@@ -1,0 +1,6 @@
+/target/
+.venv/
+__pycache__/
+artifacts/*.mlpackage/
+artifacts/*.mlmodelc/
+models/
