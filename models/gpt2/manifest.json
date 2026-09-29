@@ -1,0 +1,22 @@
+{
+  "file": "gpt2.Q4_0.gguf",
+  "size_bytes": 106554880,
+  "sha256": "d52ac7ed12e1f87cbc93473912f5c213d7c7d6f2a0112ea9d78533d0d7bd3632",
+  "source_repository": "stratalab-org/gpt2-GGUF",
+  "source_revision": "98b6b378440596a4c1f7eae0c7f74168ba1c5823",
+  "source_url": "https://huggingface.co/stratalab-org/gpt2-GGUF/resolve/98b6b378440596a4c1f7eae0c7f74168ba1c5823/gpt2.Q4_0.gguf",
+  "base_model": "openai-community/gpt2",
+  "license": "MIT",
+  "license_source": "https://github.com/openai/gpt-2/blob/9b63575ef42771a015060c964af2c3da4cf7c8ab/LICENSE",
+  "format": "GGUF v3",
+  "architecture": "gpt2",
+  "layers": 12,
+  "attention_heads": 12,
+  "embedding_width": 768,
+  "feed_forward_width": 3072,
+  "context_length": 1024,
+  "vocabulary_size": 50257,
+  "tensor_count": 149,
+  "tensor_types": {"F32": 99, "Q4_0": 49, "Q6_K": 1},
+  "notes": "Includes GPT-2 vocabulary and BPE merges. output.weight uses Q6_K. Upstream does not pin its base-model revision or converter version. Download identity and tensor layout verified; inference not yet validated."
+}
