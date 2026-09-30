@@ -30,3 +30,8 @@ This reference demonstrates GPU escape-time fractals, view uniforms, and smooth
 coloring. Our compact shader is an original implementation of `z = z² + c`, with
 an escape-time loop and a cosine palette. It uses Rust-owned camera and palette
 state rather than importing the reference application's frontend or dependencies.
+
+## Deep-zoom precision
+
+- [luma.gl GPU precision guide](https://luma.gl/docs/api-guide/shaders/gpu-floating-point-precision): distinguishes storage from arithmetic precision and explains why classic float-pair arithmetic can fail under WGSL/Metal optimizations. Our bounded Mandelbrot orbit uses integer Q8.56 arithmetic for deep zooms.
+- [mathr: Deep zoom theory and practice](https://mathr.co.uk/blog/2021-05-14_deep_zoom_theory_and_practice.html): describes perturbation, reference orbits, glitch detection, and rescaling for much deeper rendering. These are the next steps beyond the current fixed-precision implementation.

@@ -17,12 +17,20 @@ Open http://127.0.0.1:5173/. This compiles the Rust library and serves the `web/
 folder directly. Use a browser with WebGPU enabled. The browser loads the WASM
 file with plain JavaScript. HTML, CSS, and JavaScript need no bundler.
 
-The buttons call Rust exports to pan, zoom, explore a detail preset, pause the
-palette animation, or reset. Rust owns this state, embeds the WGSL shader, and
-writes a 32-byte uniform block each frame. JavaScript copies those bytes to a
+Drag the canvas to pan. Two-finger trackpad scrolling, pinching, and mouse-wheel
+scrolling zoom around the pointer. The buttons also call Rust exports to pan,
+zoom, explore a detail preset, pause the
+palette animation, or reset. Sliders adjust logarithmic zoom, iteration detail,
+color bands, and color animation speed; Rust validates their ranges. Rust owns this state, embeds the WGSL shader, and
+writes a 64-byte uniform block each frame. JavaScript copies those bytes to a
 WebGPU buffer and submits a fullscreen triangle; the fragment shader calculates
-the fractal on the GPU. The demo caps zoom and iterations for single-precision
-rendering; it is not an arbitrary-precision deep-zoom renderer.
+the fractal on the GPU. The zoom controls have no preset bounds, and the slider expands as you explore.
+Rust keeps the camera in 64-bit floating point. At deep zooms the GPU uses
+signed Q8.56 integer arithmetic, preserving tiny coordinate differences instead
+of rounding every pixel to a single-precision center. The normal view uses the
+faster float shader path. Iterations remain bounded to keep rendering responsive.
+Precision is still finite: arbitrary-precision coordinates and perturbation-based
+reference orbits are needed for indefinitely deep exploration.
 
 After editing Rust or WGSL, run `make build` and refresh the browser. Refresh after editing
 HTML, CSS, or JavaScript as well.
