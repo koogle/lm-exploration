@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080d19" />
+    <title>Web Inference — Shader demo</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <canvas id="canvas" aria-label="Mandelbrot fractal rendered by a Rust-controlled WebGPU shader"></canvas>
+    <fieldset id="controls" disabled>
+      <legend>Mandelbrot</legend>
+      <div class="buttons" role="group" aria-label="Fractal controls">
+        <button data-action="left" aria-label="Pan left">←</button>
+        <button data-action="up" aria-label="Pan up">↑</button>
+        <button data-action="down" aria-label="Pan down">↓</button>
+        <button data-action="right" aria-label="Pan right">→</button>
+        <button data-action="in" aria-label="Zoom in">+</button>
+        <button data-action="out" aria-label="Zoom out">−</button>
+        <button data-action="detail">Explore detail</button>
+        <button data-action="pause" aria-pressed="false">Pause colors</button>
+        <button data-action="reset">Reset</button>
+      </div>
+    </fieldset>
+    <p id="error" role="alert" hidden></p>
+    <noscript>This demo requires JavaScript and WebGPU.</noscript>
+    <script type="module" src="./src.js"></script>
+  </body>
+</html>

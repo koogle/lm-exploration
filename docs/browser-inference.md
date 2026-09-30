@@ -1,15 +1,16 @@
 # From checkpoint to browser inference
 
-This is an implementation sketch, not a runnable inference engine. The checkpoint
-is present; the Rust loader, GPU kernels, tokenizer, and browser entry point remain
-to be implemented.
+This is an implementation sketch, not a runnable inference engine. A minimal
+browser page and Rust-controlled WebGPU fractal demo exist; the checkpoint loader, GPU
+kernels, and tokenizer remain to be implemented.
 
 ## Deployment
 
 ```text
 Build machine                             Browser
 Rust source -- compile --> .wasm --------> Rust orchestration on CPU
-                       + JS bindings ---> browser entry point
+                                           ^
+JavaScript -- fetch + instantiate --------|
 WGSL source ----------------------------> WebGPU shader compilation
 GGUF checkpoint -- static download -----> metadata + weights + tokenizer
                                          |
@@ -17,9 +18,12 @@ GGUF checkpoint -- static download -----> metadata + weights + tokenizer
                                    GPU storage buffers
 ```
 
-Use `wasm-bindgen` bindings (for example via `wasm-pack build --target web`) and
-`wgpu` with its WebGPU backend. A static HTTPS host serves HTML, JS, WASM, and the
-checkpoint; localhost works for development. There is no inference service.
+The current demo uses `make build` to compile a Rust `cdylib` with Cargo and uses browser JavaScript's
+`WebAssembly.instantiateStreaming` to load and call its raw exports. This avoids
+generated JavaScript bindings for the small demo ABI. For a full inference engine,
+use `wgpu` with its WebGPU backend; `wasm-bindgen` can be added if richer Rust/JS
+types are useful. A static HTTPS host serves HTML, JS, WASM, and the checkpoint;
+localhost works for development. There is no inference service.
 The deployment must materialize the Git LFS binary, not serve its pointer file.
 The model is a separate download, not embedded in the WASM executable.
 
