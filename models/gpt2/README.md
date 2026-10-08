@@ -25,7 +25,7 @@ PY
 
 The verification command requires Python 3.11 or newer. Run it from the repository root.
 
-GGUF is a tensor container, not a WebGPU executable. This file contains 12 GPT-2
+GGUF is a tensor container, not a GPU executable. This file contains 12 GPT-2
 blocks, 12 attention heads, width 768, a 1,024-token context, and a 50,257-entry
 vocabulary with BPE merges. Its 149 tensors use F32 (99), Q4_0 (49), and Q6_K (1).
 Despite the filename, the output projection uses Q6_K; the loader must support
@@ -34,8 +34,8 @@ all three types. Quantization approximates the original weights.
 The small download does not imply a 107 MB runtime memory requirement. Expanding
 all stored tensors to F32 takes roughly 652 MB, before activations, attention
 state, and temporary copies. A later packed-weight implementation can reduce
-this. Check adapter buffer limits and split large matrices as needed.
+this. Check device memory and buffer limits and split large matrices as needed.
 
 The source identifies the base model but does not pin its revision or converter
 version. We verified the downloaded bytes and tensor layout; generation quality
-and browser execution have not yet been validated.
+and on-device inference have not yet been validated.

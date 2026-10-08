@@ -1,2 +1,4 @@
-rust/wasm/target/
-web/inference.wasm
+.DS_Store
+DerivedData/
+xcuserdata/
+*.xcuserstate

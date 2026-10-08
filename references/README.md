@@ -1,5 +1,9 @@
 # References
 
+These notes and links are retained from the former browser experiment. WebGPU,
+WGSL, and Rust examples are historical references, not the implementation plan
+for the native iPhone / Metal project.
+
 ## Links
 
 - [Facet rendering with wgpu](https://www.mattkeeter.com/blog/2026-08-23-wgpu-facet/)
@@ -20,18 +24,17 @@ Source: [Testing WebGPU data layouts with Facet](https://www.mattkeeter.com/blog
 
 ### Relevance to this project
 
-When adding Rust-side configuration or uniform structs for WebGPU shaders, verify their byte offsets and field sizes against the WGSL declarations. Pay particular attention to matrices and aligned vectors. A Naga-based test can use the project's existing shader tooling if available; Facet is one option for discovering Rust field layouts without writing per-struct offset lists.
+When adding Rust-side configuration or uniform structs for WebGPU shaders, verify their byte offsets and field sizes against the WGSL declarations. Pay particular attention to matrices and aligned vectors. A Naga-based test could be added alongside future shader tooling; Facet is one option for discovering Rust field layouts without writing per-struct offset lists.
 
-## Fractal shader reference
+## Model format and inference
 
-- [WebGPU Fractal Explorer — Mandelbrot WGSL shader](https://github.com/thaapasa/webgpu-fractal/blob/main/src/renderer/shaders/mandelbrot.wgsl)
+Links preserved from the former browser implementation guide:
 
-This reference demonstrates GPU escape-time fractals, view uniforms, and smooth
-coloring. Our compact shader is an original implementation of `z = z² + c`, with
-an escape-time loop and a cosine palette. It uses Rust-owned camera and palette
-state rather than importing the reference application's frontend or dependencies.
+- [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
+- [GGML quantization types](https://github.com/ggml-org/llama.cpp/blob/master/ggml/include/ggml.h)
+- [GPT-2 reference forward pass](https://github.com/openai/gpt-2/blob/master/src/model.py)
 
-## Deep-zoom precision
+## Historical browser API references
 
-- [luma.gl GPU precision guide](https://luma.gl/docs/api-guide/shaders/gpu-floating-point-precision): distinguishes storage from arithmetic precision and explains why classic float-pair arithmetic can fail under WGSL/Metal optimizations. Our bounded Mandelbrot orbit uses integer Q8.56 arithmetic for deep zooms.
-- [mathr: Deep zoom theory and practice](https://mathr.co.uk/blog/2021-05-14_deep_zoom_theory_and_practice.html): describes perturbation, reference orbits, glitch detection, and rescaling for much deeper rendering. These are the next steps beyond the current fixed-precision implementation.
+- [wgpu in the browser](https://wgpu.rs/doc/wgpu/documentation/platforms/web/index.html)
+- [wgpu compute passes](https://docs.rs/wgpu/latest/wgpu/struct.ComputePass.html)
