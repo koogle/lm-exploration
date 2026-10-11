@@ -127,3 +127,22 @@ All 192 validation examples remain cached unchanged; retained validation token+
 feature SHA-256 is `0336c72f43d0480a6c0ed867c691f5b7f67311ab5b6e0f56923bc32dd0971bc8`.
 The preparation retained 6730 existing train+validation examples and did not
 regenerate their labels. Raw report: `results/dflash-expanded-data-01.json`.
+
+## Completed fidelity selection
+
+All three 20000-update runs completed and pass 12 verified FP32 rollout checks.
+Selected validation NEW scores: QK-normalized two-layer 0.484354; five draft layers
+with two features 0.519650; five draft layers with five features 0.530051. Choose
+`dflash-fidelity-features-01`, step 18000, 78,578,432 trainable draft parameters,
+by the predeclared rule. The last increment is small: paired conditional bootstrap
+95% interval for five versus two feature depths is [-0.02018, 0.04234] NEW tokens.
+It does not establish a reliable benefit from more feature depths. All remain
+below the useful-quality gate. See `results/dflash-fidelity-comparison.json` and
+`results/dflash-feature-depth-comparison.json` for uncertainty limitations.
+
+Expanded five-depth recache completed in 154.2 seconds with old feature planes
+preserved, 26163 train and 192 validation responses, and no label regeneration.
+The next two configs share this pool and the same selected warm-start checkpoint.
+Both require the original 6144 training groups with exactly matching token labels.
+A 20-update GPU warm-start smoke precedes their launch. Selection/config hashes are
+archived in `results/dflash-exposure-selection.json` before the new fits.

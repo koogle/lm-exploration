@@ -81,7 +81,7 @@ fig.text(
     fontsize=9,
 )
 fig.tight_layout(rect=(0, 0.04, 1, 0.95))
-fig.savefig(args.output, dpi=160)
+fig.savefig(args.output, dpi=160, bbox_inches="tight", pad_inches=0.2)
 args.output.with_suffix(".json").write_text(
     json.dumps(
         {

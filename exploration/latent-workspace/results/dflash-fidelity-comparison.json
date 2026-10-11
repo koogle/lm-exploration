@@ -1,0 +1,69 @@
+{
+  "control": "dflash-scale-6144-01.json",
+  "reports": {
+    "dflash-scale-6144-01.json": "cc7b282b23d8ebd5ab733ebf69ed20b7c082ec91374b52bf511b2cc9b5bad7ad",
+    "dflash-fidelity-norm-01.json": "2b09e35f49e215bb3d78f4cec8ff5fdd2c2bcf39f5f8e4a136f867b2494cf671",
+    "dflash-fidelity-depth-01.json": "f6f6aeb2ce40b3430f0ecbaccd949cb19fb2d67edb920dc356e16289889e9964",
+    "dflash-fidelity-features-01.json": "f7e2cb9961c6d21dae1d36b361a644c21d6fa73b6d3bb9cdd407178db8ca6347"
+  },
+  "comparisons": [
+    {
+      "run": "dflash-fidelity-norm-01.json",
+      "difference_from_control": {
+        "accepted_beyond_anchor": {
+          "estimate": 0.0999181694958521,
+          "conditional_bootstrap_95_percent": [
+            0.06617501414814986,
+            0.13509936138921688
+          ]
+        },
+        "nll": {
+          "estimate": -0.2891002851489278,
+          "conditional_bootstrap_95_percent": [
+            -0.33194506739554897,
+            -0.24661941517754676
+          ]
+        }
+      }
+    },
+    {
+      "run": "dflash-fidelity-depth-01.json",
+      "difference_from_control": {
+        "accepted_beyond_anchor": {
+          "estimate": 0.13521337700573352,
+          "conditional_bootstrap_95_percent": [
+            0.09910435514349383,
+            0.1723939678178945
+          ]
+        },
+        "nll": {
+          "estimate": -0.38648159704349044,
+          "conditional_bootstrap_95_percent": [
+            -0.4393115535727536,
+            -0.335522132495848
+          ]
+        }
+      }
+    },
+    {
+      "run": "dflash-fidelity-features-01.json",
+      "difference_from_control": {
+        "accepted_beyond_anchor": {
+          "estimate": 0.14561460394908002,
+          "conditional_bootstrap_95_percent": [
+            0.11228040420721996,
+            0.18187107950420178
+          ]
+        },
+        "nll": {
+          "estimate": -0.4326541632259257,
+          "conditional_bootstrap_95_percent": [
+            -0.48795214735705883,
+            -0.37883766348098746
+          ]
+        }
+      }
+    }
+  ],
+  "note": "10000 paired source-group bootstrap draws stratified by domain, block-weighted within domains. Conditional on validation-selected checkpoints; excludes selection bias, seed variability and multiple-comparison adjustment. Not test results."
+}

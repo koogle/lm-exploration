@@ -1,0 +1,18 @@
+{
+  "selected_run": "dflash-fidelity-features-01",
+  "selected_step": 18000,
+  "selection_metric": "highest selected validation consecutive NEW matches; tie lower NLL",
+  "candidates": {
+    "norm": 0.48435441370223975,
+    "depth": 0.5196496212121212,
+    "features": 0.5300508481554677
+  },
+  "trainable_parameters": 78578432,
+  "target": "Qwen/Qwen2.5-0.5B",
+  "test_status": "sealed; no test responses or features",
+  "next_stage_supervised_new_exposures_per_arm": 53760000,
+  "next_stage_config_hashes": {
+    "configs/dflash-exposure-6144.json": "e5e9552da7c75b0f1b855e097efd38f69941a96f32bc2f3ba0d7870d3f813a89",
+    "configs/dflash-exposure-24576.json": "55da05d0626b66cec45a0881f118f1acd5cde6f42be5d5c90f6a4ebed763518f"
+  }
+}
