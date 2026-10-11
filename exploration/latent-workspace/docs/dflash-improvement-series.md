@@ -119,3 +119,11 @@ The validation-selected step 100 scores train 1.75404 / validation 0.08608; zero
 its context memory reduces validation to 0.05086. These are memorization and weak
 held-out-conditioning results, not a useful drafter. Raw evidence:
 `results/dflash-batch48-fit-audit-01.json`.
+
+Expanded pool completed in 782.6 seconds: 26163 usable training responses
+(8700 prose, 8764 code, 8699 translation), with 1,453,823 distinct response-token
+positions across that full pool. This supports the planned balanced 24576 subset.
+All 192 validation examples remain cached unchanged; retained validation token+
+feature SHA-256 is `0336c72f43d0480a6c0ed867c691f5b7f67311ab5b6e0f56923bc32dd0971bc8`.
+The preparation retained 6730 existing train+validation examples and did not
+regenerate their labels. Raw report: `results/dflash-expanded-data-01.json`.
