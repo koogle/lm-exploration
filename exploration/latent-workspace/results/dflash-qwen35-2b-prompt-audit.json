@@ -1,0 +1,13 @@
+{
+  "same_ordered_source_groups_splits_domains": true,
+  "group_overlap_between_splits": 0,
+  "source_manifest_sha256": "c178d31f2e2dc81b6a40eafee2a7ac94716e2e9f7b581c5904ce9ed2af768bab",
+  "adapted_manifest_sha256": "4464a0eaf55fa5e1bec5f26cbcf1e03656ae64d3198190a4d9e21556dab08447",
+  "counts": {
+    "train": 6600,
+    "validation": 192,
+    "test": 192
+  },
+  "test_status": "prompts only; no test responses or metrics",
+  "format": "chat_no_thinking"
+}

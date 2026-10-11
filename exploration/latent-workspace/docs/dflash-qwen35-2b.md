@@ -48,3 +48,8 @@ The planned fit uses a fixed 20000-update global cosine schedule. Bounded-worker
 continuations restore weights, optimizer and sampler/RNG state while retaining
 this global schedule (`schedule_steps=20000`); the default historical continuation
 behavior remains a new cycle. Exact split-versus-uninterrupted training is tested.
+
+Prompt audit: all 6984 ordered source groups/splits/domains match the 0.5B
+manifest, with zero cross-split group overlap. The complete original source prompt
+text survives retokenization and wrapping in every record. See
+[identity audit](../results/dflash-qwen35-2b-prompt-audit.json).
