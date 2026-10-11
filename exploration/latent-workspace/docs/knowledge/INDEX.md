@@ -16,3 +16,5 @@ Trained layer and J-lens comparisons: [Conditioning study](../conditioning-study
 Small-set fitting and layer dropout/null controls: [Protocol](../small-data-controls.md).
 
 Current drafting-first priority: [DFlash baseline](../dflash-baseline.md).
+
+Larger response-data comparison and DFlash generalization evidence: [Protocol](../dflash-data-scaling.md).

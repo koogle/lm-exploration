@@ -167,6 +167,9 @@ def benchmark(drafter, target, tokenizer, examples, mask_id):
 
 def restore_continuation(cfg, previous, state, drafter, optimizer, generator):
     old = previous["config"]
+    for key, default in (("teacher_parent", ""), ("train_limit", 0)):
+        if getattr(cfg, key) != old.get(key, default):
+            raise ValueError(f"continuation changes cached subset: {key}")
     for key in (
         "model",
         "model_revision",
@@ -226,6 +229,30 @@ def run_dflash(cfg, output, on_checkpoint=None):
         audit = json.loads((parent / "teacher-audit.json").read_text())
         for name in ("teacher.pt", "teacher-audit.json", "prompts.json", "best.pt"):
             shutil.copyfile(parent / name, output / name)
+    elif cfg.teacher_parent:
+        from .dflash_scaling import nested_subset, teacher_statistics
+
+        parent = Path(cfg.teacher_parent)
+        if not json.loads((parent / "report.json").read_text()).get("completed"):
+            raise ValueError("teacher preparation is incomplete")
+        parent_cfg = json.loads((parent / "config.json").read_text())
+        for key in (
+            "model",
+            "model_revision",
+            "layers",
+            "prompt_tokens",
+            "response_tokens",
+            "block_size",
+        ):
+            if json.dumps(cfg.to_dict()[key]) != json.dumps(parent_cfg[key]):
+                raise ValueError(f"teacher cache/config mismatch: {key}")
+        data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
+        data["train"] = nested_subset(data["train"], cfg.train_limit, cfg.seed)
+        audit = teacher_statistics(data, cfg.block_size)
+        audit["parent_generation_audit"] = json.loads((parent / "teacher-audit.json").read_text())
+        atomic_save(output / "teacher.pt", data)
+        write_json(output / "teacher-audit.json", audit)
+        shutil.copyfile(parent / "prompts.json", output / "prompts.json")
     else:
         manifest = prepare_prompts(cfg, tokenizer, output, deadline - 120)
         if on_checkpoint:

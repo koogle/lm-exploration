@@ -80,15 +80,18 @@ def verify(parent: str, run_id: str, fit_audit: bool = False):
     max_containers=1,
     volumes={"/cache": cache, "/runs": runs},
 )
-def train_long(config: dict, run_id: str):
+def train_long(config: dict, run_id: str, prepare_data: bool = False):
     import sys
 
     sys.path.insert(0, "/project/.venv/lib/python3.12/site-packages")
     from latent_workspace.dflash import DraftConfig
+    from latent_workspace.dflash_scaling import prepare_pool
     from latent_workspace.dflash_train import run_dflash
 
     try:
-        return run_dflash(DraftConfig(**config), f"/runs/{run_id}", on_checkpoint=runs.commit)
+        return (prepare_pool if prepare_data else run_dflash)(
+            DraftConfig(**config), f"/runs/{run_id}", on_checkpoint=runs.commit
+        )
     finally:
         runs.commit()
         cache.commit()
@@ -101,7 +104,10 @@ def main(
     verify_parent: str = "",
     long_run: bool = False,
     fit_audit: bool = False,
+    prepare_data: bool = False,
 ):
+    if prepare_data and (not long_run or verify_parent):
+        raise ValueError("--prepare-data requires --long-run and no verification parent")
     if fit_audit and not verify_parent:
         raise ValueError("--fit-audit requires --verify-parent")
     if verify_parent:
@@ -120,5 +126,9 @@ def main(
         raise ValueError("invalid run ID or insufficient cleanup margin")
     amount = reserve("artifacts/budget.json", run_id, "L40S", timeout_seconds=timeout)
     print(f"Reserved ${amount:.2f} for a hard-bounded {timeout}s L40S worker.")
-    report = (train_long if long_run else pilot).remote(cfg.to_dict(), run_id)
+    report = (
+        train_long.remote(cfg.to_dict(), run_id, prepare_data)
+        if long_run
+        else pilot.remote(cfg.to_dict(), run_id)
+    )
     Path(f"results/{run_id}.json").write_text(json.dumps(report, indent=2) + "\n")

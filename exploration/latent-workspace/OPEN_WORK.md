@@ -5,6 +5,11 @@ main; direct commits and regular pushes authorized. Historical source:
 `koogle/latent-workspace`. See [consolidation](../../docs/consolidation.md).
 
 Current priority: [DFlash-style Qwen drafting baseline](docs/dflash-baseline.md).
+New authorized work: [larger response-data comparison](docs/dflash-data-scaling.md),
+768 versus 6144 nested responses, matched architecture/initialization/exposure and
+shared fresh validation. Improved sampling and batched teacher preparation are
+implemented; GPU preparation smoke and training results are pending. The existing
+$205.50 reservation ledger has been restored to this consolidated checkout.
 Representation experiments are deferred. One known anchor plus seven masked proposals,
 target-generated labels, fixed feature K/V injection, random-anchor packed training
 and cached greedy verification are implemented. No useful fast drafter is established.
