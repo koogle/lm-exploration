@@ -14,7 +14,10 @@ Test data remains sealed. No useful drafter is established yet.
 The normalization gain is 0.099918 tokens (about 26% relative), still far short
 of the predeclared two-token macro gate. All 12 checked FP32 verified rollouts
 match ordinary target generation. This is one seed on reused validation, not an
-independent test result. Full-training and zero-context audits are pending.
+independent test result. Full-training audit: selected train **0.62267 NEW / 7**, validation **0.48435**;
+final train **0.63507**, validation **0.48302**. Zeroing selected-checkpoint target
+memory drops validation to **0.06322**. It uses conditioning, but larger-set fitting
+is still weak. Both validation audits exactly reproduce the training reports.
 
 All three fidelity studies execute source matching commit `6c772af`:
 `4e7c2bd29a51db1922f2956d97b8fc13d590833f174420bfcf55ece81e9bff22`.

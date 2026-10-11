@@ -55,7 +55,17 @@ for run in runs:
     )
     axes[2].plot(range(1, cfg["block_size"]), accuracy, marker="o", label=label)
 axes[0].set(xlabel="Updates", ylabel="New-token NLL (lower is better)")
-axes[1].set(xlabel="Updates", ylabel="Consecutive correct NEW tokens / 7", ylim=(0, 7))
+axes[1].set(
+    xlabel="Updates",
+    ylabel="Consecutive correct NEW tokens / 7",
+    ylim=(
+        0,
+        max(
+            2.2,
+            1.1 * max(p["validation"]["accepted_beyond_anchor"] for r in runs for p in r["curve"]),
+        ),
+    ),
+)
 axes[1].axhline(2, color="gray", linestyle=":", label="Working macro quality gate")
 axes[2].set(xlabel="NEW position", ylabel="Selected validation token accuracy", ylim=(0, 1))
 for ax in axes:
