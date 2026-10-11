@@ -12,6 +12,8 @@ matches / 7** on 184 shared validation source prompts. The 2B head is weak on
 training too (0.173). Both used 6144 responses and 20000 updates. Family, tokenizer,
 prompt format and draft capacity also change; this is not a pure size ablation.
 Prediction quality remains the priority. No 2B rollout verification was performed.
+See the [DFlash comparison and fitting diagnosis](docs/dflash-fidelity.md) for
+confirmed implementation differences and the remaining causal uncertainty.
 
 ![Qwen target drafting quality](results/dflash-qwen35-2b-comparison.png)
 

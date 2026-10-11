@@ -17,6 +17,9 @@ not billed usage; failed/stopped reservations are retained.
 Next: establish reliable drafter fitting and training fidelity before treating data
 size or backbone size as a sufficient fix. A same-family 1.5B size control or a
 native hybrid-target adapter remains untested. No additional training is running.
+The [reference audit](docs/dflash-fidelity.md) confirms missing query/key
+normalization relative to DFlash, in addition to depth/data differences. Its causal
+effect is untested; prioritize exact-target fitting and matched fidelity checks.
 The 0.5B study below remains the reference; representation sweeps and inference
 speed optimization remain deferred.
 
