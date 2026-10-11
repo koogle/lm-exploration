@@ -1,0 +1,423 @@
+<title>Bench Runs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: short argument up top, then the web app shown in a 1440×900 browser window scaled to fit, then the data contract it needs. The app keeps the Study C instrument look. */
+:root {
+  --bg: #f4f5f7; --surface: #ffffff; --fg: #16181d; --muted: #5c6371; --line: #dadee5; --accent: #2b4fd8; --accent-soft: #e6ebfc;
+  --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #111317; --surface: #191c22; --fg: #e8eaee; --muted: #9aa1ad; --line: #2b3039; --accent: #8ea6ff; --accent-soft: #232b45; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #111317; --surface: #191c22; --fg: #e8eaee; --muted: #9aa1ad; --line: #2b3039; --accent: #8ea6ff; --accent-soft: #232b45; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--display); font-size: 16px; line-height: 1.55; padding: 0 20px; }
+.wrap { max-width: 1480px; margin: 0 auto; padding-block: 56px 96px; display: grid; gap: 56px; }
+.prose { max-width: 70ch; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(34px, 5vw, 52px); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(22px, 3vw, 30px); font-weight: 700; }
+h3 { font-size: 15px; font-weight: 700; }
+p { margin: 0; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+header.intro { display: grid; gap: 16px; }
+.lede { font-size: 19px; color: var(--muted); max-width: 66ch; }
+.note { font-size: 13.5px; color: var(--muted); max-width: 95ch; }
+.points { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+.points > div { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.points p { font-size: 15px; }
+@media (max-width: 860px) { .points { grid-template-columns: 1fr; gap: 18px; } }
+.frame { width: 100%; position: relative; }
+.win { position: absolute; top: 0; left: 0; width: 1440px; height: 936px; transform-origin: top left; border-radius: 12px; overflow: hidden; background: #0e1115; box-shadow: 0 0 0 1px #2a2f37, 0 40px 80px -40px rgba(10,14,25,.55); }
+.contract { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; }
+@media (max-width: 900px) { .contract { grid-template-columns: 1fr; } }
+.contract ul { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 15px; }
+.codeblock { font-family: var(--mono); font-size: 12.5px; line-height: 1.6; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; overflow-x: auto; white-space: pre; }
+code { font-family: var(--mono); font-size: .88em; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+
+/* ---------- app ---------- */
+.app { color: #cfd6e0; font-family: var(--mono); font-size: 12px; height: 100%; display: flex; flex-direction: column; }
+.app button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.app button:focus-visible { outline: 2px solid #4a8fe0; outline-offset: 1px; }
+.chrome { height: 36px; background: #1a1d22; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-bottom: 1px solid #262b33; flex: none; }
+.lights { display: flex; gap: 7px; } .lights i { width: 11px; height: 11px; border-radius: 6px; background: #3a3f47; display: block; }
+.url { flex: 1; max-width: 520px; margin: 0 auto; height: 24px; border-radius: 6px; background: #0f1216; display: flex; align-items: center; justify-content: center; font-size: 11.5px; color: #8b96a6; }
+.url b { color: #cfd6e0; font-weight: 500; }
+.hdr { height: 50px; display: flex; align-items: center; gap: 16px; padding: 0 18px; border-bottom: 1px solid #222832; flex: none; }
+.logo { font-family: var(--display); font-weight: 800; font-size: 16px; color: #e7ecf3; letter-spacing: -0.01em; }
+.grp { display: grid; line-height: 1.25; padding-right: 16px; border-right: 1px solid #222832; }
+.lbl { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; }
+.val { font-size: 12.5px; color: #e7ecf3; }
+.ok { color: #6fd3b8; }
+.sp { flex: 1; }
+.btn { height: 30px; padding: 0 12px; border-radius: 6px; border: 1px solid #2c3440; color: #cfd6e0; font-size: 11.5px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.btn.pri { background: #e7ecf3; color: #0e1115; border-color: #e7ecf3; font-weight: 600; }
+.body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 500px; }
+.main { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid #222832; }
+.side { min-width: 0; min-height: 0; overflow: auto; scrollbar-width: thin; }
+.ph { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; padding: 12px 16px 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ph b { color: #cfd6e0; font-weight: 500; letter-spacing: .04em; }
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid #222832; }
+.sum { padding: 10px 16px; display: grid; gap: 2px; border-right: 1px solid #222832; }
+.sum:last-child { border-right: 0; }
+.sum span { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; }
+.sum b { font-size: 16px; color: #e7ecf3; font-weight: 500; }
+.sum small { font-family: var(--display); font-size: 11.5px; color: #8b96a6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chartwrap { padding: 0 16px 4px; border-bottom: 1px solid #222832; }
+.chartwrap svg { display: block; width: 100%; }
+.tablewrap { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
+table.runs { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; table-layout: fixed; }
+.runs th { position: sticky; top: 0; background: #0e1115; z-index: 1; text-align: left; font-weight: 400; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; padding: 8px 10px; border-bottom: 1px solid #222832; white-space: nowrap; }
+.runs td { padding: 8px 10px; border-bottom: 1px solid #1a1f26; vertical-align: middle; }
+.runs tr { cursor: pointer; }
+.runs tr:hover td { background: #121820; }
+.runs tr.isB td { background: #141b24; }
+.runs tr.isA td { background: #11161d; }
+.ab { display: inline-flex; gap: 3px; }
+.ab button { width: 20px; height: 20px; border-radius: 4px; border: 1px solid #2c3440; font-size: 10px; display: inline-grid; place-items: center; color: #6f7a8a; }
+.ab button.on.a { background: #9aa3b0; color: #0e1115; border-color: #9aa3b0; font-weight: 600; }
+.ab button.on.b { background: #e7ecf3; color: #0e1115; border-color: #e7ecf3; font-weight: 600; }
+.rn { display: grid; gap: 2px; }
+.rn { min-width: 0; }
+.rn b, .rn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rn b { font-family: var(--display); font-weight: 500; font-size: 13px; color: #e7ecf3; }
+.rn span { font-size: 10.5px; color: #6f7a8a; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
+.status { display: grid; gap: 4px; }
+.status span { font-size: 10.5px; white-space: nowrap; }
+.status .bar { height: 4px; background: #222832; border-radius: 2px; overflow: hidden; }
+.status .bar i { display: block; height: 100%; background: #6fd3b8; }
+.s-run { color: #6fd3b8; } .s-done { color: #9fb4d9; } .s-fail { color: #ff8fa3; } .s-queue { color: #8b96a6; }
+.lossc { display: flex; align-items: center; gap: 8px; }
+.lossc b { color: #e7ecf3; font-weight: 500; font-size: 12.5px; min-width: 40px; }
+.delta { display: grid; grid-template-columns: 56px 60px; align-items: center; gap: 6px; }
+.delta b { font-weight: 500; text-align: right; }
+.dbar { height: 8px; position: relative; background: #161b22; border-radius: 2px; }
+.dbar::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: #3a4452; }
+.dbar i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.good { color: #6fd3b8; } .bad { color: #ff8fa3; } .neutral { color: #8b96a6; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-size: 10.5px; line-height: 1.35; padding: 2px 6px; border-radius: 4px; border: 1px solid transparent; }
+.chip em { font-style: normal; font-size: 9px; letter-spacing: .08em; margin-right: 5px; opacity: .85; }
+.chip.code { background: #221b36; color: #d6c2ff; } .chip.data { background: #10302b; color: #9ff0da; } .chip.config { background: #33280f; color: #f5c77d; }
+.chip.same { background: transparent; border-color: #2c3440; color: #6f7a8a; }
+
+/* compare panel */
+.cmphead { padding: 14px 18px 12px; border-bottom: 1px solid #222832; display: grid; gap: 10px; position: sticky; top: 0; background: #0e1115; z-index: 2; }
+.vs { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+.vs .side-a, .vs .side-b { display: grid; gap: 2px; min-width: 0; }
+.vs .side-b { text-align: right; }
+.vs b { font-family: var(--display); font-weight: 600; font-size: 14px; color: #e7ecf3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs small { font-size: 10.5px; color: #6f7a8a; }
+.vs .mid { font-size: 10px; color: #6f7a8a; letter-spacing: .1em; }
+.tag { display: inline-block; font-size: 9.5px; font-weight: 600; padding: 1px 5px; border-radius: 3px; margin-right: 6px; vertical-align: 1px; }
+.tag.a { background: #9aa3b0; color: #0e1115; } .tag.b { background: #e7ecf3; color: #0e1115; }
+.explain { font-family: var(--display); font-size: 13.5px; line-height: 1.5; color: #e7ecf3; padding: 10px 12px; border-radius: 6px; background: #131820; border-left: 3px solid #4a5566; }
+.explain.one { border-left-color: #6fd3b8; } .explain.many { border-left-color: #f0b35a; } .explain.fail { border-left-color: #ff8fa3; }
+.explain button { color: #8ea6ff; text-decoration: underline; text-underline-offset: 2px; }
+.sec { padding: 4px 18px 14px; display: grid; gap: 8px; border-bottom: 1px solid #1a1f26; }
+.sec h4 { margin: 10px 0 0; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; font-weight: 400; display: flex; justify-content: space-between; }
+.metrics { display: grid; grid-template-columns: 130px 1fr 1fr 70px; gap: 0; font-variant-numeric: tabular-nums; }
+.metrics div { padding: 5px 0; border-bottom: 1px solid #1a1f26; }
+.metrics .k { color: #8b96a6; white-space: nowrap; } .metrics .h { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; }
+.metrics .r { text-align: right; }
+.diff { font-size: 11px; line-height: 16px; border: 1px solid #222832; border-radius: 6px; overflow: hidden; }
+.diff div { white-space: pre; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; }
+.diff .f { background: #161b22; color: #e7ecf3; padding-block: 4px; font-weight: 600; }
+.diff .h { color: #6f7a8a; background: #11151b; }
+.diff .add { background: #12302c; color: #a8f0dc; } .diff .del { background: #3a1820; color: #ffb3c1; }
+.diff .ctx { color: #8b96a6; }
+table.kv { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.kv th { text-align: left; font-weight: 400; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; padding: 4px 0; }
+.kv td { padding: 5px 0; border-top: 1px solid #1a1f26; }
+.kv td:nth-child(2) { color: #b8c0cc; } .kv td:nth-child(3) { color: #e7ecf3; }
+.mixrow { display: grid; grid-template-columns: 24px 1fr; gap: 8px; align-items: center; }
+.mixbar { display: flex; height: 14px; border-radius: 3px; overflow: hidden; gap: 2px; }
+.mixlg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 10.5px; color: #cfd6e0; }
+.samples2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.samples2 div { border: 1px solid #222832; border-radius: 6px; padding: 8px 10px; font-family: var(--display); font-size: 12.5px; line-height: 1.45; color: #e7ecf3; }
+.samples2 i { font-style: normal; color: #6f7a8a; }
+.samples2 small { display: block; font-family: var(--mono); font-size: 10px; color: #6f7a8a; margin-bottom: 4px; }
+.muted { color: #6f7a8a; font-family: var(--display); font-size: 12px; }
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <div class="eyebrow">bench · Modal-hosted training interface · revision 3</div>
+    <h1>Bench Runs</h1>
+    <p class="lede">The training interface is now a web app served from the same Modal app that runs training. Its home screen answers two questions you couldn't answer before: how is every run doing, and what changed between any two of them.</p>
+    <div class="points">
+      <div><h3>Pick a baseline, read every run against it</h3><p>Mark one run as <b>A</b>. Every row then shows its validation loss at equal tokens relative to A, and chips listing exactly what differs from A in code, config and data.</p></div>
+      <div><h3>Compare any two runs</h3><p>Mark another run as <b>B</b>. The panel on the right shows the result, a plain sentence on whether the difference can be pinned on one change, and the evidence: code diff, config keys, data mix, samples.</p></div>
+      <div><h3>Honest attribution</h3><p>When A and B differ in more than one thing, the panel says so and suggests a run that isolates one change. Try A = main, B = #16, then follow the suggestion.</p></div>
+    </div>
+    <p class="note">Runs, numbers and samples are made-up examples. Loss is validation loss on TinyStories, compared at equal tokens seen. Click rows to set B, use the A/B buttons to choose both. iPad inference now has its own app and is not part of this screen.</p>
+  </header>
+
+  <div class="frame" data-app></div>
+
+  <section class="contract">
+    <div class="prose" style="display:grid;gap:12px">
+      <h2>What the training code has to record</h2>
+      <p>Everything on this screen comes from two things: a <b>recipe</b> that describes what a run was asked to do, and <b>metrics</b> that describe what happened. The "what changed" chips are a diff of two recipes, so the recipe has to capture every input that matters.</p>
+      <ul>
+        <li><b>recipe.json</b>, written before step 0: git SHA, ref, resolved config, model hyperparameters, and the data mix with each source's path, weight and shard hash.</li>
+        <li><b>metrics.jsonl</b>: step, tokens, train loss, val loss per source, tokens/s, learning rate, per-layer gradient norms.</li>
+        <li><b>samples.jsonl</b>: fixed prompts, greedy, every 500 steps, so samples line up across runs.</li>
+        <li>Live values also go to a Modal Dict, since Volume writes only appear after a commit.</li>
+      </ul>
+    </div>
+    <div class="codeblock">// runs/r-0144/recipe.json
+{
+  "ref": "pull/16", "sha": "c02e8f1",
+  "model": { "n_layer": 6, "n_embd": 384, "n_head": 6,
+             "mlp": "swiglu", "rope_theta": 10000,
+             "vocab_size": 8192 },
+  "optim": { "lr": 6e-4, "warmup_steps": 200 },
+  "train": { "steps": 5000, "batch_size": 64,
+             "block_size": 256 },
+  "data":  { "tokenizer": "bpe-8k", "sources": [
+    { "path": "datasets/tinystories/train.bin",
+      "weight": 0.7, "sha256": "a91f…3c02" },
+    { "path": "datasets/simplewiki/train.bin",
+      "weight": 0.2, "sha256": "04be…91d7" },
+    { "path": "datasets/tinystories-instruct/train.bin",
+      "weight": 0.1, "sha256": "7d3e…a810" } ] },
+  "gpu": "L4"
+}</div>
+  </section>
+</div>
+
+<script>
+/* ---------------- example runs ---------------- */
+const STEPS = 5000, TOK = 16384;
+const BASE = { mlp: 'gelu', rope_theta: 10000, vocab_size: 8192, lr: '6e-4', warmup_steps: 200, steps: 5000, batch_size: 64, tokenizer: 'bpe-8k', mix: [['ts', 1]] };
+const MIX15 = [['ts', .7], ['wiki', .2], ['inst', .1]];
+const RUNS = [
+  { id: 'main', title: 'main', ref: 'main', sha: '4be1d07', run: 'r-0139', status: 'done', at: 5000, variant: 0, color: '#9aa3b0', gpu: 'L4', mins: 11.4, tps: 121, recipe: {}, val: { wiki: 4.31, inst: 1.98 } },
+  { id: 'pr12', title: '#12 SwiGLU MLP', ref: 'exp/swiglu', sha: '7a20f5b', run: 'r-0137', status: 'done', at: 5000, variant: -0.054, color: '#7cc4f8', gpu: 'L4', mins: 12.1, tps: 117, recipe: { mlp: 'swiglu' }, val: { wiki: 4.25, inst: 1.93 } },
+  { id: 'pr13', title: '#13 Longer warmup', ref: 'exp/warmup-1k', sha: '31c9a02', run: 'r-0138', status: 'done', at: 5000, variant: 0.009, color: '#8b96a6', gpu: 'L4', mins: 11.3, tps: 121, recipe: { warmup_steps: 1000 }, val: { wiki: 4.33, inst: 1.99 } },
+  { id: 'pr14', title: '#14 RoPE theta 500k', ref: 'exp/rope-500k', sha: '9c41e2a', run: 'r-0142', status: 'run', at: 3100, variant: -0.025, color: '#6fd3b8', gpu: 'L4', mins: 7.0, tps: 121, recipe: { rope_theta: 500000 } },
+  { id: 'pr15', title: '#15 Data mix: wiki + instruct', ref: 'data/mix-wiki-instruct', sha: 'b57d0c3', run: 'r-0143', status: 'done', at: 5000, variant: 0.03, color: '#f0b35a', gpu: 'L4', mins: 11.6, tps: 119, recipe: { mix: MIX15 }, val: { wiki: 2.94, inst: 1.62 } },
+  { id: 'pr16', title: '#16 SwiGLU + data mix', ref: 'exp/swiglu-mix', sha: 'c02e8f1', run: 'r-0144', status: 'done', at: 5000, variant: -0.024, color: '#c5a3ff', gpu: 'L4', mins: 12.3, tps: 116, recipe: { mlp: 'swiglu', mix: MIX15 }, val: { wiki: 2.85, inst: 1.57 } },
+  { id: 'hlr', title: 'exp/high-lr', ref: 'exp/high-lr', sha: '2d9e6aa', run: 'r-0140', status: 'fail', at: 3140, diverge: 3140, variant: -0.03, color: '#ff8fa3', gpu: 'L4', mins: 7.2, tps: 120, recipe: { lr: '3e-3' } },
+  { id: 'pr11', title: '#11 BPE vocab 16k', ref: 'exp/vocab-16k', sha: 'e81c3d9', run: 'r-0145', status: 'queue', at: 0, variant: 0, color: '#5f6b7c', gpu: 'L4', recipe: { vocab_size: 16384, tokenizer: 'bpe-16k' } },
+];
+RUNS.forEach(r => r.recipe = { ...BASE, ...r.recipe });
+const byId = id => RUNS.find(r => r.id === id);
+const SOURCES = { ts: { name: 'TinyStories', color: '#6fd3b8', tokens: 471e6 }, wiki: { name: 'Simple Wikipedia', color: '#7cc4f8', tokens: 152e6 }, inst: { name: 'TinyStories-Instruct', color: '#c5a3ff', tokens: 120e6 } };
+
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function curve(run) {
+  const pts = [];
+  for (let s = 0; s <= run.at; s += 250) {
+    let L = 1.674 + 7.4 * Math.exp(-s / 210) + 1.05 * Math.exp(-s / 1700) + run.variant * Math.min(1, s / 1500) + .012;
+    if (run.recipe.warmup_steps > 200) L += .25 * Math.exp(-s / 500);
+    if (run.diverge && s > run.diverge - 400) L += Math.pow((s - (run.diverge - 400)) / 400, 3) * 2.2;
+    pts.push([s, L]);
+  }
+  return pts;
+}
+const valAt = (run, s) => { const p = curve(run).find(p => p[0] === s); return p ? p[1] : null; };
+const lastVal = run => { const c = curve(run); return c.length ? c[c.length - 1][1] : null; };
+const fmt = (v, d = 3) => v.toFixed(d);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const sign = v => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmt(Math.abs(v));
+
+/* ---------------- recipe diff: the "what changed" engine ---------------- */
+const FIELDS = [
+  ['mlp', 'code', v => v === 'swiglu' ? 'SwiGLU 8/3×' : 'GELU 4×'],
+  ['rope_theta', 'code', v => v.toLocaleString()],
+  ['vocab_size', 'code', v => v.toLocaleString()],
+  ['lr', 'config', v => v], ['warmup_steps', 'config', v => v.toLocaleString()], ['steps', 'config', v => v.toLocaleString()], ['batch_size', 'config', v => v],
+  ['tokenizer', 'data', v => v],
+  ['mix', 'data', v => v.map(([k, w]) => `${SOURCES[k].name.split(' ')[0]} ${Math.round(w * 100)}%`).join(' · ')],
+];
+function mixDelta(ma, mb) {
+  const keys = [...new Set([...ma, ...mb].map(x => x[0]))], w = (m, k) => Math.round(((m.find(x => x[0] === k) || [0, 0])[1]) * 100);
+  return 'mix ' + keys.filter(k => w(ma, k) !== w(mb, k)).map(k => { const n = SOURCES[k].name.replace('TinyStories-', '').replace('Simple ', ''); return !w(ma, k) ? `+${n} ${w(mb, k)}%` : !w(mb, k) ? `−${n}` : `${n} ${w(ma, k)}→${w(mb, k)}%`; }).join(', ');
+}
+function changes(a, b) {
+  return FIELDS.filter(([k]) => JSON.stringify(a.recipe[k]) !== JSON.stringify(b.recipe[k])).map(([k, area, f]) => ({ key: k, area, a: f(a.recipe[k]), b: f(b.recipe[k]), mixText: k === 'mix' ? mixDelta(a.recipe.mix, b.recipe.mix) : '' }));
+}
+const chipHTML = c => c.key === 'mix' ? `<span class="chip data"><em>DATA</em>${esc(c.mixText)}</span>` : `<span class="chip ${c.area}"><em>${c.area.toUpperCase()}</em>${c.key} ${esc(c.a)} → ${esc(c.b)}</span>`;
+
+/* delta of B against A at equal tokens (latest step both reached) */
+function delta(a, b) {
+  const s = Math.floor(Math.min(a.at, b.at) / 250) * 250;
+  if (!s || b.diverge && s >= b.diverge - 250) return null;
+  return { step: s, d: valAt(b, s) - valAt(a, s) };
+}
+
+/* ---------------- model.py from a recipe, for code diffs ---------------- */
+function modelPy(r) {
+  const R = r.recipe;
+  const mlp = R.mlp === 'swiglu'
+    ? ['class MLP(nn.Module):', '    def __init__(self, cfg):', '        super().__init__()', '        hidden = int(8 * cfg.n_embd / 3)  # same params as 4x GELU', '        self.gate = nn.Linear(cfg.n_embd, hidden, bias=False)', '        self.up = nn.Linear(cfg.n_embd, hidden, bias=False)', '        self.down = nn.Linear(hidden, cfg.n_embd, bias=False)', '', '    def forward(self, x):', '        return self.down(F.silu(self.gate(x)) * self.up(x))']
+    : ['class MLP(nn.Module):', '    def __init__(self, cfg):', '        super().__init__()', '        self.fc = nn.Linear(cfg.n_embd, 4 * cfg.n_embd, bias=False)', '        self.proj = nn.Linear(4 * cfg.n_embd, cfg.n_embd, bias=False)', '', '    def forward(self, x):', '        return self.proj(F.gelu(self.fc(x)))'];
+  return ['@dataclass', 'class Config:', `    vocab_size: int = ${R.vocab_size}`, '    n_layer: int = 6', '    n_head: int = 6', '    n_embd: int = 384', '    block_size: int = 256', `    rope_theta: float = ${R.rope_theta === 10000 ? '10_000.0' : '500_000.0'}`, '', 'class Attention(nn.Module):', '    ...', '', ...mlp, '', 'class Block(nn.Module):', '    ...'];
+}
+function lineDiff(A, B) { // LCS
+  const n = A.length, m = B.length, dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = A[i] === B[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const out = []; let i = 0, j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && A[i] === B[j]) { out.push(['ctx', A[i], i]); i++; j++; }
+    else if (j < m && (i === n || dp[i][j + 1] >= dp[i + 1][j])) { out.push(['add', B[j], i]); j++; }
+    else { out.push(['del', A[i], i]); i++; }
+  }
+  const keep = out.map((o, k) => o[0] !== 'ctx' || out.slice(Math.max(0, k - 2), k + 3).some(x => x[0] !== 'ctx'));
+  const rows = []; let gap = false;
+  out.forEach((o, k) => { if (keep[k]) { if (gap && rows.length) rows.push(['h', '⋯']); rows.push(o); gap = false; } else gap = true; });
+  return rows;
+}
+
+const SAMPLES = {
+  gelu: 'Once upon a time, there was a little girl named Mia. She loved her red ball. One day, Mia saw a small bird with a hurt wing.',
+  swiglu: 'Once upon a time, there was a little girl named Mia. She loved to play in the park with her red ball. One day she found a bird that could not fly.',
+  mix: 'Once upon a time, there was a girl named Mia who lived near a forest. A forest is a large area with many trees. Mia liked to walk there with her dog.',
+  fail: '(no sample after step 3,000: run diverged)',
+};
+const sampleOf = r => r.status === 'queue' ? '(not run yet)' : r.diverge ? SAMPLES.fail : r.recipe.mix.length > 1 ? SAMPLES.mix : SAMPLES[r.recipe.mlp];
+
+/* ---------------- charts ---------------- */
+function chart(runs, a, b, { w = 840, h = 230, yMin = 1.6, yMax = 3.0 } = {}) {
+  const P = { l: 36, r: 12, t: 10, b: 22 }, iw = w - P.l - P.r, ih = h - P.t - P.b;
+  const x = s => P.l + s / STEPS * iw, y = v => P.t + (1 - (Math.min(yMax, Math.max(yMin, v)) - yMin) / (yMax - yMin)) * ih;
+  let g = '';
+  for (let v = yMin; v <= yMax + 1e-9; v += .2) g += `<line x1="${P.l}" x2="${w - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#1b2129"/><text x="${P.l - 6}" y="${y(v) + 3}" fill="#6f7a8a" font-size="9.5" text-anchor="end">${v.toFixed(1)}</text>`;
+  for (let s = 0; s <= STEPS; s += 1000) g += `<text x="${x(s)}" y="${h - 6}" fill="#6f7a8a" font-size="9.5" text-anchor="middle">${Math.round(s * TOK / 1e6)}M tok</text>`;
+  const order = runs.filter(r => r.id !== a && r.id !== b).concat(runs.filter(r => r.id === a), runs.filter(r => r.id === b));
+  const lines = order.map(r => {
+    const pts = curve(r).filter(p => p[0] >= 500); if (!pts.length) return '';
+    const hi = r.id === a || r.id === b;
+    const d = pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join('');
+    const e = pts[pts.length - 1];
+    return `<path d="${d}" fill="none" stroke="${r.color}" stroke-width="${hi ? 2.2 : 1}" opacity="${hi ? 1 : .32}" ${r.id === a ? 'stroke-dasharray="5 3"' : ''}/>` +
+      (hi ? `<circle cx="${x(e[0])}" cy="${y(e[1])}" r="3.2" fill="${r.color}"/><text x="${Math.min(x(e[0]) + 6, w - 40)}" y="${y(e[1]) + (r.id === a ? 12 : -6)}" fill="${r.color}" font-size="10">${r.id === a ? 'A' : 'B'} ${fmt(e[1])}</text>` : '') +
+      (r.diverge && hi ? `<text x="${x(r.diverge) - 4}" y="${P.t + 10}" fill="#ff8fa3" font-size="9.5" text-anchor="end">diverged</text>` : '');
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Validation loss of all runs against tokens seen">${g}${lines}</svg>`;
+}
+function spark(r) {
+  const pts = curve(r).filter(p => p[0] >= 250); if (pts.length < 2) return '<svg width="64" height="18"></svg>';
+  const x = s => s / STEPS * 62 + 1, y = v => 17 - (Math.min(3.2, Math.max(1.6, v)) - 1.6) / 1.6 * 16;
+  return `<svg width="64" height="18" aria-hidden="true"><path d="${pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join('')}" fill="none" stroke="${r.color}" stroke-width="1.3"/></svg>`;
+}
+
+/* ---------------- app ---------------- */
+function app(root) {
+  const st = { a: 'main', b: 'pr16' };
+  root.innerHTML = `<div class="app">
+    <div class="chrome"><span class="lights"><i></i><i></i><i></i></span><span class="url"><b>jakob--bench-web.modal.run</b>/runs</span></div>
+    <div class="hdr"><span class="logo">bench</span>
+      <div class="grp"><span class="lbl">Repo</span><span class="val">jakob/bench-models</span></div>
+      <div class="grp"><span class="lbl">Volume</span><span class="val">bench-data · 3.1 GB</span></div>
+      <div class="grp"><span class="lbl">GPU today</span><span class="val">74 min · L4</span></div>
+      <span class="sp"></span><span class="val" style="color:#8b96a6">signed in with GitHub · jakob</span><button class="btn pri">New run from branch or PR…</button></div>
+    <div class="body"><div class="main"><div class="summary" data-summary></div><div class="ph" data-charthead></div><div class="chartwrap" data-chart></div><div class="tablewrap" data-table></div></div><div class="side" data-side></div></div>
+  </div>`;
+  const $ = s => root.querySelector(s);
+
+  function render() {
+    const A = byId(st.a), B = byId(st.b);
+    const done = RUNS.filter(r => r.status === 'done' && r.id !== st.a).map(r => ({ r, d: delta(A, r) })).filter(x => x.d).sort((x, y) => x.d.d - y.d.d);
+    const best = done[0], running = RUNS.filter(r => r.status === 'run'), failed = RUNS.filter(r => r.status === 'fail');
+    $('[data-summary]').innerHTML = `
+      <div class="sum"><span>Baseline A</span><b><span class="sw" style="background:${A.color}"></span>${esc(A.title)}</b><small>val ${fmt(lastVal(A))} at ${(A.at * TOK / 1e6).toFixed(0)}M tokens</small></div>
+      <div class="sum"><span>Best vs A</span><b class="${best && best.d.d < 0 ? 'good' : ''}">${best ? sign(best.d.d) : '—'}</b><small>${best ? esc(best.r.title) : 'no finished runs'}</small></div>
+      <div class="sum"><span>Running</span><b>${running.length}</b><small>${running.map(r => `${esc(r.title)} · ${Math.round(r.at / STEPS * 100)}%`).join(', ') || 'none'}</small></div>
+      <div class="sum"><span>Failed</span><b class="${failed.length ? 'bad' : ''}">${failed.length}</b><small>${failed.map(r => `${esc(r.title)} · NaN at step ${r.diverge.toLocaleString()}`).join(', ') || 'none'}</small></div>`;
+    $('[data-charthead]').innerHTML = `<span>Validation loss · all runs · against tokens seen</span><span><b>A</b> dashed · <b>B</b> bold · others faint</span>`;
+    $('[data-chart]').innerHTML = chart(RUNS, st.a, st.b);
+    $('[data-table]').innerHTML = `<table class="runs"><colgroup><col style="width:62px"><col style="width:210px"><col style="width:128px"><col style="width:112px"><col style="width:128px"><col></colgroup><thead><tr><th>A / B</th><th>Run</th><th>Status</th><th>Val loss</th><th>Δ vs A, equal tokens</th><th>What differs from A</th></tr></thead><tbody>
+      ${RUNS.map(r => {
+        const d = r.id === st.a ? null : delta(A, r), ch = r.id === st.a ? [] : changes(A, r);
+        const status = r.status === 'run' ? `<span class="s-run">running · ${Math.round(r.at / STEPS * 100)}%</span><span class="bar"><i style="width:${r.at / STEPS * 100}%"></i></span>`
+          : r.status === 'done' ? `<span class="s-done">done · ${r.mins} min</span>` : r.status === 'fail' ? `<span class="s-fail">NaN at step ${r.diverge.toLocaleString()}</span>` : `<span class="s-queue">queued · ${r.gpu}</span>`;
+        const dv = d ? d.d : 0, cls = !d ? 'neutral' : Math.abs(dv) < .01 ? 'neutral' : dv < 0 ? 'good' : 'bad';
+        const bw = d ? Math.min(50, Math.abs(dv) / .08 * 50) : 0;
+        return `<tr class="${r.id === st.b ? 'isB' : r.id === st.a ? 'isA' : ''}" data-row="${r.id}">
+          <td><span class="ab"><button class="a${r.id === st.a ? ' on' : ''}" data-a="${r.id}" aria-label="Set ${esc(r.title)} as A">A</button><button class="b${r.id === st.b ? ' on' : ''}" data-b="${r.id}" aria-label="Set ${esc(r.title)} as B">B</button></span></td>
+          <td><div class="rn"><b><span class="sw" style="background:${r.color}"></span>${esc(r.title)}</b><span>${esc(r.ref)} @ ${r.sha} · ${r.run}</span></div></td>
+          <td><div class="status">${status}</div></td>
+          <td><div class="lossc"><b>${r.status === 'queue' ? '—' : r.diverge ? 'nan' : fmt(lastVal(r))}</b>${spark(r)}</div></td>
+          <td>${r.id === st.a ? '<span class="neutral">baseline</span>' : d ? `<div class="delta"><b class="${cls}">${sign(dv)}</b><span class="dbar"><i style="${dv < 0 ? `right:50%;width:${bw}%;background:#6fd3b8` : `left:50%;width:${bw}%;background:#ff8fa3`}"></i></span></div>${d.step < Math.min(A.at, 5000) || r.status === 'run' ? `<div class="neutral" style="font-size:10px">at ${(d.step * TOK / 1e6).toFixed(0)}M tok</div>` : ''}` : '<span class="neutral">—</span>'}</td>
+          <td><div class="chips">${r.id === st.a ? '<span class="chip same">reference</span>' : ch.length ? ch.map(chipHTML).join('') : '<span class="chip same">same recipe</span>'}</div></td></tr>`;
+      }).join('')}</tbody></table>`;
+    renderSide(A, B);
+  }
+
+  function renderSide(A, B) {
+    const ch = changes(A, B), d = delta(A, B);
+    let cls = 'one', text;
+    const what = ch.map(c => c.key === 'mix' ? 'the data mix' : c.key).join(' and ');
+    if (B.status === 'queue') { cls = ''; text = `B hasn't run yet. It differs from A in ${what || 'nothing'}.`; }
+    else if (B.diverge) { cls = 'fail'; text = `B failed at step ${B.diverge.toLocaleString()} when the loss became NaN. The only difference from A is ${what}, so that change is the cause.`; }
+    else if (!ch.length) { cls = ''; text = `A and B have the same recipe. Any difference is run-to-run noise.`; }
+    else {
+      const dir = d.d < -.005 ? `${fmt(Math.abs(d.d))} lower` : d.d > .005 ? `${fmt(d.d)} higher` : 'the same';
+      const where = `at ${(d.step * TOK / 1e6).toFixed(0)}M tokens${B.status === 'run' ? ' (B is still running)' : ''}`;
+      if (ch.length === 1) text = `B's val loss is ${dir} than A ${where}. Only ${what} differs, so the difference comes from that change.`;
+      else {
+        cls = 'many';
+        const iso = ch.map(c => { const r = RUNS.find(r => r.id !== B.id && r.status !== 'queue' && changes(r, B).length === 1 && changes(r, B)[0].key === c.key); return r ? { c, r } : null; }).filter(Boolean);
+        text = `B's val loss is ${dir} than A ${where}, but ${ch.length} things differ (${what}), so this comparison can't say which caused it.` +
+          (iso.length ? ' ' + iso.map(({ c, r }) => `To isolate ${c.key === 'mix' ? 'the data mix' : c.key}, <button data-pair="${r.id},${B.id}">compare ${esc(r.title)} with B</button>.`).join(' ') : '');
+      }
+    }
+    const metric = (k, va, vb, lowerBetter = true, dp = 3) => {
+      const dd = vb != null && va != null ? vb - va : null;
+      return `<div class="k">${k}</div><div class="r">${va == null ? '—' : typeof va === 'number' ? fmt(va, dp) : va}</div><div class="r">${vb == null ? '—' : typeof vb === 'number' ? fmt(vb, dp) : vb}</div><div class="r ${dd == null || Math.abs(dd) < 1e-9 ? 'neutral' : (dd < 0) === lowerBetter ? 'good' : 'bad'}">${dd == null ? '' : (dd > 0 ? '+' : '−') + fmt(Math.abs(dd), dp)}</div>`;
+    };
+    const s = d ? d.step : Math.min(A.at, B.at);
+    const codeCh = ch.filter(c => c.area === 'code'), cfgCh = ch.filter(c => c.area === 'config'), dataCh = ch.filter(c => c.area === 'data');
+    const diffRows = codeCh.length ? lineDiff(modelPy(A), modelPy(B)) : [];
+    const mixBar = r => `<div class="mixbar">${r.recipe.mix.map(([k, w]) => `<div style="flex:${w};background:${SOURCES[k].color}" title="${SOURCES[k].name} ${Math.round(w * 100)}%"></div>`).join('')}</div>`;
+    const allSrc = [...new Set([...A.recipe.mix, ...B.recipe.mix].map(x => x[0]))];
+    const w = (r, k) => (r.recipe.mix.find(x => x[0] === k) || [0, 0])[1];
+    $('[data-side]').innerHTML = `
+      <div class="cmphead">
+        <div class="vs"><div class="side-a"><b><span class="tag a">A</span>${esc(A.title)}</b><small>${esc(A.ref)} @ ${A.sha}</small></div><span class="mid">VS</span><div class="side-b"><b><span class="tag b">B</span>${esc(B.title)}</b><small>${esc(B.ref)} @ ${B.sha}</small></div></div>
+        <p class="explain ${cls}">${text}</p>
+      </div>
+      <div class="sec"><h4><span>Result</span><span>${s ? `at ${(s * TOK / 1e6).toFixed(0)}M tokens` : ''}</span></h4>
+        <div class="metrics"><div class="h"></div><div class="h r">A</div><div class="h r">B</div><div class="h r">B − A</div>
+          ${metric('TinyStories val', s ? valAt(A, s) : null, s && !B.diverge ? valAt(B, s) : null)}
+          ${metric('Simple Wiki val', A.status === 'done' && A.val ? A.val.wiki : null, B.status === 'done' && B.val ? B.val.wiki : null, true, 2)}
+          ${metric('Instruct val', A.status === 'done' && A.val ? A.val.inst : null, B.status === 'done' && B.val ? B.val.inst : null, true, 2)}
+          ${metric('tokens / s', A.status !== 'queue' ? A.tps * 1000 : null, B.status !== 'queue' ? B.tps * 1000 : null, false, 0).replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,')}
+          ${metric('GPU minutes', A.mins ?? null, B.mins ?? null, true, 1)}
+        </div>
+        ${s ? chart([A, B], A.id, B.id, { w: 464, h: 150, yMin: 1.6, yMax: 2.6 }) : ''}
+      </div>
+      <div class="sec"><h4><span>What changed · ${ch.length || 'nothing'}</span><span>from recipe.json</span></h4>
+        ${ch.length ? `<div class="chips">${ch.map(chipHTML).join('')}</div>` : '<p class="muted">Identical recipes.</p>'}
+        ${codeCh.length ? `<h4><span>Code · train/model.py</span><span>${A.sha} → ${B.sha}</span></h4><div class="diff"><div class="f">train/model.py</div>${diffRows.map(([k, t]) => `<div class="${k}">${k === 'add' ? '+ ' : k === 'del' ? '- ' : k === 'h' ? '' : '  '}${esc(t) || ' '}</div>`).join('')}</div>` : ''}
+        ${cfgCh.length ? `<h4><span>Config</span><span>configs/tiny.toml</span></h4><table class="kv"><thead><tr><th>key</th><th>A</th><th>B</th></tr></thead><tbody>${cfgCh.map(c => `<tr><td>${c.key}</td><td>${esc(c.a)}</td><td>${esc(c.b)}</td></tr>`).join('')}</tbody></table>` : ''}
+        ${dataCh.length || A.recipe.mix.length > 1 ? `<h4><span>Data mix</span><span>${dataCh.length ? 'differs' : 'same'}</span></h4>
+          <div class="mixrow"><span class="tag a">A</span>${mixBar(A)}</div><div class="mixrow"><span class="tag b">B</span>${mixBar(B)}</div>
+          <table class="kv"><thead><tr><th>source</th><th>A</th><th>B</th></tr></thead><tbody>${allSrc.map(k => `<tr><td><span class="sw" style="background:${SOURCES[k].color}"></span>${SOURCES[k].name}</td><td>${Math.round(w(A, k) * 100)}% · ${(w(A, k) * A.at * TOK / 1e6).toFixed(0)}M tok</td><td>${Math.round(w(B, k) * 100)}% · ${(w(B, k) * B.at * TOK / 1e6).toFixed(0)}M tok</td></tr>`).join('')}</tbody></table>` : ''}
+      </div>
+      <div class="sec"><h4><span>Samples · same prompt, greedy</span><span>step ${Math.min(3000, A.at, B.at).toLocaleString() || '—'}</span></h4>
+        <div class="samples2"><div><small>A</small>${esc(sampleOf(A))}</div><div><small>B</small>${esc(sampleOf(B))}</div></div>
+      </div>`;
+  }
+
+  root.addEventListener('click', e => {
+    const t = e.target.closest('[data-a],[data-b],[data-pair],[data-row]'); if (!t) return;
+    if (t.dataset.a) { st.a = t.dataset.a; if (st.b === st.a) st.b = RUNS.find(r => r.id !== st.a).id; }
+    else if (t.dataset.b) { st.b = t.dataset.b; if (st.a === st.b) st.a = RUNS.find(r => r.id !== st.b).id; }
+    else if (t.dataset.pair) { [st.a, st.b] = t.dataset.pair.split(','); }
+    else if (t.dataset.row && t.dataset.row !== st.a) st.b = t.dataset.row;
+    render();
+  });
+  render();
+}
+
+const frame = document.querySelector('[data-app]');
+const win = document.createElement('div'); win.className = 'win'; frame.appendChild(win); app(win);
+const fit = () => { const w = frame.clientWidth, s = Math.min(1, w / 1440); win.style.transform = `translateX(${Math.max(0, (w - 1440 * s) / 2)}px) scale(${s})`; frame.style.height = (936 * s) + 'px'; };
+new ResizeObserver(fit).observe(frame); fit();
+</script>

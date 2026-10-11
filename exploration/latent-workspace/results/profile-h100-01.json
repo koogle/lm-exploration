@@ -1,0 +1,245 @@
+{
+  "run_id": "profile-h100-01",
+  "output": "/runs/profile-h100-01",
+  "report": {
+    "manifest": {
+      "config": {
+        "model": "Qwen/Qwen2.5-0.5B",
+        "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+        "dataset": "Salesforce/wikitext",
+        "dataset_config": "wikitext-2-raw-v1",
+        "dataset_revision": "b08601e04326c79dfdd32d625aee71d232d685c3",
+        "layers": [
+          6,
+          12,
+          18,
+          24
+        ],
+        "jspace_prompts": 8,
+        "jspace_top_k": 25,
+        "jspace_dim_batch": 16,
+        "selected_layers": [],
+        "block_size": 4,
+        "context_length": 128,
+        "memory_tokens": 16,
+        "slots": 8,
+        "width": 512,
+        "heads": 8,
+        "decoder_layers": 4,
+        "refinement_rounds": 2,
+        "diffusion_steps": 4,
+        "batch_size": 8,
+        "train_examples": 128,
+        "eval_examples": 32,
+        "steps": 25,
+        "eval_every": 25,
+        "learning_rate": 0.0003,
+        "seed": 42,
+        "max_seconds": 900,
+        "variants": [
+          "diffusion:multi"
+        ]
+      },
+      "source_sha256": "2285de8636e6941f1c874a4e314f6aa392aeb2c6c58fe1f86f31a98192e92b4f",
+      "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+      "data": {
+        "dataset_revision": "b08601e04326c79dfdd32d625aee71d232d685c3",
+        "train_document_hashes": [
+          "64abdfe12ff40183cd2643bc7bd927342592460bbecb0b3760ba84b65a047d6a",
+          "7545de9141476e4af6d560a33982d641890ace6badc110a85632e6ebe683a6fd",
+          "77ee79ecc2319f29147f9d416c49d0a3a7786e6924c45f7abea0d979ccadc0bb",
+          "86c9e4486c019c2123f74945e297dac31703d10408d716e461e14827b1eda092",
+          "f88f360fd75514ffb8fe7bffb976a43d20c019a130f677bfd5ddd98deff33eb2",
+          "fe1ac503ec7b5c4d5b8afd9aa53c68d6abe22ca0b01d85c55b7ef6abbdf5df5d"
+        ],
+        "validation_document_hashes": [
+          "0ef5e0625dad1e82fb93015ea95b6220d58f40bc3a762e308dc521123f0acc1e",
+          "ee441d8682a1158b8bfe4fb1ebc48902ae299ee25baf27e4ab44ba86c18ddac6"
+        ],
+        "train_examples": 128,
+        "validation_examples": 32,
+        "train_window_tokens": 16896,
+        "validation_window_tokens": 4224
+      },
+      "device": "cuda",
+      "torch": "2.6.0+cu124",
+      "gpu": "NVIDIA H100 80GB HBM3"
+    },
+    "variants": {
+      "diffusion:multi": {
+        "parameters": 21628032,
+        "steps": 25,
+        "completed": true,
+        "context_token_exposures": 25600,
+        "target_token_exposures": 800,
+        "training_seconds_this_session": 4.571003902000001,
+        "steps_per_second_this_session": 5.469258074590896,
+        "initial": {
+          "nll": 11.65312385559082,
+          "nll_by_position": [
+            11.585685729980469,
+            11.729713439941406,
+            11.621198654174805,
+            11.675895690917969
+          ],
+          "accuracy_by_position": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "exact_block_accuracy": 0.0,
+          "generated_accuracy_by_position": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "generated_exact_block_accuracy": 0.0,
+          "examples": 32,
+          "example_mean_nll": [
+            11.56213665008545,
+            11.140844345092773,
+            12.305387496948242,
+            11.792703628540039,
+            11.789694786071777,
+            11.702594757080078,
+            11.05074405670166,
+            11.357385635375977,
+            11.468172073364258,
+            11.467876434326172,
+            11.804519653320312,
+            11.724804878234863,
+            11.354209899902344,
+            11.82721996307373,
+            11.707115173339844,
+            11.413558959960938,
+            11.862171173095703,
+            11.82693862915039,
+            11.519582748413086,
+            11.730316162109375,
+            11.897851943969727,
+            11.516449928283691,
+            11.852235794067383,
+            11.974267959594727,
+            10.973283767700195,
+            11.490009307861328,
+            12.274293899536133,
+            11.591957092285156,
+            11.715799331665039,
+            11.990087509155273,
+            11.882991790771484,
+            11.332733154296875
+          ],
+          "nll_standard_error": 0.054384466260671616
+        },
+        "held_out": {
+          "nll": 8.09113597869873,
+          "nll_by_position": [
+            7.053511619567871,
+            8.459915161132812,
+            8.069412231445312,
+            8.781702995300293
+          ],
+          "accuracy_by_position": [
+            0.03125,
+            0.0,
+            0.03125,
+            0.0
+          ],
+          "exact_block_accuracy": 0.0,
+          "generated_accuracy_by_position": [
+            0.03125,
+            0.0,
+            0.03125,
+            0.0
+          ],
+          "generated_exact_block_accuracy": 0.0,
+          "examples": 32,
+          "example_mean_nll": [
+            7.340394020080566,
+            5.175640106201172,
+            7.077408790588379,
+            7.485208988189697,
+            8.805991172790527,
+            7.800748348236084,
+            8.368392944335938,
+            7.534976959228516,
+            9.310721397399902,
+            7.676407337188721,
+            9.989252090454102,
+            8.213815689086914,
+            6.50103759765625,
+            10.80242919921875,
+            8.344829559326172,
+            5.704501152038574,
+            10.14370346069336,
+            4.93275785446167,
+            7.964175224304199,
+            9.600101470947266,
+            9.777935028076172,
+            8.256147384643555,
+            6.639559745788574,
+            10.037663459777832,
+            5.854883193969727,
+            7.336964130401611,
+            8.785659790039062,
+            6.846966743469238,
+            10.308055877685547,
+            10.56410026550293,
+            10.95535659790039,
+            4.780551910400391
+          ],
+          "nll_standard_error": 0.3101138472557068
+        },
+        "latency": {
+          "autoregressive": {
+            "seconds": [
+              0.25110589300000186,
+              0.259418433999997,
+              0.2635015309999993
+            ],
+            "output_tokens": [
+              16,
+              16,
+              16
+            ],
+            "seconds_per_token": 0.016125538708333293
+          },
+          "block": {
+            "seconds": [
+              0.21169020700000019,
+              0.200175435000002,
+              0.16456217600000045
+            ],
+            "output_tokens": [
+              16,
+              16,
+              16
+            ],
+            "seconds_per_token": 0.012008912875000055
+          },
+          "note": "Unverified block quality; timing alone does not establish efficiency at matched quality."
+        }
+      }
+    },
+    "teacher": {
+      "nll_by_position": [
+        2.668243169784546,
+        1.9866619110107422,
+        1.7176176309585571,
+        2.6932127475738525
+      ],
+      "accuracy_by_position": [
+        0.5,
+        0.6875,
+        0.5625,
+        0.40625
+      ],
+      "note": "Teacher-forced AR reference sees true earlier target tokens; not a context-only comparator."
+    },
+    "feature_cache_bytes": 29360128,
+    "elapsed_seconds": 23.898251778000002,
+    "peak_gpu_bytes": 1509420032
+  }
+}

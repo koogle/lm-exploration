@@ -1,0 +1,3 @@
+rust/wasm/target/
+web/inference.wasm
+models/gpt2/*.gguf

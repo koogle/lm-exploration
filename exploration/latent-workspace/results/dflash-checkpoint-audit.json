@@ -1,0 +1,12 @@
+{
+  "training_completed_steps": 1000,
+  "requested_steps": 1000,
+  "original_rollout_check": "failed; raw report completed=false retained",
+  "launch_commit": "18a9756",
+  "source_sha256": "cf0fab15798cd0bc53487cdafee0a6df60a8d3a5c47dbaea274543a736b83bd2",
+  "checkpoint_step": 1000,
+  "checkpoint_matches_report": true,
+  "draft_final_norm_weight_rms": 1.1267485618591309,
+  "draft_final_norm_weight_min": 0.9684260487556458,
+  "draft_final_norm_weight_max": 1.3143820762634277
+}

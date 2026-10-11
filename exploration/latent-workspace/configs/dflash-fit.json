@@ -1,0 +1,27 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B",
+  "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "layers": [
+    2,
+    22
+  ],
+  "draft_layers": 2,
+  "block_size": 8,
+  "gamma": 4.0,
+  "train_prompts": 384,
+  "validation_prompts": 48,
+  "test_prompts": 48,
+  "prompt_tokens": 128,
+  "response_tokens": 64,
+  "batch_size": 3,
+  "anchors_per_sequence": 8,
+  "steps": 20000,
+  "eval_every": 250,
+  "learning_rate": 0.0006,
+  "warmup_ratio": 0.04,
+  "seed": 42,
+  "max_seconds": 3300,
+  "historical_corpus": "/runs/data-large-01/corpus.pt",
+  "prompt_manifest": "",
+  "continue_from": "/runs/dflash-pilot-02"
+}

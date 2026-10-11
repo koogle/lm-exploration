@@ -1,0 +1,15 @@
+{
+  "completed": true,
+  "arms": [
+    "baseline",
+    "dropout",
+    "null",
+    "dropout-null"
+  ],
+  "source_sha256": "06d951e2d9178a6d7ffe72f95c659579293426e222ee934bddf57aebe0e961e8",
+  "launch_commit": "255a6b5",
+  "identical_ordered_subsets_and_split_hashes": true,
+  "identical_supervised_token_counts_by_checkpoint": true,
+  "all_training_windows_measured": true,
+  "new_test_evaluation": false
+}

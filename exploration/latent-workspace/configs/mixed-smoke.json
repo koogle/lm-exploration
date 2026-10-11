@@ -1,0 +1,16 @@
+{
+  "corpus": "mixed",
+  "context_length": 64,
+  "memory_tokens": 4,
+  "train_examples": 96,
+  "eval_examples": 24,
+  "test_examples": 24,
+  "batch_size": 4,
+  "steps": 5,
+  "eval_every": 5,
+  "jspace_prompts": 1,
+  "max_seconds": 900,
+  "variants": ["diffusion:final", "diffusion:all", "diffusion:jspace"],
+  "selected_layers": [6, 12, 18],
+  "evaluate_test": false
+}

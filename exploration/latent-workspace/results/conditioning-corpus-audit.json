@@ -1,0 +1,22 @@
+{
+  "runs": [
+    "conditioning-final-01",
+    "conditioning-all-01",
+    "conditioning-best-01",
+    "conditioning-selected-01",
+    "conditioning-attention-all-01",
+    "conditioning-attention-best-01",
+    "conditioning-attention-selected-01",
+    "conditioning-jspace-01",
+    "conditioning-parallel-all-01",
+    "qwen3-conditioning-final-01",
+    "qwen3-conditioning-all-01"
+  ],
+  "all_ordered_training_and_heldout_window_hashes_match": true,
+  "split_digest": {
+    "validation": "019a303789eeafb64a5017e49daf3df6d84a350a1917385502eddcc164fd9b6c",
+    "test": "61dd20c13483045682fecc3da158d93860dd9e5d18ecf820af3c3239be932e88",
+    "ordered_train": "fa1d6e7e2e3f53fcefc13281caa98ec1655667f3b851acf3364ba3ca71c41053"
+  },
+  "note": "Cross-run corpus-identity audit only; no metrics or token labels altered."
+}

@@ -1,0 +1,31 @@
+{
+  "run": "data-repaired-02",
+  "window_counts": {
+    "train": {
+      "total": 49152,
+      "distinct": 49152
+    },
+    "validation": {
+      "total": 192,
+      "distinct": 192
+    },
+    "test": {
+      "total": 192,
+      "distinct": 192
+    }
+  },
+  "held_out_tensors_unchanged": {
+    "validation": true,
+    "test": true
+  },
+  "overlap_counts": {
+    "train/validation": 0,
+    "train/test": 0,
+    "validation/test": 0
+  },
+  "parent_training_cleanup": {
+    "duplicate_windows_removed": 67,
+    "held_out_overlapping_windows_removed": 9,
+    "note": "Held-out tensors unchanged; historical training subset may change to remove leakage/duplicates."
+  }
+}

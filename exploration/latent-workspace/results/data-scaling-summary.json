@@ -1,0 +1,102 @@
+[
+  {
+    "run": "data-repaired-02",
+    "seed": 42,
+    "batch": 16,
+    "windows": 12288,
+    "best_step": 4000,
+    "best_validation_nll": 5.921109199523926,
+    "final_step": 8000,
+    "final_validation_nll": 6.000762780507405
+  },
+  {
+    "run": "data-repaired-02",
+    "seed": 42,
+    "batch": 16,
+    "windows": 49152,
+    "best_step": 8000,
+    "best_validation_nll": 5.737749099731445,
+    "final_step": 8000,
+    "final_validation_nll": 5.737749099731445
+  },
+  {
+    "run": "data-large-01",
+    "seed": 42,
+    "batch": 16,
+    "windows": 196608,
+    "best_step": 8000,
+    "best_validation_nll": 5.689993381500244,
+    "final_step": 8000,
+    "final_validation_nll": 5.689993381500244
+  },
+  {
+    "run": "data-batch128-01",
+    "seed": 42,
+    "batch": 128,
+    "windows": 49152,
+    "best_step": 2000,
+    "best_validation_nll": 5.5114240646362305,
+    "final_step": 4000,
+    "final_validation_nll": 5.669602711995442
+  },
+  {
+    "run": "data-large-batch128-01",
+    "seed": 42,
+    "batch": 128,
+    "windows": 196608,
+    "best_step": 4000,
+    "best_validation_nll": 5.264228979746501,
+    "final_step": 4000,
+    "final_validation_nll": 5.264228979746501
+  },
+  {
+    "run": "data-continue-01",
+    "seed": 42,
+    "batch": 128,
+    "windows": 196608,
+    "best_step": 16000,
+    "best_validation_nll": 5.200833638509114,
+    "final_step": 16000,
+    "final_validation_nll": 5.200833638509114
+  },
+  {
+    "run": "data-seed43-01",
+    "seed": 43,
+    "batch": 128,
+    "windows": 49152,
+    "best_step": 2000,
+    "best_validation_nll": 5.638756275177002,
+    "final_step": 4000,
+    "final_validation_nll": 5.753170649210612
+  },
+  {
+    "run": "data-seed43-01",
+    "seed": 43,
+    "batch": 128,
+    "windows": 196608,
+    "best_step": 4000,
+    "best_validation_nll": 5.279750029246013,
+    "final_step": 4000,
+    "final_validation_nll": 5.279750029246013
+  },
+  {
+    "run": "data-seed44-01",
+    "seed": 44,
+    "batch": 128,
+    "windows": 49152,
+    "best_step": 2000,
+    "best_validation_nll": 5.556931972503662,
+    "final_step": 4000,
+    "final_validation_nll": 5.712105433146159
+  },
+  {
+    "run": "data-seed44-01",
+    "seed": 44,
+    "batch": 128,
+    "windows": 196608,
+    "best_step": 4000,
+    "best_validation_nll": 5.34785000483195,
+    "final_step": 4000,
+    "final_validation_nll": 5.34785000483195
+  }
+]

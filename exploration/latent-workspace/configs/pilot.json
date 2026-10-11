@@ -1,0 +1,14 @@
+{
+  "train_examples": 4096,
+  "eval_examples": 256,
+  "steps": 750,
+  "eval_every": 250,
+  "jspace_prompts": 100,
+  "max_seconds": 3300,
+  "context_length": 256,
+  "selected_layers": [
+    6,
+    12,
+    18
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "source_run": "conditioning-scan-01",
+  "all_24_residual_probes_completed": true,
+  "criterion": "validation mean NLL at offsets 2..4; exclude final layer",
+  "selected_layers": [
+    18,
+    20,
+    17
+  ],
+  "selected_scores": [
+    7.1131612459818525,
+    7.116751035054524,
+    7.121565500895183
+  ]
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "run": "qwen3-conditioning-all-01",
+    "variant": "diffusion:all",
+    "selected_layers": [
+      6,
+      12,
+      18
+    ],
+    "best_step": 4000,
+    "best_nll": 5.42282772064209,
+    "qwen_prefix_agreement": 1.0572916666666667,
+    "domains": {
+      "prose": 5.643893241882324,
+      "code": 5.170934677124023,
+      "translation": 5.453655242919922
+    },
+    "parameters": 23405056
+  },
+  {
+    "run": "qwen3-conditioning-final-01",
+    "variant": "diffusion:final",
+    "selected_layers": [
+      6,
+      12,
+      18
+    ],
+    "best_step": 4000,
+    "best_nll": 5.6735184987386065,
+    "qwen_prefix_agreement": 1.1145833333333333,
+    "domains": {
+      "prose": 5.915737628936768,
+      "code": 5.449021339416504,
+      "translation": 5.655796527862549
+    },
+    "parameters": 23405056
+  }
+]

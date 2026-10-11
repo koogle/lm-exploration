@@ -1,0 +1,233 @@
+{
+  "rows": [
+    {
+      "run": "conditioning-final-01",
+      "step": 4000,
+      "model": "Qwen/Qwen2.5-0.5B",
+      "validation_nll": 5.390157063802083,
+      "test_nll": 5.518684387207031,
+      "qwen_prefix": 1.0364583333333333,
+      "full_block_agreement": 0.015625,
+      "domain_nll": {
+        "prose": 5.4086503982543945,
+        "code": 4.965723991394043,
+        "translation": 6.181678771972656
+      }
+    },
+    {
+      "run": "conditioning-all-01",
+      "step": 4000,
+      "model": "Qwen/Qwen2.5-0.5B",
+      "validation_nll": 5.258598804473877,
+      "test_nll": 5.410946528116862,
+      "qwen_prefix": 1.140625,
+      "full_block_agreement": 0.015625,
+      "domain_nll": {
+        "prose": 5.3141021728515625,
+        "code": 4.759177207946777,
+        "translation": 6.159560203552246
+      }
+    },
+    {
+      "run": "conditioning-best-01",
+      "step": 4000,
+      "model": "Qwen/Qwen2.5-0.5B",
+      "validation_nll": 5.310537974039714,
+      "test_nll": 5.441781520843506,
+      "qwen_prefix": 1.09375,
+      "full_block_agreement": 0.020833333333333332,
+      "domain_nll": {
+        "prose": 5.298996925354004,
+        "code": 4.822872638702393,
+        "translation": 6.203474998474121
+      }
+    },
+    {
+      "run": "conditioning-selected-01",
+      "step": 4000,
+      "model": "Qwen/Qwen2.5-0.5B",
+      "validation_nll": 5.3306277592976885,
+      "test_nll": 5.43981138865153,
+      "qwen_prefix": 1.046875,
+      "full_block_agreement": 0.005208333333333333,
+      "domain_nll": {
+        "prose": 5.326728820800781,
+        "code": 4.823012828826904,
+        "translation": 6.169692516326904
+      }
+    },
+    {
+      "run": "conditioning-attention-all-01",
+      "step": 4000,
+      "model": "Qwen/Qwen2.5-0.5B",
+      "validation_nll": 5.419034004211426,
+      "test_nll": 5.583416144053142,
+      "qwen_prefix": 1.0833333333333333,
+      "full_block_agreement": 0.015625,
+      "domain_nll": {
+        "prose": 5.477457046508789,
+        "code": 4.9754838943481445,
+        "translation": 6.29730749130249
+      }
+    },
+    {
+      "run": "conditioning-attention-best-01",
+      "step": 4000,
+      "model": "Qwen/Qwen2.5-0.5B",
+      "validation_nll": 5.459811846415202,
+      "test_nll": 5.579233646392822,
+      "qwen_prefix": 1.078125,
+      "full_block_agreement": 0.010416666666666666,
+      "domain_nll": {
+        "prose": 5.482937812805176,
+        "code": 4.969126224517822,
+        "translation": 6.285636901855469
+      }
+    },
+    {
+      "run": "conditioning-attention-selected-01",
+      "step": 4000,
+      "model": "Qwen/Qwen2.5-0.5B",
+      "validation_nll": 5.439148902893066,
+      "test_nll": 5.556125322977702,
+      "qwen_prefix": 1.0520833333333333,
+      "full_block_agreement": 0.015625,
+      "domain_nll": {
+        "prose": 5.422050476074219,
+        "code": 4.986753940582275,
+        "translation": 6.259571552276611
+      }
+    },
+    {
+      "run": "conditioning-jspace-01",
+      "step": 4000,
+      "model": "Qwen/Qwen2.5-0.5B",
+      "validation_nll": 5.531956513722737,
+      "test_nll": 5.663089275360107,
+      "qwen_prefix": 1.0625,
+      "full_block_agreement": 0.005208333333333333,
+      "domain_nll": {
+        "prose": 5.60100793838501,
+        "code": 5.100714683532715,
+        "translation": 6.287545204162598
+      }
+    },
+    {
+      "run": "conditioning-parallel-all-01",
+      "step": 4000,
+      "model": "Qwen/Qwen2.5-0.5B",
+      "validation_nll": 5.16081698735555,
+      "test_nll": 5.331814448038737,
+      "qwen_prefix": 1.1458333333333333,
+      "full_block_agreement": 0.010416666666666666,
+      "domain_nll": {
+        "prose": 5.25168514251709,
+        "code": 4.581098556518555,
+        "translation": 6.162659645080566
+      }
+    },
+    {
+      "run": "qwen3-conditioning-final-01",
+      "step": 4000,
+      "model": "Qwen/Qwen3-0.6B-Base",
+      "validation_nll": 5.6735184987386065,
+      "test_nll": 5.66273848215739,
+      "qwen_prefix": 1.0208333333333333,
+      "full_block_agreement": 0.0,
+      "domain_nll": {
+        "prose": 5.5980072021484375,
+        "code": 5.236783027648926,
+        "translation": 6.153425216674805
+      }
+    },
+    {
+      "run": "qwen3-conditioning-all-01",
+      "step": 4000,
+      "model": "Qwen/Qwen3-0.6B-Base",
+      "validation_nll": 5.42282772064209,
+      "test_nll": 5.444850921630859,
+      "qwen_prefix": 1.0364583333333333,
+      "full_block_agreement": 0.0,
+      "domain_nll": {
+        "prose": 5.284911155700684,
+        "code": 4.990416526794434,
+        "translation": 6.059225082397461
+      }
+    }
+  ],
+  "paired_comparisons": [
+    {
+      "left": "conditioning-all-01",
+      "right": "conditioning-final-01",
+      "nll": {
+        "left_minus_right": -0.10773823311319575,
+        "group_bootstrap_95_interval": [
+          -0.1703139691798401,
+          -0.041177871674117864
+        ]
+      },
+      "qwen_prefix": {
+        "left_minus_right": 0.10416666666666667,
+        "group_bootstrap_95_interval": [
+          0.028707279311835927,
+          0.17885968784071762
+        ]
+      }
+    },
+    {
+      "left": "conditioning-jspace-01",
+      "right": "conditioning-selected-01",
+      "nll": {
+        "left_minus_right": 0.2232776937695841,
+        "group_bootstrap_95_interval": [
+          0.15402833742801791,
+          0.2903372613663934
+        ]
+      },
+      "qwen_prefix": {
+        "left_minus_right": 0.015625,
+        "group_bootstrap_95_interval": [
+          -0.06416428191511209,
+          0.10000473484848477
+        ]
+      }
+    },
+    {
+      "left": "conditioning-all-01",
+      "right": "conditioning-parallel-all-01",
+      "nll": {
+        "left_minus_right": 0.0791321657015942,
+        "group_bootstrap_95_interval": [
+          0.008478404178382665,
+          0.14422174433613386
+        ]
+      },
+      "qwen_prefix": {
+        "left_minus_right": -0.005208333333333333,
+        "group_bootstrap_95_interval": [
+          -0.10883675164836219,
+          0.10093037922522728
+        ]
+      }
+    },
+    {
+      "left": "qwen3-conditioning-all-01",
+      "right": "qwen3-conditioning-final-01",
+      "nll": {
+        "left_minus_right": -0.21788758505135775,
+        "group_bootstrap_95_interval": [
+          -0.3167814540990767,
+          -0.11456450134909554
+        ]
+      },
+      "qwen_prefix": {
+        "left_minus_right": 0.015625,
+        "group_bootstrap_95_interval": [
+          -0.049278776089437856,
+          0.08575797439736445
+        ]
+      }
+    }
+  ],
+  "limits": "One decoder seed, 192 grouped test windows, multiple exploratory comparisons. Intervals are conditional on trained heads; not corrected for multiple testing."
+}

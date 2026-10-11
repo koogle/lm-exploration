@@ -1,0 +1,18 @@
+{
+  "dataset_config": "wikitext-2-raw-v1",
+  "context_length": 64,
+  "memory_tokens": 4,
+  "width": 256,
+  "heads": 4,
+  "decoder_layers": 2,
+  "refinement_rounds": 1,
+  "batch_size": 4,
+  "train_examples": 64,
+  "eval_examples": 16,
+  "steps": 10,
+  "eval_every": 10,
+  "jspace_prompts": 1,
+  "jspace_dim_batch": 8,
+  "max_seconds": 1500,
+  "variants": ["parallel:final", "diffusion:final", "diffusion:layer12", "diffusion:multi", "diffusion:attention12", "diffusion:attention_multi", "diffusion:jspace"]
+}

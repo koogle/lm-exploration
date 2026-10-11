@@ -1,0 +1,12 @@
+{
+  "dataset_config": "wikitext-2-raw-v1",
+  "context_length": 128,
+  "memory_tokens": 16,
+  "batch_size": 8,
+  "train_examples": 128,
+  "eval_examples": 32,
+  "steps": 25,
+  "eval_every": 25,
+  "max_seconds": 900,
+  "variants": ["diffusion:multi"]
+}

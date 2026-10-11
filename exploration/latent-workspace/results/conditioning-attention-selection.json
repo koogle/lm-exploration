@@ -1,0 +1,9 @@
+{
+  "source_run": "conditioning-scan-01",
+  "criterion": "validation mean NLL at offsets 2..4",
+  "selected_layers": [
+    20,
+    16,
+    15
+  ]
+}

@@ -1,0 +1,804 @@
+{
+  "run_id": "qwen3-conditioning-smoke-01",
+  "output": "/runs/qwen3-conditioning-smoke-01",
+  "report": {
+    "config": {
+      "model": "Qwen/Qwen3-0.6B-Base",
+      "model_revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+      "allow_compatible_backbone_change": true,
+      "normalize_token_inputs": false,
+      "position_readout": true,
+      "residual_readout": true,
+      "study_scan_only": false,
+      "scan_attention": false,
+      "study_eval_only": false,
+      "study_resume": "",
+      "study_reference": "",
+      "study_parent": "",
+      "study_sizes": [
+        96
+      ],
+      "study_checkpoints": [
+        2
+      ],
+      "evaluate_test": false,
+      "scan_steps": 0,
+      "select_layers_by_probe": false,
+      "selected_layer_count": 3,
+      "corpus": "mixed",
+      "test_examples": 12,
+      "dataset": "Salesforce/wikitext",
+      "dataset_config": "wikitext-103-raw-v1",
+      "dataset_revision": "main",
+      "layers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
+      ],
+      "jspace_prompts": 8,
+      "jspace_top_k": 25,
+      "jspace_dim_batch": 16,
+      "selected_layers": [
+        6,
+        12,
+        18
+      ],
+      "block_size": 4,
+      "context_length": 128,
+      "memory_tokens": 4,
+      "slots": 8,
+      "width": 512,
+      "heads": 8,
+      "decoder_layers": 4,
+      "refinement_rounds": 1,
+      "diffusion_steps": 4,
+      "batch_size": 128,
+      "train_examples": 96,
+      "eval_examples": 12,
+      "steps": 1000,
+      "eval_every": 250,
+      "learning_rate": 0.0003,
+      "seed": 42,
+      "max_seconds": 600,
+      "variants": [
+        "diffusion:all"
+      ]
+    },
+    "data": {
+      "domain_ranges": {
+        "test": {
+          "prose": [
+            0,
+            4
+          ],
+          "code": [
+            4,
+            8
+          ],
+          "translation": [
+            8,
+            12
+          ]
+        },
+        "validation": {
+          "prose": [
+            0,
+            4
+          ],
+          "code": [
+            4,
+            8
+          ],
+          "translation": [
+            8,
+            12
+          ]
+        },
+        "train": {
+          "prose": [
+            0,
+            32
+          ],
+          "code": [
+            32,
+            64
+          ],
+          "translation": [
+            64,
+            96
+          ]
+        }
+      },
+      "window_groups": {
+        "test": [
+          "prose:2936924d2b456db8aa2da1e64d0044044ea74996d63f502b807deace0061d4dc",
+          "prose:2936924d2b456db8aa2da1e64d0044044ea74996d63f502b807deace0061d4dc",
+          "prose:2936924d2b456db8aa2da1e64d0044044ea74996d63f502b807deace0061d4dc",
+          "prose:2936924d2b456db8aa2da1e64d0044044ea74996d63f502b807deace0061d4dc",
+          "code:dilawar/moose-full",
+          "code:dilawar/moose-full",
+          "code:dilawar/moose-full",
+          "code:dilawar/moose-full",
+          "translation:37d49ed6b4cc796a885164626bacc70d5d321fcec2dc4fcad0c507df4a2cd295",
+          "translation:37d49ed6b4cc796a885164626bacc70d5d321fcec2dc4fcad0c507df4a2cd295",
+          "translation:37d49ed6b4cc796a885164626bacc70d5d321fcec2dc4fcad0c507df4a2cd295",
+          "translation:cae90b17c8f38295cedaf20d90cdd02f9d1f665bc6a71af88005f46d101f321a"
+        ],
+        "validation": [
+          "prose:c1ae099d023a343bb66a32c6d06888eef3c5b625e7da8b145e17c2d7448b964e",
+          "prose:c1ae099d023a343bb66a32c6d06888eef3c5b625e7da8b145e17c2d7448b964e",
+          "prose:c1ae099d023a343bb66a32c6d06888eef3c5b625e7da8b145e17c2d7448b964e",
+          "prose:c1ae099d023a343bb66a32c6d06888eef3c5b625e7da8b145e17c2d7448b964e",
+          "code:tomchristie/django",
+          "code:tomchristie/django",
+          "code:tomchristie/django",
+          "code:tomchristie/django",
+          "translation:8fb6c8396b20bcd731dcff9157e77429af96d5db014cd4ab447bc29d879e5ce4",
+          "translation:8fb6c8396b20bcd731dcff9157e77429af96d5db014cd4ab447bc29d879e5ce4",
+          "translation:8fb6c8396b20bcd731dcff9157e77429af96d5db014cd4ab447bc29d879e5ce4",
+          "translation:8fb6c8396b20bcd731dcff9157e77429af96d5db014cd4ab447bc29d879e5ce4"
+        ],
+        "train": [
+          "prose:c4ef5cbb748f80c8d863718aa9b054298ddf5fe3fd94f236bf9476416c5938ab",
+          "prose:c4ef5cbb748f80c8d863718aa9b054298ddf5fe3fd94f236bf9476416c5938ab",
+          "prose:c4ef5cbb748f80c8d863718aa9b054298ddf5fe3fd94f236bf9476416c5938ab",
+          "prose:c4ef5cbb748f80c8d863718aa9b054298ddf5fe3fd94f236bf9476416c5938ab",
+          "prose:01b3f39d9aae8a61a333414d5e2543bacfde166db7d5c388fbdede5df140706c",
+          "prose:01b3f39d9aae8a61a333414d5e2543bacfde166db7d5c388fbdede5df140706c",
+          "prose:01b3f39d9aae8a61a333414d5e2543bacfde166db7d5c388fbdede5df140706c",
+          "prose:01b3f39d9aae8a61a333414d5e2543bacfde166db7d5c388fbdede5df140706c",
+          "prose:0f2ba30cba2a68b5f41583aa76c9e8e72c0d382f61b28dcb5bc4ceafba21b35b",
+          "prose:0f2ba30cba2a68b5f41583aa76c9e8e72c0d382f61b28dcb5bc4ceafba21b35b",
+          "prose:0f2ba30cba2a68b5f41583aa76c9e8e72c0d382f61b28dcb5bc4ceafba21b35b",
+          "prose:0f2ba30cba2a68b5f41583aa76c9e8e72c0d382f61b28dcb5bc4ceafba21b35b",
+          "prose:d0f0885aad8df0ced1bc98fe915a3bc5fa1548923e4734a106f78a54ad8c4926",
+          "prose:d0f0885aad8df0ced1bc98fe915a3bc5fa1548923e4734a106f78a54ad8c4926",
+          "prose:d0f0885aad8df0ced1bc98fe915a3bc5fa1548923e4734a106f78a54ad8c4926",
+          "prose:d0f0885aad8df0ced1bc98fe915a3bc5fa1548923e4734a106f78a54ad8c4926",
+          "prose:3b1897420ebb3bed3c31e2f8267df83f60704170412d15fca1b23a8e944fbc04",
+          "prose:3b1897420ebb3bed3c31e2f8267df83f60704170412d15fca1b23a8e944fbc04",
+          "prose:3b1897420ebb3bed3c31e2f8267df83f60704170412d15fca1b23a8e944fbc04",
+          "prose:3b1897420ebb3bed3c31e2f8267df83f60704170412d15fca1b23a8e944fbc04",
+          "prose:62e2ec26960d2b2aadd46cf6de80a28bea7dd7a43603b642e2e7b3ad419d1f3a",
+          "prose:62e2ec26960d2b2aadd46cf6de80a28bea7dd7a43603b642e2e7b3ad419d1f3a",
+          "prose:62e2ec26960d2b2aadd46cf6de80a28bea7dd7a43603b642e2e7b3ad419d1f3a",
+          "prose:62e2ec26960d2b2aadd46cf6de80a28bea7dd7a43603b642e2e7b3ad419d1f3a",
+          "prose:72617a2a49d7035227d4c3bc35f0b6a02faefa11f56994fd6d6a372d43e283de",
+          "prose:72617a2a49d7035227d4c3bc35f0b6a02faefa11f56994fd6d6a372d43e283de",
+          "prose:72617a2a49d7035227d4c3bc35f0b6a02faefa11f56994fd6d6a372d43e283de",
+          "prose:72617a2a49d7035227d4c3bc35f0b6a02faefa11f56994fd6d6a372d43e283de",
+          "prose:418365a1ceff01389a588f604ceab542df604d6af54b328593cad32db764f805",
+          "prose:418365a1ceff01389a588f604ceab542df604d6af54b328593cad32db764f805",
+          "prose:418365a1ceff01389a588f604ceab542df604d6af54b328593cad32db764f805",
+          "prose:418365a1ceff01389a588f604ceab542df604d6af54b328593cad32db764f805",
+          "code:ahmedbodi/AutobahnPython",
+          "code:ahmedbodi/AutobahnPython",
+          "code:ahmedbodi/AutobahnPython",
+          "code:ifduyue/django",
+          "code:ifduyue/django",
+          "code:ifduyue/django",
+          "code:ifduyue/django",
+          "code:kmike/scikit-learn",
+          "code:kmike/scikit-learn",
+          "code:kmike/scikit-learn",
+          "code:kmike/scikit-learn",
+          "code:houlixin/BBB-TISDK",
+          "code:houlixin/BBB-TISDK",
+          "code:houlixin/BBB-TISDK",
+          "code:houlixin/BBB-TISDK",
+          "code:dataxu/ansible",
+          "code:dataxu/ansible",
+          "code:dataxu/ansible",
+          "code:dataxu/ansible",
+          "code:163gal/Time-Line",
+          "code:163gal/Time-Line",
+          "code:163gal/Time-Line",
+          "code:163gal/Time-Line",
+          "code:blackbliss/callme",
+          "code:blackbliss/callme",
+          "code:blackbliss/callme",
+          "code:blackbliss/callme",
+          "code:pipet/pipet",
+          "code:pipet/pipet",
+          "code:prutseltje/ansible",
+          "code:prutseltje/ansible",
+          "code:prutseltje/ansible",
+          "translation:c325687946389ab8d659fb54873fcf49dbef78248334795515a00587cafa79ec",
+          "translation:c325687946389ab8d659fb54873fcf49dbef78248334795515a00587cafa79ec",
+          "translation:c9d86f64188fca52b143e0cdcbd85c5bc1ac80653ce6321e800246b1867a5c0e",
+          "translation:c9d86f64188fca52b143e0cdcbd85c5bc1ac80653ce6321e800246b1867a5c0e",
+          "translation:c9d86f64188fca52b143e0cdcbd85c5bc1ac80653ce6321e800246b1867a5c0e",
+          "translation:c9d86f64188fca52b143e0cdcbd85c5bc1ac80653ce6321e800246b1867a5c0e",
+          "translation:cbf50eed2018f5dd00430c72f88b7f3902e054537d2c37d0eb016815513739ca",
+          "translation:cbf50eed2018f5dd00430c72f88b7f3902e054537d2c37d0eb016815513739ca",
+          "translation:cbf50eed2018f5dd00430c72f88b7f3902e054537d2c37d0eb016815513739ca",
+          "translation:cbf50eed2018f5dd00430c72f88b7f3902e054537d2c37d0eb016815513739ca",
+          "translation:8b211eb5b1cd430bda69371df18697e49f32c422637b19f14c66fd4415d8723a",
+          "translation:8b211eb5b1cd430bda69371df18697e49f32c422637b19f14c66fd4415d8723a",
+          "translation:8b211eb5b1cd430bda69371df18697e49f32c422637b19f14c66fd4415d8723a",
+          "translation:8b211eb5b1cd430bda69371df18697e49f32c422637b19f14c66fd4415d8723a",
+          "translation:98833e7c956eb9719e6d72d5223efb5b03a1d6386acda1eabd79834c5d3b761c",
+          "translation:98833e7c956eb9719e6d72d5223efb5b03a1d6386acda1eabd79834c5d3b761c",
+          "translation:98833e7c956eb9719e6d72d5223efb5b03a1d6386acda1eabd79834c5d3b761c",
+          "translation:98833e7c956eb9719e6d72d5223efb5b03a1d6386acda1eabd79834c5d3b761c",
+          "translation:bc22f42aa6e88294afe0ed0b728eccb10eb00b3635b1b7d81cd5ebc65b546239",
+          "translation:bc22f42aa6e88294afe0ed0b728eccb10eb00b3635b1b7d81cd5ebc65b546239",
+          "translation:bc22f42aa6e88294afe0ed0b728eccb10eb00b3635b1b7d81cd5ebc65b546239",
+          "translation:bc22f42aa6e88294afe0ed0b728eccb10eb00b3635b1b7d81cd5ebc65b546239",
+          "translation:81d44a5c8cfbddb41f71b3c39613e29cdb10fd6c81e20d4bc6a6efa0fccdbdd3",
+          "translation:81d44a5c8cfbddb41f71b3c39613e29cdb10fd6c81e20d4bc6a6efa0fccdbdd3",
+          "translation:81d44a5c8cfbddb41f71b3c39613e29cdb10fd6c81e20d4bc6a6efa0fccdbdd3",
+          "translation:e3e09cc058beabad8e11d5b154682202f1b0ec6c308a86f4621e5fdebf1c5bf0",
+          "translation:e3e09cc058beabad8e11d5b154682202f1b0ec6c308a86f4621e5fdebf1c5bf0",
+          "translation:8ff0c1a132f65d6a6d1816e189d3fb338421e3f85a88deb946e25ba0d3dbfc7c",
+          "translation:8ff0c1a132f65d6a6d1816e189d3fb338421e3f85a88deb946e25ba0d3dbfc7c",
+          "translation:8ff0c1a132f65d6a6d1816e189d3fb338421e3f85a88deb946e25ba0d3dbfc7c",
+          "translation:8ff0c1a132f65d6a6d1816e189d3fb338421e3f85a88deb946e25ba0d3dbfc7c",
+          "translation:062c9044367a6508b1e5f7ef354637225f3460e570081e54c0dbcced97e188fd"
+        ]
+      },
+      "window_hashes": {
+        "test": [
+          "2936924d2b456db8aa2da1e64d0044044ea74996d63f502b807deace0061d4dc",
+          "2936924d2b456db8aa2da1e64d0044044ea74996d63f502b807deace0061d4dc",
+          "2936924d2b456db8aa2da1e64d0044044ea74996d63f502b807deace0061d4dc",
+          "2936924d2b456db8aa2da1e64d0044044ea74996d63f502b807deace0061d4dc",
+          "885d9b16a2a9fa045c16382ed9b9aec1ed6fd31ab6dca076c77651f5dc96956c",
+          "885d9b16a2a9fa045c16382ed9b9aec1ed6fd31ab6dca076c77651f5dc96956c",
+          "885d9b16a2a9fa045c16382ed9b9aec1ed6fd31ab6dca076c77651f5dc96956c",
+          "885d9b16a2a9fa045c16382ed9b9aec1ed6fd31ab6dca076c77651f5dc96956c",
+          "37d49ed6b4cc796a885164626bacc70d5d321fcec2dc4fcad0c507df4a2cd295",
+          "37d49ed6b4cc796a885164626bacc70d5d321fcec2dc4fcad0c507df4a2cd295",
+          "37d49ed6b4cc796a885164626bacc70d5d321fcec2dc4fcad0c507df4a2cd295",
+          "cae90b17c8f38295cedaf20d90cdd02f9d1f665bc6a71af88005f46d101f321a"
+        ],
+        "validation": [
+          "c1ae099d023a343bb66a32c6d06888eef3c5b625e7da8b145e17c2d7448b964e",
+          "c1ae099d023a343bb66a32c6d06888eef3c5b625e7da8b145e17c2d7448b964e",
+          "c1ae099d023a343bb66a32c6d06888eef3c5b625e7da8b145e17c2d7448b964e",
+          "c1ae099d023a343bb66a32c6d06888eef3c5b625e7da8b145e17c2d7448b964e",
+          "ff868557a58cd5221b65613f66700e067c7aeb812e30bbbbe764e594d7212c16",
+          "ff868557a58cd5221b65613f66700e067c7aeb812e30bbbbe764e594d7212c16",
+          "ff868557a58cd5221b65613f66700e067c7aeb812e30bbbbe764e594d7212c16",
+          "ff868557a58cd5221b65613f66700e067c7aeb812e30bbbbe764e594d7212c16",
+          "8fb6c8396b20bcd731dcff9157e77429af96d5db014cd4ab447bc29d879e5ce4",
+          "8fb6c8396b20bcd731dcff9157e77429af96d5db014cd4ab447bc29d879e5ce4",
+          "8fb6c8396b20bcd731dcff9157e77429af96d5db014cd4ab447bc29d879e5ce4",
+          "8fb6c8396b20bcd731dcff9157e77429af96d5db014cd4ab447bc29d879e5ce4"
+        ],
+        "train": [
+          "c4ef5cbb748f80c8d863718aa9b054298ddf5fe3fd94f236bf9476416c5938ab",
+          "c4ef5cbb748f80c8d863718aa9b054298ddf5fe3fd94f236bf9476416c5938ab",
+          "c4ef5cbb748f80c8d863718aa9b054298ddf5fe3fd94f236bf9476416c5938ab",
+          "c4ef5cbb748f80c8d863718aa9b054298ddf5fe3fd94f236bf9476416c5938ab",
+          "01b3f39d9aae8a61a333414d5e2543bacfde166db7d5c388fbdede5df140706c",
+          "01b3f39d9aae8a61a333414d5e2543bacfde166db7d5c388fbdede5df140706c",
+          "01b3f39d9aae8a61a333414d5e2543bacfde166db7d5c388fbdede5df140706c",
+          "01b3f39d9aae8a61a333414d5e2543bacfde166db7d5c388fbdede5df140706c",
+          "0f2ba30cba2a68b5f41583aa76c9e8e72c0d382f61b28dcb5bc4ceafba21b35b",
+          "0f2ba30cba2a68b5f41583aa76c9e8e72c0d382f61b28dcb5bc4ceafba21b35b",
+          "0f2ba30cba2a68b5f41583aa76c9e8e72c0d382f61b28dcb5bc4ceafba21b35b",
+          "0f2ba30cba2a68b5f41583aa76c9e8e72c0d382f61b28dcb5bc4ceafba21b35b",
+          "d0f0885aad8df0ced1bc98fe915a3bc5fa1548923e4734a106f78a54ad8c4926",
+          "d0f0885aad8df0ced1bc98fe915a3bc5fa1548923e4734a106f78a54ad8c4926",
+          "d0f0885aad8df0ced1bc98fe915a3bc5fa1548923e4734a106f78a54ad8c4926",
+          "d0f0885aad8df0ced1bc98fe915a3bc5fa1548923e4734a106f78a54ad8c4926",
+          "3b1897420ebb3bed3c31e2f8267df83f60704170412d15fca1b23a8e944fbc04",
+          "3b1897420ebb3bed3c31e2f8267df83f60704170412d15fca1b23a8e944fbc04",
+          "3b1897420ebb3bed3c31e2f8267df83f60704170412d15fca1b23a8e944fbc04",
+          "3b1897420ebb3bed3c31e2f8267df83f60704170412d15fca1b23a8e944fbc04",
+          "62e2ec26960d2b2aadd46cf6de80a28bea7dd7a43603b642e2e7b3ad419d1f3a",
+          "62e2ec26960d2b2aadd46cf6de80a28bea7dd7a43603b642e2e7b3ad419d1f3a",
+          "62e2ec26960d2b2aadd46cf6de80a28bea7dd7a43603b642e2e7b3ad419d1f3a",
+          "62e2ec26960d2b2aadd46cf6de80a28bea7dd7a43603b642e2e7b3ad419d1f3a",
+          "72617a2a49d7035227d4c3bc35f0b6a02faefa11f56994fd6d6a372d43e283de",
+          "72617a2a49d7035227d4c3bc35f0b6a02faefa11f56994fd6d6a372d43e283de",
+          "72617a2a49d7035227d4c3bc35f0b6a02faefa11f56994fd6d6a372d43e283de",
+          "72617a2a49d7035227d4c3bc35f0b6a02faefa11f56994fd6d6a372d43e283de",
+          "418365a1ceff01389a588f604ceab542df604d6af54b328593cad32db764f805",
+          "418365a1ceff01389a588f604ceab542df604d6af54b328593cad32db764f805",
+          "418365a1ceff01389a588f604ceab542df604d6af54b328593cad32db764f805",
+          "418365a1ceff01389a588f604ceab542df604d6af54b328593cad32db764f805",
+          "fae1b596568043d96f922f72f32cf929a61e366a46bb7849b09962b3a3e9246c",
+          "fae1b596568043d96f922f72f32cf929a61e366a46bb7849b09962b3a3e9246c",
+          "fae1b596568043d96f922f72f32cf929a61e366a46bb7849b09962b3a3e9246c",
+          "64fdf4e3a66fc24c2a4ccad2ccff7c4317a2fb6d32e9c9e687abf510fbc691b1",
+          "64fdf4e3a66fc24c2a4ccad2ccff7c4317a2fb6d32e9c9e687abf510fbc691b1",
+          "64fdf4e3a66fc24c2a4ccad2ccff7c4317a2fb6d32e9c9e687abf510fbc691b1",
+          "64fdf4e3a66fc24c2a4ccad2ccff7c4317a2fb6d32e9c9e687abf510fbc691b1",
+          "a1ec156c6aa193daddbddf280d332a5e52fb1837a5dd824dd8a1cc2b38820df8",
+          "a1ec156c6aa193daddbddf280d332a5e52fb1837a5dd824dd8a1cc2b38820df8",
+          "a1ec156c6aa193daddbddf280d332a5e52fb1837a5dd824dd8a1cc2b38820df8",
+          "a1ec156c6aa193daddbddf280d332a5e52fb1837a5dd824dd8a1cc2b38820df8",
+          "7d9ebb4633a48df9b4a4170387964c888aa9b87275a3a04bf106c5dc10dfa144",
+          "7d9ebb4633a48df9b4a4170387964c888aa9b87275a3a04bf106c5dc10dfa144",
+          "7d9ebb4633a48df9b4a4170387964c888aa9b87275a3a04bf106c5dc10dfa144",
+          "7d9ebb4633a48df9b4a4170387964c888aa9b87275a3a04bf106c5dc10dfa144",
+          "41732e88a1186b6fc435ffb22c4c516cf68a37da1bc19acc924dd41d912bce3a",
+          "41732e88a1186b6fc435ffb22c4c516cf68a37da1bc19acc924dd41d912bce3a",
+          "41732e88a1186b6fc435ffb22c4c516cf68a37da1bc19acc924dd41d912bce3a",
+          "41732e88a1186b6fc435ffb22c4c516cf68a37da1bc19acc924dd41d912bce3a",
+          "90072e2d1a4a6b8d98597c5e8c1fc41c841de528194f9a04205c9cad61634d94",
+          "90072e2d1a4a6b8d98597c5e8c1fc41c841de528194f9a04205c9cad61634d94",
+          "90072e2d1a4a6b8d98597c5e8c1fc41c841de528194f9a04205c9cad61634d94",
+          "90072e2d1a4a6b8d98597c5e8c1fc41c841de528194f9a04205c9cad61634d94",
+          "ed1c1320642694a24b35ce732aa313ebf591ea622139968745edcc03724c5378",
+          "ed1c1320642694a24b35ce732aa313ebf591ea622139968745edcc03724c5378",
+          "ed1c1320642694a24b35ce732aa313ebf591ea622139968745edcc03724c5378",
+          "ed1c1320642694a24b35ce732aa313ebf591ea622139968745edcc03724c5378",
+          "4a52c780e795334af496511dfa2e7fba41098c3155dbe1503aa516db42e7c1d9",
+          "4a52c780e795334af496511dfa2e7fba41098c3155dbe1503aa516db42e7c1d9",
+          "523cb0f96301bb714dd83e2cc58232d31c6723f6cb4b627f0050f3374bcd7a85",
+          "523cb0f96301bb714dd83e2cc58232d31c6723f6cb4b627f0050f3374bcd7a85",
+          "523cb0f96301bb714dd83e2cc58232d31c6723f6cb4b627f0050f3374bcd7a85",
+          "c325687946389ab8d659fb54873fcf49dbef78248334795515a00587cafa79ec",
+          "c325687946389ab8d659fb54873fcf49dbef78248334795515a00587cafa79ec",
+          "c9d86f64188fca52b143e0cdcbd85c5bc1ac80653ce6321e800246b1867a5c0e",
+          "c9d86f64188fca52b143e0cdcbd85c5bc1ac80653ce6321e800246b1867a5c0e",
+          "c9d86f64188fca52b143e0cdcbd85c5bc1ac80653ce6321e800246b1867a5c0e",
+          "c9d86f64188fca52b143e0cdcbd85c5bc1ac80653ce6321e800246b1867a5c0e",
+          "cbf50eed2018f5dd00430c72f88b7f3902e054537d2c37d0eb016815513739ca",
+          "cbf50eed2018f5dd00430c72f88b7f3902e054537d2c37d0eb016815513739ca",
+          "cbf50eed2018f5dd00430c72f88b7f3902e054537d2c37d0eb016815513739ca",
+          "cbf50eed2018f5dd00430c72f88b7f3902e054537d2c37d0eb016815513739ca",
+          "8b211eb5b1cd430bda69371df18697e49f32c422637b19f14c66fd4415d8723a",
+          "8b211eb5b1cd430bda69371df18697e49f32c422637b19f14c66fd4415d8723a",
+          "8b211eb5b1cd430bda69371df18697e49f32c422637b19f14c66fd4415d8723a",
+          "8b211eb5b1cd430bda69371df18697e49f32c422637b19f14c66fd4415d8723a",
+          "98833e7c956eb9719e6d72d5223efb5b03a1d6386acda1eabd79834c5d3b761c",
+          "98833e7c956eb9719e6d72d5223efb5b03a1d6386acda1eabd79834c5d3b761c",
+          "98833e7c956eb9719e6d72d5223efb5b03a1d6386acda1eabd79834c5d3b761c",
+          "98833e7c956eb9719e6d72d5223efb5b03a1d6386acda1eabd79834c5d3b761c",
+          "bc22f42aa6e88294afe0ed0b728eccb10eb00b3635b1b7d81cd5ebc65b546239",
+          "bc22f42aa6e88294afe0ed0b728eccb10eb00b3635b1b7d81cd5ebc65b546239",
+          "bc22f42aa6e88294afe0ed0b728eccb10eb00b3635b1b7d81cd5ebc65b546239",
+          "bc22f42aa6e88294afe0ed0b728eccb10eb00b3635b1b7d81cd5ebc65b546239",
+          "81d44a5c8cfbddb41f71b3c39613e29cdb10fd6c81e20d4bc6a6efa0fccdbdd3",
+          "81d44a5c8cfbddb41f71b3c39613e29cdb10fd6c81e20d4bc6a6efa0fccdbdd3",
+          "81d44a5c8cfbddb41f71b3c39613e29cdb10fd6c81e20d4bc6a6efa0fccdbdd3",
+          "e3e09cc058beabad8e11d5b154682202f1b0ec6c308a86f4621e5fdebf1c5bf0",
+          "e3e09cc058beabad8e11d5b154682202f1b0ec6c308a86f4621e5fdebf1c5bf0",
+          "8ff0c1a132f65d6a6d1816e189d3fb338421e3f85a88deb946e25ba0d3dbfc7c",
+          "8ff0c1a132f65d6a6d1816e189d3fb338421e3f85a88deb946e25ba0d3dbfc7c",
+          "8ff0c1a132f65d6a6d1816e189d3fb338421e3f85a88deb946e25ba0d3dbfc7c",
+          "8ff0c1a132f65d6a6d1816e189d3fb338421e3f85a88deb946e25ba0d3dbfc7c",
+          "062c9044367a6508b1e5f7ef354637225f3460e570081e54c0dbcced97e188fd"
+        ]
+      },
+      "split_policy": "mixed-v1",
+      "quarantined_duplicate_hashes": [],
+      "sources": {
+        "prose": {
+          "repository": "Salesforce/wikitext",
+          "config": "wikitext-103-raw-v1",
+          "revision": "b08601e04326c79dfdd32d625aee71d232d685c3"
+        },
+        "code": {
+          "repository": "codeparrot/codeparrot-clean",
+          "config": null,
+          "revision": "35a59fb025bc0a102f7d96eac09d145b896d487b"
+        },
+        "translation": {
+          "repository": "wmt/wmt14",
+          "config": "de-en",
+          "revision": "b199e406369ec1b7634206d3ded5ba45de2fe696"
+        }
+      },
+      "dataset_revision": "6402da5c257ae38810bee13c451c6a168d399aba7d3f14181f3ec2514c282cdb"
+    },
+    "window_audit": {
+      "counts": {
+        "test": {
+          "total": 12,
+          "distinct": 12
+        },
+        "validation": {
+          "total": 12,
+          "distinct": 12
+        },
+        "train": {
+          "total": 96,
+          "distinct": 96
+        }
+      },
+      "overlaps": {
+        "train/validation": 0,
+        "train/test": 0,
+        "validation/test": 0
+      }
+    },
+    "tokenizer_compatibility": null,
+    "source_sha256": "9af19fbea3b9ea58d8f583001016304aa605601af6578fd2a3196216b9603bf4",
+    "test_status": "sealed; no test losses or accuracy computed",
+    "curves": {
+      "96": {
+        "training_windows": 96,
+        "trainable_parameters": 23405056,
+        "unique_blocks": 96,
+        "unique_target_token_slots": 384,
+        "train_indices": [
+          6,
+          13,
+          18,
+          24,
+          22,
+          7,
+          28,
+          31,
+          30,
+          21,
+          4,
+          8,
+          10,
+          16,
+          23,
+          2,
+          19,
+          27,
+          17,
+          25,
+          9,
+          29,
+          1,
+          0,
+          15,
+          11,
+          5,
+          26,
+          3,
+          12,
+          20,
+          14,
+          32,
+          58,
+          53,
+          63,
+          36,
+          39,
+          33,
+          46,
+          38,
+          43,
+          40,
+          62,
+          35,
+          55,
+          44,
+          61,
+          41,
+          52,
+          45,
+          50,
+          47,
+          49,
+          37,
+          48,
+          59,
+          54,
+          60,
+          51,
+          42,
+          57,
+          56,
+          34,
+          84,
+          86,
+          66,
+          69,
+          79,
+          68,
+          87,
+          82,
+          89,
+          77,
+          94,
+          74,
+          64,
+          76,
+          81,
+          71,
+          75,
+          92,
+          67,
+          65,
+          78,
+          95,
+          88,
+          72,
+          93,
+          80,
+          85,
+          70,
+          90,
+          73,
+          83,
+          91
+        ],
+        "checkpoints": [
+          {
+            "step": 2,
+            "target_token_slots_seen": 1024,
+            "masked_supervised_tokens_seen": 632,
+            "training_sample_nll_by_position": [
+              1.7692482471466064,
+              10.668909072875977,
+              13.528409957885742,
+              13.650463104248047
+            ],
+            "training_sample_accuracy_by_position": [
+              0.6145833730697632,
+              0.0416666679084301,
+              0.02083333395421505,
+              0.03125
+            ],
+            "training_position_collapse_fraction": 0.8645833333333334,
+            "validation_by_domain": {
+              "prose": {
+                "nll": 6.327375411987305,
+                "nll_by_position": [
+                  1.570923089981079,
+                  6.94422721862793,
+                  9.922443389892578,
+                  6.871907711029053
+                ],
+                "accuracy_by_position": [
+                  0.5,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "exact_block_accuracy": 0.0,
+                "generated_accuracy_by_position": [
+                  0.5,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "generated_exact_block_accuracy": 0.0,
+                "qwen_greedy_prefix_agreement": 0.75,
+                "qwen_greedy_full_block_agreement": 0.0,
+                "qwen_greedy_prefix_lengths": [
+                  1,
+                  1,
+                  1,
+                  0
+                ],
+                "agreement_note": "Read-only comparison along proposed blocks; no verifier in generation and no speed claim.",
+                "examples": 4,
+                "example_mean_nll": [
+                  4.946001052856445,
+                  5.635836601257324,
+                  5.331398963928223,
+                  9.396265029907227
+                ],
+                "nll_standard_error": 1.0326533317565918
+              },
+              "code": {
+                "nll": 13.61772346496582,
+                "nll_by_position": [
+                  0.40766870975494385,
+                  14.648727416992188,
+                  19.244577407836914,
+                  20.169919967651367
+                ],
+                "accuracy_by_position": [
+                  0.75,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "exact_block_accuracy": 0.0,
+                "generated_accuracy_by_position": [
+                  0.75,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "generated_exact_block_accuracy": 0.0,
+                "qwen_greedy_prefix_agreement": 0.75,
+                "qwen_greedy_full_block_agreement": 0.0,
+                "qwen_greedy_prefix_lengths": [
+                  1,
+                  1,
+                  0,
+                  1
+                ],
+                "agreement_note": "Read-only comparison along proposed blocks; no verifier in generation and no speed claim.",
+                "examples": 4,
+                "example_mean_nll": [
+                  15.538272857666016,
+                  17.31100845336914,
+                  7.915560722351074,
+                  13.706048965454102
+                ],
+                "nll_standard_error": 2.0382044315338135
+              },
+              "translation": {
+                "nll": 13.234491348266602,
+                "nll_by_position": [
+                  0.8422890305519104,
+                  13.91653823852539,
+                  17.80548858642578,
+                  20.37364959716797
+                ],
+                "accuracy_by_position": [
+                  0.5,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "exact_block_accuracy": 0.0,
+                "generated_accuracy_by_position": [
+                  0.5,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "generated_exact_block_accuracy": 0.0,
+                "qwen_greedy_prefix_agreement": 1.0,
+                "qwen_greedy_full_block_agreement": 0.0,
+                "qwen_greedy_prefix_lengths": [
+                  1,
+                  1,
+                  1,
+                  1
+                ],
+                "agreement_note": "Read-only comparison along proposed blocks; no verifier in generation and no speed claim.",
+                "examples": 4,
+                "example_mean_nll": [
+                  15.713825225830078,
+                  12.66002082824707,
+                  6.594507217407227,
+                  17.96961212158203
+                ],
+                "nll_standard_error": 2.4662365913391113
+              }
+            },
+            "macro_validation_nll": 11.059863408406576
+          }
+        ],
+        "best_validation_nll": 11.059863408406576,
+        "best_step": 2,
+        "validation_samples": {
+          "prose": {
+            "prefix": "= Homarus gammarus =\nHomarus gammarus , known as the European lobster or common lobster , is a species of clawed lobster from the eastern Atlantic Ocean , Mediterranean Sea and parts of the Black Sea . It is closely related to the American lobster , H. americanus . It may grow to a length of 60 cm ( 24 in ) and a mass of 6 kilograms ( 13 lb ) , and bears a conspicuous pair of claws . In life , the lobsters are blue , only becoming \" lobster red \" on cooking . Mating occurs in the summer , producing eggs which are carried by",
+            "generated": " the the the the male male male male .\n .\n .\n .\n .\n .\n .\n .\n .\n .\n .\n .\n .\n .\n .\n .\n"
+          },
+          "code": {
+            "prefix": "import os\nfrom importlib import import_module\n\nfrom django.core.exceptions import ImproperlyConfigured\nfrom django.utils.module_loading import module_has_submodule\n\nMODELS_MODULE_NAME = 'models'\n\n\nclass AppConfig:\n    \"\"\"Class representing a Django application and its configuration.\"\"\"\n\n    def __init__(self, app_name, app_module):\n        # Full Python path to the application e.g. 'django.contrib.admin'.\n        self.name = app_name\n\n        # Root module for the application e.g. <module 'django.contrib.admin'\n        # from 'django/contrib/admin/__init__.py'>.\n        self.module = app_module\n\n",
+            "generated": "                             # # # # # # # # # # # # # # # # # # # #"
+          },
+          "translation": {
+            "prefix": "Translate English to German.\nEnglish: A Republican strategy to counter the re-election of Obama\nGerman:",
+            "generated": " Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein Ein"
+          }
+        }
+      }
+    },
+    "readout_norm_weight_rms": 3.908003330230713,
+    "teacher_validation_by_domain": {
+      "prose": {
+        "nll_by_position": [
+          1.4452177286148071,
+          1.6938261985778809,
+          2.032409906387329,
+          3.269346237182617
+        ],
+        "accuracy_by_position": [
+          0.75,
+          0.5,
+          0.5,
+          0.25
+        ],
+        "note": "Teacher-forced AR reference sees true earlier target tokens; not a context-only comparator."
+      },
+      "code": {
+        "nll_by_position": [
+          0.342887282371521,
+          1.2375953197479248,
+          2.144766092300415,
+          0.1504518687725067
+        ],
+        "accuracy_by_position": [
+          1.0,
+          0.75,
+          0.75,
+          1.0
+        ],
+        "note": "Teacher-forced AR reference sees true earlier target tokens; not a context-only comparator."
+      },
+      "translation": {
+        "nll_by_position": [
+          0.7355301976203918,
+          1.0543307065963745,
+          1.3698863983154297,
+          1.1848241090774536
+        ],
+        "accuracy_by_position": [
+          0.5,
+          0.75,
+          0.75,
+          0.75
+        ],
+        "note": "Teacher-forced AR reference sees true earlier target tokens; not a context-only comparator."
+      }
+    },
+    "repeated_next_token_baseline": {
+      "prose": {
+        "nll": 6.319990158081055,
+        "nll_by_position": [
+          1.460615634918213,
+          6.976240634918213,
+          10.085615158081055,
+          6.757490634918213
+        ],
+        "accuracy_by_position": [
+          0.75,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "note": "Prefix-only; repeat the same Qwen next-token distribution at every block position. No training or target access."
+      },
+      "code": {
+        "nll": 13.745113372802734,
+        "nll_by_position": [
+          0.35790616273880005,
+          15.045406341552734,
+          19.617671966552734,
+          19.959468841552734
+        ],
+        "accuracy_by_position": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "note": "Prefix-only; repeat the same Qwen next-token distribution at every block position. No training or target access."
+      },
+      "translation": {
+        "nll": 13.257952690124512,
+        "nll_by_position": [
+          0.7594180107116699,
+          13.911762237548828,
+          17.911760330200195,
+          20.448869705200195
+        ],
+        "accuracy_by_position": [
+          0.5,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "note": "Prefix-only; repeat the same Qwen next-token distribution at every block position. No training or target access."
+      }
+    },
+    "elapsed_seconds": 43.212748599,
+    "completed": true
+  }
+}

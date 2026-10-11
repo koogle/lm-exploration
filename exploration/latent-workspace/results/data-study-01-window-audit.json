@@ -1,0 +1,28 @@
+{
+  "run": "data-study-01",
+  "window_counts": {
+    "train": {
+      "total": 12288,
+      "distinct": 12213
+    },
+    "validation": {
+      "total": 192,
+      "distinct": 192
+    },
+    "test": {
+      "total": 192,
+      "distinct": 192
+    }
+  },
+  "overlap_counts": {
+    "train/validation": 1,
+    "train/test": 0,
+    "validation/test": 0
+  },
+  "note": "Document/repository split isolation did not prevent repeated windows. Historical held-out metrics are exploratory; follow-up removes duplicate training windows and held-out overlaps while preserving held-out tensors.",
+  "cleanup_in_followup": {
+    "training_copies_of_overlapping_window_removed": 9,
+    "other_duplicate_training_rows_removed": 67,
+    "clean_parent_distinct_nonoverlapping_windows": 12212
+  }
+}

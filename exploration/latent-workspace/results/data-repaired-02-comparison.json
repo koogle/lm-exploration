@@ -1,0 +1,27 @@
+{
+  "sizes": [
+    12288,
+    49152
+  ],
+  "step": 8000,
+  "larger_minus_smaller_nll": -0.26301368077596,
+  "paired_group_bootstrap_95_interval": [
+    -0.4022412025284065,
+    -0.1332639845533311
+  ],
+  "domains": {
+    "prose": {
+      "larger_minus_smaller_nll": -0.49922650307416916,
+      "groups": 16
+    },
+    "code": {
+      "larger_minus_smaller_nll": -0.056600870564579964,
+      "groups": 16
+    },
+    "translation": {
+      "larger_minus_smaller_nll": -0.23321320489048958,
+      "groups": 16
+    }
+  },
+  "note": "Negative favors more data. Paired resampling of held-out source groups within domains; one training seed and adaptive exploratory comparisons, not confirmatory inference."
+}

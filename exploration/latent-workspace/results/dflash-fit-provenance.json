@@ -1,0 +1,13 @@
+{
+  "training_commit": "b0b2280",
+  "training_source_sha256": "d9b597c1ceda8c70160078612cb8b5f29d5c77bb7c24ea87b1237508676e179f",
+  "audit_commit": "bb3ef32",
+  "selected_checkpoint_step": 17000,
+  "selected_checkpoint_sha256": "e07a5bdb38b7e165596183377caa8d8e432b371cef9d4e49d31eb1dd60b4154e",
+  "teacher_sequence_sha256": "fbe5d7150fdad042a6befc7e643f9715f00b94b80936c4b7eada665b2a2dac63",
+  "checkpoint_matches_download": true,
+  "audit_validation_exactly_matches_training_report": true,
+  "training_completed": true,
+  "verification_passed": true,
+  "test_status": "new test prompts reserved; no teacher test responses/features/metrics produced"
+}

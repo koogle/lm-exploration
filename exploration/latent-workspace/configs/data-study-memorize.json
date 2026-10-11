@@ -1,0 +1,30 @@
+{
+  "corpus": "mixed",
+  "context_length": 128,
+  "memory_tokens": 4,
+  "train_examples": 12288,
+  "eval_examples": 192,
+  "test_examples": 192,
+  "batch_size": 16,
+  "refinement_rounds": 1,
+  "study_sizes": [
+    96
+  ],
+  "study_checkpoints": [
+    100,
+    500,
+    1000,
+    2000
+  ],
+  "max_seconds": 3300,
+  "variants": [
+    "diffusion:multi"
+  ],
+  "selected_layers": [
+    6,
+    12,
+    18
+  ],
+  "evaluate_test": false,
+  "study_parent": "/runs/data-study-01"
+}

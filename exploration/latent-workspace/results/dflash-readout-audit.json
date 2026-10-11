@@ -1,0 +1,55 @@
+{
+  "checkpoint_step": 1000,
+  "draft_norm_rms": 1.1267485618591309,
+  "target_norm_rms": 7.122156620025635,
+  "formula": "CE >= max(0, log(V) - sqrt(H) * ||(W_y - mean_v W_v) * gamma||_2). Jensen plus Cauchy-Schwarz; RMS-normalized pre-gamma vector has norm <= sqrt(H).",
+  "scope": "A bound holding the checkpoint's norm weights fixed, not an irreducible data-entropy floor. Norm weights remain trainable.",
+  "splits": {
+    "train": {
+      "prose": {
+        "labels": 224,
+        "mean_ce_lower_bounds": {
+          "trained_draft_norm": 0.0,
+          "target_norm": 0.0
+        }
+      },
+      "code": {
+        "labels": 224,
+        "mean_ce_lower_bounds": {
+          "trained_draft_norm": 0.0,
+          "target_norm": 0.0
+        }
+      },
+      "translation": {
+        "labels": 175,
+        "mean_ce_lower_bounds": {
+          "trained_draft_norm": 0.0005628858343698084,
+          "target_norm": 0.0
+        }
+      }
+    },
+    "validation": {
+      "prose": {
+        "labels": 896,
+        "mean_ce_lower_bounds": {
+          "trained_draft_norm": 6.338102684821934e-05,
+          "target_norm": 0.0
+        }
+      },
+      "code": {
+        "labels": 896,
+        "mean_ce_lower_bounds": {
+          "trained_draft_norm": 0.0007090696017257869,
+          "target_norm": 0.0
+        }
+      },
+      "translation": {
+        "labels": 840,
+        "mean_ce_lower_bounds": {
+          "trained_draft_norm": 0.0006484485929831862,
+          "target_norm": 0.0
+        }
+      }
+    }
+  }
+}

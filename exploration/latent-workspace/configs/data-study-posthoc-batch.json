@@ -1,0 +1,36 @@
+{
+  "corpus": "mixed",
+  "context_length": 128,
+  "memory_tokens": 4,
+  "train_examples": 49152,
+  "eval_examples": 192,
+  "test_examples": 192,
+  "batch_size": 16,
+  "refinement_rounds": 1,
+  "study_sizes": [
+    12288,
+    49152
+  ],
+  "study_checkpoints": [
+    100,
+    500,
+    2000,
+    4000,
+    8000
+  ],
+  "max_seconds": 3300,
+  "variants": [
+    "diffusion:multi"
+  ],
+  "selected_layers": [
+    6,
+    12,
+    18
+  ],
+  "evaluate_test": false,
+  "study_parent": "/runs/data-batch128-01",
+  "residual_readout": true,
+  "position_readout": true,
+  "study_reference": "",
+  "study_eval_only": true
+}

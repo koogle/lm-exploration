@@ -1,0 +1,10 @@
+{
+  "run": "conditioning-all-01",
+  "checkpoint": "size-196608-best.pt",
+  "local_path": "artifacts/conditioning-all-best.pt",
+  "bytes": 92076327,
+  "sha256": "77a4b129a3e441bde58a6a5142fd46bd39766543fe0fd7e1e54fc9eaeb235a15",
+  "model": "Qwen/Qwen2.5-0.5B",
+  "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "note": "Decoder and frozen-model reference only; download pretrained Qwen separately."
+}

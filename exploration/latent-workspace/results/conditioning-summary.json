@@ -1,0 +1,164 @@
+[
+  {
+    "run": "conditioning-all-01",
+    "variant": "diffusion:all",
+    "selected_layers": [
+      6,
+      12,
+      18
+    ],
+    "best_step": 4000,
+    "best_nll": 5.258598804473877,
+    "qwen_prefix_agreement": 1.0989583333333333,
+    "domains": {
+      "prose": 5.437150955200195,
+      "code": 4.888426303863525,
+      "translation": 5.45021915435791
+    },
+    "parameters": 23009280
+  },
+  {
+    "run": "conditioning-attention-all-01",
+    "variant": "diffusion:attention_all",
+    "selected_layers": [
+      6,
+      12,
+      18
+    ],
+    "best_step": 4000,
+    "best_nll": 5.419034004211426,
+    "qwen_prefix_agreement": 1.1041666666666667,
+    "domains": {
+      "prose": 5.596429824829102,
+      "code": 5.119955062866211,
+      "translation": 5.540717124938965
+    },
+    "parameters": 23009280
+  },
+  {
+    "run": "conditioning-attention-best-01",
+    "variant": "diffusion:attention20",
+    "selected_layers": [
+      20,
+      16,
+      15
+    ],
+    "best_step": 4000,
+    "best_nll": 5.459811846415202,
+    "qwen_prefix_agreement": 0.9947916666666666,
+    "domains": {
+      "prose": 5.681761741638184,
+      "code": 5.109837532043457,
+      "translation": 5.587836265563965
+    },
+    "parameters": 23009280
+  },
+  {
+    "run": "conditioning-attention-selected-01",
+    "variant": "diffusion:attention_multi",
+    "selected_layers": [
+      20,
+      16,
+      15
+    ],
+    "best_step": 4000,
+    "best_nll": 5.439148902893066,
+    "qwen_prefix_agreement": 0.9947916666666666,
+    "domains": {
+      "prose": 5.584224700927734,
+      "code": 5.068195343017578,
+      "translation": 5.665026664733887
+    },
+    "parameters": 23009280
+  },
+  {
+    "run": "conditioning-best-01",
+    "variant": "diffusion:best",
+    "selected_layers": [
+      18,
+      20,
+      17
+    ],
+    "best_step": 4000,
+    "best_nll": 5.310537974039714,
+    "qwen_prefix_agreement": 1.0416666666666667,
+    "domains": {
+      "prose": 5.511594295501709,
+      "code": 4.936093330383301,
+      "translation": 5.483926296234131
+    },
+    "parameters": 23009280
+  },
+  {
+    "run": "conditioning-final-01",
+    "variant": "diffusion:final",
+    "selected_layers": [
+      6,
+      12,
+      18
+    ],
+    "best_step": 4000,
+    "best_nll": 5.390157063802083,
+    "qwen_prefix_agreement": 0.9791666666666666,
+    "domains": {
+      "prose": 5.604657173156738,
+      "code": 4.989361763000488,
+      "translation": 5.576452255249023
+    },
+    "parameters": 23009280
+  },
+  {
+    "run": "conditioning-jspace-01",
+    "variant": "diffusion:jspace",
+    "selected_layers": [
+      18,
+      20,
+      17
+    ],
+    "best_step": 4000,
+    "best_nll": 5.531956513722737,
+    "qwen_prefix_agreement": 1.03125,
+    "domains": {
+      "prose": 5.6321611404418945,
+      "code": 5.194835662841797,
+      "translation": 5.7688727378845215
+    },
+    "parameters": 23009280
+  },
+  {
+    "run": "conditioning-parallel-all-01",
+    "variant": "parallel:all",
+    "selected_layers": [
+      6,
+      12,
+      18
+    ],
+    "best_step": 4000,
+    "best_nll": 5.16081698735555,
+    "qwen_prefix_agreement": 1.0833333333333333,
+    "domains": {
+      "prose": 5.35124397277832,
+      "code": 4.750967979431152,
+      "translation": 5.380239009857178
+    },
+    "parameters": 23009280
+  },
+  {
+    "run": "conditioning-selected-01",
+    "variant": "diffusion:multi",
+    "selected_layers": [
+      18,
+      20,
+      17
+    ],
+    "best_step": 4000,
+    "best_nll": 5.3306277592976885,
+    "qwen_prefix_agreement": 1.0364583333333333,
+    "domains": {
+      "prose": 5.4637885093688965,
+      "code": 5.004176616668701,
+      "translation": 5.523918151855469
+    },
+    "parameters": 23009280
+  }
+]

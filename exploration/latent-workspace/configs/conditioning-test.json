@@ -1,0 +1,31 @@
+{
+  "study_eval_only": true,
+  "evaluate_test": true,
+  "study_eval_parents": [
+    "/runs/conditioning-final-01",
+    "/runs/conditioning-all-01",
+    "/runs/conditioning-best-01",
+    "/runs/conditioning-selected-01",
+    "/runs/conditioning-attention-all-01",
+    "/runs/conditioning-attention-best-01",
+    "/runs/conditioning-attention-selected-01",
+    "/runs/conditioning-jspace-01",
+    "/runs/conditioning-parallel-all-01",
+    "/runs/qwen3-conditioning-final-01",
+    "/runs/qwen3-conditioning-all-01"
+  ],
+  "study_eval_hashes": {
+    "/runs/conditioning-final-01": "95b0cc70f5d7627b91ffe0bdf3d580413721294c406ca3ef2b802fc601d71f06",
+    "/runs/conditioning-all-01": "cb874b80183cc841654e8c92d9d8210ade4d64af2f371b8a877a6bf97812e769",
+    "/runs/conditioning-best-01": "e1fafcda18100fd20c511019c45c5c897098af7ff7c18197eb312fbf04acd3c2",
+    "/runs/conditioning-selected-01": "71caf4a2f1086535a49a8f974ef97fcdfe01eb8836aabfd33d33603f56e1cac6",
+    "/runs/conditioning-attention-all-01": "18bb553d8c9f0a3d313f1b2002483aa36803a6c29a8c257819e257bdfacfc53f",
+    "/runs/conditioning-attention-best-01": "d04a94307cb47138636dc272ac6c85228bfa22356c0718e1f2ee4a80b07f19b0",
+    "/runs/conditioning-attention-selected-01": "13dcc7411a343d06acbe0395be0ccebcb94d5da161130528dffaa881e48a228a",
+    "/runs/conditioning-jspace-01": "d5048cf3c0a9952d41f92ff6a015dbc91c710317bf0cdee1afc14e3b48549246",
+    "/runs/conditioning-parallel-all-01": "84773b9af19535c1e1f662d38befa95b9ea76aa9186dc78d9be0d37711b3be84",
+    "/runs/qwen3-conditioning-final-01": "b3ef266a690beec49fe71ea454a5c17e94844584e30582da819f422e8858ee18",
+    "/runs/qwen3-conditioning-all-01": "62b303b1a924a427b6d1223ee87c3fb5b123a427d67eef43074233362a8f9d53"
+  },
+  "max_seconds": 3300
+}

@@ -1,0 +1,61 @@
+{
+  "corpus": "mixed",
+  "context_length": 128,
+  "memory_tokens": 4,
+  "train_examples": 196608,
+  "eval_examples": 192,
+  "test_examples": 192,
+  "batch_size": 128,
+  "refinement_rounds": 1,
+  "study_sizes": [
+    196608
+  ],
+  "study_checkpoints": [
+    500,
+    1000,
+    2000,
+    4000
+  ],
+  "max_seconds": 3300,
+  "variants": [
+    "diffusion:best"
+  ],
+  "selected_layers": [
+    18,
+    20,
+    17
+  ],
+  "evaluate_test": false,
+  "study_parent": "/runs/data-large-01",
+  "residual_readout": true,
+  "position_readout": true,
+  "study_reference": "",
+  "layers": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24
+  ],
+  "study_resume": "",
+  "jspace_prompts": 100
+}

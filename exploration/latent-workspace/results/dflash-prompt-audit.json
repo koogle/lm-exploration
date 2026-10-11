@@ -1,0 +1,49 @@
+{
+  "records": 480,
+  "split_counts": {
+    "test": 48,
+    "validation": 48,
+    "train": 384
+  },
+  "counts_by_split_domain": {
+    "train": {
+      "prose": 128,
+      "code": 128,
+      "translation": 128
+    },
+    "validation": {
+      "prose": 16,
+      "code": 16,
+      "translation": 16
+    },
+    "test": {
+      "prose": 16,
+      "code": 16,
+      "translation": 16
+    }
+  },
+  "historical_source_group_exclusion_verified": true,
+  "all_groups_and_prompt_hashes_unique": true,
+  "selection_rejections": {
+    "exact_source_group_or_prompt": 2,
+    "cross_split_near_duplicate_prompt": 2
+  },
+  "source_revisions": {
+    "prose": {
+      "repository": "Salesforce/wikitext",
+      "config": "wikitext-103-raw-v1",
+      "revision": "b08601e04326c79dfdd32d625aee71d232d685c3"
+    },
+    "code": {
+      "repository": "codeparrot/codeparrot-clean",
+      "config": null,
+      "revision": "35a59fb025bc0a102f7d96eac09d145b896d487b"
+    },
+    "translation": {
+      "repository": "wmt/wmt14",
+      "config": "de-en",
+      "revision": "b199e406369ec1b7634206d3ded5ba45de2fe696"
+    }
+  },
+  "test_status": "prompts reserved; no target responses or test metrics generated"
+}

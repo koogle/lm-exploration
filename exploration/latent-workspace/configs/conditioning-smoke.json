@@ -1,0 +1,38 @@
+{
+  "corpus": "mixed",
+  "context_length": 128,
+  "memory_tokens": 4,
+  "train_examples": 96,
+  "eval_examples": 12,
+  "test_examples": 12,
+  "batch_size": 128,
+  "refinement_rounds": 1,
+  "study_sizes": [
+    96
+  ],
+  "study_checkpoints": [
+    2
+  ],
+  "max_seconds": 600,
+  "variants": [
+    "diffusion:jspace"
+  ],
+  "selected_layers": [
+    6,
+    12,
+    18
+  ],
+  "evaluate_test": false,
+  "study_parent": "",
+  "residual_readout": true,
+  "position_readout": true,
+  "study_reference": "",
+  "layers": [
+    6,
+    12,
+    18,
+    24
+  ],
+  "study_resume": "",
+  "jspace_prompts": 1
+}
