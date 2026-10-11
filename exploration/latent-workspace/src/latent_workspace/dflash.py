@@ -20,6 +20,7 @@ class DraftConfig:
     model_revision: str = "060db6499f32faf8b98477b0a26969ef7d8b9987"
     layers: tuple[int, ...] = (2, 22)  # Fixed, one-based post-block features.
     draft_layers: int = 2
+    qk_norm: bool = False  # Opt-in; historical checkpoints retain exact behavior.
     block_size: int = 8  # One target-supplied anchor plus seven NEW proposals.
     gamma: float = 4.0
     train_prompts: int = 384
@@ -107,7 +108,7 @@ def rotate(x, cos, sin):
 
 
 class DraftLayer(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, qk_norm=False):
         super().__init__()
         h = config.hidden_size
         self.heads = config.num_attention_heads
@@ -117,6 +118,8 @@ class DraftLayer(nn.Module):
         self.k = nn.Linear(h, self.kv_heads * self.dim, bias=True)
         self.v = nn.Linear(h, self.kv_heads * self.dim, bias=True)
         self.o = nn.Linear(h, h, bias=False)
+        self.q_norm = Qwen2RMSNorm(self.dim, eps=config.rms_norm_eps) if qk_norm else nn.Identity()
+        self.k_norm = Qwen2RMSNorm(self.dim, eps=config.rms_norm_eps) if qk_norm else nn.Identity()
         self.norm = Qwen2RMSNorm(h, eps=config.rms_norm_eps)
         self.post_norm = Qwen2RMSNorm(h, eps=config.rms_norm_eps)
         self.mlp = Qwen2MLP(config)
@@ -125,13 +128,13 @@ class DraftLayer(nn.Module):
         b, t, _ = x.shape
         k = self.k(x).view(b, t, self.kv_heads, self.dim).transpose(1, 2)
         v = self.v(x).view(b, t, self.kv_heads, self.dim).transpose(1, 2)
-        return rotate(k, cos, sin), v
+        return rotate(self.k_norm(k), cos, sin), v
 
     def forward(self, x, context_kv, cos, sin, mask=None):
         residual = x
         z = self.norm(x)
         q = self.q(z).view(x.shape[0], x.shape[1], self.heads, self.dim).transpose(1, 2)
-        q = rotate(q, cos, sin)
+        q = rotate(self.q_norm(q), cos, sin)
         k, v = self.kv(z, cos, sin)
         k = torch.cat((context_kv[0], k), dim=-2)
         v = torch.cat((context_kv[1], v), dim=-2)
@@ -160,7 +163,9 @@ class DFlashDrafter(nn.Module):
         h = target_config.hidden_size
         self.fc = nn.Linear(len(cfg.layers) * h, h, bias=False)
         self.hidden_norm = Qwen2RMSNorm(h, eps=target_config.rms_norm_eps)
-        self.layers = nn.ModuleList([DraftLayer(target_config) for _ in range(cfg.draft_layers)])
+        self.layers = nn.ModuleList(
+            [DraftLayer(target_config, cfg.qk_norm) for _ in range(cfg.draft_layers)]
+        )
         self.norm = Qwen2RMSNorm(h, eps=target_config.rms_norm_eps)
         self.rotary = Qwen2RotaryEmbedding(target_config)
         for module in self.modules():

@@ -106,6 +106,16 @@ def audit_fit(parent, output):
         if name == "best":
             from .dflash import block_loss
 
+            zero_memory = [
+                {**e, "memory": torch.zeros_like(e["memory"])} for e in data["validation"]
+            ]
+            report["conditioning_control"] = {
+                "note": "Selected checkpoint evaluated with zero target memory; no retraining. Distribution shift is intentional; not a causal attribution to individual layers.",
+                "zero_memory_validation": evaluate(
+                    draft, target, zero_memory, state["mask_token_id"]
+                ),
+            }
+            del zero_memory
             tokenizer = AutoTokenizer.from_pretrained(cfg.model, revision=cfg.model_revision)
             samples = []
             for domain in DOMAINS:

@@ -253,3 +253,38 @@ def test_qwen35_hybrid_features_are_causal_and_drafter_trains():
     assert torch.isfinite(loss)
     assert draft.fc.weight.grad.abs().sum() > 0
     assert all(p.grad is None for p in target.parameters())
+
+
+def test_qk_normalization_preserves_common_initialization_and_causal_cache():
+    target, original = fixture()
+    cfg = replace(original.cfg, qk_norm=True)
+    torch.manual_seed(42)
+    plain = DFlashDrafter(target.config, original.cfg)
+    torch.manual_seed(42)
+    normed = DFlashDrafter(target.config, cfg)
+    for name, value in plain.state_dict().items():
+        torch.testing.assert_close(value, normed.state_dict()[name], atol=0, rtol=0)
+    tokens = torch.randint(31, (1, 12))
+    memory = features(target.model(tokens, output_hidden_states=True), cfg.layers)
+    anchors = torch.tensor([[4, 8]])
+    a = block_loss(normed, target, tokens, memory, anchors, 30)
+    altered = memory.clone()
+    altered[:, 4:] = torch.randn_like(altered[:, 4:]) * 20
+    b = block_loss(normed, target, tokens, altered, anchors, 30)
+    torch.testing.assert_close(a[1][:, :3], b[1][:, :3], atol=0, rtol=0)
+    a[0].backward()
+    assert normed.layers[0].q_norm.weight.grad.abs().sum() > 0
+    assert normed.layers[0].k_norm.weight.grad.abs().sum() > 0
+    assert normed.fc.weight.grad.abs().sum() > 0
+    assert all(p.grad is None for p in target.parameters())
+    full = normed.context_cache(memory, torch.arange(12)[None])
+    prefix = normed.context_cache(memory[:, :5], torch.arange(5)[None])
+    incremental = normed.context_cache(memory[:, 5:], torch.arange(5, 12)[None], prefix)
+    for layer_full, layer_incremental in zip(full, incremental):
+        for x, y in zip(layer_full, layer_incremental):
+            torch.testing.assert_close(x, y)
+    prompt = tokens[:, :4]
+    assert (
+        verified_generate(normed, target, prompt, 12, 30)["tokens"]
+        == greedy_generate(target, prompt, 12)["tokens"]
+    )

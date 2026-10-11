@@ -1,5 +1,8 @@
 # Latent workspace block generation
 
+Active: [small-Qwen drafter improvement studies](docs/dflash-improvement-series.md),
+with controlled attention/depth comparisons and a predeclared held-out quality gate.
+
 Current priority: build a **DFlash-style drafter for frozen Qwen targets**
 that predicts useful multi-token blocks. Train on Qwen-generated continuations,
 condition on a known anchor, and verify proposals with Qwen. The original J-space,

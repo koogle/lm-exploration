@@ -199,6 +199,7 @@ def restore_continuation(cfg, previous, state, drafter, optimizer, generator):
         ("train_limit", 0),
         ("schedule_steps", 0),
         ("teacher_prompt_style", "raw"),
+        ("qk_norm", False),
     ):
         if getattr(cfg, key) != old.get(key, default):
             raise ValueError(f"continuation changes cached subset: {key}")
@@ -354,6 +355,7 @@ def run_dflash(cfg, output, on_checkpoint=None):
     report["teacher_sequence_sha256"] = sequence_hash.hexdigest()
     for cycle_step in range(1 if previous else 0, cfg.steps + 1):
         step = start_step + cycle_step
+        gradient_diagnostic = None
         if cycle_step:
             drafter.train()
             examples = []
@@ -386,7 +388,14 @@ def run_dflash(cfg, output, on_checkpoint=None):
             if not torch.isfinite(loss):
                 raise FloatingPointError("nonfinite DFlash-style training loss")
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(drafter.parameters(), 1.0)
+            grad_norm = torch.nn.utils.clip_grad_norm_(drafter.parameters(), 1.0)
+            if cycle_step % cfg.eval_every == 0 or cycle_step == cfg.steps:
+                gradient_diagnostic = {
+                    "global_norm_before_clip": float(grad_norm),
+                    "feature_projection_norm_after_clip": float(drafter.fc.weight.grad.norm()),
+                    "learning_rate": optimizer.param_groups[0]["lr"],
+                    "batch_loss": float(loss.detach()),
+                }
             optimizer.step()
             sampled_anchors += anchors.numel()
             supervised += anchors.numel() * (cfg.block_size - 1)
@@ -402,6 +411,7 @@ def run_dflash(cfg, output, on_checkpoint=None):
                 "supervised_target_exposures": supervised,
                 "elapsed_seconds": time.monotonic() - started,
                 "phase": output.name,
+                "gradient_diagnostic": gradient_diagnostic,
             }
             report["curve"].append(row)
             state = {
@@ -427,7 +437,7 @@ def run_dflash(cfg, output, on_checkpoint=None):
             if on_checkpoint:
                 on_checkpoint()
             print(
-                f"DFlash-style step={step} accepted NEW={validation['accepted_beyond_anchor']:.3f}/7 nll={validation['nll']:.4f}",
+                f"DFlash-style step={step} accepted NEW={validation['accepted_beyond_anchor']:.3f}/{cfg.block_size - 1} nll={validation['nll']:.4f}",
                 flush=True,
             )
         if time_limit:

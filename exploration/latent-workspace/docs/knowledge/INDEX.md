@@ -24,3 +24,5 @@ Larger target quality comparison: [Qwen3.5-2B](../dflash-qwen35-2b.md).
 Completed larger-target measurements: [2B findings](../../results/dflash-qwen35-2b-findings.md).
 
 Poor fitting and reference differences: [DFlash fidelity audit](../dflash-fidelity.md).
+
+Active small-target quality series: [Protocol](../dflash-improvement-series.md).

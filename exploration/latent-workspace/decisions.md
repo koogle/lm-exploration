@@ -89,3 +89,9 @@
   a pure size effect or solve it by speed work. Preserve the negative result,
   keep test sealed, and prioritize reliable drafter fitting/training fidelity.
   See results/dflash-qwen35-2b-findings.md.
+
+- 2026-10-11: User requests sustained small-target improvement studies based on
+  the DFlash comparison. Return to frozen Qwen2.5-0.5B, distinguish its size from
+  the separately trained drafter, and prioritize quality. Predeclare QK-norm and
+  depth comparisons, a held-out multi-token quality gate, and bounded adaptive
+  follow-ups in docs/dflash-improvement-series.md. No new budget authorization.
