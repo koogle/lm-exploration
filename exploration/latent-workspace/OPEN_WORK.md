@@ -1,13 +1,33 @@
 # Open work
 
 Active: [small-target drafter improvement series](docs/dflash-improvement-series.md).
-GPU normalization smoke passed (300 updates, frozen target, three verified rollouts).
-The 31M normalization fit completed: validation NEW 0.484 versus original 0.384,
-all 12 rollouts match. Two deeper fits remain active; five-depth recaching passed
-with unchanged teacher tokens. The expanded pool completed with 26163 training responses and the
-original validation cache preserved. Large-batch tiny-set audit confirms fitting
-(6.862 train NEW / 7) but poor validation (0.041). See results/dflash-improvement-findings.md. 82 local tests passed. Current conservative reservations:
-$297.25/$500; no new authorization. Full studies and quality gate remain incomplete.
+All matched fidelity fits and full-training audits completed. Selected validation NEW:
+original 0.384, normalization 0.484, five draft layers 0.520, five feature depths
+0.530. All 12 checked rollouts match per new fit. Extra feature-depth benefit is
+uncertain; full-training fitting remains weak. The selected 79M checkpoint is
+`dflash-fidelity-features-01/best.pt`, step 18000. Frozen target: Qwen2.5-0.5B.
+
+**Running now:** `dflash-exposure-6144-01` and `dflash-exposure-24576-01` on Modal,
+configured in `configs/dflash-exposure-{6144,24576}.json`. Both load the same selected
+weights and use batch 48, 8 anchors, a fixed 20000-update schedule and 53.76M
+additional NEW-label exposures. Logs: `artifacts/dflash-exposure-*-01.log`.
+Initial weights/validation match exactly; both retain the original training groups.
+See `results/dflash-exposure-launch-audit.json` and the protocol for provenance.
+The expanded five-depth pool has 26163 usable training responses and the original
+192 validation responses. Test remains sealed. Goal is NOT complete.
+
+Next: monitor these workers; use `scripts/resume_dflash.py` on finalized time-limit
+reports to request only the remaining updates, with new run IDs and reservations.
+Do not restart the schedule or optimizer. Initially budget at most eight long-worker
+reservations for this pair before reviewing progress. Plot with
+`scripts/plot_dflash_scaling.py ... --output results/dflash-exposure-scaling`
+(and `--partial` for live reports). Audit full fitting and zero-memory conditioning
+before deciding whether more data, exposure, or another repair is justified.
+
+82 local tests pass; larger-batch and exact warm-start GPU smokes passed. Current
+conservative reservations: **$318.50/$500**, not billed cost. Retain failed/stopped
+reservations. See results/dflash-improvement-findings.md. Stop the active goal only
+when useful quality is demonstrated or further work is genuinely blocked.
 
 Historical completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).
 Both targets used 6144 responses and 20000 updates. Selected shared-prompt NEW

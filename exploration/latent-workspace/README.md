@@ -2,8 +2,10 @@
 
 Active: [small-Qwen drafter improvement studies](docs/dflash-improvement-series.md),
 with controlled attention/depth comparisons and a predeclared held-out quality gate.
-[Current findings](results/dflash-improvement-findings.md): normalization improves
-validation NEW matches from 0.384 to 0.484; useful multi-token drafting remains unsolved.
+[Current findings](results/dflash-improvement-findings.md): completed fidelity studies
+improve validation NEW matches from 0.384 to 0.530. The selected 79M drafter now
+undergoes matched 6144/24576-response fits with 53.76M additional labels per arm.
+Useful multi-token drafting remains unsolved; the frozen target is Qwen2.5-0.5B.
 
 Current priority: build a **DFlash-style drafter for frozen Qwen targets**
 that predicts useful multi-token blocks. Train on Qwen-generated continuations,

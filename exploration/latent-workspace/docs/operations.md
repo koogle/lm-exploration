@@ -179,3 +179,19 @@ so expanded feature caches fit without out-of-memory failures. Short smoke/audit
 workers remain at 32 GiB. GPU, CPU count, hard 3600-second bound and conservative
 $5 reservation are unchanged; these are not billed-cost claims. Existing running
 workers retain their original resource snapshot.
+
+For an exposure-study worker that ended at its time bound, download its final
+report, then prepare exactly the remaining updates (not another full 20000):
+
+```bash
+uv run python scripts/resume_dflash.py results/dflash-exposure-6144-01.json \
+  --output configs/dflash-exposure-6144-02.json
+uv run modal run --detach modal_dflash.py --config configs/dflash-exposure-6144-02.json \
+  --run-id dflash-exposure-6144-02 --long-run
+```
+
+The helper rejects live reports, completed fits, unexpected failures, overwritten
+configs and invalid schedule budgets. It submits no job. The trainer also rejects
+updates past a fixed global schedule, avoiding accidental training at zero LR.
+Both sides retain the initial weight hash across workers, separately recording each
+worker's starting hash. Use a new run ID/reservation for every continuation.

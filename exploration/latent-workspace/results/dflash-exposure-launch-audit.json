@@ -1,0 +1,18 @@
+{
+  "initial_drafter_sha256": "af96f4fe5766459aad227b664306fb66e472a1796a2f7ce88034fa912892a327",
+  "source_sha256": "fe03b6b0fac1bf7ff61e40a8ad6b2b892ea14fff73029cb936cdc2486e3a98ac",
+  "validation_sequence_sha256": "3574078c772ce68430d556d12c95efab6ad73231b8cf285805187fa35e108498",
+  "identical_initial_validation": true,
+  "small_arm_matches_original_ordered_training_tokens": true,
+  "required_original_training_groups_per_arm": 6144,
+  "warm_start": {
+    "parent": "/runs/dflash-fidelity-features-01",
+    "step": 18000,
+    "checkpoint_sha256": "91a18cee1de4c4a45316c665d942440ce8773f568b0a2262e26844a21379e7dc",
+    "note": "Weights only; fresh AdamW and new schedule on the declared teacher corpus."
+  },
+  "train_response_tokens": {
+    "6144": 341069,
+    "24576": 1364859
+  }
+}
