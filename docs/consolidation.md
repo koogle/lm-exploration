@@ -70,10 +70,12 @@ consolidation of the four recent repositories.
 
 ## GitHub administration still required
 
-The consolidated contents are published on destination `main`. All three source
-READMEs now point to the destination, and web-inference PR #1 is closed with links
-to its imported designs. These move notices are the only source-file changes;
-the original source code and model remain available.
+The consolidated contents are published on destination `main`. Web and phone
+source READMEs point to the destination, and web-inference PR #1 is closed with
+links to its imported designs. Per the user's subsequent instruction,
+`koogle/latent-workspace` remains active for ongoing iteration and must not be
+archived. Its imported copy is a snapshot, not an automatically synchronized mirror.
+Source code and the original model remain available.
 
 The current environment supports Git fetch/push, but its network policy blocks
 the GitHub administration API. The connected GitHub tools do not expose repository
@@ -87,9 +89,9 @@ an authenticated GitHub CLI with administration access:
 gh repo rename lm-exploration --repo koogle/0-to-llm --yes
 gh repo archive koogle/web-inference --yes
 gh repo archive koogle/phone-inference --yes
-gh repo archive koogle/latent-workspace --yes
 ```
 
 Keep the destination private. Renaming preserves the destination repository's
-identity and GitHub redirects the old URL. Archiving the three sources preserves
-their history and original discussions. No repository needs to be deleted.
+identity and GitHub redirects the old URL. Archive only `web-inference` and `phone-inference`, preserving their history and
+original discussions. Keep `latent-workspace` and the consolidated destination
+active. No repository needs to be deleted.
