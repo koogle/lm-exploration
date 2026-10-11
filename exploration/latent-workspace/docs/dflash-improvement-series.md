@@ -74,3 +74,34 @@ model loading because it assumed a separate config.json for a historical trainin
 run. Read config from report.json instead; rerun `dflash-small-teacher-audit-02`
 completed. Retain both $0.50 reservations. This diagnostic fix does not change
 training or cached labels.
+
+## Supervision exposure and next controlled data study
+
+The original 20000-update runs used batch 3 and 8 anchors/response: only **3.36M
+supervised NEW-token positions**. Update counts alone obscure how small this is.
+The paper's nominal 800k responses × 6 epochs × 512 anchors × 15 NEW positions is
+36.9B attempted label positions before sequence-length/masking effects; this is
+arithmetic from its recipe, not a measured training-token count. It is not a
+compute-equivalent comparison with our smaller target, shorter blocks or corpus.
+
+Profile batch 48 on the same five-layer, two-feature, QK-normalized architecture
+with a 300-update/96-response bounded smoke. This changes training throughput and
+supervision, not inference architecture. Do not interpret the smoke as validation
+of generalization or compare it causally to the earlier two-layer smoke.
+
+After the three matched 20000-update architecture runs complete, choose the highest
+selected validation NEW score among them. Freeze that architecture and checkpoint
+for a matched data/exposure study. Both arms load exactly those draft weights,
+start fresh AdamW/sampler/schedule, and use batch 48, 8 anchors, 20000 updates,
+6e-4 LR, 4% warmup/cosine: **53.76M additional NEW-label exposures per arm**.
+One uses the original 6144 training responses; the other uses 24576 responses,
+requiring every original training example to remain present with unchanged labels.
+Both share the unchanged validation cache. If the chosen architecture has five
+feature depths, recache only the added planes on the expanded pool first.
+
+Bound each worker to 3600 seconds/$5 and restore optimizer/RNG with one global
+20000-update schedule when resuming. Initially allow at most eight worker
+reservations ($40) for this pair; review progress before extending. The global
+$500 cap remains binding. Full-fitting and conditioning audits distinguish remaining
+optimization failure from memorization/generalization failure. No winner or useful
+quality is claimed until measured, and sealed test stays untouched until the gate.

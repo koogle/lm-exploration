@@ -43,6 +43,7 @@ class DraftConfig:
     teacher_parent: str = ""
     extend_teacher_parent: str = ""  # Data preparation only; preserve old labels/holdouts.
     train_limit: int = 0
+    retain_training_parent: str = ""  # Require its training examples in a larger subset.
     teacher_batch_size: int = 1
     rollout_prompts_per_domain: int = 1
     quality_only: bool = False

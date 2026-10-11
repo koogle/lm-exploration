@@ -233,3 +233,22 @@ def test_fresh_training_from_teacher_cache_does_not_restore_a_model(
         assert exposures["sampled_blocks"] == 6
         assert exposures["supervised_new_token_exposures"] == 18
         assert exposures["conditioning_position_exposures"] == 24
+
+
+def test_expanded_subset_retains_required_training_groups_and_rejects_incompatibility():
+    rows = [
+        {"domain": d, "group": f"{d}-{i}"}
+        for d in ("prose", "code", "translation")
+        for i in range(20)
+    ]
+    required = {f"{d}-19" for d in ("prose", "code", "translation")}
+    selected = nested_subset(rows, 12, 42, required)
+    assert required <= {r["group"] for r in selected}
+    assert all(
+        sum(r["domain"] == d for r in selected) == 4 for d in ("prose", "code", "translation")
+    )
+    assert selected == nested_subset(list(reversed(rows)), 12, 42, required)
+    with pytest.raises(ValueError, match="missing"):
+        nested_subset(rows, 12, 42, {"not-present"})
+    with pytest.raises(ValueError, match="exceed"):
+        nested_subset(rows, 3, 42, {"code-18", "code-19"})

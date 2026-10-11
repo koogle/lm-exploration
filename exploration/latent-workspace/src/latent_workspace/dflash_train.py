@@ -201,6 +201,7 @@ def restore_continuation(cfg, previous, state, drafter, optimizer, generator):
         ("teacher_prompt_style", "raw"),
         ("qk_norm", False),
         ("warm_start_from", ""),
+        ("retain_training_parent", ""),
     ):
         if getattr(cfg, key) != old.get(key, default):
             raise ValueError(f"continuation changes cached subset: {key}")
@@ -284,8 +285,24 @@ def run_dflash(cfg, output, on_checkpoint=None):
             ):
                 raise ValueError(f"teacher cache/config mismatch: {key}")
         data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
-        data["train"] = nested_subset(data["train"], cfg.train_limit, cfg.seed)
+        required = set()
+        if cfg.retain_training_parent:
+            retained = torch.load(
+                Path(cfg.retain_training_parent) / "teacher.pt",
+                map_location="cpu",
+                weights_only=True,
+            )
+            available = {e["group"]: e for e in data["train"]}
+            for e in retained["train"]:
+                if e["group"] not in available or not torch.equal(
+                    e["tokens"], available[e["group"]]["tokens"]
+                ):
+                    raise ValueError("required training example missing or labels changed")
+                required.add(e["group"])
+            del retained, available
+        data["train"] = nested_subset(data["train"], cfg.train_limit, cfg.seed, required)
         audit = teacher_statistics(data, cfg.block_size)
+        audit["required_training_groups"] = len(required)
         audit["parent_generation_audit"] = json.loads((parent / "teacher-audit.json").read_text())
         atomic_save(output / "teacher.pt", data)
         write_json(output / "teacher-audit.json", audit)

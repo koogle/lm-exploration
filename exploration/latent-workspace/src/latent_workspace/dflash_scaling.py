@@ -36,15 +36,23 @@ def continuation_slice(ids, width, group, seed):
     return ids[start : start + width], start
 
 
-def nested_subset(examples, count, seed):
+def nested_subset(examples, count, seed, required_groups=()):
     if count <= 0 or count % 3:
         raise ValueError("subset must be a positive multiple of three")
     result = []
+    required_groups = set(required_groups)
+    if not required_groups <= {e["group"] for e in examples}:
+        raise ValueError("required training groups missing from expanded pool")
     for domain in DOMAINS:
         rows = sorted(
             (e for e in examples if e["domain"] == domain),
-            key=lambda e: hashlib.sha256(f"{seed}:{e['group']}".encode()).hexdigest(),
+            key=lambda e: (
+                e["group"] not in required_groups,
+                hashlib.sha256(f"{seed}:{e['group']}".encode()).hexdigest(),
+            ),
         )
+        if sum(e["group"] in required_groups for e in rows) > count // 3:
+            raise ValueError("required training groups exceed balanced subset")
         if len(rows) < count // 3:
             raise ValueError(f"not enough usable {domain} responses for subset {count}")
         result.extend(rows[: count // 3])
@@ -229,7 +237,9 @@ def build_batched_teacher(cfg, target, tokenizer, manifest, output, deadline, ex
         (
             r
             for r in manifest["records"]
-            if r["split"] != "test" and r["group"] not in retained_groups
+            if r["split"] != "test"
+            and r["group"] not in retained_groups
+            and (existing is None or r["split"] == "train")
         ),
         key=lambda r: r["split"] != "validation",
     )
