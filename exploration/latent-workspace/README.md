@@ -6,10 +6,14 @@ condition on a known anchor, and verify proposals with Qwen. The original J-spac
 workspace and layer-selection experiments are deferred until this baseline works.
 No backbone pretraining or collaborative proposal module.
 
-Active user-requested follow-up: [Qwen3.5-2B drafting quality](docs/dflash-qwen35-2b.md).
-The real-model smoke and fresh teacher preparation passed; the 6144-response fit is running.
-This changes model family, tokenizer, prompt format and drafter width; no 2B quality
-conclusion yet. Prediction quality, not speed optimization, is the priority.
+The [completed Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md)
+did not improve drafting: selected checkpoints score **0.170 versus 0.387 NEW
+matches / 7** on 184 shared validation source prompts. The 2B head is weak on
+training too (0.173). Both used 6144 responses and 20000 updates. Family, tokenizer,
+prompt format and draft capacity also change; this is not a pure size ablation.
+Prediction quality remains the priority. No 2B rollout verification was performed.
+
+![Qwen target drafting quality](results/dflash-qwen35-2b-comparison.png)
 
 The [completed response-data study](results/dflash-data-scaling.md) compares 768
 versus 6144 training responses at the same 20000-update budget and on 192 shared

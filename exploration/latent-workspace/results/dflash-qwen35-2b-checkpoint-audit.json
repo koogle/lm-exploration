@@ -1,0 +1,13 @@
+{
+  "local_checkpoint": {
+    "file": "artifacts/dflash-qwen35-2b-best.pt",
+    "sha256": "82de0b090d98574e79371d4c9daa6aaedf314ce0d75a9c1acba0024628c3c748",
+    "bytes": 419523862
+  },
+  "matches_gpu_checkpoint": true,
+  "checkpoint_step": 16750,
+  "both_validation_audits_match_training_exactly": true,
+  "sampler_replay_matches_saved_state": true,
+  "training_source_sha256": "272b39bae57338e455b5b9224fb6ff81064325ceb8108a67eb0e8a8d57d638a3",
+  "audit_source_sha256": "726790fe19f09d82a8e59edf3efe1c1c4527cad9effde2cb5860d84c6c969c64"
+}

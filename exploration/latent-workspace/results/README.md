@@ -1,6 +1,11 @@
 # Experiment evidence
 
-Current evidence: [DFlash response-data scaling](dflash-data-scaling.md).
+Latest: [Qwen3.5-2B quality comparison](dflash-qwen35-2b-findings.md).
+The 2B setup does not improve drafting: 0.170 versus 0.387 NEW matches on shared
+validation source prompts, and weak full-training prediction. Family/tokenizer/
+prompt/draft-capacity differences prevent a pure-size conclusion.
+
+Earlier evidence: [DFlash response-data scaling](dflash-data-scaling.md).
 The matched 768-versus-6144 response comparison improves held-out new-token acceptance
 from 0.218 to 0.384. Useful multi-token drafting and broad speedup remain unestablished.
 The [earlier tiny-corpus fit](dflash-findings.md) remains as historical evidence.

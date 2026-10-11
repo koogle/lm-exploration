@@ -82,3 +82,10 @@
   a 2B Qwen comparison. Add exact Qwen3.5-2B as a quality-only target; disclose
   family/tokenizer/draft-capacity changes and unsupported hybrid cache rollback.
   See docs/dflash-qwen35-2b.md.
+
+- 2026-10-11: Completed the requested Qwen3.5-2B quality experiment at 20000
+  updates and 6144 responses. Selected shared-source-prompt matches are 0.170
+  versus 0.387 for 0.5B; 2B training remains weak too. Do not interpret this as
+  a pure size effect or solve it by speed work. Preserve the negative result,
+  keep test sealed, and prioritize reliable drafter fitting/training fidelity.
+  See results/dflash-qwen35-2b-findings.md.

@@ -1,17 +1,30 @@
 # Open work
 
-Active: user-requested Qwen3.5-2B drafting **quality** comparison. See
-[protocol](docs/dflash-qwen35-2b.md). GPU training smoke passed. Raw prompt sample failures prompted a switch to
-non-thinking chat formatting; the 6144-response fit completed 20000 updates, with 184 usable validation
-responses. Selected shared-prompt NEW matches: 0.170 (2B) versus 0.387 (0.5B).
-Full-training audit running; no pure-size or human answer-quality claim.
-Conservative reservations: $258.25/$500. All stopped/failed reservations are retained. Existing 0.5B results below remain the historical baseline.
+Completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).
+Both targets used 6144 responses and 20000 updates. Selected shared-prompt NEW
+matches are 0.170 (2B) versus 0.387 (0.5B), worse in each domain. Full-training
+2B selected/final matches are 0.173/0.175 versus validation 0.170/0.168. This is
+poor fitting as well as poor held-out prediction, not the tiny-set memorization
+pattern. Family, tokenizer, prompt format and draft capacity differ; no pure-size
+or human answer-quality claim. Test remains sealed and hybrid rollout unimplemented.
+
+Both full fitting audits match the training curves exactly. Sampler replay confirms
+3.36M NEW-label exposures and 72.97M conditioning-position exposures. The downloaded
+selected checkpoint matches the GPU hash. 79 local tests and all GPU checks passed;
+all comparison jobs ended. Cumulative conservative reservations: $258.25/$500,
+not billed usage; failed/stopped reservations are retained.
+
+Next: establish reliable drafter fitting and training fidelity before treating data
+size or backbone size as a sufficient fix. A same-family 1.5B size control or a
+native hybrid-target adapter remains untested. No additional training is running.
+The 0.5B study below remains the reference; representation sweeps and inference
+speed optimization remain deferred.
 
 Location: `exploration/latent-workspace/` in private `koogle/0-to-llm` (LM Exploration),
 main; direct commits and regular pushes authorized. Historical source:
 `koogle/latent-workspace`. See [consolidation](../../docs/consolidation.md).
 
-Current priority: a useful DFlash-style drafter for frozen Qwen2.5-0.5B.
+Current priority: useful block prediction with a frozen Qwen target.
 Representation/layer/J-space experiments remain deferred.
 
 [Completed data-size study](results/dflash-data-scaling.md): fresh 768- and 6144-response
@@ -42,12 +55,11 @@ on upcast stored weights. Speculation preserves target behavior, not human answe
 completed. Selected heads are downloaded and checksum-verified at
 `artifacts/dflash-scale-{768,6144}-best.pt`; best/latest checkpoints persist on Modal.
 Both selected heads also ran through the CLI in the consolidated checkout.
-All jobs in this study have completed. Cumulative conservative reservations are
-$226.50 under the original authorized $500 upper cap; not a confirmed bill.
+All jobs in that study completed. At that checkpoint, conservative reservations
+were $226.50/$500; the current cumulative reservation appears above.
 
 Next: establish adequate optimization and data coverage with the same drafting
-baseline, guided by held-out accepted multi-token prefixes and verified end-to-end
-latency. The 6144-response head's high training loss keeps optimization an open factor.
+baseline, guided by held-out multi-token prediction quality. The 6144-response head's high training loss keeps optimization an open factor.
 Further source diversity, longer teacher responses and larger mixed-domain pools
 remain untested. Bounded streaming shuffle is not globally uniform sampling, Python
 is the only code language, and translation separation is sentence-level. Keep test

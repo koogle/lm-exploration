@@ -33,7 +33,7 @@ Quality-only runs explicitly omit rollout verification: Qwen3.5's recurrent
 state cannot be rolled back using the existing KV-only crop verifier. They
 report verification as null, not successful. No latency qualification is intended.
 
-Status: bounded 40-update Modal smoke completed in 116.2 seconds, with finite
+Implementation checks: bounded 40-update Modal smoke completed in 116.2 seconds, with finite
 training and no target gradients. It has 104,876,032 trainable parameters.
 Chat-formatted teacher smoke passed: 23 usable train and nine validation responses
 in 13.6 seconds. The inspected prose/translation samples are coherent, but a code sample
@@ -46,14 +46,15 @@ Full preparation completed in 623.1 seconds: 6390 usable training responses
 training subset completed 20000 updates; the 192 test prompts remain unlabelled. Raw
 preparation was deliberately stopped.
 The first chat preparation failed before generation because the tokenizer returned
-a BatchEncoding; explicit `return_dict=False` fixes serialization. No trained
-2B generalization conclusion yet. The smoke tests loading, feature extraction, gradients
-and held-out scoring; it cannot establish generalization or adequate training.
+a BatchEncoding; explicit `return_dict=False` fixes serialization. These smoke
+checks validate loading, feature extraction, gradients and scoring. The completed
+trained-model results below provide the quality evidence.
 
-The planned fit uses a fixed 20000-update global cosine schedule. Bounded-worker
+The completed fit used a fixed 20000-update global cosine schedule. Bounded-worker
 continuations restore weights, optimizer and sampler/RNG state while retaining
 this global schedule (`schedule_steps=20000`); the default historical continuation
-behavior remains a new cycle. Exact split-versus-uninterrupted training is tested.
+behavior remains a new cycle. Exact split-versus-uninterrupted training is tested;
+no continuation was needed for this completed fit.
 
 Prompt audit: all 6984 ordered source groups/splits/domains match the 0.5B
 manifest, with zero cross-split group overlap. The text audit finds 6440 exact source-text
@@ -64,10 +65,10 @@ affect code continuation, is another declared prompt-format difference. See
 
 Training completed as `dflash-qwen35-2b-fit-01`, with 104,876,032 trainable
 parameters and 295691 distinct response-token positions in the selected 6144
-responses. At early checkpoints the 2B setup is not ahead; do not treat this
-as a final result or stop the fixed-budget fit based on that observation.
-`scripts/plot_dflash_targets.py` compares shared measured update counts and,
-when final reports are available, validation-selected heads on shared source
+responses. The 2B setup was behind at early checkpoints; the full fixed budget
+was completed before drawing the final conclusion.
+`scripts/plot_dflash_targets.py` compares shared measured update counts and
+validation-selected heads on shared source
 prompts. It marks incomplete curves and refuses to overwrite input reports.
 
 A bounded real-model teacher audit sampled one train and validation response per
@@ -77,7 +78,7 @@ prior features by exactly zero. This reduces concern about a gross cache/label
 mismatch; it is not an exhaustive corpus audit. See
 [teacher consistency](../results/dflash-qwen35-2b-teacher-audit-01.json).
 
-The final fitting audit will also show unverified seven-token proposals from the
+The final fitting audit also shows unverified seven-token proposals from the
 selected checkpoint: first validation response per domain, at its first anchor
 and up to 16 response tokens later. This fixed selection is illustrative, not a
 new benchmark or verified generation. Teacher tokens, draft tokens, supplied
@@ -93,5 +94,10 @@ Training completed in 2505.4 seconds, with 3.36M supervised NEW-token exposures,
 no target gradients, and verification explicitly unrun. Selected step: 16750.
 On the 184 shared validation source prompts, selected NEW matches are 0.17017
 for 2B versus 0.38658 for 0.5B. All three domains are worse for this 2B setup.
-The full-training-set fitting audit is running; do not infer its result from the
-12-response training diagnostic. [Completed curves](../results/dflash-qwen35-2b-comparison.png).
+The full-training-set fitting audit completed: selected train/validation NEW
+matches are 0.17250/0.17017, and final matches are 0.17537/0.16789.
+Both validation audits match the original curves exactly; saved sampler state
+replay and the downloaded checkpoint checksum also match. [Completed curves](../results/dflash-qwen35-2b-comparison.png).
+
+Completed interpretation and artifacts: [findings](../results/dflash-qwen35-2b-findings.md).
+All jobs ended; conservative reservations total $258.25/$500, not billed usage.

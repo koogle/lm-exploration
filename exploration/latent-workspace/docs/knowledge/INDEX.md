@@ -20,3 +20,5 @@ Current drafting-first priority: [DFlash baseline](../dflash-baseline.md).
 Larger response-data comparison and DFlash generalization evidence: [Protocol](../dflash-data-scaling.md).
 
 Larger target quality comparison: [Qwen3.5-2B](../dflash-qwen35-2b.md).
+
+Completed larger-target measurements: [2B findings](../../results/dflash-qwen35-2b-findings.md).
