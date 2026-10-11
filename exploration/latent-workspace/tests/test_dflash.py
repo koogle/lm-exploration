@@ -211,3 +211,45 @@ def test_hybrid_target_requires_quality_only():
     with pytest.raises(ValueError, match="quality-only"):
         cfg.validate()
     replace(cfg, quality_only=True).validate()
+
+
+def test_qwen35_hybrid_features_are_causal_and_drafter_trains():
+    from transformers import Qwen3_5ForCausalLM, Qwen3_5TextConfig
+
+    torch.manual_seed(9)
+    config = Qwen3_5TextConfig(
+        vocab_size=31,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=4,
+        num_attention_heads=2,
+        num_key_value_heads=1,
+        head_dim=16,
+        linear_num_key_heads=2,
+        linear_num_value_heads=2,
+        linear_key_head_dim=16,
+        linear_value_head_dim=16,
+        layer_types=["linear_attention"] * 3 + ["full_attention"],
+        rope_parameters={
+            "rope_type": "default",
+            "rope_theta": 10000000,
+            "partial_rotary_factor": 0.5,
+            "mrope_section": [1, 1, 2],
+        },
+    )
+    target = Qwen3_5ForCausalLM(config).eval().requires_grad_(False)
+    cfg = replace(
+        DraftConfig(), model="Qwen/Qwen3.5-2B", quality_only=True, layers=(1, 3), block_size=4
+    )
+    draft = DFlashDrafter(config, cfg)
+    tokens = torch.randint(31, (1, 12))
+    changed = tokens.clone()
+    changed[:, 6:] = (changed[:, 6:] + 1) % 31
+    memory = features(target.model(tokens, use_cache=False, output_hidden_states=True), cfg.layers)
+    other = features(target.model(changed, use_cache=False, output_hidden_states=True), cfg.layers)
+    torch.testing.assert_close(memory[:, :6], other[:, :6])
+    loss, _, _, _ = block_loss(draft, target, tokens, memory, torch.tensor([[6]]), 30)
+    loss.backward()
+    assert torch.isfinite(loss)
+    assert draft.fc.weight.grad.abs().sum() > 0
+    assert all(p.grad is None for p in target.parameters())

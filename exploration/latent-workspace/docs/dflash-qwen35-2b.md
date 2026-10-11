@@ -28,6 +28,8 @@ Quality-only runs explicitly omit rollout verification: Qwen3.5's recurrent
 state cannot be rolled back using the existing KV-only crop verifier. They
 report verification as null, not successful. No latency qualification is intended.
 
-Status: implementation and bounded 40-update Modal smoke underway. No trained
-2B quality conclusion yet. The smoke tests loading, feature extraction, gradients
+Status: bounded 40-update Modal smoke completed in 116.2 seconds, with finite
+training and no target gradients. It has 104,876,032 trainable parameters.
+Fresh teacher preparation for the larger comparison is running. No trained
+2B generalization conclusion yet. The smoke tests loading, feature extraction, gradients
 and held-out scoring; it cannot establish generalization or adequate training.

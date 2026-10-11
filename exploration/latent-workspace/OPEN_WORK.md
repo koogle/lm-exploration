@@ -1,8 +1,8 @@
 # Open work
 
 Active: user-requested Qwen3.5-2B drafting **quality** comparison. See
-[protocol](docs/dflash-qwen35-2b.md). Bounded GPU smoke underway; no quality
-claim yet. Existing 0.5B results below remain the historical baseline.
+[protocol](docs/dflash-qwen35-2b.md). GPU smoke passed; fresh 2B teacher preparation running. No quality
+claim yet. Reservations now $232.75/$500, not billed usage. Existing 0.5B results below remain the historical baseline.
 
 Location: `exploration/latent-workspace/` in private `koogle/0-to-llm` (LM Exploration),
 main; direct commits and regular pushes authorized. Historical source:
