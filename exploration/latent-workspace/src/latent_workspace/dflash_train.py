@@ -200,6 +200,7 @@ def restore_continuation(cfg, previous, state, drafter, optimizer, generator):
         ("schedule_steps", 0),
         ("teacher_prompt_style", "raw"),
         ("qk_norm", False),
+        ("warm_start_from", ""),
     ):
         if getattr(cfg, key) != old.get(key, default):
             raise ValueError(f"continuation changes cached subset: {key}")
@@ -298,6 +299,26 @@ def run_dflash(cfg, output, on_checkpoint=None):
         )
     seed_all(cfg.seed)
     drafter = DFlashDrafter(target.config, cfg).to(device)
+    warm_start = None
+    if cfg.warm_start_from and not previous:
+        path = Path(cfg.warm_start_from) / "best.pt"
+        warm_state = torch.load(path, map_location="cpu", weights_only=True)
+        for key in ("model", "model_revision", "layers", "draft_layers", "qk_norm", "block_size"):
+            default = False if key == "qk_norm" else None
+            if json.dumps(cfg.to_dict()[key]) != json.dumps(warm_state["config"].get(key, default)):
+                raise ValueError(f"warm start changes draft architecture: {key}")
+        if mask_id != warm_state["mask_token_id"]:
+            raise ValueError("warm start changes mask token")
+        drafter.load_state_dict(warm_state["drafter"])
+        with path.open("rb") as f:
+            checkpoint_sha = hashlib.file_digest(f, "sha256").hexdigest()
+        warm_start = {
+            "parent": cfg.warm_start_from,
+            "step": warm_state["step"],
+            "checkpoint_sha256": checkpoint_sha,
+            "note": "Weights only; fresh AdamW and new schedule on the declared teacher corpus.",
+        }
+        del warm_state
     optimizer = torch.optim.AdamW(drafter.parameters(), lr=cfg.learning_rate, weight_decay=0.01)
     generator = torch.Generator().manual_seed(cfg.seed)
     start_step = 0
@@ -319,6 +340,7 @@ def run_dflash(cfg, output, on_checkpoint=None):
         "completed": False,
         "test_status": "new test prompts reserved; no teacher test responses/features/metrics produced",
         "data_note": "All labels are pinned frozen Qwen greedy continuations, not original human answers.",
+        "warm_start": previous.get("warm_start") if previous else warm_start,
     }
     initial_weights = hashlib.sha256()
     for name, tensor in sorted(drafter.state_dict().items()):

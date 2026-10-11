@@ -199,6 +199,24 @@ def test_fresh_training_from_teacher_cache_does_not_restore_a_model(
     assert resumed["teacher_sequence_sha256"] == report["teacher_sequence_sha256"]
     assert resumed["parent_run"] == str(tmp_path / "fit")
 
+    warmed = trainer.run_dflash(
+        replace(cfg, warm_start_from=str(tmp_path / "fit")), tmp_path / "warmed"
+    )
+    assert warmed["curve"][0]["step"] == 0
+    expected_validation = {
+        k: v for k, v in report["selected_validation"].items() if k != "examples"
+    }
+    assert warmed["curve"][0]["validation"] == expected_validation
+    assert warmed["warm_start"]["step"] == report["best_step"]
+    assert warmed["curve"][-1]["supervised_target_exposures"] == 9
+    warmed_state = torch.load(tmp_path / "warmed" / "latest.pt", weights_only=True)
+    assert all(int(s["step"]) == 1 for s in warmed_state["optimizer"]["state"].values())
+    with pytest.raises(ValueError, match="qk_norm"):
+        trainer.run_dflash(
+            replace(cfg, warm_start_from=str(tmp_path / "fit"), qk_norm=True),
+            tmp_path / "incompatible-warm-start",
+        )
+
     if schedule_steps:
         uninterrupted = trainer.run_dflash(replace(cfg, steps=2), tmp_path / "uninterrupted")
         assert uninterrupted["verification_passed"] is None

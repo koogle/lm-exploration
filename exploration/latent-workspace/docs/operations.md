@@ -159,3 +159,17 @@ new backbone training or target forward computation.
 For full fitting audits of the wider 2B drafter, `--verify-parent RUN --fit-audit
 --long-run` selects a 3600-second diagnostic worker and reserves $5 for the full
 bound. The short worker remains 360 seconds/$0.50; no timeout is under-reserved.
+
+`warm_start_from` loads only a compatible run's selected draft weights onto the
+new declared teacher corpus. It starts fresh AdamW, sampler RNG and a new schedule;
+it is not optimizer continuation. The report records source checkpoint SHA/step.
+A later `continue_from` retains this provenance and restores optimizer/RNG exactly.
+CPU integration tests check identical step-zero validation, fresh optimizer step
+counts, architecture rejection and continued global-schedule behavior.
+
+`--recache-parent RUN --long-run` adds configured feature depths to existing
+train/validation tokens, retaining old feature planes bitwise. Data preparation
+with `extend_teacher_parent` retains old cached examples and all held-out prompts,
+then generates only uncached training responses. It rejects changed teacher settings
+and hash-checks unchanged validation tokens/features. Both use the same bounded
+3600-second worker and $5 reservation. No sealed-test teacher generation occurs.

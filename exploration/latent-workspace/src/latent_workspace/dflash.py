@@ -37,6 +37,7 @@ class DraftConfig:
     seed: int = 42
     max_seconds: int = 720
     continue_from: str = ""
+    warm_start_from: str = ""  # Weights only; new corpus/optimizer/schedule are explicit.
     historical_corpus: str = "/runs/data-large-01/corpus.pt"
     prompt_manifest: str = ""
     teacher_parent: str = ""
