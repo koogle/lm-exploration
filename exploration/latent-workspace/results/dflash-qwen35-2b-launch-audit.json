@@ -1,0 +1,45 @@
+{
+  "reproducible_package_commit": "4d3fa54791d07cace529b515322ca2ad063b2e62",
+  "package_sha256": "272b39bae57338e455b5b9224fb6ff81064325ceb8108a67eb0e8a8d57d638a3",
+  "matches_preparation_and_training": true,
+  "training_config": {
+    "model": "Qwen/Qwen3.5-2B",
+    "model_revision": "15852e8c16360a2fea060d615a32b45270f8a8fc",
+    "layers": [
+      2,
+      22
+    ],
+    "draft_layers": 2,
+    "block_size": 8,
+    "gamma": 4.0,
+    "train_prompts": 6600,
+    "validation_prompts": 192,
+    "test_prompts": 192,
+    "prompt_tokens": 128,
+    "response_tokens": 64,
+    "batch_size": 3,
+    "anchors_per_sequence": 8,
+    "steps": 20000,
+    "eval_every": 250,
+    "learning_rate": 0.0006,
+    "warmup_ratio": 0.04,
+    "seed": 42,
+    "max_seconds": 3300,
+    "continue_from": "",
+    "historical_corpus": "/runs/data-large-01/corpus.pt",
+    "prompt_manifest": "",
+    "teacher_parent": "/runs/dflash-qwen35-2b-chat-data-01",
+    "train_limit": 6144,
+    "teacher_batch_size": 32,
+    "rollout_prompts_per_domain": 4,
+    "quality_only": true,
+    "teacher_prompt_style": "chat_no_thinking",
+    "schedule_steps": 20000
+  },
+  "training_dataset_identity": "2494b02a88c4dc45760c8f599cea84396bd0573bfd5c4789c4f46fc0913f22d3",
+  "split_sequence_sha256": {
+    "train": "d0de0d075daa732ee11328a3e6d79b99e29aafe5c729f03f1181d066ced6cda4",
+    "validation": "f7bc2ec463b59874f755712a5f16235c96f67f4d2e6bf4f5fa6a75aee9e007af"
+  },
+  "initial_drafter_sha256": "d0ca5030c209cb2461bb5bdf3dbc3b9b0cc4138e8da8f0a979b43c6daa20d4dc"
+}

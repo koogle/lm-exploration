@@ -80,3 +80,9 @@ selected checkpoint: first validation response per domain, at its first anchor
 and up to 16 response tokens later. This fixed selection is illustrative, not a
 new benchmark or verified generation. Teacher tokens, draft tokens, supplied
 anchor and context tail are retained together.
+
+[Halfway curve](../results/dflash-qwen35-2b-halfway-comparison.png) and
+[raw snapshot](../results/dflash-qwen35-2b-halfway.json) are explicitly incomplete.
+At 10000 updates, validation NEW matches are 0.136 for 2B versus 0.313 for the
+0.5B baseline. Both preparation and training package hashes match committed
+source `4d3fa54`; see [launch audit](../results/dflash-qwen35-2b-launch-audit.json).
