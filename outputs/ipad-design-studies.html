@@ -1,0 +1,1119 @@
+<title>Inference Bench Studies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a single reading column for the argument, with each iPad study shown full-bleed at true 11" landscape proportions and scaled to fit. */
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --fg: #16181d;
+  --muted: #5c6371;
+  --line: #dadee5;
+  --accent: #2b4fd8;
+  --accent-soft: #e6ebfc;
+  --k-delta: #2f9e91;
+  --k-attn: #d9922b;
+  --k-ffn: #7f6ff0;
+  --k-head: #df5c74;
+  --k-norm: #9aa3b0;
+  --k-sample: #4a8fe0;
+  --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --surface: #191c22; --fg: #e8eaee; --muted: #9aa1ad; --line: #2b3039;
+    --accent: #8ea6ff; --accent-soft: #232b45; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #191c22; --fg: #e8eaee; --muted: #9aa1ad; --line: #2b3039;
+  --accent: #8ea6ff; --accent-soft: #232b45; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.55; padding: 0 20px; }
+.wrap { max-width: 1260px; margin: 0 auto; padding-block: 56px 96px; display: grid; gap: 72px; }
+.prose { max-width: 68ch; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(34px, 5vw, 52px); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(24px, 3vw, 32px); font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 15px; font-weight: 700; }
+p { margin: 0; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+header.intro { display: grid; gap: 18px; }
+header.intro .lede { font-size: 19px; color: var(--muted); max-width: 62ch; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.fact { font-family: var(--mono); font-size: 12.5px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.fact b { font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.note { font-size: 13.5px; color: var(--muted); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+nav.toc a { font-size: 14px; text-decoration: none; color: var(--fg); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+
+section.study { display: grid; gap: 22px; scroll-margin-top: 20px; }
+.study-head { display: grid; gap: 8px; }
+.study-head .tag { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 0.06em; text-transform: uppercase; }
+.frame { width: 100%; position: relative; }
+.device { position: absolute; top: 0; left: 0; width: 1220px; height: 860px; transform-origin: top left; padding: 20px; border-radius: 40px; background: #1d1f23; box-shadow: 0 0 0 1px #34373d inset, 0 30px 60px -30px rgba(10,14,25,.45); }
+.screen { width: 1180px; height: 820px; border-radius: 20px; overflow: hidden; position: relative; }
+.analysis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+.analysis > div { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.analysis ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 15px; }
+.analysis p { font-size: 15px; }
+@media (max-width: 820px) { .analysis { grid-template-columns: 1fr; gap: 18px; } }
+.hint { font-size: 13px; color: var(--muted); font-family: var(--mono); }
+
+table.cmp { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 680px; }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table.cmp th, table.cmp td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.cmp tr:last-child td { border-bottom: 0; }
+table.cmp thead th { font-size: 12px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 500; }
+table.cmp td:first-child { font-weight: 600; width: 26%; }
+.dots { font-family: var(--mono); letter-spacing: 2px; color: var(--accent); white-space: nowrap; }
+.dots s { text-decoration: none; color: var(--line); }
+
+.rec { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+@media (max-width: 900px) { .rec { grid-template-columns: 1fr; } }
+.rec ol, .rec ul { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.code { font-family: var(--mono); font-size: 12.5px; line-height: 1.6; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; overflow-x: auto; white-space: pre; color: var(--fg); }
+.code .c { color: var(--muted); }
+code { font-family: var(--mono); font-size: .88em; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+.stack { display: grid; gap: 14px; }
+
+/* ---------- shared mock pieces ---------- */
+.screen button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.screen button:focus-visible { outline: 2px solid #4a8fe0; outline-offset: 1px; }
+.sbar { height: 24px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; font-size: 12px; font-weight: 600; font-family: -apple-system, system-ui, sans-serif; }
+.sbar .r { display: flex; gap: 6px; align-items: center; }
+.batt { width: 22px; height: 11px; border: 1.5px solid currentColor; border-radius: 3px; position: relative; opacity: .9; }
+.batt::after { content: ""; position: absolute; inset: 1.5px; right: 5px; background: currentColor; border-radius: 1px; }
+.code-view { font-family: var(--mono); font-size: 11.5px; line-height: 17px; overflow: auto; white-space: pre; }
+.code-view .ln { display: flex; }
+.code-view .n { width: 38px; flex: none; text-align: right; padding-right: 12px; user-select: none; }
+.code-view .t { flex: 1; padding-right: 16px; }
+.tok { cursor: pointer; border-radius: 3px; }
+.scroll { overflow: auto; scrollbar-width: thin; }
+
+/* ---------- Study A: native workbench ---------- */
+.mA { background: #fff; color: #1c1c1e; font-family: -apple-system, "SF Pro Text", system-ui, "Helvetica Neue", sans-serif; font-size: 13px; }
+.mA .sbar { background: #fff; }
+.mA .tb { height: 50px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid #e5e5ea; }
+.mA .tb .ttl { display: grid; line-height: 1.2; }
+.mA .tb .ttl b { font-size: 15px; }
+.mA .tb .ttl span { font-size: 11.5px; color: #8e8e93; }
+.mA .tb .sp { flex: 1; }
+.mA .ib { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #007aff; }
+.mA .pill { height: 30px; padding: 0 12px; border-radius: 15px; background: #f2f2f7; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; color: #1c1c1e; }
+.mA .pill.on { background: #e5efff; color: #007aff; }
+.mA .pill.go { background: #007aff; color: #fff; }
+.mA .cols { display: grid; grid-template-columns: 300px minmax(0,1fr) 300px; height: 746px; }
+.mA .chat { background: #f2f2f7; border-right: 1px solid #e5e5ea; display: flex; flex-direction: column; min-height: 0; }
+.mA .chat .msgs { flex: 1; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.mA .bub { background: #007aff; color: #fff; padding: 9px 12px; border-radius: 16px 16px 4px 16px; align-self: flex-end; max-width: 85%; font-size: 13.5px; line-height: 1.4; }
+.mA .ans { font-size: 13.5px; line-height: 1.5; background: #fff; padding: 10px 12px; border-radius: 14px; }
+.mA .ans .tok:hover { background: #e5efff; }
+.mA .ans .tok.sel { background: #007aff; color: #fff; }
+.mA .meta { font-size: 11px; color: #8e8e93; display: flex; gap: 8px; flex-wrap: wrap; }
+.mA .inp { margin: 10px 12px 12px; background: #fff; border-radius: 18px; border: 1px solid #e0e0e6; padding: 8px 8px 8px 14px; display: flex; align-items: center; color: #aeaeb2; font-size: 13.5px; }
+.mA .inp .snd { margin-left: auto; width: 26px; height: 26px; border-radius: 13px; background: #007aff; color: #fff; display: grid; place-items: center; font-size: 14px; }
+.mA .knobs { display: flex; gap: 6px; padding: 0 12px 12px; font-size: 11px; color: #636366; flex-wrap: wrap; }
+.mA .knobs span { background: #e5e5ea; padding: 2px 8px; border-radius: 6px; }
+.mA .center { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.mA .tabs { height: 34px; display: flex; align-items: stretch; border-bottom: 1px solid #e5e5ea; background: #fafafa; overflow: hidden; }
+.mA .tabs button { padding: 0 14px; font-size: 12px; color: #636366; border-right: 1px solid #ececf0; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.mA .tabs button.on { background: #fff; color: #1c1c1e; font-weight: 600; box-shadow: inset 0 -2px 0 #007aff; }
+.mA .code-view { flex: 1; min-height: 0; padding: 10px 0; background: #fff; }
+.mA .code-view .n { color: #b4b4ba; }
+.mA .c-kw { color: #9b2393; font-weight: 600; } .mA .c-ty { color: #3900a0; } .mA .c-com { color: #5d6c79; font-style: italic; }
+.mA .c-num { color: #1c00cf; } .mA .c-pre { color: #643820; } .mA .c-att { color: #815f03; } .mA .c-fn { color: #326d74; }
+.mA .build { height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 14px; font-size: 11.5px; color: #636366; border-top: 1px solid #e5e5ea; background: #fafafa; }
+.mA .ok { color: #248a3d; font-weight: 600; }
+.mA .drawer { height: 252px; border-top: 1px solid #d8d8de; background: #fff; display: flex; flex-direction: column; padding: 10px 14px 8px; gap: 8px; }
+.mA .drawer .hd { display: flex; align-items: baseline; gap: 10px; }
+.mA .drawer .hd b { font-size: 13px; }
+.mA .drawer .hd span { color: #8e8e93; font-size: 12px; }
+.mA .seg { margin-left: auto; display: inline-flex; background: #eeeef0; border-radius: 7px; padding: 2px; font-size: 11.5px; }
+.mA .seg span { padding: 2px 10px; border-radius: 5px; }
+.mA .seg span.on { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.12); font-weight: 600; }
+.mA .wf { display: flex; height: 26px; border-radius: 5px; overflow: hidden; gap: 1px; background: #fff; }
+.mA .wf button { height: 100%; min-width: 1px; }
+.mA .wf button.sel { outline: 2px solid #1c1c1e; outline-offset: -2px; }
+.mA .wfax { display: flex; justify-content: space-between; font-size: 10px; color: #8e8e93; font-family: var(--mono); margin-top: -4px; }
+.mA table { width: 100%; border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.mA th { text-align: left; font-weight: 500; color: #8e8e93; padding: 2px 6px; font-size: 10.5px; }
+.mA td { padding: 3px 6px; border-top: 1px solid #f0f0f3; white-space: nowrap; }
+.mA td.k { font-family: var(--mono); font-size: 11px; }
+.mA td.k button { color: #007aff; }
+.mA .bar { height: 6px; border-radius: 3px; background: #007aff; opacity: .8; }
+.mA .warn { color: #c4560b; font-weight: 600; }
+.mA .insp { border-left: 1px solid #e5e5ea; background: #fbfbfd; display: flex; flex-direction: column; min-height: 0; }
+.mA .card { margin: 12px; padding: 12px; border-radius: 12px; background: #fff; border: 1px solid #ececf0; display: grid; gap: 8px; }
+.mA .card .nm { display: flex; align-items: center; gap: 8px; }
+.mA .card .nm b { font-size: 14px; }
+.mA .dot { width: 8px; height: 8px; border-radius: 4px; background: #34c759; }
+.mA .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 11px; }
+.mA .kv div { display: grid; }
+.mA .kv span { color: #8e8e93; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.mA .kv b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.mA .iseg { margin: 0 12px 8px; display: flex; background: #eeeef0; border-radius: 8px; padding: 2px; font-size: 12px; }
+.mA .iseg span { flex: 1; text-align: center; padding: 4px 0; border-radius: 6px; }
+.mA .iseg span.on { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.mA .layers { flex: 1; min-height: 0; padding: 0 8px 12px; }
+.mA .lrow { width: 100%; display: grid; grid-template-columns: 18px 1fr 64px 46px; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 7px; text-align: left; font-size: 12px; }
+.mA .lrow:hover { background: #f0f0f5; }
+.mA .lrow.sel { background: #e5efff; }
+.mA .lrow .ix { font-family: var(--mono); font-size: 10.5px; color: #8e8e93; text-align: right; }
+.mA .lrow .nm2 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mA .lrow .nm2 i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.mA .lrow .nm2 small { color: #8e8e93; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mA .lrow .tr { height: 5px; background: #ececf0; border-radius: 3px; overflow: hidden; }
+.mA .lrow .tr div { height: 100%; }
+.mA .lrow .ms { font-family: var(--mono); font-size: 10.5px; text-align: right; color: #3a3a3c; }
+.mA .ops { margin: 2px 0 6px 26px; border-left: 1px solid #e0e0e6; padding-left: 8px; display: grid; }
+.mA .op { display: grid; grid-template-columns: 1fr auto 40px; gap: 6px; align-items: center; padding: 3px 6px; border-radius: 6px; font-size: 11px; text-align: left; width: 100%; }
+.mA .op:hover { background: #f0f0f5; }
+.mA .op.on { background: #e5efff; }
+.mA .op .q { font-family: var(--mono); font-size: 9.5px; padding: 1px 5px; border-radius: 4px; background: #f2f2f7; color: #636366; }
+.mA .op .ms { font-family: var(--mono); font-size: 10px; text-align: right; color: #636366; }
+
+/* ---------- Study B: model spine ---------- */
+.mB { background: #f3f4f1; color: #17191c; font-family: var(--body); font-size: 13px; }
+.mB .sbar { background: #f3f4f1; }
+.mB .tb { height: 50px; display: flex; align-items: center; gap: 16px; padding: 0 18px; border-bottom: 1px solid #dcdfd8; }
+.mB .brand { font-weight: 800; font-size: 16px; letter-spacing: -0.01em; }
+.mB .model { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid #d3d6cf; border-radius: 8px; background: #fff; font-size: 12.5px; }
+.mB .model small { color: #6b7068; font-family: var(--mono); font-size: 11px; }
+.mB .sp { flex: 1; }
+.mB .btn { height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid #cfd2cb; background: #fff; font-weight: 600; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; }
+.mB .btn.pri { background: #17191c; color: #f3f4f1; border-color: #17191c; }
+.mB .cols { display: grid; grid-template-columns: 270px minmax(0,1fr) 400px; height: 746px; }
+.mB .chat { border-right: 1px solid #dcdfd8; display: flex; flex-direction: column; min-height: 0; }
+.mB .chat .msgs { flex: 1; padding: 16px; display: grid; gap: 14px; align-content: start; min-height: 0; }
+.mB .who { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: #6b7068; font-weight: 600; margin-bottom: 4px; }
+.mB .u { font-size: 14px; line-height: 1.45; }
+.mB .ans { font-size: 14px; line-height: 1.75; }
+.mB .ans .tok { padding-bottom: 1px; border-bottom: 3px solid transparent; }
+.mB .ans .tok.sel { background: #17191c; color: #fff; }
+.mB .heatlg { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: #6b7068; font-family: var(--mono); }
+.mB .heatlg div { flex: 1; height: 5px; border-radius: 3px; }
+.mB .inp { margin: 12px; border: 1px solid #cfd2cb; border-radius: 10px; background: #fff; padding: 10px 12px; color: #9ca098; font-size: 13.5px; }
+.mB .center { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #fff; }
+.mB .khead { padding: 16px 18px 14px; border-bottom: 1px solid #e6e8e3; display: grid; gap: 10px; }
+.mB .khead .row1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.mB .khead h4 { margin: 0; font-family: var(--mono); font-size: 17px; font-weight: 600; }
+.mB .khead .file { font-family: var(--mono); font-size: 11px; color: #6b7068; }
+.mB .stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+.mB .stat { display: grid; gap: 2px; }
+.mB .stat span { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: #6b7068; }
+.mB .stat b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.mB .roof { display: grid; gap: 4px; }
+.mB .roof .track { height: 8px; border-radius: 4px; background: #eceee9; position: relative; overflow: hidden; }
+.mB .roof .track div { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+.mB .roof small { font-size: 11px; color: #6b7068; font-family: var(--mono); }
+.mB .used { display: flex; flex-wrap: wrap; gap: 5px; }
+.mB .used span { font-family: var(--mono); font-size: 10.5px; padding: 2px 7px; border-radius: 5px; background: #f0f1ed; color: #3d413b; }
+.mB .code-view { flex: 1; min-height: 0; padding: 10px 0; }
+.mB .code-view .n { color: #b5b9b1; }
+.mB .c-kw { color: #b8336a; } .mB .c-ty { color: #2a6f97; } .mB .c-com { color: #8a8f86; } .mB .c-num { color: #a8590d; }
+.mB .c-pre { color: #6d4aa8; } .mB .c-att { color: #8a8f86; } .mB .c-fn { color: #2c7a5b; }
+.mB .console { border-top: 1px solid #e6e8e3; padding: 8px 18px; font-family: var(--mono); font-size: 11px; color: #4d524b; display: flex; gap: 16px; background: #fafbf8; }
+.mB .console .ok { color: #2c7a5b; font-weight: 600; }
+.mB .spine { border-left: 1px solid #dcdfd8; display: flex; flex-direction: column; min-height: 0; padding: 14px 16px 12px; gap: 10px; }
+.mB .sphead { display: flex; justify-content: space-between; align-items: baseline; }
+.mB .sphead b { font-size: 14px; }
+.mB .sphead span { font-family: var(--mono); font-size: 11px; color: #6b7068; }
+.mB .sums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mB .sums div { background: #fff; border: 1px solid #e0e3dc; border-radius: 8px; padding: 7px 9px; display: grid; }
+.mB .sums span { font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; color: #6b7068; }
+.mB .sums b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.mB .rows { display: grid; gap: 2px; flex: 1; align-content: start; position: relative; }
+.mB .srow { display: grid; grid-template-columns: 22px 16px minmax(0,1fr) 52px; gap: 6px; align-items: center; height: 19px; text-align: left; width: 100%; border-radius: 4px; padding: 0 4px 0 0; }
+.mB .srow:hover { background: #e8eae5; }
+.mB .srow.sel { background: #17191c0f; box-shadow: inset 2px 0 0 #17191c; }
+.mB .srow.live { background: #fff4d6; }
+.mB .srow .ix { font-family: var(--mono); font-size: 10px; color: #8a8f86; text-align: right; }
+.mB .srow .g { font-family: var(--mono); font-size: 10px; font-weight: 600; width: 16px; height: 16px; display: grid; place-items: center; border-radius: 4px; color: #fff; }
+.mB .srow .bars { display: flex; height: 11px; gap: 1px; }
+.mB .srow .bars div { height: 100%; border-radius: 2px; }
+.mB .srow .ms { font-family: var(--mono); font-size: 10.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.mB .srow.big { height: 30px; margin-top: 6px; }
+.mB .srow.big .bars { height: 18px; }
+.mB .sep { font-size: 10px; color: #8a8f86; font-family: var(--mono); padding: 4px 0 2px 44px; display: flex; justify-content: space-between; }
+.mB .callout { font-size: 11.5px; background: #fff; border: 1px solid #e0e3dc; border-radius: 8px; padding: 8px 10px; line-height: 1.45; }
+.mB .callout b { color: #b8336a; }
+
+/* ---------- Study C: token scope ---------- */
+.mC { background: #0e1115; color: #cfd6e0; font-family: var(--mono); font-size: 12px; }
+.mC .sbar { background: #0e1115; color: #cfd6e0; }
+.mC .tb { height: 50px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid #222832; }
+.mC .tb .lbl { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; }
+.mC .tb .val { font-size: 13px; color: #e7ecf3; }
+.mC .tb .grp { display: grid; line-height: 1.25; padding-right: 14px; border-right: 1px solid #222832; }
+.mC .sp { flex: 1; }
+.mC .btn { height: 30px; padding: 0 12px; border-radius: 6px; border: 1px solid #2c3440; color: #cfd6e0; font-size: 11.5px; display: inline-flex; align-items: center; gap: 6px; }
+.mC .btn.pri { background: #e7ecf3; color: #0e1115; border-color: #e7ecf3; font-weight: 600; }
+.mC .rec { width: 8px; height: 8px; border-radius: 4px; background: #df5c74; }
+.mC .cols { display: grid; grid-template-columns: 260px minmax(0,1fr) 360px; height: 746px; }
+.mC .chat { border-right: 1px solid #222832; display: flex; flex-direction: column; min-height: 0; }
+.mC .ph { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; padding: 12px 14px 8px; display: flex; justify-content: space-between; }
+.mC .u { margin: 0 14px; padding: 10px; border: 1px solid #222832; border-radius: 6px; color: #e7ecf3; font-family: var(--body); font-size: 13px; line-height: 1.45; }
+.mC .chips { padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 3px; align-content: flex-start; flex: 1; min-height: 0; }
+.mC .chip { padding: 2px 4px; border-radius: 3px; background: #161b22; border: 1px solid #222832; font-size: 11.5px; color: #cfd6e0; white-space: pre; }
+.mC .chip.sel { background: #e7ecf3; color: #0e1115; border-color: #e7ecf3; }
+.mC .chip.slow { border-color: #df5c74; }
+.mC .chat .foot { border-top: 1px solid #222832; padding: 10px 14px; color: #6f7a8a; font-size: 11px; display: grid; gap: 4px; }
+.mC .center { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.mC .scope { height: 214px; border-bottom: 1px solid #222832; padding: 10px 14px 8px; display: grid; grid-template-rows: auto 1fr auto; gap: 6px; background: #0b0d10; }
+.mC .scope .hd { display: flex; gap: 14px; align-items: baseline; }
+.mC .scope .hd b { color: #e7ecf3; font-weight: 600; }
+.mC .scope .hd span { color: #6f7a8a; font-size: 11px; }
+.mC .lanes { position: relative; display: grid; grid-template-rows: 22px 52px 26px; gap: 8px; }
+.mC .lane { position: relative; border-left: 1px solid #2c3440; }
+.mC .lane .nm { position: absolute; left: 4px; top: -1px; font-size: 9.5px; letter-spacing: .08em; color: #6f7a8a; text-transform: uppercase; z-index: 2; pointer-events: none; }
+.mC .seg2 { position: absolute; top: 12px; bottom: 0; border-radius: 1px; }
+.mC .lane.gpu .seg2 { top: 12px; }
+.mC .seg2.idle { background: repeating-linear-gradient(135deg, #2c3440 0 3px, transparent 3px 6px); }
+.mC .ax { position: relative; height: 14px; color: #6f7a8a; font-size: 9.5px; }
+.mC .ax span { position: absolute; transform: translateX(-50%); }
+.mC .flag { position: absolute; top: 0; font-size: 10px; color: #f0b35a; white-space: nowrap; }
+.mC .code-view { flex: 1; min-height: 0; padding: 10px 0; background: #0e1115; }
+.mC .ftabs { display: flex; gap: 0; border-bottom: 1px solid #222832; height: 30px; }
+.mC .ftabs button { padding: 0 12px; font-size: 11px; color: #6f7a8a; border-right: 1px solid #222832; }
+.mC .ftabs button.on { color: #e7ecf3; background: #161b22; }
+.mC .code-view .n { color: #3d4654; }
+.mC .c-kw { color: #ff8fa3; } .mC .c-ty { color: #7cc4f8; } .mC .c-com { color: #5f6b7c; font-style: italic; } .mC .c-num { color: #f0b35a; }
+.mC .c-pre { color: #c5a3ff; } .mC .c-att { color: #5f6b7c; } .mC .c-fn { color: #6fd3b8; }
+.mC .heat { border-left: 1px solid #222832; display: flex; flex-direction: column; min-height: 0; }
+.mC .hmode { display: flex; gap: 2px; padding: 0 14px 8px; }
+.mC .hmode button { flex: 1; font-size: 10.5px; padding: 4px 0; border: 1px solid #2c3440; border-radius: 4px; color: #6f7a8a; }
+.mC .hmode button.on { color: #0e1115; background: #cfd6e0; border-color: #cfd6e0; }
+.mC .grid { padding: 0 14px; display: grid; gap: 1px; }
+.mC .hr { display: grid; grid-template-columns: 54px minmax(0,1fr) 42px; gap: 6px; align-items: center; height: 15px; width: 100%; text-align: left; }
+.mC .hr .nm { font-size: 9.5px; color: #8b96a6; text-align: right; white-space: nowrap; }
+.mC .hr.sel .nm { color: #e7ecf3; }
+.mC .hr .cells { display: flex; gap: 1px; height: 13px; position: relative; }
+.mC .hr .cells i { flex: 1; display: block; border-radius: 1px; }
+.mC .hr .ms { font-size: 9.5px; color: #8b96a6; text-align: right; }
+.mC .hr.sel { box-shadow: 0 0 0 1px #4a5566; border-radius: 2px; }
+.mC .colsel { position: absolute; top: -2px; bottom: -2px; border: 1px solid #e7ecf3; border-radius: 2px; pointer-events: none; }
+.mC .gridwrap { position: relative; }
+.mC .scale { margin: 10px 14px 0; display: flex; align-items: center; gap: 8px; font-size: 9.5px; color: #6f7a8a; }
+.mC .scale div { flex: 1; height: 6px; border-radius: 3px; }
+.mC .obs { margin: 10px 14px; padding: 9px 10px; border: 1px solid #3a2f1f; background: #1a1610; border-radius: 6px; font-family: var(--body); font-size: 12px; line-height: 1.45; color: #e9dcc6; }
+.mC .obs b { color: #f0b35a; }
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <div class="eyebrow">iPhoneInference · iPad Air M4 · design studies</div>
+    <h1>Inference Bench</h1>
+    <p class="lede">Three layouts for the v0 iPad app. Each one loads the local Qwen3.5-2B GGUF, chats with it on the left, shows the Metal source in the middle, and lists the model's layers on the right. They differ in how you inspect a forward pass while the model runs.</p>
+    <div class="facts" id="facts"></div>
+    <div class="legend">
+      <span><i style="background:var(--k-delta)"></i>Gated DeltaNet mixer</span>
+      <span><i style="background:var(--k-attn)"></i>Full attention</span>
+      <span><i style="background:var(--k-ffn)"></i>FFN (SwiGLU)</span>
+      <span><i style="background:var(--k-head)"></i>Embedding / LM head</span>
+      <span><i style="background:var(--k-norm)"></i>Norms, residuals</span>
+      <span><i style="background:var(--k-sample)"></i>Sampling</span>
+    </div>
+    <p class="note">The layer and tensor tables come from your GGUF file (names, shapes, quant types, byte sizes). The timings are a bandwidth model for illustration, not measurements. Every mockup is live: tap a token in the chat to load its forward pass, tap a layer or kernel to open its shader, press Run to replay generation.</p>
+    <nav class="toc">
+      <a href="#workbench">A · Workbench</a>
+      <a href="#spine">B · Model Spine</a>
+      <a href="#scope">C · Token Scope</a>
+      <a href="#compare">Compare</a>
+      <a href="#recommendation">Recommendation</a>
+    </nav>
+  </header>
+
+  <section class="study" id="workbench">
+    <div class="study-head">
+      <div class="tag">Study A</div>
+      <h2>Workbench</h2>
+      <p class="prose">An Xcode-shaped tool in native iPadOS chrome. Chat lives in the sidebar, the shader editor takes the center with a collapsible forward-pass drawer below it, and an inspector on the right holds the model card and a layer tree you can expand down to individual tensors.</p>
+    </div>
+    <div class="frame" data-mock="A"></div>
+    <div class="analysis">
+      <div><h3>How inspection works</h3><p>Pick a token, and the drawer shows that token's pass as one waterfall bar plus a table of kernels ranked by time, with achieved bandwidth. Expand a layer to see every dispatch with its tensor and quant type.</p></div>
+      <div><h3>Good for</h3><ul><li>Fastest to build: <code>NavigationSplitView</code>, an <code>.inspector</code>, and a resizable drawer.</li><li>Most room for the editor once the drawer is collapsed.</li><li>Feels like a normal iPad app, which matters on a 11" screen.</li></ul></div>
+      <div><h3>Costs</h3><ul><li>Layer timing lives in a scrolling list, so you can't see the whole model at once.</li><li>Only one token at a time. Stalls that span many tokens stay hidden.</li><li>The drawer and the editor compete for the same vertical space.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="study" id="spine">
+    <div class="study-head">
+      <div class="tag">Study B</div>
+      <h2>Model Spine</h2>
+      <p class="prose">The right column becomes the model itself: embedding, all 24 blocks, LM head, drawn as one row each with bar lengths set by time. While a token decodes, a highlight walks down the spine. The center opens on a kernel, with a header that says where the kernel runs and how close it gets to the memory-bandwidth limit.</p>
+    </div>
+    <div class="frame" data-mock="B"></div>
+    <div class="analysis">
+      <div><h3>How inspection works</h3><p>The whole architecture fits on screen, so the shape of the cost is obvious: 18 DeltaNet blocks, 6 attention blocks, and an LM head bigger than any four blocks combined. Chat tokens are underlined by latency so slow ones stand out.</p></div>
+      <div><h3>Good for</h3><ul><li>Learning the model while optimizing it. The 3:1 DeltaNet/attention rhythm is visible.</li><li>Kernel-first work: the header answers "is this kernel worth my time?" before you read any code.</li><li>Bandwidth framing fits decode, which is memory-bound.</li></ul></div>
+      <div><h3>Costs</h3><ul><li>The spine is a custom view that needs <code>Canvas</code> or a hand-tuned stack.</li><li>A wide right column leaves about 510 pt for code.</li><li>Still one token at a time; comparing tokens means tapping between them.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="study" id="scope">
+    <div class="study-head">
+      <div class="tag">Study C</div>
+      <h2>Token Scope</h2>
+      <p class="prose">An instrument panel. Tokens appear as chips. The top of the center shows a CPU/GPU timeline for the selected token, gaps included. The right column is a heatmap of layers against tokens, so you see each layer's cost over the whole generation instead of one pass.</p>
+    </div>
+    <div class="frame" data-mock="C"></div>
+    <div class="analysis">
+      <div><h3>How inspection works</h3><p>The timeline shows when the GPU sits idle while the CPU encodes. The heatmap separates two kinds of slowness: a uniform hot column is a system stall (clocks, thermals, a page fault), while a row that heats up over time is a kernel scaling with context, like attention.</p></div>
+      <div><h3>Good for</h3><ul><li>Performance work across a whole generation, not a single pass.</li><li>Finding scheduling problems: CPU encode cost, command-buffer gaps, sync points.</li><li>Comparing a kernel edit against the previous run over many tokens.</li></ul></div>
+      <div><h3>Costs</h3><ul><li>Densest to build: timeline and heatmap both need <code>Canvas</code> and hit-testing.</li><li>The editor gets the least space of the three.</li><li>Hard to read until you know the model. Less useful on day one.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="stack" id="compare">
+    <h2>Compare</h2>
+    <div class="tbl">
+      <table class="cmp">
+        <thead><tr><th>Question</th><th>A · Workbench</th><th>B · Model Spine</th><th>C · Token Scope</th></tr></thead>
+        <tbody>
+          <tr><td>Effort to build in SwiftUI</td><td><span class="dots">●<s>●●</s></span> Stock containers</td><td><span class="dots">●●<s>●</s></span> One custom view</td><td><span class="dots">●●●</span> Two custom canvases</td></tr>
+          <tr><td>Where does one token's time go?</td><td>Drawer table, ranked</td><td>Visible at a glance on the spine</td><td>Timeline, including idle gaps</td></tr>
+          <tr><td>Is something slow across many tokens?</td><td>Not visible</td><td>Latency underline in chat</td><td>Heatmap shows it directly</td></tr>
+          <tr><td>Space for writing shaders</td><td>Most, drawer collapses</td><td>Medium</td><td>Least</td></tr>
+          <tr><td>Is this kernel worth optimizing?</td><td>GB/s column in the table</td><td>Header with bandwidth bar and call sites</td><td>Row heat plus timeline width</td></tr>
+          <tr><td>Helps you learn the architecture</td><td>Tree, one level at a time</td><td>Whole model on one screen</td><td>Implicit in the rows</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="stack" id="recommendation">
+    <h2>Recommendation</h2>
+    <div class="rec">
+      <div class="stack prose">
+        <p>Build <b>B in A's chrome</b> for v0, and add C's timeline later as an optional strip above the editor.</p>
+        <ol>
+          <li><b>Shell from A.</b> Native split view, chat in the sidebar, a standard toolbar with Load, Build, Profile, Run. It works with the keyboard, pointer, and Stage Manager without extra effort.</li>
+          <li><b>Right column from B.</b> The spine is the one view that teaches you the model and answers where the time goes. Tapping a row expands its dispatches inline, which covers A's tree.</li>
+          <li><b>Center header from B.</b> Calls per token, ms, share, and achieved GB/s against the iPad's peak. This is how you pick what to rewrite next. In the mock data it points to the LM head's Q6_K matvec.</li>
+          <li><b>Later, from C.</b> The CPU/GPU timeline once you start working on scheduling, and the heatmap once runs get long enough for stalls to matter.</li>
+        </ol>
+        <p>Load stays simple in v0: one model card in the inspector with an Import button that opens the Files picker, then a progress list (header parsed, 320 tensors checked, file mapped, buffers created).</p>
+      </div>
+      <div class="stack">
+        <h3>What the runtime needs to expose</h3>
+        <ul class="prose" style="font-size:15px">
+          <li><b>A dispatch log per token.</b> Each entry records layer, op, kernel, tensor, and bytes read. The UI draws only from this log, so every study runs on the same data.</li>
+          <li><b>Timing per layer.</b> Apple GPUs sample timestamps at encoder boundaries, not per dispatch. A Profile toggle can split each layer into its own compute encoder and accept the overhead. Check <code>supportsCounterSampling(.atDispatchBoundary)</code> on the device.</li>
+          <li><b>Hot-swappable kernels.</b> Your playground already compiles from source with <code>makeLibrary(source:)</code>. Each kernel needs a CPU reference so Build can report max error before a new pipeline goes live.</li>
+          <li><b>Zero-copy weights.</b> <code>mmap</code> the GGUF and wrap it with <code>makeBuffer(bytesNoCopy:)</code>. Tensors become offsets into one buffer, which is what the layer list displays.</li>
+        </ul>
+        <div class="code"><span class="c">// SwiftUI skeleton for the recommended layout</span>
+NavigationSplitView {
+    ChatView(session)               <span class="c">// sidebar</span>
+} detail: {
+    VStack(spacing: 0) {
+        KernelHeader(kernel, stats)  <span class="c">// from B</span>
+        ShaderEditor(file)
+        BuildStatus(result)
+    }
+    .inspector(isPresented: .constant(true)) {
+        ModelCard(model)
+        ModelSpine(pass, selection)   <span class="c">// from B</span>
+    }
+}</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const TENSORS = [["output_norm.weight",[2048],"F32",8192],["token_embd.weight",[2048,248320],"Q6_K",417177600],["blk.0.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.0.attn_norm.weight",[2048],"F32",8192],["blk.0.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.0.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.0.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.0.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.0.post_attention_norm.weight",[2048],"F32",8192],["blk.0.ssm_a",[16],"F32",64],["blk.0.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.0.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.0.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.0.ssm_dt.bias",[16],"F32",64],["blk.0.ssm_norm.weight",[128],"F32",512],["blk.0.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.1.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.1.attn_norm.weight",[2048],"F32",8192],["blk.1.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.1.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.1.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.1.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.1.post_attention_norm.weight",[2048],"F32",8192],["blk.1.ssm_a",[16],"F32",64],["blk.1.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.1.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.1.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.1.ssm_dt.bias",[16],"F32",64],["blk.1.ssm_norm.weight",[128],"F32",512],["blk.1.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.2.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.2.attn_norm.weight",[2048],"F32",8192],["blk.2.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.2.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.2.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.2.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.2.post_attention_norm.weight",[2048],"F32",8192],["blk.2.ssm_a",[16],"F32",64],["blk.2.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.2.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.2.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.2.ssm_dt.bias",[16],"F32",64],["blk.2.ssm_norm.weight",[128],"F32",512],["blk.2.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.3.attn_k.weight",[2048,512],"Q4_K",589824],["blk.3.attn_k_norm.weight",[256],"F32",1024],["blk.3.attn_norm.weight",[2048],"F32",8192],["blk.3.attn_output.weight",[2048,2048],"Q4_K",2359296],["blk.3.attn_q.weight",[2048,4096],"Q4_K",4718592],["blk.3.attn_q_norm.weight",[256],"F32",1024],["blk.3.attn_v.weight",[2048,512],"Q6_K",860160],["blk.3.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.3.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.3.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.3.post_attention_norm.weight",[2048],"F32",8192],["blk.4.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.4.attn_norm.weight",[2048],"F32",8192],["blk.4.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.4.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.4.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.4.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.4.post_attention_norm.weight",[2048],"F32",8192],["blk.4.ssm_a",[16],"F32",64],["blk.4.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.4.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.4.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.4.ssm_dt.bias",[16],"F32",64],["blk.4.ssm_norm.weight",[128],"F32",512],["blk.4.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.5.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.5.attn_norm.weight",[2048],"F32",8192],["blk.5.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.5.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.5.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.5.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.5.post_attention_norm.weight",[2048],"F32",8192],["blk.5.ssm_a",[16],"F32",64],["blk.5.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.5.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.5.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.5.ssm_dt.bias",[16],"F32",64],["blk.5.ssm_norm.weight",[128],"F32",512],["blk.5.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.6.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.6.attn_norm.weight",[2048],"F32",8192],["blk.6.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.6.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.6.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.6.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.6.post_attention_norm.weight",[2048],"F32",8192],["blk.6.ssm_a",[16],"F32",64],["blk.6.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.6.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.6.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.6.ssm_dt.bias",[16],"F32",64],["blk.6.ssm_norm.weight",[128],"F32",512],["blk.6.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.7.attn_k.weight",[2048,512],"Q4_K",589824],["blk.7.attn_k_norm.weight",[256],"F32",1024],["blk.7.attn_norm.weight",[2048],"F32",8192],["blk.7.attn_output.weight",[2048,2048],"Q4_K",2359296],["blk.7.attn_q.weight",[2048,4096],"Q4_K",4718592],["blk.7.attn_q_norm.weight",[256],"F32",1024],["blk.7.attn_v.weight",[2048,512],"Q6_K",860160],["blk.7.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.7.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.7.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.7.post_attention_norm.weight",[2048],"F32",8192],["blk.8.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.8.attn_norm.weight",[2048],"F32",8192],["blk.8.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.8.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.8.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.8.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.8.post_attention_norm.weight",[2048],"F32",8192],["blk.8.ssm_a",[16],"F32",64],["blk.8.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.8.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.8.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.8.ssm_dt.bias",[16],"F32",64],["blk.8.ssm_norm.weight",[128],"F32",512],["blk.8.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.9.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.9.attn_norm.weight",[2048],"F32",8192],["blk.9.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.9.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.9.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.9.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.9.post_attention_norm.weight",[2048],"F32",8192],["blk.9.ssm_a",[16],"F32",64],["blk.9.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.9.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.9.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.9.ssm_dt.bias",[16],"F32",64],["blk.9.ssm_norm.weight",[128],"F32",512],["blk.9.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.10.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.10.attn_norm.weight",[2048],"F32",8192],["blk.10.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.10.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.10.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.10.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.10.post_attention_norm.weight",[2048],"F32",8192],["blk.10.ssm_a",[16],"F32",64],["blk.10.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.10.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.10.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.10.ssm_dt.bias",[16],"F32",64],["blk.10.ssm_norm.weight",[128],"F32",512],["blk.10.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.11.attn_k.weight",[2048,512],"Q4_K",589824],["blk.11.attn_k_norm.weight",[256],"F32",1024],["blk.11.attn_norm.weight",[2048],"F32",8192],["blk.11.attn_output.weight",[2048,2048],"Q4_K",2359296],["blk.11.attn_q.weight",[2048,4096],"Q4_K",4718592],["blk.11.attn_q_norm.weight",[256],"F32",1024],["blk.11.attn_v.weight",[2048,512],"Q6_K",860160],["blk.11.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.11.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.11.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.11.post_attention_norm.weight",[2048],"F32",8192],["blk.12.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.12.attn_norm.weight",[2048],"F32",8192],["blk.12.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.12.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.12.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.12.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.12.post_attention_norm.weight",[2048],"F32",8192],["blk.12.ssm_a",[16],"F32",64],["blk.12.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.12.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.12.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.12.ssm_dt.bias",[16],"F32",64],["blk.12.ssm_norm.weight",[128],"F32",512],["blk.12.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.13.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.13.attn_norm.weight",[2048],"F32",8192],["blk.13.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.13.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.13.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.13.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.13.post_attention_norm.weight",[2048],"F32",8192],["blk.13.ssm_a",[16],"F32",64],["blk.13.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.13.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.13.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.13.ssm_dt.bias",[16],"F32",64],["blk.13.ssm_norm.weight",[128],"F32",512],["blk.13.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.14.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.14.attn_norm.weight",[2048],"F32",8192],["blk.14.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.14.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.14.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.14.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.14.post_attention_norm.weight",[2048],"F32",8192],["blk.14.ssm_a",[16],"F32",64],["blk.14.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.14.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.14.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.14.ssm_dt.bias",[16],"F32",64],["blk.14.ssm_norm.weight",[128],"F32",512],["blk.14.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.15.attn_k.weight",[2048,512],"Q4_K",589824],["blk.15.attn_k_norm.weight",[256],"F32",1024],["blk.15.attn_norm.weight",[2048],"F32",8192],["blk.15.attn_output.weight",[2048,2048],"Q4_K",2359296],["blk.15.attn_q.weight",[2048,4096],"Q4_K",4718592],["blk.15.attn_q_norm.weight",[256],"F32",1024],["blk.15.attn_v.weight",[2048,512],"Q4_K",589824],["blk.15.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.15.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.15.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.15.post_attention_norm.weight",[2048],"F32",8192],["blk.16.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.16.attn_norm.weight",[2048],"F32",8192],["blk.16.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.16.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.16.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.16.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.16.post_attention_norm.weight",[2048],"F32",8192],["blk.16.ssm_a",[16],"F32",64],["blk.16.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.16.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.16.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.16.ssm_dt.bias",[16],"F32",64],["blk.16.ssm_norm.weight",[128],"F32",512],["blk.16.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.17.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.17.attn_norm.weight",[2048],"F32",8192],["blk.17.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.17.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.17.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.17.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.17.post_attention_norm.weight",[2048],"F32",8192],["blk.17.ssm_a",[16],"F32",64],["blk.17.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.17.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.17.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.17.ssm_dt.bias",[16],"F32",64],["blk.17.ssm_norm.weight",[128],"F32",512],["blk.17.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.18.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.18.attn_norm.weight",[2048],"F32",8192],["blk.18.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.18.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.18.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.18.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.18.post_attention_norm.weight",[2048],"F32",8192],["blk.18.ssm_a",[16],"F32",64],["blk.18.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.18.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.18.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.18.ssm_dt.bias",[16],"F32",64],["blk.18.ssm_norm.weight",[128],"F32",512],["blk.18.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.19.attn_k.weight",[2048,512],"Q4_K",589824],["blk.19.attn_k_norm.weight",[256],"F32",1024],["blk.19.attn_norm.weight",[2048],"F32",8192],["blk.19.attn_output.weight",[2048,2048],"Q4_K",2359296],["blk.19.attn_q.weight",[2048,4096],"Q4_K",4718592],["blk.19.attn_q_norm.weight",[256],"F32",1024],["blk.19.attn_v.weight",[2048,512],"Q4_K",589824],["blk.19.ffn_down.weight",[6144,2048],"Q4_K",7077888],["blk.19.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.19.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.19.post_attention_norm.weight",[2048],"F32",8192],["blk.20.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.20.attn_norm.weight",[2048],"F32",8192],["blk.20.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.20.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.20.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.20.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.20.post_attention_norm.weight",[2048],"F32",8192],["blk.20.ssm_a",[16],"F32",64],["blk.20.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.20.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.20.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.20.ssm_dt.bias",[16],"F32",64],["blk.20.ssm_norm.weight",[128],"F32",512],["blk.20.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.21.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.21.attn_norm.weight",[2048],"F32",8192],["blk.21.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.21.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.21.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.21.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.21.post_attention_norm.weight",[2048],"F32",8192],["blk.21.ssm_a",[16],"F32",64],["blk.21.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.21.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.21.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.21.ssm_dt.bias",[16],"F32",64],["blk.21.ssm_norm.weight",[128],"F32",512],["blk.21.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.22.attn_gate.weight",[2048,2048],"Q4_K",2359296],["blk.22.attn_norm.weight",[2048],"F32",8192],["blk.22.attn_qkv.weight",[2048,6144],"Q5_K",8650752],["blk.22.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.22.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.22.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.22.post_attention_norm.weight",[2048],"F32",8192],["blk.22.ssm_a",[16],"F32",64],["blk.22.ssm_alpha.weight",[2048,16],"Q8_0",34816],["blk.22.ssm_beta.weight",[2048,16],"Q8_0",34816],["blk.22.ssm_conv1d.weight",[4,6144],"F32",98304],["blk.22.ssm_dt.bias",[16],"F32",64],["blk.22.ssm_norm.weight",[128],"F32",512],["blk.22.ssm_out.weight",[2048,2048],"Q5_K",2883584],["blk.23.attn_k.weight",[2048,512],"Q4_K",589824],["blk.23.attn_k_norm.weight",[256],"F32",1024],["blk.23.attn_norm.weight",[2048],"F32",8192],["blk.23.attn_output.weight",[2048,2048],"Q4_K",2359296],["blk.23.attn_q.weight",[2048,4096],"Q4_K",4718592],["blk.23.attn_q_norm.weight",[256],"F32",1024],["blk.23.attn_v.weight",[2048,512],"Q6_K",860160],["blk.23.ffn_down.weight",[6144,2048],"Q6_K",10321920],["blk.23.ffn_gate.weight",[2048,6144],"Q4_K",7077888],["blk.23.ffn_up.weight",[2048,6144],"Q4_K",7077888],["blk.23.post_attention_norm.weight",[2048],"F32",8192]];
+
+/* ---------------- model + illustrative timing ---------------- */
+const T = {}; TENSORS.forEach(([n, d, t, b]) => T[n] = { dims: d, type: t, bytes: b });
+const PEAK = 120; // GB/s, iPad Air M4 unified memory (nominal)
+const BW = { Q4_K: 76, Q5_K: 70, Q6_K: 41, Q8_0: 58 }; // achieved GB/s per kernel in the model
+const LAUNCH = 0.005;
+const KC = { embed: '#df5c74', delta: '#2f9e91', attn: '#d9922b', ffn: '#7f6ff0', norm: '#9aa3b0', head: '#df5c74', sample: '#4a8fe0' };
+const short = n => n.startsWith('blk.') ? n.split('.')[2] : n.split('.')[0];
+const qname = t => t.replace('Q', 'q');
+const op = (label, kernel, ms, bytes, kind, tensor) => ({ label, kernel, ms, bytes, kind, tensor });
+const mv = (tensor, kind, label) => { const t = T[tensor]; return op(label || short(tensor), 'matvec_' + qname(t.type), t.bytes / 1e6 / BW[t.type] + LAUNCH, t.bytes, kind, tensor); };
+
+const LAYERS = (() => {
+  const L = [];
+  L.push({ id: 'embd', name: 'token_embd', sub: 'embedding lookup', kind: 'embed', ops: [op('token_embd', 'get_rows_q6_K', .012, 1680, 'embed', 'token_embd.weight')] });
+  for (let i = 0; i < 24; i++) {
+    const p = `blk.${i}.`, attn = i % 4 === 3, ops = [];
+    ops.push(op('attn_norm', 'rmsnorm_f32', .009, 16384, 'norm', p + 'attn_norm.weight'));
+    if (!attn) {
+      ops.push(mv(p + 'attn_qkv.weight', 'delta'));
+      ops.push(mv(p + 'attn_gate.weight', 'delta'));
+      const ab = T[p + 'ssm_alpha.weight'].bytes * 2;
+      ops.push(op('ssm_alpha · beta', 'matvec_q8_0', ab / 1e6 / BW.Q8_0 + LAUNCH, ab, 'delta', p + 'ssm_alpha.weight'));
+      ops.push(op('ssm_conv1d', 'conv1d_causal_silu', .008, 98304 + 73728, 'delta', p + 'ssm_conv1d.weight'));
+      ops.push(op('delta rule', 'gated_delta_rule', .031, 2 * 16 * 128 * 128 * 4, 'delta', null));
+      ops.push(op('ssm_norm · gate', 'rmsnorm_gated', .007, 24576, 'delta', p + 'ssm_norm.weight'));
+      ops.push(mv(p + 'ssm_out.weight', 'delta'));
+    } else {
+      ops.push(mv(p + 'attn_q.weight', 'attn'));
+      ops.push(mv(p + 'attn_k.weight', 'attn'));
+      ops.push(mv(p + 'attn_v.weight', 'attn'));
+      ops.push(op('q/k norm · rope', 'qk_norm_rope', .007, 12288, 'attn', p + 'attn_q_norm.weight'));
+      ops.push(op('attention', 'attention_decode', 0, 0, 'attn', null));
+      ops.push(mv(p + 'attn_output.weight', 'attn'));
+    }
+    ops.push(op('post_attention_norm', 'add_rmsnorm', .010, 24576, 'norm', p + 'post_attention_norm.weight'));
+    ops.push(mv(p + 'ffn_gate.weight', 'ffn'));
+    ops.push(mv(p + 'ffn_up.weight', 'ffn'));
+    ops.push(op('swiglu', 'swiglu', .005, 73728, 'ffn', null));
+    ops.push(mv(p + 'ffn_down.weight', 'ffn'));
+    ops.push(op('residual', 'add_f32', .004, 24576, 'norm', null));
+    L.push({ id: 'b' + i, idx: i, name: `blk.${i}`, sub: attn ? 'full attention' : 'Gated DeltaNet', kind: attn ? 'attn' : 'delta', ops });
+  }
+  L.push({ id: 'head', name: 'lm_head', sub: 'tied to token_embd', kind: 'head', ops: [op('output_norm', 'rmsnorm_f32', .009, 16384, 'norm', 'output_norm.weight'), mv('token_embd.weight', 'head', 'lm_head (tied)')] });
+  L.push({ id: 'sample', name: 'sample', sub: 'greedy over 248,320', kind: 'sample', ops: [op('argmax', 'argmax_f32', .21, 993280, 'sample', null)] });
+  return L;
+})();
+
+const PROMPT = 'Why is the KV cache so small for this model?';
+const PROMPT_TOKENS = 28;
+const TOKENS = ['Only', ' 6', ' of', ' the', ' 24', ' layers', ' use', ' full', ' attention', '.', ' The', ' other', ' 18', ' are', ' G', 'ated', ' Delta', 'Net', ' layers', ',', ' which', ' keep', ' a', ' fixed', '-size', ' state', ' instead', ' of', ' a', ' growing', ' cache', ',', ' so', ' memory', ' per', ' token', ' stays', ' tiny', '.'];
+
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const SPIKE = { 12: 1.34, 26: 1.27 };
+const PASSES = TOKENS.map((_, ti) => {
+  const r = rng(ti * 7919 + 13), g = (SPIKE[ti] || 1) * (1 + (r() - .5) * .05), ctx = PROMPT_TOKENS + ti;
+  const layers = LAYERS.map(l => {
+    const ops = l.ops.map(o => {
+      let ms = o.ms, bytes = o.bytes;
+      if (o.kernel === 'attention_decode') { ms = .016 + ctx * .00011; bytes = 2048 * ctx; }
+      ms *= g * (1 + (r() - .5) * .08);
+      return { ...o, ms, bytes };
+    });
+    return { id: l.id, ms: ops.reduce((a, o) => a + o.ms, 0), bytes: ops.reduce((a, o) => a + o.bytes, 0), ops };
+  });
+  const gpu = layers.reduce((a, l) => a + l.ms, 0), cpu = .74 + r() * .1;
+  const bytes = layers.reduce((a, l) => a + l.bytes, 0);
+  return { ti, ctx, layers, gpu, cpu, total: cpu + gpu + .06, bytes };
+});
+const byId = id => LAYERS.find(l => l.id === id);
+function kernelStats(pass) {
+  const m = new Map();
+  pass.layers.forEach(l => l.ops.forEach(o => { const k = m.get(o.kernel) || { kernel: o.kernel, calls: 0, ms: 0, bytes: 0, sites: new Map() }; k.calls++; k.ms += o.ms; k.bytes += o.bytes; const s = o.label; k.sites.set(s, (k.sites.get(s) || 0) + 1); m.set(o.kernel, k); }));
+  return [...m.values()].sort((a, b) => b.ms - a.ms);
+}
+const avgTotal = PASSES.reduce((a, p) => a + p.total, 0) / PASSES.length;
+const fmt = (v, d = 2) => v.toFixed(d);
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const tokText = s => esc(s).replace(/ /g, '&nbsp;');
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+document.getElementById('facts').innerHTML = [
+  ['qwen35', 'arch'], ['24 blocks', '18 DeltaNet + 6 attention'], ['320', 'tensors'],
+  [(TENSORS.reduce((a, t) => a + t[3], 0) / 1e9).toFixed(2) + ' GB', 'weights'], ['248,320', 'vocab'], ['Q4_K_M', 'F32 · Q4_K · Q5_K · Q6_K · Q8_0']
+].map(([b, s]) => `<span class="fact"><b>${b}</b> ${s}</span>`).join('');
+
+/* ---------------- shader sources ---------------- */
+const KFILE = {
+  matvec_q4_K: 'matvec_q4_K.metal', matvec_q5_K: 'matvec_q5_K.metal', matvec_q6_K: 'matvec_q6_K.metal', matvec_q8_0: 'matvec_q8_0.metal',
+  gated_delta_rule: 'gated_delta_rule.metal', rmsnorm_f32: 'norms.metal', add_rmsnorm: 'norms.metal', rmsnorm_gated: 'norms.metal',
+  attention_decode: 'attention_decode.metal', qk_norm_rope: 'elementwise.metal', conv1d_causal_silu: 'elementwise.metal', swiglu: 'elementwise.metal',
+  add_f32: 'elementwise.metal', get_rows_q6_K: 'get_rows.metal', argmax_f32: 'sample.metal'
+};
+const SRC = {
+'matvec_q4_K.metal': String.raw`#include <metal_stdlib>
+using namespace metal;
+
+// Q4_K: 256 weights per super-block, 8 sub-blocks of 32.
+// Each sub-block has a 6-bit scale and a 6-bit min.
+struct block_q4_K {
+    half  d;            // super-block scale for scales
+    half  dmin;         // super-block scale for mins
+    uchar scales[12];   // packed 6-bit scales + mins
+    uchar qs[128];      // 4-bit quants, two per byte
+};
+
+inline uchar2 scale_min(uint j, device const uchar* q) {
+    return j < 4 ? uchar2(q[j] & 63, q[j + 4] & 63)
+                 : uchar2((q[j + 4] & 0xF) | ((q[j - 4] >> 6) << 4),
+                          (q[j + 4] >> 4)  | ((q[j]     >> 6) << 4));
+}
+
+// y = W · x   one simdgroup (32 lanes) per output row
+kernel void matvec_q4_K(
+    device const block_q4_K* W    [[buffer(0)]],
+    device const float*      x    [[buffer(1)]],
+    device float*            y    [[buffer(2)]],
+    constant uint&           K    [[buffer(3)]],
+    uint row  [[threadgroup_position_in_grid]],
+    uint lane [[thread_index_in_simdgroup]])
+{
+    const uint nb = K / 256;
+    device const block_q4_K* b = W + row * nb;
+    float acc = 0.0f;
+
+    // each lane owns one 32-weight sub-block per step
+    for (uint i = lane; i < nb * 8; i += 32) {
+        device const block_q4_K& blk = b[i / 8];
+        const uint   j  = i % 8;
+        const uchar2 sm = scale_min(j, blk.scales);
+        const float  d  = float(blk.d)    * sm.x;
+        const float  m  = float(blk.dmin) * sm.y;
+
+        device const uchar* q  = blk.qs + (j / 2) * 32;
+        device const float* xs = x + (i / 8) * 256 + j * 32;
+        const uint shift = (j & 1) * 4;
+
+        float dot = 0.0f, sum = 0.0f;
+        for (uint l = 0; l < 32; ++l) {
+            dot += float((q[l] >> shift) & 0xF) * xs[l];
+            sum += xs[l];
+        }
+        acc += d * dot - m * sum;
+    }
+
+    acc = simd_sum(acc);
+    if (lane == 0) y[row] = acc;
+}`,
+'matvec_q5_K.metal': String.raw`#include <metal_stdlib>
+using namespace metal;
+
+// Q5_K = Q4_K plus one high bit per weight in qh.
+struct block_q5_K {
+    half  d;
+    half  dmin;
+    uchar scales[12];
+    uchar qh[32];       // 5th bit, one bit per sub-block
+    uchar qs[128];
+};
+
+uchar2 scale_min(uint j, device const uchar* q);   // shared with q4_K
+
+kernel void matvec_q5_K(
+    device const block_q5_K* W    [[buffer(0)]],
+    device const float*      x    [[buffer(1)]],
+    device float*            y    [[buffer(2)]],
+    constant uint&           K    [[buffer(3)]],
+    uint row  [[threadgroup_position_in_grid]],
+    uint lane [[thread_index_in_simdgroup]])
+{
+    const uint nb = K / 256;
+    device const block_q5_K* b = W + row * nb;
+    float acc = 0.0f;
+    for (uint i = lane; i < nb * 8; i += 32) {
+        device const block_q5_K& blk = b[i / 8];
+        const uint   j  = i % 8;
+        const uchar2 sm = scale_min(j, blk.scales);
+        device const uchar* q  = blk.qs + (j / 2) * 32;
+        device const float* xs = x + (i / 8) * 256 + j * 32;
+        const uint shift = (j & 1) * 4;
+        float dot = 0.0f, sum = 0.0f;
+        for (uint l = 0; l < 32; ++l) {
+            const uint v = ((q[l] >> shift) & 0xF) | (((blk.qh[l] >> j) & 1) << 4);
+            dot += float(v) * xs[l];
+            sum += xs[l];
+        }
+        acc += float(blk.d) * sm.x * dot - float(blk.dmin) * sm.y * sum;
+    }
+    acc = simd_sum(acc);
+    if (lane == 0) y[row] = acc;
+}`,
+'matvec_q6_K.metal': String.raw`#include <metal_stdlib>
+using namespace metal;
+
+// Q6_K: 4 low bits in ql, 2 high bits in qh, int8 scale per 16 weights.
+struct block_q6_K {
+    uchar ql[128];
+    uchar qh[64];
+    char  scales[16];
+    half  d;
+};
+
+// v0: one lane per super-block. At K = 2048 that is 8 super-blocks,
+// so only 8 of 32 lanes do work. This is the lm_head bottleneck.
+kernel void matvec_q6_K(
+    device const block_q6_K* W    [[buffer(0)]],
+    device const float*      x    [[buffer(1)]],
+    device float*            y    [[buffer(2)]],
+    constant uint&           K    [[buffer(3)]],
+    uint row  [[threadgroup_position_in_grid]],
+    uint lane [[thread_index_in_simdgroup]])
+{
+    const uint nb = K / 256;
+    float acc = 0.0f;
+    for (uint i = lane; i < nb; i += 32) {
+        device const block_q6_K& blk = W[row * nb + i];
+        const float d = float(blk.d);
+        for (uint n = 0; n < 2; ++n) {
+            device const uchar* ql = blk.ql + 64 * n;
+            device const uchar* qh = blk.qh + 32 * n;
+            device const char*  sc = blk.scales + 8 * n;
+            device const float* xs = x + i * 256 + 128 * n;
+            for (uint l = 0; l < 32; ++l) {
+                const uint is = l / 16;
+                const int q1 = int((ql[l]      & 0xF) | (((qh[l] >> 0) & 3) << 4)) - 32;
+                const int q2 = int((ql[l + 32] & 0xF) | (((qh[l] >> 2) & 3) << 4)) - 32;
+                const int q3 = int((ql[l]      >> 4)  | (((qh[l] >> 4) & 3) << 4)) - 32;
+                const int q4 = int((ql[l + 32] >> 4)  | (((qh[l] >> 6) & 3) << 4)) - 32;
+                acc += d * (sc[is]     * q1 * xs[l]      + sc[is + 2] * q2 * xs[l + 32]
+                          + sc[is + 4] * q3 * xs[l + 64] + sc[is + 6] * q4 * xs[l + 96]);
+            }
+        }
+    }
+    acc = simd_sum(acc);
+    if (lane == 0) y[row] = acc;
+}`,
+'matvec_q8_0.metal': String.raw`#include <metal_stdlib>
+using namespace metal;
+
+struct block_q8_0 {
+    half d;
+    char qs[32];
+};
+
+// Used for ssm_alpha and ssm_beta: 16 output rows, K = 2048.
+kernel void matvec_q8_0(
+    device const block_q8_0* W    [[buffer(0)]],
+    device const float*      x    [[buffer(1)]],
+    device float*            y    [[buffer(2)]],
+    constant uint&           K    [[buffer(3)]],
+    uint row  [[threadgroup_position_in_grid]],
+    uint lane [[thread_index_in_simdgroup]])
+{
+    const uint nb = K / 32;
+    float acc = 0.0f;
+    for (uint i = lane; i < nb; i += 32) {
+        device const block_q8_0& blk = W[row * nb + i];
+        float dot = 0.0f;
+        for (uint l = 0; l < 32; ++l) dot += float(blk.qs[l]) * x[i * 32 + l];
+        acc += float(blk.d) * dot;
+    }
+    acc = simd_sum(acc);
+    if (lane == 0) y[row] = acc;
+}`,
+'gated_delta_rule.metal': String.raw`#include <metal_stdlib>
+using namespace metal;
+
+// One decode step of the Gated DeltaNet recurrence.
+// 16 heads, state S is 128 x 128 per head, kept in f32 between tokens.
+//   S   = g * S
+//   S  += k ⊗ beta * (v - S^T k)
+//   out = S^T q
+// One threadgroup per head; thread j owns column j of S.
+kernel void gated_delta_rule(
+    device float*       S     [[buffer(0)]],   // [16, 128, 128]
+    device const float* q     [[buffer(1)]],   // [16, 128] L2-normalised
+    device const float* k     [[buffer(2)]],   // [16, 128] L2-normalised
+    device const float* v     [[buffer(3)]],   // [16, 128]
+    device const float* g     [[buffer(4)]],   // [16] decay, already exp()'d
+    device const float* beta  [[buffer(5)]],   // [16] write strength
+    device float*       out   [[buffer(6)]],   // [16, 128]
+    uint h [[threadgroup_position_in_grid]],
+    uint j [[thread_position_in_threadgroup]])
+{
+    constexpr uint D = 128;
+    threadgroup float kk[D], qq[D];
+    kk[j] = k[h * D + j];
+    qq[j] = q[h * D + j];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    device float* s = S + h * D * D;
+    const float decay = g[h];
+
+    // pass 1: decay the state and read what it remembers for k
+    float mem = 0.0f;
+    for (uint i = 0; i < D; ++i) {
+        const float sij = s[i * D + j] * decay;
+        s[i * D + j] = sij;
+        mem += sij * kk[i];
+    }
+
+    // pass 2: write the correction, read out with q
+    const float delta = beta[h] * (v[h * D + j] - mem);
+    float o = 0.0f;
+    for (uint i = 0; i < D; ++i) {
+        const float sij = s[i * D + j] + kk[i] * delta;
+        s[i * D + j] = sij;
+        o += sij * qq[i];
+    }
+    out[h * D + j] = o;
+}`,
+'norms.metal': String.raw`#include <metal_stdlib>
+using namespace metal;
+
+kernel void rmsnorm_f32(
+    device const float* x    [[buffer(0)]],
+    device const float* w    [[buffer(1)]],
+    device float*       y    [[buffer(2)]],
+    constant uint&      n    [[buffer(3)]],
+    constant float&     eps  [[buffer(4)]],
+    uint tid  [[thread_position_in_threadgroup]],
+    uint tgs  [[threads_per_threadgroup]],
+    uint sg   [[simdgroup_index_in_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]])
+{
+    threadgroup float partial[32];
+    float ss = 0.0f;
+    for (uint i = tid; i < n; i += tgs) ss += x[i] * x[i];
+    ss = simd_sum(ss);
+    if (lane == 0) partial[sg] = ss;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    ss = simd_sum(lane < tgs / 32 ? partial[lane] : 0.0f);
+
+    const float scale = rsqrt(ss / float(n) + eps);
+    for (uint i = tid; i < n; i += tgs) y[i] = x[i] * scale * w[i];
+}
+
+// h += attn_out, then y = rmsnorm(h): saves one pass over h
+kernel void add_rmsnorm(/* same bindings + residual */) { }
+
+// rmsnorm per head, then multiply by silu(z) from attn_gate
+kernel void rmsnorm_gated(/* ... */) { }`,
+'attention_decode.metal': String.raw`#include <metal_stdlib>
+using namespace metal;
+
+// Decode step for the 6 full-attention blocks.
+// 8 query heads share 2 KV heads (GQA 4:1), head_dim 256.
+// v0: one position per iteration with a barrier pair. Fine below 4K
+// context; switch to split-K once the profiler says so.
+kernel void attention_decode(
+    device const half* q      [[buffer(0)]],  // [8, 256]
+    device const half* Kc     [[buffer(1)]],  // [2, max_ctx, 256]
+    device const half* Vc     [[buffer(2)]],  // [2, max_ctx, 256]
+    device half*       out    [[buffer(3)]],  // [8, 256]
+    constant uint&     n_ctx  [[buffer(4)]],
+    constant uint&     max_ctx[[buffer(5)]],
+    uint h    [[threadgroup_position_in_grid]],
+    uint d    [[thread_position_in_threadgroup]],
+    uint sg   [[simdgroup_index_in_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]])
+{
+    constexpr uint D = 256, GROUP = 4;
+    const uint kvh = h / GROUP;
+    device const half* K = Kc + kvh * max_ctx * D;
+    device const half* V = Vc + kvh * max_ctx * D;
+    const float qd = float(q[h * D + d]) * rsqrt(float(D));
+
+    threadgroup float red[8];
+    float m = -INFINITY, l = 0.0f, acc = 0.0f;     // online softmax
+
+    for (uint t = 0; t < n_ctx; ++t) {
+        float s = simd_sum(qd * float(K[t * D + d]));
+        if (lane == 0) red[sg] = s;
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        s = 0.0f;
+        for (uint i = 0; i < 8; ++i) s += red[i];
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        const float m_new = max(m, s);
+        const float c = exp(m - m_new), p = exp(s - m_new);
+        l   = l * c + p;
+        acc = acc * c + p * float(V[t * D + d]);
+        m   = m_new;
+    }
+    out[h * D + d] = half(acc / l);
+}`,
+'elementwise.metal': String.raw`#include <metal_stdlib>
+using namespace metal;
+
+kernel void add_f32(device float* h [[buffer(0)]], device const float* x [[buffer(1)]],
+                    uint i [[thread_position_in_grid]]) {
+    h[i] += x[i];
+}
+
+kernel void swiglu(device const float* gate [[buffer(0)]], device const float* up [[buffer(1)]],
+                   device float* out [[buffer(2)]], uint i [[thread_position_in_grid]]) {
+    const float g = gate[i];
+    out[i] = g / (1.0f + exp(-g)) * up[i];
+}
+
+// 4-tap causal conv over the last 4 qkv vectors, then SiLU.
+kernel void conv1d_causal_silu(/* state ring buffer, weights [4, 6144] */) { }
+
+// per-head RMSNorm on q and k, then partial RoPE on the first 64 dims
+kernel void qk_norm_rope(/* ... */) { }`,
+'get_rows.metal': String.raw`#include <metal_stdlib>
+using namespace metal;
+
+// Look up one row of token_embd (Q6_K, 2048 wide) and dequantize to f32.
+// Reads 1,680 bytes. The same tensor is the lm_head at the other end.
+kernel void get_rows_q6_K(/* table, token id, out */) { }`,
+'sample.metal': String.raw`#include <metal_stdlib>
+using namespace metal;
+
+// Greedy sampling over 248,320 logits in two passes:
+// 1) each threadgroup reduces a slice to (max, index)
+// 2) one threadgroup reduces the partials
+kernel void argmax_f32(
+    device const float* logits [[buffer(0)]],
+    device float2*      part   [[buffer(1)]],
+    constant uint&      n      [[buffer(2)]],
+    uint gid  [[thread_position_in_grid]],
+    uint grid [[threads_per_grid]],
+    uint tg   [[threadgroup_position_in_grid]],
+    uint lane [[thread_index_in_simdgroup]])
+{
+    float best = -INFINITY, idx = 0;
+    for (uint i = gid; i < n; i += grid) {
+        if (logits[i] > best) { best = logits[i]; idx = float(i); }
+    }
+    const float m = simd_max(best);
+    // ... lowest index among lanes holding m, then write part[tg]
+}`
+};
+
+function hlLine(s) {
+  const re = /(\/\/.*$)|(#\w+.*$)|(\[\[[^\]]*\]\])|\b(kernel|device|constant|threadgroup|const|constexpr|for|if|else|return|struct|using|namespace|inline|static)\b|\b(uint|uint2|float|float2|float4|half|half4|uchar|uchar2|char|int|bool|void|block_q4_K|block_q5_K|block_q6_K|block_q8_0|mem_flags|metal)\b|\b(0x[0-9A-Fa-f]+|\d+(?:\.\d+)?f?|INFINITY)\b|\b(simd_sum|simd_max|threadgroup_barrier|rsqrt|exp|max|min|scale_min)\b/g;
+  let out = '', last = 0, m;
+  const cls = ['', 'c-com', 'c-pre', 'c-att', 'c-kw', 'c-ty', 'c-num', 'c-fn'];
+  while ((m = re.exec(s))) {
+    out += esc(s.slice(last, m.index));
+    const g = m.findIndex((v, i) => i > 0 && v !== undefined);
+    out += `<span class="${cls[g]}">${esc(m[0])}</span>`;
+    last = re.lastIndex;
+    if (m[0] === '') re.lastIndex++;
+  }
+  return out + esc(s.slice(last));
+}
+const codeHTML = file => (SRC[file] || '').split('\n').map((l, i) => `<div class="ln"><span class="n">${i + 1}</span><span class="t">${hlLine(l) || ' '}</span></div>`).join('');
+const firstKernelOf = layerId => { const l = byId(layerId); return l.ops.reduce((a, o) => (o.ms > a.ms ? o : a), l.ops[0]).kernel; };
+
+const statusBar = () => `<div class="sbar"><span>9:41  Sat 10 Oct</span><span class="r">100% <span class="batt"></span></span></div>`;
+const heat = t => { // 0..1 → color for latency
+  const stops = [[0, [226, 232, 224]], [.5, [240, 190, 120]], [1, [214, 72, 98]]];
+  let i = 0; while (i < stops.length - 2 && t > stops[i + 1][0]) i++;
+  const [a, ca] = stops[i], [b, cb] = stops[i + 1], f = Math.max(0, Math.min(1, (t - a) / (b - a)));
+  return `rgb(${ca.map((c, k) => Math.round(c + (cb[k] - c) * f)).join(',')})`;
+};
+
+/* ---------------- Study A ---------------- */
+function mockA(root) {
+  const st = { tok: 30, layer: 'b3', open: ['matvec_q4_K.metal', 'gated_delta_rule.metal', 'attention_decode.metal'], file: 'matvec_q4_K.metal', shown: TOKENS.length, opSel: null };
+  root.innerHTML = `<div class="screen mA">${statusBar()}
+    <div class="tb">
+      <span class="ib" aria-hidden="true">▤</span>
+      <div class="ttl"><b>Qwen3.5-2B ⌄</b><span>Q4_K_M · 1.27 GB mapped · Metal</span></div>
+      <span class="sp"></span>
+      <span class="pill">⌘B Build</span><span class="pill on">◉ Profile</span><button class="pill go" data-run>▶ Run</button>
+    </div>
+    <div class="cols">
+      <aside class="chat"><div class="msgs scroll"><div class="bub">${esc(PROMPT)}</div><div class="ans" data-ans></div><div class="meta" data-meta></div></div>
+        <div class="inp">Message Qwen3.5-2B<span class="snd">↑</span></div>
+        <div class="knobs"><span>greedy</span><span>ctx 4,096</span><span>max 256</span></div></aside>
+      <main class="center"><div class="tabs" data-tabs></div><div class="code-view scroll" data-code></div>
+        <div class="build"><span class="ok">✓ Compiled</span><span>84 ms</span><span>· matches CPU reference, max |Δ| 3.0e-4</span></div>
+        <div class="drawer" data-drawer></div></main>
+      <aside class="insp">
+        <div class="card"><div class="nm"><span class="dot"></span><b>Qwen3.5-2B</b><span style="color:#8e8e93;font-size:11px;margin-left:auto">Loaded in 0.41 s</span></div>
+          <div class="kv"><div><span>Format</span><b>GGUF v3 · Q4_K_M</b></div><div><span>Blocks</span><b>18 Δ + 6 A</b></div><div><span>Mapped</span><b>1.27 GB, no copy</b></div><div><span>Context</span><b>4,096 of 262,144</b></div></div></div>
+        <div class="iseg"><span class="on">Layers</span><span>Tensors</span><span>Memory</span></div>
+        <div class="layers scroll" data-layers></div>
+      </aside>
+    </div></div>`;
+  const $ = s => root.querySelector(s);
+  function renderChat() {
+    $('[data-ans]').innerHTML = TOKENS.slice(0, st.shown).map((t, i) => `<span class="tok${i === st.tok ? ' sel' : ''}" data-tok="${i}">${tokText(t)}</span>`).join('');
+    $('[data-meta]').innerHTML = `<span>${st.shown} tokens</span><span>${fmt(1000 / avgTotal, 1)} tok/s</span><span>prefill ${PROMPT_TOKENS} tok · 96 ms</span>`;
+  }
+  function renderEditor() {
+    $('[data-tabs]').innerHTML = st.open.map(f => `<button class="${f === st.file ? 'on' : ''}" data-file="${f}">${f}</button>`).join('');
+    $('[data-code]').innerHTML = codeHTML(st.file);
+  }
+  function renderDrawer() {
+    const p = PASSES[st.tok], ks = kernelStats(p).slice(0, 6);
+    $('[data-drawer]').innerHTML = `<div class="hd"><b>Forward pass · token ${st.tok + 1} “${esc(TOKENS[st.tok].trim())}”</b><span>${fmt(p.total)} ms · ctx ${p.ctx} · ${fmt(p.bytes / 1e9)} GB read</span><span class="seg"><span class="on">Kernels</span><span>Dispatches</span></span></div>
+      <div class="wf">${p.layers.map(l => `<button class="${l.id === st.layer ? 'sel' : ''}" data-layer="${l.id}" title="${byId(l.id).name} ${fmt(l.ms)} ms" style="flex:${l.ms};background:${KC[byId(l.id).kind]}"></button>`).join('')}</div>
+      <div class="wfax"><span>0 ms</span><span>embd → blk.0 … blk.23 → lm_head → sample</span><span>${fmt(p.gpu, 1)} ms GPU</span></div>
+      <table><thead><tr><th>Kernel</th><th>Calls</th><th>ms</th><th style="width:120px">Share</th><th>GB/s</th></tr></thead><tbody>
+      ${ks.map(k => { const gbs = k.bytes / 1e6 / k.ms; return `<tr><td class="k"><button data-kernel="${k.kernel}">${k.kernel}</button></td><td>${k.calls}</td><td>${fmt(k.ms)}</td><td><div class="bar" style="width:${(k.ms / p.gpu * 100).toFixed(1)}%"></div></td><td class="${gbs > 1 && gbs < 50 ? 'warn' : ''}">${gbs > 1 ? fmt(gbs, 0) : '—'}</td></tr>`; }).join('')}
+      </tbody></table>`;
+  }
+  function renderLayers() {
+    const p = PASSES[st.tok], max = Math.max(...p.layers.filter(l => l.id !== 'head').map(l => l.ms));
+    $('[data-layers]').innerHTML = p.layers.map(l => {
+      const L = byId(l.id), sel = l.id === st.layer;
+      let h = `<button class="lrow${sel ? ' sel' : ''}" data-layer="${l.id}"><span class="ix">${L.idx ?? ''}</span><span class="nm2"><i style="background:${KC[L.kind]}"></i>${L.idx !== undefined ? (L.kind === 'attn' ? 'Attention' : 'DeltaNet') : L.name}<small>${L.idx !== undefined ? '' : L.sub}</small></span><span class="tr"><div style="width:${Math.min(100, l.ms / max * 100)}%;background:${KC[L.kind]}"></div></span><span class="ms">${fmt(l.ms)}</span></button>`;
+      if (sel) h += `<div class="ops">${l.ops.map((o, i) => `<button class="op${st.opSel === i ? ' on' : ''}" data-op="${i}" data-kernel="${o.kernel}"><span>${esc(o.label)}</span><span class="q">${o.tensor ? T[o.tensor].type : o.kernel.split('_')[0]}</span><span class="ms">${fmt(o.ms, 3)}</span></button>`).join('')}</div>`;
+      return h;
+    }).join('');
+  }
+  function openKernel(k) {
+    const f = KFILE[k]; if (!f) return;
+    if (!st.open.includes(f)) { st.open.unshift(f); st.open = st.open.slice(0, 4); }
+    st.file = f; renderEditor();
+  }
+  const all = () => { renderChat(); renderDrawer(); renderLayers(); };
+  root.addEventListener('click', e => {
+    const t = e.target.closest('[data-tok],[data-file],[data-layer],[data-kernel],[data-run]'); if (!t) return;
+    if (t.dataset.tok) { st.tok = +t.dataset.tok; all(); }
+    else if (t.dataset.file) { st.file = t.dataset.file; renderEditor(); }
+    else if (t.dataset.op) { st.opSel = +t.dataset.op; openKernel(t.dataset.kernel); renderLayers(); }
+    else if (t.dataset.layer) { st.layer = t.dataset.layer; st.opSel = null; openKernel(firstKernelOf(st.layer)); renderDrawer(); renderLayers(); }
+    else if (t.dataset.kernel) openKernel(t.dataset.kernel);
+    else if (t.dataset.run !== undefined) play(st, all, 140);
+  });
+  renderEditor(); all();
+}
+
+/* ---------------- Study B ---------------- */
+function mockB(root) {
+  const st = { tok: 30, layer: 'head', kernel: 'matvec_q6_K', shown: TOKENS.length, live: null };
+  root.innerHTML = `<div class="screen mB">${statusBar()}
+    <div class="tb"><span class="brand">Bench</span>
+      <span class="model">● Qwen3.5-2B <small>Q4_K_M · 24 blocks · 1.27 GB</small></span>
+      <span class="sp"></span><span class="btn">Import GGUF…</span><span class="btn">Build ⌘B</span><button class="btn pri" data-run>Run ▶</button></div>
+    <div class="cols">
+      <aside class="chat"><div class="msgs scroll"><div><div class="who">You</div><div class="u">${esc(PROMPT)}</div></div><div><div class="who">Qwen3.5-2B</div><div class="ans" data-ans></div></div></div>
+        <div style="padding:0 16px 4px"><div class="heatlg"><span>fast</span><div style="background:linear-gradient(90deg,${heat(0)},${heat(.5)},${heat(1)})"></div><span>slow</span></div></div>
+        <div class="inp">Ask something…</div></aside>
+      <main class="center"><div class="khead" data-khead></div><div class="code-view scroll" data-code></div>
+        <div class="console"><span class="ok">✓ built</span><span>matvec_q6_K · 91 ms</span><span>CPU reference max |Δ| 2.1e-4</span><span style="margin-left:auto">pipeline swapped live</span></div></main>
+      <aside class="spine" data-spine></aside>
+    </div></div>`;
+  const $ = s => root.querySelector(s);
+  const totals = PASSES.map(p => p.total), tmin = Math.min(...totals), tmax = Math.max(...totals);
+  function renderChat() {
+    $('[data-ans]').innerHTML = TOKENS.slice(0, st.shown).map((t, i) => `<span class="tok${i === st.tok ? ' sel' : ''}" data-tok="${i}" style="border-bottom-color:${heat((totals[i] - tmin) / (tmax - tmin))}">${tokText(t)}</span>`).join('');
+  }
+  function renderHead() {
+    const p = PASSES[st.tok], k = kernelStats(p).find(x => x.kernel === st.kernel) || kernelStats(p)[0];
+    const gbs = k.bytes / 1e6 / k.ms, good = gbs / PEAK;
+    $('[data-khead]').innerHTML = `<div class="row1"><h4>${k.kernel}</h4><span class="file">${KFILE[k.kernel]}</span></div>
+      <div class="stats"><div class="stat"><span>Calls / token</span><b>${k.calls}</b></div><div class="stat"><span>Time / token</span><b>${fmt(k.ms)} ms</b></div><div class="stat"><span>Share</span><b>${fmt(k.ms / p.gpu * 100, 0)}%</b></div><div class="stat"><span>Bytes read</span><b>${k.bytes > 1e6 ? fmt(k.bytes / 1e6, 0) + ' MB' : fmt(k.bytes / 1e3, 0) + ' KB'}</b></div></div>
+      <div class="roof"><div class="track"><div style="width:${Math.min(100, good * 100)}%;background:${good < .45 ? '#b8336a' : '#2c7a5b'}"></div></div><small>${gbs > 1 ? `${fmt(gbs, 0)} GB/s achieved of ${PEAK} GB/s peak · ${fmt(good * 100, 0)}% of the memory roofline` : 'compute-bound: bytes read are negligible'}</small></div>
+      <div class="used">${[...k.sites].map(([s, n]) => `<span>${esc(s)} ×${n}</span>`).join('')}</div>`;
+    $('[data-code]').innerHTML = codeHTML(KFILE[k.kernel]);
+  }
+  function renderSpine() {
+    const p = PASSES[st.tok], blockMax = 1.0;
+    const row = (l, big) => {
+      const L = byId(l.id), mixer = l.ops.filter(o => o.kind === L.kind || (L.kind === 'head' && o.kind === 'head')).reduce((a, o) => a + o.ms, 0);
+      const ffn = l.ops.filter(o => o.kind === 'ffn').reduce((a, o) => a + o.ms, 0), rest = l.ms - mixer - ffn;
+      const scale = big ? 100 / l.ms : 100 / blockMax;
+      const g = L.idx !== undefined ? (L.kind === 'attn' ? 'A' : 'Δ') : L.kind === 'embed' ? 'E' : L.kind === 'head' ? 'H' : 'S';
+      return `<button class="srow${big ? ' big' : ''}${st.layer === l.id ? ' sel' : ''}${st.live === l.id ? ' live' : ''}" data-layer="${l.id}"><span class="ix">${L.idx ?? ''}</span><span class="g" style="background:${KC[L.kind]}">${g}</span>
+        <span class="bars"><div style="width:${mixer * scale}%;background:${KC[L.kind]}"></div><div style="width:${ffn * scale}%;background:${KC.ffn}"></div><div style="width:${rest * scale}%;background:${KC.norm}"></div></span>
+        <span class="ms">${fmt(l.ms)}</span></button>`;
+    };
+    const head = p.layers.find(l => l.id === 'head');
+    $('[data-spine]').innerHTML = `<div class="sphead"><b>Forward pass</b><span>token ${st.tok + 1} “${esc(TOKENS[st.tok].trim())}” · ctx ${p.ctx}</span></div>
+      <div class="sums"><div><span>Per token</span><b>${fmt(p.total, 1)} ms</b></div><div><span>Read</span><b>${fmt(p.bytes / 1e9, 2)} GB</b></div><div><span>Effective</span><b>${fmt(p.bytes / 1e6 / p.gpu, 0)} GB/s</b></div></div>
+      <div class="rows">${p.layers.filter(l => l.id !== 'head' && l.id !== 'sample').map(l => row(l)).join('')}
+        <div class="sep"><span>scale: full width = 1.0 ms</span><span>lm_head drawn at its own scale ↓</span></div>
+        ${row(head, true)}${row(p.layers.find(l => l.id === 'sample'))}</div>
+      <div class="callout"><b>lm_head is ${fmt(head.ms / p.gpu * 100, 0)}% of the token.</b> One 248,320 × 2048 Q6_K matvec reads 417 MB, more than ten blocks combined, at ${fmt(head.bytes / 1e6 / head.ms, 0)} GB/s.</div>`;
+  }
+  const all = () => { renderChat(); renderSpine(); };
+  root.addEventListener('click', e => {
+    const t = e.target.closest('[data-tok],[data-layer],[data-run]'); if (!t) return;
+    if (t.dataset.tok) { st.tok = +t.dataset.tok; all(); renderHead(); }
+    else if (t.dataset.layer) { st.layer = t.dataset.layer; st.kernel = firstKernelOf(st.layer); renderSpine(); renderHead(); }
+    else play(st, () => { all(); renderHead(); }, 300, (frac) => { const ids = LAYERS.map(l => l.id); st.live = frac == null ? null : ids[Math.min(ids.length - 1, Math.floor(frac * ids.length))]; renderSpine(); });
+  });
+  all(); renderHead();
+}
+
+/* ---------------- Study C ---------------- */
+function mockC(root) {
+  const st = { tok: 26, layer: 'b23', mode: 'rel', shown: TOKENS.length, files: ['attention_decode.metal', 'matvec_q6_K.metal', 'gated_delta_rule.metal'], file: 'attention_decode.metal' };
+  root.innerHTML = `<div class="screen mC">${statusBar()}
+    <div class="tb"><div class="grp"><span class="lbl">Model</span><span class="val">qwen3.5-2b q4_k_m</span></div>
+      <div class="grp"><span class="lbl">Decode</span><span class="val" data-tps></span></div>
+      <div class="grp"><span class="lbl">GPU busy</span><span class="val" data-busy></span></div>
+      <span class="sp"></span><span class="btn"><span class="rec"></span>Profiling · encoder per layer</span><button class="btn pri" data-run>Run ▶</button></div>
+    <div class="cols">
+      <aside class="chat"><div class="ph"><span>Prompt</span><span>${PROMPT_TOKENS} tok</span></div><div class="u">${esc(PROMPT)}</div>
+        <div class="ph"><span>Output</span><span data-count></span></div><div class="chips scroll" data-chips></div>
+        <div class="foot"><span>Red outline: token over 1.2× median latency</span><span>greedy · ctx 4096 · kv f16</span></div></aside>
+      <main class="center"><div class="scope" data-scope></div><div class="ftabs" data-ftabs></div><div class="code-view scroll" data-code></div></main>
+      <aside class="heat"><div class="ph"><span>Layer × token</span><span data-hsel></span></div>
+        <div class="hmode"><button data-mode="abs">Absolute ms</button><button data-mode="rel">vs. layer median</button></div>
+        <div class="gridwrap"><div class="grid" data-grid></div></div><div class="scale" data-scale></div><div class="obs" data-obs></div></aside>
+    </div></div>`;
+  const $ = s => root.querySelector(s);
+  const med = PASSES.map(p => p.total).sort((a, b) => a - b)[Math.floor(PASSES.length / 2)];
+  const rowMed = LAYERS.map((l, li) => { const v = PASSES.map(p => p.layers[li].ms).sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; });
+  const absColor = t => { const a = [24, 34, 46], b = [47, 158, 145], c = [240, 179, 90], f = Math.min(1, Math.max(0, t)); const [x, y, u] = f < .5 ? [a, b, f * 2] : [b, c, (f - .5) * 2]; return `rgb(${x.map((v, k) => Math.round(v + (y[k] - v) * u)).join(',')})`; };
+  const relColor = r => { const d = Math.max(-1, Math.min(1, (r - 1) / .3)); if (d >= 0) { const a = [30, 36, 46], b = [223, 92, 116]; return `rgb(${a.map((v, k) => Math.round(v + (b[k] - v) * d)).join(',')})`; } const a = [30, 36, 46], b = [74, 143, 224]; return `rgb(${a.map((v, k) => Math.round(v + (b[k] - v) * -d)).join(',')})`; };
+  function renderTop() {
+    $('[data-tps]').textContent = `${fmt(1000 / avgTotal, 1)} tok/s · ${fmt(avgTotal, 1)} ms`;
+    const busy = PASSES.reduce((a, p) => a + p.gpu, 0) / PASSES.reduce((a, p) => a + p.total, 0);
+    $('[data-busy]').textContent = `${fmt(busy * 100, 0)}%`;
+    $('[data-count]').textContent = `${st.shown} tok`;
+    $('[data-chips]').innerHTML = TOKENS.slice(0, st.shown).map((t, i) => `<button class="chip${i === st.tok ? ' sel' : ''}${PASSES[i].total > med * 1.2 ? ' slow' : ''}" data-tok="${i}">${esc(t)}</button>`).join('');
+  }
+  function renderScope() {
+    const p = PASSES[st.tok], span = 32, x = ms => (ms / span * 100).toFixed(3) + '%';
+    let t = p.cpu, gpu = '';
+    p.layers.forEach(l => { const L = byId(l.id); gpu += `<button class="seg2" data-layer="${l.id}" title="${L.name} ${fmt(l.ms)} ms" style="left:${x(t)};width:calc(${x(l.ms)} - 1px);background:${KC[L.kind]};${l.id === st.layer ? 'box-shadow:0 0 0 1px #e7ecf3;' : ''}"></button>`; t += l.ms; });
+    const ticks = [0, 4, 8, 12, 16, 20, 24, 28, 32].map(v => `<span style="left:${x(v)}">${v}</span>`).join('');
+    $('[data-scope]').innerHTML = `<div class="hd"><b>Token ${st.tok + 1} “${esc(TOKENS[st.tok].trim())}”</b><span>${fmt(p.total)} ms total · GPU ${fmt(p.gpu)} · CPU encode ${fmt(p.cpu)} · ctx ${p.ctx}</span></div>
+      <div class="lanes">
+        <div class="lane"><span class="nm">CPU</span><div class="seg2" style="left:0;width:${x(p.cpu)};background:#4a5566"></div><div class="seg2 idle" style="left:${x(p.cpu)};width:${x(p.gpu)}"></div><div class="seg2" style="left:${x(p.cpu + p.gpu)};width:${x(.06)};background:#4a5566"></div></div>
+        <div class="lane gpu"><span class="nm">GPU · 27 encoders</span><div class="seg2 idle" style="left:0;width:${x(p.cpu)}"></div>${gpu}</div>
+        <div class="lane"><span class="flag" style="left:${x(0)}">▲ GPU idle ${fmt(p.cpu)} ms while CPU encodes. Encode token n+1 during token n.</span></div>
+      </div>
+      <div class="ax">${ticks}<span style="left:97%">ms</span></div>`;
+  }
+  function renderGrid() {
+    const n = st.shown, rows = LAYERS.map((L, li) => {
+      const vals = PASSES.slice(0, n).map(p => p.layers[li].ms), cur = PASSES[st.tok].layers[li].ms;
+      const cells = vals.map(v => `<i style="background:${st.mode === 'abs' ? absColor(Math.log10(v / .3) / Math.log10(12 / .3) * .9 + .1) : relColor(v / rowMed[li])}"></i>`).join('') + '<i style="background:transparent"></i>'.repeat(TOKENS.length - n);
+      const label = L.idx !== undefined ? `${L.kind === 'attn' ? 'A' : 'Δ'} ${String(L.idx).padStart(2, '0')}` : L.name;
+      return `<button class="hr${st.layer === L.id ? ' sel' : ''}" data-layer="${L.id}"><span class="nm" style="${L.kind === 'attn' ? 'color:#f0b35a' : ''}">${label}</span><span class="cells">${cells}</span><span class="ms">${fmt(cur)}</span></button>`;
+    }).join('');
+    $('[data-grid]').innerHTML = rows;
+    $('[data-hsel]').textContent = `token ${st.tok + 1} outlined`;
+    root.querySelectorAll('.mC .hr .cells i:nth-child(' + (st.tok + 1) + ')').forEach(c => c.style.boxShadow = '0 0 0 1px #e7ecf3');
+    root.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === st.mode));
+    $('[data-scale]').innerHTML = st.mode === 'abs'
+      ? `<span>0.3 ms</span><div style="background:linear-gradient(90deg,${absColor(.1)},${absColor(.5)},${absColor(1)})"></div><span>12 ms</span>`
+      : `<span>−30%</span><div style="background:linear-gradient(90deg,${relColor(.7)},${relColor(1)},${relColor(1.3)})"></div><span>+30%</span>`;
+    $('[data-obs]').innerHTML = st.mode === 'rel'
+      ? `<b>Tokens 13 and 27 are hot in every row.</b> When a whole column heats up, the cause is outside the kernels: clocks, thermals, or a stall. The attention rows (A 03 … A 23) warm steadily to the right as context grows.`
+      : `<b>lm_head dominates every column.</b> Absolute mode shows where time goes. Switch to “vs. layer median” to see which layers change over the run.`;
+  }
+  function renderCode() {
+    $('[data-ftabs]').innerHTML = st.files.map(f => `<button class="${f === st.file ? 'on' : ''}" data-file="${f}">${f}</button>`).join('');
+    $('[data-code]').innerHTML = codeHTML(st.file);
+  }
+  const all = () => { renderTop(); renderScope(); renderGrid(); };
+  root.addEventListener('click', e => {
+    const t = e.target.closest('[data-tok],[data-layer],[data-mode],[data-file],[data-run]'); if (!t) return;
+    if (t.dataset.tok) { st.tok = +t.dataset.tok; all(); }
+    else if (t.dataset.layer) { st.layer = t.dataset.layer; const f = KFILE[firstKernelOf(st.layer)]; if (!st.files.includes(f)) st.files = [f, ...st.files].slice(0, 4); st.file = f; renderScope(); renderGrid(); renderCode(); }
+    else if (t.dataset.mode) { st.mode = t.dataset.mode; renderGrid(); }
+    else if (t.dataset.file) { st.file = t.dataset.file; renderCode(); }
+    else play(st, all, 160);
+  });
+  all(); renderCode();
+}
+
+/* ---------------- replay ---------------- */
+function play(st, render, interval, onSweep) {
+  if (st.timer) clearInterval(st.timer);
+  if (REDUCED) { st.shown = TOKENS.length; st.tok = TOKENS.length - 1; render(); return; }
+  st.shown = 0; let start = performance.now();
+  const tick = () => {
+    st.shown++; st.tok = st.shown - 1; render(); start = performance.now();
+    if (st.shown >= TOKENS.length) { clearInterval(st.timer); st.timer = null; if (onSweep) onSweep(null); }
+  };
+  st.timer = setInterval(tick, interval); tick();
+  if (onSweep) { const sweep = () => { if (!st.timer) return; onSweep(Math.min(.999, (performance.now() - start) / interval)); requestAnimationFrame(sweep); }; requestAnimationFrame(sweep); }
+}
+
+/* ---------------- mount + scale ---------------- */
+const MOCKS = { A: mockA, B: mockB, C: mockC };
+document.querySelectorAll('[data-mock]').forEach(frame => {
+  const dev = document.createElement('div'); dev.className = 'device'; frame.appendChild(dev);
+  MOCKS[frame.dataset.mock](dev);
+  const fit = () => { const w = frame.clientWidth, s = Math.min(1, w / 1220); dev.style.transform = `translateX(${Math.max(0, (w - 1220 * s) / 2)}px) scale(${s})`; frame.style.height = (860 * s) + 'px'; };
+  new ResizeObserver(fit).observe(frame); fit();
+});
+</script>

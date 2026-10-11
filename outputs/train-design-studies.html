@@ -1,0 +1,843 @@
+<title>Bench Train Studies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: reading column for the argument; each iPad study shown at true 11" landscape proportions, scaled to fit. Mockups use the Study C instrument look the user picked. */
+:root {
+  --bg: #f4f5f7; --surface: #ffffff; --fg: #16181d; --muted: #5c6371; --line: #dadee5;
+  --accent: #2b4fd8; --accent-soft: #e6ebfc;
+  --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #111317; --surface: #191c22; --fg: #e8eaee; --muted: #9aa1ad; --line: #2b3039; --accent: #8ea6ff; --accent-soft: #232b45; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #111317; --surface: #191c22; --fg: #e8eaee; --muted: #9aa1ad; --line: #2b3039; --accent: #8ea6ff; --accent-soft: #232b45; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--display); font-size: 16px; line-height: 1.55; padding: 0 20px; }
+.wrap { max-width: 1260px; margin: 0 auto; padding-block: 56px 96px; display: grid; gap: 72px; }
+.prose { max-width: 68ch; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(34px, 5vw, 52px); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(24px, 3vw, 32px); font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 15px; font-weight: 700; }
+p { margin: 0; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+header.intro { display: grid; gap: 18px; }
+.lede { font-size: 19px; color: var(--muted); max-width: 64ch; }
+.note { font-size: 13.5px; color: var(--muted); max-width: 90ch; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+nav.toc a { font-size: 14px; text-decoration: none; color: var(--fg); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--mono); font-size: 13px; }
+.flow span { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.flow b { color: var(--muted); font-weight: 400; }
+section.study { display: grid; gap: 22px; scroll-margin-top: 20px; }
+.study-head { display: grid; gap: 8px; }
+.tag { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: .06em; text-transform: uppercase; }
+.frame { width: 100%; position: relative; }
+.device { position: absolute; top: 0; left: 0; width: 1220px; height: 860px; transform-origin: top left; padding: 20px; border-radius: 40px; background: #1d1f23; box-shadow: 0 0 0 1px #34373d inset, 0 30px 60px -30px rgba(10,14,25,.45); }
+.analysis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+.analysis > div { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.analysis ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 15px; }
+.analysis p { font-size: 15px; }
+@media (max-width: 820px) { .analysis { grid-template-columns: 1fr; gap: 18px; } }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table.cmp { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 680px; }
+table.cmp th, table.cmp td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.cmp tr:last-child td { border-bottom: 0; }
+table.cmp thead th { font-size: 12px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 500; }
+table.cmp td:first-child { font-weight: 600; width: 26%; }
+.stack { display: grid; gap: 14px; }
+.rec { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+@media (max-width: 900px) { .rec { grid-template-columns: 1fr; } }
+.rec ol, .rec ul { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+code { font-family: var(--mono); font-size: .88em; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+
+/* ---------- mock: Study C instrument look ---------- */
+.screen { width: 1180px; height: 820px; border-radius: 20px; overflow: hidden; position: relative;
+  background: #0e1115; color: #cfd6e0; font-family: var(--mono); font-size: 12px; }
+.screen button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.screen button:focus-visible { outline: 2px solid #4a8fe0; outline-offset: 1px; }
+.sbar { height: 24px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; font-size: 12px; font-weight: 600; font-family: -apple-system, system-ui, sans-serif; }
+.batt { width: 22px; height: 11px; border: 1.5px solid currentColor; border-radius: 3px; position: relative; display: inline-block; vertical-align: middle; margin-left: 6px; }
+.batt::after { content: ""; position: absolute; inset: 1.5px; right: 5px; background: currentColor; border-radius: 1px; }
+.tb { height: 50px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid #222832; }
+.phase { display: flex; border: 1px solid #2c3440; border-radius: 7px; padding: 2px; }
+.phase span { padding: 4px 12px; border-radius: 5px; font-size: 11.5px; color: #6f7a8a; }
+.phase span.on { background: #e7ecf3; color: #0e1115; font-weight: 600; }
+.grp { display: grid; line-height: 1.25; padding-right: 14px; border-right: 1px solid #222832; }
+.lbl { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; }
+.val { font-size: 12.5px; color: #e7ecf3; }
+.ok { color: #6fd3b8; }
+.sp { flex: 1; }
+.btn { height: 30px; padding: 0 12px; border-radius: 6px; border: 1px solid #2c3440; color: #cfd6e0; font-size: 11.5px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.btn.pri { background: #e7ecf3; color: #0e1115; border-color: #e7ecf3; font-weight: 600; }
+.cols { display: grid; height: 746px; }
+.col { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.col + .col { border-left: 1px solid #222832; }
+.ph { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; padding: 12px 14px 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.scroll { overflow: auto; scrollbar-width: thin; }
+.seg { display: flex; gap: 2px; }
+.seg button { padding: 3px 9px; font-size: 10.5px; border: 1px solid #2c3440; border-radius: 4px; color: #6f7a8a; }
+.seg button.on { color: #0e1115; background: #cfd6e0; border-color: #cfd6e0; }
+
+/* refs list */
+.refs { padding: 0 8px 10px; display: grid; gap: 2px; }
+.ref { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; padding: 8px 8px; border-radius: 6px; border: 1px solid transparent; }
+.ref:hover { background: #151a20; }
+.ref.sel { background: #161b22; border-color: #2c3440; }
+.ref .t { font-family: var(--display); font-size: 13px; color: #e7ecf3; line-height: 1.3; }
+.ref .m { grid-column: 1 / -1; font-size: 10.5px; color: #6f7a8a; display: flex; gap: 8px; flex-wrap: wrap; }
+.st { font-size: 10px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; align-self: start; }
+.st.run { background: #12302c; color: #6fd3b8; }
+.st.done { background: #1b2230; color: #9fb4d9; }
+.st.fail { background: #3a1820; color: #ff8fa3; }
+.st.none { background: transparent; border: 1px dashed #2c3440; color: #6f7a8a; }
+.swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+/* metric tiles */
+.tiles { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 1px; background: #222832; border-top: 1px solid #222832; border-bottom: 1px solid #222832; }
+.tile { background: #0e1115; padding: 8px 12px; display: grid; gap: 1px; }
+.tile b { font-size: 15px; color: #e7ecf3; font-weight: 500; font-variant-numeric: tabular-nums; }
+.tile span { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: #6f7a8a; }
+
+.runhead { padding: 12px 16px 10px; display: grid; gap: 6px; border-bottom: 1px solid #222832; }
+.runhead .t { font-family: var(--display); font-size: 17px; font-weight: 600; color: #e7ecf3; }
+.runhead .m { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: #6f7a8a; align-items: center; }
+.runhead .m b { color: #cfd6e0; font-weight: 500; }
+.chart { padding: 8px 14px 4px; }
+.chart svg { display: block; width: 100%; }
+.legend { display: flex; gap: 12px; font-size: 10.5px; color: #8b96a6; padding: 0 14px 6px; flex-wrap: wrap; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.tabs { display: flex; border-bottom: 1px solid #222832; height: 30px; flex: none; }
+.tabs button { padding: 0 14px; font-size: 11px; color: #6f7a8a; border-right: 1px solid #222832; }
+.tabs button.on { color: #e7ecf3; background: #161b22; }
+.pane { flex: 1; min-height: 0; }
+.code { white-space: pre; font-size: 11.5px; line-height: 17px; padding: 8px 0; }
+.code div { padding: 0 14px; }
+.code .add { background: #12302c; color: #a8f0dc; }
+.code .del { background: #3a1820; color: #ffb3c1; }
+.code .hunk { color: #6f7a8a; background: #131820; }
+.code .file { color: #e7ecf3; background: #161b22; padding-block: 4px; font-weight: 600; }
+.log div { padding: 0 14px; white-space: pre; font-size: 11px; line-height: 17px; }
+.log .dim { color: #6f7a8a; }
+.log .ev { color: #f0b35a; }
+.log .er { color: #ff8fa3; }
+.samples { padding: 10px 14px; display: grid; gap: 10px; }
+.sample { display: grid; grid-template-columns: 70px 1fr; gap: 10px; }
+.sample .s { color: #6f7a8a; font-size: 10.5px; padding-top: 2px; }
+.sample p { font-family: var(--display); font-size: 13px; line-height: 1.45; color: #e7ecf3; }
+.sample p i { color: #6f7a8a; font-style: normal; }
+
+/* heatmap */
+.hm { padding: 0 14px; display: grid; gap: 1px; }
+.hr { display: grid; grid-template-columns: 58px minmax(0,1fr); gap: 6px; align-items: center; height: 14px; }
+.hr .nm { font-size: 9.5px; color: #8b96a6; text-align: right; white-space: nowrap; }
+.hr .cells { display: flex; gap: 1px; height: 12px; }
+.hr .cells i { flex: 1; border-radius: 1px; }
+.hax { display: grid; grid-template-columns: 58px minmax(0,1fr); gap: 6px; padding: 4px 14px 0; font-size: 9.5px; color: #6f7a8a; }
+.hax div { display: flex; justify-content: space-between; }
+.obs { margin: 10px 14px; padding: 9px 10px; border: 1px solid #3a2f1f; background: #1a1610; border-radius: 6px; font-family: var(--display); font-size: 12px; line-height: 1.45; color: #e9dcc6; }
+.obs b { color: #f0b35a; }
+.ckpts { padding: 0 14px 12px; display: grid; gap: 4px; }
+.ck { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 7px 9px; border: 1px solid #222832; border-radius: 6px; }
+.ck .n { color: #e7ecf3; }
+.ck .d { font-size: 10.5px; color: #6f7a8a; grid-column: 1; }
+.ck .a { grid-row: 1 / 3; grid-column: 2; display: flex; gap: 4px; align-items: center; }
+.mini { font-size: 10px; padding: 3px 7px; border-radius: 4px; border: 1px solid #2c3440; }
+.mini.pri { background: #e7ecf3; color: #0e1115; border-color: #e7ecf3; }
+
+/* compare */
+.cfg { width: 100%; border-collapse: collapse; font-size: 11px; }
+.cfg th { text-align: left; font-weight: 400; color: #6f7a8a; padding: 4px 14px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.cfg td { padding: 4px 14px; border-top: 1px solid #1b2129; font-variant-numeric: tabular-nums; }
+.cfg td.diff { color: #f0b35a; }
+.check { width: 13px; height: 13px; border: 1px solid #4a5566; border-radius: 3px; display: inline-grid; place-items: center; font-size: 9px; }
+.check.on { background: #e7ecf3; color: #0e1115; border-color: #e7ecf3; }
+.verdict { margin: 10px 14px; display: grid; gap: 6px; }
+.verdict div { display: grid; grid-template-columns: 1fr auto; font-size: 11.5px; padding: 6px 9px; border: 1px solid #222832; border-radius: 6px; }
+.verdict b { font-weight: 500; }
+.good { color: #6fd3b8; } .bad { color: #ff8fa3; }
+
+/* pipeline */
+.stages { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 6px; padding: 12px 14px; border-bottom: 1px solid #222832; }
+.stage { border: 1px solid #222832; border-radius: 6px; padding: 7px 8px; display: grid; gap: 2px; position: relative; }
+.stage b { font-size: 11.5px; color: #e7ecf3; font-weight: 500; }
+.stage span { font-size: 10px; color: #6f7a8a; }
+.stage.done { border-color: #1f3f39; }
+.stage.done b::before { content: "✓ "; color: #6fd3b8; }
+.stage.now { border-color: #6fd3b8; background: #0f1d1b; }
+.stage.now b::before { content: "● "; color: #6fd3b8; }
+.stage .bar { height: 3px; border-radius: 2px; background: #222832; margin-top: 4px; overflow: hidden; }
+.stage .bar div { height: 100%; background: #6fd3b8; }
+.tree { padding: 0 10px 10px; display: grid; gap: 1px; font-size: 11.5px; }
+.tree div { padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.tree .dir { color: #8b96a6; }
+.tree .f { color: #cfd6e0; }
+.tree .f.sel { background: #161b22; color: #e7ecf3; }
+.tree small { color: #6f7a8a; float: right; }
+.preview { margin: 0 14px 12px; border: 1px solid #222832; border-radius: 6px; padding: 8px 10px; font-family: var(--display); font-size: 12px; line-height: 1.5; color: #cfd6e0; display: grid; gap: 6px; }
+.preview .meta { font-family: var(--mono); font-size: 10.5px; color: #6f7a8a; }
+.preview p span { background: #1b2230; border-radius: 2px; margin-right: 1px; }
+.handoff { margin: 0 14px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.handoff div { border: 1px solid #222832; border-radius: 6px; padding: 8px 10px; display: grid; gap: 3px; }
+.handoff b { color: #e7ecf3; font-weight: 500; font-size: 12px; }
+.handoff span { color: #6f7a8a; font-size: 10.5px; }
+
+/* run board additions */
+.verdict-line { font-family: var(--display); font-size: 13px; line-height: 1.45; color: #cfd6e0; margin-top: 2px; padding-left: 9px; border-left: 2px solid #4a5566; }
+.verdict-line.run { border-color: #6fd3b8; } .verdict-line.done { border-color: #7cc4f8; } .verdict-line.fail { border-color: #ff8fa3; } .verdict-line.none { border-color: #2c3440; color: #6f7a8a; }
+.filebar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 14px 4px; font-size: 10.5px; color: #6f7a8a; position: sticky; top: 0; background: #0e1115; z-index: 1; }
+.chgkey { color: #f0b35a; }
+.code.numbered div { padding-left: 0; }
+.code .ln { display: inline-block; width: 34px; text-align: right; padding-right: 10px; color: #3d4654; user-select: none; }
+.code .chg { background: #241d10; box-shadow: inset 2px 0 0 #f0b35a; }
+.code .flash { outline: 1px solid #f0b35a; }
+.chgs { padding: 0 10px 6px; display: grid; gap: 3px; }
+.chg-row { display: grid; grid-template-columns: 52px 1fr 10px; gap: 8px; align-items: start; padding: 7px 8px; border: 1px solid #222832; border-radius: 6px; font-family: var(--display); font-size: 12.5px; line-height: 1.35; color: #e7ecf3; width: 100%; }
+.chg-row:hover { border-color: #3a4452; }
+.chg-row.none { grid-template-columns: 1fr; color: #6f7a8a; }
+.chg-row .area { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; padding: 2px 0; text-align: center; border-radius: 3px; }
+.area.code { background: #2a2140; color: #c5a3ff; } .area.data { background: #12302c; color: #6fd3b8; } .area.config { background: #33280f; color: #f0b35a; }
+.chg-row .go { color: #6f7a8a; }
+.rbody { flex: 1; min-height: 0; padding: 0 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+.archsum { font-size: 11px; color: #8b96a6; } .archsum b { color: #e7ecf3; font-weight: 500; font-size: 13px; }
+.arch { display: grid; gap: 2px; }
+.agroup { display: flex; justify-content: space-between; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #6f7a8a; padding: 6px 2px 2px; }
+.arow { display: grid; grid-template-columns: 70px 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; border: 1px solid #222832; border-radius: 5px; width: 100%; }
+.arow.in { margin-left: 12px; width: calc(100% - 12px); }
+.arow:hover { border-color: #3a4452; }
+.arow.changed { border-color: #5a4520; background: #1c160c; }
+.arow .an { color: #e7ecf3; font-size: 11.5px; } .arow .ad { color: #8b96a6; font-size: 10.5px; } .arow .ap { color: #8b96a6; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.hint2 { font-family: var(--display); font-size: 11.5px; color: #6f7a8a; line-height: 1.4; }
+.mixbar { display: flex; height: 14px; border-radius: 3px; overflow: hidden; gap: 2px; }
+.mixlg { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10.5px; color: #cfd6e0; }
+.mixlg span { display: inline-flex; align-items: center; gap: 5px; }
+.srcs { display: grid; gap: 6px; }
+.src { border: 1px solid #222832; border-radius: 6px; padding: 8px 10px; display: grid; gap: 6px; }
+.src .sh { display: flex; align-items: center; gap: 6px; } .src .sh b { color: #e7ecf3; font-weight: 500; flex: 1; font-family: var(--display); font-size: 12.5px; } .src .sh span { color: #8b96a6; }
+.kv2 { display: grid; grid-template-columns: 64px 1fr; gap: 2px 8px; font-size: 10.5px; } .kv2 span:nth-child(odd) { color: #6f7a8a; } .kv2 span:nth-child(even) { color: #cfd6e0; overflow-wrap: anywhere; }
+.ex { font-family: var(--display); font-size: 11.5px; line-height: 1.4; color: #8b96a6; border-left: 2px solid #2c3440; padding-left: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vbs td { padding-left: 0; } .vbs td:not(:first-child) { text-align: right; }
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <div class="eyebrow">iPhoneInference · Train phase · design studies</div>
+    <h1>Bench Train</h1>
+    <p class="lede">Three layouts for the Train phase. The app connects to one GitHub repo that holds the training code and the Modal pipeline. You never edit code in the app: you pick a branch or pull request, run it on Modal, and watch what training does.</p>
+    <div class="flow"><span>branch / PR</span><b>→</b><span>commit SHA</span><b>→</b><span>Modal GPU clones it</span><b>→</b><span>metrics, logs, samples</span><b>→</b><span>GGUF checkpoint</span><b>→</b><span>run on iPad or Modal</span></div>
+    <p class="note">All three use the Study C instrument look and keep the same top bar, with a Train / Inference switch. The repo, PRs, runs, losses and samples are made-up examples for the mockups. The model is a 13.8M-parameter Llama-style network (6 layers, width 384, vocab 8,192, context 256) trained on TinyStories. Tap PRs, runs and tabs: the mockups respond.</p>
+    <nav class="toc">
+      <a href="#board">A · Run Board</a>
+      <a href="#compare">B · Compare</a>
+      <a href="#pipeline">C · Pipeline</a>
+      <a href="#versus">Side by side</a>
+      <a href="#recommendation">Recommendation</a>
+    </nav>
+  </header>
+
+  <section class="study" id="board">
+    <div class="study-head">
+      <div class="tag">Study A</div>
+      <h2>Run Board</h2>
+      <p class="prose">Built to answer two questions: how is the current run doing, and how did a finished run perform and why. Pick a PR or branch on the left. The center shows <b>what happened</b>: a one-line verdict, the loss against the main baseline, and tabs for the exact model code at the run's commit, samples, gradients, logs and the diff. The right column shows <b>what went in</b>: the changes from main first, then the architecture, the data mix with every source traced to a Volume file, and the outputs.</p>
+    </div>
+    <div class="frame" data-mock="A"></div>
+    <div class="analysis">
+      <div><h3>How it explains a run</h3><p>Every run is read against main. The verdict states the result, "Differs from main" lists the causes (code, data, config), and each cause opens its evidence: highlighted lines in the model code, the data mix, or the diff. Try #15 (data mix), #12 (code) and exp/high-lr (failure).</p></div>
+      <div><h3>Good for</h3><ul><li>Seeing the exact code that ran, with lines that differ from main highlighted.</li><li>Knowing what data a run saw: sources, weights, tokens and epochs seen, shard hashes, and val loss per source.</li><li>Watching a live run: verdict, tiles, curve, logs and samples all update.</li></ul></div>
+      <div><h3>Costs</h3><ul><li>Comparing more than one PR against main means switching back and forth.</li><li>The verdict sentence has to be generated from metrics; it needs care to stay accurate.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="study" id="compare">
+    <div class="study-head">
+      <div class="tag">Study B</div>
+      <h2>Compare</h2>
+      <p class="prose">Experiments are judged against each other, so the center becomes an overlay chart. Tick up to four runs on the left. The center plots validation loss against tokens seen, then lists only the config keys and files that differ. The right column puts generated samples from two runs side by side at the same step.</p>
+    </div>
+    <div class="frame" data-mock="B"></div>
+    <div class="analysis">
+      <div><h3>What you see</h3><p>The answer to "should this PR merge?": how much lower the loss is at equal tokens, what changed to get there, and whether the text reads better.</p></div>
+      <div><h3>Good for</h3><ul><li>Deciding between experiments, not watching one.</li><li>Fair comparison: the x-axis is tokens seen, so runs with different batch sizes line up.</li><li>Catching config drift: a run that differs in more than the PR claims shows extra keys.</li></ul></div>
+      <div><h3>Costs</h3><ul><li>Weak for live monitoring and debugging a single run.</li><li>No logs or gradient view; you'd need A or C next to it.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="study" id="pipeline">
+    <div class="study-head">
+      <div class="tag">Study C</div>
+      <h2>Pipeline</h2>
+      <p class="prose">A run as a sequence of stages, like a CI job: clone the commit, load data, train, evaluate, export GGUF, ready. The current stage expands, logs stream underneath, and the right column browses the repo at that exact commit next to the Modal Volume, with a preview of the dataset as the model's tokenizer splits it.</p>
+    </div>
+    <div class="frame" data-mock="C"></div>
+    <div class="analysis">
+      <div><h3>What you see</h3><p>Where a run is and what it ran on: the exact code, the exact data, and the files it produced. The last stage hands the checkpoint to the Inference phase, on the iPad or on Modal.</p></div>
+      <div><h3>Good for</h3><ul><li>Trust and reproducibility. Every number traces to a commit and a dataset file.</li><li>Debugging failures that happen before training, such as clone, install or data.</li><li>Seeing the data, which the other studies hide.</li></ul></div>
+      <div><h3>Costs</h3><ul><li>The loss curve is reduced to a strip.</li><li>Feels like a CI dashboard; less insight into what the model is learning.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="stack" id="versus">
+    <h2>Side by side</h2>
+    <div class="tbl"><table class="cmp">
+      <thead><tr><th>Question</th><th>A · Run Board</th><th>B · Compare</th><th>C · Pipeline</th></tr></thead>
+      <tbody>
+        <tr><td>Is my running PR healthy?</td><td>Best: live tiles, curve, gradient heatmap</td><td>Weak</td><td>Stage + log stream</td></tr>
+        <tr><td>Should this PR merge?</td><td>Against main only</td><td>Best: overlay, config diff, samples</td><td>No</td></tr>
+        <tr><td>What code and data did it use?</td><td>Diff tab</td><td>Changed files list</td><td>Best: repo tree at the SHA + Volume</td></tr>
+        <tr><td>What is the model learning?</td><td>Samples tab over time</td><td>Samples side by side</td><td>Not shown</td></tr>
+        <tr><td>Why did a run fail?</td><td>Heatmap + logs</td><td>No</td><td>Stage + logs</td></tr>
+        <tr><td>Handoff to Inference</td><td>Checkpoint list</td><td>No</td><td>Final stage, iPad or Modal</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="stack" id="recommendation">
+    <h2>Recommendation</h2>
+    <div class="rec">
+      <div class="stack prose">
+        <p>Build <b>A as the Train screen</b>, and fold the best parts of B and C into it as modes rather than separate screens.</p>
+        <ol>
+          <li><b>A is the default.</b> Center: verdict, loss vs main, and tabs for model code, samples, gradients, logs and diff. Right: what differs from main, then Model, Data mix and Outputs.</li>
+          <li><b>B becomes a "Compare" toggle on the chart.</b> Ticking extra runs in the left list overlays them and swaps the Diff tab for the config-diff table.</li>
+          <li><b>C's stage strip sits above the chart while a run is starting.</b> Clone, data and compile take the first minute or two; once training starts it collapses into the header.</li>
+          <li><b>C's full repo tree and token-level data preview</b> open from the Model code and Data mix views when you need more than the model file and the mix.</li>
+        </ol>
+      </div>
+      <div class="stack">
+        <h3>What this asks of the backend</h3>
+        <ul class="prose" style="font-size:15px">
+          <li><b>GitHub, read-only.</b> List PRs and branches, read files and diffs at a SHA. A fine-grained token with read access to one repo is enough, since the app never writes.</li>
+          <li><b>A runner deployed from the repo.</b> A Modal web endpoint with: start run (ref, config, GPU), list runs, stream metrics and logs, list checkpoints, download a file.</li>
+          <li><b>One Volume layout.</b> <code>datasets/…</code> and <code>runs/&lt;id&gt;/{metrics.jsonl, log.txt, samples.jsonl, ckpt/, model.gguf}</code>. The app only reads it.</li>
+          <li><b>Training code that logs what the UI shows:</b> loss, val loss per data source, tokens seen per source, tokens/s, learning rate, per-layer gradient norms, a sample every N steps, and the resolved config with each source's shard hash.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ---------------- example data ---------------- */
+const STEPS = 5000, TOK_PER_STEP = 16384;
+const REFS = [
+  { id: 'main', kind: 'branch', title: 'main', branch: 'main', sha: '4be1d07', author: 'JF', run: 'r-0139', status: 'done', color: '#9aa3b0', variant: 0, gpu: 'L4', mins: 11.4, valFinal: 1.742, at: 5000 },
+  { id: 'pr14', kind: 'pr', num: 14, title: 'RoPE theta 10k → 500k', branch: 'exp/rope-500k', sha: '9c41e2a', author: 'JF', run: 'r-0142', status: 'run', color: '#6fd3b8', variant: -0.025, gpu: 'L4', mins: 7.0, at: 3100, files: 1 },
+  { id: 'pr12', kind: 'pr', num: 12, title: 'SwiGLU MLP instead of GELU', branch: 'exp/swiglu', sha: '7a20f5b', author: 'JF', run: 'r-0137', status: 'done', color: '#7cc4f8', variant: -0.054, gpu: 'L4', mins: 12.1, valFinal: 1.688, at: 5000, files: 2 },
+  { id: 'hlr', kind: 'branch', title: 'exp/high-lr', branch: 'exp/high-lr', sha: '2d9e6aa', author: 'JF', run: 'r-0140', status: 'fail', color: '#ff8fa3', variant: -0.03, gpu: 'L4', mins: 7.2, at: 3140, diverge: 3140 },
+  { id: 'pr15', kind: 'pr', num: 15, title: 'Data mix: add Simple Wikipedia + instruct', branch: 'data/mix-wiki-instruct', sha: 'b57d0c3', author: 'JF', run: 'r-0143', status: 'done', color: '#f0b35a', variant: 0.03, gpu: 'L4', mins: 11.6, at: 5000, files: 2 },
+  { id: 'pr11', kind: 'pr', num: 11, title: 'BPE vocab 8k → 16k', branch: 'exp/vocab-16k', sha: 'e81c3d9', author: 'JF', status: 'none', color: '#c5a3ff', variant: 0, files: 3 },
+];
+
+/* data sources on the Volume, and the mix each ref's config asks for */
+const SOURCES = {
+  ts: { name: 'TinyStories', path: 'datasets/tinystories/train.bin', tokens: 471e6, color: '#6fd3b8', sha: 'a91f…3c02', prep: 'data/prepare_tinystories.py', example: 'Once upon a time, there was a little boy named Tim. Tim had a big, red ball. He loved to play with it every day.' },
+  wiki: { name: 'Simple English Wikipedia', path: 'datasets/simplewiki/train.bin', tokens: 152e6, color: '#7cc4f8', sha: '04be…91d7', prep: 'data/prepare_simplewiki.py', example: 'A volcano is a place where hot melted rock, called magma, comes up through the ground. When it reaches the surface it is called lava.' },
+  inst: { name: 'TinyStories-Instruct', path: 'datasets/tinystories-instruct/train.bin', tokens: 120e6, color: '#c5a3ff', sha: '7d3e…a810', prep: 'data/prepare_tinystories.py --instruct', example: 'Features: Dialogue. Words: jump, blue, kind. Summary: A frog learns to share. Story: Once upon a time, a little frog lived by a blue pond.' },
+};
+const MIX = { pr15: [['ts', .7], ['wiki', .2], ['inst', .1]] };
+const mixOf = ref => MIX[ref.id] || [['ts', 1]];
+const VAL_BY_SOURCE = { pr15: { ts: 1.771, wiki: 2.94, inst: 1.62 }, main: { ts: 1.742, wiki: 4.31, inst: 1.98 } };
+
+/* train/model.py at each ref's SHA (the exact code the run used) */
+function modelPy(ref) {
+  const swiglu = ref.id === 'pr12', theta = ref.id === 'pr14' ? '500_000.0' : '10_000.0', vocab = ref.id === 'pr11' ? 16384 : 8192;
+  const mlp = swiglu ? [
+    'class MLP(nn.Module):',
+    '    def __init__(self, cfg):',
+    '        super().__init__()',
+    '        hidden = int(8 * cfg.n_embd / 3)  # same params as 4x GELU',
+    '        self.gate = nn.Linear(cfg.n_embd, hidden, bias=False)',
+    '        self.up = nn.Linear(cfg.n_embd, hidden, bias=False)',
+    '        self.down = nn.Linear(hidden, cfg.n_embd, bias=False)',
+    '',
+    '    def forward(self, x):',
+    '        return self.down(F.silu(self.gate(x)) * self.up(x))',
+  ] : [
+    'class MLP(nn.Module):',
+    '    def __init__(self, cfg):',
+    '        super().__init__()',
+    '        self.fc = nn.Linear(cfg.n_embd, 4 * cfg.n_embd, bias=False)',
+    '        self.proj = nn.Linear(4 * cfg.n_embd, cfg.n_embd, bias=False)',
+    '',
+    '    def forward(self, x):',
+    '        return self.proj(F.gelu(self.fc(x)))',
+  ];
+  return [
+    'import torch',
+    'import torch.nn as nn',
+    'import torch.nn.functional as F',
+    'from dataclasses import dataclass',
+    '',
+    '@dataclass',
+    'class Config:',
+    `    vocab_size: int = ${vocab}`,
+    '    n_layer: int = 6',
+    '    n_head: int = 6',
+    '    n_embd: int = 384',
+    '    block_size: int = 256',
+    `    rope_theta: float = ${theta}`,
+    '    dropout: float = 0.0',
+    '',
+    'class RMSNorm(nn.Module):',
+    '    def __init__(self, dim, eps=1e-6):',
+    '        super().__init__()',
+    '        self.eps = eps',
+    '        self.weight = nn.Parameter(torch.ones(dim))',
+    '',
+    '    def forward(self, x):',
+    '        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps) * self.weight',
+    '',
+    'class Attention(nn.Module):',
+    '    def __init__(self, cfg):',
+    '        super().__init__()',
+    '        self.n_head = cfg.n_head',
+    '        self.qkv = nn.Linear(cfg.n_embd, 3 * cfg.n_embd, bias=False)',
+    '        self.out = nn.Linear(cfg.n_embd, cfg.n_embd, bias=False)',
+    '',
+    '    def forward(self, x, rope):',
+    '        B, T, C = x.shape',
+    '        q, k, v = self.qkv(x).view(B, T, 3, self.n_head, -1).unbind(2)',
+    '        q, k = apply_rope(q, rope), apply_rope(k, rope)',
+    '        y = F.scaled_dot_product_attention(q.transpose(1, 2), k.transpose(1, 2),',
+    '                                           v.transpose(1, 2), is_causal=True)',
+    '        return self.out(y.transpose(1, 2).reshape(B, T, C))',
+    '',
+    ...mlp,
+    '',
+    'class Block(nn.Module):',
+    '    def __init__(self, cfg):',
+    '        super().__init__()',
+    '        self.attn_norm = RMSNorm(cfg.n_embd)',
+    '        self.attn = Attention(cfg)',
+    '        self.ffn_norm = RMSNorm(cfg.n_embd)',
+    '        self.mlp = MLP(cfg)',
+    '',
+    '    def forward(self, x, rope):',
+    '        x = x + self.attn(self.attn_norm(x), rope)',
+    '        return x + self.mlp(self.ffn_norm(x))',
+    '',
+    'class GPT(nn.Module):',
+    '    def __init__(self, cfg):',
+    '        super().__init__()',
+    '        self.tok_embd = nn.Embedding(cfg.vocab_size, cfg.n_embd)',
+    '        self.blocks = nn.ModuleList(Block(cfg) for _ in range(cfg.n_layer))',
+    '        self.norm = RMSNorm(cfg.n_embd)',
+    '        self.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False)',
+    '        self.lm_head.weight = self.tok_embd.weight  # tied',
+    '        self.rope = rope_table(cfg.block_size, cfg.n_embd // cfg.n_head, cfg.rope_theta)',
+  ];
+}
+function configToml(ref) {
+  const lr = ref.id === 'hlr' ? '3e-3' : '6e-4', tok = ref.id === 'pr11' ? 'bpe-16k' : 'bpe-8k';
+  return [
+    '[data]',
+    `tokenizer = "${tok}"`,
+    '',
+    ...mixOf(ref).flatMap(([k, w]) => ['[[data.sources]]', `path = "${SOURCES[k].path}"`, `weight = ${w}`, '']),
+    '[train]',
+    'steps = 5000',
+    'batch_size = 64',
+    'block_size = 256',
+    'eval_every = 250',
+    'sample_every = 500',
+    '',
+    '[optim]',
+    `lr = ${lr}`,
+    'warmup_steps = 200',
+    'weight_decay = 0.1',
+  ];
+}
+const byId = id => REFS.find(r => r.id === id);
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function curve(ref, val) {
+  const r = rng(ref.sha.charCodeAt(0) * 31 + (val ? 7 : 1)), pts = [];
+  const end = ref.at || 0;
+  for (let s = 0; s <= end; s += val ? 250 : 50) {
+    let L = 1.62 + 7.4 * Math.exp(-s / 210) + 1.05 * Math.exp(-s / 1700) + ref.variant * Math.min(1, s / 1500);
+    if (val) L += 0.012; else L += (r() - .5) * .07 * Math.max(.3, 1 - s / 5000);
+    if (ref.diverge && s > ref.diverge - 400) L += Math.pow((s - (ref.diverge - 400)) / 400, 3) * 2.2;
+    pts.push([s, L]);
+  }
+  return pts;
+}
+const lastLoss = ref => { const c = curve(ref, false); return c.length ? c[c.length - 1][1] : null; };
+const lastVal = ref => { const c = curve(ref, true); return c.length ? c[c.length - 1][1] : null; };
+const fmt = (v, d = 2) => v.toFixed(d);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function lossChart(series, { w = 560, h = 220, xMax = STEPS, yMin = 1.4, yMax = 4.4, tokens = false } = {}) {
+  const P = { l: 34, r: 10, t: 8, b: 20 }, iw = w - P.l - P.r, ih = h - P.t - P.b;
+  const x = s => P.l + s / xMax * iw, y = v => P.t + (1 - (Math.min(yMax, Math.max(yMin, v)) - yMin) / (yMax - yMin)) * ih;
+  let g = '';
+  for (let v = Math.ceil(yMin * 2) / 2; v <= yMax; v += .5) g += `<line x1="${P.l}" x2="${w - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#1b2129"/><text x="${P.l - 6}" y="${y(v) + 3}" fill="#6f7a8a" font-size="9" text-anchor="end">${v.toFixed(1)}</text>`;
+  for (let s = 0; s <= xMax; s += 1000) g += `<text x="${x(s)}" y="${h - 5}" fill="#6f7a8a" font-size="9" text-anchor="middle">${tokens ? Math.round(s * TOK_PER_STEP / 1e6) + 'M' : s === 0 ? '0' : s / 1000 + 'k'}</text>`;
+  const lines = series.map(sr => {
+    const d = sr.pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join('');
+    const end = sr.pts[sr.pts.length - 1];
+    return `<path d="${d}" fill="none" stroke="${sr.color}" stroke-width="${sr.width || 1.5}" ${sr.dash ? 'stroke-dasharray="4 3"' : ''} opacity="${sr.opacity || 1}"/>` +
+      (sr.dot && end ? `<circle cx="${x(end[0])}" cy="${y(end[1])}" r="3" fill="${sr.color}"/>` : '') +
+      (sr.mark ? `<line x1="${x(sr.mark)}" x2="${x(sr.mark)}" y1="${P.t}" y2="${h - P.b}" stroke="#ff8fa3" stroke-dasharray="2 3"/><text x="${x(sr.mark) - 4}" y="${P.t + 10}" fill="#ff8fa3" font-size="9" text-anchor="end">diverged · step ${sr.mark.toLocaleString()}</text>` : '');
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Loss curve">${g}${lines}</svg>`;
+}
+
+const DIFFS = {
+  pr14: [['file', 'train/model.py'], ['hunk', '@@ -14,7 +14,7 @@ class Config:'], ['', '    n_head: int = 6'], ['', '    block_size: int = 256'], ['del', '-   rope_theta: float = 10_000.0'], ['add', '+   rope_theta: float = 500_000.0'], ['', '    dropout: float = 0.0']],
+  pr12: [['file', 'train/model.py'], ['hunk', '@@ -61,12 +61,14 @@ class MLP(nn.Module):'], ['', '    def __init__(self, cfg):'], ['', '        super().__init__()'], ['del', '-       self.fc = nn.Linear(cfg.n_embd, 4 * cfg.n_embd, bias=False)'], ['del', '-       self.proj = nn.Linear(4 * cfg.n_embd, cfg.n_embd, bias=False)'], ['add', '+       hidden = int(8 * cfg.n_embd / 3)  # same params as 4x GELU'], ['add', '+       self.gate = nn.Linear(cfg.n_embd, hidden, bias=False)'], ['add', '+       self.up = nn.Linear(cfg.n_embd, hidden, bias=False)'], ['add', '+       self.down = nn.Linear(hidden, cfg.n_embd, bias=False)'], ['', ''], ['', '    def forward(self, x):'], ['del', '-       return self.proj(F.gelu(self.fc(x)))'], ['add', '+       return self.down(F.silu(self.gate(x)) * self.up(x))'], ['file', 'export/gguf.py'], ['hunk', '@@ -40,3 +40,4 @@ def mlp_tensors(i, mlp):'], ['del', '-   yield f"blk.{i}.ffn_up.weight", mlp.fc.weight'], ['add', '+   yield f"blk.{i}.ffn_gate.weight", mlp.gate.weight'], ['add', '+   yield f"blk.{i}.ffn_up.weight", mlp.up.weight']],
+  hlr: [['file', 'configs/tiny.toml'], ['hunk', '@@ -8,4 +8,4 @@ [optim]'], ['del', '-lr = 6e-4'], ['add', '+lr = 3e-3'], ['', 'warmup_steps = 200'], ['', 'weight_decay = 0.1']],
+  pr11: [['file', 'configs/tiny.toml'], ['hunk', '@@ -3,3 +3,3 @@ [data]'], ['del', '-tokenizer = "bpe-8k"'], ['add', '+tokenizer = "bpe-16k"'], ['file', 'data/tokenize.py'], ['hunk', '@@ -22,1 +22,1 @@'], ['del', '-VOCAB = 8192'], ['add', '+VOCAB = 16384'], ['file', 'train/model.py'], ['hunk', '@@ -10,1 +10,1 @@ class Config:'], ['del', '-   vocab_size: int = 8192'], ['add', '+   vocab_size: int = 16384']],
+  pr15: [['file', 'configs/tiny.toml'], ['hunk', '@@ -3,4 +3,12 @@ [data]'], ['', 'tokenizer = "bpe-8k"'], ['', ''], ['', '[[data.sources]]'], ['', 'path = "datasets/tinystories/train.bin"'], ['del', '-weight = 1.0'], ['add', '+weight = 0.7'], ['add', '+'], ['add', '+[[data.sources]]'], ['add', '+path = "datasets/simplewiki/train.bin"'], ['add', '+weight = 0.2'], ['add', '+'], ['add', '+[[data.sources]]'], ['add', '+path = "datasets/tinystories-instruct/train.bin"'], ['add', '+weight = 0.1'], ['file', 'data/prepare_simplewiki.py'], ['hunk', 'new file · 84 lines'], ['add', '+def main(dump="simplewiki-20260901.xml.bz2", out="/vol/datasets/simplewiki"):'], ['add', '+    # strip markup, drop pages under 200 chars, tokenize with bpe-8k']],
+  main: [['hunk', 'main is the baseline: no diff.']],
+};
+const diffHTML = id => `<div class="code">${(DIFFS[id] || DIFFS.main).map(([k, t]) => `<div class="${k}">${esc(t) || ' '}</div>`).join('')}</div>`;
+
+function logsHTML(ref) {
+  const L = [
+    ['dim', `[modal] container started · ${ref.gpu || 'L4'} · bench-runner.train`],
+    ['', `git clone github.com/jakob/bench-models @ ${ref.sha} (${ref.branch})`],
+    ['', 'data  /vol/datasets/tinystories/train.bin · 471M tokens · uint16'],
+    ['', 'model 13.8M params · 6 layers · d=384 · ctx 256 · vocab 8192'],
+  ];
+  for (let s = 500; s <= Math.min(ref.at || 0, 5000); s += 500) {
+    const l = curve(ref, false).find(p => p[0] === s);
+    L.push(['', `step ${String(s).padStart(5)} | loss ${fmt(l[1], 3)} | ${ref.diverge && s > 2600 ? '118k' : '121k'} tok/s | lr ${s < 200 ? '…' : '6.0e-4'}`]);
+    if (s % 1000 === 0) L.push(['ev', `eval ${String(s).padStart(5)} | val ${fmt(curve(ref, true).find(p => p[0] === s)[1], 3)} | ckpt runs/${ref.run}/ckpt/step-${s}.pt`]);
+  }
+  if (ref.diverge) { L.push(['er', `step  3140 | loss nan | grad norm inf in blk.5.attn`]); L.push(['er', 'run stopped: non-finite loss (stop_on_nan = true)']); }
+  if (ref.status === 'run') L.push(['dim', '…streaming']);
+  return `<div class="log">${L.map(([k, t]) => `<div class="${k}">${esc(t)}</div>`).join('')}</div>`;
+}
+
+const SAMPLES = [
+  [0, 'Once upon a time', ' pmQ ofx thethe ,, a dull. ran ran ofof 9 the'],
+  [500, 'Once upon a time', ' the the girl was a big. She was happy dog and the sun. He said go.'],
+  [1500, 'Once upon a time', ', there was a little girl named Mia. She liked to play with her ball in the park. One day she saw a big tree.'],
+  [3000, 'Once upon a time', ', there was a little girl named Mia. She loved her red ball. One day, Mia saw a small bird with a hurt wing. She picked it up gently.'],
+];
+const samplesHTML = (ref, upto) => `<div class="samples">${SAMPLES.filter(s => s[0] <= (upto ?? ref.at ?? 0)).map(([s, p, t]) => `<div class="sample"><span class="s">step ${s.toLocaleString()}</span><p><i>${esc(p)}</i>${esc(t)}</p></div>`).join('') || '<div class="sample"><span class="s">—</span><p>No samples yet. The first one is written at step 0 once training starts.</p></div>'}</div>`;
+
+const LAYERS = ['tok_embd', ...[0, 1, 2, 3, 4, 5].flatMap(i => [`L${i} attn`, `L${i} mlp`]), 'lm_head'];
+function gradColor(v) { // v ~ 0..1+, log-ish
+  const f = Math.max(0, Math.min(1, v));
+  const a = [24, 34, 46], b = [47, 158, 145], c = [240, 179, 90], d = [255, 120, 140];
+  const [x, y, u] = f < .45 ? [a, b, f / .45] : f < .8 ? [b, c, (f - .45) / .35] : [c, d, (f - .8) / .2];
+  return `rgb(${x.map((v, k) => Math.round(v + (y[k] - v) * u)).join(',')})`;
+}
+function heatHTML(ref) {
+  const cols = 50, r = rng(ref.sha.charCodeAt(1) * 13);
+  const rows = LAYERS.map((name, li) => {
+    const cells = [];
+    for (let c = 0; c < cols; c++) {
+      const s = c * 100;
+      if (s > (ref.at || 0)) { cells.push('<i style="background:#12161b"></i>'); continue; }
+      let v = .35 + .5 * Math.exp(-s / 600) + (li === 0 || li === LAYERS.length - 1 ? .12 : 0) + (r() - .5) * .08;
+      if (ref.diverge && li === 11 && s > 2500) v += (s - 2500) / 600;
+      if (ref.diverge && s > 2900) v += (s - 2900) / 300;
+      cells.push(`<i style="background:${gradColor(v)}"></i>`);
+    }
+    return `<div class="hr"><span class="nm">${name}</span><span class="cells">${cells.join('')}</span></div>`;
+  }).join('');
+  return `<div class="hm">${rows}</div><div class="hax"><span></span><div><span>0</span><span>step</span><span>5k</span></div></div>`;
+}
+
+const statusChip = ref => ({ run: `<span class="st run">${Math.round(ref.at / STEPS * 100)}%</span>`, done: `<span class="st done">val ${fmt(lastVal(ref))}</span>`, fail: '<span class="st fail">failed</span>', none: '<span class="st none">not run</span>' })[ref.status];
+const refTitle = ref => ref.kind === 'pr' ? `#${ref.num} ${esc(ref.title)}` : esc(ref.title);
+const statusBar = () => `<div class="sbar"><span>9:41  Sun 11 Oct</span><span>100%<span class="batt"></span></span></div>`;
+const topBar = (extra = '') => `<div class="tb"><div class="phase"><span class="on">Train</span><span>Inference</span></div>
+  <div class="grp"><span class="lbl">Repo</span><span class="val">jakob/bench-models ⌄</span></div>
+  <div class="grp"><span class="lbl">Modal</span><span class="val"><span class="ok">●</span> bench-runner</span></div>
+  <div class="grp"><span class="lbl">Volume</span><span class="val">bench-data · 3.1 GB</span></div>${extra}<span class="sp"></span></div>`;
+
+/* ---------------- Study A ---------------- */
+function changesOf(ref) {
+  return ({
+    main: [],
+    pr14: [['Code', 'rope_theta 10,000 → 500,000', 'model', 'Config']],
+    pr12: [['Code', 'MLP: GELU 4× → SwiGLU 8/3×, same parameter count', 'model', 'MLP'], ['Code', 'export/gguf.py writes ffn_gate / ffn_up', 'diff']],
+    hlr: [['Config', 'lr 6e-4 → 3e-3 (5× main)', 'diff']],
+    pr15: [['Data', 'TinyStories 100% → 70%, + Simple Wikipedia 20%, + TinyStories-Instruct 10%', 'data'], ['Code', 'new data/prepare_simplewiki.py', 'diff']],
+    pr11: [['Config', 'tokenizer bpe-8k → bpe-16k', 'data'], ['Code', 'vocab_size 8,192 → 16,384 (+3.1M parameters)', 'model', 'Config']],
+  })[ref.id] || [];
+}
+function verdictOf(ref) {
+  const main = byId('main'), v = lastVal(ref);
+  const base = v ? curve(main, true).find(p => p[0] === Math.floor((ref.at || 0) / 250) * 250) : null;
+  const d = v && base ? v - base[1] : 0, ds = (d > 0 ? '+' : '−') + fmt(Math.abs(d), 3);
+  return ({
+    main: `Baseline. Finished 5,000 steps at val ${fmt(v, 3)} in ${ref.mins} min on an ${ref.gpu}.`,
+    pr14: `Running, step ${ref.at.toLocaleString()} of 5,000. Val is ${ds} against main at the same step. About 4 min left.`,
+    pr12: `Finished. Val ${fmt(v, 3)}, ${ds} against main at equal tokens and equal parameters. Gradients stayed even, so the gain comes from the MLP change itself.`,
+    hlr: `Failed at step 3,140: the loss became NaN. L5 attention gradients started climbing about 600 steps earlier. This branch uses 5× main's learning rate.`,
+    pr15: `Finished. TinyStories val is ${ds} against main, but Simple Wikipedia val falls from 4.31 to 2.94. The mix traded a little story fit for much broader text.`,
+    pr11: 'Not run yet. Run it to compare against main.',
+  })[ref.id];
+}
+function archRows(ref) {
+  const swiglu = ref.id === 'pr12', vocab = ref.id === 'pr11' ? 16384 : 8192, theta = ref.id === 'pr14' ? '500k' : '10k';
+  const M = n => (n / 1e6).toFixed(2) + 'M';
+  return [
+    { name: 'tok_embd', detail: `${vocab.toLocaleString()} × 384`, params: M(vocab * 384), cls: 'GPT', changed: ref.id === 'pr11' },
+    { group: '6 × Block', params: M(6 * 1770240) },
+    { name: 'attn_norm', detail: 'RMSNorm', params: '384', cls: 'RMSNorm', indent: 1 },
+    { name: 'attn', detail: `qkv 384→1152 · out 384→384 · RoPE θ ${theta}`, params: M(589824), cls: 'Attention', indent: 1, changed: ref.id === 'pr14' },
+    { name: 'ffn_norm', detail: 'RMSNorm', params: '384', cls: 'RMSNorm', indent: 1 },
+    { name: 'mlp', detail: swiglu ? 'SwiGLU 384→1024 (gate, up) →384' : 'GELU 384→1536→384', params: M(1179648), cls: 'MLP', indent: 1, changed: swiglu },
+    { name: 'norm', detail: 'RMSNorm', params: '384', cls: 'GPT' },
+    { name: 'lm_head', detail: 'tied to tok_embd', params: '0', cls: 'GPT' },
+  ];
+}
+function codeView(lines, baseLines) {
+  const base = new Set(baseLines);
+  return `<div class="code numbered">${lines.map((l, i) => `<div class="${base.has(l) ? '' : 'chg'}" data-line="${i}"><span class="ln">${i + 1}</span>${esc(l) || ' '}</div>`).join('')}</div>`;
+}
+function mockA(root) {
+  const st = { ref: 'pr15', tab: 'code', file: 'model', side: 'data', list: 'all' };
+  root.innerHTML = `<div class="screen">${statusBar()}${topBar('<button class="btn pri">Run on Modal ▶</button>')}
+    <div class="cols" style="grid-template-columns:250px minmax(0,1fr) 350px">
+      <div class="col"><div class="ph"><span>Branches &amp; PRs</span><span class="seg"><button data-list="prs">PRs</button><button data-list="all">All</button></span></div><div class="refs scroll" data-refs></div></div>
+      <div class="col" data-center></div>
+      <div class="col" data-right></div>
+    </div></div>`;
+  const $ = s => root.querySelector(s);
+  function renderList() {
+    root.querySelectorAll('[data-list]').forEach(b => b.classList.toggle('on', b.dataset.list === st.list));
+    $('[data-refs]').innerHTML = REFS.filter(r => st.list === 'all' || r.kind === 'pr' || r.id === 'main').map(r => `<button class="ref${r.id === st.ref ? ' sel' : ''}" data-ref="${r.id}"><span class="t">${refTitle(r)}</span>${statusChip(r)}<span class="m"><span>${esc(r.branch)}</span><span>${r.sha}</span>${r.run ? `<span>${r.run}</span>` : ''}</span></button>`).join('');
+  }
+  function renderCenter() {
+    const ref = byId(st.ref), main = byId('main'), loss = lastLoss(ref);
+    const tokens = (ref.at || 0) * TOK_PER_STEP;
+    $('[data-center]').innerHTML = `<div class="runhead"><span class="t">${refTitle(ref)}</span><span class="m"><span><b>${esc(ref.branch)}</b> @ ${ref.sha}</span>${ref.run ? `<span>run <b>${ref.run}</b></span><span>${ref.gpu} · ${ref.status === 'run' ? 'running' : ref.mins + ' min'}</span>` : '<span>never run</span>'}</span>
+        <p class="verdict-line ${ref.status}">${verdictOf(ref)}</p></div>
+      <div class="tiles"><div class="tile"><span>Step</span><b>${(ref.at || 0).toLocaleString()} / 5,000</b></div><div class="tile"><span>Train loss</span><b>${loss ? (ref.diverge ? 'nan' : fmt(loss, 3)) : '—'}</b></div>
+        <div class="tile"><span>Val loss</span><b>${lastVal(ref) && !ref.diverge ? fmt(lastVal(ref), 3) : '—'}</b></div>
+        <div class="tile"><span>Tokens</span><b>${(tokens / 1e6).toFixed(1)}M</b></div><div class="tile"><span>Tok/s</span><b>${ref.run ? (ref.id === 'pr15' ? '119k' : '121k') : '—'}</b></div></div>
+      <div class="chart">${lossChart([
+        { pts: curve(main, true), color: '#9aa3b0', dash: true, width: 1.2 },
+        ...(ref.id === 'main' ? [{ pts: curve(main, false), color: '#9aa3b0', opacity: .35, width: 1 }] : [{ pts: curve(ref, false), color: ref.color, opacity: .35, width: 1 }, { pts: curve(ref, true), color: ref.color, width: 2, dot: true, mark: ref.diverge }])
+      ], { w: 560, h: 180 })}</div>
+      <div class="legend"><span><i class="swatch" style="background:${ref.color}"></i>${ref.id === 'main' ? 'main' : 'this run'}: val (solid), train (faint)</span><span><i class="swatch" style="background:#9aa3b0"></i>main baseline, val</span></div>
+      <div class="tabs">${[['code', 'Model code'], ['samples', 'Samples'], ['grads', 'Gradients'], ['logs', 'Logs'], ['diff', 'Diff vs main']].map(([k, l]) => `<button data-tab="${k}" class="${st.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="pane scroll" data-pane></div>`;
+    renderPane();
+  }
+  function renderPane() {
+    const ref = byId(st.ref), main = byId('main');
+    let html;
+    if (st.tab === 'code') {
+      const lines = st.file === 'model' ? modelPy(ref) : configToml(ref), base = st.file === 'model' ? modelPy(main) : configToml(main);
+      html = `<div class="filebar"><span class="seg"><button data-file="model" class="${st.file === 'model' ? 'on' : ''}">train/model.py</button><button data-file="config" class="${st.file === 'config' ? 'on' : ''}">configs/tiny.toml</button></span><span>@ ${ref.sha} · read-only · <span class="chgkey">▌</span> differs from main</span></div>${codeView(lines, base)}`;
+    } else if (st.tab === 'samples') html = samplesHTML(ref);
+    else if (st.tab === 'grads') html = `<div class="ph"><span>Gradient norm · layer × step</span></div>${heatHTML(ref)}<div class="obs">${ref.diverge ? '<b>L5 attn heats up 600 steps before the loss explodes.</b> The rest of the model follows at step 2,900.' : ref.status === 'none' ? '<b>No run yet.</b>' : '<b>Healthy.</b> Gradients settle after warmup and stay even across layers.'}</div>`;
+    else if (st.tab === 'logs') html = logsHTML(ref);
+    else html = diffHTML(ref.id);
+    $('[data-pane]').innerHTML = html;
+  }
+  function renderRight() {
+    const ref = byId(st.ref), ch = changesOf(ref);
+    const changes = ch.length ? ch.map(([area, text, tab, cls]) => `<button class="chg-row" data-goto="${tab}" data-cls="${cls || ''}"><span class="area ${area.toLowerCase()}">${area}</span><span>${esc(text)}</span><span class="go">›</span></button>`).join('') : '<div class="chg-row none"><span>This is the baseline every run is compared with.</span></div>';
+    let body = '';
+    if (st.side === 'model') {
+      const rows = archRows(ref);
+      body = `<div class="archsum"><b>${ref.id === 'pr11' ? '16.9M' : '13.8M'}</b> parameters · 6 layers · width 384 · 6 heads · context 256</div>
+        <div class="arch">${rows.map(r => r.group ? `<div class="agroup"><span>${r.group}</span><span>${r.params}</span></div>` : `<button class="arow${r.changed ? ' changed' : ''}${r.indent ? ' in' : ''}" data-jump="${r.cls}"><span class="an">${r.name}</span><span class="ad">${esc(r.detail)}</span><span class="ap">${r.params}</span></button>`).join('')}</div>
+        <p class="hint2">Read from train/model.py at ${ref.sha}. Tap a row to open its code.</p>`;
+    } else if (st.side === 'data') {
+      const mix = mixOf(ref), seen = (ref.at || 0) * TOK_PER_STEP, vbs = VAL_BY_SOURCE[ref.id];
+      body = `<div class="mixbar">${mix.map(([k, w]) => `<div style="flex:${w};background:${SOURCES[k].color}" title="${SOURCES[k].name} ${Math.round(w * 100)}%"></div>`).join('')}</div>
+        <div class="mixlg">${mix.map(([k, w]) => `<span><i class="swatch" style="background:${SOURCES[k].color}"></i>${SOURCES[k].name} ${Math.round(w * 100)}%</span>`).join('')}</div>
+        ${ref.id !== 'main' ? `<p class="hint2">${mix.length > 1 ? 'main uses TinyStories 100%.' : 'Same mix as main.'} Tokenizer ${ref.id === 'pr11' ? 'bpe-16k' : 'bpe-8k'}.</p>` : '<p class="hint2">Tokenizer bpe-8k.</p>'}
+        <div class="srcs">${mix.map(([k, w]) => { const s = SOURCES[k], used = seen * w; return `<div class="src"><div class="sh"><i class="swatch" style="background:${s.color}"></i><b>${s.name}</b><span>${Math.round(w * 100)}%</span></div>
+          <div class="kv2"><span>path</span><span>${s.path}</span><span>available</span><span>${(s.tokens / 1e6).toFixed(0)}M tokens</span><span>seen</span><span>${(used / 1e6).toFixed(1)}M · ${(used / s.tokens).toFixed(2)} epochs</span><span>shard</span><span>sha256 ${s.sha}</span><span>built by</span><span>${s.prep}</span></div>
+          <p class="ex">${esc(s.example)}</p></div>`; }).join('')}</div>
+        <div class="ph" style="padding-left:0;padding-right:0"><span>Val loss by source</span><span>vs main</span></div>
+        ${vbs ? `<table class="cfg vbs"><tbody>${Object.keys(SOURCES).map(k => `<tr><td>${SOURCES[k].name}</td><td>${fmt(vbs[k], 2)}</td><td class="${vbs[k] < VAL_BY_SOURCE.main[k] ? 'good' : vbs[k] > VAL_BY_SOURCE.main[k] ? 'bad' : ''}">${ref.id === 'main' ? '—' : (vbs[k] > VAL_BY_SOURCE.main[k] ? '+' : '−') + fmt(Math.abs(vbs[k] - VAL_BY_SOURCE.main[k]), 2)}</td></tr>`).join('')}</tbody></table>` : `<p class="hint2">${ref.status === 'none' ? 'Not run yet.' : 'This run only evaluated on TinyStories val.'}</p>`}`;
+    } else {
+      const ck = ref.at ? [1000, 2000, 3000, 4000, 5000].filter(s => s <= ref.at && !(ref.diverge && s > 3000)).reverse() : [];
+      body = `<div class="ckpts" style="padding:0">${ck.map((s, i) => `<div class="ck"><span class="n">step-${s}${i === 0 && ref.status === 'done' ? ' · final' : ''}</span><span class="d">val ${fmt(curve(ref, true).find(p => p[0] === s)[1], 3)} · GGUF F16 · 27.6 MB</span><span class="a"><button class="mini pri">iPad ↓</button><button class="mini">Modal ▶</button></span></div>`).join('') || '<div class="ck"><span class="d">Checkpoints appear every 1,000 steps.</span></div>'}</div>
+        ${ref.run ? `<div class="ph" style="padding-left:0;padding-right:0"><span>runs/${ref.run}/ on bench-data</span></div><div class="tree" style="padding:0"><div class="f">metrics.jsonl <small>188 KB</small></div><div class="f">log.txt <small>41 KB</small></div><div class="f">samples.jsonl <small>6 KB</small></div><div class="f">config.resolved.toml <small>1 KB</small></div><div class="f">ckpt/ <small>${ck.length} files</small></div>${ref.status === 'done' ? '<div class="f">model.gguf <small>27.6 MB</small></div>' : ''}</div>` : ''}`;
+    }
+    $('[data-right]').innerHTML = `<div class="ph"><span>Differs from main</span><span>${ch.length || ''}</span></div><div class="chgs">${changes}</div>
+      <div class="ph"><span class="seg">${[['model', 'Model'], ['data', 'Data mix'], ['out', 'Outputs']].map(([k, l]) => `<button data-side="${k}" class="${st.side === k ? 'on' : ''}">${l}</button>`).join('')}</span></div>
+      <div class="rbody scroll">${body}</div>`;
+  }
+  function jumpTo(cls) {
+    st.tab = 'code'; st.file = 'model'; renderCenter();
+    const lines = modelPy(byId(st.ref)), i = lines.findIndex(l => l.startsWith(cls === 'Config' ? 'class Config' : `class ${cls}`));
+    const el = root.querySelector(`[data-line="${Math.max(0, i)}"]`), pane = $('[data-pane]');
+    if (el && pane) { pane.scrollTop = el.offsetTop - 40; el.classList.add('flash'); }
+  }
+  root.addEventListener('click', e => {
+    const t = e.target.closest('[data-ref],[data-tab],[data-list],[data-file],[data-side],[data-goto],[data-jump]'); if (!t) return;
+    if (t.dataset.ref) { st.ref = t.dataset.ref; renderList(); renderCenter(); renderRight(); }
+    else if (t.dataset.tab) { st.tab = t.dataset.tab; renderCenter(); }
+    else if (t.dataset.list) { st.list = t.dataset.list; renderList(); }
+    else if (t.dataset.file) { st.file = t.dataset.file; renderPane(); }
+    else if (t.dataset.side) { st.side = t.dataset.side; renderRight(); }
+    else if (t.dataset.jump) jumpTo(t.dataset.jump);
+    else if (t.dataset.goto) {
+      const g = t.dataset.goto;
+      if (g === 'model') { st.side = 'model'; renderRight(); if (t.dataset.cls) jumpTo(t.dataset.cls); }
+      else if (g === 'data') { st.side = 'data'; renderRight(); st.tab = 'code'; st.file = 'config'; renderCenter(); }
+      else { st.tab = 'diff'; renderCenter(); }
+    }
+  });
+  renderList(); renderCenter(); renderRight();
+}
+
+/* ---------------- Study B ---------------- */
+function mockB(root) {
+  const st = { picked: ['main', 'pr12', 'pr14'], a: 'main', b: 'pr12' };
+  root.innerHTML = `<div class="screen">${statusBar()}${topBar('<span class="btn">Compare mode</span>')}
+    <div class="cols" style="grid-template-columns:260px minmax(0,1fr) 330px">
+      <div class="col"><div class="ph"><span>Runs</span><span>tick up to 4</span></div><div class="refs scroll" data-refs></div></div>
+      <div class="col scroll" data-center></div>
+      <div class="col scroll" data-right></div>
+    </div></div>`;
+  const $ = s => root.querySelector(s);
+  const D0 = 'ts 100%', CFG = { main: { mlp: 'gelu 4×', rope_theta: '10,000', lr: '6e-4', data: D0, params: '13.8M' }, pr12: { mlp: 'swiglu 8/3×', rope_theta: '10,000', lr: '6e-4', data: D0, params: '13.8M' }, pr14: { mlp: 'gelu 4×', rope_theta: '500,000', lr: '6e-4', data: D0, params: '13.8M' }, hlr: { mlp: 'gelu 4×', rope_theta: '10,000', lr: '3e-3', data: D0, params: '13.8M' }, pr15: { mlp: 'gelu 4×', rope_theta: '10,000', lr: '6e-4', data: 'ts 70 · wiki 20 · inst 10', params: '13.8M' } };
+  function render() {
+    const runs = REFS.filter(r => r.run);
+    $('[data-refs]').innerHTML = runs.map(r => { const on = st.picked.includes(r.id); return `<button class="ref${on ? ' sel' : ''}" data-pick="${r.id}"><span class="t"><span class="check${on ? ' on' : ''}">${on ? '✓' : ''}</span> <span class="swatch" style="background:${r.color}"></span> ${refTitle(r)}</span>${statusChip(r)}<span class="m"><span>${r.run}</span><span>${r.sha}</span><span>${r.gpu} · ${r.mins} min</span></span></button>`; }).join('');
+    const picked = st.picked.map(byId);
+    const keys = Object.keys(CFG.main);
+    const at = 3000, mainV = curve(byId('main'), true).find(p => p[0] === at)[1];
+    $('[data-center]').innerHTML = `<div class="runhead"><span class="t">Validation loss vs tokens seen</span><span class="m"><span>${picked.length} runs</span><span>same dataset: <b>tinystories/val.bin</b></span><span>eval every 250 steps</span></span></div>
+      <div class="chart">${lossChart(picked.map(r => ({ pts: curve(r, true), color: r.color, width: r.id === 'main' ? 1.3 : 2, dash: r.id === 'main', dot: true, mark: r.diverge })), { w: 590, h: 260, tokens: true, yMin: 1.5, yMax: 3.5 })}</div>
+      <div class="legend">${picked.map(r => `<span><i class="swatch" style="background:${r.color}"></i>${r.kind === 'pr' ? '#' + r.num : r.title}</span>`).join('')}<span>x: tokens (16,384 per step)</span></div>
+      <div class="ph"><span>At 49M tokens (step 3,000)</span></div>
+      <div class="verdict">${picked.filter(r => r.id !== 'main').map(r => { const v = curve(r, true).find(p => p[0] === at); const d = v ? v[1] - mainV : null; return `<div><span>${refTitle(r)}</span><b class="${d == null ? '' : d < 0 ? 'good' : 'bad'}">${d == null ? 'no data' : (d > 0 ? '+' : '') + fmt(d, 3) + ' vs main'}</b></div>`; }).join('')}</div>
+      <div class="ph"><span>Config keys that differ</span><span>from configs/*.toml at each SHA</span></div>
+      <table class="cfg"><thead><tr><th>key</th>${picked.map(r => `<th>${r.kind === 'pr' ? '#' + r.num : r.title}</th>`).join('')}</tr></thead><tbody>
+      ${keys.map(k => { const vals = picked.map(r => (CFG[r.id] || CFG.main)[k]); const differs = new Set(vals).size > 1; return differs ? `<tr><td>${k}</td>${vals.map(v => `<td class="${v !== CFG.main[k] ? 'diff' : ''}">${v}</td>`).join('')}</tr>` : ''; }).join('') || `<tr><td colspan="${picked.length + 1}">No differences.</td></tr>`}
+      </tbody></table>`;
+    const A = byId(st.a), B = byId(st.b);
+    const sel = (which, cur) => `<span class="seg">${picked.map(r => `<button class="${r.id === cur ? 'on' : ''}" data-side="${which}" data-id="${r.id}">${r.kind === 'pr' ? '#' + r.num : r.title}</button>`).join('')}</span>`;
+    $('[data-right]').innerHTML = `<div class="ph"><span>Samples at step 3,000</span></div>
+      <div class="ph" style="padding-top:0"><span>Left</span>${sel('a', st.a)}</div>${samplesHTML(A, 3000).replace('class="samples"', 'class="samples" style="padding-top:0"')}
+      <div class="ph"><span>Right</span>${sel('b', st.b)}</div>${samplesHTML(B, 3000).replace('class="samples"', 'class="samples" style="padding-top:0"')}
+      <div class="obs"><b>Same prompt, same seed, greedy.</b> Samples come from samples.jsonl in each run folder, written by the training loop every 500 steps.</div>`;
+  }
+  root.addEventListener('click', e => {
+    const t = e.target.closest('[data-pick],[data-side]'); if (!t) return;
+    if (t.dataset.pick) { const id = t.dataset.pick, i = st.picked.indexOf(id); if (i >= 0 && st.picked.length > 1) st.picked.splice(i, 1); else if (i < 0 && st.picked.length < 4) st.picked.push(id); if (!st.picked.includes(st.a)) st.a = st.picked[0]; if (!st.picked.includes(st.b)) st.b = st.picked[st.picked.length - 1]; }
+    else st[t.dataset.side] = t.dataset.id;
+    render();
+  });
+  render();
+}
+
+/* ---------------- Study C ---------------- */
+function mockC(root) {
+  const st = { ref: 'pr14', side: 'code', file: 'train/model.py' };
+  root.innerHTML = `<div class="screen">${statusBar()}${topBar('<button class="btn pri">Run on Modal ▶</button>')}
+    <div class="cols" style="grid-template-columns:240px minmax(0,1fr) 340px">
+      <div class="col"><div class="ph"><span>Branches &amp; PRs</span></div><div class="refs scroll" data-refs></div></div>
+      <div class="col" data-center></div>
+      <div class="col" data-right></div>
+    </div></div>`;
+  const $ = s => root.querySelector(s);
+  const stageSet = ref => {
+    const s = ref.status, at = ref.at || 0;
+    const base = [['Clone', `@ ${ref.sha}`, 1], ['Data', '471M tok', 1], ['Train', `${at.toLocaleString()} / 5,000`, at / 5000], ['Eval', 'val + samples', s === 'done' ? 1 : 0], ['Export', 'GGUF F16', s === 'done' ? 1 : 0], ['Ready', 'iPad · Modal', s === 'done' ? 1 : 0]];
+    if (s === 'none') return base.map(b => [b[0], b[0] === 'Clone' ? `@ ${ref.sha}` : '—', 0]);
+    return base;
+  };
+  const FILES = {
+    'train/model.py': `# train/model.py @ ${'9c41e2a'}
+@dataclass
+class Config:
+    vocab_size: int = 8192
+    n_layer: int = 6
+    n_head: int = 6
+    n_embd: int = 384
+    block_size: int = 256
+    rope_theta: float = 500_000.0
+    dropout: float = 0.0
+
+class Block(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.attn_norm = RMSNorm(cfg.n_embd)
+        self.attn = Attention(cfg)
+        self.ffn_norm = RMSNorm(cfg.n_embd)
+        self.mlp = MLP(cfg)
+
+    def forward(self, x, rope):
+        x = x + self.attn(self.attn_norm(x), rope)
+        return x + self.mlp(self.ffn_norm(x))`,
+    'configs/tiny.toml': `[data]
+dataset = "tinystories"
+tokenizer = "bpe-8k"
+
+[train]
+steps = 5000
+batch_size = 64
+block_size = 256
+eval_every = 250
+sample_every = 500
+ckpt_every = 1000
+
+[optim]
+lr = 6e-4
+warmup_steps = 200
+weight_decay = 0.1`,
+    'modal/runner.py': `app = modal.App("bench-runner")
+vol = modal.Volume.from_name("bench-data")
+
+@app.function(gpu="L4", volumes={"/vol": vol},
+              secrets=[modal.Secret.from_name("github-read")],
+              timeout=60 * 60)
+def train(ref: str, sha: str, config: str, run_id: str):
+    clone(sha, "/src")
+    run(["python", "/src/train/train.py",
+         "--config", f"/src/{config}",
+         "--out", f"/vol/runs/{run_id}"])
+    vol.commit()`
+  };
+  function render() {
+    const ref = byId(st.ref);
+    $('[data-refs]').innerHTML = REFS.map(r => `<button class="ref${r.id === st.ref ? ' sel' : ''}" data-ref="${r.id}"><span class="t">${refTitle(r)}</span>${statusChip(r)}<span class="m"><span>${r.sha}</span></span></button>`).join('');
+    const stages = stageSet(ref), nowIdx = stages.findIndex(s => s[2] < 1);
+    const failed = ref.status === 'fail';
+    $('[data-center]').innerHTML = `<div class="runhead"><span class="t">${refTitle(ref)}</span><span class="m"><span><b>${esc(ref.branch)}</b> @ ${ref.sha}</span>${ref.run ? `<span>run <b>${ref.run}</b></span><span>${ref.gpu} · ${ref.mins} min</span>` : '<span>not run yet: Run on Modal starts at Clone</span>'}</span></div>
+      <div class="stages">${stages.map((s, i) => `<div class="stage ${s[2] >= 1 ? 'done' : i === nowIdx && ref.status !== 'none' ? (failed ? '' : 'now') : ''}" style="${failed && i === nowIdx ? 'border-color:#ff8fa3;background:#1d1013' : ''}"><b>${s[0]}</b><span>${s[1]}</span><div class="bar"><div style="width:${Math.round(s[2] * 100)}%;${failed && i === nowIdx ? 'background:#ff8fa3' : ''}"></div></div></div>`).join('')}</div>
+      <div class="chart" style="padding-bottom:0">${lossChart([{ pts: curve(byId('main'), true), color: '#9aa3b0', dash: true, width: 1 }, { pts: curve(ref, false), color: ref.color, width: 1.4, mark: ref.diverge }], { w: 590, h: 110, yMin: 1.4, yMax: 4.4 })}</div>
+      <div class="tabs"><button class="on">Logs</button><button>Samples</button><button>Diff vs main</button></div>
+      <div class="pane scroll">${logsHTML(ref)}</div>`;
+    root.querySelectorAll('[data-side]').forEach(b => b.classList.toggle('on', b.dataset.side === st.side));
+    const right = st.side === 'code'
+      ? `<div class="ph"><span>Repo @ ${ref.sha}</span><span>read-only</span></div>
+         <div class="tree">${['configs/', 'configs/tiny.toml', 'data/', 'data/tokenize.py', 'export/', 'export/gguf.py', 'modal/', 'modal/runner.py', 'train/', 'train/model.py', 'train/train.py'].map(p => p.endsWith('/') ? `<div class="dir">▾ ${p}</div>` : `<button class="f${p === st.file ? ' sel' : ''}" data-file="${p}" style="display:block;width:100%;padding-left:20px">${p.split('/')[1]}</button>`).join('')}</div>
+         <div class="ph"><span>${st.file}</span></div><div class="scroll" style="flex:1;min-height:0"><div class="code">${esc(FILES[st.file] || '# file preview').split('\n').map(l => `<div>${l || ' '}</div>`).join('')}</div></div>`
+      : `<div class="ph"><span>Volume · bench-data</span><span>read-only</span></div>
+         <div class="tree"><div class="dir">▾ datasets/tinystories/</div><div class="f sel" style="padding-left:20px">train.bin <small>943 MB</small></div><div class="f" style="padding-left:20px">val.bin <small>9.5 MB</small></div><div class="f" style="padding-left:20px">tokenizer-8k.json <small>412 KB</small></div>
+           <div class="dir">▾ runs/${ref.run || 'r-0142'}/</div><div class="f" style="padding-left:20px">metrics.jsonl <small>188 KB</small></div><div class="f" style="padding-left:20px">log.txt <small>41 KB</small></div><div class="f" style="padding-left:20px">samples.jsonl <small>6 KB</small></div><div class="f" style="padding-left:20px">ckpt/ <small>3 files</small></div></div>
+         <div class="ph"><span>train.bin · tokens 0–48</span></div>
+         <div class="preview"><span class="meta">uint16 token ids, decoded with tokenizer-8k.json · each box is one token</span><p>${'Once| upon| a| time|,| there| was| a| little| boy| named| Tim|.| Tim| had| a| big|,| red| ball|.| He| loved| to| play| with| it| every| day|.|<|endoftext|>|Lily| and| her| mom| went| to| the| park|.'.split('|').map(t => `<span>${esc(t)}</span>`).join('')}</p></div>
+         <div class="ph"><span>When the run is ready</span></div>
+         <div class="handoff"><div><b>Run on iPad</b><span>Download model.gguf (27.6 MB), switch to Inference, your Metal kernels</span></div><div><b>Run on Modal</b><span>Same checkpoint served from the Volume, GPU timings shown in the same heatmap</span></div></div>`;
+    $('[data-right]').innerHTML = `<div class="ph"><span class="seg"><button data-side="code">Code</button><button data-side="data">Data &amp; files</button></span></div>${right}`;
+    root.querySelectorAll('[data-side]').forEach(b => b.classList.toggle('on', b.dataset.side === st.side));
+  }
+  root.addEventListener('click', e => {
+    const t = e.target.closest('[data-ref],[data-side],[data-file]'); if (!t) return;
+    if (t.dataset.ref) st.ref = t.dataset.ref; else if (t.dataset.side) st.side = t.dataset.side; else st.file = t.dataset.file;
+    render();
+  });
+  render();
+}
+
+/* ---------------- mount + scale ---------------- */
+const MOCKS = { A: mockA, B: mockB, C: mockC };
+document.querySelectorAll('[data-mock]').forEach(frame => {
+  const dev = document.createElement('div'); dev.className = 'device'; frame.appendChild(dev);
+  MOCKS[frame.dataset.mock](dev);
+  const fit = () => { const w = frame.clientWidth, s = Math.min(1, w / 1220); dev.style.transform = `translateX(${Math.max(0, (w - 1220 * s) / 2)}px) scale(${s})`; frame.style.height = (860 * s) + 'px'; };
+  new ResizeObserver(fit).observe(frame); fit();
+});
+</script>
