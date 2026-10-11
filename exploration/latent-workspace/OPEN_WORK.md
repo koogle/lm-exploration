@@ -10,11 +10,15 @@ New authorized work: [larger response-data comparison](docs/dflash-data-scaling.
 shared fresh validation. Improved sampling and batched teacher preparation are
 implemented. GPU preparation smoke passed (24 training and nine validation responses);
 full pool preparation completed: 6538 usable train responses and 192 validation.
-Both matched 20000-update fits are running from scratch. Initial-weight, executable-
+The 768-response fit completed 20000 updates: best validation new matches 0.2185,
+final validation NLL 9.3788. Full-response audit: final train NLL 0.1377 and 6.8259
+new matches / 7. All 12 FP32 rollout outputs matched; timings vary by prompt, with
+one fast code example consisting largely of repeated zeroes. The 6144-response
+fit is still running to the same update budget. Initial-weight, executable-
 source and ordered-validation hashes match. 75 local tests
 pass, including fresh training from an archived teacher cache. The existing
 reservation ledger was restored to this consolidated checkout; current reservations
-are $225.50 after two preparation and two training reservations, not billed usage.
+are $226 after preparation, training and the smaller fit's audit, not billed usage.
 Representation experiments are deferred. One known anchor plus seven masked proposals,
 target-generated labels, fixed feature K/V injection, random-anchor packed training
 and cached greedy verification are implemented. No useful fast drafter is established.

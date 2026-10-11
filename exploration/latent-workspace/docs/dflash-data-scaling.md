@@ -27,6 +27,22 @@ Our 380-response fit is over 2000 times smaller by response count and much short
 per response. Small-target speed is also harder to improve because the target is
 already cheap. Its failure is not a reproduction-based refutation of DFlash.
 
+| Setting | Paper's standard Qwen3 setup | This controlled comparison |
+| --- | --- | --- |
+| Target | 4B/8B; separate 30B-A3B Coder setting | Qwen2.5-0.5B base |
+| Training responses | Around 800k; 100k for most ablations | 768 or 6144 |
+| Draft layers / fixed feature layers | Usually 5 / 5 | 2 / 2 |
+| Block positions including supplied anchor | 16 | 8 |
+| Maximum total sequence length | 3072; 4096 for Coder | 192 (128 prompt + 64 response) |
+| Sampled anchors per sequence | 512 | 8 per sampled response visit |
+| Evaluation scope | Math, code, chat benchmark collections | New groups from prose, Python and English/German collections |
+
+These differences are not separately ablated here. DFlash does not look up stored
+answers at inference: the target computes features of the current prompt, then
+verifies proposed blocks. An unfamiliar prompt may reduce acceptance/speed without
+invalidating the speculative-decoding construction. Our observed numerical-precision
+limitations are documented separately; exact output equality is checked, not assumed.
+
 ## Comparison
 
 Generate one pool from 6600 training prompts, 192 validation and 192 test prompts.
