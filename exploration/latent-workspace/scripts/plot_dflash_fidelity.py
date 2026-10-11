@@ -1,6 +1,7 @@
 """Compare fixed-corpus fidelity studies; partial curves remain explicitly labelled."""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -11,6 +12,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("reports", nargs="+", type=Path)
 parser.add_argument("--output", type=Path, default=Path("results/dflash-fidelity-curves.png"))
 args = parser.parse_args()
+if any(
+    p.resolve() in {args.output.resolve(), args.output.with_suffix(".json").resolve()}
+    for p in args.reports
+):
+    raise ValueError("Plot outputs must not overwrite input reports")
 runs = [json.loads(p.read_text()) for p in args.reports]
 for run in runs[1:]:
     for key in (
@@ -66,4 +72,31 @@ fig.text(
 )
 fig.tight_layout(rect=(0, 0.04, 1, 0.95))
 fig.savefig(args.output, dpi=160)
+args.output.with_suffix(".json").write_text(
+    json.dumps(
+        {
+            "partial": partial,
+            "inputs": [
+                {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+                for p in args.reports
+            ],
+            "runs": [
+                {
+                    key: run[key]
+                    for key in (
+                        "config",
+                        "source_sha256",
+                        "split_sequence_sha256",
+                        "curve",
+                        "best_step",
+                        "trainable_parameters",
+                    )
+                }
+                for run in runs
+            ],
+        },
+        indent=2,
+    )
+    + "\n"
+)
 print(args.output)
