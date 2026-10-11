@@ -74,3 +74,9 @@ cached feature cosine is 0.999896–0.999930, and perturbing future tokens chang
 prior features by exactly zero. This reduces concern about a gross cache/label
 mismatch; it is not an exhaustive corpus audit. See
 [teacher consistency](../results/dflash-qwen35-2b-teacher-audit-01.json).
+
+The final fitting audit will also show unverified seven-token proposals from the
+selected checkpoint: first validation response per domain, at its first anchor
+and up to 16 response tokens later. This fixed selection is illustrative, not a
+new benchmark or verified generation. Teacher tokens, draft tokens, supplied
+anchor and context tail are retained together.

@@ -99,6 +99,48 @@ def audit_fit(parent, output):
             "training": evaluate(draft, target, data["train"], state["mask_token_id"]),
             "validation": evaluate(draft, target, data["validation"], state["mask_token_id"]),
         }
+        if name == "best":
+            from .dflash import block_loss
+
+            tokenizer = AutoTokenizer.from_pretrained(cfg.model, revision=cfg.model_revision)
+            samples = []
+            for domain in DOMAINS:
+                e = next(x for x in data["validation"] if x["domain"] == domain)
+                anchors = sorted(
+                    {
+                        e["prompt_length"],
+                        min(e["prompt_length"] + 16, len(e["tokens"]) - cfg.block_size),
+                    }
+                )
+                for anchor in anchors:
+                    with torch.no_grad(), precision("cuda"):
+                        _, _, predicted, labels = block_loss(
+                            draft,
+                            target,
+                            e["tokens"][None].cuda(),
+                            e["memory"][None].cuda(),
+                            torch.tensor([[anchor]], device="cuda"),
+                            state["mask_token_id"],
+                        )
+                    samples.append(
+                        {
+                            "domain": domain,
+                            "group": e["group"],
+                            "anchor_position": anchor,
+                            "context_tail": tokenizer.decode(
+                                e["tokens"][max(0, anchor - 48) : anchor]
+                            ),
+                            "supplied_anchor": tokenizer.decode(e["tokens"][anchor : anchor + 1]),
+                            "teacher_new_tokens": labels[0].tolist(),
+                            "draft_new_tokens": predicted[0].tolist(),
+                            "teacher_text": tokenizer.decode(labels[0]),
+                            "draft_text": tokenizer.decode(predicted[0]),
+                            "consecutive_new_matches": int(
+                                (predicted == labels).long().cumprod(-1).sum()
+                            ),
+                        }
+                    )
+            report["qualitative_blocks"] = samples
         write_json(output / "fit-audit.json", report)
         print(f"Full-response fitting audit: {name} step {state['step']}", flush=True)
     return report
