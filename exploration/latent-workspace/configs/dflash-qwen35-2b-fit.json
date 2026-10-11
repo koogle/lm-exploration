@@ -26,7 +26,7 @@
   "continue_from": "",
   "teacher_parent": "/runs/dflash-qwen35-2b-chat-data-01",
   "train_limit": 6144,
-  "teacher_batch_size": 16,
+  "teacher_batch_size": 32,
   "rollout_prompts_per_domain": 4,
   "quality_only": true,
   "schedule_steps": 20000,

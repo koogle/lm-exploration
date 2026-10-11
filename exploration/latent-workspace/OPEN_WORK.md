@@ -2,7 +2,7 @@
 
 Active: user-requested Qwen3.5-2B drafting **quality** comparison. See
 [protocol](docs/dflash-qwen35-2b.md). GPU training smoke passed. Raw prompt sample failures prompted a switch to
-non-thinking chat formatting; corrected teacher smoke is running. No quality
+non-thinking chat formatting; corrected teacher smoke passed and full preparation is running. No quality
 claim yet. All stopped/failed reservations are retained. Existing 0.5B results below remain the historical baseline.
 
 Location: `exploration/latent-workspace/` in private `koogle/0-to-llm` (LM Exploration),

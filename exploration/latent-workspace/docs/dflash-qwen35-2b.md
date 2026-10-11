@@ -35,7 +35,10 @@ report verification as null, not successful. No latency qualification is intende
 
 Status: bounded 40-update Modal smoke completed in 116.2 seconds, with finite
 training and no target gradients. It has 104,876,032 trainable parameters.
-Chat-formatted teacher smoke is running; raw preparation was deliberately stopped.
+Chat-formatted teacher smoke passed: 23 usable train and nine validation responses
+in 13.6 seconds. Sampled prose/translation improve in coherence, but a code sample
+still repeats the partial function; this is not a semantic-quality benchmark.
+The full chat-formatted teacher preparation is running; raw preparation was deliberately stopped.
 The first chat preparation failed before generation because the tokenizer returned
 a BatchEncoding; explicit `return_dict=False` fixes serialization. No trained
 2B generalization conclusion yet. The smoke tests loading, feature extraction, gradients
