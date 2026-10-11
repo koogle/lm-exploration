@@ -38,7 +38,11 @@ training and no target gradients. It has 104,876,032 trainable parameters.
 Chat-formatted teacher smoke passed: 23 usable train and nine validation responses
 in 13.6 seconds. Sampled prose/translation improve in coherence, but a code sample
 still repeats the partial function; this is not a semantic-quality benchmark.
-The full chat-formatted teacher preparation is running; raw preparation was deliberately stopped.
+Full preparation completed in 623.1 seconds: 6390 usable training responses
+(2173 prose, 2054 code, 2163 translation), and 184 validation responses
+(63/57/64). Dropped 211 short and seven duplicate responses. The balanced 6144
+training subset is now fitting; the 192 test prompts remain unlabelled. Raw
+preparation was deliberately stopped.
 The first chat preparation failed before generation because the tokenizer returned
 a BatchEncoding; explicit `return_dict=False` fixes serialization. No trained
 2B generalization conclusion yet. The smoke tests loading, feature extraction, gradients

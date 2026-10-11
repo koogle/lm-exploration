@@ -7,7 +7,7 @@ workspace and layer-selection experiments are deferred until this baseline works
 No backbone pretraining or collaborative proposal module.
 
 Active user-requested follow-up: [Qwen3.5-2B drafting quality](docs/dflash-qwen35-2b.md).
-The real-model smoke passed and fresh chat-formatted teacher preparation is running.
+The real-model smoke and fresh teacher preparation passed; the 6144-response fit is running.
 This changes model family, tokenizer, prompt format and drafter width; no 2B quality
 conclusion yet. Prediction quality, not speed optimization, is the priority.
 

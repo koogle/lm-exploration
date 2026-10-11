@@ -1,0 +1,118 @@
+{
+  "config": {
+    "model": "Qwen/Qwen3.5-2B",
+    "model_revision": "15852e8c16360a2fea060d615a32b45270f8a8fc",
+    "layers": [
+      2,
+      22
+    ],
+    "draft_layers": 2,
+    "block_size": 8,
+    "gamma": 4.0,
+    "train_prompts": 6600,
+    "validation_prompts": 192,
+    "test_prompts": 192,
+    "prompt_tokens": 128,
+    "response_tokens": 64,
+    "batch_size": 3,
+    "anchors_per_sequence": 8,
+    "steps": 40,
+    "eval_every": 20,
+    "learning_rate": 0.0006,
+    "warmup_ratio": 0.04,
+    "seed": 42,
+    "max_seconds": 3300,
+    "continue_from": "",
+    "historical_corpus": "/runs/data-large-01/corpus.pt",
+    "prompt_manifest": "/runs/dflash-data-pool-01/prompts.json",
+    "teacher_parent": "",
+    "train_limit": 0,
+    "teacher_batch_size": 32,
+    "rollout_prompts_per_domain": 4,
+    "quality_only": true,
+    "teacher_prompt_style": "chat_no_thinking",
+    "schedule_steps": 0
+  },
+  "teacher_audit": {
+    "by_split_domain": {
+      "train": {
+        "prose": {
+          "prompts": 2173,
+          "response_tokens": 122314,
+          "eligible_anchors": 107103,
+          "mean_unique_response_4gram_fraction": 0.9852821356923405,
+          "response_length_min": 8,
+          "response_length_max": 64
+        },
+        "code": {
+          "prompts": 2054,
+          "response_tokens": 109368,
+          "eligible_anchors": 94990,
+          "mean_unique_response_4gram_fraction": 0.8743580869543847,
+          "response_length_min": 8,
+          "response_length_max": 64
+        },
+        "translation": {
+          "prompts": 2163,
+          "response_tokens": 75653,
+          "eligible_anchors": 60512,
+          "mean_unique_response_4gram_fraction": 0.9985417645770275,
+          "response_length_min": 8,
+          "response_length_max": 64
+        }
+      },
+      "validation": {
+        "prose": {
+          "prompts": 63,
+          "response_tokens": 3696,
+          "eligible_anchors": 3255,
+          "mean_unique_response_4gram_fraction": 0.9786058767498363,
+          "response_length_min": 10,
+          "response_length_max": 64
+        },
+        "code": {
+          "prompts": 57,
+          "response_tokens": 2989,
+          "eligible_anchors": 2590,
+          "mean_unique_response_4gram_fraction": 0.8849648524655715,
+          "response_length_min": 9,
+          "response_length_max": 64
+        },
+        "translation": {
+          "prompts": 64,
+          "response_tokens": 2089,
+          "eligible_anchors": 1641,
+          "mean_unique_response_4gram_fraction": 0.9972063908811475,
+          "response_length_min": 10,
+          "response_length_max": 64
+        }
+      }
+    },
+    "short_responses": 211,
+    "duplicate_responses": 7,
+    "teacher_batch_size": 32,
+    "target_arithmetic": "torch.bfloat16",
+    "note": "Batched greedy target generation; BF16 batch-shape argmax can differ from single-prompt arithmetic. Both data-size fits use this identical cache."
+  },
+  "validation_samples": [
+    {
+      "domain": "prose",
+      "prompt": "<|im_start|>user\nContinue the following prose. Output only the continuation, without repeating the supplied text or adding commentary.\n\n= Qualified to the relegation tournament indicated ; ( DQ ) =\nDisqualified from tournament .\n= = = = Results summary = = = =\nSource :\n= = = = Results by round = = = =\nSource :\nRules for classification : 1 ) points ; 2 ) goal difference ; 3 ) number of goals scored ( C )<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "response": "The final standings were determined by the points system, with the team that accumulated the most points at the top of the table. In the event of a tie, goal difference was the deciding factor, followed by the number of goals scored. The relegation zone was filled by the bottom three teams, while the top two secured"
+    },
+    {
+      "domain": "code",
+      "prompt": "<|im_start|>user\nContinue the following code. Output only the continuation, without repeating the supplied code, explanation, or Markdown fences.\n\n coding=utf-8\n\n################################################################################\n# CosConfig \u6709\u5173cos\u7684\u914d\u7f6e\n################################################################################\nclass CosConfig(object):\n    def __init__(self):\n        self._end_point    = 'http://web.file.myqcloud.com/files/v1'\n        self._user_agent   = 'cos-python-sdk-v3.3'\n        self._timeout      = 30\n        self._sign_expired = 300\n\n    # \u8bbe\u7f6eCOS\u7684\u57df\u540d\u5730\u5740\n    def set_end_point(self, end_point):\n        self._end_point = end_point\n\n    # \u83b7\u53d6\u57df\u540d\u5730\u5740\n    def get_end_point(self):\n        return<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "response": "    def get_end_point(self):\n        return self._end_point\n\n    # \u8bbe\u7f6e COS \u7684\u7b7e\u540d\u8fc7\u671f\u65f6\u95f4\n    def set_sign_expired(self, sign_expired):\n        self._sign_expired = sign_expired\n\n    # \u83b7\u53d6 COS \u7684\u7b7e\u540d\u8fc7\u671f\u65f6\u95f4\n    def get_sign_expired(self):"
+    },
+    {
+      "domain": "translation",
+      "prompt": "<|im_start|>user\nOutput only the German translation, without explanation.\nTranslate English to German.\nEnglish: I remember when people came into this House lobbying us in the national interest not to allow this liberalisation.\nGerman:<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "response": "Ich erinnere mich, dass Menschen in diesem Haus uns in nationaler Interessenlage darum bat, diese Liberalisierung nicht zu erlauben.<|im_end|>"
+    }
+  ],
+  "elapsed_seconds": 623.067476661,
+  "completed": true,
+  "source_sha256": "272b39bae57338e455b5b9224fb6ff81064325ceb8108a67eb0e8a8d57d638a3",
+  "test_status": "test prompts only; no teacher responses or metrics"
+}
