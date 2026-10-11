@@ -77,3 +77,8 @@ All 11 checkpoint selections were frozen before test access; the test is now
 exposed. The source report hashes, checkpoint hashes and corpus identity audit
 are retained. Best heads and resumable checkpoints are in the dedicated Modal
 volume. The all-layer Qwen2.5 inference head is also downloaded locally.
+
+Active small-Qwen quality studies: [findings](dflash-improvement-findings.md),
+[completed fidelity curves](dflash-fidelity-curves.png), and
+[higher-supervision interim curves](dflash-exposure-interim.png). The latter are
+unfinished; their JSON sidecar preserves the plotted snapshot. Goal remains unmet.

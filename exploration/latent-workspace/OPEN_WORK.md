@@ -20,7 +20,7 @@ Next: monitor these workers; use `scripts/resume_dflash.py` on finalized time-li
 reports to request only the remaining updates, with new run IDs and reservations.
 Do not restart the schedule or optimizer. Initially budget at most eight long-worker
 reservations for this pair before reviewing progress. Plot with
-`scripts/plot_dflash_scaling.py ... --output results/dflash-exposure-scaling`
+`scripts/plot_dflash_scaling.py ... --quality-gate 2 --output results/dflash-exposure-scaling`
 (and `--partial` for live reports). Audit full fitting and zero-memory conditioning
 before deciding whether more data, exposure, or another repair is justified.
 

@@ -85,3 +85,9 @@ Raw reports: `dflash-fidelity-norm-01.json`, `dflash-batch48-smoke-01.json`,
 `dflash-small-teacher-audit-02.json`. Original comparison:
 [dflash-data-scaling.md](dflash-data-scaling.md). Paper/reference differences:
 [DFlash fidelity audit](../docs/dflash-fidelity.md).
+
+The higher-supervision [interim curves](dflash-exposure-interim.png) are a partial
+snapshot, with source reports embedded in dflash-exposure-interim.json. Both workers
+match committed package source `07a68c9`; continuation must retain that source until
+a justified change is recorded. Latest setup checks: 82 tests, Ruff and diff checks
+pass. Conservative reservations: $318.50/$500, not actual billed usage.

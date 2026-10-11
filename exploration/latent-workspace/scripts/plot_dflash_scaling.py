@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser()
 parser.add_argument("reports", nargs=2, type=Path)
 parser.add_argument("--output", type=Path, default=Path("results/dflash-data-scaling"))
+parser.add_argument("--quality-gate", type=float, default=None)
 parser.add_argument(
     "--partial", action="store_true", help="Plot incomplete curves; no uncertainty estimates"
 )
@@ -90,11 +91,20 @@ axes[1].set(
         0,
         max(
             1.05,
+            (args.quality_gate or 1) * 1.05,
             1.1 * max(p["validation"]["accepted_beyond_anchor"] for r in runs for p in r["curve"]),
         ),
     ),
 )
-axes[1].axhline(1, color="grey", linestyle=":", linewidth=1, label="1 new token (reference)")
+axes[1].axhline(
+    args.quality_gate or 1,
+    color="grey",
+    linestyle=":",
+    linewidth=1,
+    label=f"{args.quality_gate:g} NEW-token quality gate"
+    if args.quality_gate
+    else "1 new token (reference)",
+)
 axes[2].set(
     xlabel="New draft position; known anchor excluded",
     ylabel="Validation token accuracy",
@@ -104,13 +114,19 @@ for ax in axes:
     ax.grid(alpha=0.2)
     ax.legend(fontsize=7)
 fig.suptitle(
-    "DFlash-style Qwen2.5-0.5B: different response-corpus sizes"
+    f"Our {runs[0]['trainable_parameters'] / 1e6:.0f}M drafter for frozen "
+    f"{runs[0]['config']['model'].split('/')[-1]}: response-data comparison"
     + (" — IN PROGRESS" if args.partial else "")
 )
 fig.text(
     0.5,
     0.01,
-    "Same initialization and validation cache. Training curve: 12 diagnostic prompts. Validation-selected checkpoints; not test results.",
+    (
+        "Same trained initialization; updates are additional. "
+        if runs[0]["config"].get("warm_start_from")
+        else "Same random initialization. "
+    )
+    + "Same validation cache; train curve: 12 diagnostics. Validation selected, not test results.",
     ha="center",
     fontsize=9,
 )
