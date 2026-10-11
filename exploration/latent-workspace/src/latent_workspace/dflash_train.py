@@ -44,9 +44,10 @@ def collate(examples, count, block_size, generator, device):
 
 
 @torch.no_grad()
-def evaluate(drafter, target, examples, mask_id, limit_per_domain=None):
+def evaluate(drafter, target, examples, mask_id, limit_per_domain=None, include_examples=False):
     drafter.eval()
     result = {}
+    example_metrics = []
     for domain in DOMAINS:
         rows = [x for x in examples if x["domain"] == domain]
         if limit_per_domain:
@@ -78,6 +79,19 @@ def evaluate(drafter, target, examples, mask_id, limit_per_domain=None):
             hits += correct.sum(0).cpu()
             lengths.extend(correct.long().cumprod(-1).sum(-1).cpu().tolist())
             blocks += len(ce)
+            if include_examples:
+                example_metrics.append(
+                    {
+                        "group": e["group"],
+                        "domain": domain,
+                        "blocks": len(ce),
+                        "nll": float(ce.mean()),
+                        "accepted_beyond_anchor": float(
+                            correct.long().cumprod(-1).sum(-1).float().mean()
+                        ),
+                        "accuracy_by_draft_position": correct.float().mean(0).cpu().tolist(),
+                    }
+                )
         result[domain] = {
             "nll": float(ce_sum.mean() / blocks),
             "nll_by_draft_position": (ce_sum / blocks).tolist(),
@@ -89,12 +103,15 @@ def evaluate(drafter, target, examples, mask_id, limit_per_domain=None):
             "blocks": blocks,
             "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately.",
         }
-    return {
+    metrics = {
         "by_domain": result,
         "nll": sum(x["nll"] for x in result.values()) / 3,
         "accepted_beyond_anchor": sum(x["mean_accepted_beyond_anchor"] for x in result.values())
         / 3,
     }
+    if include_examples:
+        metrics["examples"] = example_metrics
+    return metrics
 
 
 @torch.no_grad()
@@ -120,7 +137,11 @@ def greedy_generate(target, prompt, max_new_tokens, eos_id=None):
 
 
 def benchmark(drafter, target, tokenizer, examples, mask_id):
-    selected = [next(x for x in examples if x["domain"] == d) for d in DOMAINS]
+    selected = [
+        x
+        for d in DOMAINS
+        for x in [e for e in examples if e["domain"] == d][: drafter.cfg.rollout_prompts_per_domain]
+    ]
     rows = []
     for example in selected:
         prompt = example["tokens"][: example["prompt_length"]][None].to(target.device)
@@ -159,7 +180,7 @@ def benchmark(drafter, target, tokenizer, examples, mask_id):
                 "acceptance_lengths": spec[0]["accepted_new_draft_tokens"],
                 "verification_calls": spec[0]["verification_calls"],
                 "text": tokenizer.decode(ar[0]["tokens"]),
-                "timing_note": "Median of 3 alternating-order warmed runs, includes prefill; batch 1, 32-token cap, same target/precision. Three prompts only, not a general speed benchmark.",
+                "timing_note": "Median of 3 alternating-order warmed runs, includes prefill; batch 1, 32-token cap, same target/precision. Small validation slice, not a general speed benchmark.",
             }
         )
     return rows
@@ -385,6 +406,9 @@ def run_dflash(cfg, output, on_checkpoint=None):
             break
     state = torch.load(output / "best.pt", map_location=device, weights_only=True)
     drafter.load_state_dict(state["drafter"])
+    report["selected_validation"] = evaluate(
+        drafter, target, data["validation"], mask_id, include_examples=True
+    )
     # BF16 shape-dependent target argmax flips were observed on real Qwen.
     # Validate the cached verifier using FP32 arithmetic on the same stored weights.
     target.float()

@@ -100,3 +100,65 @@ def test_batched_cache_excludes_test_and_removes_padding_from_features(tmp_path,
                 )[0]
             torch.testing.assert_close(e["memory"], expected, atol=1e-6, rtol=1e-5)
     assert audit["by_split_domain"]["train"]["code"]["eligible_anchors"] == 2
+
+
+def test_fresh_training_from_teacher_cache_does_not_restore_a_model(tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+
+    import latent_workspace.dflash_train as trainer
+    from latent_workspace.dflash import features
+    from latent_workspace.dflash_scaling import teacher_statistics
+
+    target, draft = fixture()
+    parent = tmp_path / "pool"
+    parent.mkdir()
+    cfg = replace(
+        draft.cfg,
+        teacher_parent=str(parent),
+        train_limit=6,
+        steps=1,
+        eval_every=1,
+        batch_size=3,
+        anchors_per_sequence=1,
+    )
+    data = {"train": [], "validation": []}
+    for split, rows in data.items():
+        for domain in ("prose", "code", "translation"):
+            for i in range(2):
+                tokens = torch.tensor([3, 5, 7, 9, 1, 2, 4, 6])
+                with torch.no_grad():
+                    memory = features(
+                        target.model(tokens[None], output_hidden_states=True), cfg.layers
+                    )[0]
+                rows.append(
+                    {
+                        "tokens": tokens,
+                        "memory": memory,
+                        "prompt_length": 4,
+                        "group": f"{split}-{domain}-{i}",
+                        "domain": domain,
+                    }
+                )
+    torch.save(data, parent / "teacher.pt")
+    for name, value in (
+        ("config", cfg.to_dict()),
+        ("report", {"completed": True}),
+        ("teacher-audit", teacher_statistics(data, cfg.block_size)),
+        ("prompts", {"records": []}),
+    ):
+        (parent / f"{name}.json").write_text(json.dumps(value))
+    monkeypatch.setattr(trainer.AutoModelForCausalLM, "from_pretrained", lambda *a, **kw: target)
+    monkeypatch.setattr(
+        trainer.AutoTokenizer,
+        "from_pretrained",
+        lambda *a, **kw: SimpleNamespace(get_vocab=lambda: {"<|fim_pad|>": 30}, eos_token_id=30),
+    )
+    monkeypatch.setattr(trainer, "benchmark", lambda *a: [{"identical_to_target_greedy": True}])
+    report = trainer.run_dflash(cfg, tmp_path / "fit")
+    assert report["training_completed"]
+    assert report["curve"][0]["step"] == 0
+    assert report["curve"][-1]["step"] == 1
+    assert report["curve"][-1]["supervised_target_exposures"] == 9
+    assert report["frozen_target_has_no_gradients"]
+    assert "parent_run" not in report

@@ -41,11 +41,16 @@ class DraftConfig:
     teacher_parent: str = ""
     train_limit: int = 0
     teacher_batch_size: int = 1
+    rollout_prompts_per_domain: int = 1
 
     def validate(self):
         if self.continue_from and self.teacher_parent:
             raise ValueError("choose continuation or fresh initialization from teacher data")
-        if self.train_limit < 0 or self.train_limit % 3 or self.teacher_batch_size < 1:
+        if (
+            self.train_limit < 0
+            or self.train_limit % 3
+            or min(self.teacher_batch_size, self.rollout_prompts_per_domain) < 1
+        ):
             raise ValueError("invalid balanced subset or teacher batch size")
         if self.model != "Qwen/Qwen2.5-0.5B" or len(self.model_revision) != 40:
             raise ValueError("baseline requires pinned Qwen2.5-0.5B")

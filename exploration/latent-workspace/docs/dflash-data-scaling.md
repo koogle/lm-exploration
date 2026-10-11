@@ -46,7 +46,9 @@ comparison does not demonstrate convergence, especially for the larger dataset.
 Selection: maximum validation consecutive NEW matches, tie-breaker lower NLL.
 Keep anchor excluded. Report per-position/domain metrics and 12-response training
 diagnostics; conduct a post-training fitting audit before broad fitting claims.
-Run the existing FP32 verified-rollout/timing check separately. No test selection.
+Retain per-prompt selected-checkpoint validation scores for paired uncertainty
+estimates. Run the FP32 verified-rollout/timing check on four prompts/domain
+(12 total), rather than the previous three-prompt diagnostic. No test selection.
 
 ## Improved source sampling and separation
 

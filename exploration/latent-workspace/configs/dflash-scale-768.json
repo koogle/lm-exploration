@@ -26,5 +26,6 @@
   "continue_from": "",
   "teacher_parent": "/runs/dflash-data-pool-01",
   "train_limit": 768,
-  "teacher_batch_size": 32
+  "teacher_batch_size": 32,
+  "rollout_prompts_per_domain": 4
 }
