@@ -1,6 +1,7 @@
 """Compare recorded drafting quality; different tokenizers are not a paired task."""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -11,6 +12,10 @@ parser.add_argument("baseline")
 parser.add_argument("larger")
 parser.add_argument("--output", default="results/dflash-qwen35-2b-comparison.png")
 args = parser.parse_args()
+if Path(args.output).with_suffix(".json").resolve() in {
+    Path(p).resolve() for p in (args.baseline, args.larger)
+}:
+    raise ValueError("analysis output must not overwrite an input report")
 a, b = [json.loads(Path(p).read_text()) for p in (args.baseline, args.larger)]
 common = sorted({x["step"] for x in a["curve"]} & {x["step"] for x in b["curve"]})
 if not common:
@@ -49,7 +54,7 @@ for report, color in zip((a, b), ("#3573b9", "#df7b24")):
             "trainable_parameters": report["trainable_parameters"],
             "validation": row["validation"],
             "training_diagnostic": row["training_diagnostic"],
-            "training_completed": report["training_completed"],
+            "training_completed": report.get("training_completed", False),
         }
     )
 axes[0].set(
@@ -67,7 +72,37 @@ axes[1].set(
 for ax in axes:
     ax.grid(alpha=0.2)
     ax.legend(fontsize=8)
-fig.suptitle("Qwen target comparison — tokenizer, architecture and draft capacity also change")
+fig.suptitle(
+    ("IN PROGRESS — " if not b.get("training_completed") else "")
+    + "Qwen target comparison\nTokenizer, prompt format, architecture and draft capacity also change"
+)
 fig.tight_layout()
 fig.savefig(args.output, dpi=160, bbox_inches="tight")
+summary["input_sha256"] = {
+    p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in (args.baseline, args.larger)
+}
+if all("selected_validation" in r for r in (a, b)):
+    examples = [{e["group"]: e for e in r["selected_validation"]["examples"]} for r in (a, b)]
+    groups = sorted(set(examples[0]) & set(examples[1]))
+    paired = {
+        "shared_prompts": len(groups),
+        "note": "Validation-selected checkpoints; same source groups but different target responses/tokenizers/prompts. No independent test or pure size effect.",
+    }
+    for report, lookup in zip((a, b), examples):
+        by_domain = {}
+        for domain in ("prose", "code", "translation"):
+            rows = [lookup[g] for g in groups if lookup[g]["domain"] == domain]
+            blocks = sum(e["blocks"] for e in rows)
+            by_domain[domain] = {
+                "prompts": len(rows),
+                "blocks": blocks,
+                "accepted_new": sum(e["blocks"] * e["accepted_beyond_anchor"] for e in rows)
+                / blocks,
+            }
+        paired[report["config"]["model"]] = {
+            "best_step": report["best_step"],
+            "by_domain": by_domain,
+            "accepted_new": sum(d["accepted_new"] for d in by_domain.values()) / 3,
+        }
+    summary["selected_shared_prompt_comparison"] = paired
 Path(args.output).with_suffix(".json").write_text(json.dumps(summary, indent=2) + "\n")

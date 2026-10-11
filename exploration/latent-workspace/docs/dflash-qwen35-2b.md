@@ -59,3 +59,11 @@ round trips and 544 with trailing whitespace removed by the official chat templa
 there are zero other text mismatches. This whitespace normalization, which can
 affect code continuation, is another declared prompt-format difference. See
 [identity audit](../results/dflash-qwen35-2b-prompt-audit.json).
+
+Training is running as `dflash-qwen35-2b-fit-01`, with 104,876,032 trainable
+parameters and 295691 distinct response-token positions in the selected 6144
+responses. At early checkpoints the 2B setup is not ahead; do not treat this
+as a final result or stop the fixed-budget fit based on that observation.
+`scripts/plot_dflash_targets.py` compares shared measured update counts and,
+when final reports are available, validation-selected heads on shared source
+prompts. It marks incomplete curves and refuses to overwrite input reports.
