@@ -248,7 +248,7 @@ def audit_teacher(parent, output):
 
     parent, output = Path(parent), Path(output)
     output.mkdir(parents=True, exist_ok=False)
-    cfg = DraftConfig(**json.loads((parent / "config.json").read_text()))
+    cfg = DraftConfig(**json.loads((parent / "report.json").read_text())["config"])
     data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
     target = (
         AutoModelForCausalLM.from_pretrained(

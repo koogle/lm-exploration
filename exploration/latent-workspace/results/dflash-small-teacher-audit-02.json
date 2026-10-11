@@ -1,0 +1,70 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B",
+  "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "parent": "/runs/dflash-scale-6144-01",
+  "cases": [
+    {
+      "split": "train",
+      "domain": "prose",
+      "group": "prose:bc969b3a069593f231b639acb5518b6201a015445ce79e1579268fc4abd8cea9",
+      "response_tokens": 64,
+      "full_forward_teacher_argmax_agreement": 1.0,
+      "cached_feature_mean_cosine": 0.999954879283905,
+      "cached_feature_relative_rms_difference": 0.009529882110655308,
+      "future_perturbation_prefix_max_difference": 0.0
+    },
+    {
+      "split": "train",
+      "domain": "code",
+      "group": "code:Gloomymoon/SecKill",
+      "response_tokens": 64,
+      "full_forward_teacher_argmax_agreement": 1.0,
+      "cached_feature_mean_cosine": 0.9999282360076904,
+      "cached_feature_relative_rms_difference": 0.011810899712145329,
+      "future_perturbation_prefix_max_difference": 0.0
+    },
+    {
+      "split": "train",
+      "domain": "translation",
+      "group": "translation:8c34996ab059096b7b72073d072da601d0e5afe587bff4636c2d82a4270a5d14",
+      "response_tokens": 9,
+      "full_forward_teacher_argmax_agreement": 1.0,
+      "cached_feature_mean_cosine": 0.9995893239974976,
+      "cached_feature_relative_rms_difference": 0.026474742218852043,
+      "future_perturbation_prefix_max_difference": 0.0
+    },
+    {
+      "split": "validation",
+      "domain": "prose",
+      "group": "prose:e595543b8a47c81708d54c49f57644deb198d2f87fd8b13c71a83ab5cd5403aa",
+      "response_tokens": 64,
+      "full_forward_teacher_argmax_agreement": 1.0,
+      "cached_feature_mean_cosine": 0.9999381899833679,
+      "cached_feature_relative_rms_difference": 0.010859236121177673,
+      "future_perturbation_prefix_max_difference": 0.0
+    },
+    {
+      "split": "validation",
+      "domain": "code",
+      "group": "code:tencentyun/cos-python-sdk",
+      "response_tokens": 64,
+      "full_forward_teacher_argmax_agreement": 1.0,
+      "cached_feature_mean_cosine": 0.9999517798423767,
+      "cached_feature_relative_rms_difference": 0.009881619364023209,
+      "future_perturbation_prefix_max_difference": 0.0
+    },
+    {
+      "split": "validation",
+      "domain": "translation",
+      "group": "translation:c4de7bd48efddc1f5c87088f9f4754682894cfcc16ef9c545cbea4d6eba052bc",
+      "response_tokens": 41,
+      "full_forward_teacher_argmax_agreement": 0.9999999403953552,
+      "cached_feature_mean_cosine": 0.9987011551856995,
+      "cached_feature_relative_rms_difference": 0.03951186686754227,
+      "future_perturbation_prefix_max_difference": 0.0
+    }
+  ],
+  "completed": true,
+  "scope": "six source examples only; BF16 batch-shape differences permitted; not an exhaustive cache audit",
+  "test_status": "not accessed"
+}

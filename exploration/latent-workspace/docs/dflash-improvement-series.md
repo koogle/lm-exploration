@@ -68,3 +68,9 @@ are not regenerated, and validation tensors are hash-checked before/after extens
 The new teacher batch sees only new/previously uncached training groups. Record
 short/duplicate exclusions and actual usable counts. This preparation does not
 choose the next training architecture or establish sufficient optimization exposure.
+
+The first small-target teacher audit (`dflash-small-teacher-audit-01`) failed before
+model loading because it assumed a separate config.json for a historical training
+run. Read config from report.json instead; rerun `dflash-small-teacher-audit-02`
+completed. Retain both $0.50 reservations. This diagnostic fix does not change
+training or cached labels.
