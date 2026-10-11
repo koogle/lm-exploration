@@ -105,3 +105,9 @@ reservations ($40) for this pair; review progress before extending. The global
 $500 cap remains binding. Full-fitting and conditioning audits distinguish remaining
 optimization failure from memorization/generalization failure. No winner or useful
 quality is claimed until measured, and sealed test stays untouched until the gate.
+
+Batch-48 smoke completed in 115 seconds, all three verified rollouts match. At
+300 updates (806400 NEW-label exposures), the 12-response training diagnostic
+reaches NLL 0.239 / 6.979 consecutive matches; validation NLL 9.481 / 0.041.
+This is tiny-set memorization, not useful generalization. A full 96-response audit
+is running; do not treat diagnostic training samples as the whole corpus.
