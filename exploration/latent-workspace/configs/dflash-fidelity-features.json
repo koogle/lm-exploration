@@ -27,7 +27,7 @@
   "historical_corpus": "/runs/data-large-01/corpus.pt",
   "prompt_manifest": "",
   "continue_from": "",
-  "teacher_parent": "/runs/dflash-data-pool-01",
+  "teacher_parent": "/runs/dflash-fidelity-cache-01",
   "train_limit": 6144,
   "teacher_batch_size": 32,
   "rollout_prompts_per_domain": 4,

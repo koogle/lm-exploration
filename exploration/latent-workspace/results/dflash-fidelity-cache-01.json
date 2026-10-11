@@ -1,0 +1,115 @@
+{
+  "completed": true,
+  "config": {
+    "model": "Qwen/Qwen2.5-0.5B",
+    "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+    "layers": [
+      2,
+      7,
+      12,
+      17,
+      22
+    ],
+    "draft_layers": 5,
+    "qk_norm": true,
+    "block_size": 8,
+    "gamma": 4.0,
+    "train_prompts": 6600,
+    "validation_prompts": 192,
+    "test_prompts": 192,
+    "prompt_tokens": 128,
+    "response_tokens": 64,
+    "batch_size": 3,
+    "anchors_per_sequence": 8,
+    "steps": 20000,
+    "eval_every": 250,
+    "learning_rate": 0.0006,
+    "warmup_ratio": 0.04,
+    "seed": 42,
+    "max_seconds": 3300,
+    "continue_from": "",
+    "historical_corpus": "/runs/data-large-01/corpus.pt",
+    "prompt_manifest": "",
+    "teacher_parent": "/runs/dflash-data-pool-01",
+    "train_limit": 6144,
+    "teacher_batch_size": 32,
+    "rollout_prompts_per_domain": 4,
+    "quality_only": false,
+    "teacher_prompt_style": "raw",
+    "schedule_steps": 20000
+  },
+  "parent": "/runs/dflash-scale-6144-01",
+  "teacher_sequence_sha256": "337429d4f9c78ba92cf4efa55d2dbb2cc67bd3ca529e7d74dc9307c110552adf",
+  "old_feature_layers": [
+    2,
+    22
+  ],
+  "new_feature_layers": [
+    2,
+    7,
+    12,
+    17,
+    22
+  ],
+  "preserved_old_features_bitwise": true,
+  "teacher_audit": {
+    "by_split_domain": {
+      "train": {
+        "prose": {
+          "prompts": 2048,
+          "response_tokens": 130179,
+          "eligible_anchors": 115843,
+          "mean_unique_response_4gram_fraction": 0.7456896439367665,
+          "response_length_min": 10,
+          "response_length_max": 64
+        },
+        "code": {
+          "prompts": 2048,
+          "response_tokens": 129430,
+          "eligible_anchors": 115094,
+          "mean_unique_response_4gram_fraction": 0.7933076875702226,
+          "response_length_min": 8,
+          "response_length_max": 64
+        },
+        "translation": {
+          "prompts": 2048,
+          "response_tokens": 81460,
+          "eligible_anchors": 67124,
+          "mean_unique_response_4gram_fraction": 0.9764981916116551,
+          "response_length_min": 8,
+          "response_length_max": 64
+        }
+      },
+      "validation": {
+        "prose": {
+          "prompts": 64,
+          "response_tokens": 4033,
+          "eligible_anchors": 3585,
+          "mean_unique_response_4gram_fraction": 0.6675981122702435,
+          "response_length_min": 29,
+          "response_length_max": 64
+        },
+        "code": {
+          "prompts": 64,
+          "response_tokens": 4055,
+          "eligible_anchors": 3607,
+          "mean_unique_response_4gram_fraction": 0.7706796448087432,
+          "response_length_min": 33,
+          "response_length_max": 64
+        },
+        "translation": {
+          "prompts": 64,
+          "response_tokens": 2412,
+          "eligible_anchors": 1964,
+          "mean_unique_response_4gram_fraction": 0.9836096734433725,
+          "response_length_min": 11,
+          "response_length_max": 64
+        }
+      }
+    },
+    "recache_parent": "/runs/dflash-scale-6144-01"
+  },
+  "elapsed_seconds": 38.206615192,
+  "test_status": "No test tokens, features or responses accessed",
+  "source_sha256": "4e7c2bd29a51db1922f2956d97b8fc13d590833f174420bfcf55ece81e9bff22"
+}

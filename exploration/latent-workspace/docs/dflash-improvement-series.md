@@ -47,3 +47,13 @@ controls to test reliance on conditioning. Preserve all negative results and cur
 Reference: [DFlash paper](https://arxiv.org/html/2602.06036v1),
 [pinned source and fidelity audit](dflash-fidelity.md). Our QK-only variant is still
 an adaptation, not a full reference reproduction.
+
+## Feature-depth extension launched after successful cache check
+
+`dflash-fidelity-cache-01` adds post-block layers 7/12/17 to the archived 6144-response
+fit's layers 2/22. The ordered teacher-token SHA matches exactly; existing feature
+planes are reused bitwise. New planes use a masked BF16 target forward. No teacher
+answers are regenerated. `dflash-fidelity-features-01` uses five draft layers and
+five fixed feature layers with QK normalization, matching study 3's data, schedule
+and all other training settings. Its larger projection has more parameters; do not
+attribute differences solely to feature information independent of capacity.

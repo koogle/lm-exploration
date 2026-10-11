@@ -1,8 +1,10 @@
 # Open work
 
 Active: [small-target drafter improvement series](docs/dflash-improvement-series.md).
-Opt-in QK normalization and five-layer comparison implemented; bounded GPU smoke
-launched. Full studies and quality-gate validation are not yet complete.
+GPU normalization smoke passed (300 updates, frozen target, three verified rollouts).
+Two matched 20000-update fits are running, plus five-depth feature recaching on
+unchanged teacher tokens. 81 local tests passed. Current conservative reservations:
+$274.50/$500; no new authorization. Full studies and quality gate remain incomplete.
 
 Completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).
 Both targets used 6144 responses and 20000 updates. Selected shared-prompt NEW
