@@ -155,3 +155,7 @@ position and supervised NEW-token exposures separately. Replay must exactly matc
 the checkpoint sampler RNG state or the audit rejects the count. Conditioning
 positions are counted per sampled block; frozen cached features do not imply
 new backbone training or target forward computation.
+
+For full fitting audits of the wider 2B drafter, `--verify-parent RUN --fit-audit
+--long-run` selects a 3600-second diagnostic worker and reserves $5 for the full
+bound. The short worker remains 360 seconds/$0.50; no timeout is under-reserved.

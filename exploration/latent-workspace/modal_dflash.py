@@ -98,6 +98,29 @@ def train_long(config: dict, run_id: str, prepare_data: bool = False):
         cache.commit()
 
 
+@app.function(
+    image=image,
+    gpu="L40S",
+    cpu=4,
+    memory=32768,
+    timeout=3600,
+    retries=0,
+    max_containers=1,
+    volumes={"/cache": cache, "/runs": runs},
+)
+def audit_long(parent: str, run_id: str):
+    import sys
+
+    sys.path.insert(0, "/project/.venv/lib/python3.12/site-packages")
+    from latent_workspace.dflash_diagnostics import audit_fit
+
+    try:
+        return audit_fit(f"/runs/{parent}", f"/runs/{run_id}")
+    finally:
+        runs.commit()
+        cache.commit()
+
+
 @app.local_entrypoint()
 def main(
     config: str = "configs/dflash-pilot.json",
@@ -117,9 +140,16 @@ def main(
     if verify_parent:
         if any(not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", x) for x in (run_id, verify_parent)):
             raise ValueError("invalid verification run identifiers")
-        amount = reserve("artifacts/budget.json", run_id, "L40S", timeout_seconds=360)
-        print(f"Reserved ${amount:.2f} for the hard-bounded 360s diagnostic worker.")
-        report = verify.remote(verify_parent, run_id, fit_audit, teacher_audit)
+        if long_run and not fit_audit:
+            raise ValueError("long verification worker is only for full fitting audits")
+        timeout = 3600 if long_run else 360
+        amount = reserve("artifacts/budget.json", run_id, "L40S", timeout_seconds=timeout)
+        print(f"Reserved ${amount:.2f} for the hard-bounded {timeout}s diagnostic worker.")
+        report = (
+            audit_long.remote(verify_parent, run_id)
+            if long_run
+            else verify.remote(verify_parent, run_id, fit_audit, teacher_audit)
+        )
         Path(f"results/{run_id}.json").write_text(json.dumps(report, indent=2) + "\n")
         return
     from latent_workspace.dflash import DraftConfig
