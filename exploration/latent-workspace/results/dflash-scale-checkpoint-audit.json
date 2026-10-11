@@ -1,0 +1,25 @@
+{
+  "training_commit": "e3da59d",
+  "preparation_commit": "46f7256",
+  "training_source_sha256": "b069aace444f3879a776bc7baaf0f52439aa0928c2a6c85951a9592ae8696b4d",
+  "shared_validation_sha256": "3574078c772ce68430d556d12c95efab6ad73231b8cf285805187fa35e108498",
+  "same_initial_weights": true,
+  "runs": {
+    "768": {
+      "selected_step": 7000,
+      "downloaded_checkpoint_sha256": "c266c8e131b4929f0f470037300bdef86942357fc4a14aab1ab298ac8abb245b",
+      "full_audit_matches_validation_exactly": true,
+      "training_completed": true,
+      "verification_passed": true,
+      "frozen_target_has_no_gradients": true
+    },
+    "6144": {
+      "selected_step": 17500,
+      "downloaded_checkpoint_sha256": "af5078b5003b9db46a5e2d6dba4e85aab458f727ed1005ead987166e9ce7fbad",
+      "full_audit_matches_validation_exactly": true,
+      "training_completed": true,
+      "verification_passed": true,
+      "frozen_target_has_no_gradients": true
+    }
+  }
+}

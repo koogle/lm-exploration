@@ -105,3 +105,14 @@ Current reservations before these launches: $205.50, not actual billed cost.
 Two independent training apps may run concurrently; each has its own reservation.
 A new job is required for any continuation. Raw curves, checkpoints and data remain
 on the dedicated volume. Push configs/source/protocol before executing the comparison.
+
+## Executed outcome
+
+Both fits completed their 20000-update budgets. [Results and final curves](../results/dflash-data-scaling.md)
+show selected held-out new-token acceptance improving from 0.2185 to 0.3844. At the
+final update, validation NLL is 9.3788 versus 6.3464. Full-response training audits
+confirm that the smaller fit memorizes while the larger remains weak on training
+and validation alike. All twelve FP32 rollout prompts match for both heads; median
+speed ratios 0.994x/1.095x are only a small timing check. No test labels or metrics.
+Actual source/initialization/validation hashes match; raw reports and downloaded
+checkpoint identities are archived. Total reservations now $226.50/$500, not billed cost.

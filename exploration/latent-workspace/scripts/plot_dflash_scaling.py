@@ -75,8 +75,17 @@ for color, r in zip(("tab:blue", "tab:orange"), runs):
     )
 axes[0].set(xlabel="Optimizer updates", ylabel="New-token NLL (lower is better)")
 axes[1].set(
-    xlabel="Optimizer updates", ylabel="Validation consecutive NEW matches / 7", ylim=(0, None)
+    xlabel="Optimizer updates",
+    ylabel="Validation accepted new tokens per block (max 7)",
+    ylim=(
+        0,
+        max(
+            1.05,
+            1.1 * max(p["validation"]["accepted_beyond_anchor"] for r in runs for p in r["curve"]),
+        ),
+    ),
 )
+axes[1].axhline(1, color="grey", linestyle=":", linewidth=1, label="1 new token (reference)")
 axes[2].set(
     xlabel="New draft position; known anchor excluded",
     ylabel="Validation token accuracy",
@@ -97,7 +106,7 @@ fig.text(
     fontsize=9,
 )
 fig.tight_layout(rect=(0, 0.04, 1, 0.95))
-fig.savefig(args.output.with_suffix(".png"), dpi=160)
+fig.savefig(args.output.with_suffix(".png"), dpi=160, bbox_inches="tight", pad_inches=0.2)
 if args.partial:
     print("Interim curves only; jobs are still running. " + str(args.output.with_suffix(".png")))
     raise SystemExit(0)
@@ -124,6 +133,11 @@ for domain in ("prose", "code", "translation"):
         (delta[indices] * sampled_weights[:, :, None]).sum(1) / sampled_weights.sum(1)[:, None] / 3
     )
     point += (delta * weights[:, None]).sum(0) / weights.sum() / 3
+expected_difference = [
+    runs[1]["selected_validation"][key] - runs[0]["selected_validation"][key]
+    for key in ("accepted_beyond_anchor", "nll")
+]
+np.testing.assert_allclose(point, expected_difference, atol=1e-5, rtol=1e-5)
 summary = {
     "matched_initialization_and_validation": True,
     "source_sha256": runs[0]["source_sha256"],

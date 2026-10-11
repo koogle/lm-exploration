@@ -68,3 +68,12 @@
   0.3 new tokens / 7. FP32 verified output matches three prompts but is slower than
   AR. Prioritize broader, better-sampled target responses with fixed architecture;
   defer representation experiments. See results/dflash-findings.md.
+
+- 2026-10-11: Continued work moved to the consolidated `koogle/0-to-llm` repository
+  after discovering the source repository's migration notice. Restored the existing
+  budget ledger before launching jobs; preserved prior reservations and Modal resources.
+- 2026-10-11: Completed matched fresh 768/6144-response DFlash fits at 20000 updates.
+  More data improves held-out acceptance (0.2185 to 0.3844) and reduces overfitting,
+  but larger-set training loss also remains high. Keep architecture fixed while
+  resolving optimization/data coverage; no sufficient dataset size or broad speedup
+  established. New test prompts remain sealed. See results/dflash-data-scaling.md.

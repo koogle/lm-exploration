@@ -6,20 +6,21 @@ condition on a known anchor, and verify proposals with Qwen. The original J-spac
 workspace and layer-selection experiments are deferred until this baseline works.
 No backbone pretraining or collaborative proposal module.
 
-See the [DFlash baseline protocol](docs/dflash-baseline.md) for the paper/code
-comparison, data contract and predeclared evaluation. The implementation is a compact
-Qwen2 adaptation, not a full paper reproduction. The [completed 21000-update fit](results/dflash-findings.md)
-memorizes the 380-response training corpus but fails to generalize: best validation
-acceptance is only 0.284 new tokens / 7. FP32 verified output matches on three checked
-prompts, but generation is slower than Qwen alone. Broader, better-sampled training
-data is the next priority; no useful fast drafter is established.
+The [completed response-data study](results/dflash-data-scaling.md) compares 768
+versus 6144 training responses at the same 20000-update budget and on 192 shared
+validation responses. Best accepted NEW prefixes improve from **0.218 to 0.384
+out of seven**, but reliable multi-token drafting is still unsolved. All twelve
+FP32 rollout prompts matched Qwen for both heads; the larger head's median observed
+speed ratio was 1.095x on this small check, not a general performance claim.
 
-![DFlash-style fitting and validation curves](results/dflash-fit-01.png)
+![DFlash response-data scaling curves](results/dflash-data-scaling.png)
 
-A [controlled 768-versus-6144 response comparison](docs/dflash-data-scaling.md)
-is now running with improved source sampling, identical initial weights and a shared
-192-response validation cache. The reference-paper generalization evidence and
-the differences from our small-Qwen adaptation are recorded in that protocol.
+See the [baseline protocol](docs/dflash-baseline.md) and
+[data-scaling protocol/reference comparison](docs/dflash-data-scaling.md).
+This is a compact Qwen2 adaptation, not a full DFlash paper reproduction. The earlier
+[380-response fitting study](results/dflash-findings.md) established tiny-set
+memorization; the new study demonstrates better held-out prediction with more data.
+Neither establishes a sufficient final training corpus or optimization budget.
 
 ## Development
 

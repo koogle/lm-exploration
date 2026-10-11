@@ -1,7 +1,9 @@
 # Experiment evidence
 
-Current priority: [DFlash-style fitting results and curves](dflash-findings.md).
-The baseline fits its tiny training corpus but fails to generalize; no speedup.
+Current evidence: [DFlash response-data scaling](dflash-data-scaling.md).
+The matched 768-versus-6144 response comparison improves held-out new-token acceptance
+from 0.218 to 0.384. Useful multi-token drafting and broad speedup remain unestablished.
+The [earlier tiny-corpus fit](dflash-findings.md) remains as historical evidence.
 
 ## Verified initial checks (2026-10-11)
 

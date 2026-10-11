@@ -1,57 +1,57 @@
 # Open work
 
-Location: `exploration/latent-workspace/` in the private LM Exploration repository,
+Location: `exploration/latent-workspace/` in private `koogle/0-to-llm` (LM Exploration),
 main; direct commits and regular pushes authorized. Historical source:
 `koogle/latent-workspace`. See [consolidation](../../docs/consolidation.md).
 
-Current priority: [DFlash-style Qwen drafting baseline](docs/dflash-baseline.md).
-New authorized work: [larger response-data comparison](docs/dflash-data-scaling.md),
-768 versus 6144 nested responses, matched architecture/initialization/exposure and
-shared fresh validation. Improved sampling and batched teacher preparation are
-implemented. GPU preparation smoke passed (24 training and nine validation responses);
-full pool preparation completed: 6538 usable train responses and 192 validation.
-The 768-response fit completed 20000 updates: best validation new matches 0.2185,
-final validation NLL 9.3788. Full-response audit: final train NLL 0.1377 and 6.8259
-new matches / 7. All 12 FP32 rollout outputs matched; timings vary by prompt, with
-one fast code example consisting largely of repeated zeroes. The 6144-response
-fit is still running to the same update budget. Initial-weight, executable-
-source and ordered-validation hashes match. 75 local tests
-pass, including fresh training from an archived teacher cache. The existing
-reservation ledger was restored to this consolidated checkout; current reservations
-are $226 after preparation, training and the smaller fit's audit, not billed usage.
-Representation experiments are deferred. One known anchor plus seven masked proposals,
-target-generated labels, fixed feature K/V injection, random-anchor packed training
-and cached greedy verification are implemented. No useful fast drafter is established.
+Current priority: a useful DFlash-style drafter for frozen Qwen2.5-0.5B.
+Representation/layer/J-space experiments remain deferred.
 
-[Completed fitting study and curves](results/dflash-findings.md): 21000 updates on
-380 usable mixed-domain training responses (20661 unique response-token slots),
-47 fresh validation responses; 48 test prompts remain ungenerated and unevaluated.
-All-response audit: final training NLL 0.0052 and 6.9987 consecutive new matches / 7,
-versus validation NLL 9.6334 and 0.2557 matches. The validation-selected checkpoint
-at update 17000 reaches only 0.2844 validation matches. Tiny-corpus memorization,
-not useful generalization. The same architecture/data were retained throughout.
+[Completed data-size study](results/dflash-data-scaling.md): fresh 768- and 6144-response
+fits, same initial weights, architecture, 20000 updates, 3.36M repeated new-token
+label exposures and 192 shared validation responses. All identity checks match.
+The common pool contains 6538 usable training responses, generated in batches from
+shuffled sources with varied prose/code prefix offsets. Source revisions, groups,
+near-duplicate screening, dropped rows, actual counts and hashes are archived.
+New 192 test prompts have no generated labels or metrics; earlier holdouts remain
+quarantined. This study is within-source generalization, not arbitrary-domain transfer.
 
-Actual FP32 verified rollout matched ordinary Qwen on all three measured prompts,
-but achieved only 0.879–0.912x AR speed. Three prompts are a pipeline check, not a
-benchmark. Original BF16 parity failed due to a reproduced fixed-input argmax flip;
-BF16 parity/speed remain unestablished. Training/cached teacher features use BF16.
-The selected checkpoint is downloaded and checksum-verified at
-`artifacts/dflash-fit-best.pt`; both best/latest checkpoints remain on Modal.
+Best validation NEW matches / 7: **0.2185 -> 0.3844**. The paired conditional bootstrap
+interval for the gain is [0.1343, 0.1993]; it does not capture selection bias or seed
+variation. All three validation domains improve. At the final update, small-set
+full-response train/validation NLL is 0.1377/9.3788; large-set is 5.9707/6.3464.
+More data reduces overfitting, but the larger head is still weak on training as well
+as validation. This does not identify a sufficient dataset size or rule out further
+optimization/capacity limitations. Both full-response audits evaluate up to eight
+fixed anchors/response, not every possible anchor.
 
-69 local tests pass; actual GPU training, full-response fitting audit and FP32
-rollout checks completed. Source/checkpoint/data identities are archived. Failed
-initial remote import and BF16 checks remain documented, not relabeled successful.
-The original user budget was $200–$500. Current ceiling $500; cumulative conservative
-reservations at that earlier checkpoint were $205.50, not a confirmed bill.
+All twelve shared FP32 rollout prompts matched Qwen for both heads. Median prompt
+speed ratios are 0.994x and 1.095x; this small check includes a repetitive-zero code
+outlier and is not a broad speed qualification. BF16 output parity remains unresolved.
+Training and cached teacher features use BF16; correctness-reference rollout is FP32
+on upcast stored weights. Speculation preserves target behavior, not human answer quality.
 
-Next: improve target-response coverage while holding the architecture fixed.
-The pilot takes first eligible source rows and first-token prose/code prefixes;
-a spot check includes license-header continuations and consecutive parliamentary
-translation prompts. Use seeded source mixing, varied valid continuation positions,
-response-length/repetition audits and more independent validation groups before
-larger fitting/data-size runs. Keep existing test groups quarantined. These changes
-are pending, not executed. The sufficient corpus size is still unknown; do not
-resume layer/J-space experiments based on memorization or decreasing training loss.
+75 local tests pass. Both actual GPU fits, full-response audits and rollout checks
+completed. Selected heads are downloaded and checksum-verified at
+`artifacts/dflash-scale-{768,6144}-best.pt`; best/latest checkpoints persist on Modal.
+Both selected heads also ran through the CLI in the consolidated checkout.
+All jobs in this study have completed. Cumulative conservative reservations are
+$226.50 under the original authorized $500 upper cap; not a confirmed bill.
+
+Next: establish adequate optimization and data coverage with the same drafting
+baseline, guided by held-out accepted multi-token prefixes and verified end-to-end
+latency. The 6144-response head's high training loss keeps optimization an open factor.
+Further source diversity, longer teacher responses and larger mixed-domain pools
+remain untested. Bounded streaming shuffle is not globally uniform sampling, Python
+is the only code language, and translation separation is sentence-level. Keep test
+sealed while making these decisions. Do not resume representation sweeps or claim
+that scaling data alone is guaranteed to solve useful drafting.
+
+Earlier DFlash work: [380-response fit](results/dflash-findings.md) demonstrated
+memorization after 21000 updates but only 0.284 best validation new matches on a
+different smaller holdout. Its sampling and validation differ from the new study;
+it is historical evidence, not the matched small-data control. The original BF16
+verifier failure and fixed-input arithmetic diagnosis remain archived.
 
 The [trained conditioning study is complete](results/conditioning-findings.md).
 Executed: 96 residual/attention probes across two seeds; nine Qwen2.5-0.5B decoder

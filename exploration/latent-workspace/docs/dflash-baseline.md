@@ -91,7 +91,7 @@ out prompt/domain, 32-token cap, three alternating-order warmed repeats, same ta
 and precision, CUDA synchronization and end-to-end time including prefill. That is
 only a pipeline latency check, not enough evidence for a general speed claim.
 
-Before scaling: demonstrate a stable multi-token accepted prefix on held-out target
+Before qualifying this as a useful drafter: demonstrate a stable multi-token accepted prefix on held-out target
 responses, inspect domain/position failure patterns and repetition, expand independent
 validation coverage, and profile end-to-end latency. Do not resume representation
 ablations merely because training loss falls or a tiny set can be memorized.
@@ -195,3 +195,10 @@ at update 17000. FP32 rollout matched all three checked prompts, but 0.879–0.9
 AR speed means slower generation. Full training fitting does not establish useful
 held-out drafting or a sufficient data budget. The next priority is the data work
 above; representation experiments remain deferred. All new test prompts stay sealed.
+
+Subsequent user-directed [data-size testing](dflash-data-scaling.md) is now complete:
+768 versus 6144 responses improves selected validation new-token acceptance from
+0.2185 to 0.3844, with identical architecture/initialization/exposure and a shared
+192-response validation cache. [Final results](../results/dflash-data-scaling.md)
+retain the substantial remaining quality gap and the high larger-set training loss.
+This diagnostic scaling experiment does not qualify the baseline as a strong drafter.
