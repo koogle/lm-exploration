@@ -71,11 +71,15 @@ def audit_fit(parent, output):
         .requires_grad_(False)
     )
     draft = DFlashDrafter(target.config, cfg).cuda().eval()
+    audit_source = hashlib.sha256()
+    for file in sorted(Path(__file__).parent.glob("*.py")):
+        audit_source.update(file.name.encode() + file.read_bytes())
     report = {
+        "audit_source_sha256": audit_source.hexdigest(),
         "parent": str(parent),
         "teacher_sequence_sha256": digest.hexdigest(),
         "training_source_sha256": source_report["source_sha256"],
-        "note": "All training and validation responses, up to eight fixed anchors per response; not every possible anchor. Same BF16 evaluation as training curves. No training or test access.",
+        "note": "All training and validation responses, up to eight fixed anchors per response; not every possible anchor. Same BF16 evaluation as training curves. No optimizer updates or test-response access.",
         "checkpoints": {},
     }
     for name in ("best", "latest"):
