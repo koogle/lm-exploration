@@ -1,0 +1,17 @@
+[
+  {
+    "domain": "prose",
+    "prompt": "= 2011 \u2013 12 Michigan Wolverines men 's basketball team =\nThe 2011 \u2013 12 Michigan Wolverines men 's basketball team represented the University of Michigan during the 2011 \u2013 12 NCAA Division I men 's basketball season . The team played its home games in Ann Arbor , Michigan at Crisler Center for the 45th consecutive year . It had a seating capacity of 12 @,@ 721 . It was also the team 's 95th straight season as a member of the Big Ten Conference . Fifth @",
+    "response": ",@ 10th @,@ 11th @,@ 12th @,@ 13th @,@ 14th @,@ 15th @,@ 16th @,@ 17th @,@ 18th @,@ 19th @,@ 20"
+  },
+  {
+    "domain": "code",
+    "prompt": "# Copyright (c) 2012 Lars Hupfeldt Nielsen, Hupfeldt IT\n# All rights reserved. This work is under a BSD license, see LICENSE.TXT.\n\nimport sys\nimport os.path\n\nfrom pytest import raises\n\nfrom multiconf import mc_config, ConfigItem, ConfigException, MC_REQUIRED\nfrom multiconf.envs import EnvFactory\n\nfrom .utils.utils import config_error, next_line_num, replace_ids, lines_in, start_file_line\nfrom .utils.messages import already_printed_msg, config_error_mc_required_expected, mc_required_expected\nfrom .utils.messages import config",
+    "response": "_error_mc_required_not_found, mc_required_not_found\n\n\ndef test_mc_required_not_found():\n    \"\"\"Test that MC_REQUIRED is raised when a required item is not found.\"\"\"\n    with raises(ConfigException):\n        mc_config(ConfigItem(\"not_found\"))\n\n\ndef test_mc_required_expected():\n    \"\"\"Test that"
+  },
+  {
+    "domain": "translation",
+    "prompt": "Translate English to German.\nEnglish: Over the past two years, they sponsored bills in 34 States to force voters to show a photo ID card.\nGerman:",
+    "response": " \u00dcber die letzten zwei Jahre haben sie Gesetze in 34 Staaten eingef\u00fchrt, um die W\u00e4hler zu zwingen, ein Foto-ID-Karte vorzulegen.\n\n<think>\nWe need to translate the given English sentence into German. The sentence is: \"Over the past two years, they sponsored bills in"
+  }
+]

@@ -298,14 +298,49 @@ def prepare_pool(cfg, output, on_checkpoint=None):
             manifest["model"], revision=manifest["model_revision"]
         )
         source_hash = hashlib.sha256(Path(cfg.prompt_manifest).read_bytes()).hexdigest()
+        counts = defaultdict(int)
+        limits = {
+            "train": cfg.train_prompts // 3,
+            "validation": cfg.validation_prompts // 3,
+            "test": cfg.test_prompts // 3,
+        }
+        selected = []
+        for record in manifest["records"]:
+            key = (record["domain"], record["split"])
+            if counts[key] < limits[record["split"]]:
+                selected.append(record)
+                counts[key] += 1
+        manifest["records"] = selected
         for record in manifest["records"]:
             text = source_tokenizer.decode(record["prompt_ids"], skip_special_tokens=False)
-            record["prompt_ids"] = tokenizer.encode(text, add_special_tokens=False)
+            if cfg.teacher_prompt_style == "chat_no_thinking":
+                if record["domain"] == "prose":
+                    text = (
+                        "Continue the following prose. Output only the continuation, without repeating the supplied text or adding commentary.\n\n"
+                        + text
+                    )
+                elif record["domain"] == "code":
+                    text = (
+                        "Continue the following code. Output only the continuation, without repeating the supplied code, explanation, or Markdown fences.\n\n"
+                        + text
+                    )
+                else:
+                    text = "Output only the German translation, without explanation.\n" + text
+                record["prompt_ids"] = tokenizer.apply_chat_template(
+                    [{"role": "user", "content": text}],
+                    tokenize=True,
+                    add_generation_prompt=True,
+                    enable_thinking=False,
+                    return_dict=False,
+                )
+            else:
+                record["prompt_ids"] = tokenizer.encode(text, add_special_tokens=False)
         manifest.update(
             model=cfg.model,
             model_revision=cfg.model_revision,
             parent_manifest_sha256=source_hash,
-            adaptation="same decoded source prompts, retokenized without truncation or chat template",
+            adaptation="same decoded source prompts, retokenized without truncation",
+            teacher_prompt_style=cfg.teacher_prompt_style,
         )
         # Retokenization changes token identities; repeat the cross-split audit.
         registry = PromptRegistry()
@@ -325,13 +360,22 @@ def prepare_pool(cfg, output, on_checkpoint=None):
         .eval()
         .requires_grad_(False)
     )
-    _, audit = build_batched_teacher(cfg, target, tokenizer, manifest, output, deadline)
+    data, audit = build_batched_teacher(cfg, target, tokenizer, manifest, output, deadline)
     source = hashlib.sha256()
     for file in sorted(Path(__file__).parent.glob("*.py")):
         source.update(file.name.encode() + file.read_bytes())
     report = {
         "config": cfg.to_dict(),
         "teacher_audit": audit,
+        "validation_samples": [
+            {
+                "domain": d,
+                "prompt": tokenizer.decode(e["tokens"][: e["prompt_length"]]),
+                "response": tokenizer.decode(e["tokens"][e["prompt_length"] :]),
+            }
+            for d in DOMAINS
+            for e in [next(x for x in data["validation"] if x["domain"] == d)]
+        ],
         "elapsed_seconds": time.monotonic() - started,
         "completed": True,
         "source_sha256": source.hexdigest(),

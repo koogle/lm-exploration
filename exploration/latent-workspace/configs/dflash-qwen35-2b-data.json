@@ -28,5 +28,6 @@
   "train_limit": 0,
   "teacher_batch_size": 16,
   "rollout_prompts_per_domain": 4,
-  "quality_only": true
+  "quality_only": true,
+  "teacher_prompt_style": "chat_no_thinking"
 }

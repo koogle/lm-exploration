@@ -194,7 +194,12 @@ def benchmark(drafter, target, tokenizer, examples, mask_id):
 
 def restore_continuation(cfg, previous, state, drafter, optimizer, generator):
     old = previous["config"]
-    for key, default in (("teacher_parent", ""), ("train_limit", 0)):
+    for key, default in (
+        ("teacher_parent", ""),
+        ("train_limit", 0),
+        ("schedule_steps", 0),
+        ("teacher_prompt_style", "raw"),
+    ):
         if getattr(cfg, key) != old.get(key, default):
             raise ValueError(f"continuation changes cached subset: {key}")
     for key in (
@@ -270,8 +275,11 @@ def run_dflash(cfg, output, on_checkpoint=None):
             "prompt_tokens",
             "response_tokens",
             "block_size",
+            "teacher_prompt_style",
         ):
-            if json.dumps(cfg.to_dict()[key]) != json.dumps(parent_cfg[key]):
+            if json.dumps(cfg.to_dict()[key]) != json.dumps(
+                parent_cfg.get(key, "raw") if key == "teacher_prompt_style" else parent_cfg[key]
+            ):
                 raise ValueError(f"teacher cache/config mismatch: {key}")
         data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
         data["train"] = nested_subset(data["train"], cfg.train_limit, cfg.seed)
@@ -355,12 +363,20 @@ def run_dflash(cfg, output, on_checkpoint=None):
             tokens, memory, anchors = collate(
                 examples, cfg.anchors_per_sequence, cfg.block_size, generator, device
             )
-            warmup = max(1, round(cfg.steps * cfg.warmup_ratio))
+            schedule_steps = cfg.schedule_steps or cfg.steps
+            schedule_step = step if cfg.schedule_steps else cycle_step
+            warmup = max(1, round(schedule_steps * cfg.warmup_ratio))
             scale = (
-                min(cycle_step / warmup, 1.0)
-                if cycle_step <= warmup
+                min(schedule_step / warmup, 1.0)
+                if schedule_step <= warmup
                 else 0.5
-                * (1 + math.cos(math.pi * (cycle_step - warmup) / max(1, cfg.steps - warmup)))
+                * (
+                    1
+                    + math.cos(
+                        math.pi
+                        * min(1.0, (schedule_step - warmup) / max(1, schedule_steps - warmup))
+                    )
+                )
             )
             for group in optimizer.param_groups:
                 group["lr"] = cfg.learning_rate * scale

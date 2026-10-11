@@ -102,7 +102,10 @@ def test_batched_cache_excludes_test_and_removes_padding_from_features(tmp_path,
     assert audit["by_split_domain"]["train"]["code"]["eligible_anchors"] == 2
 
 
-def test_fresh_training_from_teacher_cache_does_not_restore_a_model(tmp_path, monkeypatch):
+@pytest.mark.parametrize("schedule_steps", [0, 4])
+def test_fresh_training_from_teacher_cache_does_not_restore_a_model(
+    tmp_path, monkeypatch, schedule_steps
+):
     import json
     from types import SimpleNamespace
 
@@ -117,6 +120,8 @@ def test_fresh_training_from_teacher_cache_does_not_restore_a_model(tmp_path, mo
         draft.cfg,
         teacher_parent=str(parent),
         train_limit=6,
+        schedule_steps=schedule_steps,
+        quality_only=bool(schedule_steps),
         steps=1,
         eval_every=1,
         batch_size=3,
@@ -168,3 +173,13 @@ def test_fresh_training_from_teacher_cache_does_not_restore_a_model(tmp_path, mo
     assert resumed["curve"][-1]["step"] == 2
     assert resumed["teacher_sequence_sha256"] == report["teacher_sequence_sha256"]
     assert resumed["parent_run"] == str(tmp_path / "fit")
+
+    if schedule_steps:
+        uninterrupted = trainer.run_dflash(replace(cfg, steps=2), tmp_path / "uninterrupted")
+        assert uninterrupted["verification_passed"] is None
+        a = torch.load(tmp_path / "resumed" / "latest.pt", weights_only=True)
+        b = torch.load(tmp_path / "uninterrupted" / "latest.pt", weights_only=True)
+        for key in a["drafter"]:
+            torch.testing.assert_close(a["drafter"][key], b["drafter"][key], atol=0, rtol=0)
+        assert a["optimizer"]["param_groups"] == b["optimizer"]["param_groups"]
+        assert torch.equal(a["sampler_rng"], b["sampler_rng"])

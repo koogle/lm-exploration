@@ -1,0 +1,14 @@
+{
+  "raw_smoke": "dflash-qwen35-2b-smoke-01",
+  "raw_preparation": {
+    "run": "dflash-qwen35-2b-data-01",
+    "status": "explicitly stopped before training after raw-format smoke sample audit",
+    "app": "ap-0VS17ySCOVngZuOu9A30LO"
+  },
+  "chat_preparation_smoke_01": {
+    "status": "failed before target generation",
+    "reason": "Transformers 5 chat template returned BatchEncoding; JSON serialization rejected it",
+    "fix": "explicit return_dict=False, validated against pinned tokenizer"
+  },
+  "budget_policy": "Retain all reservations for stopped and failed runs."
+}

@@ -139,3 +139,8 @@ set `continue_from` and retain those two fields as checked provenance; restorati
 uses the run's archived subset, not a new data selection. As with earlier resumes,
 a new warmup/cosine cycle is explicit. The fresh-cache and continuation path is
 covered by a tiny-model end-to-end test.
+
+Qwen3.5 quality runs can set `schedule_steps` to preserve one global warmup/cosine
+schedule across bounded workers. `steps` is the number of updates requested in
+that worker; continuation uses the restored absolute update count for scheduling.
+The default zero retains historical new-cycle continuation behavior.

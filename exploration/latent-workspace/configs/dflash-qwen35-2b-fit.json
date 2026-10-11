@@ -24,9 +24,11 @@
   "historical_corpus": "/runs/data-large-01/corpus.pt",
   "prompt_manifest": "",
   "continue_from": "",
-  "teacher_parent": "/runs/dflash-qwen35-2b-data-01",
+  "teacher_parent": "/runs/dflash-qwen35-2b-chat-data-01",
   "train_limit": 6144,
   "teacher_batch_size": 16,
   "rollout_prompts_per_domain": 4,
-  "quality_only": true
+  "quality_only": true,
+  "schedule_steps": 20000,
+  "teacher_prompt_style": "chat_no_thinking"
 }

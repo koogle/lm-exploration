@@ -19,9 +19,14 @@ matches by domain. Test remains sealed. Do not compare raw cross-tokenizer NLL
 as if it were the same task, or call target imitation human answer quality.
 
 For matched source prompts, decode the archived 0.5B prompt IDs and retokenize
-without truncation or chat wrapping. Retain original groups/splits and re-audit
+without truncation. Retain original groups/splits and re-audit
 cross-split prompt duplication. Generate fresh 2B continuations/features. This
-uses raw continuation prompts, not instruction-template evaluation of this model.
+initially used raw continuation prompts. The smoke sample audit found repetitive
+prose and appended thinking text after translations, so the raw full preparation
+was stopped before training. The revised protocol uses the official chat template
+with `enable_thinking=False`, explicit continuation-only prose/code requests, and
+translation-only instructions. Source text/groups are preserved, but prompt format
+is an additional cross-model difference. Samples remain archived.
 Record actual usable counts; short and duplicate responses can differ by target.
 
 Quality-only runs explicitly omit rollout verification: Qwen3.5's recurrent
@@ -30,6 +35,13 @@ report verification as null, not successful. No latency qualification is intende
 
 Status: bounded 40-update Modal smoke completed in 116.2 seconds, with finite
 training and no target gradients. It has 104,876,032 trainable parameters.
-Fresh teacher preparation for the larger comparison is running. No trained
+Chat-formatted teacher smoke is running; raw preparation was deliberately stopped.
+The first chat preparation failed before generation because the tokenizer returned
+a BatchEncoding; explicit `return_dict=False` fixes serialization. No trained
 2B generalization conclusion yet. The smoke tests loading, feature extraction, gradients
 and held-out scoring; it cannot establish generalization or adequate training.
+
+The planned fit uses a fixed 20000-update global cosine schedule. Bounded-worker
+continuations restore weights, optimizer and sampler/RNG state while retaining
+this global schedule (`schedule_steps=20000`); the default historical continuation
+behavior remains a new cycle. Exact split-versus-uninterrupted training is tested.

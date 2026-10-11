@@ -43,12 +43,17 @@ class DraftConfig:
     teacher_batch_size: int = 1
     rollout_prompts_per_domain: int = 1
     quality_only: bool = False
+    teacher_prompt_style: str = "raw"
+    schedule_steps: int = 0  # Optional fixed global schedule across bounded workers.
 
     def validate(self):
+        if self.teacher_prompt_style not in ("raw", "chat_no_thinking"):
+            raise ValueError("unknown teacher prompt style")
         # During continuation, teacher_parent remains provenance. The trainer
         # restores the continuation's archived subset and checks this field.
         if (
-            self.train_limit < 0
+            self.schedule_steps < 0
+            or self.train_limit < 0
             or self.train_limit % 3
             or min(self.teacher_batch_size, self.rollout_prompts_per_domain) < 1
         ):
@@ -228,6 +233,10 @@ def synchronize(device):
 @torch.no_grad()
 def verified_generate(drafter, target, prompt, max_new_tokens, mask_id, eos_id=None):
     """Greedy-only verifier. Anchor is excluded from accepted-draft statistics."""
+    if getattr(target.config, "model_type", "") == "qwen3_5_text":
+        raise NotImplementedError(
+            "Qwen3.5 hybrid-state rollback is not implemented; use quality evaluation"
+        )
     if max_new_tokens < 1 or prompt.shape[0] != 1:
         raise ValueError("positive generation length and batch one required")
     drafter.eval()
