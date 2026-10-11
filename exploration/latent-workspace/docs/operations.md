@@ -173,3 +173,9 @@ with `extend_teacher_parent` retains old cached examples and all held-out prompt
 then generates only uncached training responses. It rejects changed teacher settings
 and hash-checks unchanged validation tokens/features. Both use the same bounded
 3600-second worker and $5 reservation. No sealed-test teacher generation occurs.
+
+Long DFlash preparation/training and full-audit workers now request 96 GiB host RAM
+so expanded feature caches fit without out-of-memory failures. Short smoke/audit
+workers remain at 32 GiB. GPU, CPU count, hard 3600-second bound and conservative
+$5 reservation are unchanged; these are not billed-cost claims. Existing running
+workers retain their original resource snapshot.
