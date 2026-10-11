@@ -57,14 +57,15 @@ def pilot(config: dict, run_id: str):
     max_containers=1,
     volumes={"/cache": cache, "/runs": runs},
 )
-def verify(parent: str, run_id: str, fit_audit: bool = False):
+def verify(parent: str, run_id: str, fit_audit: bool = False, teacher_audit: bool = False):
     import sys
 
     sys.path.insert(0, "/project/.venv/lib/python3.12/site-packages")
-    from latent_workspace.dflash_diagnostics import audit_fit, diagnose
+    from latent_workspace.dflash_diagnostics import audit_fit, audit_teacher, diagnose
 
     try:
-        return (audit_fit if fit_audit else diagnose)(f"/runs/{parent}", f"/runs/{run_id}")
+        function = audit_teacher if teacher_audit else audit_fit if fit_audit else diagnose
+        return function(f"/runs/{parent}", f"/runs/{run_id}")
     finally:
         runs.commit()
         cache.commit()
@@ -105,9 +106,12 @@ def main(
     long_run: bool = False,
     fit_audit: bool = False,
     prepare_data: bool = False,
+    teacher_audit: bool = False,
 ):
     if prepare_data and (not long_run or verify_parent):
         raise ValueError("--prepare-data requires --long-run and no verification parent")
+    if teacher_audit and (not verify_parent or fit_audit):
+        raise ValueError("teacher audit requires a parent and cannot be combined with fit audit")
     if fit_audit and not verify_parent:
         raise ValueError("--fit-audit requires --verify-parent")
     if verify_parent:
@@ -115,7 +119,7 @@ def main(
             raise ValueError("invalid verification run identifiers")
         amount = reserve("artifacts/budget.json", run_id, "L40S", timeout_seconds=360)
         print(f"Reserved ${amount:.2f} for the hard-bounded 360s diagnostic worker.")
-        report = verify.remote(verify_parent, run_id, fit_audit)
+        report = verify.remote(verify_parent, run_id, fit_audit, teacher_audit)
         Path(f"results/{run_id}.json").write_text(json.dumps(report, indent=2) + "\n")
         return
     from latent_workspace.dflash import DraftConfig

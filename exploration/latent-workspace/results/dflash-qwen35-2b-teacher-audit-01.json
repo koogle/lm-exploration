@@ -1,0 +1,70 @@
+{
+  "model": "Qwen/Qwen3.5-2B",
+  "model_revision": "15852e8c16360a2fea060d615a32b45270f8a8fc",
+  "parent": "/runs/dflash-qwen35-2b-chat-data-01",
+  "cases": [
+    {
+      "split": "train",
+      "domain": "prose",
+      "group": "prose:74ff319313704a868108ba2100129acc29aff4cc15394205c4aa1fef34c879b7",
+      "response_tokens": 55,
+      "full_forward_teacher_argmax_agreement": 0.9999999403953552,
+      "cached_feature_mean_cosine": 0.999929666519165,
+      "cached_feature_relative_rms_difference": 0.011754349805414677,
+      "future_perturbation_prefix_max_difference": 0.0
+    },
+    {
+      "split": "train",
+      "domain": "code",
+      "group": "code:40223137/cdag7test37",
+      "response_tokens": 10,
+      "full_forward_teacher_argmax_agreement": 1.0,
+      "cached_feature_mean_cosine": 0.9999027252197266,
+      "cached_feature_relative_rms_difference": 0.0137107502669096,
+      "future_perturbation_prefix_max_difference": 0.0
+    },
+    {
+      "split": "train",
+      "domain": "translation",
+      "group": "translation:185a9a4ba966dab12e9b77bf60b4900062ea35c14dc9a440728c854d55d97549",
+      "response_tokens": 13,
+      "full_forward_teacher_argmax_agreement": 1.0,
+      "cached_feature_mean_cosine": 0.9998955130577087,
+      "cached_feature_relative_rms_difference": 0.013886258006095886,
+      "future_perturbation_prefix_max_difference": 0.0
+    },
+    {
+      "split": "validation",
+      "domain": "prose",
+      "group": "prose:e595543b8a47c81708d54c49f57644deb198d2f87fd8b13c71a83ab5cd5403aa",
+      "response_tokens": 64,
+      "full_forward_teacher_argmax_agreement": 1.0,
+      "cached_feature_mean_cosine": 0.9999203085899353,
+      "cached_feature_relative_rms_difference": 0.012596728280186653,
+      "future_perturbation_prefix_max_difference": 0.0
+    },
+    {
+      "split": "validation",
+      "domain": "code",
+      "group": "code:tencentyun/cos-python-sdk",
+      "response_tokens": 64,
+      "full_forward_teacher_argmax_agreement": 1.0,
+      "cached_feature_mean_cosine": 0.9999087452888489,
+      "cached_feature_relative_rms_difference": 0.013188349083065987,
+      "future_perturbation_prefix_max_difference": 0.0
+    },
+    {
+      "split": "validation",
+      "domain": "translation",
+      "group": "translation:c4de7bd48efddc1f5c87088f9f4754682894cfcc16ef9c545cbea4d6eba052bc",
+      "response_tokens": 28,
+      "full_forward_teacher_argmax_agreement": 1.0,
+      "cached_feature_mean_cosine": 0.9999099373817444,
+      "cached_feature_relative_rms_difference": 0.012933841906487942,
+      "future_perturbation_prefix_max_difference": 0.0
+    }
+  ],
+  "completed": true,
+  "scope": "six source examples only; BF16 batch-shape differences permitted; not an exhaustive cache audit",
+  "test_status": "not accessed"
+}

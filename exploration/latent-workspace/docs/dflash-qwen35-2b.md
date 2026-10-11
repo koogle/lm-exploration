@@ -67,3 +67,10 @@ as a final result or stop the fixed-budget fit based on that observation.
 `scripts/plot_dflash_targets.py` compares shared measured update counts and,
 when final reports are available, validation-selected heads on shared source
 prompts. It marks incomplete curves and refuses to overwrite input reports.
+
+A bounded real-model teacher audit sampled one train and validation response per
+domain (six total). Full-forward argmax agrees with all sampled teacher tokens;
+cached feature cosine is 0.999896–0.999930, and perturbing future tokens changes
+prior features by exactly zero. This reduces concern about a gross cache/label
+mismatch; it is not an exhaustive corpus audit. See
+[teacher consistency](../results/dflash-qwen35-2b-teacher-audit-01.json).

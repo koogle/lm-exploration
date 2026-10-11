@@ -146,3 +146,72 @@ def diagnose(parent, output):
                 flush=True,
             )
     return report
+
+
+@torch.no_grad()
+def audit_teacher(parent, output):
+    """Small train/validation consistency audit; no optimizer or test evaluation."""
+    from .dflash import features
+
+    parent, output = Path(parent), Path(output)
+    output.mkdir(parents=True, exist_ok=False)
+    cfg = DraftConfig(**json.loads((parent / "config.json").read_text()))
+    data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
+    target = (
+        AutoModelForCausalLM.from_pretrained(
+            cfg.model,
+            revision=cfg.model_revision,
+            dtype=torch.bfloat16,
+            attn_implementation="sdpa",
+        )
+        .cuda()
+        .eval()
+        .requires_grad_(False)
+    )
+    cases = []
+    for split in ("train", "validation"):
+        for domain in DOMAINS:
+            e = next(x for x in data[split] if x["domain"] == domain)
+            tokens = e["tokens"][None].cuda()
+            result = target(tokens, use_cache=False, output_hidden_states=True)
+            start = e["prompt_length"]
+            predicted = result.logits[:, start - 1 : -1].argmax(-1)
+            expected = tokens[:, start:]
+            memory = features(result, cfg.layers)[0].float().cpu()
+            cached = e["memory"].float()
+            cosine = torch.nn.functional.cosine_similarity(memory, cached, dim=-1).mean()
+            changed = tokens.clone()
+            changed[:, start:] = (changed[:, start:] + 1) % target.config.vocab_size
+            altered = target.model(changed, use_cache=False, output_hidden_states=True)
+            prefix_delta = (
+                (features(altered, cfg.layers)[0, :start].float().cpu() - memory[:start])
+                .abs()
+                .max()
+            )
+            cases.append(
+                {
+                    "split": split,
+                    "domain": domain,
+                    "group": e["group"],
+                    "response_tokens": expected.numel(),
+                    "full_forward_teacher_argmax_agreement": float(
+                        (predicted == expected).float().mean()
+                    ),
+                    "cached_feature_mean_cosine": float(cosine),
+                    "cached_feature_relative_rms_difference": float(
+                        (cached - memory).square().mean().sqrt() / memory.square().mean().sqrt()
+                    ),
+                    "future_perturbation_prefix_max_difference": float(prefix_delta),
+                }
+            )
+    report = {
+        "model": cfg.model,
+        "model_revision": cfg.model_revision,
+        "parent": str(parent),
+        "cases": cases,
+        "completed": True,
+        "scope": "six source examples only; BF16 batch-shape differences permitted; not an exhaustive cache audit",
+        "test_status": "not accessed",
+    }
+    write_json(output / "report.json", report)
+    return report

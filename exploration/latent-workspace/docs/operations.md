@@ -144,3 +144,8 @@ Qwen3.5 quality runs can set `schedule_steps` to preserve one global warmup/cosi
 schedule across bounded workers. `steps` is the number of updates requested in
 that worker; continuation uses the restored absolute update count for scheduling.
 The default zero retains historical new-cycle continuation behavior.
+
+`modal_dflash.py --verify-parent RUN --teacher-audit --run-id AUDIT` uses the
+360-second diagnostic worker to check six train/validation source responses for
+teacher-token agreement, feature-cache consistency and causal prefix invariance.
+It does not train or access test responses.
