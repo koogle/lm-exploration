@@ -198,6 +198,7 @@ def test_fresh_training_from_teacher_cache_does_not_restore_a_model(
     assert resumed["curve"][-1]["step"] == 2
     assert resumed["teacher_sequence_sha256"] == report["teacher_sequence_sha256"]
     assert resumed["parent_run"] == str(tmp_path / "fit")
+    assert resumed["initial_drafter_sha256"] == report["initial_drafter_sha256"]
 
     warmed = trainer.run_dflash(
         replace(cfg, warm_start_from=str(tmp_path / "fit")), tmp_path / "warmed"

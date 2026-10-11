@@ -362,7 +362,10 @@ def run_dflash(cfg, output, on_checkpoint=None):
     initial_weights = hashlib.sha256()
     for name, tensor in sorted(drafter.state_dict().items()):
         initial_weights.update(name.encode() + tensor.detach().cpu().numpy().tobytes())
-    report["initial_drafter_sha256"] = initial_weights.hexdigest()
+    report["worker_start_drafter_sha256"] = initial_weights.hexdigest()
+    report["initial_drafter_sha256"] = (
+        previous["initial_drafter_sha256"] if previous else initial_weights.hexdigest()
+    )
     pools = {d: [e for e in data["train"] if e["domain"] == d] for d in DOMAINS}
     best = (-1.0, -float("inf"))
     supervised = 0
@@ -488,6 +491,9 @@ def run_dflash(cfg, output, on_checkpoint=None):
         drafter, target, data["validation"], mask_id, include_examples=True
     )
     report["training_completed"] = cycle_step == cfg.steps
+    report["training_peak_cuda_memory_bytes"] = (
+        torch.cuda.max_memory_allocated() if device == "cuda" else None
+    )
     if cfg.quality_only:
         report["rollout_benchmark"] = []
         report["verification_passed"] = None

@@ -111,3 +111,11 @@ Batch-48 smoke completed in 115 seconds, all three verified rollouts match. At
 reaches NLL 0.239 / 6.979 consecutive matches; validation NLL 9.481 / 0.041.
 This is tiny-set memorization, not useful generalization. A full 96-response audit
 is running; do not treat diagnostic training samples as the whole corpus.
+
+Full tiny-set audit completed: final step 300 averages NLL **0.29685 / 6.86195 NEW
+matches** across all 96 training responses, versus validation **9.48065 / 0.04109**.
+The earlier 6.979 training figure was the 12-response diagnostic, not the full set.
+The validation-selected step 100 scores train 1.75404 / validation 0.08608; zeroing
+its context memory reduces validation to 0.05086. These are memorization and weak
+held-out-conditioning results, not a useful drafter. Raw evidence:
+`results/dflash-batch48-fit-audit-01.json`.
