@@ -188,3 +188,26 @@ def test_continuation_restores_optimizer_and_exact_next_training_update():
             restored_optimizer,
             restored_generator,
         )
+
+
+def test_partial_rotary_preserves_unrotated_channels():
+    from latent_workspace.dflash import rotate
+
+    x = torch.randn(2, 3, 5, 16, requires_grad=True)
+    cos = torch.zeros(2, 5, 4)
+    sin = torch.ones(2, 5, 4)
+    y = rotate(x, cos, sin)
+    torch.testing.assert_close(y[..., 4:], x[..., 4:])
+    torch.testing.assert_close(y[..., :2], -x[..., 2:4])
+    torch.testing.assert_close(y[..., 2:4], x[..., :2])
+    y.sum().backward()
+    assert torch.isfinite(x.grad).all()
+
+
+def test_hybrid_target_requires_quality_only():
+    from dataclasses import replace
+
+    cfg = replace(DraftConfig(), model="Qwen/Qwen3.5-2B")
+    with pytest.raises(ValueError, match="quality-only"):
+        cfg.validate()
+    replace(cfg, quality_only=True).validate()

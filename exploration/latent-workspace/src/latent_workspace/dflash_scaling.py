@@ -292,7 +292,29 @@ def prepare_pool(cfg, output, on_checkpoint=None):
     ]
     prior = json.loads(Path("/runs/dflash-pilot-02/prompts.json").read_text())
     tokenizer = AutoTokenizer.from_pretrained(cfg.model, revision=cfg.model_revision)
-    manifest = diverse_manifest(cfg, tokenizer, output, deadline, historical, prior)
+    if cfg.prompt_manifest:
+        manifest = json.loads(Path(cfg.prompt_manifest).read_text())
+        source_tokenizer = AutoTokenizer.from_pretrained(
+            manifest["model"], revision=manifest["model_revision"]
+        )
+        source_hash = hashlib.sha256(Path(cfg.prompt_manifest).read_bytes()).hexdigest()
+        for record in manifest["records"]:
+            text = source_tokenizer.decode(record["prompt_ids"], skip_special_tokens=False)
+            record["prompt_ids"] = tokenizer.encode(text, add_special_tokens=False)
+        manifest.update(
+            model=cfg.model,
+            model_revision=cfg.model_revision,
+            parent_manifest_sha256=source_hash,
+            adaptation="same decoded source prompts, retokenized without truncation or chat template",
+        )
+        # Retokenization changes token identities; repeat the cross-split audit.
+        registry = PromptRegistry()
+        for record in manifest["records"]:
+            if not registry.add(record):
+                raise ValueError("retokenized manifest failed deduplication")
+        write_json(output / "prompts.json", manifest)
+    else:
+        manifest = diverse_manifest(cfg, tokenizer, output, deadline, historical, prior)
     if on_checkpoint:
         on_checkpoint()
     target = (

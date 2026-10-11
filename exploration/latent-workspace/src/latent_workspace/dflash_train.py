@@ -422,16 +422,25 @@ def run_dflash(cfg, output, on_checkpoint=None):
     report["selected_validation"] = evaluate(
         drafter, target, data["validation"], mask_id, include_examples=True
     )
-    # BF16 shape-dependent target argmax flips were observed on real Qwen.
-    # Validate the cached verifier using FP32 arithmetic on the same stored weights.
-    target.float()
-    report["verification_target_arithmetic"] = "float32; stored BF16 weights upcast"
-    report["rollout_benchmark"] = benchmark(drafter, target, tokenizer, data["validation"], mask_id)
     report["training_completed"] = cycle_step == cfg.steps
-    report["verification_passed"] = all(
-        x["identical_to_target_greedy"] for x in report["rollout_benchmark"]
-    )
-    report["completed"] = report["training_completed"] and report["verification_passed"]
+    if cfg.quality_only:
+        report["rollout_benchmark"] = []
+        report["verification_passed"] = None
+        report["verification_status"] = (
+            "not run: quality-only experiment; hybrid cache rollback unsupported"
+        )
+        report["completed"] = report["training_completed"]
+    else:
+        # Correctness reference: FP32 on the same stored BF16 weights.
+        target.float()
+        report["verification_target_arithmetic"] = "float32; stored BF16 weights upcast"
+        report["rollout_benchmark"] = benchmark(
+            drafter, target, tokenizer, data["validation"], mask_id
+        )
+        report["verification_passed"] = all(
+            x["identical_to_target_greedy"] for x in report["rollout_benchmark"]
+        )
+        report["completed"] = report["training_completed"] and report["verification_passed"]
     report["elapsed_seconds"] = time.monotonic() - started
     report["frozen_target_has_no_gradients"] = all(p.grad is None for p in target.parameters())
     write_json(output / "report.json", report)

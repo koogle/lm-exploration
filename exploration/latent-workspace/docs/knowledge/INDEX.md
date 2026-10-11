@@ -18,3 +18,5 @@ Small-set fitting and layer dropout/null controls: [Protocol](../small-data-cont
 Current drafting-first priority: [DFlash baseline](../dflash-baseline.md).
 
 Larger response-data comparison and DFlash generalization evidence: [Protocol](../dflash-data-scaling.md).
+
+Larger target quality comparison: [Qwen3.5-2B](../dflash-qwen35-2b.md).

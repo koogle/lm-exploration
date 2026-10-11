@@ -77,3 +77,8 @@
   but larger-set training loss also remains high. Keep architecture fixed while
   resolving optimization/data coverage; no sufficient dataset size or broad speedup
   established. New test prompts remain sealed. See results/dflash-data-scaling.md.
+
+- 2026-10-11: User prioritizes better block predictions, not speed, and requests
+  a 2B Qwen comparison. Add exact Qwen3.5-2B as a quality-only target; disclose
+  family/tokenizer/draft-capacity changes and unsupported hybrid cache rollback.
+  See docs/dflash-qwen35-2b.md.

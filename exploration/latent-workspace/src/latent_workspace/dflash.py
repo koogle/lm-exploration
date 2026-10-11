@@ -42,6 +42,7 @@ class DraftConfig:
     train_limit: int = 0
     teacher_batch_size: int = 1
     rollout_prompts_per_domain: int = 1
+    quality_only: bool = False
 
     def validate(self):
         # During continuation, teacher_parent remains provenance. The trainer
@@ -52,8 +53,13 @@ class DraftConfig:
             or min(self.teacher_batch_size, self.rollout_prompts_per_domain) < 1
         ):
             raise ValueError("invalid balanced subset or teacher batch size")
-        if self.model != "Qwen/Qwen2.5-0.5B" or len(self.model_revision) != 40:
-            raise ValueError("baseline requires pinned Qwen2.5-0.5B")
+        if (
+            self.model not in ("Qwen/Qwen2.5-0.5B", "Qwen/Qwen3.5-2B")
+            or len(self.model_revision) != 40
+        ):
+            raise ValueError("requires a supported pinned Qwen checkpoint")
+        if self.model == "Qwen/Qwen3.5-2B" and not self.quality_only:
+            raise ValueError("Qwen3.5 hybrid cache currently supports quality-only experiments")
         if not self.layers or len(set(self.layers)) != len(self.layers):
             raise ValueError("invalid fixed feature layers")
         if self.block_size < 2 or self.response_tokens < self.block_size or self.gamma <= 0:
@@ -88,8 +94,11 @@ def features(output, layers):
 
 
 def rotate(x, cos, sin):
-    a, b = x.chunk(2, dim=-1)
-    return x * cos[:, None] + torch.cat((-b, a), dim=-1) * sin[:, None]
+    width = cos.shape[-1]
+    rotary, tail = x[..., :width], x[..., width:]
+    a, b = rotary.chunk(2, dim=-1)
+    rotated = rotary * cos[:, None] + torch.cat((-b, a), dim=-1) * sin[:, None]
+    return torch.cat((rotated, tail), dim=-1)
 
 
 class DraftLayer(nn.Module):

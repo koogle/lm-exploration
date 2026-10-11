@@ -1,5 +1,9 @@
 # Open work
 
+Active: user-requested Qwen3.5-2B drafting **quality** comparison. See
+[protocol](docs/dflash-qwen35-2b.md). Bounded GPU smoke underway; no quality
+claim yet. Existing 0.5B results below remain the historical baseline.
+
 Location: `exploration/latent-workspace/` in private `koogle/0-to-llm` (LM Exploration),
 main; direct commits and regular pushes authorized. Historical source:
 `koogle/latent-workspace`. See [consolidation](../../docs/consolidation.md).
