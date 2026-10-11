@@ -81,15 +81,23 @@ def verify(parent: str, run_id: str, fit_audit: bool = False, teacher_audit: boo
     max_containers=1,
     volumes={"/cache": cache, "/runs": runs},
 )
-def train_long(config: dict, run_id: str, prepare_data: bool = False):
+def train_long(config: dict, run_id: str, prepare_data: bool = False, recache_parent: str = ""):
     import sys
 
     sys.path.insert(0, "/project/.venv/lib/python3.12/site-packages")
     from latent_workspace.dflash import DraftConfig
+    from latent_workspace.dflash_recache import recache_features
     from latent_workspace.dflash_scaling import prepare_pool
     from latent_workspace.dflash_train import run_dflash
 
     try:
+        if recache_parent:
+            return recache_features(
+                DraftConfig(**config),
+                f"/runs/{recache_parent}",
+                f"/runs/{run_id}",
+                on_checkpoint=runs.commit,
+            )
         return (prepare_pool if prepare_data else run_dflash)(
             DraftConfig(**config), f"/runs/{run_id}", on_checkpoint=runs.commit
         )
@@ -130,7 +138,15 @@ def main(
     fit_audit: bool = False,
     prepare_data: bool = False,
     teacher_audit: bool = False,
+    recache_parent: str = "",
 ):
+    if recache_parent and (
+        not long_run
+        or prepare_data
+        or verify_parent
+        or not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", recache_parent)
+    ):
+        raise ValueError("recaching requires --long-run, a valid parent, and no other action")
     if prepare_data and (not long_run or verify_parent):
         raise ValueError("--prepare-data requires --long-run and no verification parent")
     if teacher_audit and (not verify_parent or fit_audit):
@@ -161,7 +177,7 @@ def main(
     amount = reserve("artifacts/budget.json", run_id, "L40S", timeout_seconds=timeout)
     print(f"Reserved ${amount:.2f} for a hard-bounded {timeout}s L40S worker.")
     report = (
-        train_long.remote(cfg.to_dict(), run_id, prepare_data)
+        train_long.remote(cfg.to_dict(), run_id, prepare_data, recache_parent)
         if long_run
         else pilot.remote(cfg.to_dict(), run_id)
     )
