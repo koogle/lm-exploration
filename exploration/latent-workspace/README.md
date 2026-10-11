@@ -1,10 +1,15 @@
 # Latent workspace block generation
 
-Current priority: build a **DFlash-style speculative drafter for frozen Qwen2.5-0.5B**
+Current priority: build a **DFlash-style drafter for frozen Qwen targets**
 that predicts useful multi-token blocks. Train on Qwen-generated continuations,
 condition on a known anchor, and verify proposals with Qwen. The original J-space,
 workspace and layer-selection experiments are deferred until this baseline works.
 No backbone pretraining or collaborative proposal module.
+
+Active user-requested follow-up: [Qwen3.5-2B drafting quality](docs/dflash-qwen35-2b.md).
+The real-model smoke passed and fresh chat-formatted teacher preparation is running.
+This changes model family, tokenizer, prompt format and drafter width; no 2B quality
+conclusion yet. Prediction quality, not speed optimization, is the priority.
 
 The [completed response-data study](results/dflash-data-scaling.md) compares 768
 versus 6144 training responses at the same 20000-update budget and on 192 shared
@@ -53,6 +58,7 @@ results are persisted. A smoke test establishes plumbing, not model quality.
 - [Block Diffusion: Interpolating Between Autoregressive and Diffusion Language
   Models](https://arxiv.org/abs/2503.09573) (BD3-LM): a research baseline to
   reproduce later, **not** an implementation or quality claim for this code.
+- [Qwen3.5-2B model card](https://huggingface.co/Qwen/Qwen3.5-2B).
 - [Qwen2.5-0.5B model card](https://huggingface.co/Qwen/Qwen2.5-0.5B).
 
 A [BibTeX bibliography](references/papers.bib) and [measured run evidence](results/README.md)
