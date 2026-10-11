@@ -195,3 +195,8 @@ configs and invalid schedule budgets. It submits no job. The trainer also reject
 updates past a fixed global schedule, avoiding accidental training at zero LR.
 Both sides retain the initial weight hash across workers, separately recording each
 worker's starting hash. Use a new run ID/reservation for every continuation.
+
+For the conditional 54k-prompt pool, long workers request 128 GiB host RAM. This
+provides room for cached feature tensors plus required-subset validation. The
+current training workers keep their original 96 GiB snapshot. The hard timeout,
+L40S device, CPU allocation and $5 conservative reservation remain unchanged.

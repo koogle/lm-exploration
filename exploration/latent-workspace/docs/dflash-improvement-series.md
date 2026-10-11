@@ -146,3 +146,15 @@ The next two configs share this pool and the same selected warm-start checkpoint
 Both require the original 6144 training groups with exactly matching token labels.
 A 20-update GPU warm-start smoke precedes their launch. Selection/config hashes are
 archived in `results/dflash-exposure-selection.json` before the new fits.
+
+## Conditional next-pool preparation
+
+At the matched 4500-update exposure checkpoint, 24576 responses score 0.8594 NEW
+versus 0.4830 for 6144. The higher-supervision runs remain incomplete. Prepare a
+54000-prompt extension to support a balanced 49152-response next stage if needed,
+without yet selecting or launching that training. Reuse the complete five-depth
+pool's existing examples, labels, features and held-out prompts. New data uses the
+same sources, split/group policy and target. This changes neither active fit.
+A bounded preparation worker reserves $5; long-worker host RAM increases to 128 GiB
+for expanded caches. GPU, source package and hard timeout remain unchanged.
+No training-source changes are made while the matched pair is running.
