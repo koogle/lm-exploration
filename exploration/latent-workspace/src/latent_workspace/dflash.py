@@ -44,8 +44,8 @@ class DraftConfig:
     rollout_prompts_per_domain: int = 1
 
     def validate(self):
-        if self.continue_from and self.teacher_parent:
-            raise ValueError("choose continuation or fresh initialization from teacher data")
+        # During continuation, teacher_parent remains provenance. The trainer
+        # restores the continuation's archived subset and checks this field.
         if (
             self.train_limit < 0
             or self.train_limit % 3

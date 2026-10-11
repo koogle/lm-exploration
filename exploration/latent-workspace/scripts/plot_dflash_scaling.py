@@ -14,6 +14,9 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser()
 parser.add_argument("reports", nargs=2, type=Path)
 parser.add_argument("--output", type=Path, default=Path("results/dflash-data-scaling"))
+parser.add_argument(
+    "--partial", action="store_true", help="Plot incomplete curves; no uncertainty estimates"
+)
 args = parser.parse_args()
 runs = sorted(
     (json.loads(p.read_text()) for p in args.reports), key=lambda r: r["config"]["train_limit"]
@@ -39,7 +42,8 @@ assert runs[0]["initial_drafter_sha256"] == runs[1]["initial_drafter_sha256"]
 assert (
     runs[0]["split_sequence_sha256"]["validation"] == runs[1]["split_sequence_sha256"]["validation"]
 )
-assert all(r["training_completed"] for r in runs)
+if not args.partial:
+    assert all(r["training_completed"] for r in runs)
 assert runs[0]["source_sha256"] == runs[1]["source_sha256"]
 
 fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
@@ -60,7 +64,9 @@ for color, r in zip(("tab:blue", "tab:orange"), runs):
         color=color,
         label=label,
     )
-    best = r["selected_validation"]
+    best = r.get("selected_validation") or next(
+        p["validation"] for p in r["curve"] if p["step"] == r["best_step"]
+    )
     accuracy = np.mean(
         [v["accuracy_by_draft_position"] for v in best["by_domain"].values()], axis=0
     )
@@ -79,7 +85,10 @@ axes[2].set(
 for ax in axes:
     ax.grid(alpha=0.2)
     ax.legend(fontsize=7)
-fig.suptitle("DFlash-style Qwen2.5-0.5B: matched optimization, different response-corpus sizes")
+fig.suptitle(
+    "DFlash-style Qwen2.5-0.5B: different response-corpus sizes"
+    + (" — IN PROGRESS" if args.partial else "")
+)
 fig.text(
     0.5,
     0.01,
@@ -89,6 +98,9 @@ fig.text(
 )
 fig.tight_layout(rect=(0, 0.04, 1, 0.95))
 fig.savefig(args.output.with_suffix(".png"), dpi=160)
+if args.partial:
+    print("Interim curves only; jobs are still running. " + str(args.output.with_suffix(".png")))
+    raise SystemExit(0)
 
 # Resample source groups within each domain, preserving pairing and block weights.
 examples = [{e["group"]: e for e in r["selected_validation"]["examples"]} for r in runs]

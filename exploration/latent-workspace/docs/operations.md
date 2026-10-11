@@ -132,3 +132,10 @@ is $5. `configs/dflash-fit.json` resumes the saved baseline/AdamW/RNG on the exa
 cached teacher corpus with an explicit new cosine cycle. Cumulative reservations
 at launch: $205/$500; the cap follows the upper end of the original authorized
 $200–$500 plan. Reservations remain conservative allocations, not billed usage.
+
+Fresh data-size runs can load `teacher_parent` with a balanced `train_limit` while
+initializing draft weights and optimizer from scratch. To continue such a run,
+set `continue_from` and retain those two fields as checked provenance; restoration
+uses the run's archived subset, not a new data selection. As with earlier resumes,
+a new warmup/cosine cycle is explicit. The fresh-cache and continuation path is
+covered by a tiny-model end-to-end test.

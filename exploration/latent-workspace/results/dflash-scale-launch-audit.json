@@ -1,0 +1,19 @@
+{
+  "preparation_commit": "46f7256",
+  "training_commit": "e3da59d",
+  "initial_drafter_sha256": "cbece683a5a69943db0fdf5f7a8847fbf5401f0e622ca492aa23234d0395d3d5",
+  "validation_sequence_sha256": "3574078c772ce68430d556d12c95efab6ad73231b8cf285805187fa35e108498",
+  "training_source_sha256": "b069aace444f3879a776bc7baaf0f52439aa0928c2a6c85951a9592ae8696b4d",
+  "runs": {
+    "768": {
+      "train_response_tokens": 42653,
+      "train_sequence_sha256": "d9ce922348d59c7367a2e624815b7d3d34f0962697a78d038947af5ee88d7e10",
+      "training_responses": 768
+    },
+    "6144": {
+      "train_response_tokens": 341069,
+      "train_sequence_sha256": "4ad144f53ead2aa39c2dca20d35a4751d2822f27594ac7435fd5c236b2cc8aee",
+      "training_responses": 6144
+    }
+  }
+}

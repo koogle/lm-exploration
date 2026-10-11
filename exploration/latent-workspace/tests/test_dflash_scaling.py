@@ -162,3 +162,9 @@ def test_fresh_training_from_teacher_cache_does_not_restore_a_model(tmp_path, mo
     assert report["curve"][-1]["supervised_target_exposures"] == 9
     assert report["frozen_target_has_no_gradients"]
     assert "parent_run" not in report
+    resumed = trainer.run_dflash(
+        replace(cfg, continue_from=str(tmp_path / "fit")), tmp_path / "resumed"
+    )
+    assert resumed["curve"][-1]["step"] == 2
+    assert resumed["teacher_sequence_sha256"] == report["teacher_sequence_sha256"]
+    assert resumed["parent_run"] == str(tmp_path / "fit")
