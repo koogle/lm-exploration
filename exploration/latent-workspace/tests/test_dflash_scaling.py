@@ -101,6 +101,31 @@ def test_batched_cache_excludes_test_and_removes_padding_from_features(tmp_path,
             torch.testing.assert_close(e["memory"], expected, atol=1e-6, rtol=1e-5)
     assert audit["by_split_domain"]["train"]["code"]["eligible_anchors"] == 2
 
+    original_rows = [e for rows in data.values() for e in rows]
+    originals = {e["group"]: (e["tokens"].clone(), e["memory"].clone()) for e in original_rows}
+    new_record = {"split": "train", "domain": "code", "group": "new", "prompt_ids": [22, 23]}
+
+    def only_new(target, batch, response_tokens, eos_id):
+        assert batch == [new_record]  # Neither old labels nor heldouts may be regenerated.
+        return [[22, 23, 24, 25, 26, 27]]
+
+    monkeypatch.setattr("latent_workspace.dflash_scaling.generate_batch", only_new)
+    expanded, extension_audit = build_batched_teacher(
+        cfg,
+        target,
+        Tokenizer(),
+        {"records": records + [new_record]},
+        tmp_path,
+        float("inf"),
+        existing=data,
+    )
+    assert len(expanded["train"]) == 7 and len(expanded["validation"]) == 6
+    assert extension_audit["retained_examples"] == 12
+    for e in original_rows:
+        expected_tokens, expected_memory = originals[e["group"]]
+        torch.testing.assert_close(e["tokens"], expected_tokens, atol=0, rtol=0)
+        torch.testing.assert_close(e["memory"], expected_memory, atol=0, rtol=0)
+
 
 @pytest.mark.parametrize("schedule_steps", [0, 4])
 def test_fresh_training_from_teacher_cache_does_not_restore_a_model(

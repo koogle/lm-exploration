@@ -57,3 +57,14 @@ answers are regenerated. `dflash-fidelity-features-01` uses five draft layers an
 five fixed feature layers with QK normalization, matching study 3's data, schedule
 and all other training settings. Its larger projection has more parameters; do not
 attribute differences solely to feature information independent of capacity.
+
+## Larger pool preparation
+
+Prepare 26400 requested mixed-domain training prompts to support a balanced 24576
+usable-response subset. Reuse the original pool's train/validation caches; register
+both its manifest and the older pilot before sampling additional source groups.
+Hold validation/test prompt counts fixed. Existing response tokens and features
+are not regenerated, and validation tensors are hash-checked before/after extension.
+The new teacher batch sees only new/previously uncached training groups. Record
+short/duplicate exclusions and actual usable counts. This preparation does not
+choose the next training architecture or establish sufficient optimization exposure.

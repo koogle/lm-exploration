@@ -51,7 +51,9 @@ def nested_subset(examples, count, seed):
     return result
 
 
-def diverse_manifest(cfg, tokenizer, output, deadline, historical, prior_manifest):
+def diverse_manifest(
+    cfg, tokenizer, output, deadline, historical, prior_manifest, initial_records=()
+):
     from datasets import load_dataset
 
     old_groups = historical["window_groups"]
@@ -65,7 +67,11 @@ def diverse_manifest(cfg, tokenizer, output, deadline, historical, prior_manifes
         zip(SPLITS, (cfg.train_prompts // 3, cfg.validation_prompts // 3, cfg.test_prompts // 3))
     )
     counts, rejected = defaultdict(int), defaultdict(int)
-    records = []
+    records = [dict(r) for r in initial_records]
+    for record in records:
+        counts[record["domain"], record["split"]] += 1
+    if any(counts[d, s] > limits[s] for d in DOMAINS for s in SPLITS):
+        raise ValueError("retained manifest exceeds requested split sizes")
     for domain_index, domain in enumerate(DOMAINS):
         repo, subset = SOURCES[domain]
         revision = historical["sources"][domain]["revision"]
@@ -199,19 +205,35 @@ def generate_batch(target, records, response_tokens, eos_id):
     return sequences
 
 
-def build_batched_teacher(cfg, target, tokenizer, manifest, output, deadline):
+def build_batched_teacher(cfg, target, tokenizer, manifest, output, deadline, existing=None):
     import torch
 
     from .dflash import features
     from .dflash_data import token_hash
     from .train import atomic_save
 
-    examples = {"train": [], "validation": []}
+    examples = existing if existing is not None else {"train": [], "validation": []}
+    if set(examples) != {"train", "validation"}:
+        raise ValueError("teacher cache must exclude test")
+    retained_groups = {e["group"] for rows in examples.values() for e in rows}
+
+    def validation_digest():
+        digest = hashlib.sha256()
+        for e in examples["validation"]:
+            digest.update(e["group"].encode() + e["tokens"].numpy().tobytes())
+            digest.update(e["memory"].contiguous().view(torch.uint8).numpy().tobytes())
+        return digest.hexdigest()
+
+    retained_validation_hash = validation_digest() if existing is not None else None
     rows = sorted(
-        (r for r in manifest["records"] if r["split"] != "test"),
+        (
+            r
+            for r in manifest["records"]
+            if r["split"] != "test" and r["group"] not in retained_groups
+        ),
         key=lambda r: r["split"] != "validation",
     )
-    seen = set()
+    seen = {e["response_sha256"] for rows in examples.values() for e in rows}
     short, duplicates = 0, 0
     started = time.monotonic()
     for offset in range(0, len(rows), cfg.teacher_batch_size):
@@ -258,12 +280,17 @@ def build_batched_teacher(cfg, target, tokenizer, manifest, output, deadline):
                 flush=True,
             )
     audit = teacher_statistics(examples, cfg.block_size)
+    if existing is not None:
+        if validation_digest() != retained_validation_hash:
+            raise ValueError("extension changed validation tokens or features")
+        audit["preserved_validation_sha256"] = retained_validation_hash
     audit.update(
         short_responses=short,
         duplicate_responses=duplicates,
         teacher_batch_size=cfg.teacher_batch_size,
         target_arithmetic=str(target.dtype),
         note="Batched greedy target generation; BF16 batch-shape argmax can differ from single-prompt arithmetic. Both data-size fits use this identical cache.",
+        retained_examples=len(retained_groups),
     )
     if any(audit["by_split_domain"][s][d]["prompts"] < 2 for s in examples for d in DOMAINS):
         raise ValueError("not enough teacher examples per split/domain")
@@ -292,7 +319,36 @@ def prepare_pool(cfg, output, on_checkpoint=None):
     ]
     prior = json.loads(Path("/runs/dflash-pilot-02/prompts.json").read_text())
     tokenizer = AutoTokenizer.from_pretrained(cfg.model, revision=cfg.model_revision)
-    if cfg.prompt_manifest:
+    existing = None
+    if cfg.extend_teacher_parent:
+        if cfg.prompt_manifest or cfg.teacher_prompt_style != "raw":
+            raise ValueError("extension requires raw prompts and no retokenization")
+        parent = Path(cfg.extend_teacher_parent)
+        parent_report = json.loads((parent / "report.json").read_text())
+        if not parent_report.get("completed"):
+            raise ValueError("extension parent incomplete")
+        old_cfg = parent_report["config"]
+        for key in (
+            "model",
+            "model_revision",
+            "layers",
+            "prompt_tokens",
+            "response_tokens",
+            "block_size",
+            "validation_prompts",
+            "test_prompts",
+        ):
+            if json.dumps(cfg.to_dict()[key]) != json.dumps(old_cfg[key]):
+                raise ValueError(f"extension changes teacher identity: {key}")
+        retained = json.loads((parent / "prompts.json").read_text())
+        prior["records"].extend(retained["records"])
+        manifest = diverse_manifest(
+            cfg, tokenizer, output, deadline, historical, prior, retained["records"]
+        )
+        existing = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
+        manifest["extension_parent"] = str(parent)
+        write_json(output / "prompts.json", manifest)
+    elif cfg.prompt_manifest:
         manifest = json.loads(Path(cfg.prompt_manifest).read_text())
         source_tokenizer = AutoTokenizer.from_pretrained(
             manifest["model"], revision=manifest["model_revision"]
@@ -360,7 +416,9 @@ def prepare_pool(cfg, output, on_checkpoint=None):
         .eval()
         .requires_grad_(False)
     )
-    data, audit = build_batched_teacher(cfg, target, tokenizer, manifest, output, deadline)
+    data, audit = build_batched_teacher(
+        cfg, target, tokenizer, manifest, output, deadline, existing=existing
+    )
     source = hashlib.sha256()
     for file in sorted(Path(__file__).parent.glob("*.py")):
         source.update(file.name.encode() + file.read_bytes())
