@@ -1,0 +1,66 @@
+{
+  "manifest_sha256": "c178d31f2e2dc81b6a40eafee2a7ac94716e2e9f7b581c5904ce9ed2af768bab",
+  "prior_manifest_sha256": "fab4ccb0b785b6a53306f03562f80e044b4e36a894cfbb71b61cb79debf311fa",
+  "records": 6984,
+  "exact_group_source_prompt_overlap_with_prior": 0,
+  "groups_unique_across_all_splits": true,
+  "counts": {
+    "prose": {
+      "train": 2200,
+      "validation": 64,
+      "test": 64
+    },
+    "code": {
+      "train": 2200,
+      "validation": 64,
+      "test": 64
+    },
+    "translation": {
+      "train": 2200,
+      "validation": 64,
+      "test": 64
+    }
+  },
+  "offsets": {
+    "prose": {
+      "nonzero_fraction": 0.990909090909091,
+      "median": 1181.0,
+      "maximum": 19289
+    },
+    "code": {
+      "nonzero_fraction": 0.9977272727272727,
+      "median": 397.0,
+      "maximum": 26154
+    },
+    "translation": {
+      "nonzero_fraction": 0.0,
+      "median": 0.0,
+      "maximum": 0
+    }
+  },
+  "rejected": {
+    "historical_group": 5930,
+    "translation_prompt_too_long": 3
+  },
+  "registry_rejected": {
+    "exact_source_group_or_prompt": 393
+  },
+  "sources": {
+    "prose": {
+      "repository": "Salesforce/wikitext",
+      "config": "wikitext-103-raw-v1",
+      "revision": "b08601e04326c79dfdd32d625aee71d232d685c3"
+    },
+    "code": {
+      "repository": "codeparrot/codeparrot-clean",
+      "config": null,
+      "revision": "35a59fb025bc0a102f7d96eac09d145b896d487b"
+    },
+    "translation": {
+      "repository": "wmt/wmt14",
+      "config": "de-en",
+      "revision": "b199e406369ec1b7634206d3ded5ba45de2fe696"
+    }
+  },
+  "test_status": "test prompts only; no teacher responses or metrics"
+}

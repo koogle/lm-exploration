@@ -16,6 +16,11 @@ data is the next priority; no useful fast drafter is established.
 
 ![DFlash-style fitting and validation curves](results/dflash-fit-01.png)
 
+A [controlled 768-versus-6144 response comparison](docs/dflash-data-scaling.md)
+is now running with improved source sampling, identical initial weights and a shared
+192-response validation cache. The reference-paper generalization evidence and
+the differences from our small-Qwen adaptation are recorded in that protocol.
+
 ## Development
 
 Run these commands from `exploration/latent-workspace/` in LM Exploration. This
