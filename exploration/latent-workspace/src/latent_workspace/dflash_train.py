@@ -305,6 +305,10 @@ def run_dflash(cfg, output, on_checkpoint=None):
         "test_status": "new test prompts reserved; no teacher test responses/features/metrics produced",
         "data_note": "All labels are pinned frozen Qwen greedy continuations, not original human answers.",
     }
+    initial_weights = hashlib.sha256()
+    for name, tensor in sorted(drafter.state_dict().items()):
+        initial_weights.update(name.encode() + tensor.detach().cpu().numpy().tobytes())
+    report["initial_drafter_sha256"] = initial_weights.hexdigest()
     pools = {d: [e for e in data["train"] if e["domain"] == d] for d in DOMAINS}
     best = (-1.0, -float("inf"))
     supervised = 0
@@ -325,11 +329,14 @@ def run_dflash(cfg, output, on_checkpoint=None):
         "Each run is a new warmup/cosine cycle; continuation restores model, AdamW and RNG on the exact archived teacher corpus."
     )
     sequence_hash = hashlib.sha256()
+    report["split_sequence_sha256"] = {}
     for split, examples in data.items():
+        split_hash = hashlib.sha256()
         for e in examples:
-            sequence_hash.update(
-                split.encode() + e["group"].encode() + e["tokens"].numpy().tobytes()
-            )
+            identity = split.encode() + e["group"].encode() + e["tokens"].numpy().tobytes()
+            sequence_hash.update(identity)
+            split_hash.update(identity)
+        report["split_sequence_sha256"][split] = split_hash.hexdigest()
     report["teacher_sequence_sha256"] = sequence_hash.hexdigest()
     for cycle_step in range(1 if previous else 0, cfg.steps + 1):
         step = start_step + cycle_step
