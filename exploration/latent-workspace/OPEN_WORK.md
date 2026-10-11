@@ -7,9 +7,9 @@ all 12 rollouts match. Two deeper fits remain active; five-depth recaching passe
 with unchanged teacher tokens. The expanded pool completed with 26163 training responses and the
 original validation cache preserved. Large-batch tiny-set audit confirms fitting
 (6.862 train NEW / 7) but poor validation (0.041). See results/dflash-improvement-findings.md. 82 local tests passed. Current conservative reservations:
-$292.25/$500; no new authorization. Full studies and quality gate remain incomplete.
+$297.25/$500; no new authorization. Full studies and quality gate remain incomplete.
 
-Completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).
+Historical completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).
 Both targets used 6144 responses and 20000 updates. Selected shared-prompt NEW
 matches are 0.170 (2B) versus 0.387 (0.5B), worse in each domain. Full-training
 2B selected/final matches are 0.173/0.175 versus validation 0.170/0.168. This is
@@ -20,17 +20,14 @@ or human answer-quality claim. Test remains sealed and hybrid rollout unimplemen
 Both full fitting audits match the training curves exactly. Sampler replay confirms
 3.36M NEW-label exposures and 72.97M conditioning-position exposures. The downloaded
 selected checkpoint matches the GPU hash. 79 local tests and all GPU checks passed;
-all comparison jobs ended. Cumulative conservative reservations: $258.25/$500,
+all 2B comparison jobs ended. Reservations at that historical completion: $258.25/$500,
 not billed usage; failed/stopped reservations are retained.
 
-Next: establish reliable drafter fitting and training fidelity before treating data
-size or backbone size as a sufficient fix. A same-family 1.5B size control or a
-native hybrid-target adapter remains untested. No additional training is running.
-The [reference audit](docs/dflash-fidelity.md) confirms missing query/key
-normalization relative to DFlash, in addition to depth/data differences. Its causal
-effect is untested; prioritize exact-target fitting and matched fidelity checks.
-The 0.5B study below remains the reference; representation sweeps and inference
-speed optimization remain deferred.
+Current follow-up is the small-Qwen series above. The 1.5B size control and hybrid
+adapter remain untested and deferred. The [reference audit](docs/dflash-fidelity.md)
+identified missing QK normalization; the new matched 0.5B-target study measures an
+improvement, with weak larger-set fitting still unresolved. Representation sweeps
+and inference speed optimization remain deferred.
 
 Location: `exploration/latent-workspace/` in private `koogle/0-to-llm` (LM Exploration),
 main; direct commits and regular pushes authorized. Historical source:

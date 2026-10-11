@@ -21,7 +21,10 @@ Train on target-generated responses with random clean anchors and fully masked
 future blocks. Measure accepted NEW tokens beyond the supplied anchor, verified
 output correctness, and end-to-end latency. Defer J-space, workspace, hidden-state
 prediction and layer-selection/dropout ablations. User now requests a Qwen3.5-2B
-quality comparison; see docs/dflash-qwen35-2b.md. Speed optimization is not the
+quality comparison; see docs/dflash-qwen35-2b.md. The current follow-up is the small frozen Qwen2.5-0.5B improvement series
+(docs/dflash-improvement-series.md), with bounded adaptive fidelity/data/exposure
+studies until the quality gate is met or the authorized budget blocks progress.
+Name draft parameter counts separately from target size. Speed optimization is not the
 current goal. Treat tokenizer, prompt formatting and draft-capacity differences
 as confounds, and keep hybrid-cache verification explicitly unimplemented. Standard fixed target-feature
 conditioning is part of DFlash; it is not an auxiliary hidden-state generation task.

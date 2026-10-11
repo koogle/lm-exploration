@@ -64,10 +64,11 @@ Passing plumbing tests and observing a loss decrease do not establish useful blo
 prediction. Nor does low acceptance alone prove zero learning: it requires an
 uninterrupted run of correct tokens starting at the first NEW position.
 
-Next diagnostic priority, not yet executed: establish small-set fitting for the
-exact 2B adaptation, measure gradient and attention/activation scales, and compare
-a reference-faithful attention implementation under matched data and exposure.
-Check conditioning usefulness against shuffled/zeroed memory at evaluation.
-Then establish a stable multi-token fit on a moderate training set before scaling
-the corpus. Keep held-out validation, sealed test prompts, and quality as the goal.
-Do not launch another model-size or representation sweep to diagnose this failure.
+Follow-up direction: the user requests studies for the small frozen Qwen target,
+so exact-2B fitting and additional size comparisons are deferred. The
+[active small-target series](dflash-improvement-series.md) now measures a QK-norm
+validation gain from 0.384 to 0.484 at matched exposure, but still weak full-training
+fit (0.623). Zero-memory validation falls to 0.063. A separate larger-batch tiny-set
+fit reaches 6.862 training matches and only 0.041 validation matches. These results
+support testing substantially greater supervision on larger mixed-domain corpora;
+they do not establish a useful drafter. Keep test sealed until the quality gate.
