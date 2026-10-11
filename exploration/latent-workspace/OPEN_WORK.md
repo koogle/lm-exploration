@@ -2,9 +2,10 @@
 
 Active: user-requested Qwen3.5-2B drafting **quality** comparison. See
 [protocol](docs/dflash-qwen35-2b.md). GPU training smoke passed. Raw prompt sample failures prompted a switch to
-non-thinking chat formatting; full preparation passed and the balanced 6144-response fit is running, with
-184 usable validation responses. Conservative reservations: $252.75/$500. No quality
-claim yet. All stopped/failed reservations are retained. Existing 0.5B results below remain the historical baseline.
+non-thinking chat formatting; the 6144-response fit completed 20000 updates, with 184 usable validation
+responses. Selected shared-prompt NEW matches: 0.170 (2B) versus 0.387 (0.5B).
+Full-training audit running; no pure-size or human answer-quality claim.
+Conservative reservations: $258.25/$500. All stopped/failed reservations are retained. Existing 0.5B results below remain the historical baseline.
 
 Location: `exploration/latent-workspace/` in private `koogle/0-to-llm` (LM Exploration),
 main; direct commits and regular pushes authorized. Historical source:

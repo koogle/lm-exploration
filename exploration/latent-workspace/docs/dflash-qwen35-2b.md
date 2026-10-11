@@ -43,7 +43,7 @@ benchmark. The official template is the intended instruction-model interface.
 Full preparation completed in 623.1 seconds: 6390 usable training responses
 (2173 prose, 2054 code, 2163 translation), and 184 validation responses
 (63/57/64). Dropped 211 short and seven duplicate responses. The balanced 6144
-training subset is now fitting; the 192 test prompts remain unlabelled. Raw
+training subset completed 20000 updates; the 192 test prompts remain unlabelled. Raw
 preparation was deliberately stopped.
 The first chat preparation failed before generation because the tokenizer returned
 a BatchEncoding; explicit `return_dict=False` fixes serialization. No trained
@@ -62,7 +62,7 @@ there are zero other text mismatches. This whitespace normalization, which can
 affect code continuation, is another declared prompt-format difference. See
 [identity audit](../results/dflash-qwen35-2b-prompt-audit.json).
 
-Training is running as `dflash-qwen35-2b-fit-01`, with 104,876,032 trainable
+Training completed as `dflash-qwen35-2b-fit-01`, with 104,876,032 trainable
 parameters and 295691 distinct response-token positions in the selected 6144
 responses. At early checkpoints the 2B setup is not ahead; do not treat this
 as a final result or stop the fixed-budget fit based on that observation.
@@ -88,3 +88,10 @@ anchor and context tail are retained together.
 At 10000 updates, validation NEW matches are 0.136 for 2B versus 0.313 for the
 0.5B baseline. Both preparation and training package hashes match committed
 source `4d3fa54`; see [launch audit](../results/dflash-qwen35-2b-launch-audit.json).
+
+Training completed in 2505.4 seconds, with 3.36M supervised NEW-token exposures,
+no target gradients, and verification explicitly unrun. Selected step: 16750.
+On the 184 shared validation source prompts, selected NEW matches are 0.17017
+for 2B versus 0.38658 for 0.5B. All three domains are worse for this 2B setup.
+The full-training-set fitting audit is running; do not infer its result from the
+12-response training diagnostic. [Completed curves](../results/dflash-qwen35-2b-comparison.png).
