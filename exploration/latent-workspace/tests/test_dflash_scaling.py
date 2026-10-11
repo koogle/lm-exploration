@@ -219,6 +219,11 @@ def test_fresh_training_from_teacher_cache_does_not_restore_a_model(
         )
 
     if schedule_steps:
+        with pytest.raises(ValueError, match="global schedule"):
+            trainer.run_dflash(
+                replace(cfg, continue_from=str(tmp_path / "fit"), steps=schedule_steps),
+                tmp_path / "beyond-schedule",
+            )
         uninterrupted = trainer.run_dflash(replace(cfg, steps=2), tmp_path / "uninterrupted")
         assert uninterrupted["verification_passed"] is None
         a = torch.load(tmp_path / "resumed" / "latest.pt", weights_only=True)

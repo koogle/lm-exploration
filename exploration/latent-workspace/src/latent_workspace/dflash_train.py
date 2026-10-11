@@ -344,6 +344,8 @@ def run_dflash(cfg, output, on_checkpoint=None):
         if mask_id != previous["mask_token_id"]:
             raise ValueError("continuation changes mask token")
         start_step = state["step"]
+    if cfg.schedule_steps and start_step + cfg.steps > cfg.schedule_steps:
+        raise ValueError("requested updates exceed the fixed global schedule")
     source = hashlib.sha256()
     for file in sorted(Path(__file__).parent.glob("*.py")):
         source.update(file.name.encode() + file.read_bytes())

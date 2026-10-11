@@ -30,7 +30,6 @@ for key in (
     "gamma",
     "batch_size",
     "anchors_per_sequence",
-    "steps",
     "learning_rate",
     "warmup_ratio",
     "seed",
@@ -38,6 +37,16 @@ for key in (
     "eval_every",
 ):
     assert runs[0]["config"][key] == runs[1]["config"][key], f"unmatched setting: {key}"
+for key, default in (
+    ("qk_norm", False),
+    ("warm_start_from", ""),
+    ("retain_training_parent", ""),
+    ("schedule_steps", 0),
+):
+    assert runs[0]["config"].get(key, default) == runs[1]["config"].get(key, default), key
+assert runs[0].get("training_goal_step", runs[0]["config"]["steps"]) == runs[1].get(
+    "training_goal_step", runs[1]["config"]["steps"]
+), "unmatched total update budget"
 assert runs[0]["initial_drafter_sha256"] == runs[1]["initial_drafter_sha256"]
 assert (
     runs[0]["split_sequence_sha256"]["validation"] == runs[1]["split_sequence_sha256"]["validation"]
