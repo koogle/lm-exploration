@@ -1,0 +1,97 @@
+{
+  "config": {
+    "model": "Qwen/Qwen2.5-0.5B",
+    "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+    "layers": [
+      2,
+      22
+    ],
+    "draft_layers": 2,
+    "block_size": 8,
+    "gamma": 4.0,
+    "train_prompts": 6600,
+    "validation_prompts": 192,
+    "test_prompts": 192,
+    "prompt_tokens": 128,
+    "response_tokens": 64,
+    "batch_size": 3,
+    "anchors_per_sequence": 8,
+    "steps": 20000,
+    "eval_every": 250,
+    "learning_rate": 0.0006,
+    "warmup_ratio": 0.04,
+    "seed": 42,
+    "max_seconds": 3300,
+    "continue_from": "",
+    "historical_corpus": "/runs/data-large-01/corpus.pt",
+    "prompt_manifest": "",
+    "teacher_parent": "",
+    "train_limit": 0,
+    "teacher_batch_size": 32
+  },
+  "teacher_audit": {
+    "by_split_domain": {
+      "train": {
+        "prose": {
+          "prompts": 2174,
+          "response_tokens": 138158,
+          "eligible_anchors": 122940,
+          "mean_unique_response_4gram_fraction": 0.7463730513952702,
+          "response_length_min": 10,
+          "response_length_max": 64
+        },
+        "code": {
+          "prompts": 2195,
+          "response_tokens": 138720,
+          "eligible_anchors": 123355,
+          "mean_unique_response_4gram_fraction": 0.7935945538875445,
+          "response_length_min": 8,
+          "response_length_max": 64
+        },
+        "translation": {
+          "prompts": 2169,
+          "response_tokens": 86480,
+          "eligible_anchors": 71297,
+          "mean_unique_response_4gram_fraction": 0.9768089611230052,
+          "response_length_min": 8,
+          "response_length_max": 64
+        }
+      },
+      "validation": {
+        "prose": {
+          "prompts": 64,
+          "response_tokens": 4033,
+          "eligible_anchors": 3585,
+          "mean_unique_response_4gram_fraction": 0.6675981122702435,
+          "response_length_min": 29,
+          "response_length_max": 64
+        },
+        "code": {
+          "prompts": 64,
+          "response_tokens": 4055,
+          "eligible_anchors": 3607,
+          "mean_unique_response_4gram_fraction": 0.7706796448087432,
+          "response_length_min": 33,
+          "response_length_max": 64
+        },
+        "translation": {
+          "prompts": 64,
+          "response_tokens": 2412,
+          "eligible_anchors": 1964,
+          "mean_unique_response_4gram_fraction": 0.9836096734433725,
+          "response_length_min": 11,
+          "response_length_max": 64
+        }
+      }
+    },
+    "short_responses": 35,
+    "duplicate_responses": 27,
+    "teacher_batch_size": 32,
+    "target_arithmetic": "torch.bfloat16",
+    "note": "Batched greedy target generation; BF16 batch-shape argmax can differ from single-prompt arithmetic. Both data-size fits use this identical cache."
+  },
+  "elapsed_seconds": 293.081840783,
+  "completed": true,
+  "source_sha256": "7fa8b85af6a1b91247bbb78ea922af845a5aa4ca63cf123c9916820ed344d18e",
+  "test_status": "test prompts only; no teacher responses or metrics"
+}

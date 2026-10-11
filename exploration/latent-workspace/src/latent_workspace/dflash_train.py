@@ -80,11 +80,17 @@ def evaluate(drafter, target, examples, mask_id, limit_per_domain=None, include_
             lengths.extend(correct.long().cumprod(-1).sum(-1).cpu().tolist())
             blocks += len(ce)
             if include_examples:
+                response = e["tokens"][e["prompt_length"] :].tolist()
                 example_metrics.append(
                     {
                         "group": e["group"],
                         "domain": domain,
                         "blocks": len(ce),
+                        "response_tokens": len(response),
+                        "unique_response_4gram_fraction": len(
+                            {tuple(response[i : i + 4]) for i in range(len(response) - 3)}
+                        )
+                        / max(1, len(response) - 3),
                         "nll": float(ce.mean()),
                         "accepted_beyond_anchor": float(
                             correct.long().cumprod(-1).sum(-1).float().mean()
