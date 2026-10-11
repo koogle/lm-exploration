@@ -50,6 +50,8 @@ this global schedule (`schedule_steps=20000`); the default historical continuati
 behavior remains a new cycle. Exact split-versus-uninterrupted training is tested.
 
 Prompt audit: all 6984 ordered source groups/splits/domains match the 0.5B
-manifest, with zero cross-split group overlap. The complete original source prompt
-text survives retokenization and wrapping in every record. See
+manifest, with zero cross-split group overlap. The text audit finds 6440 exact source-text
+round trips and 544 with trailing whitespace removed by the official chat template;
+there are zero other text mismatches. This whitespace normalization, which can
+affect code continuation, is another declared prompt-format difference. See
 [identity audit](../results/dflash-qwen35-2b-prompt-audit.json).

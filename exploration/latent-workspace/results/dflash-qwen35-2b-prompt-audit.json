@@ -9,5 +9,12 @@
     "test": 192
   },
   "test_status": "prompts only; no test responses or metrics",
-  "format": "chat_no_thinking"
+  "format": "chat_no_thinking",
+  "source_text_exact": 6440,
+  "source_text_trailing_whitespace_trimmed": 544,
+  "source_text_other_mismatches": 0,
+  "actual_adapted_prompt_token_length_range": [
+    34,
+    191
+  ]
 }
