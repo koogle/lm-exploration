@@ -183,3 +183,10 @@ def test_fresh_training_from_teacher_cache_does_not_restore_a_model(
             torch.testing.assert_close(a["drafter"][key], b["drafter"][key], atol=0, rtol=0)
         assert a["optimizer"]["param_groups"] == b["optimizer"]["param_groups"]
         assert torch.equal(a["sampler_rng"], b["sampler_rng"])
+
+        from latent_workspace.dflash_diagnostics import replay_exposures
+
+        exposures = replay_exposures(data, cfg, 2, a["sampler_rng"])
+        assert exposures["sampled_blocks"] == 6
+        assert exposures["supervised_new_token_exposures"] == 18
+        assert exposures["conditioning_position_exposures"] == 24

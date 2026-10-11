@@ -149,3 +149,9 @@ The default zero retains historical new-cycle continuation behavior.
 360-second diagnostic worker to check six train/validation source responses for
 teacher-token agreement, feature-cache consistency and causal prefix invariance.
 It does not train or access test responses.
+
+Full fitting audits now replay the saved training sampler to count conditioning
+position and supervised NEW-token exposures separately. Replay must exactly match
+the checkpoint sampler RNG state or the audit rejects the count. Conditioning
+positions are counted per sampled block; frozen cached features do not imply
+new backbone training or target forward computation.

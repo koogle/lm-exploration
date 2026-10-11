@@ -14,6 +14,39 @@ from .dflash_train import evaluate, greedy_generate, precision
 from .train import write_json
 
 
+def replay_exposures(data, cfg, steps, expected_rng):
+    """Count actual sampled conditioning positions; verify replay against saved RNG."""
+    generator = torch.Generator().manual_seed(cfg.seed)
+    pools = {d: [e for e in data["train"] if e["domain"] == d] for d in DOMAINS}
+    context, prompt_context, blocks = 0, 0, 0
+    for step in range(1, steps + 1):
+        examples = []
+        for i in range(cfg.batch_size):
+            pool = pools[DOMAINS[((step - 1) * cfg.batch_size + i) % 3]]
+            examples.append(pool[int(torch.randint(len(pool), (), generator=generator))])
+        for e in examples:
+            anchors = torch.randint(
+                e["prompt_length"],
+                len(e["tokens"]) - cfg.block_size + 1,
+                (cfg.anchors_per_sequence,),
+                generator=generator,
+            )
+            context += int(anchors.sum())
+            prompt_context += e["prompt_length"] * len(anchors)
+            blocks += len(anchors)
+    if not torch.equal(generator.get_state(), expected_rng.cpu()):
+        raise ValueError("sampling replay does not match saved RNG; exposure count invalid")
+    return {
+        "sampler_state_matches": True,
+        "sampled_blocks": blocks,
+        "supervised_new_token_exposures": blocks * (cfg.block_size - 1),
+        "conditioning_position_exposures": context,
+        "prompt_conditioning_position_exposures": prompt_context,
+        "earlier_response_conditioning_position_exposures": context - prompt_context,
+        "note": "Positions attended before each anchor, counted per sampled block. Cached features are reused; this is not backbone training or target forward FLOPs.",
+    }
+
+
 def audit_fit(parent, output):
     """Evaluate every training response at fixed anchors, without optimizer updates."""
     parent, output = Path(parent), Path(output)
@@ -53,6 +86,10 @@ def audit_fit(parent, output):
         )
         if state["step"] != expected_step:
             raise ValueError("checkpoint step does not match report")
+        if name == "latest":
+            report["sampling_exposures"] = replay_exposures(
+                data, cfg, state["step"], state["sampler_rng"]
+            )
         draft.load_state_dict(state["drafter"])
         with path.open("rb") as checkpoint_file:
             checkpoint_sha = hashlib.file_digest(checkpoint_file, "sha256").hexdigest()
