@@ -61,11 +61,19 @@ consolidation of the four recent repositories.
 - The moved research project passed all 69 tests, Ruff lint and Ruff format checks
   using its frozen uv lockfile.
 - JavaScript syntax passed for all three HTML mockups and the browser demo.
+- A fresh clone from the published destination succeeded; its commit matched the
+  local consolidation, the original-history bundle verified, and all 123 relative
+  Markdown file links resolved.
 - No GPU training or Modal deployment was performed. Rust/WASM compilation and
   interactive browser behavior were not revalidated in this environment; Rust
   tooling is unavailable. The restored browser source is unchanged.
 
 ## GitHub administration still required
+
+The consolidated contents are published on destination `main`. All three source
+READMEs now point to the destination, and web-inference PR #1 is closed with links
+to its imported designs. These move notices are the only source-file changes;
+the original source code and model remain available.
 
 The current environment supports Git fetch/push, but its network policy blocks
 the GitHub administration API. The connected GitHub tools do not expose repository
