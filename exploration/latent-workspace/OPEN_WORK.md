@@ -2,10 +2,12 @@
 
 Active: [small-target drafter improvement series](docs/dflash-improvement-series.md).
 GPU normalization smoke passed (300 updates, frozen target, three verified rollouts).
-Three matched 20000-update fits are running; five-depth feature recaching passed
-with unchanged teacher tokens. A larger training pool is being prepared with the
-original validation cache preserved. 81 local tests passed. Current conservative reservations:
-$284.50/$500; no new authorization. Full studies and quality gate remain incomplete.
+The 31M normalization fit completed: validation NEW 0.484 versus original 0.384,
+all 12 rollouts match. Two deeper fits remain active; five-depth recaching passed
+with unchanged teacher tokens. The expanded pool completed with 26163 training responses and the
+original validation cache preserved. Large-batch tiny-set audit confirms fitting
+(6.862 train NEW / 7) but poor validation (0.041). See results/dflash-improvement-findings.md. 82 local tests passed. Current conservative reservations:
+$292.25/$500; no new authorization. Full studies and quality gate remain incomplete.
 
 Completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).
 Both targets used 6144 responses and 20000 updates. Selected shared-prompt NEW

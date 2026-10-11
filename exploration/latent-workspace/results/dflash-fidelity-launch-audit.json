@@ -1,0 +1,9 @@
+{
+  "original_initial_sha256": "cbece683a5a69943db0fdf5f7a8847fbf5401f0e622ca492aa23234d0395d3d5",
+  "norm_common_initial_sha256": "cbece683a5a69943db0fdf5f7a8847fbf5401f0e622ca492aa23234d0395d3d5",
+  "norm_initial_sha256": "180923b78ea580bb0c9783b898daaf402c277c7d74a0c68553a30848abd5e22c",
+  "identical_ordered_train_validation_tokens": true,
+  "matched_study_source_commit": "6c772af",
+  "matched_study_source_sha256": "4e7c2bd29a51db1922f2956d97b8fc13d590833f174420bfcf55ece81e9bff22",
+  "note": "Actual pinned Qwen2.5-0.5B config, seed42, current uv environment; no target weights loaded. Original full hash and new full hash match archived reports; all common initial tensors identical."
+}
