@@ -10,6 +10,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from .corpus import DOMAINS
 from .dflash import DFlashDrafter, DraftConfig, verified_generate
+from .dflash_data import load_teacher_cache
 from .dflash_train import evaluate, greedy_generate, precision
 from .train import write_json
 
@@ -54,7 +55,7 @@ def audit_fit(parent, output):
     if not source_report.get("training_completed"):
         raise ValueError("fit audit requires a finished training run")
     output.mkdir(parents=True, exist_ok=False)
-    data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
+    data = load_teacher_cache(parent / "teacher.pt")
     digest = hashlib.sha256()
     for split, examples in data.items():
         for e in examples:
@@ -188,7 +189,7 @@ def diagnose(parent, output):
     tokenizer = AutoTokenizer.from_pretrained(cfg.model, revision=cfg.model_revision)
     draft = DFlashDrafter(target.config, cfg).cuda().eval()
     draft.load_state_dict(state["drafter"])
-    data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
+    data = load_teacher_cache(parent / "teacher.pt")
     examples = [next(e for e in data["validation"] if e["domain"] == d) for d in DOMAINS]
     report = {
         "parent": str(parent),
@@ -249,7 +250,7 @@ def audit_teacher(parent, output):
     parent, output = Path(parent), Path(output)
     output.mkdir(parents=True, exist_ok=False)
     cfg = DraftConfig(**json.loads((parent / "report.json").read_text())["config"])
-    data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
+    data = load_teacher_cache(parent / "teacher.pt")
     target = (
         AutoModelForCausalLM.from_pretrained(
             cfg.model,

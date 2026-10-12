@@ -26,3 +26,5 @@ Completed larger-target measurements: [2B findings](../../results/dflash-qwen35-
 Poor fitting and reference differences: [DFlash fidelity audit](../dflash-fidelity.md).
 
 Active small-target quality series: [Protocol](../dflash-improvement-series.md).
+
+Isolated data-coverage prototype: [status, invariants and remaining integration](../dflash-prefix-coverage.md).

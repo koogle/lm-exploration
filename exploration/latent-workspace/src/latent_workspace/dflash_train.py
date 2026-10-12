@@ -14,7 +14,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from .corpus import DOMAINS
 from .dflash import DFlashDrafter, block_loss, synchronize, verified_generate
-from .dflash_data import build_teacher_cache, prepare_prompts
+from .dflash_data import build_teacher_cache, load_teacher_cache, prepare_prompts
 from .train import atomic_save, seed_all, write_json
 
 
@@ -260,7 +260,7 @@ def run_dflash(cfg, output, on_checkpoint=None):
         parent = Path(cfg.continue_from)
         previous = json.loads((parent / "report.json").read_text())
         state = torch.load(parent / "latest.pt", map_location="cpu", weights_only=True)
-        data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
+        data = load_teacher_cache(parent / "teacher.pt")
         audit = json.loads((parent / "teacher-audit.json").read_text())
         for name in ("teacher.pt", "teacher-audit.json", "prompts.json", "best.pt"):
             shutil.copyfile(parent / name, output / name)
@@ -284,14 +284,10 @@ def run_dflash(cfg, output, on_checkpoint=None):
                 parent_cfg.get(key, "raw") if key == "teacher_prompt_style" else parent_cfg[key]
             ):
                 raise ValueError(f"teacher cache/config mismatch: {key}")
-        data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
+        data = load_teacher_cache(parent / "teacher.pt")
         required = set()
         if cfg.retain_training_parent:
-            retained = torch.load(
-                Path(cfg.retain_training_parent) / "teacher.pt",
-                map_location="cpu",
-                weights_only=True,
-            )
+            retained = load_teacher_cache(Path(cfg.retain_training_parent) / "teacher.pt")
             available = {e["group"]: e for e in data["train"]}
             for e in retained["train"]:
                 if e["group"] not in available or not torch.equal(

@@ -107,3 +107,9 @@
   Compare 24576/49152 responses from identical selected 79M weights with matched
   optimization, retaining all old training groups and sealed held-out data.
   Larger final-checkpoint audit continues independently. See the improvement protocol.
+
+- 2026-10-12 (isolated prototype): Prepare deterministic extra training-only article
+  prefixes with explicit source-group identity and opt-in registry safeguards.
+  Add private mapped teacher-cache reads for larger stored features. These changes
+  are on `drafter-data-coverage`, not the source used by active matched fits. Prefix
+  generation is not integrated into preparation and no new experiment is selected.

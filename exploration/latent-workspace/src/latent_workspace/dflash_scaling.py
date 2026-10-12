@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .corpus import DOMAINS, SOURCES, SPLITS, digest, repository_split
 from .data import documents
-from .dflash_data import PromptRegistry
+from .dflash_data import PromptRegistry, load_teacher_cache
 from .train import write_json
 
 
@@ -355,7 +355,7 @@ def prepare_pool(cfg, output, on_checkpoint=None):
         manifest = diverse_manifest(
             cfg, tokenizer, output, deadline, historical, prior, retained["records"]
         )
-        existing = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
+        existing = load_teacher_cache(parent / "teacher.pt")
         manifest["extension_parent"] = str(parent)
         write_json(output / "prompts.json", manifest)
     elif cfg.prompt_manifest:

@@ -144,3 +144,6 @@ exploration; the earlier test has already been evaluated and is not reused here.
 12 fits show near-complete small-set memorization followed by validation overfitting.
 Neither 25% layer dropout nor zero-content attention gives a clear validation gain
 in this one-seed diagnostic. This does not establish a sufficient final data size.
+
+Branch-only development: [training-prefix coverage prototype](docs/dflash-prefix-coverage.md),
+not integrated into data preparation or used by the active main-branch fits.
