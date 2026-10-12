@@ -68,8 +68,8 @@ arm can start. `configs/fresh-grid-*.json` initially contain a deliberately inva
 preparation report, and freeze config hashes before launching.
 
 Local compute reservations remain authoritative; workers are bounded and retain
-failed reservations. The former $500 total allocation is still enforced while the
-user supplies a replacement spending ceiling for the expanded study. This does not
+failed reservations. The user retains the $500 total allocation for now and is open to going further
+after reviewing completion costs. The ledger remains fail-closed. This does not
 block preparation within the existing remaining allocation.
 
 References: [DFlash comparison](dflash-fidelity.md),

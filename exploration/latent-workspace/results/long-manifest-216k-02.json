@@ -1,0 +1,22 @@
+{
+  "completed": true,
+  "records": 216384,
+  "source_group_counts": {
+    "train": {
+      "prose": 18000,
+      "code": 72000,
+      "translation": 72000
+    },
+    "validation": {
+      "prose": 64,
+      "code": 64,
+      "translation": 64
+    },
+    "test": {
+      "prose": 64,
+      "code": 64,
+      "translation": 64
+    }
+  },
+  "test_status": "test prompts only; no teacher responses or metrics"
+}
