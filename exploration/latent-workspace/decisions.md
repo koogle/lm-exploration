@@ -127,3 +127,10 @@
   and conditioning projection using separate checkpoint replays; preserve active
   study source and distinguish measured instability from hypotheses. See
   docs/dflash-learning-diagnostics.md.
+
+- 2026-10-12: User prioritizes new datasets and authorizes resetting model cost
+  accounting. Early-stop both 49k fresh fits after the overfitting review; retain
+  selected/latest checkpoints. Resume teacher preparation and the three larger
+  conditions under coordinator 04 with unchanged training package and fresh draft
+  initialization. Archive the $468 historical ledger; new $500 accounting epoch,
+  rather than treating prior charges as refunded. Record adaptive exposure change.

@@ -231,7 +231,10 @@ def grid_controller(run_id, blueprint, ledger):
             return False
 
     def submit_training(name, cfg, number=1):
-        if name in active or state["runs"].get(name, {}).get("status") == "completed":
+        if name in active or state["runs"].get(name, {}).get("status") in (
+            "completed",
+            "early stopped",
+        ):
             return
         job_id = f"{name}-{number:02d}"
         if not allocate(job_id):

@@ -120,3 +120,25 @@ If substantial fresh training still fails, the authorized next stage is the
 Current sparse global/projection norms are a starting point; per-layer gradient
 flow and projection information loss have not been established. Preserve the
 active grid source and use separate checkpoint replays for deeper instrumentation.
+
+## Adaptive stop and accounting reset
+
+User accepted current small-fit quality and prioritized larger data after the
+overfitting review. Both 49152-example calls were explicitly canceled with saved
+best/latest checkpoints retained: 64 cap at 57593 updates, 256 cap at 37246.
+This is an adaptive early-stop deviation from the original equal-100000-update
+grid. Compare larger-arm learning curves at common earlier updates; do not claim
+a completed equal-final-exposure five-way comparison.
+
+Controller 02 was stopped before the handoff. Controller 04 reattaches the same
+active long-teacher preparation call, skips terminal `early stopped` small fits,
+and will launch 98304/256 and 196608/{64,256} when the balanced pool is ready.
+The training package SHA is unchanged. A local controller regression test checks
+that early-stopped fits are not launched again.
+
+At explicit user instruction, cost accounting starts a new $500 epoch. Historical
+$468 reservations are archived in controller 02's remote ledger and an ignored
+local archive, not erased from provenance. New ledger reserves $12 CPU including the failed coordinator 03 launch; its
+future GPU reservations use the new ledger. Already-running teacher preparation
+was reserved in the historical epoch. This bookkeeping reset is not a Modal bill
+reset. Authoritative ledger and state are now under `/runs/fresh-grid-controller-04/`.

@@ -57,3 +57,36 @@ def test_restarted_controller_recovers_teacher_call_and_keeps_existing_budget(
     assert result["preparations"]["long-teacher-54k-r256"]["previous"] == "long-teacher-54k-r256-02"
     assert result["phase"] == "budget paused; study incomplete"
     assert json.loads((directory / "budget.json").read_text()) == ledger
+
+
+def test_restarted_controller_does_not_relaunch_early_stopped_small_fits(tmp_path, monkeypatch):
+    pytest.importorskip("modal")
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    module = importlib.import_module("modal_long_data")
+    names = ["fresh-grid-49152-r64", "fresh-grid-49152-r256"]
+    state = {
+        "package_source_sha256": "same-source",
+        "runs": {name: {"status": "early stopped"} for name in names},
+        "preparations": {"long-teacher-54k-r256": {"completed_run": "small-ready"}},
+    }
+    monkeypatch.setattr(module, "Path", lambda value: tmp_path if value == "/runs" else Path(value))
+    monkeypatch.setattr(module, "runs", SimpleNamespace(commit=lambda: None))
+
+    def unexpected(*args):
+        raise AssertionError("early-stopped drafts must not restart")
+
+    monkeypatch.setattr(module, "grid_train", SimpleNamespace(spawn=unexpected))
+    monkeypatch.setattr(module, "prepare", SimpleNamespace(spawn=unexpected))
+    blueprint = {
+        "package_source_sha256": "same-source",
+        "resume_state": state,
+        "conditions": {
+            name: {"warm_start_from": "", "continue_from": "", "steps": 100000} for name in names
+        },
+        "small_teacher": {},
+        "large_teacher": {},
+    }
+    ledger = {"reservations": [{"run_id": "prior", "gpu": "L40S", "usd": 499}]}
+    result = module.grid_controller.local("controller", blueprint, ledger)
+    assert all(result["runs"][name]["status"] == "early stopped" for name in names)
+    assert result["phase"] == "budget paused; study incomplete"

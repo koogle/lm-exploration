@@ -230,3 +230,23 @@ package and all training configurations remain unchanged. Before replacing a
 controller, verify both its call and its child GPU call ended, sync the server
 ledger, preserve its handle, and release local ownership only for the replacement
 submission. Do not discard a bounded worker's data checkpoint.
+
+### Larger-data handoff and explicit cost reset
+
+Both 49k fits are terminal `early stopped` in coordinator 04; their best/latest
+checkpoints remain on the volume. The controller's submit guard skips this status.
+Coordinator 04 reattaches the same teacher call from coordinator 02. Its training
+package SHA remains unchanged. Larger-data conditions still start fresh.
+
+The user explicitly reset bookkeeping. Historical $468 reservations stay in
+`fresh-grid-controller-02/budget.json` and ignored local archive
+`artifacts/budget-history-before-large-grid.json`; current ownership marker points
+to coordinator 04 and its new $500 ledger. Current CPU reservations total $12,
+including a failed coordinator 03 launch. In-flight teacher cost was reserved in
+the prior epoch. This does not reset actual Modal charges.
+
+Launch replacement coordinators with `uv run modal run --detach modal_long_data.py ...`.
+A `.spawn()` alone does not preserve a newly queued call if its ephemeral app
+closes without detach: coordinator 03 never started or wrote state. Its failed
+reservation is retained. Coordinator 04's state/budget were fetched successfully
+and its call confirmed active after handoff.
