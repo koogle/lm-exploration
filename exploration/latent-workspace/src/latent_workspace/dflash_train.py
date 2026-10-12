@@ -514,6 +514,10 @@ def run_dflash(cfg, output, on_checkpoint=None):
                 "phase": output.name,
                 "gradient_diagnostic": gradient_diagnostic,
             }
+            if "validation_short" in data:
+                row["validation_short"] = evaluate(
+                    drafter, target, data["validation_short"], mask_id
+                )
             report["curve"].append(row)
             state = {
                 "drafter": drafter.state_dict(),

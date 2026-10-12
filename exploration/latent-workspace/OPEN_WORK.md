@@ -11,7 +11,8 @@ checklist before selecting/integrating any subsequent data experiment.
 `docs/dflash-fresh-grid.md`: roughly 50k/64, 50k/256, 100k/256, 200k/64, 200k/256.
 All draft weights/optimizers start fresh. No warm start from old drafter fits.
 Token-only resumable teacher preparation and online frozen feature extraction are
-implemented; 111 local tests pass. GPU jobs are active: `fresh-online-smoke-01`,
+implemented; 111 local tests pass. GPU online-feature check `fresh-online-smoke-01` completed and passed three
+verified outputs with no warm start. Preparation jobs are active:
 `long-teacher-smoke-02`, and `long-manifest-216k-02`. The first preparation attempts
 failed on runner imports before teacher generation; reservations are retained. Grid configs have
 a deliberate completed-teacher placeholder and are not launch-ready.
@@ -82,7 +83,7 @@ The budget ledger in this main checkout remains authoritative.
 Goal is NOT complete; representation experiments and speed work remain deferred.
 
 82 local tests pass, as do Ruff/format/diff checks. Conservative reservations are
-**$379.75/$500**, not billed cost. Retain failed/stopped reservations. Stop the
+**$381.00/$500**, not billed cost. Retain failed/stopped reservations. Stop the
 active goal only when useful quality is demonstrated or further work is blocked.
 
 Historical completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).

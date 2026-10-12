@@ -29,7 +29,10 @@ Do not run a separate seed sweep until these substantive comparisons exist.
 All arms use the same generated 256-token pool; 64-token arms slice the same
 trajectories. EOS can stop earlier: report actual response lengths, tokens, anchors
 and distinct article/repository/source-sentence counts, not nominal maxima.
-Sets are balanced and nested by source example identity. Multiple training article
+Sets are balanced and nested by source example identity, retaining the prior
+49152 training groups with their original token prefixes. All draft weights still
+start fresh; group retention permits the two 49152 arms to start from a sealed
+subset while remaining teacher preparation continues. Multiple training article
 prefixes are correlated contexts and must not be counted as independent documents.
 The bounded per-article cap is eight, with article-level splits and historical
 holdouts quarantined. Existing teacher prefixes are preserved exactly; only their
@@ -44,14 +47,15 @@ same path. Validate padding, prefix causality and frozen gradients locally and
 with a real-model smoke before full fits. The smoke is a plumbing/profile check,
 not one of the five study results.
 
-Keep the existing 192 validation token/feature sequences unchanged, capped at their
-original 64-token trajectories for the primary matched comparison. This measures
-improvement on the common evaluation context; it does not establish full 256-token
-rollout quality. Add longer-rollout checks when selecting a useful checkpoint.
-Report primary validation per domain, position accuracy, NLL, verified rollout
-acceptance and output parity. Test stays sealed until the existing quality gate
-is met and the selected configuration/checkpoint is frozen. Repeated validation
-selection and one seed limit causal/generalization claims.
+Extend the same 192 validation trajectories to the 256-token cap, retaining every
+original teacher token. This common long view is the primary validation for all
+five arms; preserve the original 64-token view for an additional diagnostic. No
+validation example is included in training. EOS may terminate early. Report actual
+length distributions, per-domain and position accuracy, NLL, verified rollout
+acceptance and output parity. Longer-rollout checks are required when selecting a
+useful checkpoint. Test stays sealed until the existing quality gate is met and
+checkpoint/configuration are frozen. Repeated validation selection and one seed
+limit causal/generalization claims.
 
 ## Resumable preparation and training
 
@@ -71,3 +75,26 @@ block preparation within the existing remaining allocation.
 References: [DFlash comparison](dflash-fidelity.md),
 [quality gate](dflash-improvement-series.md),
 [prefix policy](dflash-prefix-coverage.md).
+
+Initial online-feature GPU check completed 20/20 updates, three checked verified
+outputs match, target gradients remain absent, and initial draft SHA matches the
+archived *random initialization*, not a trained checkpoint. `warm_start` is null.
+Peak allocated training GPU memory was 8.86 GB on the short-response check.
+This is not a fresh-grid quality result or a 256-token memory profile.
+
+`scripts/run_fresh_grid.py` orchestrates bounded preparation chunks and all five
+fresh fits, refusing changed package source or initial warm starts. It first extends the existing 54k pool to 256 tokens, then starts the two 49152
+arms from that completed pool while the larger pool continues. Required old groups
+make those small datasets identical to their eventual nested full-pool subsets. It records live status in ignored
+`artifacts/fresh-grid-progress.json`. It does not raise the budget cap or declare
+research success when training finishes. Comparison and qualification remain
+explicitly pending. Full fits must use identical package source across continuations.
+
+The long-teacher plumbing check generated 96 requested prompts, 95 usable responses,
+with prose/code typically at the 256 cap and many translation responses terminating
+earlier. Some prose/code teacher continuations are repetitive. Report descriptive
+less-repetitive validation slices alongside overall acceptance; neither repetition
+nor target-output parity establishes human answer quality. The subsequent 200-update
+long-sequence GPU profile completed with all three verified outputs matching and
+9.48 GB peak allocated training memory. Its initial SHA again matches the random
+initialization and has no warm start. It is a resource check, not a grid quality result.

@@ -32,7 +32,7 @@
   "teacher_parent": "/runs/long-data-COMPLETE",
   "extend_teacher_parent": "",
   "train_limit": 49152,
-  "retain_training_parent": "",
+  "retain_training_parent": "/runs/dflash-expansion-49152-01",
   "teacher_batch_size": 32,
   "rollout_prompts_per_domain": 4,
   "quality_only": false,

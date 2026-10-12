@@ -32,14 +32,20 @@ image = (
     max_containers=1,
     volumes={"/cache": cache, "/runs": runs},
 )
-def prepare(config, run_id, manifest_parent, seed_parent, resume_parent):
+def prepare(
+    config, run_id, manifest_parent, seed_parent, resume_parent, seal_parent, required_parent
+):
     import sys
 
     sys.path.insert(0, "/project/.venv/lib/python3.12/site-packages")
     from latent_workspace.dflash import DraftConfig
-    from latent_workspace.dflash_large_data import prepare_chunk, prepare_manifest
+    from latent_workspace.dflash_large_data import prepare_chunk, prepare_manifest, seal_subset
 
     try:
+        if seal_parent:
+            return seal_subset(
+                f"/runs/{seal_parent}", f"/runs/{required_parent}", f"/runs/{run_id}"
+            )
         if not manifest_parent:
             return prepare_manifest(
                 DraftConfig(**config),
@@ -67,16 +73,30 @@ def main(
     manifest_parent: str = "",
     seed_parent: str = "dflash-data-54k-01",
     resume_parent: str = "",
+    seal_parent: str = "",
+    required_parent: str = "dflash-expansion-49152-01",
 ):
     from latent_workspace.dflash import DraftConfig
 
     cfg = DraftConfig(**json.loads(Path(config).read_text())).validate()
-    for name in (run_id, seed_parent, manifest_parent, resume_parent):
+    for name in (run_id, seed_parent, manifest_parent, resume_parent, seal_parent, required_parent):
         if name and not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", name):
             raise ValueError("invalid run ID")
-    if cfg.max_seconds > 3300 or (resume_parent and not manifest_parent):
+    if (
+        (seal_parent and (manifest_parent or resume_parent))
+        or cfg.max_seconds > 3300
+        or (resume_parent and not manifest_parent)
+    ):
         raise ValueError("invalid bounded preparation")
     amount = reserve("artifacts/budget.json", run_id, "L40S", timeout_seconds=3600)
     print(f"Reserved ${amount:.2f} for bounded preparation.")
-    report = prepare.remote(cfg.to_dict(), run_id, manifest_parent, seed_parent, resume_parent)
+    report = prepare.remote(
+        cfg.to_dict(),
+        run_id,
+        manifest_parent,
+        seed_parent,
+        resume_parent,
+        seal_parent,
+        required_parent,
+    )
     Path(f"results/{run_id}.json").write_text(json.dumps(report, indent=2) + "\n")

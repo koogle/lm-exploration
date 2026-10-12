@@ -61,7 +61,14 @@ def nested_subset(examples, count, seed, required_groups=()):
 
 
 def diverse_manifest(
-    cfg, tokenizer, output, deadline, historical, prior_manifest, initial_records=()
+    cfg,
+    tokenizer,
+    output,
+    deadline,
+    historical,
+    prior_manifest,
+    initial_records=(),
+    on_partial=None,
 ):
     from datasets import load_dataset
 
@@ -90,6 +97,8 @@ def diverse_manifest(
         rows = buffer_shuffle(rows, cfg.seed + domain_index)
         for row in rows:
             if time.monotonic() > deadline:
+                if on_partial:
+                    on_partial(records)
                 raise TimeoutError("diverse prompt preparation deadline")
             text = (
                 row["translation"]["en"]
@@ -105,6 +114,9 @@ def diverse_manifest(
                 continue
             if group in (old_heldout if split == "train" else old_all):
                 rejected["historical_group"] += 1
+                continue
+            if domain != "prose" and group in registry.groups:
+                rejected["registered_group"] += 1
                 continue
             if domain == "translation":
                 ids = tokenizer.encode(
@@ -156,6 +168,8 @@ def diverse_manifest(
                         counts[domain, split] += 1
             if all(counts[domain, s] == limits[s] for s in SPLITS):
                 break
+        if on_partial:
+            on_partial(records)
         print(f"Diverse prompts {domain}: {dict(counts)}", flush=True)
     if any(counts[d, s] != limits[s] for d in DOMAINS for s in SPLITS):
         raise ValueError(f"insufficient diverse prompts: {dict(counts)}")
@@ -218,6 +232,10 @@ def teacher_statistics(data, block_size=8):
                     for r in responses
                 )
                 / max(1, len(responses)),
+                "response_length_mean": sum(map(len, responses)) / max(1, len(responses)),
+                "response_length_median": sorted(map(len, responses))[len(responses) // 2]
+                if responses
+                else 0,
                 "response_length_min": min(map(len, responses), default=0),
                 "response_length_max": max(map(len, responses), default=0),
             }

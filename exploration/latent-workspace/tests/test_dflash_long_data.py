@@ -113,7 +113,10 @@ def test_bounded_teacher_chunks_resume_without_regenerating_rows_or_touching_tes
     old["response_sha256"] = token_hash(old["tokens"][2:].tolist())
     torch.save({"train": [old], "validation": validation}, seed / "teacher.pt")
     for folder in (seed, manifest):
-        (folder / "config.json").write_text(json.dumps(cfg.to_dict()))
+        config = cfg.to_dict()
+        if folder == seed:
+            config["online_teacher_features"] = False
+        (folder / "config.json").write_text(json.dumps(config))
     (manifest / "prompts.json").write_text(
         json.dumps({"records": records + [{"split": "test", "group": "sealed"}]})
     )
@@ -125,6 +128,11 @@ def test_bounded_teacher_chunks_resume_without_regenerating_rows_or_touching_tes
         def eval(self):
             return self
 
+        device = "cpu"
+
+        def model(self, tokens, **kwargs):
+            return None
+
         def requires_grad_(self, value):
             return self
 
@@ -133,7 +141,14 @@ def test_bounded_teacher_chunks_resume_without_regenerating_rows_or_touching_tes
     )
     monkeypatch.setattr(
         "transformers.AutoTokenizer.from_pretrained",
-        lambda *a, **kw: SimpleNamespace(eos_token_id=999),
+        lambda *a, **kw: SimpleNamespace(eos_token_id=201),
+    )
+    monkeypatch.setattr(
+        "latent_workspace.dflash_large_data.extend_response",
+        lambda target, tokenizer, record, previous, count: previous["tokens"].tolist(),
+    )
+    monkeypatch.setattr(
+        "latent_workspace.dflash_large_data.features", lambda *args: torch.zeros(1, 8, 32)
     )
     visited = []
 
@@ -156,8 +171,24 @@ def test_bounded_teacher_chunks_resume_without_regenerating_rows_or_touching_tes
     torch.testing.assert_close(
         data["train"][0]["tokens"][: len(old["tokens"])], old["tokens"], rtol=0, atol=0
     )
-    for actual, original in zip(data["validation"], validation):
+    for i, (actual, original) in enumerate(zip(data["validation"], validation)):
         torch.testing.assert_close(actual["tokens"], original["tokens"], rtol=0, atol=0)
-        torch.testing.assert_close(actual["memory"], original["memory"], rtol=0, atol=0)
+        torch.testing.assert_close(
+            data["validation_short"][i]["memory"], original["memory"], rtol=0, atol=0
+        )
+    from latent_workspace.dflash_large_data import seal_subset
+
+    # A completed subset must not falsely claim the full requested pool is complete.
+    report_path = second / "report.json"
+    report = json.loads(report_path.read_text())
+    report["requested"] = 9
+    report_path.write_text(json.dumps(report))
+    sealed = seal_subset(second, seed, tmp_path / "sealed", count=3)
+    assert sealed["completed"] and not sealed["full_pool_completed"]
+    assert (
+        sum(v["prompts"] for v in sealed["teacher_audit"]["by_split_domain"]["train"].values()) == 3
+    )
+    with pytest.raises(ValueError, match="required teacher prefix"):
+        seal_subset(first, second, tmp_path / "missing", count=6)
     with pytest.raises(ValueError, match="changes manifest or configuration"):
         prepare_chunk(replace(cfg, response_tokens=16), tmp_path / "bad", manifest, seed, second)
