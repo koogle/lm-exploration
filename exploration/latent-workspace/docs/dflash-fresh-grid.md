@@ -113,3 +113,10 @@ the existing $500 cumulative ceiling. It stops new submissions at that cap, allo
 current workers to finish, and reports the study incomplete rather than successful.
 Server state and ledger live in the controller's run directory on the shared volume.
 Local GPU submission is blocked while the ignored ownership marker exists.
+
+
+If substantial fresh training still fails, the authorized next stage is the
+[activation, loss and gradient diagnostic plan](dflash-learning-diagnostics.md).
+Current sparse global/projection norms are a starting point; per-layer gradient
+flow and projection information loss have not been established. Preserve the
+active grid source and use separate checkpoint replays for deeper instrumentation.

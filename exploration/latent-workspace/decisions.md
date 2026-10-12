@@ -121,3 +121,9 @@
   49152/196608 examples plus an intermediate 98304/256 condition. Preserve valid
   teacher prefixes and held-out identities; this reuses labels, not trained drafts.
   See docs/dflash-fresh-grid.md for executed versus pending work.
+
+- 2026-10-12: If the substantial fresh grid remains weak, user requests deeper
+  activation/loss/gradient diagnostics. Inspect trainable-drafter flow, clipping
+  and conditioning projection using separate checkpoint replays; preserve active
+  study source and distinguish measured instability from hypotheses. See
+  docs/dflash-learning-diagnostics.md.

@@ -30,3 +30,5 @@ Active small-target quality series: [Protocol](../dflash-improvement-series.md).
 Isolated data-coverage prototype: [status, invariants and remaining integration](../dflash-prefix-coverage.md).
 
 Fresh data/response grid: [protocol](../dflash-fresh-grid.md).
+
+Conditional learning failure diagnosis: [activation/loss/gradient plan](../dflash-learning-diagnostics.md).

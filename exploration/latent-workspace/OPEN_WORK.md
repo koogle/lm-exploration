@@ -65,6 +65,9 @@ large train/validation gaps. Latest expansion audits are no longer running; the
 its bound. Do not claim a completed full-corpus audit for that stage.
 
 Remaining for the fresh study:
+- If substantial fresh training remains weak, execute the authorized
+  [activation/loss/gradient diagnostic plan](docs/dflash-learning-diagnostics.md),
+  without changing active grid source or treating sparse global norms as sufficient.
 - Complete teacher preparation; verify actual lengths, source counts, deduplication,
   old-prefix identities, unchanged short holdout and shared long holdout hashes.
 - Complete all five fresh schedules; compare curves at equal NEW-label exposure,
