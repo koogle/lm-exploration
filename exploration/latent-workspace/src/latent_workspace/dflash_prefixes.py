@@ -24,9 +24,10 @@ def training_prose_prefixes(
     """
     if min(context, max_prefixes, reserve_tokens) < 1:
         raise ValueError("positive context, prefix limit and trailing-token reserve required")
-    offsets = sorted(set(existing_offsets))
+    offsets = list(existing_offsets)
     if any(type(offset) is not int or offset < 0 for offset in offsets):
         raise ValueError("existing offsets must be nonnegative integers")
+    offsets = sorted(set(offsets))
     group = f"prose:{source_hash}"
     if group in excluded_groups or repository_split(group) != "train":
         return

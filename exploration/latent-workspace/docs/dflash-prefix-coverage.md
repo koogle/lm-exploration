@@ -19,7 +19,8 @@ holdouts; they are not additional independent documents.
   the original article identity. Their example IDs do not determine split membership.
 - `PromptRegistry(allow_training_prefixes=True)` allows only correctly identified
   additional training prose prefixes to reuse a source. Default behavior is unchanged.
-  Article-level cross-split conflicts are rejected in either insertion order;
+  Articles assigned to validation/test cannot be relabeled as training even before
+  registration. Article-level cross-split conflicts are rejected in either insertion order;
   exact prompt and cross-source near-duplicate checks remain enforced.
 - `load_teacher_cache` uses private, disk-backed tensor mappings for expansion,
   training and diagnostics. It preserves values without eagerly loading all feature
@@ -27,7 +28,7 @@ holdouts; they are not additional independent documents.
   tensors and Python metadata still consume RAM; this is not a claim that arbitrary
   pool creation fits any memory budget.
 
-98 CPU tests pass, including existing exact continuation/warm-start/cache tests,
+100 CPU tests pass, including existing exact continuation/warm-start/cache tests,
 new article/prefix quarantine tests, and a test that private mapped data cannot
 modify the source file even when a shared global mapping default was configured.
 Ruff, formatting and diff checks pass. No large-cache or GPU smoke has run for this

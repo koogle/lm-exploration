@@ -56,6 +56,7 @@ class PromptRegistry:
                 and record.get("domain") == "prose"
                 and record["split"] == "train"
                 and source_group == f"prose:{record['source_hash']}"
+                and repository_split(source_group) == "train"
                 and type(offset) is int
                 and offset >= 0
                 and record["group"] == f"{source_group}:prefix:{offset}"

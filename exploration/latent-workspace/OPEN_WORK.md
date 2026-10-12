@@ -1,5 +1,5 @@
 Branch-only prototype: [training-prefix coverage](docs/dflash-prefix-coverage.md).
-98 CPU tests pass. Prefix sampling and opt-in registry safeguards are implemented
+100 CPU tests pass. Prefix sampling and opt-in registry safeguards are implemented
 but not connected to pool preparation; disk-backed teacher-cache reads are added
 only on this isolated branch. No GPU jobs or datasets launched from this checkout.
 Main's active fits must retain their original package source. See the prototype

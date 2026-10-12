@@ -55,6 +55,18 @@ def test_heldout_article_never_becomes_training_via_new_example_id(split):
     assert extras(source_for(split)) == []
 
 
+@pytest.mark.parametrize("split", ["validation", "test"])
+def test_registry_rejects_unregistered_hash_holdout_mislabeled_as_training(split):
+    source_hash = source_for(split)
+    record = {
+        **canonical(source_hash),
+        "group": f"prose:{source_hash}:prefix:128",
+        "source_group": f"prose:{source_hash}",
+        "source_token_offset": 128,
+    }
+    assert not PromptRegistry(allow_training_prefixes=True).add(record)
+
+
 def test_historical_holdout_is_quarantined_even_when_hash_assignment_is_train():
     source_hash = source_for("train")
     assert extras(source_hash, excluded_groups={f"prose:{source_hash}"}) == []
@@ -65,6 +77,12 @@ def test_short_articles_and_exhausted_prefix_limit_are_skipped():
     assert list(training_prose_prefixes(range(70), source_for("train"), context=64, seed=42)) == []
     with pytest.raises(ValueError):
         list(training_prose_prefixes(range(70), source_for("train"), context=0, seed=42))
+    with pytest.raises(ValueError, match="nonnegative integers"):
+        list(
+            training_prose_prefixes(
+                range(300), source_for("train"), context=64, seed=42, existing_offsets=[0, "bad"]
+            )
+        )
 
 
 def test_registry_requires_opt_in_and_keeps_exact_prompt_deduplication():
