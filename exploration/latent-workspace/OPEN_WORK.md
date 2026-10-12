@@ -47,9 +47,9 @@ Before any further large pool: `results/dflash-prose-source-capacity.json` count
 per-group recipe has a balanced upper bound of 69270 responses. A 98304-response
 request needs a revised, validated source/prefix policy; do not blindly increase
 the count. Current runs are unchanged. See the protocol for deferred options.
-An isolated prototype is pushed on `drafter-data-coverage` (`2ccf058`), checked
+An isolated prototype is pushed on `drafter-data-coverage` (`0d1a68c`), checked
 out at `/workspace/drafter-data-coverage`. It adds training-only article-prefix
-primitives/registry guards and private mapped teacher-cache reads; 98 CPU tests
+primitives/registry guards and private mapped teacher-cache reads; 100 CPU tests
 pass. It is NOT merged, not wired into pool preparation, and has not run on GPU.
 Keep main package source unchanged while the active fits/resumes run. Before using
 the branch, follow its `docs/dflash-prefix-coverage.md` integration/smoke checklist.
