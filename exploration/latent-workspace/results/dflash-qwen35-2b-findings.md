@@ -1,4 +1,4 @@
-# Qwen3.5-2B drafting quality — completed experiment
+# Drafter quality for frozen Qwen3.5-2B — completed experiment
 
 **This 2B setup did not improve drafting.** Both targets received fresh drafter
 training on 6144 mixed-domain responses for 20000 updates. On the same 184

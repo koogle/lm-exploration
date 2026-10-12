@@ -1,4 +1,4 @@
-# Qwen3.5-2B drafting quality experiment
+# Drafter quality for frozen Qwen3.5-2B
 
 User direction: improve drafting quality, not speed; test the 2B Qwen.
 Use [Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B), pinned at

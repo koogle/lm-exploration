@@ -20,8 +20,10 @@ further representation experiments. See [baseline protocol](docs/dflash-baseline
 Train on target-generated responses with random clean anchors and fully masked
 future blocks. Measure accepted NEW tokens beyond the supplied anchor, verified
 output correctness, and end-to-end latency. Defer J-space, workspace, hidden-state
-prediction and layer-selection/dropout ablations. User now requests a Qwen3.5-2B
-quality comparison; see docs/dflash-qwen35-2b.md. The current follow-up is the small frozen Qwen2.5-0.5B improvement series
+prediction and layer-selection/dropout ablations. The completed historical
+Qwen3.5-2B target comparison is documented in docs/dflash-qwen35-2b.md.
+The active experiment trains a separate approximately 79M-parameter drafter for
+frozen Qwen2.5-0.5B in the improvement series
 (docs/dflash-improvement-series.md), with bounded adaptive fidelity/data/exposure
 studies until the quality gate is met or the authorized budget blocks progress.
 Name draft parameter counts separately from target size. Speed optimization is not the
