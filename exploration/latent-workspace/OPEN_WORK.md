@@ -28,13 +28,17 @@ training memory. These are plumbing/profile checks, not grid quality results.
 
 ## Durable execution and budget
 
-Modal controller `fresh-grid-controller-02` is active, resuming controller 01.
-The first teacher worker saved 35616/54000 responses before its bound. Controller
-01 restarted and failed on an existing run directory; restart handling now loads
-its persisted budget and reattaches saved calls instead of duplicating work.
-Worker `long-teacher-54k-r256-03` continues from worker 02. Neither fresh 49152 fit
-has started yet. They will start after this pool completes, followed by larger
-teacher preparation and the remaining three fits. No full grid fit/result exists yet.
+Modal controller `fresh-grid-controller-02` is active; restart recovery succeeded.
+The initial long teacher pool completed with 53501 usable responses and 9.59M
+response-token positions. Both fresh 49152-example fits have started: latest read
+snapshots are 6000/100000 updates (64 cap) and 4000/100000 (256 cap). At matched
+4000 updates, primary long-validation NEW is 1.30058 versus 2.46466. The latter's
+prose/code/translation scores are 3.82227/2.78516/0.78656, so the every-domain gate
+still fails. These are interim, reused-validation results, not qualified test evidence.
+Both share random initial weights and no warm start; source/long/short validation
+hashes match. `long-teacher-216k-01` is expanding data while these fits train.
+The remaining 98304/196608 conditions have not started. Interim curves and archived
+snapshots: `results/fresh-grid-50k-interim.{png,json}`. No full-grid result exists.
 
 - State: `/runs/fresh-grid-controller-02/state.json`.
 - Authoritative ledger: `/runs/fresh-grid-controller-02/budget.json`.
@@ -44,7 +48,7 @@ teacher preparation and the remaining three fits. No full grid fit/result exists
 Do not submit local GPU jobs while the marker exists; do not change package source
 for active fits/continuations. [Operations](docs/operations.md) describes ledger
 sync/release. The server uses bounded 3600-second GPU workers and a bounded 24-hour
-CPU coordinator. Current reservations at controller launch: **$408/$500**, including
+CPU coordinator. Current reservations at controller launch: **$423/$500**, including
 $6 CPU and retained failed/canceled reservations; this is not actual billed cost.
 The user retains $500 for now and is open to reviewing an increase if needed.
 Budget exhaustion pauses new jobs and reports the study incomplete.

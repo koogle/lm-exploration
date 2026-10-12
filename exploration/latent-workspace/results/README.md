@@ -96,3 +96,8 @@ Completed response expansion: [curves](dflash-expansion-scaling.png),
 [paired uncertainty and provenance](dflash-expansion-scaling.json), and
 [findings](dflash-improvement-findings.md). 49152 responses improve selected
 validation NEW to 1.46181, below the declared quality gate.
+
+Fresh-grid interim: [response-length curves](fresh-grid-50k-interim.png) and
+[archived live snapshots](fresh-grid-50k-interim.json). At matched 4000 fresh updates,
+64/256 training caps score 1.30058/2.46466 NEW on identical long validation.
+Translation remains below one; fits and data expansion are incomplete.
