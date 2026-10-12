@@ -143,3 +143,30 @@ held-out performance; more data helps within the tested source distribution.
 Evidence: `dflash-exposure-6144-02.json`, `dflash-exposure-24576-01.json`, and
 `dflash-exposure-scaling.json`. All 82 tests and Ruff/format/diff checks pass.
 Current conservative reservations: **$338.50/$500**; test remains sealed.
+
+
+### Full smaller-corpus audit and repetition slices
+
+The 6144-response audit completes both checkpoints and exactly reproduces the
+saved validation metrics. Selected step 2000 scores training **2.30198 NEW / 7**,
+NLL 2.49195, versus validation 0.57378. Final step 20000 reaches training
+**6.999959 NEW / 7**, NLL **0.001396**, versus validation **0.44514**, NLL 9.58671.
+This confirms near-total training memorization rather than inability to fit this
+corpus. Zeroing selected-checkpoint context gives validation 0.04371; context is
+used, but that intervention is a distribution shift, not layer attribution.
+Sampler replay matches exactly: 53.76M NEW labels and 937,797,341 conditioning
+positions. Frozen target features are reused; these are not backbone training tokens.
+
+The gain is also present in less-repetitive teacher responses (unique response
+4-gram fraction at least 0.8): prose **0.527 to 0.940** (23 prompts), code
+**0.717 to 1.228** (34), and translation **0.388 to 0.743** (63). These are descriptive
+slices of the same validation set, with no new held-out evidence or uncertainty
+claim. The repetitive translation slice has only one prompt. Raw evidence:
+`dflash-exposure-repetition-slices.json` and `dflash-exposure-6144-audit-01.json`.
+
+Actual verified rollout acceptance on the twelve fixed prompts also improves,
+but is weaker than the full offline validation proxy: pooled NEW tokens per
+verification call for prose/code/translation change from **0.305/0.881/0.280** to
+**0.442/1.016/0.469**. Different arithmetic (FP32) and trajectories/anchor positions
+mean these are not interchangeable with cached BF16 validation scores. No speed
+qualification is inferred. Both preserve checked target outputs exactly.

@@ -1,0 +1,51 @@
+{
+  "note": "Descriptive paired validation slices by teacher-response unique 4-gram fraction, a repetition proxy. Same 192 validation prompts, selected checkpoints; no test access or independent generalization claim. No uncertainty estimation in these small slices.",
+  "reports": {
+    "dflash-exposure-6144-02.json": "5bef3af6475a102156715ae382713e8cee1283ccbcc0deeb4635fc77dd704c37",
+    "dflash-exposure-24576-01.json": "13416ac03ef80cc8f1b6f600b996b577cb406b9c3c7d72312988b65fe971f080"
+  },
+  "slices": [
+    {
+      "domain": "prose",
+      "slice": "more_repetitive",
+      "prompts": 41,
+      "new_matches_6144": 0.7317073170731707,
+      "new_matches_24576": 1.3201219512195121
+    },
+    {
+      "domain": "prose",
+      "slice": "less_repetitive",
+      "prompts": 23,
+      "new_matches_6144": 0.5271739130434783,
+      "new_matches_24576": 0.9402173913043478
+    },
+    {
+      "domain": "code",
+      "slice": "more_repetitive",
+      "prompts": 30,
+      "new_matches_6144": 0.6291666666666667,
+      "new_matches_24576": 1.0333333333333334
+    },
+    {
+      "domain": "code",
+      "slice": "less_repetitive",
+      "prompts": 34,
+      "new_matches_6144": 0.7169117647058824,
+      "new_matches_24576": 1.2279411764705883
+    },
+    {
+      "domain": "translation",
+      "slice": "more_repetitive",
+      "prompts": 1,
+      "new_matches_6144": 0.375,
+      "new_matches_24576": 0.875
+    },
+    {
+      "domain": "translation",
+      "slice": "less_repetitive",
+      "prompts": 63,
+      "new_matches_6144": 0.38755020080321284,
+      "new_matches_24576": 0.7429718878194989
+    }
+  ]
+}

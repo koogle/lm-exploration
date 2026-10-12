@@ -16,8 +16,10 @@ unmet. See `results/dflash-exposure-scaling.png` and its JSON evidence sidecar.
 
 The small arm's continuation `dflash-exposure-6144-02` restored optimizer/RNG and
 completed the remaining 898 updates on the original global schedule. Reports share
-initial-weight, source and validation hashes. Full-training and zero-memory audits
-`dflash-exposure-6144-audit-01` and `dflash-exposure-24576-audit-01` are running.
+initial-weight, source and validation hashes. The smaller full-training/zero-memory audit `dflash-exposure-6144-audit-01`
+is complete: final training NEW 6.999959 versus validation 0.44514; selected
+training NEW 2.30198 versus validation 0.57378. Validation entries and sampler
+replay match exactly. `dflash-exposure-24576-audit-01` is still running.
 Next: verify both audit validation entries reproduce their training reports, compare
 selected/final full fitting and sampler replay, then choose the next intervention.
 
