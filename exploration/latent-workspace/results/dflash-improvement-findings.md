@@ -91,3 +91,25 @@ snapshot, with source reports embedded in dflash-exposure-interim.json. Both wor
 match committed package source `07a68c9`; continuation must retain that source until
 a justified change is recorded. Latest setup checks: 82 tests, Ruff and diff checks
 pass. Conservative reservations: $318.50/$500, not actual billed usage.
+
+
+## Higher-supervision update, 2026-10-12
+
+The 24576-response arm completed all 20000 additional updates / 53.76M NEW-label
+exposures. Selected step 10000 scores **1.02179 NEW / 7**: prose 1.18359, code
+1.13672, translation 0.74506. Final step 20000 scores 0.95882. All twelve checked
+FP32 rollouts match the target. The 6144-response arm ended at its time bound at
+step 19102; selected step 2000 scores 0.57378. Its remaining 898 updates are being
+continued with optimizer/RNG and the original global schedule restored. Package
+source is unchanged and matches both first workers. A complete comparison awaits
+that continuation; full-training audits are separate from the small train diagnostic.
+
+The larger arm's validation worsens after its selected checkpoint despite improving
+training diagnostics. Additional repetition alone is not resolving the gap. Its
+full training/zero-memory audit is running. The conditional next data pool completed
+with 53476 usable training responses and unchanged held-out data; no new fit has
+been chosen yet. Test remains sealed and the two-token gate remains unmet.
+
+Raw reports: `dflash-exposure-6144-01.json`, `dflash-exposure-24576-01.json`,
+`dflash-data-54k-01.json`. Reservations after the continuation and larger fit audit:
+**$333.50/$500**, conservative allocation rather than billed cost.

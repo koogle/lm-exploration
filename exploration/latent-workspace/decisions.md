@@ -95,3 +95,8 @@
   the separately trained drafter, and prioritize quality. Predeclare QK-norm and
   depth comparisons, a held-out multi-token quality gate, and bounded adaptive
   follow-ups in docs/dflash-improvement-series.md. No new budget authorization.
+
+- 2026-10-12: Correct ambiguous target-size labels: the historical 2B-target
+  experiment trained a separate approximately 105M drafter; the current frozen
+  Qwen2.5-0.5B improvement study trains a separate 79M drafter. Neither target
+  is being trained or used as the draft network.

@@ -44,7 +44,8 @@ does not require iterative denoising here: classic DFlash uses one parallel pass
 The corpus has about 130 times fewer responses. Anchors are correlated within
 responses, and our short responses cannot provide 512 distinct full-block anchors;
 do not present the anchor-count ratio as independent-data or compute equivalence.
-The two-layer 2B draft has about 105M trainable parameters, versus 31M for 0.5B,
+The two-layer drafter for the 2B target has about 105M trainable parameters,
+versus 31M for the 0.5B target,
 with the same label-exposure budget. Larger target weights remain frozen: changing
 the target does not automatically give the randomly initialized draft those skills.
 

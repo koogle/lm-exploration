@@ -156,7 +156,7 @@ the checkpoint sampler RNG state or the audit rejects the count. Conditioning
 positions are counted per sampled block; frozen cached features do not imply
 new backbone training or target forward computation.
 
-For full fitting audits of the wider 2B drafter, `--verify-parent RUN --fit-audit
+For full fitting audits of the 105M drafter trained for the frozen 2B target, `--verify-parent RUN --fit-audit
 --long-run` selects a 3600-second diagnostic worker and reserves $5 for the full
 bound. The short worker remains 360 seconds/$0.50; no timeout is under-reserved.
 
@@ -174,7 +174,7 @@ then generates only uncached training responses. It rejects changed teacher sett
 and hash-checks unchanged validation tokens/features. Both use the same bounded
 3600-second worker and $5 reservation. No sealed-test teacher generation occurs.
 
-Long DFlash preparation/training and full-audit workers now request 96 GiB host RAM
+Long DFlash preparation/training and full-audit workers now request 128 GiB host RAM
 so expanded feature caches fit without out-of-memory failures. Short smoke/audit
 workers remain at 32 GiB. GPU, CPU count, hard 3600-second bound and conservative
 $5 reservation are unchanged; these are not billed-cost claims. Existing running

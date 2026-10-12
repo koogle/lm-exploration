@@ -7,27 +7,30 @@ original 0.384, normalization 0.484, five draft layers 0.520, five feature depth
 uncertain; full-training fitting remains weak. The selected 79M checkpoint is
 `dflash-fidelity-features-01/best.pt`, step 18000. Frozen target: Qwen2.5-0.5B.
 
-**Running now:** `dflash-exposure-6144-01` and `dflash-exposure-24576-01` on Modal,
-configured in `configs/dflash-exposure-{6144,24576}.json`. Both load the same selected
-weights and use batch 48, 8 anchors, a fixed 20000-update schedule and 53.76M
-additional NEW-label exposures. Logs: `artifacts/dflash-exposure-*-01.log`.
-Initial weights/validation match exactly; both retain the original training groups.
-See `results/dflash-exposure-launch-audit.json` and the protocol for provenance.
-The expanded five-depth pool has 26163 usable training responses and the original
-192 validation responses. Test remains sealed. Goal is NOT complete.
+**Current (2026-10-12):** The 24576-response exposure fit completed 20000 updates;
+selected step 10000 scores **1.02179 NEW / 7** (prose 1.18359, code 1.13672,
+translation 0.74506). Its final score is 0.95882. All 12 checked FP32 rollouts match.
+The 6144-response worker ended at step 19102; selected step 2000 scores 0.57378.
+`dflash-exposure-6144-02` is completing its remaining 898 updates with the same
+optimizer/RNG/global schedule and unchanged package source. The larger fit's full
+training/zero-memory audit, `dflash-exposure-24576-audit-01`, is running on Modal.
 
-Next: monitor these workers; use `scripts/resume_dflash.py` on finalized time-limit
-reports to request only the remaining updates, with new run IDs and reservations.
-Do not restart the schedule or optimizer. Initially budget at most eight long-worker
-reservations for this pair before reviewing progress. Plot with
-`scripts/plot_dflash_scaling.py ... --quality-gate 2 --output results/dflash-exposure-scaling`
-(and `--partial` for live reports). Audit full fitting and zero-memory conditioning
-before deciding whether more data, exposure, or another repair is justified.
+The conditional 54k-prompt preparation completed: 53476 usable training responses
+(17769 prose, 17898 code, 17809 translation), preserving the five-depth parent cache
+and all 192 validation examples. No test responses generated. No fit on this new
+pool has been launched. Wait for the completed matched comparison and full-fitting
+audits before selecting the next training intervention. Goal is NOT complete.
 
-82 local tests pass; larger-batch and exact warm-start GPU smokes passed. Current
-conservative reservations: **$318.50/$500**, not billed cost. Retain failed/stopped
-reservations. See results/dflash-improvement-findings.md. Stop the active goal only
-when useful quality is demonstrated or further work is genuinely blocked.
+Next: finish the 6144 arm and audit it; publish matched completed curves and paired
+uncertainty. Use the full training audits to distinguish remaining fitting from
+memorization/generalization problems. Keep package source unchanged through the
+current continuation. Both arms share the initial 79M weights and validation cache.
+Test stays sealed until the declared quality gate is met.
+
+82 local tests previously pass; larger-batch and exact warm-start GPU smokes passed.
+Current conservative reservations: **$333.50/$500**, not billed cost. Retain failed
+and stopped reservations. See results/dflash-improvement-findings.md. Stop the
+active goal only when useful quality is demonstrated or further work is blocked.
 
 Historical completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).
 Both targets used 6144 responses and 20000 updates. Selected shared-prompt NEW

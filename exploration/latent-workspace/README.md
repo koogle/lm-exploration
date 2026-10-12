@@ -3,8 +3,9 @@
 Active: [small-Qwen drafter improvement studies](docs/dflash-improvement-series.md),
 with controlled attention/depth comparisons and a predeclared held-out quality gate.
 [Current findings](results/dflash-improvement-findings.md): completed fidelity studies
-improve validation NEW matches from 0.384 to 0.530. The selected 79M drafter now
-undergoes matched 6144/24576-response fits with 53.76M additional labels per arm.
+improve validation NEW matches from 0.384 to 0.530. The separate 79M drafter reaches 1.022 NEW matches / 7 with 24576 training
+responses and 53.76M additional labels. The matched smaller-data continuation and
+full-fitting audits are in progress; the two-token quality gate remains unmet.
 Useful multi-token drafting remains unsolved; the frozen target is Qwen2.5-0.5B.
 
 Current priority: build a **DFlash-style drafter for frozen Qwen targets**
@@ -15,7 +16,7 @@ No backbone pretraining or collaborative proposal module.
 
 The [completed Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md)
 did not improve drafting: selected checkpoints score **0.170 versus 0.387 NEW
-matches / 7** on 184 shared validation source prompts. The 2B head is weak on
+matches / 7** on 184 shared validation source prompts. The drafter trained for the 2B target is weak on
 training too (0.173). Both used 6144 responses and 20000 updates. Family, tokenizer,
 prompt format and draft capacity also change; this is not a pure size ablation.
 Prediction quality remains the priority. No 2B rollout verification was performed.

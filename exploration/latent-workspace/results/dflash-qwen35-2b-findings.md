@@ -7,7 +7,7 @@ match **0.387 NEW tokens for Qwen2.5-0.5B versus 0.170 for Qwen3.5-2B**, out of
 seven proposed tokens after a supplied anchor. These are consecutive teacher-token
 matches, not verified rollout acceptance or human answer-quality scores.
 
-The 2B head is weak on training too: its selected checkpoint scores **0.173 on
+The drafter trained for the 2B target is weak on training too: its selected checkpoint scores **0.173 on
 all training responses and 0.170 on validation**. Its final checkpoint scores
 0.175/0.168. This is a failure to learn useful training predictions, not evidence
 that it has successfully memorized this corpus and only fails to generalize.

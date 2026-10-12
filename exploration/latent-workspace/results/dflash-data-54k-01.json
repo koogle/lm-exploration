@@ -1,0 +1,127 @@
+{
+  "config": {
+    "model": "Qwen/Qwen2.5-0.5B",
+    "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+    "layers": [
+      2,
+      7,
+      12,
+      17,
+      22
+    ],
+    "draft_layers": 5,
+    "qk_norm": true,
+    "block_size": 8,
+    "gamma": 4.0,
+    "train_prompts": 54000,
+    "validation_prompts": 192,
+    "test_prompts": 192,
+    "prompt_tokens": 128,
+    "response_tokens": 64,
+    "batch_size": 3,
+    "anchors_per_sequence": 8,
+    "steps": 20000,
+    "eval_every": 250,
+    "learning_rate": 0.0006,
+    "warmup_ratio": 0.04,
+    "seed": 42,
+    "max_seconds": 3300,
+    "continue_from": "",
+    "warm_start_from": "",
+    "historical_corpus": "/runs/data-large-01/corpus.pt",
+    "prompt_manifest": "",
+    "teacher_parent": "",
+    "extend_teacher_parent": "/runs/dflash-expanded-features-01",
+    "train_limit": 49152,
+    "retain_training_parent": "",
+    "teacher_batch_size": 32,
+    "rollout_prompts_per_domain": 4,
+    "quality_only": false,
+    "teacher_prompt_style": "raw",
+    "schedule_steps": 20000
+  },
+  "teacher_audit": {
+    "by_split_domain": {
+      "train": {
+        "prose": {
+          "prompts": 17769,
+          "response_tokens": 1129407,
+          "eligible_anchors": 1005024,
+          "mean_unique_response_4gram_fraction": 0.7567753616672417,
+          "response_length_min": 10,
+          "response_length_max": 64
+        },
+        "code": {
+          "prompts": 17898,
+          "response_tokens": 1130656,
+          "eligible_anchors": 1005370,
+          "mean_unique_response_4gram_fraction": 0.7954122526737104,
+          "response_length_min": 8,
+          "response_length_max": 64
+        },
+        "translation": {
+          "prompts": 17809,
+          "response_tokens": 712814,
+          "eligible_anchors": 588151,
+          "mean_unique_response_4gram_fraction": 0.9766265480756046,
+          "response_length_min": 8,
+          "response_length_max": 64
+        }
+      },
+      "validation": {
+        "prose": {
+          "prompts": 64,
+          "response_tokens": 4033,
+          "eligible_anchors": 3585,
+          "mean_unique_response_4gram_fraction": 0.6675981122702435,
+          "response_length_min": 29,
+          "response_length_max": 64
+        },
+        "code": {
+          "prompts": 64,
+          "response_tokens": 4055,
+          "eligible_anchors": 3607,
+          "mean_unique_response_4gram_fraction": 0.7706796448087432,
+          "response_length_min": 33,
+          "response_length_max": 64
+        },
+        "translation": {
+          "prompts": 64,
+          "response_tokens": 2412,
+          "eligible_anchors": 1964,
+          "mean_unique_response_4gram_fraction": 0.9836096734433725,
+          "response_length_min": 11,
+          "response_length_max": 64
+        }
+      }
+    },
+    "preserved_validation_sha256": "9cb8aa788fb44567026420ccbe2444edfdab4e26c97148f5cb6a26e84c36ca33",
+    "short_responses": 233,
+    "duplicate_responses": 291,
+    "teacher_batch_size": 32,
+    "target_arithmetic": "torch.bfloat16",
+    "note": "Batched greedy target generation; BF16 batch-shape argmax can differ from single-prompt arithmetic. Both data-size fits use this identical cache.",
+    "retained_examples": 26355
+  },
+  "validation_samples": [
+    {
+      "domain": "prose",
+      "prompt": "= Qualified to the relegation tournament indicated ; ( DQ ) =\nDisqualified from tournament .\n= = = = Results summary = = = =\nSource :\n= = = = Results by round = = = =\nSource :\nRules for classification : 1 ) points ; 2 ) goal difference ; 3 ) number of goals scored ( C )",
+      "response": " ; 4 ) number of goals conceded ( D ) ; 5 ) number of goals scored in the last 10 minutes ( E ) ; 6 ) number of goals conceded in the last 10 minutes ( F ) ; 7 ) number of goals scored in the last 20 minutes ( G"
+    },
+    {
+      "domain": "code",
+      "prompt": " coding=utf-8\n\n################################################################################\n# CosConfig \u6709\u5173cos\u7684\u914d\u7f6e\n################################################################################\nclass CosConfig(object):\n    def __init__(self):\n        self._end_point    = 'http://web.file.myqcloud.com/files/v1'\n        self._user_agent   = 'cos-python-sdk-v3.3'\n        self._timeout      = 30\n        self._sign_expired = 300\n\n    # \u8bbe\u7f6eCOS\u7684\u57df\u540d\u5730\u5740\n    def set_end_point(self, end_point):\n        self._end_point = end_point\n\n    # \u83b7\u53d6\u57df\u540d\u5730\u5740\n    def get_end_point(self):\n        return",
+      "response": " self._end_point\n\n    # \u8bbe\u7f6eCOS\u7684\u7528\u6237\u4ee3\u7406\n    def set_user_agent(self, user_agent):\n        self._user_agent = user_agent\n\n    # \u83b7\u53d6\u7528\u6237\u4ee3\u7406\n    def get_user_agent(self):\n        return self._user_agent\n\n    # \u8bbe\u7f6eCOS\u7684\u8d85\u65f6\u65f6\u95f4\n   "
+    },
+    {
+      "domain": "translation",
+      "prompt": "Translate English to German.\nEnglish: I remember when people came into this House lobbying us in the national interest not to allow this liberalisation.\nGerman:",
+      "response": " Ich recalcule, als ich in diesem Haus Menschen vor\u00fcbergehend in die Nationalen Interessen Lobbyen gesto\u00dfen habe, nicht, um die Liberalisierung zu verhindern.<|endoftext|>"
+    }
+  ],
+  "elapsed_seconds": 1997.738084552,
+  "completed": true,
+  "source_sha256": "fe03b6b0fac1bf7ff61e40a8ad6b2b892ea14fff73029cb936cdc2486e3a98ac",
+  "test_status": "test prompts only; no teacher responses or metrics"
+}
