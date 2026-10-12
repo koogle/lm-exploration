@@ -17,15 +17,20 @@ verified outputs with no warm start. Preparation jobs are active:
 failed on runner imports before teacher generation; reservations are retained. The 216k training manifest is complete: 72k examples/domain, with 18k prose article
 sources and 72k source groups each for code/translation. The long GPU profile passed
 200 updates with 9.48 GB peak allocated memory, matching random initial weights.
-The detached orchestrator `scripts/run_fresh_grid.py` is active and has submitted
-`long-teacher-54k-r256-01`. It will extend the old trajectories, start both fresh
-49152 conditions, expand the token-only pool and then start the remaining three.
-Current phase/status lives in ignored `artifacts/fresh-grid-progress.json`; logs are
-`artifacts/fresh-grid-orchestrator.log` and per-run logs. Package source must stay
-unchanged while the runner operates. No full grid fit or grid quality result exists
-yet. Initial configs still contain the completed-teacher placeholder; the runner
-replaces it only after preparation completes. The user retains $500 as the current
-total ceiling and is open to going further after reviewing completion costs.
+Coordination is now hosted on Modal as `fresh-grid-controller-01`, submitted with
+`.spawn()` so chat/client interruption does not cancel it. The former local runner
+and `long-teacher-54k-r256-01` were canceled before a checkpoint; retain their
+reservation. The server controller has started `long-teacher-54k-r256-02` and will
+coordinate both 49152 fits, larger data preparation, and the remaining three fits.
+Current server state: `/runs/fresh-grid-controller-01/state.json`; budget:
+`/runs/fresh-grid-controller-01/budget.json`. Local handle/ownership marker is ignored
+`artifacts/budget_remote_controller.json`. Do NOT submit other local GPU jobs while
+that marker exists: the server ledger is authoritative. See operations for syncing.
+Package source is frozen at `94142e0cee4088a0c5808f0b556a1dcbbd0bb9cba3701cf31c8511aec96c17fa`.
+No full grid fit or grid quality result exists yet. The user retains $500 as the
+current total ceiling and is open to going further after reviewing completion costs.
+112 local tests pass. Current conservative reservations are $397, including $6 for
+the bounded 24-hour CPU controller and failed/canceled jobs; this is not billed cost.
 
 Active: [small-target drafter improvement series](docs/dflash-improvement-series.md).
 All matched fidelity fits and full-training audits completed. Selected validation NEW:

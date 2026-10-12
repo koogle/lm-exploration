@@ -6,16 +6,21 @@ from pathlib import Path
 
 CAP_USD = 500.0  # Upper end of the user-authorized original $200–$500 plan.
 # Deliberately conservative allocation rates, not a quotation of Modal prices.
-HOURLY_RESERVATION = {"L40S": 5.0, "H100": 12.0}
+HOURLY_RESERVATION = {"L40S": 5.0, "H100": 12.0, "CPU": 0.25}
 TIMEOUT_SECONDS = 3600
 
 
 def reserve(path, run_id, gpu, *, timeout_seconds=TIMEOUT_SECONDS):
     import fcntl
 
-    if type(timeout_seconds) is not int or not 0 < timeout_seconds <= TIMEOUT_SECONDS:
+    maximum = 86400 if gpu == "CPU" else TIMEOUT_SECONDS
+    if type(timeout_seconds) is not int or not 0 < timeout_seconds <= maximum:
         raise ValueError("invalid bounded worker timeout")
     path = Path(path)
+    if (path.parent / "budget_remote_controller.json").exists():
+        raise ValueError(
+            "remote controller owns the ledger; sync and release it before local GPU submission"
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.with_suffix(".lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)

@@ -207,3 +207,16 @@ and volume declarations are self-contained: importing a second local Modal runne
 from the remote entrypoint fails unless that module is explicitly packaged. The
 first attempts hit this import failure; no teacher examples were generated, and
 failed reservations remain in the ledger. See docs/dflash-fresh-grid.md.
+
+
+For the fresh grid, local background subprocesses are not durable across session
+interruptions: one received a cancellation signal before its first checkpoint.
+Use `modal_long_data.py --launch-grid` to spawn the Modal CPU controller. Its handle
+is stored in ignored `artifacts/budget_remote_controller.json`; the server run
+folder contains `state.json`, `blueprint.json`, and the authoritative `budget.json`.
+Download state/ledger with `uv run modal volume get latent-workspace-qwen-runs ...`.
+Do not submit local GPU work while the marker exists. Before releasing ownership,
+verify the controller and its GPU calls ended, download its complete budget ledger
+to `artifacts/budget.json`, then remove the marker. Preserve all failed reservations.
+A paused controller's checkpoints and call IDs remain available; budget pause or
+training completion does not establish the drafter quality goal.

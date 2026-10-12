@@ -192,3 +192,17 @@ def test_bounded_teacher_chunks_resume_without_regenerating_rows_or_touching_tes
         seal_subset(first, second, tmp_path / "missing", count=6)
     with pytest.raises(ValueError, match="changes manifest or configuration"):
         prepare_chunk(replace(cfg, response_tokens=16), tmp_path / "bad", manifest, seed, second)
+
+
+def test_cpu_controller_reservation_and_local_ledger_ownership_are_bounded(tmp_path):
+    from latent_workspace.budget import reserve
+
+    path = tmp_path / "budget.json"
+    assert reserve(path, "controller", "CPU", timeout_seconds=86400) == 6
+    with pytest.raises(ValueError, match="bounded worker timeout"):
+        reserve(path, "unbounded", "CPU", timeout_seconds=86401)
+    (tmp_path / "budget_remote_controller.json").write_text("{}")
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="remote controller owns"):
+        reserve(path, "local", "L40S")
+    assert path.read_bytes() == before

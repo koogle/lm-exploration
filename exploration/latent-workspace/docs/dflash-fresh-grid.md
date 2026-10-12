@@ -98,3 +98,18 @@ nor target-output parity establishes human answer quality. The subsequent 200-up
 long-sequence GPU profile completed with all three verified outputs matching and
 9.48 GB peak allocated training memory. Its initial SHA again matches the random
 initialization and has no warm start. It is a resource check, not a grid quality result.
+
+
+## Durable Modal controller
+
+The local background runner was canceled with its first GPU input when the session
+interrupted. No checkpoint was produced. It is superseded operationally by
+`modal_long_data.py --launch-grid`, which spawns a 24-hour CPU controller on Modal.
+The submitted controller is `fresh-grid-controller-01`; it starts teacher extension
+at worker 02, preserving worker 01's canceled reservation. All GPU workers retain
+their 3600-second limits and use the same captured package source. The controller
+has a conservative $6 CPU reservation and serializes all new GPU allocations under
+the existing $500 cumulative ceiling. It stops new submissions at that cap, allows
+current workers to finish, and reports the study incomplete rather than successful.
+Server state and ledger live in the controller's run directory on the shared volume.
+Local GPU submission is blocked while the ignored ownership marker exists.

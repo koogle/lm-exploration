@@ -75,10 +75,48 @@ def main(
     resume_parent: str = "",
     seal_parent: str = "",
     required_parent: str = "dflash-expansion-49152-01",
+    launch_grid: bool = False,
 ):
     from latent_workspace.dflash import DraftConfig
 
     cfg = DraftConfig(**json.loads(Path(config).read_text())).validate()
+    if launch_grid:
+        import hashlib
+
+        reserve("artifacts/budget.json", run_id, "CPU", timeout_seconds=86400)
+        source = hashlib.sha256()
+        for path in sorted(Path("src/latent_workspace").glob("*.py")):
+            source.update(path.name.encode() + path.read_bytes())
+        blueprint = {
+            "package_source_sha256": source.hexdigest(),
+            "small_teacher": json.loads(Path("configs/long-data-54k-r256.json").read_text()),
+            "large_teacher": json.loads(Path("configs/long-data-216k.json").read_text()),
+            "conditions": {
+                name: json.loads((Path("configs") / f"{name}.json").read_text())
+                for name in (
+                    "fresh-grid-49152-r64",
+                    "fresh-grid-49152-r256",
+                    "fresh-grid-98304-r256",
+                    "fresh-grid-196608-r64",
+                    "fresh-grid-196608-r256",
+                )
+            },
+        }
+        call = grid_controller.spawn(
+            run_id, blueprint, json.loads(Path("artifacts/budget.json").read_text())
+        )
+        handle = {
+            "run_id": run_id,
+            "call_id": call.object_id,
+            "remote_budget_path": f"{run_id}/budget.json",
+            "remote_state_path": f"{run_id}/state.json",
+        }
+        Path("artifacts/budget_remote_controller.json").write_text(
+            json.dumps(handle, indent=2) + "\n"
+        )
+        print(json.dumps(handle, indent=2), flush=True)
+        return
+
     for name in (run_id, seed_parent, manifest_parent, resume_parent, seal_parent, required_parent):
         if name and not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", name):
             raise ValueError("invalid run ID")
@@ -100,3 +138,198 @@ def main(
         required_parent,
     )
     Path(f"results/{run_id}.json").write_text(json.dumps(report, indent=2) + "\n")
+
+
+@app.function(
+    image=image,
+    gpu="L40S",
+    cpu=4,
+    memory=131072,
+    timeout=3600,
+    retries=0,
+    max_containers=5,
+    volumes={"/cache": cache, "/runs": runs},
+)
+def grid_train(config, run_id):
+    import sys
+
+    sys.path.insert(0, "/project/.venv/lib/python3.12/site-packages")
+    from latent_workspace.dflash import DraftConfig
+    from latent_workspace.dflash_train import run_dflash
+
+    try:
+        return run_dflash(DraftConfig(**config), f"/runs/{run_id}", on_checkpoint=runs.commit)
+    finally:
+        runs.commit()
+        cache.commit()
+
+
+@app.function(
+    image=image,
+    cpu=1,
+    memory=2048,
+    timeout=86400,
+    retries=0,
+    max_containers=1,
+    volumes={"/runs": runs},
+)
+def grid_controller(run_id, blueprint, ledger):
+    """Coordinate bounded GPU jobs on Modal, independently of chat/client lifetime."""
+    import time
+
+    from latent_workspace.train import write_json
+
+    directory = Path("/runs") / run_id
+    directory.mkdir(exist_ok=False)
+    budget_path = directory / "budget.json"
+    write_json(budget_path, ledger)
+    state = {
+        "phase": "extending 54k teacher trajectories",
+        "runs": {},
+        "package_source_sha256": blueprint["package_source_sha256"],
+    }
+    write_json(directory / "blueprint.json", blueprint)
+    active = {}
+    allocation_blocked = False
+
+    def save():
+        write_json(directory / "state.json", state)
+        runs.commit()
+
+    def allocate(job_id):
+        nonlocal allocation_blocked
+        try:
+            reserve(budget_path, job_id, "L40S", timeout_seconds=3600)
+            save()
+            return True
+        except ValueError as exc:
+            if "allocation cap reached" not in str(exc):
+                raise
+            allocation_blocked = True
+            state["budget_error"] = str(exc)
+            save()
+            return False
+
+    def submit_training(name, cfg, number=1):
+        job_id = f"{name}-{number:02d}"
+        if not allocate(job_id):
+            state["runs"].setdefault(name, {})["status"] = "budget paused"
+            save()
+            return
+        call = grid_train.spawn(cfg, job_id)
+        active[name] = (call, cfg, number, job_id)
+        state["runs"][name] = {
+            "status": "running",
+            "run_id": job_id,
+            "call_id": call.object_id,
+            "worker": number,
+        }
+        save()
+
+    def poll_training():
+        for name, (call, cfg, number, job_id) in list(active.items()):
+            try:
+                report = call.get(timeout=0)
+            except TimeoutError:
+                continue
+            del active[name]
+            if report["source_sha256"] != blueprint["package_source_sha256"]:
+                raise RuntimeError("worker package source changed")
+            state["runs"][name].update(
+                step=report["curve"][-1]["step"], best_step=report["best_step"]
+            )
+            if report["training_completed"]:
+                state["runs"][name].update(
+                    status="completed",
+                    validation_new=report["selected_validation"]["accepted_beyond_anchor"],
+                )
+            else:
+                if report.get("stopped") != "bounded time limit; training incomplete":
+                    raise RuntimeError(f"unexpected training failure: {job_id}")
+                remaining = report["training_goal_step"] - report["curve"][-1]["step"]
+                if remaining <= 0 or number >= 30:
+                    raise RuntimeError("invalid or excessive training continuation")
+                resumed = {**cfg, "continue_from": f"/runs/{job_id}", "steps": remaining}
+                submit_training(name, resumed, number + 1)
+            save()
+
+    def wait_call(call):
+        while True:
+            poll_training()
+            try:
+                return call.get(timeout=15)
+            except TimeoutError:
+                continue
+
+    def preparation(cfg, manifest, seed, prefix, start=1):
+        previous = ""
+        for number in range(start, 31):
+            job_id = f"{prefix}-{number:02d}"
+            if not allocate(job_id):
+                return None
+            call = prepare.spawn(cfg, job_id, manifest, seed, previous, "", "")
+            state.update(teacher_run=job_id, teacher_call_id=call.object_id)
+            save()
+            report = wait_call(call)
+            state.update(
+                teacher_cursor=report["cursor"],
+                teacher_counts=report["teacher_audit"]["by_split_domain"]["train"],
+            )
+            save()
+            if report["completed"]:
+                return job_id
+            previous = job_id
+        raise RuntimeError("teacher preparation reached its worker limit")
+
+    try:
+        for cfg in blueprint["conditions"].values():
+            if cfg["warm_start_from"] or cfg["continue_from"] or cfg["steps"] != 100000:
+                raise ValueError("grid condition must start fresh with declared exposure")
+        save()
+        small = preparation(
+            blueprint["small_teacher"],
+            "dflash-data-54k-01",
+            "dflash-data-54k-01",
+            "long-teacher-54k-r256",
+            start=2,
+        )
+        if small:
+            for size, cap in ((49152, 64), (49152, 256)):
+                name = f"fresh-grid-{size}-r{cap}"
+                submit_training(
+                    name, {**blueprint["conditions"][name], "teacher_parent": f"/runs/{small}"}
+                )
+            state["phase"] = "two fresh fits; expanding long-response pool"
+            save()
+            large = preparation(
+                blueprint["large_teacher"], "long-manifest-216k-02", small, "long-teacher-216k"
+            )
+            if large:
+                if not all(
+                    state["teacher_counts"][domain]["prompts"] >= 65536
+                    for domain in ("prose", "code", "translation")
+                ):
+                    raise RuntimeError(
+                        "completed teacher pool lacks enough balanced usable examples"
+                    )
+                for size, cap in ((98304, 256), (196608, 64), (196608, 256)):
+                    name = f"fresh-grid-{size}-r{cap}"
+                    submit_training(
+                        name, {**blueprint["conditions"][name], "teacher_parent": f"/runs/{large}"}
+                    )
+                state["phase"] = "five fresh fits"
+                save()
+        while active:
+            poll_training()
+            time.sleep(15)
+        state["phase"] = (
+            "budget paused; study incomplete"
+            if allocation_blocked
+            else "training complete; comparison and qualification pending"
+        )
+        save()
+        return state
+    except Exception as exc:
+        state.update(phase="needs review", error=str(exc))
+        save()
+        raise
