@@ -28,7 +28,7 @@ training memory. These are plumbing/profile checks, not grid quality results.
 
 ## Durable execution and budget
 
-Modal controller `fresh-grid-controller-08` now prioritizes the larger datasets.
+Modal controller `fresh-grid-controller-09` now prioritizes the larger datasets.
 The initial long teacher pool completed with 53501 usable responses and 9.59M
 response-token positions. Latest archived fresh-fit snapshots reach 55593 updates
 (64 cap) and 37246 (256 cap). Long-validation NEW is 2.04131 versus 3.60350;
@@ -55,8 +55,8 @@ at the first worker boundary after full teacher preparation. Initial-stage
 validation still covers all three domains. Prose/code-stage checkpoint results
 are recorded below; no full-domain or sealed-test qualification exists.
 
-- State: `/runs/fresh-grid-controller-08/state.json`.
-- Authoritative ledger: `/runs/fresh-grid-controller-08/budget.json`.
+- State: `/runs/fresh-grid-controller-09/state.json`.
+- Authoritative ledger: `/runs/fresh-grid-controller-09/budget.json`.
 - Local handle/ownership marker: ignored `artifacts/budget_remote_controller.json`.
 - New curriculum package SHA: `47d71073e55a03e87c4bdb59df6aa684cedc532815d30c9f44167ff97da919ae`.
 - Historical stopped fits retain SHA `94142e0cee4088a0c5808f0b556a1dcbbd0bb9cba3701cf31c8511aec96c17fa`.
@@ -67,7 +67,7 @@ sync/release. The server uses bounded 3600-second GPU workers and a bounded 24-h
 CPU coordinator. User explicitly reset cost accounting for the larger-data stage. The previous
 **$468** reservation ledger remains archived under controller 02 and locally in
 ignored `artifacts/budget-history-before-large-grid.json`. New epoch ceiling:
-**$500**, currently **$91.125** reserved, including earlier failed/retired coordinator
+**$500**, currently **$117.125** reserved, including earlier failed/retired coordinator
 reservations, the bounded CPU sealing job and the first 98k GPU worker. The already-running teacher
 worker belongs to the previous epoch. These are conservative reservations, not
 Modal bills; resetting this ledger does not alter actual billing.
@@ -152,3 +152,21 @@ Coordinator 08 retries with fresh worker IDs 03, original worker-01 checkpoints,
 full 196608 data, restored optimizer and unchanged package SHA. Calls are active;
 new full-domain checkpoints are pending. Historical failed controller error stays
 recorded. See `results/large-curriculum-progress.md`.
+
+## Latest full-domain checkpoints and single-use recovery
+
+Latest completed worker-03 snapshots: cap64 step33712, validation NEW2.1351,
+NLL3.6731, domains2.584/2.3965/1.4249; cap256 step22655, NEW3.6929, NLL2.1398,
+domains5.0723/4.6270/1.3794. Exact reports:
+`results/large-curriculum-full-interim.json`. Long cap is slightly above the
+historical49k best3.6035, without a matched exposure/seed or sealed-test claim.
+Full-domain validation loss continues improving; short acceptance is near a
+plateau, not sustained loss worsening. Training diagnostic remains tiny.
+
+Worker04 inputs failed before training because reused containers retained open
+mapped cache files, preventing volume reload. Coordinator09 retries worker05 from
+worker03 checkpoints, keeping weights/optimizer/RNG/source and failed costs.
+GPU preparation/training now use single-use containers. Captured09 uses Modal's
+legacy equivalent max_inputs=1; maintained wrapper uses single_use_containers=True.
+New input calls are active. Current epoch reservations117.125/500; this is not
+actual billed cost.

@@ -292,3 +292,19 @@ is complete; resumed configs contain all three domains and curriculum_switch.
 Current ledger path is `/runs/fresh-grid-controller-08/budget.json`; reservations
 $91.125 at recovery. Confirm input calls are active and inspect their next report
 to distinguish launch recovery from completed full-domain training.
+
+### Open mmap handles prevent reload in reused containers
+
+After the successful full-data worker03 chunks, both worker04 inputs failed at
+volume reload: "there are open files preventing the operation". Tensor cache
+mappings retained in the reused process can outlive an input. Make preparation
+and training containers single-use (`single_use_containers=True`) so continuations
+start without prior mappings; keep reload before parent access. Coordinator09's
+captured wrapper used equivalent legacy `max_inputs=1`, supported with a
+deprecation warning. Maintained source uses the current spelling.
+
+Coordinator09 retries worker05 from completed worker03 checkpoints and exact
+continuation configs. Both calls were confirmed active; no package source or
+optimizer reset. Failed reservations remain. Current authoritative ledger under
+`fresh-grid-controller-09/`, launch reservations117.125/500. New checkpoints, not
+launch state alone, establish further training progress.

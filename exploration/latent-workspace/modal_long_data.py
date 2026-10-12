@@ -29,6 +29,7 @@ image = (
     memory=131072,
     timeout=3600,
     retries=0,
+    single_use_containers=True,
     max_containers=1,
     volumes={"/cache": cache, "/runs": runs},
 )
@@ -219,6 +220,7 @@ def main(
     memory=131072,
     timeout=3600,
     retries=0,
+    single_use_containers=True,
     max_containers=5,
     volumes={"/cache": cache, "/runs": runs},
 )
