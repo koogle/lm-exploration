@@ -24,23 +24,27 @@ Real-model online-feature and long-sequence checks completed. Both start from th
 archived random initial SHA and have no warm start; all three checked outputs per
 profile match the target. The 200-update long profile peaks at 9.48 GB allocated
 training memory. These are plumbing/profile checks, not grid quality results.
-112 local tests, Ruff/format and diff checks pass.
+113 local tests, Ruff/format and diff checks pass.
 
 ## Durable execution and budget
 
-Modal controller `fresh-grid-controller-01` is active. It has submitted
-`long-teacher-54k-r256-02`, then will start both 49152 fits, prepare the larger
-teacher pool and start the remaining three. No full grid fit/result exists yet.
+Modal controller `fresh-grid-controller-02` is active, resuming controller 01.
+The first teacher worker saved 35616/54000 responses before its bound. Controller
+01 restarted and failed on an existing run directory; restart handling now loads
+its persisted budget and reattaches saved calls instead of duplicating work.
+Worker `long-teacher-54k-r256-03` continues from worker 02. Neither fresh 49152 fit
+has started yet. They will start after this pool completes, followed by larger
+teacher preparation and the remaining three fits. No full grid fit/result exists yet.
 
-- State: `/runs/fresh-grid-controller-01/state.json`.
-- Authoritative ledger: `/runs/fresh-grid-controller-01/budget.json`.
+- State: `/runs/fresh-grid-controller-02/state.json`.
+- Authoritative ledger: `/runs/fresh-grid-controller-02/budget.json`.
 - Local handle/ownership marker: ignored `artifacts/budget_remote_controller.json`.
 - Frozen package SHA: `94142e0cee4088a0c5808f0b556a1dcbbd0bb9cba3701cf31c8511aec96c17fa`.
 
 Do not submit local GPU jobs while the marker exists; do not change package source
 for active fits/continuations. [Operations](docs/operations.md) describes ledger
 sync/release. The server uses bounded 3600-second GPU workers and a bounded 24-hour
-CPU coordinator. Current reservations at controller launch: **$397/$500**, including
+CPU coordinator. Current reservations at controller launch: **$408/$500**, including
 $6 CPU and retained failed/canceled reservations; this is not actual billed cost.
 The user retains $500 for now and is open to reviewing an increase if needed.
 Budget exhaustion pauses new jobs and reports the study incomplete.

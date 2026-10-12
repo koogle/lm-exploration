@@ -220,3 +220,13 @@ verify the controller and its GPU calls ended, download its complete budget ledg
 to `artifacts/budget.json`, then remove the marker. Preserve all failed reservations.
 A paused controller's checkpoints and call IDs remain available; budget pause or
 training completion does not establish the drafter quality goal.
+
+A Modal coordinator may reexecute its input after restart. Controller 01 failed
+on `mkdir(exist_ok=False)` after its first teacher worker checkpointed 35616/54000
+responses. The coordinator now preserves existing state/budget and reattaches saved
+call IDs; a local recovery test verifies that it does not reset the ledger or
+launch a duplicate teacher call. Controller 02 resumes that checkpoint; source
+package and all training configurations remain unchanged. Before replacing a
+controller, verify both its call and its child GPU call ended, sync the server
+ledger, preserve its handle, and release local ownership only for the replacement
+submission. Do not discard a bounded worker's data checkpoint.

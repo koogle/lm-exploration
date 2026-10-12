@@ -76,6 +76,7 @@ def main(
     seal_parent: str = "",
     required_parent: str = "dflash-expansion-49152-01",
     launch_grid: bool = False,
+    resume_controller: str = "",
 ):
     from latent_workspace.dflash import DraftConfig
 
@@ -102,6 +103,10 @@ def main(
                 )
             },
         }
+        if resume_controller:
+            budget_parent = Path("artifacts/fresh-grid-remote-state.json")
+            blueprint["resume_state"] = json.loads(budget_parent.read_text())
+            blueprint["resumed_controller"] = resume_controller
         call = grid_controller.spawn(
             run_id, blueprint, json.loads(Path("artifacts/budget.json").read_text())
         )
@@ -180,16 +185,31 @@ def grid_controller(run_id, blueprint, ledger):
     from latent_workspace.train import write_json
 
     directory = Path("/runs") / run_id
-    directory.mkdir(exist_ok=False)
+    directory.mkdir(exist_ok=True)
     budget_path = directory / "budget.json"
-    write_json(budget_path, ledger)
+    if not budget_path.exists():
+        write_json(budget_path, ledger)
     state = {
         "phase": "extending 54k teacher trajectories",
         "runs": {},
         "package_source_sha256": blueprint["package_source_sha256"],
     }
+    if (directory / "state.json").exists():
+        state = json.loads((directory / "state.json").read_text())
+    elif blueprint.get("resume_state"):
+        state = blueprint["resume_state"]
+    if state["package_source_sha256"] != blueprint["package_source_sha256"]:
+        raise ValueError("controller restart changes captured training source")
     write_json(directory / "blueprint.json", blueprint)
     active = {}
+    for name, record in state["runs"].items():
+        if record.get("status") == "running":
+            active[name] = (
+                modal.FunctionCall.from_id(record["call_id"]),
+                record["config"],
+                record["worker"],
+                record["run_id"],
+            )
     allocation_blocked = False
 
     def save():
@@ -211,6 +231,8 @@ def grid_controller(run_id, blueprint, ledger):
             return False
 
     def submit_training(name, cfg, number=1):
+        if name in active or state["runs"].get(name, {}).get("status") == "completed":
+            return
         job_id = f"{name}-{number:02d}"
         if not allocate(job_id):
             state["runs"].setdefault(name, {})["status"] = "budget paused"
@@ -223,6 +245,7 @@ def grid_controller(run_id, blueprint, ledger):
             "run_id": job_id,
             "call_id": call.object_id,
             "worker": number,
+            "config": cfg,
         }
         save()
 
@@ -262,23 +285,44 @@ def grid_controller(run_id, blueprint, ledger):
                 continue
 
     def preparation(cfg, manifest, seed, prefix, start=1):
-        previous = ""
-        for number in range(start, 31):
+        stages = state.setdefault("preparations", {})
+        if prefix not in stages:
+            stages[prefix] = {"next_worker": start, "previous": ""}
+            if state.get("teacher_run", "").startswith(prefix + "-") and state.get(
+                "teacher_call_id"
+            ):
+                stages[prefix].update(
+                    next_worker=int(state["teacher_run"].rsplit("-", 1)[1]),
+                    job_id=state["teacher_run"],
+                    call_id=state["teacher_call_id"],
+                )
+        stage = stages[prefix]
+        if stage.get("completed_run"):
+            return stage["completed_run"]
+        while stage["next_worker"] <= 30:
+            number = stage["next_worker"]
             job_id = f"{prefix}-{number:02d}"
-            if not allocate(job_id):
-                return None
-            call = prepare.spawn(cfg, job_id, manifest, seed, previous, "", "")
-            state.update(teacher_run=job_id, teacher_call_id=call.object_id)
-            save()
+            if stage.get("call_id"):
+                call = modal.FunctionCall.from_id(stage["call_id"])
+            else:
+                if not allocate(job_id):
+                    return None
+                call = prepare.spawn(cfg, job_id, manifest, seed, stage["previous"], "", "")
+                stage.update(job_id=job_id, call_id=call.object_id)
+                state.update(teacher_run=job_id, teacher_call_id=call.object_id)
+                save()
             report = wait_call(call)
             state.update(
                 teacher_cursor=report["cursor"],
                 teacher_counts=report["teacher_audit"]["by_split_domain"]["train"],
             )
-            save()
             if report["completed"]:
+                stage["completed_run"] = job_id
+                save()
                 return job_id
-            previous = job_id
+            stage.update(previous=job_id, next_worker=number + 1)
+            stage.pop("call_id", None)
+            save()
         raise RuntimeError("teacher preparation reached its worker limit")
 
     try:
