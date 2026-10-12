@@ -205,3 +205,12 @@ Evidence: `dflash-exposure-24576-audit-01.json`, `dflash-exposure-fit-summary.js
 The summary records audit hashes; `scripts/plot_dflash_fit.py` reproduces the figure.
 Both audits are now complete. The next paired data-expansion fits remain running,
 and test remains sealed. No useful-drafter or speed claim is made.
+
+
+Next-stage launch checks pass: identical initial draft weights and source hashes,
+unchanged validation token hash, and exact step-zero validation matching the
+selected 1.02179 source head. Both arms report all 24576 required training groups
+after runtime label-identity validation. The control includes exactly those groups;
+required-first sorting can change their historical order. Provenance:
+`dflash-expansion-launch-audit.json`. Early 500-update scores (0.992 control,
+1.067 larger corpus) are incomplete observations, not a selected final comparison.

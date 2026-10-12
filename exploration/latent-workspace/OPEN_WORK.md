@@ -34,9 +34,10 @@ validation examples. Both selected audits informed the next matched pair, now ru
 (`/runs/dflash-exposure-24576-01/best.pt`, step 10000), fresh AdamW/sampler, batch48,
 eight anchors, 6e-4 LR and one fixed 20000-update schedule. Keep package source
 unchanged; resume only remaining updates after bounded workers if needed.
-Initial worker allocation is four $5 reservations for this pair. Verify step-zero
-validation/initial weights and retained 24576 group/token identities once live
-reports are available. See `results/dflash-expansion-selection.json`.
+Initial worker allocation is four $5 reservations for this pair. Launch checks pass: identical initial weights/source/validation hash and exact
+step-zero validation matching the selected source head. Both report all 24576
+required training groups after the runtime token-identity checks. See
+`results/dflash-expansion-launch-audit.json` and selection provenance.
 No test responses have been generated; keep test sealed until the declared gate passes.
 Goal is NOT complete; representation experiments and speed work remain deferred.
 

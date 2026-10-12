@@ -1,0 +1,219 @@
+{
+  "target": "Qwen/Qwen2.5-0.5B",
+  "trainable_parameters": 78578432,
+  "initial_drafter_sha256": "3b97164d8bb8cbef0e9b9aa79fe2c08a171089cfce2077633ea6c2ad0ba7624f",
+  "source_sha256": "fe03b6b0fac1bf7ff61e40a8ad6b2b892ea14fff73029cb936cdc2486e3a98ac",
+  "validation_sequence_sha256": "3574078c772ce68430d556d12c95efab6ad73231b8cf285805187fa35e108498",
+  "warm_start": {
+    "parent": "/runs/dflash-exposure-24576-01",
+    "step": 10000,
+    "checkpoint_sha256": "2338dba807e2c94e9bc844265f987cb8abc5eef4a7248c74f55131582e14a88f",
+    "note": "Weights only; fresh AdamW and new schedule on the declared teacher corpus."
+  },
+  "initial_validation_exactly_matches_selected_source": true,
+  "required_training_groups_each_arm": 24576,
+  "retention_note": "Fixed training source validates every required source group and its token labels before selecting subsets. Control size equals all required groups. Required-first hash sorting can change historical order; this is not a claim of identical historical sample order.",
+  "arms": {
+    "24576": {
+      "teacher_audit": {
+        "train": {
+          "prose": {
+            "prompts": 8192,
+            "response_tokens": 520735,
+            "eligible_anchors": 463391,
+            "mean_unique_response_4gram_fraction": 0.7562398735355264,
+            "response_length_min": 10,
+            "response_length_max": 64
+          },
+          "code": {
+            "prompts": 8192,
+            "response_tokens": 517462,
+            "eligible_anchors": 460118,
+            "mean_unique_response_4gram_fraction": 0.7981007632931498,
+            "response_length_min": 8,
+            "response_length_max": 64
+          },
+          "translation": {
+            "prompts": 8192,
+            "response_tokens": 326662,
+            "eligible_anchors": 269318,
+            "mean_unique_response_4gram_fraction": 0.976960510633219,
+            "response_length_min": 8,
+            "response_length_max": 64
+          }
+        },
+        "validation": {
+          "prose": {
+            "prompts": 64,
+            "response_tokens": 4033,
+            "eligible_anchors": 3585,
+            "mean_unique_response_4gram_fraction": 0.6675981122702435,
+            "response_length_min": 29,
+            "response_length_max": 64
+          },
+          "code": {
+            "prompts": 64,
+            "response_tokens": 4055,
+            "eligible_anchors": 3607,
+            "mean_unique_response_4gram_fraction": 0.7706796448087432,
+            "response_length_min": 33,
+            "response_length_max": 64
+          },
+          "translation": {
+            "prompts": 64,
+            "response_tokens": 2412,
+            "eligible_anchors": 1964,
+            "mean_unique_response_4gram_fraction": 0.9836096734433725,
+            "response_length_min": 11,
+            "response_length_max": 64
+          }
+        }
+      },
+      "report_sha256": "69c5809ffb270b5aa91b1364b664f5736439da1282bba12e0621106c4d04ff57",
+      "last_observed_step": 1500
+    },
+    "49152": {
+      "teacher_audit": {
+        "train": {
+          "prose": {
+            "prompts": 16384,
+            "response_tokens": 1041408,
+            "eligible_anchors": 926720,
+            "mean_unique_response_4gram_fraction": 0.7570519989359024,
+            "response_length_min": 10,
+            "response_length_max": 64
+          },
+          "code": {
+            "prompts": 16384,
+            "response_tokens": 1034937,
+            "eligible_anchors": 920249,
+            "mean_unique_response_4gram_fraction": 0.794739904182835,
+            "response_length_min": 8,
+            "response_length_max": 64
+          },
+          "translation": {
+            "prompts": 16384,
+            "response_tokens": 655544,
+            "eligible_anchors": 540856,
+            "mean_unique_response_4gram_fraction": 0.9765227866659704,
+            "response_length_min": 8,
+            "response_length_max": 64
+          }
+        },
+        "validation": {
+          "prose": {
+            "prompts": 64,
+            "response_tokens": 4033,
+            "eligible_anchors": 3585,
+            "mean_unique_response_4gram_fraction": 0.6675981122702435,
+            "response_length_min": 29,
+            "response_length_max": 64
+          },
+          "code": {
+            "prompts": 64,
+            "response_tokens": 4055,
+            "eligible_anchors": 3607,
+            "mean_unique_response_4gram_fraction": 0.7706796448087432,
+            "response_length_min": 33,
+            "response_length_max": 64
+          },
+          "translation": {
+            "prompts": 64,
+            "response_tokens": 2412,
+            "eligible_anchors": 1964,
+            "mean_unique_response_4gram_fraction": 0.9836096734433725,
+            "response_length_min": 11,
+            "response_length_max": 64
+          }
+        }
+      },
+      "report_sha256": "17baed3e9fbac9833247b6f6929a5e0ff1b27225ab6061e07ee2e803301ab001",
+      "last_observed_step": 500
+    }
+  },
+  "test_status": "new test prompts reserved; no teacher test responses/features/metrics produced",
+  "initial_validation": {
+    "by_domain": {
+      "prose": {
+        "nll": 4.545071125030518,
+        "nll_by_draft_position": [
+          2.705256938934326,
+          3.5665440559387207,
+          4.361715316772461,
+          5.0463995933532715,
+          5.132145881652832,
+          5.4185919761657715,
+          5.584842681884766
+        ],
+        "accuracy_by_draft_position": [
+          0.515625,
+          0.419921875,
+          0.33203125,
+          0.251953125,
+          0.21484375,
+          0.15625,
+          0.138671875
+        ],
+        "mean_accepted_beyond_anchor": 1.18359375,
+        "full_draft_acceptance": 0.025390625,
+        "prompts": 64,
+        "blocks": 512,
+        "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+      },
+      "code": {
+        "nll": 4.922084331512451,
+        "nll_by_draft_position": [
+          3.142514228820801,
+          4.012166500091553,
+          4.744062900543213,
+          5.08687162399292,
+          5.516921520233154,
+          5.907409191131592,
+          6.044643402099609
+        ],
+        "accuracy_by_draft_position": [
+          0.498046875,
+          0.3984375,
+          0.294921875,
+          0.2421875,
+          0.197265625,
+          0.15625,
+          0.123046875
+        ],
+        "mean_accepted_beyond_anchor": 1.13671875,
+        "full_draft_acceptance": 0.01953125,
+        "prompts": 64,
+        "blocks": 512,
+        "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+      },
+      "translation": {
+        "nll": 6.2800140380859375,
+        "nll_by_draft_position": [
+          3.8562798500061035,
+          5.341119766235352,
+          6.366265773773193,
+          7.159905433654785,
+          7.371555328369141,
+          7.015918254852295,
+          6.849050998687744
+        ],
+        "accuracy_by_draft_position": [
+          0.40316206216812134,
+          0.2747035622596741,
+          0.17391304671764374,
+          0.11660078912973404,
+          0.10474308580160141,
+          0.13636364042758942,
+          0.14822134375572205
+        ],
+        "mean_accepted_beyond_anchor": 0.7450592885375494,
+        "full_draft_acceptance": 0.005928853754940711,
+        "prompts": 64,
+        "blocks": 506,
+        "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+      }
+    },
+    "nll": 5.249056498209636,
+    "accepted_beyond_anchor": 1.021790596179183
+  }
+}
