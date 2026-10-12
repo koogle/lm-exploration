@@ -158,3 +158,11 @@ same sources, split/group policy and target. This changes neither active fit.
 A bounded preparation worker reserves $5; long-worker host RAM increases to 128 GiB
 for expanded caches. GPU, source package and hard timeout remain unchanged.
 No training-source changes are made while the matched pair is running.
+
+
+Both high-supervision arms completed their declared 20000 updates, with the small
+arm resuming its final 898 updates under the unchanged schedule/source. Selected
+validation NEW matches are 0.57378 versus 1.02179; conditional paired interval for
+the gain is [0.37974, 0.51880]. All twelve rollout checks pass for both. Full-fitting
+audits are running; the conditional next pool is complete but no fit on it is
+selected. Test remains sealed and the quality gate remains unmet.

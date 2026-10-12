@@ -82,3 +82,7 @@ Active small-Qwen quality studies: [findings](dflash-improvement-findings.md),
 [completed fidelity curves](dflash-fidelity-curves.png), and
 [higher-supervision interim curves](dflash-exposure-interim.png). The latter are
 unfinished; their JSON sidecar preserves the plotted snapshot. Goal remains unmet.
+
+Completed matched higher-supervision curves: [79M drafter for the 0.5B target](dflash-exposure-scaling.png),
+[paired validation uncertainty](dflash-exposure-scaling.json), and
+[interpretation](dflash-improvement-findings.md#completed-matched-exposure-comparison).

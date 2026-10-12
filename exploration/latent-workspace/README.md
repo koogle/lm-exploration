@@ -4,8 +4,8 @@ Active: [small-Qwen drafter improvement studies](docs/dflash-improvement-series.
 with controlled attention/depth comparisons and a predeclared held-out quality gate.
 [Current findings](results/dflash-improvement-findings.md): completed fidelity studies
 improve validation NEW matches from 0.384 to 0.530. The separate 79M drafter reaches 1.022 NEW matches / 7 with 24576 training
-responses and 53.76M additional labels. The matched smaller-data continuation and
-full-fitting audits are in progress; the two-token quality gate remains unmet.
+responses and 53.76M additional labels. The matched smaller-data fit scores 0.574; full-fitting audits are in progress.
+The two-token quality gate remains unmet.
 Useful multi-token drafting remains unsolved; the frozen target is Qwen2.5-0.5B.
 
 Current priority: build a **DFlash-style drafter for frozen Qwen targets**

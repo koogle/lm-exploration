@@ -1,0 +1,26 @@
+{
+  "matched_initialization_and_validation": true,
+  "source_sha256": "fe03b6b0fac1bf7ff61e40a8ad6b2b892ea14fff73029cb936cdc2486e3a98ac",
+  "validation_sequence_sha256": "3574078c772ce68430d556d12c95efab6ad73231b8cf285805187fa35e108498",
+  "reports": {
+    "dflash-exposure-6144-02.json": "5bef3af6475a102156715ae382713e8cee1283ccbcc0deeb4635fc77dd704c37",
+    "dflash-exposure-24576-01.json": "13416ac03ef80cc8f1b6f600b996b577cb406b9c3c7d72312988b65fe971f080"
+  },
+  "paired_validation_difference_large_minus_small": {
+    "accepted_new_tokens": {
+      "estimate": 0.44801187838215445,
+      "bootstrap_95_percent": [
+        0.379737602208303,
+        0.518801808784275
+      ]
+    },
+    "nll": {
+      "estimate": -1.2914370890450326,
+      "bootstrap_95_percent": [
+        -1.4073536847179324,
+        -1.1735053683598804
+      ]
+    }
+  },
+  "uncertainty_note": "10000 paired source-group bootstrap samples, stratified by domain, block-weighted within domains. Conditional on validation-selected checkpoints; does not capture model-selection bias or seed variation. Not a test-set result."
+}

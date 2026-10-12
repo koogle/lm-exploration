@@ -7,29 +7,28 @@ original 0.384, normalization 0.484, five draft layers 0.520, five feature depth
 uncertain; full-training fitting remains weak. The selected 79M checkpoint is
 `dflash-fidelity-features-01/best.pt`, step 18000. Frozen target: Qwen2.5-0.5B.
 
-**Current (2026-10-12):** The 24576-response exposure fit completed 20000 updates;
-selected step 10000 scores **1.02179 NEW / 7** (prose 1.18359, code 1.13672,
-translation 0.74506). Its final score is 0.95882. All 12 checked FP32 rollouts match.
-The 6144-response worker ended at step 19102; selected step 2000 scores 0.57378.
-`dflash-exposure-6144-02` is completing its remaining 898 updates with the same
-optimizer/RNG/global schedule and unchanged package source. The larger fit's full
-training/zero-memory audit, `dflash-exposure-24576-audit-01`, is running on Modal.
+**Current (2026-10-12):** Both matched exposure fits completed 20000 updates and
+53.76M additional NEW-label exposures. Selected validation NEW matches / 7 are
+**0.57378 (6144 responses) versus 1.02179 (24576)**. The paired conditional bootstrap
+95% interval for the gain is [0.37974, 0.51880]; this excludes selection bias and
+seed variation. Both pass all twelve checked FP32 rollouts. The two-token gate is
+unmet. See `results/dflash-exposure-scaling.png` and its JSON evidence sidecar.
 
-The conditional 54k-prompt preparation completed: 53476 usable training responses
-(17769 prose, 17898 code, 17809 translation), preserving the five-depth parent cache
-and all 192 validation examples. No test responses generated. No fit on this new
-pool has been launched. Wait for the completed matched comparison and full-fitting
-audits before selecting the next training intervention. Goal is NOT complete.
+The small arm's continuation `dflash-exposure-6144-02` restored optimizer/RNG and
+completed the remaining 898 updates on the original global schedule. Reports share
+initial-weight, source and validation hashes. Full-training and zero-memory audits
+`dflash-exposure-6144-audit-01` and `dflash-exposure-24576-audit-01` are running.
+Next: verify both audit validation entries reproduce their training reports, compare
+selected/final full fitting and sampler replay, then choose the next intervention.
 
-Next: finish the 6144 arm and audit it; publish matched completed curves and paired
-uncertainty. Use the full training audits to distinguish remaining fitting from
-memorization/generalization problems. Keep package source unchanged through the
-current continuation. Both arms share the initial 79M weights and validation cache.
-Test stays sealed until the declared quality gate is met.
+The conditional 54k-prompt pool has 53476 usable training responses (17769 prose,
+17898 code, 17809 translation), preserving the five-depth parent cache and all 192
+validation examples. No fit on this new pool has been launched. No test responses
+have been generated; keep test sealed until the declared validation gate passes.
+Goal is NOT complete; representation experiments and speed work remain deferred.
 
-82 local tests previously pass; larger-batch and exact warm-start GPU smokes passed.
-Current conservative reservations: **$333.50/$500**, not billed cost. Retain failed
-and stopped reservations. See results/dflash-improvement-findings.md. Stop the
+82 local tests pass, as do Ruff/format/diff checks. Conservative reservations are
+**$338.50/$500**, not billed cost. Retain failed/stopped reservations. Stop the
 active goal only when useful quality is demonstrated or further work is blocked.
 
 Historical completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).

@@ -113,3 +113,33 @@ been chosen yet. Test remains sealed and the two-token gate remains unmet.
 Raw reports: `dflash-exposure-6144-01.json`, `dflash-exposure-24576-01.json`,
 `dflash-data-54k-01.json`. Reservations after the continuation and larger fit audit:
 **$333.50/$500**, conservative allocation rather than billed cost.
+
+
+## Completed matched exposure comparison
+
+Both arms now complete 20000 additional updates and 53.76M NEW-label exposures.
+The 6144 arm resumed its final 898 updates with optimizer/RNG and schedule retained;
+its selected checkpoint remains step 2000. Initial weights, package source and
+validation identities match across arms. Both pass all twelve FP32 rollout checks.
+
+| Training responses | Selected step | Validation NEW / 7 | Selected validation NLL | Final validation NEW / 7 |
+| --- | --- | --- | --- | --- |
+| 6144 | 2000 | 0.57378 | 6.54049 | 0.44514 |
+| 24576 | 10000 | 1.02179 | 5.24906 | 0.95882 |
+
+The paired source-group bootstrap estimates a **0.44801** NEW-token gain with
+conditional 95% interval **[0.37974, 0.51880]**. This is conditional on selected
+checkpoints, excluding validation-selection bias and seed variation. It is not a
+test result. All three domains improve; translation remains below one NEW token.
+
+![Completed exposure and data comparison](dflash-exposure-scaling.png)
+
+Dashed training curves are twelve fixed diagnostic responses, not the full corpus.
+Both full-training audits are running before the next training choice. The
+validation improvement demonstrates useful information is being learned, but it
+still fails the declared two-token criterion. Longer repetition eventually harms
+held-out performance; more data helps within the tested source distribution.
+
+Evidence: `dflash-exposure-6144-02.json`, `dflash-exposure-24576-01.json`, and
+`dflash-exposure-scaling.json`. All 82 tests and Ruff/format/diff checks pass.
+Current conservative reservations: **$338.50/$500**; test remains sealed.
