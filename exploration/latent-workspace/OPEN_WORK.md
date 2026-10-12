@@ -39,6 +39,9 @@ step-zero validation matching the selected source head. Both report all 24576
 required training groups after the runtime token-identity checks. See
 `results/dflash-expansion-launch-audit.json` and selection provenance.
 No test responses have been generated; keep test sealed until the declared gate passes.
+Interim curves/snapshots: `results/dflash-expansion-interim.{png,json}` (5500
+control updates, 4500 larger-data updates). These are incomplete; compare matching
+update positions and do not infer full-corpus fitting from twelve train diagnostics.
 Goal is NOT complete; representation experiments and speed work remain deferred.
 
 82 local tests pass, as do Ruff/format/diff checks. Conservative reservations are

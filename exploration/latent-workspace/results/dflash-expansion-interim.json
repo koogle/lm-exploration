@@ -1,0 +1,4356 @@
+{
+  "status": "IN PROGRESS; not completed or test results",
+  "planned_updates_per_arm": 20000,
+  "source_reports": {
+    "dflash-expansion-24576-live.json": "977452485008c473daa70571138a1b05af69f9a03b824f2a505ab12a214dab6c",
+    "dflash-expansion-49152-live.json": "db41a1c39ca18b08a3c98d5288fb9faf520eff110ef7929cb5a0d7233ec97d80"
+  },
+  "snapshots": [
+    {
+      "config": {
+        "model": "Qwen/Qwen2.5-0.5B",
+        "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+        "layers": [
+          2,
+          7,
+          12,
+          17,
+          22
+        ],
+        "draft_layers": 5,
+        "qk_norm": true,
+        "block_size": 8,
+        "gamma": 4.0,
+        "train_prompts": 54000,
+        "validation_prompts": 192,
+        "test_prompts": 192,
+        "prompt_tokens": 128,
+        "response_tokens": 64,
+        "batch_size": 48,
+        "anchors_per_sequence": 8,
+        "steps": 20000,
+        "eval_every": 500,
+        "learning_rate": 0.0006,
+        "warmup_ratio": 0.04,
+        "seed": 42,
+        "max_seconds": 3300,
+        "continue_from": "",
+        "warm_start_from": "/runs/dflash-exposure-24576-01",
+        "historical_corpus": "/runs/data-large-01/corpus.pt",
+        "prompt_manifest": "",
+        "teacher_parent": "/runs/dflash-data-54k-01",
+        "extend_teacher_parent": "",
+        "train_limit": 24576,
+        "retain_training_parent": "/runs/dflash-exposure-24576-01",
+        "teacher_batch_size": 32,
+        "rollout_prompts_per_domain": 4,
+        "quality_only": false,
+        "teacher_prompt_style": "raw",
+        "schedule_steps": 20000
+      },
+      "source_sha256": "fe03b6b0fac1bf7ff61e40a8ad6b2b892ea14fff73029cb936cdc2486e3a98ac",
+      "mask_token_id": 151662,
+      "trainable_parameters": 78578432,
+      "teacher_audit": {
+        "by_split_domain": {
+          "train": {
+            "prose": {
+              "prompts": 8192,
+              "response_tokens": 520735,
+              "eligible_anchors": 463391,
+              "mean_unique_response_4gram_fraction": 0.7562398735355264,
+              "response_length_min": 10,
+              "response_length_max": 64
+            },
+            "code": {
+              "prompts": 8192,
+              "response_tokens": 517462,
+              "eligible_anchors": 460118,
+              "mean_unique_response_4gram_fraction": 0.7981007632931498,
+              "response_length_min": 8,
+              "response_length_max": 64
+            },
+            "translation": {
+              "prompts": 8192,
+              "response_tokens": 326662,
+              "eligible_anchors": 269318,
+              "mean_unique_response_4gram_fraction": 0.976960510633219,
+              "response_length_min": 8,
+              "response_length_max": 64
+            }
+          },
+          "validation": {
+            "prose": {
+              "prompts": 64,
+              "response_tokens": 4033,
+              "eligible_anchors": 3585,
+              "mean_unique_response_4gram_fraction": 0.6675981122702435,
+              "response_length_min": 29,
+              "response_length_max": 64
+            },
+            "code": {
+              "prompts": 64,
+              "response_tokens": 4055,
+              "eligible_anchors": 3607,
+              "mean_unique_response_4gram_fraction": 0.7706796448087432,
+              "response_length_min": 33,
+              "response_length_max": 64
+            },
+            "translation": {
+              "prompts": 64,
+              "response_tokens": 2412,
+              "eligible_anchors": 1964,
+              "mean_unique_response_4gram_fraction": 0.9836096734433725,
+              "response_length_min": 11,
+              "response_length_max": 64
+            }
+          }
+        },
+        "required_training_groups": 24576,
+        "parent_generation_audit": {
+          "by_split_domain": {
+            "train": {
+              "prose": {
+                "prompts": 17769,
+                "response_tokens": 1129407,
+                "eligible_anchors": 1005024,
+                "mean_unique_response_4gram_fraction": 0.7567753616672417,
+                "response_length_min": 10,
+                "response_length_max": 64
+              },
+              "code": {
+                "prompts": 17898,
+                "response_tokens": 1130656,
+                "eligible_anchors": 1005370,
+                "mean_unique_response_4gram_fraction": 0.7954122526737104,
+                "response_length_min": 8,
+                "response_length_max": 64
+              },
+              "translation": {
+                "prompts": 17809,
+                "response_tokens": 712814,
+                "eligible_anchors": 588151,
+                "mean_unique_response_4gram_fraction": 0.9766265480756046,
+                "response_length_min": 8,
+                "response_length_max": 64
+              }
+            },
+            "validation": {
+              "prose": {
+                "prompts": 64,
+                "response_tokens": 4033,
+                "eligible_anchors": 3585,
+                "mean_unique_response_4gram_fraction": 0.6675981122702435,
+                "response_length_min": 29,
+                "response_length_max": 64
+              },
+              "code": {
+                "prompts": 64,
+                "response_tokens": 4055,
+                "eligible_anchors": 3607,
+                "mean_unique_response_4gram_fraction": 0.7706796448087432,
+                "response_length_min": 33,
+                "response_length_max": 64
+              },
+              "translation": {
+                "prompts": 64,
+                "response_tokens": 2412,
+                "eligible_anchors": 1964,
+                "mean_unique_response_4gram_fraction": 0.9836096734433725,
+                "response_length_min": 11,
+                "response_length_max": 64
+              }
+            }
+          },
+          "preserved_validation_sha256": "9cb8aa788fb44567026420ccbe2444edfdab4e26c97148f5cb6a26e84c36ca33",
+          "short_responses": 233,
+          "duplicate_responses": 291,
+          "teacher_batch_size": 32,
+          "target_arithmetic": "torch.bfloat16",
+          "note": "Batched greedy target generation; BF16 batch-shape argmax can differ from single-prompt arithmetic. Both data-size fits use this identical cache.",
+          "retained_examples": 26355
+        }
+      },
+      "curve": [
+        {
+          "step": 0,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.545071125030518,
+                "nll_by_draft_position": [
+                  2.705256938934326,
+                  3.5665440559387207,
+                  4.361715316772461,
+                  5.0463995933532715,
+                  5.132145881652832,
+                  5.4185919761657715,
+                  5.584842681884766
+                ],
+                "accuracy_by_draft_position": [
+                  0.515625,
+                  0.419921875,
+                  0.33203125,
+                  0.251953125,
+                  0.21484375,
+                  0.15625,
+                  0.138671875
+                ],
+                "mean_accepted_beyond_anchor": 1.18359375,
+                "full_draft_acceptance": 0.025390625,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 4.922084331512451,
+                "nll_by_draft_position": [
+                  3.142514228820801,
+                  4.012166500091553,
+                  4.744062900543213,
+                  5.08687162399292,
+                  5.516921520233154,
+                  5.907409191131592,
+                  6.044643402099609
+                ],
+                "accuracy_by_draft_position": [
+                  0.498046875,
+                  0.3984375,
+                  0.294921875,
+                  0.2421875,
+                  0.197265625,
+                  0.15625,
+                  0.123046875
+                ],
+                "mean_accepted_beyond_anchor": 1.13671875,
+                "full_draft_acceptance": 0.01953125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.2800140380859375,
+                "nll_by_draft_position": [
+                  3.8562798500061035,
+                  5.341119766235352,
+                  6.366265773773193,
+                  7.159905433654785,
+                  7.371555328369141,
+                  7.015918254852295,
+                  6.849050998687744
+                ],
+                "accuracy_by_draft_position": [
+                  0.40316206216812134,
+                  0.2747035622596741,
+                  0.17391304671764374,
+                  0.11660078912973404,
+                  0.10474308580160141,
+                  0.13636364042758942,
+                  0.14822134375572205
+                ],
+                "mean_accepted_beyond_anchor": 0.7450592885375494,
+                "full_draft_acceptance": 0.005928853754940711,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.249056498209636,
+            "accepted_beyond_anchor": 1.021790596179183
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.2129099369049072,
+                "nll_by_draft_position": [
+                  1.2397078275680542,
+                  1.1459733247756958,
+                  2.0445046424865723,
+                  2.388939380645752,
+                  2.4380409717559814,
+                  2.894016742706299,
+                  3.3391876220703125
+                ],
+                "accuracy_by_draft_position": [
+                  0.75,
+                  0.8125,
+                  0.5625,
+                  0.4375,
+                  0.4375,
+                  0.4375,
+                  0.28125
+                ],
+                "mean_accepted_beyond_anchor": 2.84375,
+                "full_draft_acceptance": 0.125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.893823504447937,
+                "nll_by_draft_position": [
+                  0.532401442527771,
+                  1.279388189315796,
+                  1.752516508102417,
+                  1.9285948276519775,
+                  1.9916915893554688,
+                  2.5939464569091797,
+                  3.17822527885437
+                ],
+                "accuracy_by_draft_position": [
+                  0.84375,
+                  0.78125,
+                  0.59375,
+                  0.4375,
+                  0.5625,
+                  0.25,
+                  0.1875
+                ],
+                "mean_accepted_beyond_anchor": 2.53125,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 0.7353367209434509,
+                "nll_by_draft_position": [
+                  0.07674641907215118,
+                  0.12033453583717346,
+                  0.1882745325565338,
+                  0.7901036739349365,
+                  1.1655548810958862,
+                  1.0188782215118408,
+                  1.787465214729309
+                ],
+                "accuracy_by_draft_position": [
+                  1.0,
+                  1.0,
+                  0.9230769276618958,
+                  0.807692289352417,
+                  0.7307692170143127,
+                  0.807692289352417,
+                  0.5
+                ],
+                "mean_accepted_beyond_anchor": 5.3076923076923075,
+                "full_draft_acceptance": 0.38461538461538464,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.6140233874320984,
+            "accepted_beyond_anchor": 3.5608974358974357
+          },
+          "sampled_anchor_blocks": 0,
+          "supervised_target_exposures": 0,
+          "elapsed_seconds": 262.91727595099997,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": null
+        },
+        {
+          "step": 500,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.6236162185668945,
+                "nll_by_draft_position": [
+                  2.7624831199645996,
+                  3.652768611907959,
+                  4.501198768615723,
+                  5.128454685211182,
+                  5.2032270431518555,
+                  5.533612251281738,
+                  5.583568572998047
+                ],
+                "accuracy_by_draft_position": [
+                  0.5234375,
+                  0.392578125,
+                  0.328125,
+                  0.248046875,
+                  0.234375,
+                  0.140625,
+                  0.15234375
+                ],
+                "mean_accepted_beyond_anchor": 1.1640625,
+                "full_draft_acceptance": 0.02734375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 5.017180919647217,
+                "nll_by_draft_position": [
+                  3.1871466636657715,
+                  4.108606815338135,
+                  4.833481788635254,
+                  5.239264011383057,
+                  5.634152412414551,
+                  5.955160140991211,
+                  6.16245174407959
+                ],
+                "accuracy_by_draft_position": [
+                  0.498046875,
+                  0.419921875,
+                  0.28125,
+                  0.23046875,
+                  0.1953125,
+                  0.16796875,
+                  0.123046875
+                ],
+                "mean_accepted_beyond_anchor": 1.1171875,
+                "full_draft_acceptance": 0.017578125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.452108860015869,
+                "nll_by_draft_position": [
+                  3.9709017276763916,
+                  5.614829063415527,
+                  6.478393077850342,
+                  7.294832229614258,
+                  7.527712345123291,
+                  7.202301025390625,
+                  7.075789451599121
+                ],
+                "accuracy_by_draft_position": [
+                  0.3893280625343323,
+                  0.24901185929775238,
+                  0.16996046900749207,
+                  0.11660078912973404,
+                  0.11660078912973404,
+                  0.13241106271743774,
+                  0.12845849990844727
+                ],
+                "mean_accepted_beyond_anchor": 0.6936758893280632,
+                "full_draft_acceptance": 0.005928853754940711,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.364301999409993,
+            "accepted_beyond_anchor": 0.9916419631093545
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.1525914669036865,
+                "nll_by_draft_position": [
+                  1.0838292837142944,
+                  1.1387686729431152,
+                  1.9354552030563354,
+                  2.351196765899658,
+                  2.4280169010162354,
+                  2.7489583492279053,
+                  3.38191556930542
+                ],
+                "accuracy_by_draft_position": [
+                  0.78125,
+                  0.78125,
+                  0.625,
+                  0.5,
+                  0.34375,
+                  0.46875,
+                  0.3125
+                ],
+                "mean_accepted_beyond_anchor": 2.9375,
+                "full_draft_acceptance": 0.125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.6877295970916748,
+                "nll_by_draft_position": [
+                  0.5810509920120239,
+                  1.1457679271697998,
+                  1.396148443222046,
+                  1.4042482376098633,
+                  1.8408375978469849,
+                  2.4449734687805176,
+                  3.001079559326172
+                ],
+                "accuracy_by_draft_position": [
+                  0.84375,
+                  0.78125,
+                  0.75,
+                  0.59375,
+                  0.40625,
+                  0.28125,
+                  0.3125
+                ],
+                "mean_accepted_beyond_anchor": 2.65625,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 0.7656513452529907,
+                "nll_by_draft_position": [
+                  0.08090602606534958,
+                  0.23014241456985474,
+                  0.15668199956417084,
+                  0.8752543926239014,
+                  1.2558619976043701,
+                  1.0063540935516357,
+                  1.754358172416687
+                ],
+                "accuracy_by_draft_position": [
+                  1.0,
+                  0.9615384340286255,
+                  0.9615384340286255,
+                  0.807692289352417,
+                  0.7307692170143127,
+                  0.807692289352417,
+                  0.4615384638309479
+                ],
+                "mean_accepted_beyond_anchor": 5.384615384615385,
+                "full_draft_acceptance": 0.38461538461538464,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.5353241364161174,
+            "accepted_beyond_anchor": 3.659455128205128
+          },
+          "sampled_anchor_blocks": 192000,
+          "supervised_target_exposures": 1344000,
+          "elapsed_seconds": 375.905745383,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.8407449126243591,
+            "feature_projection_norm_after_clip": 0.4865935742855072,
+            "learning_rate": 0.00037499999999999995,
+            "batch_loss": 1.2022027969360352
+          }
+        },
+        {
+          "step": 1000,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.716938018798828,
+                "nll_by_draft_position": [
+                  2.774169445037842,
+                  3.85113263130188,
+                  4.535972595214844,
+                  5.215578556060791,
+                  5.401122093200684,
+                  5.544782638549805,
+                  5.695806980133057
+                ],
+                "accuracy_by_draft_position": [
+                  0.515625,
+                  0.3828125,
+                  0.318359375,
+                  0.2421875,
+                  0.189453125,
+                  0.166015625,
+                  0.12890625
+                ],
+                "mean_accepted_beyond_anchor": 1.107421875,
+                "full_draft_acceptance": 0.0234375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 5.065683841705322,
+                "nll_by_draft_position": [
+                  3.2000443935394287,
+                  4.151572227478027,
+                  4.8807454109191895,
+                  5.285216331481934,
+                  5.775433540344238,
+                  6.006338596343994,
+                  6.160431861877441
+                ],
+                "accuracy_by_draft_position": [
+                  0.5,
+                  0.392578125,
+                  0.26953125,
+                  0.23828125,
+                  0.19140625,
+                  0.154296875,
+                  0.12109375
+                ],
+                "mean_accepted_beyond_anchor": 1.041015625,
+                "full_draft_acceptance": 0.013671875,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.356052398681641,
+                "nll_by_draft_position": [
+                  4.066465854644775,
+                  5.594200611114502,
+                  6.377439022064209,
+                  7.009984493255615,
+                  7.5619025230407715,
+                  7.015270233154297,
+                  6.867104530334473
+                ],
+                "accuracy_by_draft_position": [
+                  0.36758893728256226,
+                  0.21146245300769806,
+                  0.16798418760299683,
+                  0.11660078912973404,
+                  0.08695652335882187,
+                  0.11660078912973404,
+                  0.13636364042758942
+                ],
+                "mean_accepted_beyond_anchor": 0.6284584980237155,
+                "full_draft_acceptance": 0.005928853754940711,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.379558086395264,
+            "accepted_beyond_anchor": 0.9256319993412384
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 1.8631305694580078,
+                "nll_by_draft_position": [
+                  0.8490972518920898,
+                  0.77239590883255,
+                  1.4039485454559326,
+                  2.1477742195129395,
+                  2.1069371700286865,
+                  2.492821216583252,
+                  3.2689390182495117
+                ],
+                "accuracy_by_draft_position": [
+                  0.8125,
+                  0.84375,
+                  0.625,
+                  0.53125,
+                  0.53125,
+                  0.46875,
+                  0.28125
+                ],
+                "mean_accepted_beyond_anchor": 3.03125,
+                "full_draft_acceptance": 0.0625,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 2.189617395401001,
+                "nll_by_draft_position": [
+                  0.4553895890712738,
+                  1.5408434867858887,
+                  1.8813962936401367,
+                  1.955486536026001,
+                  2.3141231536865234,
+                  3.101895570755005,
+                  4.078186988830566
+                ],
+                "accuracy_by_draft_position": [
+                  0.8125,
+                  0.65625,
+                  0.5,
+                  0.40625,
+                  0.40625,
+                  0.28125,
+                  0.125
+                ],
+                "mean_accepted_beyond_anchor": 2.03125,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 0.8535690903663635,
+                "nll_by_draft_position": [
+                  0.08553023636341095,
+                  0.21965520083904266,
+                  0.2559628486633301,
+                  0.9882778525352478,
+                  1.307411789894104,
+                  1.2692298889160156,
+                  1.8489158153533936
+                ],
+                "accuracy_by_draft_position": [
+                  1.0,
+                  0.9615384340286255,
+                  0.9615384340286255,
+                  0.7692307829856873,
+                  0.7307692170143127,
+                  0.692307710647583,
+                  0.4615384638309479
+                ],
+                "mean_accepted_beyond_anchor": 5.038461538461538,
+                "full_draft_acceptance": 0.23076923076923078,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.6354390184084575,
+            "accepted_beyond_anchor": 3.3669871794871793
+          },
+          "sampled_anchor_blocks": 384000,
+          "supervised_target_exposures": 2688000,
+          "elapsed_seconds": 439.00209172899997,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 1.010864496231079,
+            "feature_projection_norm_after_clip": 0.5609200596809387,
+            "learning_rate": 0.0005998393762429097,
+            "batch_loss": 1.403374433517456
+          }
+        },
+        {
+          "step": 1500,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.657615661621094,
+                "nll_by_draft_position": [
+                  2.7706220149993896,
+                  3.8104050159454346,
+                  4.43253755569458,
+                  5.137120723724365,
+                  5.263396739959717,
+                  5.5888848304748535,
+                  5.600344657897949
+                ],
+                "accuracy_by_draft_position": [
+                  0.505859375,
+                  0.39453125,
+                  0.31640625,
+                  0.23828125,
+                  0.203125,
+                  0.17578125,
+                  0.1328125
+                ],
+                "mean_accepted_beyond_anchor": 1.1171875,
+                "full_draft_acceptance": 0.021484375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 5.084922790527344,
+                "nll_by_draft_position": [
+                  3.1934027671813965,
+                  4.124606609344482,
+                  4.966963768005371,
+                  5.2257184982299805,
+                  5.807736396789551,
+                  6.086053371429443,
+                  6.189977169036865
+                ],
+                "accuracy_by_draft_position": [
+                  0.470703125,
+                  0.41796875,
+                  0.26953125,
+                  0.2421875,
+                  0.201171875,
+                  0.166015625,
+                  0.12109375
+                ],
+                "mean_accepted_beyond_anchor": 1.001953125,
+                "full_draft_acceptance": 0.009765625,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.432095050811768,
+                "nll_by_draft_position": [
+                  4.091117858886719,
+                  5.449862480163574,
+                  6.48018217086792,
+                  7.23220157623291,
+                  7.613800525665283,
+                  7.083311080932617,
+                  7.074187278747559
+                ],
+                "accuracy_by_draft_position": [
+                  0.3695652186870575,
+                  0.23122529685497284,
+                  0.16007904708385468,
+                  0.11067193746566772,
+                  0.09486165642738342,
+                  0.12055335938930511,
+                  0.12252964079380035
+                ],
+                "mean_accepted_beyond_anchor": 0.6067193675889329,
+                "full_draft_acceptance": 0.003952569169960474,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.391544500986735,
+            "accepted_beyond_anchor": 0.9086199975296442
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 1.9245132207870483,
+                "nll_by_draft_position": [
+                  0.8740155696868896,
+                  0.9198912382125854,
+                  1.361084222793579,
+                  2.225966691970825,
+                  2.3803839683532715,
+                  2.447477340698242,
+                  3.2627744674682617
+                ],
+                "accuracy_by_draft_position": [
+                  0.875,
+                  0.75,
+                  0.65625,
+                  0.4375,
+                  0.375,
+                  0.5,
+                  0.375
+                ],
+                "mean_accepted_beyond_anchor": 2.84375,
+                "full_draft_acceptance": 0.125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.9076606035232544,
+                "nll_by_draft_position": [
+                  0.6227854490280151,
+                  1.6079305410385132,
+                  1.3736158609390259,
+                  1.6521188020706177,
+                  2.175097703933716,
+                  2.670957565307617,
+                  3.2511191368103027
+                ],
+                "accuracy_by_draft_position": [
+                  0.8125,
+                  0.71875,
+                  0.65625,
+                  0.4375,
+                  0.5,
+                  0.34375,
+                  0.21875
+                ],
+                "mean_accepted_beyond_anchor": 2.46875,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.1116230487823486,
+                "nll_by_draft_position": [
+                  0.1575688272714615,
+                  0.5915313363075256,
+                  0.7150087356567383,
+                  1.0843349695205688,
+                  1.243132472038269,
+                  1.6428170204162598,
+                  2.34696888923645
+                ],
+                "accuracy_by_draft_position": [
+                  0.9615384340286255,
+                  0.8461538553237915,
+                  0.807692289352417,
+                  0.807692289352417,
+                  0.6153846383094788,
+                  0.6153846383094788,
+                  0.42307692766189575
+                ],
+                "mean_accepted_beyond_anchor": 3.8076923076923075,
+                "full_draft_acceptance": 0.11538461538461539,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.6479322910308838,
+            "accepted_beyond_anchor": 3.040064102564102
+          },
+          "sampled_anchor_blocks": 576000,
+          "supervised_target_exposures": 4032000,
+          "elapsed_seconds": 502.073311025,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.9851908683776855,
+            "feature_projection_norm_after_clip": 0.5649397969245911,
+            "learning_rate": 0.0005980343337058333,
+            "batch_loss": 1.5249807834625244
+          }
+        },
+        {
+          "step": 2000,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.681576251983643,
+                "nll_by_draft_position": [
+                  2.805131196975708,
+                  3.8014917373657227,
+                  4.492895603179932,
+                  5.205543518066406,
+                  5.354778289794922,
+                  5.526501178741455,
+                  5.584693908691406
+                ],
+                "accuracy_by_draft_position": [
+                  0.51953125,
+                  0.404296875,
+                  0.328125,
+                  0.23828125,
+                  0.2109375,
+                  0.169921875,
+                  0.134765625
+                ],
+                "mean_accepted_beyond_anchor": 1.150390625,
+                "full_draft_acceptance": 0.029296875,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 4.9995317459106445,
+                "nll_by_draft_position": [
+                  3.2165489196777344,
+                  4.04881477355957,
+                  4.866905212402344,
+                  5.1611456871032715,
+                  5.718459129333496,
+                  5.916878700256348,
+                  6.067972660064697
+                ],
+                "accuracy_by_draft_position": [
+                  0.49609375,
+                  0.416015625,
+                  0.287109375,
+                  0.212890625,
+                  0.19140625,
+                  0.1484375,
+                  0.123046875
+                ],
+                "mean_accepted_beyond_anchor": 1.076171875,
+                "full_draft_acceptance": 0.01171875,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.5261921882629395,
+                "nll_by_draft_position": [
+                  4.069247722625732,
+                  5.743045330047607,
+                  6.661757469177246,
+                  7.359431743621826,
+                  7.743345737457275,
+                  7.111602306365967,
+                  6.994910717010498
+                ],
+                "accuracy_by_draft_position": [
+                  0.38735178112983704,
+                  0.2450592815876007,
+                  0.15019762516021729,
+                  0.09486165642738342,
+                  0.08695652335882187,
+                  0.12648221850395203,
+                  0.15217390656471252
+                ],
+                "mean_accepted_beyond_anchor": 0.6719367588932806,
+                "full_draft_acceptance": 0.003952569169960474,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.402433395385742,
+            "accepted_beyond_anchor": 0.9661664196310936
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 1.803842544555664,
+                "nll_by_draft_position": [
+                  0.6440005302429199,
+                  0.7707926034927368,
+                  1.1247518062591553,
+                  2.0269269943237305,
+                  2.222834825515747,
+                  2.5052638053894043,
+                  3.332327365875244
+                ],
+                "accuracy_by_draft_position": [
+                  0.875,
+                  0.875,
+                  0.6875,
+                  0.59375,
+                  0.46875,
+                  0.4375,
+                  0.28125
+                ],
+                "mean_accepted_beyond_anchor": 3.5,
+                "full_draft_acceptance": 0.125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 2.0850820541381836,
+                "nll_by_draft_position": [
+                  0.4011826515197754,
+                  1.29677414894104,
+                  1.9455785751342773,
+                  1.861251950263977,
+                  2.039795160293579,
+                  3.0180916786193848,
+                  4.032900810241699
+                ],
+                "accuracy_by_draft_position": [
+                  0.90625,
+                  0.75,
+                  0.5625,
+                  0.40625,
+                  0.5,
+                  0.25,
+                  0.09375
+                ],
+                "mean_accepted_beyond_anchor": 2.53125,
+                "full_draft_acceptance": 0.0,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 0.8224669098854065,
+                "nll_by_draft_position": [
+                  0.22693832218647003,
+                  0.3274837136268616,
+                  0.5062370896339417,
+                  0.9086607694625854,
+                  1.325974702835083,
+                  0.9159736633300781,
+                  1.5459997653961182
+                ],
+                "accuracy_by_draft_position": [
+                  0.9230769276618958,
+                  0.9230769276618958,
+                  0.8461538553237915,
+                  0.7692307829856873,
+                  0.692307710647583,
+                  0.6153846383094788,
+                  0.6153846383094788
+                ],
+                "mean_accepted_beyond_anchor": 4.346153846153846,
+                "full_draft_acceptance": 0.3076923076923077,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.5704638361930847,
+            "accepted_beyond_anchor": 3.4591346153846154
+          },
+          "sampled_anchor_blocks": 768000,
+          "supervised_target_exposures": 5376000,
+          "elapsed_seconds": 565.2507737430001,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.9820395708084106,
+            "feature_projection_norm_after_clip": 0.5435050129890442,
+            "learning_rate": 0.0005942355841209691,
+            "batch_loss": 1.3472133874893188
+          }
+        },
+        {
+          "step": 2500,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.691141605377197,
+                "nll_by_draft_position": [
+                  2.870844602584839,
+                  3.709808826446533,
+                  4.48192024230957,
+                  5.2330498695373535,
+                  5.313290596008301,
+                  5.587955474853516,
+                  5.6411213874816895
+                ],
+                "accuracy_by_draft_position": [
+                  0.509765625,
+                  0.3984375,
+                  0.337890625,
+                  0.23046875,
+                  0.20703125,
+                  0.185546875,
+                  0.146484375
+                ],
+                "mean_accepted_beyond_anchor": 1.109375,
+                "full_draft_acceptance": 0.025390625,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 4.969490051269531,
+                "nll_by_draft_position": [
+                  3.140984058380127,
+                  4.095369338989258,
+                  4.849698066711426,
+                  5.05147647857666,
+                  5.651655197143555,
+                  5.887814521789551,
+                  6.109432220458984
+                ],
+                "accuracy_by_draft_position": [
+                  0.51171875,
+                  0.390625,
+                  0.296875,
+                  0.234375,
+                  0.19140625,
+                  0.158203125,
+                  0.1015625
+                ],
+                "mean_accepted_beyond_anchor": 1.1015625,
+                "full_draft_acceptance": 0.005859375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.58339786529541,
+                "nll_by_draft_position": [
+                  4.146687984466553,
+                  5.712863445281982,
+                  6.756723403930664,
+                  7.405561447143555,
+                  7.702947616577148,
+                  7.264674186706543,
+                  7.094324588775635
+                ],
+                "accuracy_by_draft_position": [
+                  0.365612655878067,
+                  0.22727273404598236,
+                  0.1462450623512268,
+                  0.1146245077252388,
+                  0.09288537502288818,
+                  0.1146245077252388,
+                  0.12450592964887619
+                ],
+                "mean_accepted_beyond_anchor": 0.6225296442687747,
+                "full_draft_acceptance": 0.003952569169960474,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.414676507314046,
+            "accepted_beyond_anchor": 0.9444890480895914
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 1.6962321996688843,
+                "nll_by_draft_position": [
+                  0.5596020817756653,
+                  0.6267471313476562,
+                  0.9917073845863342,
+                  2.1066009998321533,
+                  2.000868797302246,
+                  2.5741844177246094,
+                  3.0139150619506836
+                ],
+                "accuracy_by_draft_position": [
+                  0.875,
+                  0.9375,
+                  0.84375,
+                  0.4375,
+                  0.53125,
+                  0.4375,
+                  0.375
+                ],
+                "mean_accepted_beyond_anchor": 3.46875,
+                "full_draft_acceptance": 0.125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.694898247718811,
+                "nll_by_draft_position": [
+                  0.3133387863636017,
+                  0.8958141207695007,
+                  1.5115952491760254,
+                  1.5917140245437622,
+                  1.812727689743042,
+                  2.6068224906921387,
+                  3.132275104522705
+                ],
+                "accuracy_by_draft_position": [
+                  0.875,
+                  0.8125,
+                  0.65625,
+                  0.625,
+                  0.53125,
+                  0.375,
+                  0.3125
+                ],
+                "mean_accepted_beyond_anchor": 3.09375,
+                "full_draft_acceptance": 0.0625,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.0798312425613403,
+                "nll_by_draft_position": [
+                  0.26091980934143066,
+                  0.3961029052734375,
+                  0.6436378955841064,
+                  1.1214884519577026,
+                  1.466556429862976,
+                  1.5387418270111084,
+                  2.1313719749450684
+                ],
+                "accuracy_by_draft_position": [
+                  0.9230769276618958,
+                  0.9615384340286255,
+                  0.807692289352417,
+                  0.7307692170143127,
+                  0.6538461446762085,
+                  0.6538461446762085,
+                  0.4615384638309479
+                ],
+                "mean_accepted_beyond_anchor": 4.1923076923076925,
+                "full_draft_acceptance": 0.23076923076923078,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.4903205633163452,
+            "accepted_beyond_anchor": 3.584935897435898
+          },
+          "sampled_anchor_blocks": 960000,
+          "supervised_target_exposures": 6720000,
+          "elapsed_seconds": 630.111439817,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.9897228479385376,
+            "feature_projection_norm_after_clip": 0.5516862273216248,
+            "learning_rate": 0.0005884685393048886,
+            "batch_loss": 1.4291187524795532
+          }
+        },
+        {
+          "step": 3000,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.793582916259766,
+                "nll_by_draft_position": [
+                  3.0343406200408936,
+                  3.8258707523345947,
+                  4.587090969085693,
+                  5.313500881195068,
+                  5.349365234375,
+                  5.695852279663086,
+                  5.749059677124023
+                ],
+                "accuracy_by_draft_position": [
+                  0.505859375,
+                  0.376953125,
+                  0.306640625,
+                  0.25390625,
+                  0.2109375,
+                  0.18359375,
+                  0.14453125
+                ],
+                "mean_accepted_beyond_anchor": 1.083984375,
+                "full_draft_acceptance": 0.02734375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 5.024402141571045,
+                "nll_by_draft_position": [
+                  3.213113307952881,
+                  4.094299793243408,
+                  4.860685348510742,
+                  5.102383136749268,
+                  5.700457572937012,
+                  5.987892150878906,
+                  6.211984634399414
+                ],
+                "accuracy_by_draft_position": [
+                  0.509765625,
+                  0.384765625,
+                  0.28125,
+                  0.267578125,
+                  0.201171875,
+                  0.16015625,
+                  0.115234375
+                ],
+                "mean_accepted_beyond_anchor": 1.12890625,
+                "full_draft_acceptance": 0.0234375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.621119499206543,
+                "nll_by_draft_position": [
+                  4.228057861328125,
+                  5.85628604888916,
+                  6.710099220275879,
+                  7.366581916809082,
+                  7.851064205169678,
+                  7.261109352111816,
+                  7.074635028839111
+                ],
+                "accuracy_by_draft_position": [
+                  0.373517781496048,
+                  0.23122529685497284,
+                  0.15810276567935944,
+                  0.09486165642738342,
+                  0.09288537502288818,
+                  0.1304347813129425,
+                  0.15415020287036896
+                ],
+                "mean_accepted_beyond_anchor": 0.6462450592885376,
+                "full_draft_acceptance": 0.005928853754940711,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.479701519012451,
+            "accepted_beyond_anchor": 0.9530452280961792
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 1.6883879899978638,
+                "nll_by_draft_position": [
+                  0.5888227224349976,
+                  0.7395186424255371,
+                  1.113340973854065,
+                  1.8818217515945435,
+                  1.80751633644104,
+                  2.3182735443115234,
+                  3.3694210052490234
+                ],
+                "accuracy_by_draft_position": [
+                  0.875,
+                  0.8125,
+                  0.6875,
+                  0.5625,
+                  0.5625,
+                  0.375,
+                  0.3125
+                ],
+                "mean_accepted_beyond_anchor": 3.1875,
+                "full_draft_acceptance": 0.09375,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.738064169883728,
+                "nll_by_draft_position": [
+                  0.41121625900268555,
+                  0.9208723306655884,
+                  1.5560067892074585,
+                  1.6036959886550903,
+                  2.049971580505371,
+                  2.5927467346191406,
+                  3.0319395065307617
+                ],
+                "accuracy_by_draft_position": [
+                  0.875,
+                  0.8125,
+                  0.59375,
+                  0.59375,
+                  0.46875,
+                  0.34375,
+                  0.25
+                ],
+                "mean_accepted_beyond_anchor": 2.75,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.2360600233078003,
+                "nll_by_draft_position": [
+                  0.25647351145744324,
+                  0.551595151424408,
+                  0.8552836179733276,
+                  1.5393092632293701,
+                  1.4856001138687134,
+                  1.7512263059616089,
+                  2.212932825088501
+                ],
+                "accuracy_by_draft_position": [
+                  0.9615384340286255,
+                  0.8846153616905212,
+                  0.807692289352417,
+                  0.5769230723381042,
+                  0.6538461446762085,
+                  0.5769230723381042,
+                  0.38461539149284363
+                ],
+                "mean_accepted_beyond_anchor": 4.076923076923077,
+                "full_draft_acceptance": 0.23076923076923078,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.5541707277297974,
+            "accepted_beyond_anchor": 3.3381410256410255
+          },
+          "sampled_anchor_blocks": 1152000,
+          "supervised_target_exposures": 8064000,
+          "elapsed_seconds": 698.105577679,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.9608973860740662,
+            "feature_projection_norm_after_clip": 0.5599349737167358,
+            "learning_rate": 0.0005807717780271977,
+            "batch_loss": 1.1589998006820679
+          }
+        },
+        {
+          "step": 3500,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.762513637542725,
+                "nll_by_draft_position": [
+                  2.9348018169403076,
+                  3.8876752853393555,
+                  4.532312870025635,
+                  5.289703845977783,
+                  5.334670066833496,
+                  5.582882404327393,
+                  5.775547981262207
+                ],
+                "accuracy_by_draft_position": [
+                  0.501953125,
+                  0.3984375,
+                  0.330078125,
+                  0.2421875,
+                  0.201171875,
+                  0.166015625,
+                  0.15625
+                ],
+                "mean_accepted_beyond_anchor": 1.115234375,
+                "full_draft_acceptance": 0.02734375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 5.059584617614746,
+                "nll_by_draft_position": [
+                  3.2766711711883545,
+                  4.085973262786865,
+                  4.827919006347656,
+                  5.105523586273193,
+                  5.870112419128418,
+                  6.069216728210449,
+                  6.181673526763916
+                ],
+                "accuracy_by_draft_position": [
+                  0.525390625,
+                  0.37890625,
+                  0.30078125,
+                  0.255859375,
+                  0.171875,
+                  0.15625,
+                  0.103515625
+                ],
+                "mean_accepted_beyond_anchor": 1.111328125,
+                "full_draft_acceptance": 0.013671875,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.664488315582275,
+                "nll_by_draft_position": [
+                  4.322903633117676,
+                  5.779366493225098,
+                  6.677925109863281,
+                  7.410233974456787,
+                  7.849210739135742,
+                  7.343684673309326,
+                  7.268099784851074
+                ],
+                "accuracy_by_draft_position": [
+                  0.3695652186870575,
+                  0.23320157825946808,
+                  0.14229248464107513,
+                  0.10671936720609665,
+                  0.09683794528245926,
+                  0.12450592964887619,
+                  0.12252964079380035
+                ],
+                "mean_accepted_beyond_anchor": 0.650197628458498,
+                "full_draft_acceptance": 0.009881422924901186,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.495528856913249,
+            "accepted_beyond_anchor": 0.9589200428194994
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 1.4844797849655151,
+                "nll_by_draft_position": [
+                  0.4855285882949829,
+                  0.6257073283195496,
+                  1.0308408737182617,
+                  1.5079052448272705,
+                  1.7537708282470703,
+                  2.291079521179199,
+                  2.696525812149048
+                ],
+                "accuracy_by_draft_position": [
+                  0.875,
+                  0.84375,
+                  0.71875,
+                  0.625,
+                  0.53125,
+                  0.53125,
+                  0.34375
+                ],
+                "mean_accepted_beyond_anchor": 3.5625,
+                "full_draft_acceptance": 0.21875,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.7272660732269287,
+                "nll_by_draft_position": [
+                  0.43289893865585327,
+                  0.8938497304916382,
+                  1.43503999710083,
+                  2.0901265144348145,
+                  2.02372670173645,
+                  2.458238124847412,
+                  2.7569825649261475
+                ],
+                "accuracy_by_draft_position": [
+                  0.875,
+                  0.75,
+                  0.53125,
+                  0.4375,
+                  0.4375,
+                  0.46875,
+                  0.3125
+                ],
+                "mean_accepted_beyond_anchor": 2.46875,
+                "full_draft_acceptance": 0.0625,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 0.910960853099823,
+                "nll_by_draft_position": [
+                  0.2808476984500885,
+                  0.33469927310943604,
+                  0.7291733026504517,
+                  0.7849798202514648,
+                  1.2651190757751465,
+                  1.209415316581726,
+                  1.772491693496704
+                ],
+                "accuracy_by_draft_position": [
+                  0.9615384340286255,
+                  0.9230769276618958,
+                  0.8461538553237915,
+                  0.807692289352417,
+                  0.692307710647583,
+                  0.6538461446762085,
+                  0.5
+                ],
+                "mean_accepted_beyond_anchor": 4.615384615384615,
+                "full_draft_acceptance": 0.2692307692307692,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.3742355704307556,
+            "accepted_beyond_anchor": 3.548878205128205
+          },
+          "sampled_anchor_blocks": 1344000,
+          "supervised_target_exposures": 9408000,
+          "elapsed_seconds": 763.177186654,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.8904425501823425,
+            "feature_projection_norm_after_clip": 0.48656991124153137,
+            "learning_rate": 0.000571196787937033,
+            "batch_loss": 1.064670443534851
+          }
+        },
+        {
+          "step": 4000,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.774810791015625,
+                "nll_by_draft_position": [
+                  2.9878318309783936,
+                  3.817168712615967,
+                  4.616621971130371,
+                  5.3171563148498535,
+                  5.3796257972717285,
+                  5.568653106689453,
+                  5.73661470413208
+                ],
+                "accuracy_by_draft_position": [
+                  0.513671875,
+                  0.416015625,
+                  0.32421875,
+                  0.259765625,
+                  0.224609375,
+                  0.1953125,
+                  0.14453125
+                ],
+                "mean_accepted_beyond_anchor": 1.205078125,
+                "full_draft_acceptance": 0.037109375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 5.0500335693359375,
+                "nll_by_draft_position": [
+                  3.2218387126922607,
+                  4.068665981292725,
+                  4.826247692108154,
+                  5.204530239105225,
+                  5.860259056091309,
+                  6.0528459548950195,
+                  6.115845203399658
+                ],
+                "accuracy_by_draft_position": [
+                  0.51171875,
+                  0.41796875,
+                  0.28125,
+                  0.25390625,
+                  0.203125,
+                  0.15234375,
+                  0.12109375
+                ],
+                "mean_accepted_beyond_anchor": 1.1484375,
+                "full_draft_acceptance": 0.017578125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.757826328277588,
+                "nll_by_draft_position": [
+                  4.27295446395874,
+                  5.79282283782959,
+                  6.796473979949951,
+                  7.456636428833008,
+                  7.9843292236328125,
+                  7.509275913238525,
+                  7.4922919273376465
+                ],
+                "accuracy_by_draft_position": [
+                  0.365612655878067,
+                  0.239130437374115,
+                  0.15810276567935944,
+                  0.12055335938930511,
+                  0.10276679694652557,
+                  0.13241106271743774,
+                  0.1304347813129425
+                ],
+                "mean_accepted_beyond_anchor": 0.6857707509881423,
+                "full_draft_acceptance": 0.009881422924901186,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.527556896209717,
+            "accepted_beyond_anchor": 1.013095458662714
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 1.3879069089889526,
+                "nll_by_draft_position": [
+                  0.4110790193080902,
+                  0.6045417189598083,
+                  0.903462827205658,
+                  1.2643663883209229,
+                  1.5129508972167969,
+                  2.16153621673584,
+                  2.857412099838257
+                ],
+                "accuracy_by_draft_position": [
+                  0.96875,
+                  0.84375,
+                  0.78125,
+                  0.59375,
+                  0.6875,
+                  0.53125,
+                  0.375
+                ],
+                "mean_accepted_beyond_anchor": 4.0625,
+                "full_draft_acceptance": 0.1875,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.78830087184906,
+                "nll_by_draft_position": [
+                  0.5658655762672424,
+                  0.8790809512138367,
+                  1.4905563592910767,
+                  1.74271559715271,
+                  1.867207646369934,
+                  2.6654305458068848,
+                  3.307249069213867
+                ],
+                "accuracy_by_draft_position": [
+                  0.84375,
+                  0.78125,
+                  0.65625,
+                  0.4375,
+                  0.5,
+                  0.3125,
+                  0.1875
+                ],
+                "mean_accepted_beyond_anchor": 2.5625,
+                "full_draft_acceptance": 0.0,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 0.45154014229774475,
+                "nll_by_draft_position": [
+                  0.057140056043863297,
+                  0.11339393258094788,
+                  0.1378122866153717,
+                  0.416681706905365,
+                  0.8267325162887573,
+                  0.5539712905883789,
+                  1.0550490617752075
+                ],
+                "accuracy_by_draft_position": [
+                  1.0,
+                  0.9615384340286255,
+                  0.9615384340286255,
+                  0.9230769276618958,
+                  0.7692307829856873,
+                  0.8846153616905212,
+                  0.6538461446762085
+                ],
+                "mean_accepted_beyond_anchor": 5.5,
+                "full_draft_acceptance": 0.4230769230769231,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.209249307711919,
+            "accepted_beyond_anchor": 4.041666666666667
+          },
+          "sampled_anchor_blocks": 1536000,
+          "supervised_target_exposures": 10752000,
+          "elapsed_seconds": 826.6534796540001,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.9170743823051453,
+            "feature_projection_norm_after_clip": 0.5122577548027039,
+            "learning_rate": 0.0005598076211353316,
+            "batch_loss": 1.0387470722198486
+          }
+        },
+        {
+          "step": 4500,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.866281032562256,
+                "nll_by_draft_position": [
+                  2.970261335372925,
+                  3.891921043395996,
+                  4.5998215675354,
+                  5.374635696411133,
+                  5.5434346199035645,
+                  5.760433197021484,
+                  5.9234619140625
+                ],
+                "accuracy_by_draft_position": [
+                  0.5,
+                  0.39453125,
+                  0.33203125,
+                  0.25,
+                  0.2109375,
+                  0.1875,
+                  0.142578125
+                ],
+                "mean_accepted_beyond_anchor": 1.138671875,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 5.100948333740234,
+                "nll_by_draft_position": [
+                  3.2337443828582764,
+                  4.150452613830566,
+                  4.954394340515137,
+                  5.26426362991333,
+                  5.873655796051025,
+                  6.0305938720703125,
+                  6.1995320320129395
+                ],
+                "accuracy_by_draft_position": [
+                  0.52734375,
+                  0.41015625,
+                  0.267578125,
+                  0.24609375,
+                  0.1953125,
+                  0.150390625,
+                  0.099609375
+                ],
+                "mean_accepted_beyond_anchor": 1.146484375,
+                "full_draft_acceptance": 0.009765625,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.755283355712891,
+                "nll_by_draft_position": [
+                  4.220228672027588,
+                  5.830609321594238,
+                  6.892276763916016,
+                  7.523365497589111,
+                  7.870295524597168,
+                  7.494067668914795,
+                  7.456137180328369
+                ],
+                "accuracy_by_draft_position": [
+                  0.373517781496048,
+                  0.23122529685497284,
+                  0.1462450623512268,
+                  0.12252964079380035,
+                  0.10079051554203033,
+                  0.12252964079380035,
+                  0.12845849990844727
+                ],
+                "mean_accepted_beyond_anchor": 0.642292490118577,
+                "full_draft_acceptance": 0.009881422924901186,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.57417090733846,
+            "accepted_beyond_anchor": 0.9758162467061924
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 1.31627357006073,
+                "nll_by_draft_position": [
+                  0.35440558195114136,
+                  0.793371856212616,
+                  0.9344691038131714,
+                  1.2321197986602783,
+                  1.2707867622375488,
+                  1.8743442296981812,
+                  2.754417896270752
+                ],
+                "accuracy_by_draft_position": [
+                  0.9375,
+                  0.6875,
+                  0.71875,
+                  0.65625,
+                  0.65625,
+                  0.5,
+                  0.3125
+                ],
+                "mean_accepted_beyond_anchor": 3.46875,
+                "full_draft_acceptance": 0.21875,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.950846791267395,
+                "nll_by_draft_position": [
+                  0.6350092887878418,
+                  1.062685251235962,
+                  1.4997261762619019,
+                  2.0842490196228027,
+                  2.2348060607910156,
+                  2.731990098953247,
+                  3.407461166381836
+                ],
+                "accuracy_by_draft_position": [
+                  0.84375,
+                  0.8125,
+                  0.59375,
+                  0.46875,
+                  0.5,
+                  0.28125,
+                  0.125
+                ],
+                "mean_accepted_beyond_anchor": 2.46875,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 0.6664790511131287,
+                "nll_by_draft_position": [
+                  0.08196498453617096,
+                  0.11003394424915314,
+                  0.21407395601272583,
+                  0.7420369386672974,
+                  0.9604613184928894,
+                  1.1175103187561035,
+                  1.439271092414856
+                ],
+                "accuracy_by_draft_position": [
+                  0.9615384340286255,
+                  1.0,
+                  0.9230769276618958,
+                  0.807692289352417,
+                  0.7692307829856873,
+                  0.6538461446762085,
+                  0.692307710647583
+                ],
+                "mean_accepted_beyond_anchor": 5.076923076923077,
+                "full_draft_acceptance": 0.38461538461538464,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.3111998041470845,
+            "accepted_beyond_anchor": 3.671474358974359
+          },
+          "sampled_anchor_blocks": 1728000,
+          "supervised_target_exposures": 12096000,
+          "elapsed_seconds": 890.85033794,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.9313874840736389,
+            "feature_projection_norm_after_clip": 0.5014083981513977,
+            "learning_rate": 0.0005466804656969324,
+            "batch_loss": 1.0070695877075195
+          }
+        },
+        {
+          "step": 5000,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.939539909362793,
+                "nll_by_draft_position": [
+                  3.036362648010254,
+                  4.0109357833862305,
+                  4.717620849609375,
+                  5.42630672454834,
+                  5.625304222106934,
+                  5.812086582183838,
+                  5.948162078857422
+                ],
+                "accuracy_by_draft_position": [
+                  0.501953125,
+                  0.40234375,
+                  0.306640625,
+                  0.236328125,
+                  0.189453125,
+                  0.19140625,
+                  0.158203125
+                ],
+                "mean_accepted_beyond_anchor": 1.150390625,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 5.128735065460205,
+                "nll_by_draft_position": [
+                  3.253209114074707,
+                  4.154680252075195,
+                  5.003721237182617,
+                  5.184782028198242,
+                  5.8341498374938965,
+                  6.131429195404053,
+                  6.339176177978516
+                ],
+                "accuracy_by_draft_position": [
+                  0.498046875,
+                  0.392578125,
+                  0.275390625,
+                  0.25390625,
+                  0.177734375,
+                  0.158203125,
+                  0.115234375
+                ],
+                "mean_accepted_beyond_anchor": 1.10546875,
+                "full_draft_acceptance": 0.01953125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.838045597076416,
+                "nll_by_draft_position": [
+                  4.390724182128906,
+                  6.0732808113098145,
+                  6.8196611404418945,
+                  7.56657600402832,
+                  8.098878860473633,
+                  7.424967288970947,
+                  7.492232322692871
+                ],
+                "accuracy_by_draft_position": [
+                  0.36166009306907654,
+                  0.20553359389305115,
+                  0.15415020287036896,
+                  0.11264821887016296,
+                  0.10671936720609665,
+                  0.1146245077252388,
+                  0.1146245077252388
+                ],
+                "mean_accepted_beyond_anchor": 0.6245059288537549,
+                "full_draft_acceptance": 0.01383399209486166,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.635440190633138,
+            "accepted_beyond_anchor": 0.9601217679512516
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 1.433168649673462,
+                "nll_by_draft_position": [
+                  0.5664279460906982,
+                  0.6749888062477112,
+                  1.18634033203125,
+                  1.4552251100540161,
+                  1.4986915588378906,
+                  1.9543027877807617,
+                  2.696204423904419
+                ],
+                "accuracy_by_draft_position": [
+                  0.84375,
+                  0.875,
+                  0.6875,
+                  0.53125,
+                  0.6875,
+                  0.53125,
+                  0.34375
+                ],
+                "mean_accepted_beyond_anchor": 3.4375,
+                "full_draft_acceptance": 0.1875,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.7569324970245361,
+                "nll_by_draft_position": [
+                  0.43496739864349365,
+                  0.7409071922302246,
+                  1.6492393016815186,
+                  1.98476243019104,
+                  2.083742380142212,
+                  2.3417389392852783,
+                  3.0631706714630127
+                ],
+                "accuracy_by_draft_position": [
+                  0.875,
+                  0.8125,
+                  0.59375,
+                  0.4375,
+                  0.46875,
+                  0.375,
+                  0.21875
+                ],
+                "mean_accepted_beyond_anchor": 2.71875,
+                "full_draft_acceptance": 0.09375,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 0.5617689490318298,
+                "nll_by_draft_position": [
+                  0.05272741615772247,
+                  0.12423966825008392,
+                  0.2046983242034912,
+                  0.39960119128227234,
+                  0.624239981174469,
+                  1.121950626373291,
+                  1.4049254655838013
+                ],
+                "accuracy_by_draft_position": [
+                  1.0,
+                  0.9615384340286255,
+                  0.9230769276618958,
+                  0.8846153616905212,
+                  0.8846153616905212,
+                  0.7692307829856873,
+                  0.6538461446762085
+                ],
+                "mean_accepted_beyond_anchor": 5.576923076923077,
+                "full_draft_acceptance": 0.5,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.2506233652432759,
+            "accepted_beyond_anchor": 3.911057692307692
+          },
+          "sampled_anchor_blocks": 1920000,
+          "supervised_target_exposures": 13440000,
+          "elapsed_seconds": 955.8376148140001,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.8701696395874023,
+            "feature_projection_norm_after_clip": 0.49565640091896057,
+            "learning_rate": 0.000531903136008821,
+            "batch_loss": 0.9672391414642334
+          }
+        },
+        {
+          "step": 5500,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.998384952545166,
+                "nll_by_draft_position": [
+                  3.0673627853393555,
+                  3.985203981399536,
+                  4.8339457511901855,
+                  5.5619401931762695,
+                  5.733450889587402,
+                  5.845995903015137,
+                  5.960791110992432
+                ],
+                "accuracy_by_draft_position": [
+                  0.509765625,
+                  0.40625,
+                  0.31640625,
+                  0.232421875,
+                  0.185546875,
+                  0.189453125,
+                  0.138671875
+                ],
+                "mean_accepted_beyond_anchor": 1.189453125,
+                "full_draft_acceptance": 0.029296875,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 5.187328338623047,
+                "nll_by_draft_position": [
+                  3.411867618560791,
+                  4.2177910804748535,
+                  5.057121753692627,
+                  5.28102445602417,
+                  5.914587020874023,
+                  6.1414031982421875,
+                  6.287505626678467
+                ],
+                "accuracy_by_draft_position": [
+                  0.494140625,
+                  0.416015625,
+                  0.302734375,
+                  0.259765625,
+                  0.197265625,
+                  0.16796875,
+                  0.1171875
+                ],
+                "mean_accepted_beyond_anchor": 1.162109375,
+                "full_draft_acceptance": 0.01953125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 7.009568691253662,
+                "nll_by_draft_position": [
+                  4.548849105834961,
+                  6.002818584442139,
+                  7.000608921051025,
+                  7.788343906402588,
+                  8.276660919189453,
+                  7.682290077209473,
+                  7.76740837097168
+                ],
+                "accuracy_by_draft_position": [
+                  0.35770750045776367,
+                  0.22134387493133545,
+                  0.15217390656471252,
+                  0.0988142266869545,
+                  0.09486165642738342,
+                  0.14426878094673157,
+                  0.15415020287036896
+                ],
+                "mean_accepted_beyond_anchor": 0.6304347826086957,
+                "full_draft_acceptance": 0.009881422924901186,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.731760660807292,
+            "accepted_beyond_anchor": 0.9939990942028986
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 1.4238780736923218,
+                "nll_by_draft_position": [
+                  0.4686110019683838,
+                  0.5788779854774475,
+                  0.9331817626953125,
+                  1.4736826419830322,
+                  1.6522517204284668,
+                  2.017739772796631,
+                  2.8428025245666504
+                ],
+                "accuracy_by_draft_position": [
+                  0.90625,
+                  0.84375,
+                  0.8125,
+                  0.59375,
+                  0.65625,
+                  0.5,
+                  0.34375
+                ],
+                "mean_accepted_beyond_anchor": 3.53125,
+                "full_draft_acceptance": 0.125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.746887445449829,
+                "nll_by_draft_position": [
+                  0.3141630291938782,
+                  0.9536943435668945,
+                  1.5412445068359375,
+                  1.6932975053787231,
+                  2.0779545307159424,
+                  2.6576733589172363,
+                  2.9901857376098633
+                ],
+                "accuracy_by_draft_position": [
+                  0.90625,
+                  0.84375,
+                  0.65625,
+                  0.53125,
+                  0.46875,
+                  0.34375,
+                  0.21875
+                ],
+                "mean_accepted_beyond_anchor": 3.34375,
+                "full_draft_acceptance": 0.0625,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 0.3759101331233978,
+                "nll_by_draft_position": [
+                  0.03403588384389877,
+                  0.11060653626918793,
+                  0.22508880496025085,
+                  0.1900193840265274,
+                  0.6998271346092224,
+                  0.41933873295783997,
+                  0.9524542093276978
+                ],
+                "accuracy_by_draft_position": [
+                  1.0,
+                  1.0,
+                  0.9615384340286255,
+                  1.0,
+                  0.807692289352417,
+                  0.8846153616905212,
+                  0.692307710647583
+                ],
+                "mean_accepted_beyond_anchor": 6.0,
+                "full_draft_acceptance": 0.5769230769230769,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.1822252174218495,
+            "accepted_beyond_anchor": 4.291666666666667
+          },
+          "sampled_anchor_blocks": 2112000,
+          "supervised_target_exposures": 14784000,
+          "elapsed_seconds": 1019.7355204050001,
+          "phase": "dflash-expansion-24576-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.8648508787155151,
+            "feature_projection_norm_after_clip": 0.4848679006099701,
+            "learning_rate": 0.0005155744853339093,
+            "batch_loss": 0.860156774520874
+          }
+        }
+      ],
+      "completed": false,
+      "test_status": "new test prompts reserved; no teacher test responses/features/metrics produced",
+      "data_note": "All labels are pinned frozen Qwen greedy continuations, not original human answers.",
+      "warm_start": {
+        "parent": "/runs/dflash-exposure-24576-01",
+        "step": 10000,
+        "checkpoint_sha256": "2338dba807e2c94e9bc844265f987cb8abc5eef4a7248c74f55131582e14a88f",
+        "note": "Weights only; fresh AdamW and new schedule on the declared teacher corpus."
+      },
+      "worker_start_drafter_sha256": "3b97164d8bb8cbef0e9b9aa79fe2c08a171089cfce2077633ea6c2ad0ba7624f",
+      "initial_drafter_sha256": "3b97164d8bb8cbef0e9b9aa79fe2c08a171089cfce2077633ea6c2ad0ba7624f",
+      "training_goal_step": 20000,
+      "schedule_note": "Each run is a new warmup/cosine cycle; continuation restores model, AdamW and RNG on the exact archived teacher corpus.",
+      "split_sequence_sha256": {
+        "train": "5c42b84adca53aecf8f5509f582e7deb138b9a0bd1b10f774328d34fb22373df",
+        "validation": "3574078c772ce68430d556d12c95efab6ad73231b8cf285805187fa35e108498"
+      },
+      "teacher_sequence_sha256": "9c49d7f9727cfc3c00d368a6cdb9014042a2a682e1e3846adb6b37d1e0ca9ce8",
+      "best_step": 0
+    },
+    {
+      "config": {
+        "model": "Qwen/Qwen2.5-0.5B",
+        "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+        "layers": [
+          2,
+          7,
+          12,
+          17,
+          22
+        ],
+        "draft_layers": 5,
+        "qk_norm": true,
+        "block_size": 8,
+        "gamma": 4.0,
+        "train_prompts": 54000,
+        "validation_prompts": 192,
+        "test_prompts": 192,
+        "prompt_tokens": 128,
+        "response_tokens": 64,
+        "batch_size": 48,
+        "anchors_per_sequence": 8,
+        "steps": 20000,
+        "eval_every": 500,
+        "learning_rate": 0.0006,
+        "warmup_ratio": 0.04,
+        "seed": 42,
+        "max_seconds": 3300,
+        "continue_from": "",
+        "warm_start_from": "/runs/dflash-exposure-24576-01",
+        "historical_corpus": "/runs/data-large-01/corpus.pt",
+        "prompt_manifest": "",
+        "teacher_parent": "/runs/dflash-data-54k-01",
+        "extend_teacher_parent": "",
+        "train_limit": 49152,
+        "retain_training_parent": "/runs/dflash-exposure-24576-01",
+        "teacher_batch_size": 32,
+        "rollout_prompts_per_domain": 4,
+        "quality_only": false,
+        "teacher_prompt_style": "raw",
+        "schedule_steps": 20000
+      },
+      "source_sha256": "fe03b6b0fac1bf7ff61e40a8ad6b2b892ea14fff73029cb936cdc2486e3a98ac",
+      "mask_token_id": 151662,
+      "trainable_parameters": 78578432,
+      "teacher_audit": {
+        "by_split_domain": {
+          "train": {
+            "prose": {
+              "prompts": 16384,
+              "response_tokens": 1041408,
+              "eligible_anchors": 926720,
+              "mean_unique_response_4gram_fraction": 0.7570519989359024,
+              "response_length_min": 10,
+              "response_length_max": 64
+            },
+            "code": {
+              "prompts": 16384,
+              "response_tokens": 1034937,
+              "eligible_anchors": 920249,
+              "mean_unique_response_4gram_fraction": 0.794739904182835,
+              "response_length_min": 8,
+              "response_length_max": 64
+            },
+            "translation": {
+              "prompts": 16384,
+              "response_tokens": 655544,
+              "eligible_anchors": 540856,
+              "mean_unique_response_4gram_fraction": 0.9765227866659704,
+              "response_length_min": 8,
+              "response_length_max": 64
+            }
+          },
+          "validation": {
+            "prose": {
+              "prompts": 64,
+              "response_tokens": 4033,
+              "eligible_anchors": 3585,
+              "mean_unique_response_4gram_fraction": 0.6675981122702435,
+              "response_length_min": 29,
+              "response_length_max": 64
+            },
+            "code": {
+              "prompts": 64,
+              "response_tokens": 4055,
+              "eligible_anchors": 3607,
+              "mean_unique_response_4gram_fraction": 0.7706796448087432,
+              "response_length_min": 33,
+              "response_length_max": 64
+            },
+            "translation": {
+              "prompts": 64,
+              "response_tokens": 2412,
+              "eligible_anchors": 1964,
+              "mean_unique_response_4gram_fraction": 0.9836096734433725,
+              "response_length_min": 11,
+              "response_length_max": 64
+            }
+          }
+        },
+        "required_training_groups": 24576,
+        "parent_generation_audit": {
+          "by_split_domain": {
+            "train": {
+              "prose": {
+                "prompts": 17769,
+                "response_tokens": 1129407,
+                "eligible_anchors": 1005024,
+                "mean_unique_response_4gram_fraction": 0.7567753616672417,
+                "response_length_min": 10,
+                "response_length_max": 64
+              },
+              "code": {
+                "prompts": 17898,
+                "response_tokens": 1130656,
+                "eligible_anchors": 1005370,
+                "mean_unique_response_4gram_fraction": 0.7954122526737104,
+                "response_length_min": 8,
+                "response_length_max": 64
+              },
+              "translation": {
+                "prompts": 17809,
+                "response_tokens": 712814,
+                "eligible_anchors": 588151,
+                "mean_unique_response_4gram_fraction": 0.9766265480756046,
+                "response_length_min": 8,
+                "response_length_max": 64
+              }
+            },
+            "validation": {
+              "prose": {
+                "prompts": 64,
+                "response_tokens": 4033,
+                "eligible_anchors": 3585,
+                "mean_unique_response_4gram_fraction": 0.6675981122702435,
+                "response_length_min": 29,
+                "response_length_max": 64
+              },
+              "code": {
+                "prompts": 64,
+                "response_tokens": 4055,
+                "eligible_anchors": 3607,
+                "mean_unique_response_4gram_fraction": 0.7706796448087432,
+                "response_length_min": 33,
+                "response_length_max": 64
+              },
+              "translation": {
+                "prompts": 64,
+                "response_tokens": 2412,
+                "eligible_anchors": 1964,
+                "mean_unique_response_4gram_fraction": 0.9836096734433725,
+                "response_length_min": 11,
+                "response_length_max": 64
+              }
+            }
+          },
+          "preserved_validation_sha256": "9cb8aa788fb44567026420ccbe2444edfdab4e26c97148f5cb6a26e84c36ca33",
+          "short_responses": 233,
+          "duplicate_responses": 291,
+          "teacher_batch_size": 32,
+          "target_arithmetic": "torch.bfloat16",
+          "note": "Batched greedy target generation; BF16 batch-shape argmax can differ from single-prompt arithmetic. Both data-size fits use this identical cache.",
+          "retained_examples": 26355
+        }
+      },
+      "curve": [
+        {
+          "step": 0,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.545071125030518,
+                "nll_by_draft_position": [
+                  2.705256938934326,
+                  3.5665440559387207,
+                  4.361715316772461,
+                  5.0463995933532715,
+                  5.132145881652832,
+                  5.4185919761657715,
+                  5.584842681884766
+                ],
+                "accuracy_by_draft_position": [
+                  0.515625,
+                  0.419921875,
+                  0.33203125,
+                  0.251953125,
+                  0.21484375,
+                  0.15625,
+                  0.138671875
+                ],
+                "mean_accepted_beyond_anchor": 1.18359375,
+                "full_draft_acceptance": 0.025390625,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 4.922084331512451,
+                "nll_by_draft_position": [
+                  3.142514228820801,
+                  4.012166500091553,
+                  4.744062900543213,
+                  5.08687162399292,
+                  5.516921520233154,
+                  5.907409191131592,
+                  6.044643402099609
+                ],
+                "accuracy_by_draft_position": [
+                  0.498046875,
+                  0.3984375,
+                  0.294921875,
+                  0.2421875,
+                  0.197265625,
+                  0.15625,
+                  0.123046875
+                ],
+                "mean_accepted_beyond_anchor": 1.13671875,
+                "full_draft_acceptance": 0.01953125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 6.2800140380859375,
+                "nll_by_draft_position": [
+                  3.8562798500061035,
+                  5.341119766235352,
+                  6.366265773773193,
+                  7.159905433654785,
+                  7.371555328369141,
+                  7.015918254852295,
+                  6.849050998687744
+                ],
+                "accuracy_by_draft_position": [
+                  0.40316206216812134,
+                  0.2747035622596741,
+                  0.17391304671764374,
+                  0.11660078912973404,
+                  0.10474308580160141,
+                  0.13636364042758942,
+                  0.14822134375572205
+                ],
+                "mean_accepted_beyond_anchor": 0.7450592885375494,
+                "full_draft_acceptance": 0.005928853754940711,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 5.249056498209636,
+            "accepted_beyond_anchor": 1.021790596179183
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.2129099369049072,
+                "nll_by_draft_position": [
+                  1.2397078275680542,
+                  1.1459733247756958,
+                  2.0445046424865723,
+                  2.388939380645752,
+                  2.4380409717559814,
+                  2.894016742706299,
+                  3.3391876220703125
+                ],
+                "accuracy_by_draft_position": [
+                  0.75,
+                  0.8125,
+                  0.5625,
+                  0.4375,
+                  0.4375,
+                  0.4375,
+                  0.28125
+                ],
+                "mean_accepted_beyond_anchor": 2.84375,
+                "full_draft_acceptance": 0.125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.893823504447937,
+                "nll_by_draft_position": [
+                  0.532401442527771,
+                  1.279388189315796,
+                  1.752516508102417,
+                  1.9285948276519775,
+                  1.9916915893554688,
+                  2.5939464569091797,
+                  3.17822527885437
+                ],
+                "accuracy_by_draft_position": [
+                  0.84375,
+                  0.78125,
+                  0.59375,
+                  0.4375,
+                  0.5625,
+                  0.25,
+                  0.1875
+                ],
+                "mean_accepted_beyond_anchor": 2.53125,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 0.7353367209434509,
+                "nll_by_draft_position": [
+                  0.07674641907215118,
+                  0.12033453583717346,
+                  0.1882745325565338,
+                  0.7901036739349365,
+                  1.1655548810958862,
+                  1.0188782215118408,
+                  1.787465214729309
+                ],
+                "accuracy_by_draft_position": [
+                  1.0,
+                  1.0,
+                  0.9230769276618958,
+                  0.807692289352417,
+                  0.7307692170143127,
+                  0.807692289352417,
+                  0.5
+                ],
+                "mean_accepted_beyond_anchor": 5.3076923076923075,
+                "full_draft_acceptance": 0.38461538461538464,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.6140233874320984,
+            "accepted_beyond_anchor": 3.5608974358974357
+          },
+          "sampled_anchor_blocks": 0,
+          "supervised_target_exposures": 0,
+          "elapsed_seconds": 327.171908665,
+          "phase": "dflash-expansion-49152-01",
+          "gradient_diagnostic": null
+        },
+        {
+          "step": 500,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.145353317260742,
+                "nll_by_draft_position": [
+                  2.4178714752197266,
+                  3.2696375846862793,
+                  3.9163308143615723,
+                  4.60193395614624,
+                  4.707921981811523,
+                  4.969592571258545,
+                  5.134183406829834
+                ],
+                "accuracy_by_draft_position": [
+                  0.552734375,
+                  0.439453125,
+                  0.345703125,
+                  0.25,
+                  0.220703125,
+                  0.1796875,
+                  0.16015625
+                ],
+                "mean_accepted_beyond_anchor": 1.248046875,
+                "full_draft_acceptance": 0.01953125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 4.415783882141113,
+                "nll_by_draft_position": [
+                  2.6899797916412354,
+                  3.581799030303955,
+                  4.210975170135498,
+                  4.625612735748291,
+                  5.0348029136657715,
+                  5.307582378387451,
+                  5.45973539352417
+                ],
+                "accuracy_by_draft_position": [
+                  0.544921875,
+                  0.41796875,
+                  0.296875,
+                  0.25390625,
+                  0.18359375,
+                  0.158203125,
+                  0.125
+                ],
+                "mean_accepted_beyond_anchor": 1.171875,
+                "full_draft_acceptance": 0.015625,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 5.222994327545166,
+                "nll_by_draft_position": [
+                  3.0592966079711914,
+                  4.43622350692749,
+                  5.262475967407227,
+                  5.9219489097595215,
+                  6.192485332489014,
+                  5.842073440551758,
+                  5.846459865570068
+                ],
+                "accuracy_by_draft_position": [
+                  0.44466403126716614,
+                  0.2806324064731598,
+                  0.17984189093112946,
+                  0.13438735902309418,
+                  0.10276679694652557,
+                  0.15217390656471252,
+                  0.11857707798480988
+                ],
+                "mean_accepted_beyond_anchor": 0.7806324110671937,
+                "full_draft_acceptance": 0.001976284584980237,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 4.594710508982341,
+            "accepted_beyond_anchor": 1.0668514286890647
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.364598512649536,
+                "nll_by_draft_position": [
+                  1.235082745552063,
+                  1.230427622795105,
+                  2.166668176651001,
+                  2.474623680114746,
+                  2.550981044769287,
+                  3.1742587089538574,
+                  3.720146417617798
+                ],
+                "accuracy_by_draft_position": [
+                  0.71875,
+                  0.8125,
+                  0.5625,
+                  0.40625,
+                  0.46875,
+                  0.34375,
+                  0.25
+                ],
+                "mean_accepted_beyond_anchor": 2.90625,
+                "full_draft_acceptance": 0.15625,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 1.9749220609664917,
+                "nll_by_draft_position": [
+                  0.6334593296051025,
+                  1.2065694332122803,
+                  1.9408888816833496,
+                  1.939133882522583,
+                  2.2060484886169434,
+                  2.733579635620117,
+                  3.164774179458618
+                ],
+                "accuracy_by_draft_position": [
+                  0.8125,
+                  0.6875,
+                  0.4375,
+                  0.5,
+                  0.46875,
+                  0.3125,
+                  0.1875
+                ],
+                "mean_accepted_beyond_anchor": 1.9375,
+                "full_draft_acceptance": 0.0,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.0450012683868408,
+                "nll_by_draft_position": [
+                  0.20546594262123108,
+                  0.47118332982063293,
+                  0.5010408163070679,
+                  1.2705233097076416,
+                  1.5586178302764893,
+                  1.4159761667251587,
+                  1.8922022581100464
+                ],
+                "accuracy_by_draft_position": [
+                  1.0,
+                  0.9230769276618958,
+                  0.9615384340286255,
+                  0.7307692170143127,
+                  0.6538461446762085,
+                  0.7307692170143127,
+                  0.5
+                ],
+                "mean_accepted_beyond_anchor": 4.576923076923077,
+                "full_draft_acceptance": 0.2692307692307692,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 1.7948406140009563,
+            "accepted_beyond_anchor": 3.140224358974359
+          },
+          "sampled_anchor_blocks": 192000,
+          "supervised_target_exposures": 1344000,
+          "elapsed_seconds": 495.330753044,
+          "phase": "dflash-expansion-49152-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 1.066929578781128,
+            "feature_projection_norm_after_clip": 0.5591930150985718,
+            "learning_rate": 0.00037499999999999995,
+            "batch_loss": 2.9638853073120117
+          }
+        },
+        {
+          "step": 1000,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 4.081744194030762,
+                "nll_by_draft_position": [
+                  2.3485326766967773,
+                  3.2223474979400635,
+                  3.830754518508911,
+                  4.461562633514404,
+                  4.718197822570801,
+                  4.942930698394775,
+                  5.047883033752441
+                ],
+                "accuracy_by_draft_position": [
+                  0.5625,
+                  0.423828125,
+                  0.349609375,
+                  0.287109375,
+                  0.23046875,
+                  0.16796875,
+                  0.158203125
+                ],
+                "mean_accepted_beyond_anchor": 1.28125,
+                "full_draft_acceptance": 0.029296875,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 4.365544319152832,
+                "nll_by_draft_position": [
+                  2.631108522415161,
+                  3.441946029663086,
+                  4.151708602905273,
+                  4.628214359283447,
+                  5.05177640914917,
+                  5.269593238830566,
+                  5.384461402893066
+                ],
+                "accuracy_by_draft_position": [
+                  0.541015625,
+                  0.447265625,
+                  0.306640625,
+                  0.232421875,
+                  0.193359375,
+                  0.17578125,
+                  0.142578125
+                ],
+                "mean_accepted_beyond_anchor": 1.193359375,
+                "full_draft_acceptance": 0.017578125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 5.091627597808838,
+                "nll_by_draft_position": [
+                  2.947232484817505,
+                  4.264549255371094,
+                  5.0783233642578125,
+                  5.841701507568359,
+                  6.060796737670898,
+                  5.662696361541748,
+                  5.786091327667236
+                ],
+                "accuracy_by_draft_position": [
+                  0.48221343755722046,
+                  0.3023715317249298,
+                  0.19367589056491852,
+                  0.1403162032365799,
+                  0.12845849990844727,
+                  0.16996046900749207,
+                  0.09288537502288818
+                ],
+                "mean_accepted_beyond_anchor": 0.8537549407114624,
+                "full_draft_acceptance": 0.005928853754940711,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 4.5129720369974775,
+            "accepted_beyond_anchor": 1.1094547719038208
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.459188222885132,
+                "nll_by_draft_position": [
+                  1.227326512336731,
+                  1.2715141773223877,
+                  1.9884488582611084,
+                  2.6814632415771484,
+                  2.897549629211426,
+                  3.285125970840454,
+                  3.8628885746002197
+                ],
+                "accuracy_by_draft_position": [
+                  0.75,
+                  0.78125,
+                  0.53125,
+                  0.46875,
+                  0.375,
+                  0.3125,
+                  0.09375
+                ],
+                "mean_accepted_beyond_anchor": 2.78125,
+                "full_draft_acceptance": 0.0625,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 2.4288012981414795,
+                "nll_by_draft_position": [
+                  0.7826410531997681,
+                  1.3438855409622192,
+                  2.6325159072875977,
+                  2.559185028076172,
+                  2.5221199989318848,
+                  3.281013011932373,
+                  3.8802499771118164
+                ],
+                "accuracy_by_draft_position": [
+                  0.75,
+                  0.71875,
+                  0.34375,
+                  0.28125,
+                  0.40625,
+                  0.25,
+                  0.15625
+                ],
+                "mean_accepted_beyond_anchor": 1.84375,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.4736106395721436,
+                "nll_by_draft_position": [
+                  0.5467365980148315,
+                  0.7888014316558838,
+                  0.903680682182312,
+                  1.5862661600112915,
+                  1.7626726627349854,
+                  2.325852870941162,
+                  2.40126371383667
+                ],
+                "accuracy_by_draft_position": [
+                  0.8846153616905212,
+                  0.8461538553237915,
+                  0.7307692170143127,
+                  0.692307710647583,
+                  0.6153846383094788,
+                  0.42307692766189575,
+                  0.3461538553237915
+                ],
+                "mean_accepted_beyond_anchor": 3.423076923076923,
+                "full_draft_acceptance": 0.15384615384615385,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 2.1205333868662515,
+            "accepted_beyond_anchor": 2.682692307692308
+          },
+          "sampled_anchor_blocks": 384000,
+          "supervised_target_exposures": 2688000,
+          "elapsed_seconds": 558.031861689,
+          "phase": "dflash-expansion-49152-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 1.120036005973816,
+            "feature_projection_norm_after_clip": 0.6026261448860168,
+            "learning_rate": 0.0005998393762429097,
+            "batch_loss": 2.951728343963623
+          }
+        },
+        {
+          "step": 1500,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 3.9553561210632324,
+                "nll_by_draft_position": [
+                  2.2094898223876953,
+                  2.988799810409546,
+                  3.671170711517334,
+                  4.393426895141602,
+                  4.575020790100098,
+                  4.89586067199707,
+                  4.953723430633545
+                ],
+                "accuracy_by_draft_position": [
+                  0.583984375,
+                  0.458984375,
+                  0.3828125,
+                  0.279296875,
+                  0.21875,
+                  0.193359375,
+                  0.166015625
+                ],
+                "mean_accepted_beyond_anchor": 1.3828125,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 4.19041633605957,
+                "nll_by_draft_position": [
+                  2.4895267486572266,
+                  3.298558235168457,
+                  3.8742709159851074,
+                  4.4456963539123535,
+                  4.920154571533203,
+                  5.095062255859375,
+                  5.209644794464111
+                ],
+                "accuracy_by_draft_position": [
+                  0.556640625,
+                  0.43359375,
+                  0.328125,
+                  0.25,
+                  0.208984375,
+                  0.1796875,
+                  0.1328125
+                ],
+                "mean_accepted_beyond_anchor": 1.232421875,
+                "full_draft_acceptance": 0.01953125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 5.1329345703125,
+                "nll_by_draft_position": [
+                  2.94036602973938,
+                  4.2564592361450195,
+                  5.201005935668945,
+                  5.8278303146362305,
+                  6.065075874328613,
+                  5.789997100830078,
+                  5.849804401397705
+                ],
+                "accuracy_by_draft_position": [
+                  0.46640315651893616,
+                  0.3063241243362427,
+                  0.1818181872367859,
+                  0.12845849990844727,
+                  0.12648221850395203,
+                  0.13636364042758942,
+                  0.12845849990844727
+                ],
+                "mean_accepted_beyond_anchor": 0.8517786561264822,
+                "full_draft_acceptance": 0.001976284584980237,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 4.426235675811768,
+            "accepted_beyond_anchor": 1.1556710103754941
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.606566905975342,
+                "nll_by_draft_position": [
+                  1.3376801013946533,
+                  1.427308440208435,
+                  2.142338752746582,
+                  2.9962053298950195,
+                  3.086707830429077,
+                  3.321103572845459,
+                  3.9346230030059814
+                ],
+                "accuracy_by_draft_position": [
+                  0.78125,
+                  0.78125,
+                  0.53125,
+                  0.375,
+                  0.28125,
+                  0.3125,
+                  0.21875
+                ],
+                "mean_accepted_beyond_anchor": 2.4375,
+                "full_draft_acceptance": 0.0625,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 2.2222115993499756,
+                "nll_by_draft_position": [
+                  0.7773200869560242,
+                  1.3992621898651123,
+                  2.47141170501709,
+                  1.9941563606262207,
+                  2.251389741897583,
+                  3.0636093616485596,
+                  3.5983309745788574
+                ],
+                "accuracy_by_draft_position": [
+                  0.8125,
+                  0.71875,
+                  0.4375,
+                  0.5,
+                  0.46875,
+                  0.28125,
+                  0.1875
+                ],
+                "mean_accepted_beyond_anchor": 2.09375,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.5040576457977295,
+                "nll_by_draft_position": [
+                  0.5937520861625671,
+                  0.8992727994918823,
+                  1.1046664714813232,
+                  1.5262776613235474,
+                  1.7681466341018677,
+                  2.4024953842163086,
+                  2.233792781829834
+                ],
+                "accuracy_by_draft_position": [
+                  0.807692289352417,
+                  0.7692307829856873,
+                  0.7307692170143127,
+                  0.6538461446762085,
+                  0.6153846383094788,
+                  0.42307692766189575,
+                  0.38461539149284363
+                ],
+                "mean_accepted_beyond_anchor": 2.923076923076923,
+                "full_draft_acceptance": 0.11538461538461539,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 2.110945383707682,
+            "accepted_beyond_anchor": 2.484775641025641
+          },
+          "sampled_anchor_blocks": 576000,
+          "supervised_target_exposures": 4032000,
+          "elapsed_seconds": 621.918815707,
+          "phase": "dflash-expansion-49152-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 1.0127214193344116,
+            "feature_projection_norm_after_clip": 0.5949787497520447,
+            "learning_rate": 0.0005980343337058333,
+            "batch_loss": 2.8026976585388184
+          }
+        },
+        {
+          "step": 2000,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 3.8882217407226562,
+                "nll_by_draft_position": [
+                  2.140035629272461,
+                  2.9449875354766846,
+                  3.59898042678833,
+                  4.338287353515625,
+                  4.494487762451172,
+                  4.773468494415283,
+                  4.927305221557617
+                ],
+                "accuracy_by_draft_position": [
+                  0.58984375,
+                  0.46484375,
+                  0.388671875,
+                  0.279296875,
+                  0.259765625,
+                  0.19140625,
+                  0.181640625
+                ],
+                "mean_accepted_beyond_anchor": 1.466796875,
+                "full_draft_acceptance": 0.033203125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 4.104207515716553,
+                "nll_by_draft_position": [
+                  2.3913538455963135,
+                  3.250542640686035,
+                  3.8022286891937256,
+                  4.267868518829346,
+                  4.800471305847168,
+                  4.979689121246338,
+                  5.237297058105469
+                ],
+                "accuracy_by_draft_position": [
+                  0.5625,
+                  0.447265625,
+                  0.328125,
+                  0.3046875,
+                  0.212890625,
+                  0.1875,
+                  0.134765625
+                ],
+                "mean_accepted_beyond_anchor": 1.29296875,
+                "full_draft_acceptance": 0.015625,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 5.1387939453125,
+                "nll_by_draft_position": [
+                  2.9628078937530518,
+                  4.2772135734558105,
+                  5.196709156036377,
+                  5.880351543426514,
+                  6.153963565826416,
+                  5.73226261138916,
+                  5.768248558044434
+                ],
+                "accuracy_by_draft_position": [
+                  0.47826087474823,
+                  0.29841896891593933,
+                  0.16798418760299683,
+                  0.12845849990844727,
+                  0.10276679694652557,
+                  0.14426878094673157,
+                  0.15415020287036896
+                ],
+                "mean_accepted_beyond_anchor": 0.7964426877470355,
+                "full_draft_acceptance": 0.001976284584980237,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 4.377074400583903,
+            "accepted_beyond_anchor": 1.1854027709156785
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.6346683502197266,
+                "nll_by_draft_position": [
+                  1.2971326112747192,
+                  1.453898549079895,
+                  2.079869031906128,
+                  2.8244967460632324,
+                  2.949270725250244,
+                  3.3973050117492676,
+                  4.4407057762146
+                ],
+                "accuracy_by_draft_position": [
+                  0.78125,
+                  0.65625,
+                  0.53125,
+                  0.40625,
+                  0.375,
+                  0.34375,
+                  0.125
+                ],
+                "mean_accepted_beyond_anchor": 2.78125,
+                "full_draft_acceptance": 0.0625,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 2.449281692504883,
+                "nll_by_draft_position": [
+                  0.6771034598350525,
+                  1.8712011575698853,
+                  2.266967535018921,
+                  2.7740519046783447,
+                  2.6478867530822754,
+                  3.237140417098999,
+                  3.670619487762451
+                ],
+                "accuracy_by_draft_position": [
+                  0.84375,
+                  0.65625,
+                  0.46875,
+                  0.28125,
+                  0.3125,
+                  0.15625,
+                  0.15625
+                ],
+                "mean_accepted_beyond_anchor": 1.8125,
+                "full_draft_acceptance": 0.0,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.1086980104446411,
+                "nll_by_draft_position": [
+                  0.29172080755233765,
+                  0.5847044587135315,
+                  0.4361189007759094,
+                  1.2331335544586182,
+                  2.1564981937408447,
+                  1.2781426906585693,
+                  1.780566930770874
+                ],
+                "accuracy_by_draft_position": [
+                  0.9615384340286255,
+                  0.8461538553237915,
+                  0.9230769276618958,
+                  0.692307710647583,
+                  0.4615384638309479,
+                  0.6538461446762085,
+                  0.5
+                ],
+                "mean_accepted_beyond_anchor": 3.8076923076923075,
+                "full_draft_acceptance": 0.15384615384615385,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 2.0642160177230835,
+            "accepted_beyond_anchor": 2.8004807692307687
+          },
+          "sampled_anchor_blocks": 768000,
+          "supervised_target_exposures": 5376000,
+          "elapsed_seconds": 684.888138142,
+          "phase": "dflash-expansion-49152-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.96214759349823,
+            "feature_projection_norm_after_clip": 0.5436489582061768,
+            "learning_rate": 0.0005942355841209691,
+            "batch_loss": 2.625786066055298
+          }
+        },
+        {
+          "step": 2500,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 3.820045232772827,
+                "nll_by_draft_position": [
+                  2.083552360534668,
+                  2.863896369934082,
+                  3.5291574001312256,
+                  4.235927104949951,
+                  4.400478363037109,
+                  4.732860088348389,
+                  4.894443035125732
+                ],
+                "accuracy_by_draft_position": [
+                  0.587890625,
+                  0.48828125,
+                  0.384765625,
+                  0.294921875,
+                  0.259765625,
+                  0.205078125,
+                  0.177734375
+                ],
+                "mean_accepted_beyond_anchor": 1.48828125,
+                "full_draft_acceptance": 0.0390625,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 4.0507707595825195,
+                "nll_by_draft_position": [
+                  2.274097442626953,
+                  3.1271138191223145,
+                  3.729198694229126,
+                  4.231551647186279,
+                  4.732918739318848,
+                  5.072134017944336,
+                  5.188382625579834
+                ],
+                "accuracy_by_draft_position": [
+                  0.587890625,
+                  0.462890625,
+                  0.375,
+                  0.294921875,
+                  0.25,
+                  0.1640625,
+                  0.1328125
+                ],
+                "mean_accepted_beyond_anchor": 1.365234375,
+                "full_draft_acceptance": 0.015625,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 5.12476110458374,
+                "nll_by_draft_position": [
+                  2.83066987991333,
+                  4.225322246551514,
+                  5.086583614349365,
+                  5.871208190917969,
+                  6.213159084320068,
+                  5.789143085479736,
+                  5.85724401473999
+                ],
+                "accuracy_by_draft_position": [
+                  0.48616600036621094,
+                  0.29841896891593933,
+                  0.18972331285476685,
+                  0.15019762516021729,
+                  0.11264821887016296,
+                  0.1561264842748642,
+                  0.13833992183208466
+                ],
+                "mean_accepted_beyond_anchor": 0.8656126482213439,
+                "full_draft_acceptance": 0.005928853754940711,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 4.331859032313029,
+            "accepted_beyond_anchor": 1.2397094244071145
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.4596054553985596,
+                "nll_by_draft_position": [
+                  1.169047236442566,
+                  1.5210707187652588,
+                  2.117673873901367,
+                  2.6709275245666504,
+                  2.757875680923462,
+                  3.1472859382629395,
+                  3.8333568572998047
+                ],
+                "accuracy_by_draft_position": [
+                  0.8125,
+                  0.65625,
+                  0.5,
+                  0.4375,
+                  0.34375,
+                  0.3125,
+                  0.1875
+                ],
+                "mean_accepted_beyond_anchor": 2.0,
+                "full_draft_acceptance": 0.0,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 2.2697646617889404,
+                "nll_by_draft_position": [
+                  0.8625239729881287,
+                  1.8413552045822144,
+                  2.165827751159668,
+                  2.656888008117676,
+                  2.2331016063690186,
+                  2.8342885971069336,
+                  3.294368028640747
+                ],
+                "accuracy_by_draft_position": [
+                  0.75,
+                  0.53125,
+                  0.46875,
+                  0.34375,
+                  0.4375,
+                  0.3125,
+                  0.1875
+                ],
+                "mean_accepted_beyond_anchor": 1.53125,
+                "full_draft_acceptance": 0.0,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.4094804525375366,
+                "nll_by_draft_position": [
+                  0.2811010479927063,
+                  0.5060851573944092,
+                  0.6794122457504272,
+                  1.6624342203140259,
+                  2.1168711185455322,
+                  2.129132032394409,
+                  2.4913275241851807
+                ],
+                "accuracy_by_draft_position": [
+                  0.9230769276618958,
+                  0.8846153616905212,
+                  0.807692289352417,
+                  0.6153846383094788,
+                  0.5384615659713745,
+                  0.4615384638309479,
+                  0.38461539149284363
+                ],
+                "mean_accepted_beyond_anchor": 3.769230769230769,
+                "full_draft_acceptance": 0.15384615384615385,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 2.0462835232416787,
+            "accepted_beyond_anchor": 2.43349358974359
+          },
+          "sampled_anchor_blocks": 960000,
+          "supervised_target_exposures": 6720000,
+          "elapsed_seconds": 747.57958707,
+          "phase": "dflash-expansion-49152-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.988684892654419,
+            "feature_projection_norm_after_clip": 0.582775890827179,
+            "learning_rate": 0.0005884685393048886,
+            "batch_loss": 2.518662691116333
+          }
+        },
+        {
+          "step": 3000,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 3.8534560203552246,
+                "nll_by_draft_position": [
+                  2.0248870849609375,
+                  2.8935141563415527,
+                  3.559365749359131,
+                  4.322717189788818,
+                  4.534207344055176,
+                  4.742151737213135,
+                  4.897346496582031
+                ],
+                "accuracy_by_draft_position": [
+                  0.595703125,
+                  0.474609375,
+                  0.373046875,
+                  0.294921875,
+                  0.232421875,
+                  0.189453125,
+                  0.154296875
+                ],
+                "mean_accepted_beyond_anchor": 1.45703125,
+                "full_draft_acceptance": 0.02734375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 4.013773441314697,
+                "nll_by_draft_position": [
+                  2.2757341861724854,
+                  3.1229922771453857,
+                  3.7104129791259766,
+                  4.157842636108398,
+                  4.698115825653076,
+                  4.907114505767822,
+                  5.224203109741211
+                ],
+                "accuracy_by_draft_position": [
+                  0.595703125,
+                  0.48046875,
+                  0.3671875,
+                  0.322265625,
+                  0.232421875,
+                  0.17578125,
+                  0.166015625
+                ],
+                "mean_accepted_beyond_anchor": 1.423828125,
+                "full_draft_acceptance": 0.0234375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 5.120278835296631,
+                "nll_by_draft_position": [
+                  2.8096606731414795,
+                  4.166041851043701,
+                  5.137136459350586,
+                  5.963375568389893,
+                  6.1773529052734375,
+                  5.738275051116943,
+                  5.850107192993164
+                ],
+                "accuracy_by_draft_position": [
+                  0.49802371859550476,
+                  0.3083004057407379,
+                  0.19169960916042328,
+                  0.12252964079380035,
+                  0.11264821887016296,
+                  0.17588932812213898,
+                  0.11857707798480988
+                ],
+                "mean_accepted_beyond_anchor": 0.8735177865612648,
+                "full_draft_acceptance": 0.001976284584980237,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 4.3291694323221845,
+            "accepted_beyond_anchor": 1.2514590538537549
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.523747205734253,
+                "nll_by_draft_position": [
+                  1.3501096963882446,
+                  1.2875051498413086,
+                  2.2160682678222656,
+                  2.785370349884033,
+                  2.6731855869293213,
+                  3.067626476287842,
+                  4.286365509033203
+                ],
+                "accuracy_by_draft_position": [
+                  0.78125,
+                  0.71875,
+                  0.5625,
+                  0.375,
+                  0.5,
+                  0.375,
+                  0.125
+                ],
+                "mean_accepted_beyond_anchor": 2.53125,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 2.4751906394958496,
+                "nll_by_draft_position": [
+                  1.014539122581482,
+                  1.8889659643173218,
+                  2.213912010192871,
+                  2.872037410736084,
+                  2.4955859184265137,
+                  3.1283109188079834,
+                  3.712982177734375
+                ],
+                "accuracy_by_draft_position": [
+                  0.75,
+                  0.59375,
+                  0.4375,
+                  0.21875,
+                  0.3125,
+                  0.1875,
+                  0.09375
+                ],
+                "mean_accepted_beyond_anchor": 1.5625,
+                "full_draft_acceptance": 0.0,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.612926721572876,
+                "nll_by_draft_position": [
+                  0.4704892933368683,
+                  0.8362609148025513,
+                  0.9036387205123901,
+                  1.8293951749801636,
+                  2.2592668533325195,
+                  2.402987241744995,
+                  2.588449716567993
+                ],
+                "accuracy_by_draft_position": [
+                  0.8846153616905212,
+                  0.8461538553237915,
+                  0.807692289352417,
+                  0.5769230723381042,
+                  0.4615384638309479,
+                  0.4615384638309479,
+                  0.3076923191547394
+                ],
+                "mean_accepted_beyond_anchor": 3.6153846153846154,
+                "full_draft_acceptance": 0.15384615384615385,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 2.2039548556009927,
+            "accepted_beyond_anchor": 2.5697115384615383
+          },
+          "sampled_anchor_blocks": 1152000,
+          "supervised_target_exposures": 8064000,
+          "elapsed_seconds": 811.152788266,
+          "phase": "dflash-expansion-49152-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.933337926864624,
+            "feature_projection_norm_after_clip": 0.5362464189529419,
+            "learning_rate": 0.0005807717780271977,
+            "batch_loss": 2.17828631401062
+          }
+        },
+        {
+          "step": 3500,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 3.7900383472442627,
+                "nll_by_draft_position": [
+                  1.982530951499939,
+                  2.816781759262085,
+                  3.492943048477173,
+                  4.247363567352295,
+                  4.331676483154297,
+                  4.771644115447998,
+                  4.887326717376709
+                ],
+                "accuracy_by_draft_position": [
+                  0.625,
+                  0.4765625,
+                  0.404296875,
+                  0.30859375,
+                  0.271484375,
+                  0.1953125,
+                  0.162109375
+                ],
+                "mean_accepted_beyond_anchor": 1.556640625,
+                "full_draft_acceptance": 0.0390625,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 3.9161570072174072,
+                "nll_by_draft_position": [
+                  2.1736068725585938,
+                  2.9669594764709473,
+                  3.5860917568206787,
+                  4.083384037017822,
+                  4.5576043128967285,
+                  4.909762859344482,
+                  5.135691165924072
+                ],
+                "accuracy_by_draft_position": [
+                  0.599609375,
+                  0.494140625,
+                  0.38671875,
+                  0.302734375,
+                  0.228515625,
+                  0.18359375,
+                  0.134765625
+                ],
+                "mean_accepted_beyond_anchor": 1.470703125,
+                "full_draft_acceptance": 0.01953125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 5.2069549560546875,
+                "nll_by_draft_position": [
+                  2.9482462406158447,
+                  4.248508930206299,
+                  5.097379207611084,
+                  6.046590805053711,
+                  6.2860589027404785,
+                  5.872994899749756,
+                  5.948909759521484
+                ],
+                "accuracy_by_draft_position": [
+                  0.4624505937099457,
+                  0.31027668714523315,
+                  0.20553359389305115,
+                  0.12845849990844727,
+                  0.10276679694652557,
+                  0.1719367653131485,
+                  0.13241106271743774
+                ],
+                "mean_accepted_beyond_anchor": 0.8675889328063241,
+                "full_draft_acceptance": 0.003952569169960474,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 4.304383436838786,
+            "accepted_beyond_anchor": 1.2983108942687747
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.359799861907959,
+                "nll_by_draft_position": [
+                  1.0659735202789307,
+                  1.267153024673462,
+                  1.8798052072525024,
+                  2.5408976078033447,
+                  2.739974021911621,
+                  3.188166856765747,
+                  3.836627721786499
+                ],
+                "accuracy_by_draft_position": [
+                  0.8125,
+                  0.625,
+                  0.5,
+                  0.4375,
+                  0.25,
+                  0.375,
+                  0.28125
+                ],
+                "mean_accepted_beyond_anchor": 2.25,
+                "full_draft_acceptance": 0.09375,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 2.3253753185272217,
+                "nll_by_draft_position": [
+                  1.1182348728179932,
+                  1.529414415359497,
+                  2.8260436058044434,
+                  2.521902561187744,
+                  2.255847692489624,
+                  2.7765352725982666,
+                  3.2496514320373535
+                ],
+                "accuracy_by_draft_position": [
+                  0.6875,
+                  0.53125,
+                  0.34375,
+                  0.375,
+                  0.34375,
+                  0.3125,
+                  0.125
+                ],
+                "mean_accepted_beyond_anchor": 1.375,
+                "full_draft_acceptance": 0.0,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.4159194231033325,
+                "nll_by_draft_position": [
+                  0.43247494101524353,
+                  0.7824620008468628,
+                  1.001959204673767,
+                  1.6955443620681763,
+                  2.141129493713379,
+                  1.6808266639709473,
+                  2.177039623260498
+                ],
+                "accuracy_by_draft_position": [
+                  0.8461538553237915,
+                  0.8461538553237915,
+                  0.7692307829856873,
+                  0.5769230723381042,
+                  0.38461539149284363,
+                  0.6153846383094788,
+                  0.5
+                ],
+                "mean_accepted_beyond_anchor": 3.3076923076923075,
+                "full_draft_acceptance": 0.15384615384615385,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 2.0336982011795044,
+            "accepted_beyond_anchor": 2.3108974358974357
+          },
+          "sampled_anchor_blocks": 1344000,
+          "supervised_target_exposures": 9408000,
+          "elapsed_seconds": 872.848846069,
+          "phase": "dflash-expansion-49152-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.9874919652938843,
+            "feature_projection_norm_after_clip": 0.5538400411605835,
+            "learning_rate": 0.000571196787937033,
+            "batch_loss": 2.418724775314331
+          }
+        },
+        {
+          "step": 4000,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 3.7972333431243896,
+                "nll_by_draft_position": [
+                  1.9910722970962524,
+                  2.792783260345459,
+                  3.565885305404663,
+                  4.252564907073975,
+                  4.369103908538818,
+                  4.735845565795898,
+                  4.873377799987793
+                ],
+                "accuracy_by_draft_position": [
+                  0.62109375,
+                  0.494140625,
+                  0.40234375,
+                  0.302734375,
+                  0.2734375,
+                  0.20703125,
+                  0.18359375
+                ],
+                "mean_accepted_beyond_anchor": 1.546875,
+                "full_draft_acceptance": 0.037109375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 3.8998258113861084,
+                "nll_by_draft_position": [
+                  2.120115280151367,
+                  2.9138424396514893,
+                  3.5173652172088623,
+                  4.121418476104736,
+                  4.626205921173096,
+                  4.881692886352539,
+                  5.1181416511535645
+                ],
+                "accuracy_by_draft_position": [
+                  0.6171875,
+                  0.498046875,
+                  0.38671875,
+                  0.314453125,
+                  0.23046875,
+                  0.1953125,
+                  0.1640625
+                ],
+                "mean_accepted_beyond_anchor": 1.486328125,
+                "full_draft_acceptance": 0.0234375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 5.131076812744141,
+                "nll_by_draft_position": [
+                  2.7666175365448,
+                  4.174177646636963,
+                  5.155430316925049,
+                  5.972223281860352,
+                  6.239612102508545,
+                  5.741986274719238,
+                  5.867494583129883
+                ],
+                "accuracy_by_draft_position": [
+                  0.4683794379234314,
+                  0.33596837520599365,
+                  0.20158103108406067,
+                  0.13833992183208466,
+                  0.1304347813129425,
+                  0.1719367653131485,
+                  0.15217390656471252
+                ],
+                "mean_accepted_beyond_anchor": 0.8636363636363636,
+                "full_draft_acceptance": 0.005928853754940711,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 4.276045322418213,
+            "accepted_beyond_anchor": 1.2989464962121213
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.229952096939087,
+                "nll_by_draft_position": [
+                  1.0147719383239746,
+                  1.3025535345077515,
+                  1.818067193031311,
+                  2.2874767780303955,
+                  2.3886148929595947,
+                  2.965728998184204,
+                  3.8324506282806396
+                ],
+                "accuracy_by_draft_position": [
+                  0.75,
+                  0.6875,
+                  0.59375,
+                  0.5,
+                  0.46875,
+                  0.4375,
+                  0.1875
+                ],
+                "mean_accepted_beyond_anchor": 2.53125,
+                "full_draft_acceptance": 0.03125,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 2.329084873199463,
+                "nll_by_draft_position": [
+                  1.06710946559906,
+                  1.4539371728897095,
+                  2.733635425567627,
+                  2.749784231185913,
+                  2.1459057331085205,
+                  2.887651205062866,
+                  3.265571355819702
+                ],
+                "accuracy_by_draft_position": [
+                  0.78125,
+                  0.65625,
+                  0.28125,
+                  0.4375,
+                  0.40625,
+                  0.21875,
+                  0.25
+                ],
+                "mean_accepted_beyond_anchor": 1.84375,
+                "full_draft_acceptance": 0.0,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.6363126039505005,
+                "nll_by_draft_position": [
+                  0.5413841605186462,
+                  0.9371788501739502,
+                  1.3017456531524658,
+                  1.8446910381317139,
+                  2.4842312335968018,
+                  2.2720627784729004,
+                  2.0728952884674072
+                ],
+                "accuracy_by_draft_position": [
+                  0.807692289352417,
+                  0.8461538553237915,
+                  0.7307692170143127,
+                  0.692307710647583,
+                  0.38461539149284363,
+                  0.4615384638309479,
+                  0.42307692766189575
+                ],
+                "mean_accepted_beyond_anchor": 3.230769230769231,
+                "full_draft_acceptance": 0.07692307692307693,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 2.06511652469635,
+            "accepted_beyond_anchor": 2.53525641025641
+          },
+          "sampled_anchor_blocks": 1536000,
+          "supervised_target_exposures": 10752000,
+          "elapsed_seconds": 935.22173421,
+          "phase": "dflash-expansion-49152-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.917066216468811,
+            "feature_projection_norm_after_clip": 0.5047717690467834,
+            "learning_rate": 0.0005598076211353316,
+            "batch_loss": 2.245849847793579
+          }
+        },
+        {
+          "step": 4500,
+          "validation": {
+            "by_domain": {
+              "prose": {
+                "nll": 3.751750946044922,
+                "nll_by_draft_position": [
+                  1.9874695539474487,
+                  2.782564163208008,
+                  3.5030975341796875,
+                  4.124712944030762,
+                  4.38505220413208,
+                  4.653697490692139,
+                  4.8256635665893555
+                ],
+                "accuracy_by_draft_position": [
+                  0.6171875,
+                  0.484375,
+                  0.423828125,
+                  0.3125,
+                  0.26953125,
+                  0.22265625,
+                  0.154296875
+                ],
+                "mean_accepted_beyond_anchor": 1.59765625,
+                "full_draft_acceptance": 0.033203125,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 3.8393149375915527,
+                "nll_by_draft_position": [
+                  2.2540512084960938,
+                  2.860590934753418,
+                  3.435495615005493,
+                  3.998378038406372,
+                  4.57294225692749,
+                  4.732045650482178,
+                  5.021700859069824
+                ],
+                "accuracy_by_draft_position": [
+                  0.611328125,
+                  0.515625,
+                  0.39453125,
+                  0.330078125,
+                  0.271484375,
+                  0.205078125,
+                  0.15625
+                ],
+                "mean_accepted_beyond_anchor": 1.470703125,
+                "full_draft_acceptance": 0.021484375,
+                "prompts": 64,
+                "blocks": 512,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 5.2327189445495605,
+                "nll_by_draft_position": [
+                  2.8811190128326416,
+                  4.2911858558654785,
+                  5.267572402954102,
+                  5.99674654006958,
+                  6.353392601013184,
+                  5.8949456214904785,
+                  5.944070339202881
+                ],
+                "accuracy_by_draft_position": [
+                  0.48221343755722046,
+                  0.31422924995422363,
+                  0.2134387344121933,
+                  0.13636364042758942,
+                  0.0988142266869545,
+                  0.1561264842748642,
+                  0.1462450623512268
+                ],
+                "mean_accepted_beyond_anchor": 0.8557312252964426,
+                "full_draft_acceptance": 0.005928853754940711,
+                "prompts": 64,
+                "blocks": 506,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 4.274594942728679,
+            "accepted_beyond_anchor": 1.3080302000988142
+          },
+          "training_diagnostic": {
+            "by_domain": {
+              "prose": {
+                "nll": 2.2966666221618652,
+                "nll_by_draft_position": [
+                  0.8748287558555603,
+                  1.2052268981933594,
+                  2.0238072872161865,
+                  2.191009759902954,
+                  2.4404091835021973,
+                  3.293546199798584,
+                  4.047837734222412
+                ],
+                "accuracy_by_draft_position": [
+                  0.8125,
+                  0.6875,
+                  0.5,
+                  0.4375,
+                  0.5,
+                  0.3125,
+                  0.1875
+                ],
+                "mean_accepted_beyond_anchor": 2.53125,
+                "full_draft_acceptance": 0.0625,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "code": {
+                "nll": 2.672367811203003,
+                "nll_by_draft_position": [
+                  1.1370134353637695,
+                  1.7977988719940186,
+                  2.5766372680664062,
+                  3.123509168624878,
+                  2.959920883178711,
+                  3.6389498710632324,
+                  3.472745656967163
+                ],
+                "accuracy_by_draft_position": [
+                  0.71875,
+                  0.625,
+                  0.3125,
+                  0.34375,
+                  0.4375,
+                  0.15625,
+                  0.1875
+                ],
+                "mean_accepted_beyond_anchor": 1.59375,
+                "full_draft_acceptance": 0.0,
+                "prompts": 4,
+                "blocks": 32,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              },
+              "translation": {
+                "nll": 1.6571669578552246,
+                "nll_by_draft_position": [
+                  0.6046596169471741,
+                  0.9731361865997314,
+                  1.172946810722351,
+                  1.568753719329834,
+                  2.668442964553833,
+                  2.309657573699951,
+                  2.30257248878479
+                ],
+                "accuracy_by_draft_position": [
+                  0.7692307829856873,
+                  0.807692289352417,
+                  0.7307692170143127,
+                  0.692307710647583,
+                  0.4615384638309479,
+                  0.42307692766189575,
+                  0.26923078298568726
+                ],
+                "mean_accepted_beyond_anchor": 3.076923076923077,
+                "full_draft_acceptance": 0.15384615384615385,
+                "prompts": 4,
+                "blocks": 26,
+                "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+              }
+            },
+            "nll": 2.2087337970733643,
+            "accepted_beyond_anchor": 2.4006410256410255
+          },
+          "sampled_anchor_blocks": 1728000,
+          "supervised_target_exposures": 12096000,
+          "elapsed_seconds": 997.502431077,
+          "phase": "dflash-expansion-49152-01",
+          "gradient_diagnostic": {
+            "global_norm_before_clip": 0.9744909405708313,
+            "feature_projection_norm_after_clip": 0.5658975839614868,
+            "learning_rate": 0.0005466804656969324,
+            "batch_loss": 2.3614795207977295
+          }
+        }
+      ],
+      "completed": false,
+      "test_status": "new test prompts reserved; no teacher test responses/features/metrics produced",
+      "data_note": "All labels are pinned frozen Qwen greedy continuations, not original human answers.",
+      "warm_start": {
+        "parent": "/runs/dflash-exposure-24576-01",
+        "step": 10000,
+        "checkpoint_sha256": "2338dba807e2c94e9bc844265f987cb8abc5eef4a7248c74f55131582e14a88f",
+        "note": "Weights only; fresh AdamW and new schedule on the declared teacher corpus."
+      },
+      "worker_start_drafter_sha256": "3b97164d8bb8cbef0e9b9aa79fe2c08a171089cfce2077633ea6c2ad0ba7624f",
+      "initial_drafter_sha256": "3b97164d8bb8cbef0e9b9aa79fe2c08a171089cfce2077633ea6c2ad0ba7624f",
+      "training_goal_step": 20000,
+      "schedule_note": "Each run is a new warmup/cosine cycle; continuation restores model, AdamW and RNG on the exact archived teacher corpus.",
+      "split_sequence_sha256": {
+        "train": "5610e0fe34ed8cd9a0063321daa0901663e19c1548222403e394d8b5713ad085",
+        "validation": "3574078c772ce68430d556d12c95efab6ad73231b8cf285805187fa35e108498"
+      },
+      "teacher_sequence_sha256": "edd49385aa6298d80ff4cf459917d2716be7bafae657fb717f9212f6cca78175",
+      "best_step": 4500
+    }
+  ]
+}

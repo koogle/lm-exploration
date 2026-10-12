@@ -214,3 +214,19 @@ after runtime label-identity validation. The control includes exactly those grou
 required-first sorting can change their historical order. Provenance:
 `dflash-expansion-launch-audit.json`. Early 500-update scores (0.992 control,
 1.067 larger corpus) are incomplete observations, not a selected final comparison.
+
+
+### Next-stage interim curves
+
+![In-progress next data expansion](dflash-expansion-interim.png)
+
+The image includes 5500 updates for the 24576-response control and 4500 for the
+49152-response arm. Both are incomplete against the fixed 20000-update plan.
+The JSON sidecar embeds both live report snapshots. Compare equal x-axis positions;
+this is not a completed-budget or test comparison. The control's best checkpoint
+so far remains its step-zero initialization, while added data improves validation.
+
+Dashed train curves evaluate only twelve fixed diagnostic responses. Required-first
+subset ordering places these in the previously seen training set; they do not
+measure full fitting of the newly added examples. Their step-zero metrics match
+exactly across arms. The full-corpus audits after completion remain necessary.
