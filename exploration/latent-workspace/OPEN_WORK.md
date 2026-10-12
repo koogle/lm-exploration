@@ -30,15 +30,20 @@ training memory. These are plumbing/profile checks, not grid quality results.
 
 Modal controller `fresh-grid-controller-02` is active; restart recovery succeeded.
 The initial long teacher pool completed with 53501 usable responses and 9.59M
-response-token positions. Both fresh 49152-example fits have started: latest read
-snapshots are 6000/100000 updates (64 cap) and 4000/100000 (256 cap). At matched
-4000 updates, primary long-validation NEW is 1.30058 versus 2.46466. The latter's
-prose/code/translation scores are 3.82227/2.78516/0.78656, so the every-domain gate
-still fails. These are interim, reused-validation results, not qualified test evidence.
-Both share random initial weights and no warm start; source/long/short validation
-hashes match. `long-teacher-216k-01` is expanding data while these fits train.
-The remaining 98304/196608 conditions have not started. Interim curves and archived
-snapshots: `results/fresh-grid-50k-interim.{png,json}`. No full-grid result exists.
+response-token positions. Latest archived fresh-fit snapshots reach 55593 updates
+(64 cap) and 37246 (256 cap). Long-validation NEW is 2.04131 versus 3.60350;
+translation is 1.07510 versus 1.16206. Both remain active, test untouched.
+The 64-cap fit shows clear overfitting: validation NLL minimum 3.81283 at 14000
+rises to 5.30673 while the fixed 12-response training diagnostic falls to 0.225.
+Acceptance stays near 2.0. The 256-cap fit also develops a generalization gap:
+NLL 2.53554 at 13612 rises to 2.85405, but acceptance improves 3.43127→3.60350.
+Recommendation: early-stop the short arm; only a bounded additional acceptance
+check for the long arm, then prioritize more distinct training examples. This is
+an adaptive recommendation; the submitted 100000-update schedules are unchanged.
+See `results/fresh-grid-overfitting.md` and refreshed archived curves/snapshots
+`results/fresh-grid-50k-interim.{png,json}`. Training diagnostic is not a full audit.
+Long-teacher generation last processed 143360/216000 prompts. The 98304/196608
+conditions have not started. No full-grid or sealed-test qualification exists.
 
 - State: `/runs/fresh-grid-controller-02/state.json`.
 - Authoritative ledger: `/runs/fresh-grid-controller-02/budget.json`.
@@ -48,7 +53,7 @@ snapshots: `results/fresh-grid-50k-interim.{png,json}`. No full-grid result exis
 Do not submit local GPU jobs while the marker exists; do not change package source
 for active fits/continuations. [Operations](docs/operations.md) describes ledger
 sync/release. The server uses bounded 3600-second GPU workers and a bounded 24-hour
-CPU coordinator. Current reservations at controller launch: **$423/$500**, including
+CPU coordinator. Latest cumulative reservations: **$468/$500**, including
 $6 CPU and retained failed/canceled reservations; this is not actual billed cost.
 The user retains $500 for now and is open to reviewing an increase if needed.
 Budget exhaustion pauses new jobs and reports the study incomplete.

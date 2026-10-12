@@ -35,32 +35,57 @@ for key in (
 ):
     assert a["config"][key] == b["config"][key]
 assert all(r["warm_start"] is None for r in runs.values())
-fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-for cap, r in runs.items():
-    steps = [p["step"] for p in r["curve"]]
-    label = f"{cap}-token training cap"
-    axes[0].plot(
-        steps,
-        [p["validation"]["accepted_beyond_anchor"] for p in r["curve"]],
-        marker="o",
-        label=label,
-    )
-    axes[1].plot(steps, [p["validation"]["nll"] for p in r["curve"]], marker="o", label=label)
-axes[0].axhline(
-    2, color="grey", linestyle=":", label="Macro criterion; domain floors also required"
-)
-axes[0].set(
-    ylabel="Validation consecutive correct NEW tokens / 7", xlabel="Optimizer updates", ylim=(0, 4)
-)
-axes[1].set(ylabel="Validation new-token NLL (lower is better)", xlabel="Optimizer updates")
-for ax in axes:
-    ax.grid(alpha=0.2)
-    ax.legend(fontsize=8)
+fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharex=True)
+for row, (cap, r) in enumerate(runs.items()):
+    # Omit initialization to make the subsequent generalization gap readable.
+    curve = [p for p in r["curve"] if p["step"] > 0]
+    steps = [p["step"] / 1000 for p in curve]
+    for col, (metric, ylabel) in enumerate(
+        (
+            ("nll", "New-token NLL (lower is better)"),
+            ("accepted_beyond_anchor", "Consecutive correct NEW tokens / 7"),
+        )
+    ):
+        ax = axes[row, col]
+        ax.plot(
+            steps,
+            [p["validation"][metric] for p in curve],
+            marker="o",
+            markersize=3,
+            label="Validation: 192 responses",
+        )
+        ax.plot(
+            steps,
+            [p["training_diagnostic"][metric] for p in curve],
+            linestyle="--",
+            color="orange",
+            label="Training diagnostic: 12 responses",
+        )
+        chosen = (
+            min(curve, key=lambda p: p["validation"][metric])
+            if col == 0
+            else max(curve, key=lambda p: p["validation"][metric])
+        )
+        x, y = chosen["step"] / 1000, chosen["validation"][metric]
+        ax.scatter([x], [y], color="green", s=60, zorder=5)
+        ax.annotate(
+            f"Best {y:.2f} at {x:.1f}K",
+            (x, y),
+            xytext=(8, 12),
+            textcoords="offset points",
+            fontsize=9,
+        )
+        ax.set(title=f"{cap}-token training cap", ylabel=ylabel, ylim=(0, 7))
+        ax.grid(alpha=0.2)
+        ax.legend(fontsize=8)
+    axes[row, 1].axhline(2, color="grey", linestyle=":")
+for ax in axes[1]:
+    ax.set_xlabel("Optimizer updates (thousands)")
 fig.suptitle("IN PROGRESS: fresh 79M drafter for frozen Qwen2.5-0.5B; 49,152 examples")
 fig.text(
     0.5,
     0.01,
-    "Same random initialization and long validation trajectories. Each fit targets 100,000 updates. Test untouched.",
+    "Common long validation; fixed small training diagnostic is not a full-corpus audit. Initialization omitted. Test untouched.",
     ha="center",
     fontsize=9,
 )
