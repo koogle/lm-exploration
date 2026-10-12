@@ -193,3 +193,26 @@ resuming only remaining updates with the same optimizer/RNG/global schedule.
 Preserve the existing $500 cap and all reservations. Freeze configuration/checkpoint
 provenance in `results/dflash-expansion-selection.json` before launch. Keep package
 source unchanged while this pair runs. Continue to report failed quality gates.
+
+
+## Read-only source-capacity audit
+
+The pinned WikiText source contains 29444 assembled articles, 29002 normalized
+unique articles, and 23090 groups assigned to training under the existing hash
+split. The current one-prompt-per-group rule therefore permits at most **69270
+balanced training responses** across three domains, before historical holdout,
+length, near-duplicate, short-response and duplicate-response filters. A simple
+98304-response extension of this same recipe cannot succeed.
+
+This was a CPU-only streaming count using `data.documents`, `corpus.digest`, and
+`repository_split('prose:' + digest(article))` over the pinned official train split.
+No target generation, test labels, or test metrics were accessed. Evidence:
+`results/dflash-prose-source-capacity.json`. Current fits remain unchanged.
+
+If completed results justify further expansion, first choose and validate either
+additional prose sources or multiple distinct prefixes from training-only articles.
+Keep the original article/repository/source-sentence split groups separate from
+individual example identity, quarantine all existing held-out groups, preserve old
+teacher labels, and account for correlated examples. Do not relabel extra prefixes
+as new independent documents. Larger feature-cache storage/loading may also need
+attention; these are unimplemented next-stage options, not chosen experiments.

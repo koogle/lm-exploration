@@ -89,3 +89,5 @@ Completed matched higher-supervision curves: [79M drafter for the 0.5B target](d
 
 Full-corpus exposure fitting: [figure](dflash-exposure-full-fit.png) and
 [verified audit summary](dflash-exposure-fit-summary.json).
+
+Read-only pinned prose source capacity: [article/group counts and limitations](dflash-prose-source-capacity.json).

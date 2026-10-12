@@ -1,0 +1,17 @@
+{
+  "source": {
+    "repository": "Salesforce/wikitext",
+    "config": "wikitext-103-raw-v1",
+    "revision": "b08601e04326c79dfdd32d625aee71d232d685c3"
+  },
+  "official_source_split": "train",
+  "assembled_articles": 29444,
+  "unique_articles": 29002,
+  "assigned_group_counts": {
+    "train": 23090,
+    "test": 2949,
+    "validation": 2963
+  },
+  "balanced_one_prompt_per_group_train_upper_bound": 69270,
+  "note": "Upper bound before historical holdout exclusions, prompt length, near-duplicate, short teacher response and duplicate response filters. Counts source groups only; no teacher generation or test labels/metrics. Existing jobs are unchanged."
+}

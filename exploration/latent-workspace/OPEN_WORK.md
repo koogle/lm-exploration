@@ -42,6 +42,11 @@ No test responses have been generated; keep test sealed until the declared gate 
 Interim curves/snapshots: `results/dflash-expansion-interim.{png,json}` (5500
 control updates, 4500 larger-data updates). These are incomplete; compare matching
 update positions and do not infer full-corpus fitting from twelve train diagnostics.
+Before any further large pool: `results/dflash-prose-source-capacity.json` counts
+23090 eligible training article groups before filtering, so the current one-prompt
+per-group recipe has a balanced upper bound of 69270 responses. A 98304-response
+request needs a revised, validated source/prefix policy; do not blindly increase
+the count. Current runs are unchanged. See the protocol for deferred options.
 Goal is NOT complete; representation experiments and speed work remain deferred.
 
 82 local tests pass, as do Ruff/format/diff checks. Conservative reservations are
