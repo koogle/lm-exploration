@@ -1,5 +1,9 @@
 # Latent workspace block generation
 
+Next active study: [fresh-drafter 50k–200k / 64–256-token grid](docs/dflash-fresh-grid.md).
+Five full fits start from random draft weights; longer teacher preparation is
+resumable. Preparation and real-model checks are underway; no grid result exists yet.
+
 Active: [small-Qwen drafter improvement studies](docs/dflash-improvement-series.md),
 with controlled attention/depth comparisons and a predeclared held-out quality gate.
 [Current findings](results/dflash-improvement-findings.md): completed fidelity studies
@@ -148,3 +152,6 @@ exploration; the earlier test has already been evaluated and is not reused here.
 12 fits show near-complete small-set memorization followed by validation overfitting.
 Neither 25% layer dropout nor zero-content attention gives a clear validation gain
 in this one-seed diagnostic. This does not establish a sufficient final data size.
+
+Branch-only development: [training-prefix coverage prototype](docs/dflash-prefix-coverage.md),
+not integrated into data preparation or used by the active main-branch fits.

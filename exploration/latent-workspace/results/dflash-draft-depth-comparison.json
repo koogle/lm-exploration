@@ -1,0 +1,29 @@
+{
+  "control": "dflash-fidelity-norm-01.json",
+  "reports": {
+    "dflash-fidelity-norm-01.json": "2b09e35f49e215bb3d78f4cec8ff5fdd2c2bcf39f5f8e4a136f867b2494cf671",
+    "dflash-fidelity-depth-01.json": "f6f6aeb2ce40b3430f0ecbaccd949cb19fb2d67edb920dc356e16289889e9964"
+  },
+  "comparisons": [
+    {
+      "run": "dflash-fidelity-depth-01.json",
+      "difference_from_control": {
+        "accepted_beyond_anchor": {
+          "estimate": 0.035295207509881424,
+          "conditional_bootstrap_95_percent": [
+            0.004544383959428612,
+            0.06668343950634593
+          ]
+        },
+        "nll": {
+          "estimate": -0.09738131189456256,
+          "conditional_bootstrap_95_percent": [
+            -0.13174427837761862,
+            -0.06280274451926471
+          ]
+        }
+      }
+    }
+  ],
+  "note": "10000 paired source-group bootstrap draws stratified by domain, block-weighted within domains. Conditional on validation-selected checkpoints; excludes selection bias, seed variability and multiple-comparison adjustment. Not test results."
+}

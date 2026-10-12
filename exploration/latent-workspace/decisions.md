@@ -107,3 +107,17 @@
   Compare 24576/49152 responses from identical selected 79M weights with matched
   optimization, retaining all old training groups and sealed held-out data.
   Larger final-checkpoint audit continues independently. See the improvement protocol.
+
+- 2026-10-12 (isolated prototype): Prepare deterministic extra training-only article
+  prefixes with explicit source-group identity and opt-in registry safeguards.
+  Add private mapped teacher-cache reads for larger stored features. These changes
+  are on `drafter-data-coverage`, not the source used by active matched fits. Prefix
+  generation is not integrated into preparation and no new experiment is selected.
+
+- 2026-10-12: User requests substantial five-condition data/response grid toward
+  200k examples and longer teacher trajectories, then clarifies that every drafter
+  should start from scratch. Keep the combined 79M architecture fixed, use common
+  random initialization and fresh optimizers, and compare 64/256 response caps at
+  49152/196608 examples plus an intermediate 98304/256 condition. Preserve valid
+  teacher prefixes and held-out identities; this reuses labels, not trained drafts.
+  See docs/dflash-fresh-grid.md for executed versus pending work.

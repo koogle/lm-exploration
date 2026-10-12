@@ -1,4 +1,18 @@
+Branch-only prototype: [training-prefix coverage](docs/dflash-prefix-coverage.md).
+100 CPU tests pass. Prefix sampling and opt-in registry safeguards are implemented
+but not connected to pool preparation; disk-backed teacher-cache reads are added
+only on this isolated branch. No GPU jobs or datasets launched from this checkout.
+Main's active fits must retain their original package source. See the prototype
+checklist before selecting/integrating any subsequent data experiment.
+
 # Open work
+
+**User steering:** run the five-condition fresh-drafter grid in
+`docs/dflash-fresh-grid.md`: roughly 50k/64, 50k/256, 100k/256, 200k/64, 200k/256.
+All draft weights/optimizers start fresh. No warm start from old drafter fits.
+Token-only resumable teacher preparation and online frozen feature extraction are
+implemented; GPU validation and large-pool preparation are next. Grid configs have
+a deliberate completed-teacher placeholder and are not launch-ready.
 
 Active: [small-target drafter improvement series](docs/dflash-improvement-series.md).
 All matched fidelity fits and full-training audits completed. Selected validation NEW:
@@ -55,10 +69,11 @@ Before any further large pool: `results/dflash-prose-source-capacity.json` count
 per-group recipe has a balanced upper bound of 69270 responses. A 98304-response
 request needs a revised, validated source/prefix policy; do not blindly increase
 the count. Current runs are unchanged. See the protocol for deferred options.
-An isolated prototype is pushed on `drafter-data-coverage` (`0d1a68c`), checked
+An isolated prototype is pushed on `drafter-data-coverage` (`ca581aa`), checked
 out at `/workspace/drafter-data-coverage`. It adds training-only article-prefix
-primitives/registry guards and private mapped teacher-cache reads; 100 CPU tests
-pass. It is NOT merged, not wired into pool preparation, and has not run on GPU.
+primitives/registry guards and private mapped teacher-cache reads; 108 CPU tests
+passed before integration. It is now merged into the fresh-grid work; the manifest
+option is wired, with GPU validation pending.
 Keep main package source unchanged while the active fits/resumes run. Before using
 the branch, follow its `docs/dflash-prefix-coverage.md` integration/smoke checklist.
 The budget ledger in this main checkout remains authoritative.
@@ -189,3 +204,9 @@ subsets, split hashes, supervision counts and full-training diagnostics verified
 That completed checkpoint had $197 reserved against the initial $200 allocation.
 See the current drafting-first status above for subsequent reservations and cap.
 Checkpoints: `/runs/small-layer-controls-01/{baseline,dropout,null,dropout-null}/`.
+
+Prototype update: prefix preparation is now wired behind the default-one bounded
+`prose_prefixes_per_article` option. 108 CPU tests pass, including actual manifest
+extension/quarantine checks. Source-group counts are distinct from examples.
+GPU smoke and large-pool preparation remain unexecuted; this checkout has no budget
+ledger and must not launch jobs. See docs/dflash-prefix-coverage.md.

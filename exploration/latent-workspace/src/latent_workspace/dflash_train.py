@@ -13,8 +13,8 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from .corpus import DOMAINS
-from .dflash import DFlashDrafter, block_loss, synchronize, verified_generate
-from .dflash_data import build_teacher_cache, prepare_prompts
+from .dflash import DFlashDrafter, block_loss, features, synchronize, verified_generate
+from .dflash_data import build_teacher_cache, load_teacher_cache, prepare_prompts
 from .train import atomic_save, seed_all, write_json
 
 
@@ -26,21 +26,50 @@ def precision(device):
     )
 
 
-def collate(examples, count, block_size, generator, device):
+@torch.no_grad()
+def frozen_memory(target, tokens, lengths, layers):
+    mask = torch.arange(tokens.shape[1], device=tokens.device)[None] < lengths[:, None]
+    return features(
+        target.model(tokens, attention_mask=mask, use_cache=False, output_hidden_states=True),
+        layers,
+    )
+
+
+def collate(examples, count, block_size, generator, device, target=None, layers=()):
     length = max(len(e["tokens"]) for e in examples)
-    memory = torch.zeros(
-        len(examples), length, examples[0]["memory"].shape[-1], dtype=examples[0]["memory"].dtype
+    online = target is not None
+    memory = (
+        None
+        if online
+        else torch.zeros(
+            len(examples),
+            length,
+            examples[0]["memory"].shape[-1],
+            dtype=examples[0]["memory"].dtype,
+        )
     )
     tokens = torch.zeros(len(examples), length, dtype=torch.long)
     anchors = []
     for i, e in enumerate(examples):
         n = len(e["tokens"])
         tokens[i, :n] = e["tokens"]
-        memory[i, :n] = e["memory"]
+        if not online:
+            memory[i, :n] = e["memory"]
         anchors.append(
             torch.randint(e["prompt_length"], n - block_size + 1, (count,), generator=generator)
         )
-    return tokens.to(device), memory.to(device), torch.stack(anchors).to(device)
+    tokens = tokens.to(device)
+    memory = (
+        frozen_memory(
+            target,
+            tokens,
+            torch.tensor([len(e["tokens"]) for e in examples], device=device),
+            layers,
+        )
+        if online
+        else memory.to(device)
+    )
+    return tokens, memory, torch.stack(anchors).to(device)
 
 
 @torch.no_grad()
@@ -69,7 +98,14 @@ def evaluate(drafter, target, examples, mask_id, limit_per_domain=None, include_
                     drafter,
                     target,
                     e["tokens"][None].to(target.device),
-                    e["memory"][None].to(target.device),
+                    e["memory"][None].to(target.device)
+                    if "memory" in e
+                    else frozen_memory(
+                        target,
+                        e["tokens"][None].to(target.device),
+                        torch.tensor([len(e["tokens"])], device=target.device),
+                        drafter.cfg.layers,
+                    ),
                     anchors,
                     mask_id,
                 )
@@ -196,6 +232,9 @@ def restore_continuation(cfg, previous, state, drafter, optimizer, generator):
     old = previous["config"]
     for key, default in (
         ("teacher_parent", ""),
+        ("prose_prefixes_per_article", 1),
+        ("online_teacher_features", False),
+        ("training_response_cap", 0),
         ("train_limit", 0),
         ("schedule_steps", 0),
         ("teacher_prompt_style", "raw"),
@@ -260,7 +299,7 @@ def run_dflash(cfg, output, on_checkpoint=None):
         parent = Path(cfg.continue_from)
         previous = json.loads((parent / "report.json").read_text())
         state = torch.load(parent / "latest.pt", map_location="cpu", weights_only=True)
-        data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
+        data = load_teacher_cache(parent / "teacher.pt")
         audit = json.loads((parent / "teacher-audit.json").read_text())
         for name in ("teacher.pt", "teacher-audit.json", "prompts.json", "best.pt"):
             shutil.copyfile(parent / name, output / name)
@@ -284,23 +323,35 @@ def run_dflash(cfg, output, on_checkpoint=None):
                 parent_cfg.get(key, "raw") if key == "teacher_prompt_style" else parent_cfg[key]
             ):
                 raise ValueError(f"teacher cache/config mismatch: {key}")
-        data = torch.load(parent / "teacher.pt", map_location="cpu", weights_only=True)
+        data = load_teacher_cache(parent / "teacher.pt")
         required = set()
         if cfg.retain_training_parent:
-            retained = torch.load(
-                Path(cfg.retain_training_parent) / "teacher.pt",
-                map_location="cpu",
-                weights_only=True,
-            )
+            retained = load_teacher_cache(Path(cfg.retain_training_parent) / "teacher.pt")
             available = {e["group"]: e for e in data["train"]}
             for e in retained["train"]:
                 if e["group"] not in available or not torch.equal(
-                    e["tokens"], available[e["group"]]["tokens"]
+                    e["tokens"],
+                    available[e["group"]]["tokens"][: len(e["tokens"])]
+                    if cfg.online_teacher_features
+                    else available[e["group"]]["tokens"],
                 ):
                     raise ValueError("required training example missing or labels changed")
                 required.add(e["group"])
             del retained, available
         data["train"] = nested_subset(data["train"], cfg.train_limit, cfg.seed, required)
+        if cfg.training_response_cap:
+            data["train"] = [
+                {
+                    **e,
+                    "tokens": e["tokens"][: e["prompt_length"] + cfg.training_response_cap],
+                    **(
+                        {"memory": e["memory"][: e["prompt_length"] + cfg.training_response_cap]}
+                        if "memory" in e
+                        else {}
+                    ),
+                }
+                for e in data["train"]
+            ]
         audit = teacher_statistics(data, cfg.block_size)
         audit["required_training_groups"] = len(required)
         audit["parent_generation_audit"] = json.loads((parent / "teacher-audit.json").read_text())
@@ -407,7 +458,13 @@ def run_dflash(cfg, output, on_checkpoint=None):
                 pool = pools[DOMAINS[((step - 1) * cfg.batch_size + i) % 3]]
                 examples.append(pool[int(torch.randint(len(pool), (), generator=generator))])
             tokens, memory, anchors = collate(
-                examples, cfg.anchors_per_sequence, cfg.block_size, generator, device
+                examples,
+                cfg.anchors_per_sequence,
+                cfg.block_size,
+                generator,
+                device,
+                target=target if cfg.online_teacher_features else None,
+                layers=cfg.layers,
             )
             schedule_steps = cfg.schedule_steps or cfg.steps
             schedule_step = step if cfg.schedule_steps else cycle_step

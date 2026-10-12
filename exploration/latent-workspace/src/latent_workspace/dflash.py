@@ -44,6 +44,9 @@ class DraftConfig:
     extend_teacher_parent: str = ""  # Data preparation only; preserve old labels/holdouts.
     train_limit: int = 0
     retain_training_parent: str = ""  # Require its training examples in a larger subset.
+    online_teacher_features: bool = False
+    training_response_cap: int = 0  # Slice training only; shared validation stays fixed.
+    prose_prefixes_per_article: int = 1  # Prepared pools only; article splits stay fixed.
     teacher_batch_size: int = 1
     rollout_prompts_per_domain: int = 1
     quality_only: bool = False
@@ -51,6 +54,13 @@ class DraftConfig:
     schedule_steps: int = 0  # Optional fixed global schedule across bounded workers.
 
     def validate(self):
+        if (
+            type(self.prose_prefixes_per_article) is not int
+            or not 1 <= self.prose_prefixes_per_article <= 8
+        ):
+            raise ValueError("prose prefix cap must be an integer from 1 to 8")
+        if self.training_response_cap and self.training_response_cap < self.block_size:
+            raise ValueError("training response cap must fit a complete block")
         if self.teacher_prompt_style not in ("raw", "chat_no_thinking"):
             raise ValueError("unknown teacher prompt style")
         # During continuation, teacher_parent remains provenance. The trainer

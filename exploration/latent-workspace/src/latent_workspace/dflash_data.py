@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import mmap
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -14,6 +15,16 @@ from .dflash import features
 from .train import atomic_save, write_json
 
 
+def load_teacher_cache(path):
+    """Read immutable ZIP-format teacher tensors through private file mappings.
+
+    Source files must remain present and unchanged while the cache is in use.
+    New generated tensors and Python metadata still consume ordinary host RAM.
+    """
+    with torch.serialization.set_default_mmap_options(mmap.MAP_PRIVATE):
+        return torch.load(path, map_location="cpu", weights_only=True, mmap=True)
+
+
 def token_hash(ids):
     return hashlib.sha256(json.dumps(ids, separators=(",", ":")).encode()).hexdigest()
 
@@ -21,9 +32,14 @@ def token_hash(ids):
 class PromptRegistry:
     """Exact source/prefix dedup plus cross-split token-5-gram Jaccard quarantine."""
 
-    def __init__(self):
+    def __init__(self, allow_training_prefixes=False):
+        self.allow_training_prefixes = allow_training_prefixes
         self.groups = set()
         self.sources = set()
+        self.source_splits = {}
+        self.source_groups = {}
+        self.source_offsets = defaultdict(set)
+        self.unknown_offset_groups = set()
         self.prefixes = set()
         self.shingles = []
         self.index = defaultdict(set)
@@ -33,9 +49,34 @@ class PromptRegistry:
     def add(self, record):
         ids = record["prompt_ids"]
         key = token_hash(ids)
+        source_group = record.get("source_group", record["group"])
+        additional_prefix = source_group != record["group"]
+        if additional_prefix:
+            offset = record.get("source_token_offset")
+            if not (
+                self.allow_training_prefixes
+                and record.get("domain") == "prose"
+                and record["split"] == "train"
+                and source_group == f"prose:{record['source_hash']}"
+                and repository_split(source_group) == "train"
+                and type(offset) is int
+                and offset >= 0
+                and record["group"] == f"{source_group}:prefix:{offset}"
+            ):
+                self.rejected["invalid_additional_training_prefix"] += 1
+                return False
+        if (
+            source_group in self.source_groups
+            and self.source_groups[source_group] != record["split"]
+        ):
+            self.rejected["cross_split_source_group"] += 1
+            return False
+        source_reuse = (
+            additional_prefix and self.source_splits.get(record["source_hash"]) == "train"
+        )
         if (
             record["group"] in self.groups
-            or record["source_hash"] in self.sources
+            or (record["source_hash"] in self.sources and not source_reuse)
             or key in self.prefixes
         ):
             self.rejected["exact_source_group_or_prompt"] += 1
@@ -43,7 +84,9 @@ class PromptRegistry:
         shingles = {tuple(ids[i : i + 5]) for i in range(len(ids) - 4)}
         candidates = set()
         for shingle in shingles:
-            candidates.update(self.index[shingle])
+            for other_split in SPLITS:
+                if other_split != record["split"]:
+                    candidates.update(self.index[other_split, shingle])
         for i in candidates:
             if self.splits[i] == record["split"]:
                 continue
@@ -55,9 +98,16 @@ class PromptRegistry:
         self.shingles.append(shingles)
         self.splits.append(record["split"])
         for shingle in shingles:
-            self.index[shingle].add(i)
+            self.index[record["split"], shingle].add(i)
         self.groups.add(record["group"])
         self.sources.add(record["source_hash"])
+        self.source_splits[record["source_hash"]] = record["split"]
+        self.source_groups[source_group] = record["split"]
+        offset = record.get("source_token_offset")
+        if type(offset) is int and offset >= 0:
+            self.source_offsets[source_group].add(offset)
+        else:
+            self.unknown_offset_groups.add(source_group)
         self.prefixes.add(key)
         record["prompt_sha256"] = key
         return True
