@@ -220,3 +220,27 @@ def test_large_curriculum_starts_two_domains_then_adds_translation_at_worker_bou
         for cfg in switched
     )
     assert all(result["runs"][n]["status"] == "completed" for n in names)
+
+
+def test_reused_gpu_worker_reloads_volume_before_opening_new_teacher_parent(monkeypatch):
+    pytest.importorskip("modal")
+    module = importlib.import_module("modal_long_data")
+    events = []
+    monkeypatch.setattr(
+        module,
+        "runs",
+        SimpleNamespace(
+            reload=lambda: events.append("reload"), commit=lambda: events.append("commit")
+        ),
+    )
+    monkeypatch.setattr(module, "cache", SimpleNamespace(commit=lambda: None))
+
+    def run(cfg, output, on_checkpoint):
+        assert events == ["reload"], (
+            "new teacher files are invisible until the reused mount reloads"
+        )
+        return {"loaded_parent": cfg.teacher_parent}
+
+    monkeypatch.setattr("latent_workspace.dflash_train.run_dflash", run)
+    result = module.grid_train.local({"teacher_parent": "/runs/newly-committed-pool"}, "new-worker")
+    assert result["loaded_parent"] == "/runs/newly-committed-pool"

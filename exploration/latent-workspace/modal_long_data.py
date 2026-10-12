@@ -41,6 +41,7 @@ def prepare(
     from latent_workspace.dflash import DraftConfig
     from latent_workspace.dflash_large_data import prepare_chunk, prepare_manifest, seal_subset
 
+    runs.reload()
     try:
         if seal_parent:
             return seal_subset(
@@ -228,6 +229,7 @@ def grid_train(config, run_id):
     from latent_workspace.dflash import DraftConfig
     from latent_workspace.dflash_train import run_dflash
 
+    runs.reload()
     try:
         return run_dflash(DraftConfig(**config), f"/runs/{run_id}", on_checkpoint=runs.commit)
     finally:
@@ -409,6 +411,9 @@ def grid_controller(run_id, blueprint, ledger):
         raise RuntimeError("teacher preparation reached its worker limit")
 
     try:
+        for name, record in list(state["runs"].items()):
+            if record.get("status") == "retry pending":
+                submit_training(name, record["config"], record["worker"] + 1)
         for cfg in blueprint["conditions"].values():
             if cfg["warm_start_from"] or cfg["continue_from"] or cfg["steps"] != 100000:
                 raise ValueError("grid condition must start fresh with declared exposure")

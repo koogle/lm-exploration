@@ -28,7 +28,7 @@ training memory. These are plumbing/profile checks, not grid quality results.
 
 ## Durable execution and budget
 
-Modal controller `fresh-grid-controller-07` now prioritizes the larger datasets.
+Modal controller `fresh-grid-controller-08` now prioritizes the larger datasets.
 The initial long teacher pool completed with 53501 usable responses and 9.59M
 response-token positions. Latest archived fresh-fit snapshots reach 55593 updates
 (64 cap) and 37246 (256 cap). Long-validation NEW is 2.04131 versus 3.60350;
@@ -52,11 +52,11 @@ now launched: `fresh-grid-196608-r256-01` and `fresh-grid-196608-r64-01`. They
 start fresh on 131072 sealed prose/code examples (65536 each), then retain those
 weights, optimizer, RNG and global schedule when expanding to balanced 196608
 at the first worker boundary after full teacher preparation. Initial-stage
-validation still covers all three domains. No new substantial validation checkpoint
-exists yet; no full-grid or sealed-test qualification exists.
+validation still covers all three domains. Prose/code-stage checkpoint results
+are recorded below; no full-domain or sealed-test qualification exists.
 
-- State: `/runs/fresh-grid-controller-07/state.json`.
-- Authoritative ledger: `/runs/fresh-grid-controller-07/budget.json`.
+- State: `/runs/fresh-grid-controller-08/state.json`.
+- Authoritative ledger: `/runs/fresh-grid-controller-08/budget.json`.
 - Local handle/ownership marker: ignored `artifacts/budget_remote_controller.json`.
 - New curriculum package SHA: `47d71073e55a03e87c4bdb59df6aa684cedc532815d30c9f44167ff97da919ae`.
 - Historical stopped fits retain SHA `94142e0cee4088a0c5808f0b556a1dcbbd0bb9cba3701cf31c8511aec96c17fa`.
@@ -67,7 +67,7 @@ sync/release. The server uses bounded 3600-second GPU workers and a bounded 24-h
 CPU coordinator. User explicitly reset cost accounting for the larger-data stage. The previous
 **$468** reservation ledger remains archived under controller 02 and locally in
 ignored `artifacts/budget-history-before-large-grid.json`. New epoch ceiling:
-**$500**, currently **$60.125** reserved, including earlier failed/retired coordinator
+**$500**, currently **$91.125** reserved, including earlier failed/retired coordinator
 reservations, the bounded CPU sealing job and the first 98k GPU worker. The already-running teacher
 worker belongs to the previous epoch. These are conservative reservations, not
 Modal bills; resetting this ledger does not alter actual billing.
@@ -127,9 +127,28 @@ verification, not quality evidence. Its source c6578f69 differs from final
 separately with a CPU regression. Local curriculum/optimizer/domain-transition
 tests pass. The controller reattaches generation; no 98k fit is active.
 
-Latest teacher checkpoint: 200224/216000 prompts processed, usable counts
-71196 prose, 71563 code, 55614 translation. Translation needs 9922 more usable
-examples. Data-transition step can differ between response-cap arms because
+Earlier teacher checkpoint: 200224/216000 prompts processed, usable counts
+71196 prose, 71563 code, 55614 translation. Translation needed 9922 more usable
+examples at that point; full generation is now complete (see current status below). Data-transition step can differ between response-cap arms because
 worker throughput differs; report domain exposures rather than claiming a pure
 matched response-length comparison. Original equal-final-exposure five-way
 protocol is superseded by user-directed early stopping and the large-run curriculum.
+
+## Latest large-run progress and recovered handoff
+
+Prose/code stage completed to 17985 updates (64 cap) and 11472 (256 cap).
+Validation prose/code NEW = 2.750/2.648 and 4.939/4.492 respectively; translation
+NEW = 0.121 and 0.103 before translation training. Matched-domain validation NLL
+still falls, to 3.423 and 1.414. No sustained overfitting pattern yet; the fixed
+training diagnostic has eight responses and is not a full-corpus audit. Curves
+and complete reports: `results/large-curriculum-prose-code.{png,json}`.
+
+Full teacher generation is complete with 71196 prose, 71563 code and 71238
+translation examples (`results/long-teacher-216k-07.json`). Both first full-data
+continuations (worker 02) failed before training because reused GPU mounts had
+not reloaded the teacher cache written by another worker. Retain their costs.
+Wrapper now reloads the runs volume at input start; regression checks read order.
+Coordinator 08 retries with fresh worker IDs 03, original worker-01 checkpoints,
+full 196608 data, restored optimizer and unchanged package SHA. Calls are active;
+new full-domain checkpoints are pending. Historical failed controller error stays
+recorded. See `results/large-curriculum-progress.md`.

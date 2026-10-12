@@ -275,3 +275,20 @@ Captured curriculum source is 47d71073; historical stopped sources remain
 while continuations execute. Budget ledger is now
 `/runs/fresh-grid-controller-07/budget.json`, current epoch reservations $60.125
 at launch. Prior/canceled reservations remain accounted for.
+
+### Reused GPU mounts and newly committed teacher cache
+
+A Modal container reused for a continuation may still see its earlier volume
+snapshot. After full preparation, both worker-02 curriculum inputs failed on
+missing `long-teacher-216k-07/report.json` even though it existed on the committed
+volume. `grid_train` and `prepare` now reload the runs volume before reading any
+parents. Reload belongs before opening mmap handles, not midway through training.
+A regression simulates visibility becoming available only after reload.
+
+Coordinator 08 restores explicit `retry pending` records, keeps failed worker
+reservations, and retries worker 03 from worker 01's saved checkpoint/config.
+No training-package change or weight/optimizer reset occurs. Full teacher pool
+is complete; resumed configs contain all three domains and curriculum_switch.
+Current ledger path is `/runs/fresh-grid-controller-08/budget.json`; reservations
+$91.125 at recovery. Confirm input calls are active and inspect their next report
+to distinguish launch recovery from completed full-domain training.
