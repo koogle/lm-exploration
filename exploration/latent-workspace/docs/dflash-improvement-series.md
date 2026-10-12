@@ -216,3 +216,9 @@ individual example identity, quarantine all existing held-out groups, preserve o
 teacher labels, and account for correlated examples. Do not relabel extra prefixes
 as new independent documents. Larger feature-cache storage/loading may also need
 attention; these are unimplemented next-stage options, not chosen experiments.
+
+Prototype primitives now exist on the isolated, unmerged `drafter-data-coverage`
+branch (commit `2ccf058`): deterministic training-only prefixes, opt-in registry
+checks, and private mapped teacher-cache reads. 98 CPU tests pass; preparation
+integration and GPU validation remain unexecuted. Active fits retain main's source.
+See that branch's `docs/dflash-prefix-coverage.md`; this is not a new training claim.
