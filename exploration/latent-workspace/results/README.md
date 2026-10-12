@@ -91,3 +91,8 @@ Full-corpus exposure fitting: [figure](dflash-exposure-full-fit.png) and
 [verified audit summary](dflash-exposure-fit-summary.json).
 
 Read-only pinned prose source capacity: [article/group counts and limitations](dflash-prose-source-capacity.json).
+
+Completed response expansion: [curves](dflash-expansion-scaling.png),
+[paired uncertainty and provenance](dflash-expansion-scaling.json), and
+[findings](dflash-improvement-findings.md). 49152 responses improve selected
+validation NEW to 1.46181, below the declared quality gate.

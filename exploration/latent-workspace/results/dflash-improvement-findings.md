@@ -230,3 +230,33 @@ Dashed train curves evaluate only twelve fixed diagnostic responses. Required-fi
 subset ordering places these in the previously seen training set; they do not
 measure full fitting of the newly added examples. Their step-zero metrics match
 exactly across arms. The full-corpus audits after completion remain necessary.
+
+
+## Completed 24576/49152-response expansion
+
+Both arms completed 20000 additional updates (53.76M NEW-label exposures),
+sharing initialization, source, validation cache and optimization settings.
+The separate drafter has 78,578,432 trainable parameters; Qwen2.5-0.5B stays frozen.
+
+| Responses | Selected update | Validation NEW / 7 | Selected NLL | Final NEW | Final NLL |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 24576 | 0 | 1.02179 | 5.24906 | 0.95878 | 7.05541 |
+| 49152 | 10500 | 1.46181 | 4.44955 | 1.41534 | 4.89406 |
+
+The smaller-data control does not improve its starting weights. Added responses
+improve held-out prediction by 0.44002 NEW tokens, paired conditional 95% interval
+[0.35892, 0.52369]. This interval excludes checkpoint-selection bias and seed
+variation. Larger selected domain scores are prose 1.76953, code 1.72656, and
+translation 0.88933. Neither the macro two-token nor every-domain one-token gate
+is met. Test remains sealed.
+
+All twelve FP32 verification prompts match the frozen target for each head, and
+neither target accumulated gradients. Cached BF16 acceptance is a proxy and
+should not be equated with verified rollout acceptance. No speed claim follows.
+The falling training curves concern only twelve previously seen diagnostics;
+full-corpus selected/final fitting audits are running separately.
+
+![Completed expansion curves](dflash-expansion-scaling.png)
+
+Evidence: `dflash-expansion-24576-01.json`, `dflash-expansion-49152-01.json`,
+`dflash-expansion-scaling.json` (report hashes and conditional bootstrap).

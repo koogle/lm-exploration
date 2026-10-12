@@ -28,7 +28,7 @@ See `results/dflash-exposure-fit-summary.json` and `dflash-exposure-full-fit.png
 
 The conditional 54k-prompt pool has 53476 usable training responses (17769 prose,
 17898 code, 17809 translation), preserving the five-depth parent cache and all 192
-validation examples. Both selected audits informed the next matched pair, now running as
+validation examples. Both selected audits informed the next matched pair, now completed as
 `dflash-expansion-24576-01` and `dflash-expansion-49152-01`, from configs
 `configs/dflash-expansion-{24576,49152}.json`. Both use the same selected 79M weights
 (`/runs/dflash-exposure-24576-01/best.pt`, step 10000), fresh AdamW/sampler, batch48,
@@ -38,6 +38,14 @@ Initial worker allocation is four $5 reservations for this pair. Launch checks p
 step-zero validation matching the selected source head. Both report all 24576
 required training groups after the runtime token-identity checks. See
 `results/dflash-expansion-launch-audit.json` and selection provenance.
+Both completed 20000 updates. The 24576-response control selects step zero
+(1.02179 NEW); the 49152-response arm selects step 10500 (1.46181 NEW).
+Larger selected domain scores: prose 1.76953, code 1.72656, translation 0.88933.
+The gate still fails. Paired conditional gain CI: [0.35892, 0.52369]. All twelve
+FP32 rollouts match for each; frozen targets have no gradients. Final reports and
+curves: `results/dflash-expansion-scaling.{png,json}`. Full-corpus selected/final
+audits are running as `dflash-expansion-{24576,49152}-audit-01`, each bounded to
+3600 seconds/$5. No more fit continuations are needed.
 No test responses have been generated; keep test sealed until the declared gate passes.
 Interim curves/snapshots: `results/dflash-expansion-interim.{png,json}` (5500
 control updates, 4500 larger-data updates). These are incomplete; compare matching
@@ -57,7 +65,7 @@ The budget ledger in this main checkout remains authoritative.
 Goal is NOT complete; representation experiments and speed work remain deferred.
 
 82 local tests pass, as do Ruff/format/diff checks. Conservative reservations are
-**$348.50/$500**, not billed cost. Retain failed/stopped reservations. Stop the
+**$358.50/$500**, not billed cost. Retain failed/stopped reservations. Stop the
 active goal only when useful quality is demonstrated or further work is blocked.
 
 Historical completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).

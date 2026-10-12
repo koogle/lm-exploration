@@ -222,3 +222,16 @@ branch (commit `0d1a68c`): deterministic training-only prefixes, opt-in registry
 checks, and private mapped teacher-cache reads. 100 CPU tests pass; preparation
 integration and GPU validation remain unexecuted. Active fits retain main's source.
 See that branch's `docs/dflash-prefix-coverage.md`; this is not a new training claim.
+
+
+## Completed second expansion pair
+
+Both 20000-update runs finished on their initial bounded workers. The repeated
+24576-response control selects its starting checkpoint (1.02179 NEW); 49152
+responses select step 10500 (1.46181 NEW). Translation remains below one NEW token
+(0.88933), and the macro gate remains unmet. All twelve checked FP32 rollouts match
+for both heads. Selected/final full-corpus audits are now running with two $5
+reservations; cumulative reservations are $358.50/$500, not billed cost.
+See `results/dflash-improvement-findings.md` and completed expansion curves.
+No further training continuation is required for this pair; any next data-policy
+change still needs integration and bounded GPU validation before training.

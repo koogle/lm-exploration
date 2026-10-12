@@ -5,7 +5,11 @@ with controlled attention/depth comparisons and a predeclared held-out quality g
 [Current findings](results/dflash-improvement-findings.md): completed fidelity studies
 improve validation NEW matches from 0.384 to 0.530. The separate 79M drafter reaches 1.022 NEW matches / 7 with 24576 training
 responses and 53.76M additional labels. The matched smaller-data fit scores 0.574. Completed full-fitting audits confirm
-overfitting; the next 24576/49152-response comparison is running.
+overfitting. The completed next matched 24576/49152-response comparison improves
+selected validation NEW from 1.022 to **1.462**; all twelve checked rollouts match
+for both heads. Full-corpus audits of this stage are running.
+
+![Completed response expansion](results/dflash-expansion-scaling.png)
 The two-token quality gate remains unmet.
 Useful multi-token drafting remains unsolved; the frozen target is Qwen2.5-0.5B.
 
