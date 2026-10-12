@@ -66,6 +66,29 @@ def prepare(
         cache.commit()
 
 
+@app.function(image=image, cpu=2, memory=16384, timeout=900, volumes={"/runs": runs})
+def seal_available(parent, required_parent, output, count):
+    """Seal a completed snapshot's balanced subset while teacher GPU work continues."""
+    import sys
+
+    sys.path.insert(0, "/project/.venv/lib/python3.12/site-packages")
+    from latent_workspace.dflash_large_data import seal_subset
+
+    try:
+        return seal_subset(
+            f"/runs/{parent}", f"/runs/{required_parent}", f"/runs/{output}", count=count
+        )
+    finally:
+        runs.commit()
+
+
+@app.local_entrypoint()
+def seal_snapshot(parent: str, run_id: str, count: int = 98304):
+    # Reserve through the authoritative coordinator's ledger before invoking this.
+    report = seal_available.remote(parent, "dflash-expansion-49152-01", run_id, count)
+    print(json.dumps(report, indent=2))
+
+
 @app.local_entrypoint()
 def main(
     config: str,
@@ -77,6 +100,7 @@ def main(
     required_parent: str = "dflash-expansion-49152-01",
     launch_grid: bool = False,
     resume_controller: str = "",
+    available_teacher: str = "",
 ):
     from latent_workspace.dflash import DraftConfig
 
@@ -107,6 +131,10 @@ def main(
             budget_parent = Path("artifacts/fresh-grid-remote-state.json")
             blueprint["resume_state"] = json.loads(budget_parent.read_text())
             blueprint["resumed_controller"] = resume_controller
+        if available_teacher:
+            if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", available_teacher):
+                raise ValueError("invalid available teacher run")
+            blueprint["available_teacher"] = available_teacher
         call = grid_controller.spawn(
             run_id, blueprint, json.loads(Path("artifacts/budget.json").read_text())
         )
@@ -346,7 +374,20 @@ def grid_controller(run_id, blueprint, ledger):
                 submit_training(
                     name, {**blueprint["conditions"][name], "teacher_parent": f"/runs/{small}"}
                 )
-            state["phase"] = "two fresh fits; expanding long-response pool"
+            if blueprint.get("available_teacher"):
+                name = "fresh-grid-98304-r256"
+                submit_training(
+                    name,
+                    {
+                        **blueprint["conditions"][name],
+                        "teacher_parent": f"/runs/{blueprint['available_teacher']}",
+                    },
+                )
+            state["phase"] = (
+                "98k fit; expanding long-response pool"
+                if blueprint.get("available_teacher")
+                else "two fresh fits; expanding long-response pool"
+            )
             save()
             large = preparation(
                 blueprint["large_teacher"], "long-manifest-216k-02", small, "long-teacher-216k"
@@ -361,10 +402,15 @@ def grid_controller(run_id, blueprint, ledger):
                     )
                 for size, cap in ((98304, 256), (196608, 64), (196608, 256)):
                     name = f"fresh-grid-{size}-r{cap}"
-                    submit_training(
-                        name, {**blueprint["conditions"][name], "teacher_parent": f"/runs/{large}"}
-                    )
-                state["phase"] = "five fresh fits"
+                    condition = {**blueprint["conditions"][name]}
+                    if size == 196608 and blueprint.get("available_teacher"):
+                        condition["retain_training_parent"] = (
+                            f"/runs/{blueprint['available_teacher']}"
+                        )
+                    submit_training(name, {**condition, "teacher_parent": f"/runs/{large}"})
+                state["phase"] = (
+                    "larger-data fits" if blueprint.get("available_teacher") else "five fresh fits"
+                )
                 save()
         while active:
             poll_training()

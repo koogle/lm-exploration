@@ -134,3 +134,9 @@
   conditions under coordinator 04 with unchanged training package and fresh draft
   initialization. Archive the $468 historical ledger; new $500 accounting epoch,
   rather than treating prior charges as refunded. Record adaptive exposure change.
+
+- 2026-10-12: Start training before full teacher preparation finishes using a
+  sealed, balanced 98304-example subset from immutable chunk 05 (32768/domain).
+  Coordinator 05 runs the fresh 98k/256 arm concurrently with generation toward
+  196k. Preserve all 98k groups in both largest fits. No prose/code-only curriculum
+  is introduced; enough translation is already available for this intermediate fit.

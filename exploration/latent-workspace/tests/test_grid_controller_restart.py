@@ -90,3 +90,58 @@ def test_restarted_controller_does_not_relaunch_early_stopped_small_fits(tmp_pat
     result = module.grid_controller.local("controller", blueprint, ledger)
     assert all(result["runs"][name]["status"] == "early stopped" for name in names)
     assert result["phase"] == "budget paused; study incomplete"
+
+
+def test_controller_starts_available_98k_subset_before_full_preparation(tmp_path, monkeypatch):
+    pytest.importorskip("modal")
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    module = importlib.import_module("modal_long_data")
+    small_names = ["fresh-grid-49152-r64", "fresh-grid-49152-r256"]
+    name = "fresh-grid-98304-r256"
+    state = {
+        "package_source_sha256": "same-source",
+        "runs": {n: {"status": "early stopped"} for n in small_names},
+        "preparations": {"long-teacher-54k-r256": {"completed_run": "small-ready"}},
+    }
+    monkeypatch.setattr(module, "Path", lambda value: tmp_path if value == "/runs" else Path(value))
+    monkeypatch.setattr(module, "runs", SimpleNamespace(commit=lambda: None))
+    submitted = []
+
+    class Call:
+        object_id = "draft-call"
+
+        def get(self, timeout):
+            return {
+                "source_sha256": "same-source",
+                "curve": [{"step": 100000}],
+                "best_step": 100000,
+                "training_completed": True,
+                "selected_validation": {"accepted_beyond_anchor": 2},
+            }
+
+    def spawn(cfg, run_id):
+        submitted.append((cfg, run_id))
+        return Call()
+
+    def reserve(path, run_id, *args, **kwargs):
+        if run_id.startswith("long-teacher-216k"):
+            raise ValueError("allocation cap reached")
+
+    monkeypatch.setattr(module, "reserve", reserve)
+    monkeypatch.setattr(module, "grid_train", SimpleNamespace(spawn=spawn))
+    blueprint = {
+        "package_source_sha256": "same-source",
+        "resume_state": state,
+        "available_teacher": "sealed-98k",
+        "conditions": {
+            n: {"warm_start_from": "", "continue_from": "", "steps": 100000}
+            for n in [*small_names, name]
+        },
+        "small_teacher": {},
+        "large_teacher": {},
+    }
+    result = module.grid_controller.local("controller", blueprint, {"reservations": []})
+    assert len(submitted) == 1
+    assert submitted[0][0]["teacher_parent"] == "/runs/sealed-98k"
+    assert submitted[0][0]["warm_start_from"] == ""
+    assert result["runs"][name]["status"] == "completed"

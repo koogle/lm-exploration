@@ -142,3 +142,19 @@ local archive, not erased from provenance. New ledger reserves $12 CPU including
 future GPU reservations use the new ledger. Already-running teacher preparation
 was reserved in the historical epoch. This bookkeeping reset is not a Modal bill
 reset. Authoritative ledger and state are now under `/runs/fresh-grid-controller-04/`.
+
+## Start the available intermediate dataset while generation continues
+
+User asks to start using ready prose/code instead of waiting for the entire pool.
+A completed teacher chunk already contains more than 32768 usable examples in
+each domain, including translation. Seal 98304 examples from immutable chunk 05
+using a bounded CPU function; do not read the current worker's changing snapshot
+or claim the full pool complete. The subset retains all historical 49152 groups,
+unchanged prefixes and identical validation views.
+
+Coordinator 05 starts the fresh 98304/256 fit from this sealed subset while
+reattaching existing full-pool generation. This keeps training balanced, rather
+than adding an unmeasured prose/code-only curriculum. Both 196608-example arms
+retain every group in the sealed 98304 subset, preserving nesting. Draft source
+is unchanged; only orchestration gains an available-subset entrypoint. The 98k
+arm keeps the same 100000-update schedule, random seed and architecture.

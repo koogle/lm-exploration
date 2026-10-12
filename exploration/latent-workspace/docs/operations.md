@@ -250,3 +250,11 @@ A `.spawn()` alone does not preserve a newly queued call if its ephemeral app
 closes without detach: coordinator 03 never started or wrote state. Its failed
 reservation is retained. Coordinator 04's state/budget were fetched successfully
 and its call confirmed active after handoff.
+
+Available teacher chunks can be sealed independently on CPU through
+`modal_long_data.py::seal_snapshot`. Reserve its bounded CPU call before invoking
+it; use a completed immutable chunk as parent, retain historical groups, and
+verify counts/holdout hashes. Resume with the sealed run supplied as
+`--available-teacher` to `modal_long_data.py::main --launch-grid`. The controller
+starts the 98k arm during large preparation and carries its selected config
+through continuations; the two largest arms explicitly retain that sealed subset.
