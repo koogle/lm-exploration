@@ -86,3 +86,6 @@ unfinished; their JSON sidecar preserves the plotted snapshot. Goal remains unme
 Completed matched higher-supervision curves: [79M drafter for the 0.5B target](dflash-exposure-scaling.png),
 [paired validation uncertainty](dflash-exposure-scaling.json), and
 [interpretation](dflash-improvement-findings.md#completed-matched-exposure-comparison).
+
+Full-corpus exposure fitting: [figure](dflash-exposure-full-fit.png) and
+[verified audit summary](dflash-exposure-fit-summary.json).

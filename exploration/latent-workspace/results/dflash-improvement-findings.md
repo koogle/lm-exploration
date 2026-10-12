@@ -188,3 +188,20 @@ selection provenance were committed before launch in `dflash-expansion-selection
 and the improvement protocol. Both are running on Modal; no outcome is claimed.
 This is further data coverage for our separate 79M drafter and frozen 0.5B target,
 with no architecture or inference-speed change. Reservations: **$348.50/$500**.
+
+
+### Full larger-corpus audit completed
+
+The final 24576-response head scores training **5.28722 NEW / 7**, NLL **0.74966**,
+versus validation **0.95882**, NLL **6.11885**. Both selected and final validation
+dictionaries exactly reproduce the training report. Sampler replay confirms
+53.76M NEW-label exposures and 937,691,189 conditioning-position exposures. Together
+with the smaller audit, this establishes substantial fitting plus a large
+train/validation gap. It does not prove that additional data alone is sufficient.
+
+![Full-corpus fitting audit](dflash-exposure-full-fit.png)
+
+Evidence: `dflash-exposure-24576-audit-01.json`, `dflash-exposure-fit-summary.json`.
+The summary records audit hashes; `scripts/plot_dflash_fit.py` reproduces the figure.
+Both audits are now complete. The next paired data-expansion fits remain running,
+and test remains sealed. No useful-drafter or speed claim is made.

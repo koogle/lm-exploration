@@ -1,0 +1,79 @@
+{
+  "results": {
+    "6144": {
+      "best": {
+        "training": {
+          "nll": 2.4919535319010415,
+          "accepted_beyond_anchor": 2.301984980125812
+        },
+        "validation": {
+          "nll": 6.540493011474609,
+          "accepted_beyond_anchor": 0.5737787178853755
+        },
+        "step": 2000
+      },
+      "latest": {
+        "training": {
+          "nll": 0.001395972348594417,
+          "accepted_beyond_anchor": 6.999959200326398
+        },
+        "validation": {
+          "nll": 9.586714744567871,
+          "accepted_beyond_anchor": 0.44513751646903826
+        },
+        "step": 20000
+      },
+      "zero_memory_validation": 0.043712430006587616,
+      "sampling_exposures": {
+        "sampler_state_matches": true,
+        "sampled_blocks": 7680000,
+        "supervised_new_token_exposures": 53760000,
+        "conditioning_position_exposures": 937797341,
+        "prompt_conditioning_position_exposures": 755319504,
+        "earlier_response_conditioning_position_exposures": 182477837,
+        "note": "Positions attended before each anchor, counted per sampled block. Cached features are reused; this is not backbone training or target forward FLOPs."
+      }
+    },
+    "24576": {
+      "best": {
+        "training": {
+          "nll": 1.8111238479614258,
+          "accepted_beyond_anchor": 3.1950847410102665
+        },
+        "validation": {
+          "nll": 5.249056498209636,
+          "accepted_beyond_anchor": 1.021790596179183
+        },
+        "step": 10000
+      },
+      "latest": {
+        "training": {
+          "nll": 0.7496563394864401,
+          "accepted_beyond_anchor": 5.287220043653222
+        },
+        "validation": {
+          "nll": 6.118852456410726,
+          "accepted_beyond_anchor": 0.9588196846179183
+        },
+        "step": 20000
+      },
+      "zero_memory_validation": 0.037845335144927536,
+      "sampling_exposures": {
+        "sampler_state_matches": true,
+        "sampled_blocks": 7680000,
+        "supervised_new_token_exposures": 53760000,
+        "conditioning_position_exposures": 937691189,
+        "prompt_conditioning_position_exposures": 755062552,
+        "earlier_response_conditioning_position_exposures": 182628637,
+        "note": "Positions attended before each anchor, counted per sampled block. Cached features are reused; this is not backbone training or target forward FLOPs."
+      }
+    }
+  },
+  "note": "Full training and validation responses, up to eight fixed anchors per response. Validation matches training reports exactly; replay matches sampler states. No test access.",
+  "model": "Qwen/Qwen2.5-0.5B",
+  "trainable_parameters": 78578432,
+  "audit_sha256": {
+    "dflash-exposure-6144-audit-01.json": "c3976eac2c90c9b42b9e4367c18012b740c3e02f8434676d76f9d1895b3d4f09",
+    "dflash-exposure-24576-audit-01.json": "1225695d0e3d57682c74202bd0c10080d60cf3368319a102c0770213aa15518f"
+  }
+}

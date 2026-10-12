@@ -19,10 +19,12 @@ completed the remaining 898 updates on the original global schedule. Reports sha
 initial-weight, source and validation hashes. The smaller full-training/zero-memory audit `dflash-exposure-6144-audit-01`
 is complete: final training NEW 6.999959 versus validation 0.44514; selected
 training NEW 2.30198 versus validation 0.57378. Validation entries and sampler
-replay match exactly. `dflash-exposure-24576-audit-01` is still running.
+replay match exactly. `dflash-exposure-24576-audit-01` is also complete.
 The larger selected checkpoint has now been fully audited: training NEW 3.19508
 versus validation 1.02179, with exact validation agreement and verified downloaded
-checkpoint SHA. Its final-checkpoint audit remains pending.
+checkpoint SHA. Final larger-corpus training NEW is 5.28722 versus validation 0.95882; both
+audit validation dictionaries and sampler replay match the training reports.
+See `results/dflash-exposure-fit-summary.json` and `dflash-exposure-full-fit.png`.
 
 The conditional 54k-prompt pool has 53476 usable training responses (17769 prose,
 17898 code, 17809 translation), preserving the five-depth parent cache and all 192
