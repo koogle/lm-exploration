@@ -1,0 +1,15 @@
+{
+  "target": "Qwen/Qwen2.5-0.5B",
+  "trainable_draft_parameters": 78578432,
+  "warm_start_parent": "dflash-exposure-24576-01",
+  "selected_step": 10000,
+  "checkpoint_sha256": "2338dba807e2c94e9bc844265f987cb8abc5eef4a7248c74f55131582e14a88f",
+  "selected_full_training_new": 3.1950847410102665,
+  "selected_validation_new": 1.021790596179183,
+  "audit_status": "Both selected checkpoints fully audited. Larger final-checkpoint audit still running; does not change selected initialization.",
+  "decision": "Compare 24576 versus 49152 responses with identical warm-start weights, fresh AdamW, batch48, eight anchors, 20000 updates, LR6e-4 and fixed cosine. Same sources and retained training groups; test remains sealed.",
+  "config_sha256": {
+    "dflash-expansion-24576.json": "e4d0b96e5badac487552b621c0ae9d44a68fd311cd74543031bd8f6de6051724",
+    "dflash-expansion-49152.json": "2073dadde6baebfd24432fbf901b0abf5c68e056569997a002c70463de9e36ca"
+  }
+}

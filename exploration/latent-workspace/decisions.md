@@ -100,3 +100,10 @@
   experiment trained a separate approximately 105M drafter; the current frozen
   Qwen2.5-0.5B improvement study trains a separate 79M drafter. Neither target
   is being trained or used as the draft network.
+
+- 2026-10-12: Completed 6144/24576-response exposure comparison improves selected
+  validation NEW from 0.574 to 1.022, below the gate. Both selected full-training
+  audits show generalization gaps; the smaller final head memorizes nearly exactly.
+  Compare 24576/49152 responses from identical selected 79M weights with matched
+  optimization, retaining all old training groups and sealed held-out data.
+  Larger final-checkpoint audit continues independently. See the improvement protocol.

@@ -166,3 +166,30 @@ validation NEW matches are 0.57378 versus 1.02179; conditional paired interval f
 the gain is [0.37974, 0.51880]. All twelve rollout checks pass for both. Full-fitting
 audits are running; the conditional next pool is complete but no fit on it is
 selected. Test remains sealed and the quality gate remains unmet.
+
+
+## Next controlled expansion, 2026-10-12
+
+The selected 24576-response head's full-training audit scores 3.19508 NEW / 7,
+versus validation 1.02179; zero-memory validation is 0.03785. Its saved checkpoint
+hash matches the local download, and validation metrics match the training report
+exactly. The full smaller-corpus audit confirms final memorization (6.999959 train
+versus 0.44514 validation). The larger final-checkpoint audit is still running;
+both selected checkpoints have been audited before choosing the next initialization.
+
+Compare **24576 versus 49152 responses** from the prepared five-depth 54k pool.
+Both arms start from `dflash-exposure-24576-01/best.pt` (step 10000), use fresh
+AdamW/sampler and the same batch48/eight anchors/LR6e-4/4% warmup/20000-update cosine
+recipe: 53.76M additional NEW labels per arm. All prior 24576 training groups and
+labels must be retained. A required-subset sort may reorder old responses; compare
+canonical group/token identities, not just historical order. Both arms share the
+same validation tensors and initial weights. No architecture, target, source-domain,
+block-size or inference-speed changes. Test stays sealed.
+
+This matched pair isolates added training responses within the new stage. Comparison
+with the previous stage also changes warm-start/optimizer history and is not a
+one-factor data claim. Initially allow up to four bounded $5 workers for this pair,
+resuming only remaining updates with the same optimizer/RNG/global schedule.
+Preserve the existing $500 cap and all reservations. Freeze configuration/checkpoint
+provenance in `results/dflash-expansion-selection.json` before launch. Keep package
+source unchanged while this pair runs. Continue to report failed quality gates.
