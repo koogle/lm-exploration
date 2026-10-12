@@ -166,3 +166,43 @@ record for 98k and reattaches unchanged teacher generation; the balanced largest
 fits remain scheduled. The option to start prose/code immediately and add
 translation is a curriculum change requiring a clear recorded domain schedule,
 not relabeling a partial dataset as a complete balanced 196k corpus.
+
+## Authorized large-run curriculum
+
+User explicitly selected: start prose/code now, add translation to the same
+models later. Both large-run arms (64/256 response caps) start fresh on a sealed
+131072-example pool: 65536 prose and 65536 code. Full validation still covers all
+three domains. Training batches contain 24 examples/domain until the transition;
+then 16/domain. Training diagnostics cover only present domains and use their
+actual macro denominator; validation retains three domains.
+
+The first continuation after full teacher preparation completes switches each
+model to the balanced 196608 subset. Keep all initial prose/code examples and the
+historical groups, validate unchanged token prefixes and long/short holdout
+hashes, restore the same model, AdamW state and RNG, and keep the same global
+100000-update cosine schedule. Adding translation does not restart the drafter
+or optimizer. The transition is bounded to the next worker boundary, not an
+unsafe live cache mutation. Reports record the transition update, domains,
+example counts and per-checkpoint stage. This is a curriculum study, not a fresh
+all-domain 196k fit from update zero.
+
+The curriculum package changes only opt-in domain selection, subset retention
+and explicit dataset transition safeguards. Historical stopped fits keep their
+original source SHA. New large fits share frozen source SHA
+`47d71073e55a03e87c4bdb59df6aa684cedc532815d30c9f44167ff97da919ae`.
+Local checks cover nested two/three-domain subsets, optimizer/RNG restoration,
+rejection of undeclared switches and controller transition at worker boundaries.
+118 tests and Ruff/format pass. Real-model 20-update check completed with common
+random initialization, unchanged holdout hashes, no target gradients, and all
+three checked verified outputs matching. Coordinator 07 launched both largest
+response-cap arms; no substantial new quality checkpoint exists yet.
+
+Teacher preparation resume compares normalized dataclass configurations so legacy
+checkpoints lacking the new default-only training fields remain valid. A CPU
+regression resumes a legacy-style checkpoint without regeneration and still
+rejects changed response length. The real-model training check captures the
+preceding c6578f69 package; its only difference from final 47d71073 is this
+teacher-resume configuration normalization, not any drafter/training operation.
+Since different response caps can reach worker boundaries at different update
+counts, domain-transition timing may differ. Record both; do not interpret their
+final comparison as an isolated response-length effect without that caveat.

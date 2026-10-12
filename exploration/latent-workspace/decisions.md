@@ -140,3 +140,10 @@
   Coordinator 05 runs the fresh 98k/256 arm concurrently with generation toward
   196k. Preserve all 98k groups in both largest fits. No prose/code-only curriculum
   is introduced; enough translation is already available for this intermediate fit.
+
+- 2026-10-12: User explicitly selects large-run prose/code training now, adding
+  translation to the same models later. Launch both large response-cap arms from
+  random draft weights on 65536 examples/domain for prose and code; transition
+  to balanced 196608 with the same optimizer/RNG/global schedule after full
+  teacher preparation. Record this as a curriculum and its exact transition
+  steps, not a fresh all-domain 196k fit from update zero. Keep validation fixed.

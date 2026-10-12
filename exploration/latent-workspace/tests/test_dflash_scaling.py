@@ -258,3 +258,20 @@ def test_expanded_subset_retains_required_training_groups_and_rejects_incompatib
         nested_subset(rows, 12, 42, {"not-present"})
     with pytest.raises(ValueError, match="exceed"):
         nested_subset(rows, 3, 42, {"code-18", "code-19"})
+
+
+def test_two_domain_subset_retains_groups_and_expands_into_three_domains():
+    rows = [
+        {"domain": d, "group": f"{d}-{i}"}
+        for d in ("prose", "code", "translation")
+        for i in range(10)
+    ]
+    small = nested_subset(rows, 12, 42, domains=("prose", "code"))
+    assert len(small) == 12
+    assert {e["domain"] for e in small} == {"prose", "code"}
+    retained = {e["group"] for e in small}
+    large = nested_subset(rows, 24, 42, retained)
+    assert retained <= {e["group"] for e in large}
+    assert all(sum(e["domain"] == d for e in large) == 8 for d in ("prose", "code", "translation"))
+    with pytest.raises(ValueError, match="outside selected domains"):
+        nested_subset(rows, 12, 42, {"translation-0"}, domains=("prose", "code"))

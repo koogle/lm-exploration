@@ -67,7 +67,7 @@ def prepare(
 
 
 @app.function(image=image, cpu=2, memory=16384, timeout=900, volumes={"/runs": runs})
-def seal_available(parent, required_parent, output, count):
+def seal_available(parent, required_parent, output, count, domains=None):
     """Seal a completed snapshot's balanced subset while teacher GPU work continues."""
     import sys
 
@@ -76,17 +76,50 @@ def seal_available(parent, required_parent, output, count):
 
     try:
         return seal_subset(
-            f"/runs/{parent}", f"/runs/{required_parent}", f"/runs/{output}", count=count
+            f"/runs/{parent}",
+            f"/runs/{required_parent}",
+            f"/runs/{output}",
+            count=count,
+            domains=domains,
         )
     finally:
         runs.commit()
 
 
 @app.local_entrypoint()
-def seal_snapshot(parent: str, run_id: str, count: int = 98304):
+def seal_snapshot(parent: str, run_id: str, count: int = 98304, prose_code_only: bool = False):
     # Reserve through the authoritative coordinator's ledger before invoking this.
-    report = seal_available.remote(parent, "dflash-expansion-49152-01", run_id, count)
+    report = seal_available.remote(
+        parent,
+        "dflash-expansion-49152-01",
+        run_id,
+        count,
+        ["prose", "code"] if prose_code_only else None,
+    )
     print(json.dumps(report, indent=2))
+
+
+@app.local_entrypoint()
+def training_check(config: str, run_id: str):
+    """Run a separately reserved, bounded real-model curriculum plumbing check."""
+    report = grid_train.remote(json.loads(Path(config).read_text()), run_id)
+    print(
+        json.dumps(
+            {
+                key: report.get(key)
+                for key in (
+                    "completed",
+                    "training_completed",
+                    "source_sha256",
+                    "initial_drafter_sha256",
+                    "frozen_target_has_no_gradients",
+                    "verification_passed",
+                    "best_step",
+                )
+            },
+            indent=2,
+        )
+    )
 
 
 @app.local_entrypoint()
@@ -101,6 +134,7 @@ def main(
     launch_grid: bool = False,
     resume_controller: str = "",
     available_teacher: str = "",
+    prose_code_teacher: str = "",
 ):
     from latent_workspace.dflash import DraftConfig
 
@@ -135,6 +169,10 @@ def main(
             if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", available_teacher):
                 raise ValueError("invalid available teacher run")
             blueprint["available_teacher"] = available_teacher
+        if prose_code_teacher:
+            if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", prose_code_teacher):
+                raise ValueError("invalid prose/code teacher run")
+            blueprint["prose_code_teacher"] = prose_code_teacher
         call = grid_controller.spawn(
             run_id, blueprint, json.loads(Path("artifacts/budget.json").read_text())
         )
@@ -303,7 +341,21 @@ def grid_controller(run_id, blueprint, ledger):
                 remaining = report["training_goal_step"] - report["curve"][-1]["step"]
                 if remaining <= 0 or number >= 30:
                     raise RuntimeError("invalid or excessive training continuation")
-                resumed = {**cfg, "continue_from": f"/runs/{job_id}", "steps": remaining}
+                resumed = {
+                    **cfg,
+                    "continue_from": f"/runs/{job_id}",
+                    "steps": remaining,
+                    "curriculum_switch": False,
+                }
+                if cfg.get("training_domains") == ["prose", "code"] and state.get(
+                    "full_teacher_run"
+                ):
+                    resumed.update(
+                        teacher_parent=f"/runs/{state['full_teacher_run']}",
+                        training_domains=["prose", "code", "translation"],
+                        train_limit=196608,
+                        curriculum_switch=True,
+                    )
                 submit_training(name, resumed, number + 1)
             save()
 
@@ -383,8 +435,22 @@ def grid_controller(run_id, blueprint, ledger):
                         "teacher_parent": f"/runs/{blueprint['available_teacher']}",
                     },
                 )
+            if blueprint.get("prose_code_teacher"):
+                for cap in (256, 64):
+                    name = f"fresh-grid-196608-r{cap}"
+                    submit_training(
+                        name,
+                        {
+                            **blueprint["conditions"][name],
+                            "teacher_parent": f"/runs/{blueprint['prose_code_teacher']}",
+                            "train_limit": 131072,
+                            "training_domains": ["prose", "code"],
+                        },
+                    )
             state["phase"] = (
-                "98k fit; expanding long-response pool"
+                "large prose/code fits; preparing translation"
+                if blueprint.get("prose_code_teacher")
+                else "98k fit; expanding long-response pool"
                 if blueprint.get("available_teacher")
                 else "two fresh fits; expanding long-response pool"
             )
@@ -393,6 +459,7 @@ def grid_controller(run_id, blueprint, ledger):
                 blueprint["large_teacher"], "long-manifest-216k-02", small, "long-teacher-216k"
             )
             if large:
+                state["full_teacher_run"] = large
                 if not all(
                     state["teacher_counts"][domain]["prompts"] >= 65536
                     for domain in ("prose", "code", "translation")
@@ -409,7 +476,13 @@ def grid_controller(run_id, blueprint, ledger):
                         )
                     submit_training(name, {**condition, "teacher_parent": f"/runs/{large}"})
                 state["phase"] = (
-                    "larger-data fits" if blueprint.get("available_teacher") else "five fresh fits"
+                    "large curriculum fits; translation added at next worker boundary"
+                    if blueprint.get("prose_code_teacher")
+                    else (
+                        "larger-data fits"
+                        if blueprint.get("available_teacher")
+                        else "five fresh fits"
+                    )
                 )
                 save()
         while active:

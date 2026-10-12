@@ -145,3 +145,78 @@ def test_controller_starts_available_98k_subset_before_full_preparation(tmp_path
     assert submitted[0][0]["teacher_parent"] == "/runs/sealed-98k"
     assert submitted[0][0]["warm_start_from"] == ""
     assert result["runs"][name]["status"] == "completed"
+
+
+def test_large_curriculum_starts_two_domains_then_adds_translation_at_worker_boundary(
+    tmp_path, monkeypatch
+):
+    pytest.importorskip("modal")
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    module = importlib.import_module("modal_long_data")
+    import time
+
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    stopped = ["fresh-grid-49152-r64", "fresh-grid-49152-r256", "fresh-grid-98304-r256"]
+    names = ["fresh-grid-196608-r64", "fresh-grid-196608-r256"]
+    state = {
+        "package_source_sha256": "same-source",
+        "runs": {n: {"status": "early stopped"} for n in stopped},
+        "preparations": {
+            "long-teacher-54k-r256": {"completed_run": "small-ready"},
+            "long-teacher-216k": {"completed_run": "full-ready"},
+        },
+        "teacher_counts": {d: {"prompts": 65536} for d in ("prose", "code", "translation")},
+    }
+    monkeypatch.setattr(module, "Path", lambda value: tmp_path if value == "/runs" else Path(value))
+    monkeypatch.setattr(module, "runs", SimpleNamespace(commit=lambda: None))
+    submitted = []
+
+    class Call:
+        def __init__(self, cfg, job):
+            self.cfg, self.object_id = cfg, job
+
+        def get(self, timeout):
+            complete = bool(self.cfg.get("curriculum_switch"))
+            return {
+                "source_sha256": "same-source",
+                "curve": [{"step": 100000 if complete else 2000}],
+                "best_step": 2000,
+                "training_completed": complete,
+                "training_goal_step": 100000,
+                "stopped": "bounded time limit; training incomplete",
+                "selected_validation": {"accepted_beyond_anchor": 2},
+            }
+
+    def spawn(cfg, job):
+        submitted.append((cfg, job))
+        return Call(cfg, job)
+
+    monkeypatch.setattr(module, "grid_train", SimpleNamespace(spawn=spawn))
+    blueprint = {
+        "package_source_sha256": "same-source",
+        "resume_state": state,
+        "prose_code_teacher": "prose-code-ready",
+        "small_teacher": {},
+        "large_teacher": {},
+        "conditions": {
+            n: {"warm_start_from": "", "continue_from": "", "steps": 100000}
+            for n in stopped + names
+        },
+    }
+    result = module.grid_controller.local("controller", blueprint, {"reservations": []})
+    initial = [cfg for cfg, job in submitted if job.endswith("-01")]
+    switched = [cfg for cfg, job in submitted if job.endswith("-02")]
+    assert len(initial) == len(switched) == 2
+    assert all(
+        cfg["training_domains"] == ["prose", "code"] and cfg["train_limit"] == 131072
+        for cfg in initial
+    )
+    assert all(
+        cfg["training_domains"] == ["prose", "code", "translation"]
+        and cfg["train_limit"] == 196608
+        and cfg["steps"] == 98000
+        and cfg["curriculum_switch"]
+        and cfg["teacher_parent"] == "/runs/full-ready"
+        for cfg in switched
+    )
+    assert all(result["runs"][n]["status"] == "completed" for n in names)

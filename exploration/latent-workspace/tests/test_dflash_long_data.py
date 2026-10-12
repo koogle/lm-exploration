@@ -160,6 +160,10 @@ def test_bounded_teacher_chunks_resume_without_regenerating_rows_or_touching_tes
     tick = iter(range(0, 1000, 10))
     monkeypatch.setattr("latent_workspace.dflash_large_data.time.monotonic", lambda: next(tick))
     a = prepare_chunk(cfg, first, manifest, seed)
+    legacy = json.loads((first / "progress.json").read_text())
+    for key in ("training_domains", "curriculum_switch"):
+        legacy["config"].pop(key, None)
+    (first / "progress.json").write_text(json.dumps(legacy))
     assert not a["completed"] and 0 < a["cursor"] < 6
     tick = iter(range(0, 1000, 10))
     b = prepare_chunk(cfg, second, manifest, seed, first)

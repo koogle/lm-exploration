@@ -28,7 +28,7 @@ training memory. These are plumbing/profile checks, not grid quality results.
 
 ## Durable execution and budget
 
-Modal controller `fresh-grid-controller-06` now prioritizes the larger datasets.
+Modal controller `fresh-grid-controller-07` now prioritizes the larger datasets.
 The initial long teacher pool completed with 53501 usable responses and 9.59M
 response-token positions. Latest archived fresh-fit snapshots reach 55593 updates
 (64 cap) and 37246 (256 cap). Long-validation NEW is 2.04131 versus 3.60350;
@@ -47,15 +47,19 @@ Long-teacher generation last processed 143360/216000 prompts. The 98304/196608
 conditions were pending at that snapshot. The intermediate 98304/256 launch was canceled immediately after the user
 clarified that the requested starts concern the large datasets. Its sealed pool
 remains as provenance; it is not an active fit. Coordinator 06 reattaches teacher
-generation and skips the canceled 98k arm. Both 196608 fits await full balanced
-preparation under the original protocol. Whether to start them with prose/code
-and add translation later is a pending explicit curriculum choice. No new validation checkpoint
+generation and skips the canceled 98k arm. User selected prose/code first, translation later. Both largest-study arms are
+now launched: `fresh-grid-196608-r256-01` and `fresh-grid-196608-r64-01`. They
+start fresh on 131072 sealed prose/code examples (65536 each), then retain those
+weights, optimizer, RNG and global schedule when expanding to balanced 196608
+at the first worker boundary after full teacher preparation. Initial-stage
+validation still covers all three domains. No new substantial validation checkpoint
 exists yet; no full-grid or sealed-test qualification exists.
 
-- State: `/runs/fresh-grid-controller-06/state.json`.
-- Authoritative ledger: `/runs/fresh-grid-controller-06/budget.json`.
+- State: `/runs/fresh-grid-controller-07/state.json`.
+- Authoritative ledger: `/runs/fresh-grid-controller-07/budget.json`.
 - Local handle/ownership marker: ignored `artifacts/budget_remote_controller.json`.
-- Frozen package SHA: `94142e0cee4088a0c5808f0b556a1dcbbd0bb9cba3701cf31c8511aec96c17fa`.
+- New curriculum package SHA: `47d71073e55a03e87c4bdb59df6aa684cedc532815d30c9f44167ff97da919ae`.
+- Historical stopped fits retain SHA `94142e0cee4088a0c5808f0b556a1dcbbd0bb9cba3701cf31c8511aec96c17fa`.
 
 Do not submit local GPU jobs while the marker exists; do not change package source
 for active fits/continuations. [Operations](docs/operations.md) describes ledger
@@ -63,7 +67,7 @@ sync/release. The server uses bounded 3600-second GPU workers and a bounded 24-h
 CPU coordinator. User explicitly reset cost accounting for the larger-data stage. The previous
 **$468** reservation ledger remains archived under controller 02 and locally in
 ignored `artifacts/budget-history-before-large-grid.json`. New epoch ceiling:
-**$500**, currently **$39.0625** reserved, including earlier failed/retired coordinator
+**$500**, currently **$60.125** reserved, including earlier failed/retired coordinator
 reservations, the bounded CPU sealing job and the first 98k GPU worker. The already-running teacher
 worker belongs to the previous epoch. These are conservative reservations, not
 Modal bills; resetting this ledger does not alter actual billing.
@@ -110,3 +114,22 @@ negative findings. See the [knowledge index](docs/knowledge/INDEX.md).
 
 Direct main commits and regular pushes to private `koogle/0-to-llm` remain authorized.
 Run project commands from `exploration/latent-workspace/`; use uv.
+
+## Curriculum launch evidence
+
+[Sealed prose/code pool](results/long-prose-code-131k-01.json) has 31.63M response
+tokens; prose derives from 17108 article groups, code from 65536 groups. The
+[20-update real-model check](results/curriculum-smoke-01.json) starts from the
+common random SHA, has no warm start, preserves both holdout hashes, target
+gradients remain absent, and all three checked outputs match. This is plumbing
+verification, not quality evidence. Its source c6578f69 differs from final
+47d71073 only in legacy teacher-resume configuration normalization, verified
+separately with a CPU regression. Local curriculum/optimizer/domain-transition
+tests pass. The controller reattaches generation; no 98k fit is active.
+
+Latest teacher checkpoint: 200224/216000 prompts processed, usable counts
+71196 prose, 71563 code, 55614 translation. Translation needs 9922 more usable
+examples. Data-transition step can differ between response-cap arms because
+worker throughput differs; report domain exposures rather than claiming a pure
+matched response-length comparison. Original equal-final-exposure five-way
+protocol is superseded by user-directed early stopping and the large-run curriculum.

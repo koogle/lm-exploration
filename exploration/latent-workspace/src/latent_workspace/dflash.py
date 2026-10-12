@@ -46,6 +46,8 @@ class DraftConfig:
     retain_training_parent: str = ""  # Require its training examples in a larger subset.
     online_teacher_features: bool = False
     training_response_cap: int = 0  # Slice training only; shared validation stays fixed.
+    training_domains: tuple[str, ...] = ("prose", "code", "translation")
+    curriculum_switch: bool = False  # Explicit two-domain -> full-data continuation.
     prose_prefixes_per_article: int = 1  # Prepared pools only; article splits stay fixed.
     teacher_batch_size: int = 1
     rollout_prompts_per_domain: int = 1
@@ -54,6 +56,14 @@ class DraftConfig:
     schedule_steps: int = 0  # Optional fixed global schedule across bounded workers.
 
     def validate(self):
+        if (
+            not self.training_domains
+            or len(set(self.training_domains)) != len(self.training_domains)
+            or any(d not in ("prose", "code", "translation") for d in self.training_domains)
+        ):
+            raise ValueError("invalid training domains")
+        if self.curriculum_switch and (not self.continue_from or not self.teacher_parent):
+            raise ValueError("curriculum switch requires own checkpoint and completed teacher pool")
         if (
             type(self.prose_prefixes_per_article) is not int
             or not 1 <= self.prose_prefixes_per_article <= 8
@@ -68,7 +78,7 @@ class DraftConfig:
         if (
             self.schedule_steps < 0
             or self.train_limit < 0
-            or self.train_limit % 3
+            or self.train_limit % len(self.training_domains)
             or min(self.teacher_batch_size, self.rollout_prompts_per_domain) < 1
         ):
             raise ValueError("invalid balanced subset or teacher batch size")

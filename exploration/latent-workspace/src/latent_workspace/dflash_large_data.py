@@ -111,12 +111,14 @@ def prepare_chunk(cfg, output, manifest_parent, seed_parent, resume_parent="", o
     original = load_teacher_cache(seed_parent / "teacher.pt")
     old_train = {e["group"]: e for e in original["train"]}
     if resume_parent:
+        from .dflash import DraftConfig
+
         parent = Path(resume_parent)
         state = json.loads((parent / "progress.json").read_text())
         if (
             state.get("seed_parent") != str(seed_parent)
             or state["manifest_sha256"] != manifest_hash
-            or json.dumps(state["config"], sort_keys=True)
+            or json.dumps(DraftConfig(**state["config"]).to_dict(), sort_keys=True)
             != json.dumps(cfg.to_dict(), sort_keys=True)
         ):
             raise ValueError("teacher continuation changes manifest or configuration")
@@ -273,15 +275,19 @@ def prepare_chunk(cfg, output, manifest_parent, seed_parent, resume_parent="", o
     return save()
 
 
-def seal_subset(parent, required_parent, output, count=49152):
+def seal_subset(parent, required_parent, output, count=49152, domains=None):
     """Seal an available balanced slice without calling an incomplete full pool complete."""
+    from .corpus import DOMAINS
     from .dflash_scaling import nested_subset
+
+    domains = tuple(domains or DOMAINS)
 
     parent, required_parent, output = Path(parent), Path(required_parent), Path(output)
     output.mkdir(parents=True, exist_ok=False)
     progress = json.loads((parent / "progress.json").read_text())
     source_data = load_teacher_cache(parent / "teacher.pt")
     required = load_teacher_cache(required_parent / "teacher.pt")["train"]
+    required = [e for e in required if e["domain"] in domains]
     available = {e["group"]: e for e in source_data["train"]}
     for e in required:
         if e["group"] not in available or not torch.equal(
@@ -291,7 +297,11 @@ def seal_subset(parent, required_parent, output, count=49152):
     data = {
         **source_data,
         "train": nested_subset(
-            source_data["train"], count, progress["config"]["seed"], {e["group"] for e in required}
+            source_data["train"],
+            count,
+            progress["config"]["seed"],
+            {e["group"] for e in required},
+            domains=domains,
         ),
     }
     audit = teacher_statistics(data)
@@ -305,6 +315,7 @@ def seal_subset(parent, required_parent, output, count=49152):
         "teacher_audit": audit,
         "preparation_parent": str(parent),
         "prepared_subset": count,
+        "training_domains": domains,
         "full_pool_completed": progress["cursor"]
         == json.loads((parent / "report.json").read_text())["requested"],
         "note": "Sealed available subset only; full preparation may remain incomplete.",

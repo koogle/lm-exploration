@@ -288,3 +288,62 @@ def test_qk_normalization_preserves_common_initialization_and_causal_cache():
         verified_generate(normed, target, prompt, 12, 30)["tokens"]
         == greedy_generate(target, prompt, 12)["tokens"]
     )
+
+
+def test_declared_curriculum_restores_optimizer_without_reset_and_requires_opt_in():
+    from latent_workspace.dflash_train import restore_continuation
+
+    target, draft = fixture()
+    old_cfg = replace(
+        draft.cfg,
+        training_domains=("prose", "code"),
+        train_limit=131072,
+        teacher_parent="/runs/two-domains",
+    )
+    optimizer = torch.optim.AdamW(draft.parameters(), lr=old_cfg.learning_rate)
+    for p in draft.parameters():
+        p.grad = torch.ones_like(p)
+    optimizer.step()
+    generator = torch.Generator().manual_seed(99)
+    state = {
+        "step": 2000,
+        "drafter": draft.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "rng": torch.get_rng_state(),
+        "sampler_rng": generator.get_state(),
+        "cuda_rng": [],
+    }
+    previous = {"config": old_cfg.to_dict(), "curve": [{"step": 2000}]}
+    cfg = replace(
+        old_cfg,
+        training_domains=("prose", "code", "translation"),
+        train_limit=196608,
+        teacher_parent="/runs/full",
+        continue_from="/runs/own-checkpoint",
+        curriculum_switch=True,
+    )
+    restored = DFlashDrafter(target.config, cfg)
+    restored_optimizer = torch.optim.AdamW(restored.parameters(), lr=1.0)
+    restored_generator = torch.Generator()
+    restore_continuation(cfg, previous, state, restored, restored_optimizer, restored_generator)
+    assert restored_optimizer.param_groups[0]["lr"] == old_cfg.learning_rate
+    assert all(s["step"].item() == 1 for s in restored_optimizer.state.values())
+    assert torch.equal(restored_generator.get_state(), generator.get_state())
+    with pytest.raises(ValueError, match="without curriculum switch"):
+        restore_continuation(
+            replace(cfg, curriculum_switch=False),
+            previous,
+            state,
+            restored,
+            restored_optimizer,
+            restored_generator,
+        )
+    with pytest.raises(ValueError, match="invalid declared"):
+        restore_continuation(
+            replace(cfg, train_limit=98304),
+            previous,
+            state,
+            restored,
+            restored_optimizer,
+            restored_generator,
+        )

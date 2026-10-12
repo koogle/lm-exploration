@@ -258,3 +258,20 @@ verify counts/holdout hashes. Resume with the sealed run supplied as
 `--available-teacher` to `modal_long_data.py::main --launch-grid`. The controller
 starts the 98k arm during large preparation and carries its selected config
 through continuations; the two largest arms explicitly retain that sealed subset.
+
+### Large-run curriculum coordinator 07
+
+User authorized prose/code first and translation later. Current handle/ledger
+owner is coordinator 07. It starts both largest-study arms on sealed
+`long-prose-code-131k-01`, with 65536 examples per available domain. Both begin
+from the common random initialization and fresh optimizers. It reattaches teacher
+generation, then marks the full pool available and changes each arm at the next
+bounded worker continuation. The transition retains all prior training examples,
+weights, AdamW moments, RNG and the fixed global schedule, and checks both holdout
+hashes. Domain counts and transition updates are recorded in reports.
+
+Captured curriculum source is 47d71073; historical stopped sources remain
+94142e0. No old trained draft weights seed these runs. Keep this package frozen
+while continuations execute. Budget ledger is now
+`/runs/fresh-grid-controller-07/budget.json`, current epoch reservations $60.125
+at launch. Prior/canceled reservations remain accounted for.

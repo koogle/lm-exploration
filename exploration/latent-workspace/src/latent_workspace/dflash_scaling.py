@@ -37,14 +37,14 @@ def continuation_slice(ids, width, group, seed):
     return ids[start : start + width], start
 
 
-def nested_subset(examples, count, seed, required_groups=()):
-    if count <= 0 or count % 3:
-        raise ValueError("subset must be a positive multiple of three")
+def nested_subset(examples, count, seed, required_groups=(), domains=DOMAINS):
+    if not domains or count <= 0 or count % len(domains):
+        raise ValueError("subset must be a positive multiple of its domain count")
     result = []
     required_groups = set(required_groups)
     if not required_groups <= {e["group"] for e in examples}:
         raise ValueError("required training groups missing from expanded pool")
-    for domain in DOMAINS:
+    for domain in domains:
         rows = sorted(
             (e for e in examples if e["domain"] == domain),
             key=lambda e: (
@@ -52,11 +52,13 @@ def nested_subset(examples, count, seed, required_groups=()):
                 hashlib.sha256(f"{seed}:{e['group']}".encode()).hexdigest(),
             ),
         )
-        if sum(e["group"] in required_groups for e in rows) > count // 3:
+        if sum(e["group"] in required_groups for e in rows) > count // len(domains):
             raise ValueError("required training groups exceed balanced subset")
-        if len(rows) < count // 3:
+        if len(rows) < count // len(domains):
             raise ValueError(f"not enough usable {domain} responses for subset {count}")
-        result.extend(rows[: count // 3])
+        result.extend(rows[: count // len(domains)])
+    if not required_groups <= {e["group"] for e in result}:
+        raise ValueError("required training group outside selected domains")
     return result
 
 

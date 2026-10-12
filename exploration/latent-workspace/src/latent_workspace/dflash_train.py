@@ -79,6 +79,8 @@ def evaluate(drafter, target, examples, mask_id, limit_per_domain=None, include_
     example_metrics = []
     for domain in DOMAINS:
         rows = [x for x in examples if x["domain"] == domain]
+        if not rows:
+            continue
         if limit_per_domain:
             rows = rows[:limit_per_domain]
         ce_sum = torch.zeros(drafter.cfg.block_size - 1)
@@ -147,9 +149,9 @@ def evaluate(drafter, target, examples, mask_id, limit_per_domain=None, include_
         }
     metrics = {
         "by_domain": result,
-        "nll": sum(x["nll"] for x in result.values()) / 3,
+        "nll": sum(x["nll"] for x in result.values()) / len(result),
         "accepted_beyond_anchor": sum(x["mean_accepted_beyond_anchor"] for x in result.values())
-        / 3,
+        / len(result),
     }
     if include_examples:
         metrics["examples"] = example_metrics
@@ -230,6 +232,18 @@ def benchmark(drafter, target, tokenizer, examples, mask_id):
 
 def restore_continuation(cfg, previous, state, drafter, optimizer, generator):
     old = previous["config"]
+    old_domains = tuple(old.get("training_domains", DOMAINS))
+    if cfg.curriculum_switch:
+        if (
+            old_domains != ("prose", "code")
+            or tuple(cfg.training_domains) != tuple(DOMAINS)
+            or old["train_limit"] != 131072
+            or cfg.train_limit != 196608
+            or cfg.teacher_parent == old["teacher_parent"]
+        ):
+            raise ValueError("invalid declared prose/code to full-data curriculum switch")
+    elif tuple(cfg.training_domains) != old_domains:
+        raise ValueError("continuation changes training domains without curriculum switch")
     for key, default in (
         ("teacher_parent", ""),
         ("prose_prefixes_per_article", 1),
@@ -242,6 +256,8 @@ def restore_continuation(cfg, previous, state, drafter, optimizer, generator):
         ("warm_start_from", ""),
         ("retain_training_parent", ""),
     ):
+        if cfg.curriculum_switch and key in ("teacher_parent", "train_limit"):
+            continue
         if getattr(cfg, key) != old.get(key, default):
             raise ValueError(f"continuation changes cached subset: {key}")
     for key in (
@@ -295,7 +311,7 @@ def run_dflash(cfg, output, on_checkpoint=None):
     tokenizer = AutoTokenizer.from_pretrained(cfg.model, revision=cfg.model_revision)
     mask_id = tokenizer.get_vocab().get("<|fim_pad|>", tokenizer.eos_token_id)
     previous, state = None, None
-    if cfg.continue_from:
+    if cfg.continue_from and not cfg.curriculum_switch:
         parent = Path(cfg.continue_from)
         previous = json.loads((parent / "report.json").read_text())
         state = torch.load(parent / "latest.pt", map_location="cpu", weights_only=True)
@@ -307,6 +323,11 @@ def run_dflash(cfg, output, on_checkpoint=None):
         from .dflash_scaling import nested_subset, teacher_statistics
 
         parent = Path(cfg.teacher_parent)
+        if cfg.curriculum_switch:
+            previous_parent = Path(cfg.continue_from)
+            previous = json.loads((previous_parent / "report.json").read_text())
+            state = torch.load(previous_parent / "latest.pt", map_location="cpu", weights_only=True)
+            shutil.copyfile(previous_parent / "best.pt", output / "best.pt")
         if not json.loads((parent / "report.json").read_text()).get("completed"):
             raise ValueError("teacher preparation is incomplete")
         parent_cfg = json.loads((parent / "config.json").read_text())
@@ -325,10 +346,15 @@ def run_dflash(cfg, output, on_checkpoint=None):
                 raise ValueError(f"teacher cache/config mismatch: {key}")
         data = load_teacher_cache(parent / "teacher.pt")
         required = set()
-        if cfg.retain_training_parent:
-            retained = load_teacher_cache(Path(cfg.retain_training_parent) / "teacher.pt")
+        retain_parents = [cfg.retain_training_parent] if cfg.retain_training_parent else []
+        if cfg.curriculum_switch:
+            retain_parents.append(cfg.continue_from)
+        for retain_parent in retain_parents:
+            retained = load_teacher_cache(Path(retain_parent) / "teacher.pt")
             available = {e["group"]: e for e in data["train"]}
             for e in retained["train"]:
+                if e["domain"] not in cfg.training_domains:
+                    continue
                 if e["group"] not in available or not torch.equal(
                     e["tokens"],
                     available[e["group"]]["tokens"][: len(e["tokens"])]
@@ -338,7 +364,9 @@ def run_dflash(cfg, output, on_checkpoint=None):
                     raise ValueError("required training example missing or labels changed")
                 required.add(e["group"])
             del retained, available
-        data["train"] = nested_subset(data["train"], cfg.train_limit, cfg.seed, required)
+        data["train"] = nested_subset(
+            data["train"], cfg.train_limit, cfg.seed, required, domains=cfg.training_domains
+        )
         if cfg.training_response_cap:
             data["train"] = [
                 {
@@ -419,7 +447,9 @@ def run_dflash(cfg, output, on_checkpoint=None):
     report["initial_drafter_sha256"] = (
         previous["initial_drafter_sha256"] if previous else initial_weights.hexdigest()
     )
-    pools = {d: [e for e in data["train"] if e["domain"] == d] for d in DOMAINS}
+    pools = {d: [e for e in data["train"] if e["domain"] == d] for d in cfg.training_domains}
+    if any(not pool for pool in pools.values()):
+        raise ValueError("training domain has no usable examples")
     best = (-1.0, -float("inf"))
     supervised = 0
     sampled_anchors = 0
@@ -448,6 +478,22 @@ def run_dflash(cfg, output, on_checkpoint=None):
             split_hash.update(identity)
         report["split_sequence_sha256"][split] = split_hash.hexdigest()
     report["teacher_sequence_sha256"] = sequence_hash.hexdigest()
+    if cfg.curriculum_switch:
+        for split in ("validation", "validation_short"):
+            if report["split_sequence_sha256"].get(split) != previous["split_sequence_sha256"].get(
+                split
+            ):
+                raise ValueError("curriculum switch changes held-out data")
+        report["curriculum_transition"] = {
+            "step": start_step,
+            "from_domains": previous["config"]["training_domains"],
+            "to_domains": list(cfg.training_domains),
+            "from_examples": previous["config"]["train_limit"],
+            "to_examples": cfg.train_limit,
+            "optimizer_and_rng_restored": True,
+        }
+    elif previous and previous.get("curriculum_transition"):
+        report["curriculum_transition"] = previous["curriculum_transition"]
     for cycle_step in range(1 if previous else 0, cfg.steps + 1):
         step = start_step + cycle_step
         gradient_diagnostic = None
@@ -455,7 +501,7 @@ def run_dflash(cfg, output, on_checkpoint=None):
             drafter.train()
             examples = []
             for i in range(cfg.batch_size):
-                pool = pools[DOMAINS[((step - 1) * cfg.batch_size + i) % 3]]
+                pool = pools[cfg.training_domains[((step - 1) * cfg.batch_size + i) % len(pools)]]
                 examples.append(pool[int(torch.randint(len(pool), (), generator=generator))])
             tokens, memory, anchors = collate(
                 examples,
@@ -512,6 +558,8 @@ def run_dflash(cfg, output, on_checkpoint=None):
                 "supervised_target_exposures": supervised,
                 "elapsed_seconds": time.monotonic() - started,
                 "phase": output.name,
+                "training_domains": list(cfg.training_domains),
+                "training_examples": len(data["train"]),
                 "gradient_diagnostic": gradient_diagnostic,
             }
             if "validation_short" in data:
