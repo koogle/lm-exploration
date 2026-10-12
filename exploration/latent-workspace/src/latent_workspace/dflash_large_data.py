@@ -113,9 +113,12 @@ def prepare_chunk(cfg, output, manifest_parent, seed_parent, resume_parent="", o
     if resume_parent:
         parent = Path(resume_parent)
         state = json.loads((parent / "progress.json").read_text())
-        if state["manifest_sha256"] != manifest_hash or json.dumps(
-            state["config"], sort_keys=True
-        ) != json.dumps(cfg.to_dict(), sort_keys=True):
+        if (
+            state.get("seed_parent") != str(seed_parent)
+            or state["manifest_sha256"] != manifest_hash
+            or json.dumps(state["config"], sort_keys=True)
+            != json.dumps(cfg.to_dict(), sort_keys=True)
+        ):
             raise ValueError("teacher continuation changes manifest or configuration")
         data = load_teacher_cache(parent / "teacher.pt")
         cursor, seen = state["cursor"], set(state["response_hashes"])
@@ -187,6 +190,7 @@ def prepare_chunk(cfg, output, manifest_parent, seed_parent, resume_parent="", o
             output / "progress.json",
             {
                 "cursor": cursor,
+                "seed_parent": str(seed_parent),
                 "manifest_sha256": manifest_hash,
                 "config": cfg.to_dict(),
                 "response_hashes": sorted(seen),

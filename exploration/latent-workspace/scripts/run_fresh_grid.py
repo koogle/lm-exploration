@@ -4,6 +4,7 @@ Run from this project's directory. Logs/state stay in ignored artifacts. This
 orchestrator never raises the spending cap or modifies Python training source.
 """
 
+import fcntl
 import hashlib
 import json
 import subprocess
@@ -181,6 +182,8 @@ def main():
 
 
 if __name__ == "__main__":
+    lease = (ROOT / "artifacts/fresh-grid-orchestrator.lock").open("a")
+    fcntl.flock(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
     try:
         update()
         main()
