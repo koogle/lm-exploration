@@ -28,7 +28,7 @@ training memory. These are plumbing/profile checks, not grid quality results.
 
 ## Durable execution and budget
 
-Modal controller `fresh-grid-controller-05` now prioritizes the larger datasets.
+Modal controller `fresh-grid-controller-06` now prioritizes the larger datasets.
 The initial long teacher pool completed with 53501 usable responses and 9.59M
 response-token positions. Latest archived fresh-fit snapshots reach 55593 updates
 (64 cap) and 37246 (256 cap). Long-validation NEW is 2.04131 versus 3.60350;
@@ -44,14 +44,16 @@ The three larger-data conditions retain fresh initialization and 100000 updates.
 See `results/fresh-grid-overfitting.md` and refreshed archived curves/snapshots
 `results/fresh-grid-50k-interim.{png,json}`. Training diagnostic is not a full audit.
 Long-teacher generation last processed 143360/216000 prompts. The 98304/196608
-conditions were pending at that snapshot. The 98304/256 fit is now running as
-`fresh-grid-98304-r256-01`, starting fresh from sealed pool `long-subset-98304-01`
-(32768 examples/domain, 17.54M response-token positions). Both 196608 fits await
-full preparation and will retain all 98k groups. No new validation checkpoint
+conditions were pending at that snapshot. The intermediate 98304/256 launch was canceled immediately after the user
+clarified that the requested starts concern the large datasets. Its sealed pool
+remains as provenance; it is not an active fit. Coordinator 06 reattaches teacher
+generation and skips the canceled 98k arm. Both 196608 fits await full balanced
+preparation under the original protocol. Whether to start them with prose/code
+and add translation later is a pending explicit curriculum choice. No new validation checkpoint
 exists yet; no full-grid or sealed-test qualification exists.
 
-- State: `/runs/fresh-grid-controller-05/state.json`.
-- Authoritative ledger: `/runs/fresh-grid-controller-05/budget.json`.
+- State: `/runs/fresh-grid-controller-06/state.json`.
+- Authoritative ledger: `/runs/fresh-grid-controller-06/budget.json`.
 - Local handle/ownership marker: ignored `artifacts/budget_remote_controller.json`.
 - Frozen package SHA: `94142e0cee4088a0c5808f0b556a1dcbbd0bb9cba3701cf31c8511aec96c17fa`.
 
@@ -61,7 +63,7 @@ sync/release. The server uses bounded 3600-second GPU workers and a bounded 24-h
 CPU coordinator. User explicitly reset cost accounting for the larger-data stage. The previous
 **$468** reservation ledger remains archived under controller 02 and locally in
 ignored `artifacts/budget-history-before-large-grid.json`. New epoch ceiling:
-**$500**, currently **$33.0625** reserved, including earlier failed/retired coordinator
+**$500**, currently **$39.0625** reserved, including earlier failed/retired coordinator
 reservations, the bounded CPU sealing job and the first 98k GPU worker. The already-running teacher
 worker belongs to the previous epoch. These are conservative reservations, not
 Modal bills; resetting this ledger does not alter actual billing.

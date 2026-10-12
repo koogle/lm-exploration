@@ -158,3 +158,11 @@ than adding an unmeasured prose/code-only curriculum. Both 196608-example arms
 retain every group in the sealed 98304 subset, preserving nesting. Draft source
 is unchanged; only orchestration gains an available-subset entrypoint. The 98k
 arm keeps the same 100000-update schedule, random seed and architecture.
+
+Correction after the available-subset launch: user clarified that the desired
+starts were the largest datasets, not the intermediate 98k fit. The 98k call and
+coordinator 05 were canceled. Coordinator 06 retains a terminal early-stopped
+record for 98k and reattaches unchanged teacher generation; the balanced largest
+fits remain scheduled. The option to start prose/code immediately and add
+translation is a curriculum change requiring a clear recorded domain schedule,
+not relabeling a partial dataset as a complete balanced 196k corpus.
