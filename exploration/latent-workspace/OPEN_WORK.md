@@ -1,230 +1,85 @@
-Branch-only prototype: [training-prefix coverage](docs/dflash-prefix-coverage.md).
-100 CPU tests pass. Prefix sampling and opt-in registry safeguards are implemented
-but not connected to pool preparation; disk-backed teacher-cache reads are added
-only on this isolated branch. No GPU jobs or datasets launched from this checkout.
-Main's active fits must retain their original package source. See the prototype
-checklist before selecting/integrating any subsequent data experiment.
-
 # Open work
 
-**User steering:** run the five-condition fresh-drafter grid in
-`docs/dflash-fresh-grid.md`: roughly 50k/64, 50k/256, 100k/256, 200k/64, 200k/256.
-All draft weights/optimizers start fresh. No warm start from old drafter fits.
-Token-only resumable teacher preparation and online frozen feature extraction are
-implemented; 111 local tests pass. GPU online-feature check `fresh-online-smoke-01` completed and passed three
-verified outputs with no warm start. Preparation jobs are active:
-`long-teacher-smoke-02`, and `long-manifest-216k-02`. The first preparation attempts
-failed on runner imports before teacher generation; reservations are retained. The 216k training manifest is complete: 72k examples/domain, with 18k prose article
-sources and 72k source groups each for code/translation. The long GPU profile passed
-200 updates with 9.48 GB peak allocated memory, matching random initial weights.
-Coordination is now hosted on Modal as `fresh-grid-controller-01`, submitted with
-`.spawn()` so chat/client interruption does not cancel it. The former local runner
-and `long-teacher-54k-r256-01` were canceled before a checkpoint; retain their
-reservation. The server controller has started `long-teacher-54k-r256-02` and will
-coordinate both 49152 fits, larger data preparation, and the remaining three fits.
-Current server state: `/runs/fresh-grid-controller-01/state.json`; budget:
-`/runs/fresh-grid-controller-01/budget.json`. Local handle/ownership marker is ignored
-`artifacts/budget_remote_controller.json`. Do NOT submit other local GPU jobs while
-that marker exists: the server ledger is authoritative. See operations for syncing.
-Package source is frozen at `94142e0cee4088a0c5808f0b556a1dcbbd0bb9cba3701cf31c8511aec96c17fa`.
-No full grid fit or grid quality result exists yet. The user retains $500 as the
-current total ceiling and is open to going further after reviewing completion costs.
-112 local tests pass. Current conservative reservations are $397, including $6 for
-the bounded 24-hour CPU controller and failed/canceled jobs; this is not billed cost.
+Active: [fresh-drafter data/response grid](docs/dflash-fresh-grid.md). User direction:
+train every drafter from scratch and run substantial combinations toward 200k
+examples and longer teacher responses. The goal remains **unfinished**.
 
-Active: [small-target drafter improvement series](docs/dflash-improvement-series.md).
-All matched fidelity fits and full-training audits completed. Selected validation NEW:
-original 0.384, normalization 0.484, five draft layers 0.520, five feature depths
-0.530. All 12 checked rollouts match per new fit. Extra feature-depth benefit is
-uncertain; full-training fitting remains weak. The selected 79M checkpoint is
-`dflash-fidelity-features-01/best.pt`, step 18000. Frozen target: Qwen2.5-0.5B.
+## Current study
 
-**Current (2026-10-12):** Both matched exposure fits completed 20000 updates and
-53.76M additional NEW-label exposures. Selected validation NEW matches / 7 are
-**0.57378 (6144 responses) versus 1.02179 (24576)**. The paired conditional bootstrap
-95% interval for the gain is [0.37974, 0.51880]; this excludes selection bias and
-seed variation. Both pass all twelve checked FP32 rollouts. The two-token gate is
-unmet. See `results/dflash-exposure-scaling.png` and its JSON evidence sidecar.
+Five fresh fits: 49152/64, 49152/256, 98304/256, 196608/64, 196608/256
+(examples / maximum response tokens). Each declares 100000 updates and 268.8M
+NEW-label exposures, with identical random draft initialization, fresh optimizer,
+fixed 79M five-layer QK-normalized architecture and frozen Qwen2.5-0.5B.
+No old learned drafter weights are loaded. Teacher labels/held-out identities are
+reused and extended; the primary common validation uses longer trajectories,
+with the historical short view retained as an additional diagnostic. Test is sealed.
 
-The small arm's continuation `dflash-exposure-6144-02` restored optimizer/RNG and
-completed the remaining 898 updates on the original global schedule. Reports share
-initial-weight, source and validation hashes. The smaller full-training/zero-memory audit `dflash-exposure-6144-audit-01`
-is complete: final training NEW 6.999959 versus validation 0.44514; selected
-training NEW 2.30198 versus validation 0.57378. Validation entries and sampler
-replay match exactly. `dflash-exposure-24576-audit-01` is also complete.
-The larger selected checkpoint has now been fully audited: training NEW 3.19508
-versus validation 1.02179, with exact validation agreement and verified downloaded
-checkpoint SHA. Final larger-corpus training NEW is 5.28722 versus validation 0.95882; both
-audit validation dictionaries and sampler replay match the training reports.
-See `results/dflash-exposure-fit-summary.json` and `dflash-exposure-full-fit.png`.
+The 216k training manifest is complete: 72k examples/domain, drawn from 18k prose
+articles and 72k source groups each for code and translation. Prose prefixes are
+correlated contexts, not independent articles. Usable teacher counts still need
+verification after generation/filtering. Prefix safeguards and token-only caching
+are integrated into main; the earlier isolated branch is historical.
 
-The conditional 54k-prompt pool has 53476 usable training responses (17769 prose,
-17898 code, 17809 translation), preserving the five-depth parent cache and all 192
-validation examples. Both selected audits informed the next matched pair, now completed as
-`dflash-expansion-24576-01` and `dflash-expansion-49152-01`, from configs
-`configs/dflash-expansion-{24576,49152}.json`. Both use the same selected 79M weights
-(`/runs/dflash-exposure-24576-01/best.pt`, step 10000), fresh AdamW/sampler, batch48,
-eight anchors, 6e-4 LR and one fixed 20000-update schedule. Keep package source
-unchanged; resume only remaining updates after bounded workers if needed.
-Initial worker allocation is four $5 reservations for this pair. Launch checks pass: identical initial weights/source/validation hash and exact
-step-zero validation matching the selected source head. Both report all 24576
-required training groups after the runtime token-identity checks. See
-`results/dflash-expansion-launch-audit.json` and selection provenance.
-Both completed 20000 updates. The 24576-response control selects step zero
-(1.02179 NEW); the 49152-response arm selects step 10500 (1.46181 NEW).
-Larger selected domain scores: prose 1.76953, code 1.72656, translation 0.88933.
-The gate still fails. Paired conditional gain CI: [0.35892, 0.52369]. All twelve
-FP32 rollouts match for each; frozen targets have no gradients. Final reports and
-curves: `results/dflash-expansion-scaling.{png,json}`. Full-corpus selected/final
-audits are running as `dflash-expansion-{24576,49152}-audit-01`, each bounded to
-3600 seconds/$5. No more fit continuations are needed.
-No test responses have been generated; keep test sealed until the declared gate passes.
-Interim curves/snapshots: `results/dflash-expansion-interim.{png,json}` (5500
-control updates, 4500 larger-data updates). These are incomplete; compare matching
-update positions and do not infer full-corpus fitting from twelve train diagnostics.
-Before any further large pool: `results/dflash-prose-source-capacity.json` counts
-23090 eligible training article groups before filtering, so the current one-prompt
-per-group recipe has a balanced upper bound of 69270 responses. A 98304-response
-request needs a revised, validated source/prefix policy; do not blindly increase
-the count. Current runs are unchanged. See the protocol for deferred options.
-An isolated prototype is pushed on `drafter-data-coverage` (`ca581aa`), checked
-out at `/workspace/drafter-data-coverage`. It adds training-only article-prefix
-primitives/registry guards and private mapped teacher-cache reads; 108 CPU tests
-passed before integration. It is now merged into the fresh-grid work; the manifest
-option is wired, with GPU validation pending.
-Keep main package source unchanged while the active fits/resumes run. Before using
-the branch, follow its `docs/dflash-prefix-coverage.md` integration/smoke checklist.
-The budget ledger in this main checkout remains authoritative.
-Goal is NOT complete; representation experiments and speed work remain deferred.
+Real-model online-feature and long-sequence checks completed. Both start from the
+archived random initial SHA and have no warm start; all three checked outputs per
+profile match the target. The 200-update long profile peaks at 9.48 GB allocated
+training memory. These are plumbing/profile checks, not grid quality results.
+112 local tests, Ruff/format and diff checks pass.
 
-82 local tests pass, as do Ruff/format/diff checks. Conservative reservations are
-**$386.00/$500**, not billed cost. Retain failed/stopped reservations. Stop the
-active goal only when useful quality is demonstrated or further work is blocked.
+## Durable execution and budget
 
-Historical completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).
-Both targets used 6144 responses and 20000 updates. Selected shared-prompt NEW
-matches are 0.170 (2B) versus 0.387 (0.5B), worse in each domain. Full-training
-2B selected/final matches are 0.173/0.175 versus validation 0.170/0.168. This is
-poor fitting as well as poor held-out prediction, not the tiny-set memorization
-pattern. Family, tokenizer, prompt format and draft capacity differ; no pure-size
-or human answer-quality claim. Test remains sealed and hybrid rollout unimplemented.
+Modal controller `fresh-grid-controller-01` is active. It has submitted
+`long-teacher-54k-r256-02`, then will start both 49152 fits, prepare the larger
+teacher pool and start the remaining three. No full grid fit/result exists yet.
 
-Both full fitting audits match the training curves exactly. Sampler replay confirms
-3.36M NEW-label exposures and 72.97M conditioning-position exposures. The downloaded
-selected checkpoint matches the GPU hash. 79 local tests and all GPU checks passed;
-all 2B comparison jobs ended. Reservations at that historical completion: $258.25/$500,
-not billed usage; failed/stopped reservations are retained.
+- State: `/runs/fresh-grid-controller-01/state.json`.
+- Authoritative ledger: `/runs/fresh-grid-controller-01/budget.json`.
+- Local handle/ownership marker: ignored `artifacts/budget_remote_controller.json`.
+- Frozen package SHA: `94142e0cee4088a0c5808f0b556a1dcbbd0bb9cba3701cf31c8511aec96c17fa`.
 
-Current follow-up is the small-Qwen series above. The 1.5B size control and hybrid
-adapter remain untested and deferred. The [reference audit](docs/dflash-fidelity.md)
-identified missing QK normalization; the new matched 0.5B-target study measures an
-improvement, with weak larger-set fitting still unresolved. Representation sweeps
-and inference speed optimization remain deferred.
+Do not submit local GPU jobs while the marker exists; do not change package source
+for active fits/continuations. [Operations](docs/operations.md) describes ledger
+sync/release. The server uses bounded 3600-second GPU workers and a bounded 24-hour
+CPU coordinator. Current reservations at controller launch: **$397/$500**, including
+$6 CPU and retained failed/canceled reservations; this is not actual billed cost.
+The user retains $500 for now and is open to reviewing an increase if needed.
+Budget exhaustion pauses new jobs and reports the study incomplete.
 
-Location: `exploration/latent-workspace/` in private `koogle/0-to-llm` (LM Exploration),
-main; direct commits and regular pushes authorized. Historical source:
-`koogle/latent-workspace`. See [consolidation](../../docs/consolidation.md).
+The first local orchestration/teacher worker was canceled before its checkpoint
+when the client session interrupted. `.spawn()` on Modal supersedes that runner;
+remote calls now survive local chat/client lifetime. Preserve its failed reservation.
 
-Current priority: useful block prediction with a frozen Qwen target.
-Representation/layer/J-space experiments remain deferred.
+## Evidence and remaining qualification
 
-[Completed data-size study](results/dflash-data-scaling.md): fresh 768- and 6144-response
-fits, same initial weights, architecture, 20000 updates, 3.36M repeated new-token
-label exposures and 192 shared validation responses. All identity checks match.
-The common pool contains 6538 usable training responses, generated in batches from
-shuffled sources with varied prose/code prefix offsets. Source revisions, groups,
-near-duplicate screening, dropped rows, actual counts and hashes are archived.
-New 192 test prompts have no generated labels or metrics; earlier holdouts remain
-quarantined. This study is within-source generalization, not arbitrary-domain transfer.
+[Completed fidelity/data findings](results/dflash-improvement-findings.md):
+normalization 0.384→0.484 NEW, draft depth →0.520, five feature depths →0.530.
+The extra feature-depth acceptance gain is uncertain; all are one-seed results.
+Matched data/exposure studies reach 1.022 NEW at 24576 responses and 1.462 at
+49152, below the gate. Full earlier exposure audits demonstrate memorization and
+large train/validation gaps. Latest expansion audits are no longer running; the
+24576 audit has a saved partial report, and no 49152 audit report was saved before
+its bound. Do not claim a completed full-corpus audit for that stage.
 
-Best validation NEW matches / 7: **0.2185 -> 0.3844**. The paired conditional bootstrap
-interval for the gain is [0.1343, 0.1993]; it does not capture selection bias or seed
-variation. All three validation domains improve. At the final update, small-set
-full-response train/validation NLL is 0.1377/9.3788; large-set is 5.9707/6.3464.
-More data reduces overfitting, but the larger head is still weak on training as well
-as validation. This does not identify a sufficient dataset size or rule out further
-optimization/capacity limitations. Both full-response audits evaluate up to eight
-fixed anchors/response, not every possible anchor.
+Remaining for the fresh study:
+- Complete teacher preparation; verify actual lengths, source counts, deduplication,
+  old-prefix identities, unchanged short holdout and shared long holdout hashes.
+- Complete all five fresh schedules; compare curves at equal NEW-label exposure,
+  response-length/data interactions, domain scores and position accuracy.
+- Report repetition slices; some long teacher continuations are repetitive. Matching
+  target proposals does not establish human answer quality.
+- Review fitting/validation before further scaling; one seed and adaptive validation
+  selection limit significance. Do not confuse 12-response diagnostics with full fits.
+- Require the existing macro ≥2 NEW and every-domain ≥1 quality gate, longer verified
+  rollouts, then freeze checkpoint/configuration and evaluate sealed test once.
+- Source diversity, longer translation tasks, repeated seeds, representation sweeps,
+  native pretraining and speed work remain untested/deferred.
 
-All twelve shared FP32 rollout prompts matched Qwen for both heads. Median prompt
-speed ratios are 0.994x and 1.095x; this small check includes a repetitive-zero code
-outlier and is not a broad speed qualification. BF16 output parity remains unresolved.
-Training and cached teacher features use BF16; correctness-reference rollout is FP32
-on upcast stored weights. Speculation preserves target behavior, not human answer quality.
+Historical [2B-target comparison](results/dflash-qwen35-2b-findings.md) used a
+separate 105M drafter and did not improve quality. Hybrid rollout/1.5B size controls
+remain unimplemented. Historical [conditioning study](results/conditioning-findings.md)
+has an already-used test partition; it is distinct from the fresh sealed drafting
+test. Preserve [earlier layer controls](results/small-layer-controls.md) and their
+negative findings. See the [knowledge index](docs/knowledge/INDEX.md).
 
-75 local tests pass. Both actual GPU fits, full-response audits and rollout checks
-completed. Selected heads are downloaded and checksum-verified at
-`artifacts/dflash-scale-{768,6144}-best.pt`; best/latest checkpoints persist on Modal.
-Both selected heads also ran through the CLI in the consolidated checkout.
-All jobs in that study completed. At that checkpoint, conservative reservations
-were $226.50/$500; the current cumulative reservation appears above.
-
-Next: establish adequate optimization and data coverage with the same drafting
-baseline, guided by held-out multi-token prediction quality. The 6144-response head's high training loss keeps optimization an open factor.
-Further source diversity, longer teacher responses and larger mixed-domain pools
-remain untested. Bounded streaming shuffle is not globally uniform sampling, Python
-is the only code language, and translation separation is sentence-level. Keep test
-sealed while making these decisions. Do not resume representation sweeps or claim
-that scaling data alone is guaranteed to solve useful drafting.
-
-Earlier DFlash work: [380-response fit](results/dflash-findings.md) demonstrated
-memorization after 21000 updates but only 0.284 best validation new matches on a
-different smaller holdout. Its sampling and validation differ from the new study;
-it is historical evidence, not the matched small-data control. The original BF16
-verifier failure and fixed-input arithmetic diagnosis remain archived.
-
-The [trained conditioning study is complete](results/conditioning-findings.md).
-Executed: 96 residual/attention probes across two seeds; nine Qwen2.5-0.5B decoder
-conditions and two Qwen3-0.6B conditions at 4k updates each; one frozen-checkpoint
-test suite across all 11 heads. Every decoder used the same 196,608 mixed-domain
-training windows. Full corpus identity checks and source hashes are retained.
-
-Findings: all-layer residual conditioning improves test NLL over final-only for
-both Qwen families. The compressed J-lens loses to matching raw states. Diffusion
-does not beat the parallel baseline here. The all-layer Qwen2.5 diffusion head
-matches only 1.141 consecutive Qwen tokens / 4, with 1.6% full-block agreement.
-Absolute generation quality remains poor. The test split has now been evaluated;
-it must not be described as sealed or untouched for subsequent adaptive work.
-
-At completion of the original study, 50 local tests and both real-model GPU
-smokes passed, with $192/$200 reserved (not actual billed usage). The
-all-layer inference checkpoint is downloaded and checksum-verified against the
-tested head; other best/final checkpoints remain in the dedicated Modal volume.
-
-Remaining:
-- Improve later-token generalization using controlled training/decoder changes;
-  human corpus labels were used, not Qwen distillation targets.
-- Larger fresh validation/test partitions and near-duplicate audit before further
-  adaptive experiments. Current slices are only 64 windows/domain, Python code,
-  WikiText prose and English-to-German translation.
-- Repeat trained decoder comparisons across seeds; only the probes and earlier
-  dataset-size comparisons have repeated seeds so far.
-- Qwen3.5-0.8B requires a separate tokenizer/data preparation path and real-model
-  adapter verification. It was not trained in this study.
-- More J-lens calibration/convergence and readout controls before broader claims
-  about the paper's J-space representation.
-- No collaborative module or native backbone pretraining in this phase.
-
-Follow-up complete: [small-data layer controls](results/small-layer-controls.md).
-All 12 fits (96/768/3072 windows × baseline/dropout/null/both) reached 3200 updates,
-batch 32, on one bounded L40S job. Baseline final training accuracy:
-100%/98.9%/94.3%; every size overfits validation. At 3072 windows, best validation
-NLL is 7.264 baseline, 7.333 dropout, 7.262 null, 7.314 both. No clear gain from
-these controls; one seed and a reused small validation slice are exploratory.
-Tiny-set fitting works, but this does not establish enough data for a useful drafter
-or convergence at 3072 windows. Retain larger-data work as the generalization
-baseline; do not replace it with the tiny memorization sets.
-
-At the small-control checkpoint, 55 local tests passed, including exact dropout
-resume and compact feature caching.
-All four controls completed actual frozen-Qwen GPU training. Source, ordered
-subsets, split hashes, supervision counts and full-training diagnostics verified.
-That completed checkpoint had $197 reserved against the initial $200 allocation.
-See the current drafting-first status above for subsequent reservations and cap.
-Checkpoints: `/runs/small-layer-controls-01/{baseline,dropout,null,dropout-null}/`.
-
-Prototype update: prefix preparation is now wired behind the default-one bounded
-`prose_prefixes_per_article` option. 108 CPU tests pass, including actual manifest
-extension/quarantine checks. Source-group counts are distinct from examples.
-GPU smoke and large-pool preparation remain unexecuted; this checkout has no budget
-ledger and must not launch jobs. See docs/dflash-prefix-coverage.md.
+Direct main commits and regular pushes to private `koogle/0-to-llm` remain authorized.
+Run project commands from `exploration/latent-workspace/`; use uv.

@@ -1,9 +1,10 @@
 # Training-prefix coverage prototype
 
-Branch: `drafter-data-coverage`. This prototype is isolated from the active
-24576/49152-response fits on main. Do not change their package source or resume
-those jobs with this branch. No GPU jobs or new teacher datasets have been launched
-from this checkout; the existing main-checkout budget ledger remains authoritative.
+Originally developed on `drafter-data-coverage`; now integrated on main for the
+fresh grid. The prior fits completed before integration. Prefix/cache safeguards
+passed local tests and real-model preparation/training checks; full teacher
+preparation is active under the Modal controller. The remote study ledger is
+authoritative while its ownership marker exists. See [current work](../OPEN_WORK.md).
 
 The pinned WikiText audit found 23090 training article groups before filtering.
 One prompt per article therefore caps a balanced pool at 69270 responses. Extra
