@@ -200,3 +200,10 @@ For the conditional 54k-prompt pool, long workers request 128 GiB host RAM. This
 provides room for cached feature tensors plus required-subset validation. The
 current training workers keep their original 96 GiB snapshot. The hard timeout,
 L40S device, CPU allocation and $5 conservative reservation remain unchanged.
+
+
+Fresh-grid preparation uses the standalone `modal_long_data.py` app. Its image
+and volume declarations are self-contained: importing a second local Modal runner
+from the remote entrypoint fails unless that module is explicitly packaged. The
+first attempts hit this import failure; no teacher examples were generated, and
+failed reservations remain in the ledger. See docs/dflash-fresh-grid.md.

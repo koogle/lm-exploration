@@ -4,8 +4,22 @@ import json
 import re
 from pathlib import Path
 
+import modal
+
 from latent_workspace.budget import reserve
-from modal_dflash import app, cache, image, runs
+
+app = modal.App("latent-workspace-qwen-long-data")
+cache = modal.Volume.from_name("latent-workspace-qwen-cache", create_if_missing=True)
+runs = modal.Volume.from_name("latent-workspace-qwen-runs", create_if_missing=True)
+image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install("uv==0.10.12")
+    .add_local_file("pyproject.toml", "/project/pyproject.toml", copy=True)
+    .add_local_file("uv.lock", "/project/uv.lock", copy=True)
+    .run_commands("cd /project && uv sync --frozen --no-install-project")
+    .env({"PATH": "/project/.venv/bin:/usr/local/bin:/usr/bin:/bin", "HF_HOME": "/cache/hf"})
+    .add_local_python_source("latent_workspace")
+)
 
 
 @app.function(
