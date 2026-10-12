@@ -1,19 +1,42 @@
 # Training from scratch
 
-Learn how to train language models from scratch, from tiny baselines toward
-roughly one billion parameters, and understand how dataset mixtures and model
-architectures affect the results. Start with standard kernels and established
-designs. Custom training kernels can come later.
+A personal learning project: train small language models from random initialization,
+understand how architecture and data affect them, then add instruction tuning,
+reasoning and reinforcement learning. Use Modal for training and local Apple
+hardware for development and eventual inference.
+
+## Direction and scope
+
+The user's goals are:
+
+- Learn model architecture and its evolution through small, measurable experiments.
+- Study useful ideas from Qwen, GLM, Kimi and other open research; do not lock the
+  framework to one model family.
+- Use general web text, appropriately licensed code and other licensed documents,
+  with multilingual coverage.
+- Start small and progress toward roughly 1B parameters using several thousand
+  dollars' worth of available Modal credits. An exact spending allocation is not set.
+- Eventually pursue GPT-4-level performance on a narrow, objectively testable task.
+  The task and reference model/version remain to be chosen; broad parity is not a
+  promised outcome.
+- Run a model we trained ourselves on our own Apple hardware using the custom
+  kernels in [phone inference](../inference/phone/).
+
+Use standard kernels and established designs initially. Custom training kernels
+are optional later work. The frozen-Qwen drafter in
+[exploration/latent-workspace](../exploration/latent-workspace/) is a separate
+research effort, with its own resources and budget.
 
 ## Current state
 
-The [Run Board](designs/run-board-web.html) and [earlier training studies](designs/train-design-studies.html)
-are interactive HTML mockups imported from
+This folder contains a plan and interactive HTML designs, not a training system.
+The [Run Board](designs/run-board-web.html) and
+[earlier training studies](designs/train-design-studies.html) were imported from
 [web-inference PR #1](https://github.com/koogle/web-inference/pull/1).
-All displayed runs and metrics are illustrative. There is no connected training
-backend, GitHub integration or deployed Modal UI yet.
+Their runs and metrics are illustrative. No from-scratch trainer, connected
+GitHub integration or Modal dashboard has been implemented here.
 
-Open either HTML file locally, or run this from `training/`:
+Open the HTML files locally, or run this from `training/`:
 
 ```sh
 python3 -m http.server 5174 --bind 127.0.0.1
@@ -21,65 +44,201 @@ python3 -m http.server 5174 --bind 127.0.0.1
 
 Then open http://127.0.0.1:5174/designs/run-board-web.html.
 
-## Goal
+## Staged research plan
 
-Understand language-model training by training models from random initialization,
-beginning small and exploring up to approximately 1B parameters. Compare dataset
-mixtures and architecture choices with clear records of what changed and what
-was learned. Use standard kernels and model designs initially. Writing custom
-training kernels is a later option, not a prerequisite.
+The stages and numerical ranges below synthesize proposals from the supplied
+conversation. They are starting hypotheses, not approved run budgets, measured
+results or thresholds that guarantee model quality.
 
-The end-to-end goal is to export one of these models and run it on our own Apple
-hardware through the handwritten kernels in [phone inference](../inference/phone/).
-The tokenizer, architecture, tensor shapes and weight format will need an explicit
-contract between training and inference when that integration is implemented.
+| Stage | Proposed scale | Work | Evidence before advancing |
+| --- | --- | --- | --- |
+| 0. Fundamentals | 1–10M parameters; a 10M pilot | Minimal decoder-only GPT: embeddings, learned positions, causal attention, MLP, LayerNorm and next-token prediction. Establish data loading, checkpointing, resume and sampling. | Correctness against a reference, tiny-set fitting, reproducible resume and measured Modal throughput. |
+| 1. Architecture | Around 30–50M | Introduce RoPE, RMSNorm, SwiGLU, GQA and QK normalization one at a time. Begin with a standard dense baseline. | Controlled changes improve loss, stability, memory or time to a fixed quality target. |
+| 2. Data and language foundation | 150–300M | Compare tokenizer choices, language balance, code/text mixtures, filtering and optional fill-in-the-middle training. | Held-out loss and task scores improve across the intended languages and domains, not just training loss. |
+| 3. Instruction and reasoning SFT | Reuse the selected 150–300M base | Separate instruction-following fine-tuning from reasoning/worked-solution fine-tuning. | Improvements on fixed instruction, coding and mathematics evaluations relative to the same base. |
+| 4. Verifiable-reward RL | Reuse that checkpoint lineage | Start with arithmetic; progress to executable code and formal constraints. Compare an appropriate GRPO- or PPO-style approach with supervised controls. | Better held-out solution accuracy at comparable compute, with reward hacking and response-length effects checked. |
+| 5. Scale the winners | 600M to roughly 1B | Combine only supported improvements, then repeat pretraining and post-training for the chosen specialization. | Pilot throughput supports the budget, and smaller experiments justify the recipe. |
+| 6. Own-model inference | Selected trained checkpoint | Export tokenizer, architecture and weights to the Apple inference project. | Reference-output agreement before device-specific kernel optimization. |
+
+The transcript also suggested 1.7B and larger models. Those remain possible later
+extensions, beyond the current roughly-1B consolidation scope.
+
+For architecture comparisons, train fresh models under matched data and evaluation
+conditions. For post-training comparisons, fork the same base checkpoint so gains
+cannot be attributed to different pretraining. Recheck promising results across
+seeds before spending heavily on a larger run.
+
+## Architecture experiments
+
+Keep the implementation small and auditable, with explicit configuration for
+attention, feedforward layers, residual/normalization choices and training objective.
+Modularity should support comparisons; it does not imply every combination is valid.
+
+1. **Baseline:** causal dense attention, then a Qwen-inspired decoder with RoPE,
+   RMSNorm, SwiGLU, GQA and QK normalization. Randomly initialize model weights.
+2. **Optimization:** compare AdamW with Muon as a separate experiment.
+3. **Information flow and attention:** investigate Attention Residuals and hybrid
+   linear/full attention, including Gated DeltaNet/KDA-style candidates.
+4. **Later experiments:** small MoE, sparse long-context attention, alternative
+   residual schemes and auxiliary multi-token prediction.
+5. **Post-training:** test how much improvement is possible from the identical
+   pretrained base using SFT and verifiable rewards.
+
+These are candidate research directions from the conversation. Verify the relevant
+papers, official implementations and prerequisites before choosing a specific
+variant. The transcript's release dates, version labels and claimed improvements
+for “latest” Qwen/GLM/Kimi systems have not been independently verified here.
+
+Use PyTorch and standard supported attention/optimizer kernels first. The transcript
+proposed BF16, SDPA/FlashAttention where supported, activation checkpointing when
+needed, and DDP/FSDP only when scale requires them. Initial 2K–4K context is a
+proposal to benchmark, not a fixed requirement for the smallest toy model.
+
+## Data and tokenizer
+
+Build a reproducible corpus before committing to a large run. Candidate sources
+from the transcript are:
+
+| Source | Intended role | Selection work still needed |
+| --- | --- | --- |
+| FineWeb / FineWeb-Edu | General and educational text | Pin revisions, select quality filters and review underlying content eligibility. |
+| FineWeb2 | Multilingual text | Choose target languages, balance the sample and check tokenizer efficiency. |
+| CodeParrot GitHub Code | A manageable first code subset | Check current loading/access support and verify language/license metadata against source repositories. |
+| The Stack v2 | A possible larger code corpus | Confirm access arrangements, upstream licenses, provenance and removal requirements. |
+| OpenCoder / RefineCode | Code curation research and possible data | Inspect the processing recipe, access conditions and source provenance. |
+| Wikipedia, Wikisource and licensed technical/math documents | Reference, multilingual and reasoning material | Review source-specific terms and preserve attribution. |
+
+These are a shortlist, not an approved corpus or a claim that every record is
+eligible. Public availability and a dataset-level license are not sufficient
+evidence about each underlying document.
+
+For each retained record, preserve source URL/repository, revision, license,
+language, content hash, filtering decisions and training eligibility. Candidate
+code licenses discussed were MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause and ISC;
+the final allowlist and any obligations still need to be settled.
+
+Remove generated, vendored, minified and duplicate code where appropriate; retain
+useful documentation and test relationships. Apply exact and near-duplicate checks,
+exclude benchmark solutions, and split code by repository before creating windows.
+Check for credentials and personal information during corpus preparation.
+Deduplicate across dataset categories as well as within each source.
+
+Train or explicitly choose the tokenizer before the larger experiments. A balanced
+multilingual/code BPE sample and 16K–32K vocabulary were proposed for small models;
+compare 32K and 64K only if the larger model and languages justify it. Measure
+bytes/characters per token by language and code, rather than judging only English.
+Reusing an existing tokenizer is a valid explicit choice; model weights still start
+from random initialization.
+
+Mixture weights and target languages are not decided. The pasted transcript refers
+to a mixture visualization but does not contain its numerical proportions, so no
+ratios are inferred from it. Keep unique corpus size separate from total training
+token exposures, including repeated epochs.
+
+## Token and compute planning
+
+There is no single token count that makes a model “great.” Use validation curves,
+task performance and measured throughput to decide whether more data, more
+optimization or a different recipe is justified.
+
+Selected starting ranges proposed in the conversation:
+
+| Model scale | Total pretraining-token exposures |
+| --- | --- |
+| 1–10M | Begin with 10–50M tokens. |
+| 30–50M | 100M–1B; consider 1–3B only after the pilot. |
+| 100–150M | 1–3B initially; 3–10B as a larger experiment. |
+| 300–500M | 5–15B initially; 15–50B as an ambitious experiment. |
+| 600M–1B | 10–30B initially; 30–100B as an ambitious experiment. |
+
+The conversation's 300M/20B run was illustrative. Code-specific token ranges were
+also suggestions for the code portion of a mixture, not extra tokens to add on
+top of a total budget.
+
+Before a substantial run, measure sustained tokens/second, peak memory,
+checkpoint/evaluation overhead and cost on the actual Modal configuration.
+The rough dense-model estimate `6 × parameters × training tokens` is a planning
+approximation, not a runtime or price quote. Budget CPU, storage, preprocessing,
+evaluation, failed runs and reserves as well as GPU time.
+
+The transcript's $5,000 allocation and GPU-hour prices were assistant examples,
+not a confirmed budget or current pricing. Choose explicit per-run and overall
+bounds using measured throughput and current rates. Do not borrow the
+latent-workspace research ledger or treat this plan as authorization to launch jobs.
+
+## Post-training and evaluation
+
+Keep three experiments distinct:
+
+- **Instruction SFT:** conversation formatting and instruction following.
+- **Reasoning SFT:** worked solutions and structured problem solving. The transcript
+  suggested OpenR1-Math-220k as a candidate; inspect provenance and terms before use.
+- **Verifiable-reward RL:** sampled rollouts scored by reliable outcomes, beginning
+  with exact-answer arithmetic, then Python functions with hidden tests and
+  algorithmic tasks with randomized cases.
+
+The proposed SFT volumes were 10–100M instruction tokens and 10–200M reasoning
+tokens. These are exploratory ranges, not requirements. RL is budgeted through
+rollout generation and optimization compute, not a fixed static corpus size.
+Start RL when the model already generates some successful solutions.
+
+Compare base, instruction-SFT, reasoning-SFT and SFT-plus-RL checkpoints. Include
+an additional-SFT control with comparable compute. Track pass@1/correctness,
+reward, response length and generalization to unseen task families. Treat a
+change in style or longer answers separately from a gain in accuracy.
+
+Freeze evaluation definitions early:
+
+- Held-out language-model loss by language and domain.
+- Multilingual QA/translation/reasoning for the selected languages.
+- Executable coding tests and exact-answer mathematics.
+- Instruction formatting and constraint compliance.
+- Tokens/second, peak memory, wall-clock convergence and quality per compute cost.
+
+Use validation for choices and keep test evaluation for frozen decisions. For
+the narrow parity goal, select a specific reference model/version, use matched
+prompts and tools, report uncertainty, and audit contamination.
 
 ## Run Board on Modal
 
-Use [the latest web Run Board](designs/run-board-web.html) as the visual starting
-point. Host the actual UI on Modal, with GPU training jobs behind it and GitHub
-as the source of model code.
+Use [the latest Run Board design](designs/run-board-web.html) as the UI starting
+point. The intended application is a Modal-hosted web interface backed by bounded
+training jobs and persistent run artifacts.
 
-The intended workflow is:
+1. Select a GitHub branch or PR and resolve its immutable commit before starting.
+2. Choose architecture, tokenizer, dataset mixture, seed, optimization settings,
+   token budget and compute limit.
+3. Start, observe, stop and explicitly resume runs; inspect curves, throughput,
+   checkpoints and sample generations.
+4. Choose a baseline and compare code/config/data differences beside measured
+   results. Compare at equal token exposure and also report compute differences.
 
-1. Select a GitHub branch or PR and resolve its exact commit before starting.
-2. Configure model architecture and parameter count, tokenizer, dataset mixture,
-   optimization settings, seed, token budget and bounded compute budget.
-3. Start a run and inspect its state, loss curves, tokens processed, throughput,
-   checkpoints and generated samples. Support stopping and resuming explicitly.
-4. Choose a baseline run and compare other runs at equal token exposure. Show
-   differences in model code, configuration and data alongside the measured results.
+When several factors change, show that confounding rather than implying a
+single-factor experiment. Retain each run's code/config snapshot, dependencies,
+dataset revisions and splits, mixture weights, tokenizer, seed, hardware,
+token/update counts, checkpoint lineage, metrics and outputs independently of
+the UI.
 
-The design's comparison panel should make it easy to see whether a single change
-can explain a result. When code, data and configuration all differ, present that
-confounding clearly rather than implying a controlled experiment.
+## Next concrete milestone
 
-## Reproducible experiments
+Proposed first implementation: a tiny baseline with reference checks, deterministic
+data sampling, checkpoint/resume and generation, followed by one bounded Modal
+throughput pilot. Then connect the Run Board to those real artifacts before
+scaling the experiment matrix.
 
-Each run should retain the resolved Git commit, code/config snapshots, dependency
-versions, model and tokenizer configuration, pinned dataset revisions and mixture
-weights, split definitions, seed, optimizer/schedule, tokens and updates processed,
-hardware, checkpoint lineage, metrics and sample outputs. Compare on fixed
-validation slices and reserve test evaluation for frozen choices.
+Still to decide:
 
-Dataset and architecture controls are part of the run definition, not just labels
-in the UI. Keep raw records and checkpoints available independently of the dashboard.
+- The narrow target task and reference-model evaluation protocol.
+- Target languages, initial data sources, license policy and mixture weights.
+- Tokenizer choice, exact first model configuration and context length.
+- First Modal GPU configuration and explicit experiment/overall budget.
+- Which architecture ablation follows the verified baseline.
 
-## Initial milestones
+## Source and status
 
-- A small standard-model baseline that trains, checkpoints, resumes and generates.
-- A bounded Modal training job with persisted run metadata, metrics and artifacts.
-- The Run Board connected to real runs, with explicit start/stop controls and
-  GitHub commit selection.
-- Controlled data-mixture and architecture comparisons, then larger parameter sizes.
-- Export and correctness checks against the custom Apple inference implementation.
-
-The initial architecture, tokenizer, datasets, exact model sizes, hardware and
-compute budget remain to be chosen. Fold in the user's other-thread notes before
-treating these choices as settled. The existing speculative-decoding project's
-budget, frozen-backbone assumptions and Modal resource names do not define this
-new from-scratch training effort.
-
-Additional notes from earlier conversations can be incorporated here when provided.
-The existing frozen-model drafting research lives in
-[exploration/latent-workspace](../exploration/latent-workspace/).
+Extracted on 2026-10-12 from the user-supplied transcript of
+[“GPT 3.5 Size Explained”](https://chatgpt.com/share/6accc26c-fd60-83ea-9f52-34cc038c7857),
+together with the repository-consolidation instructions. The transcript was read
+from the supplied text, not from the inaccessible shared-page body. This README
+separates stated goals from assistant-proposed recipes and unverified external
+claims. No training runs, data ingestion or deployment were performed for this update.
