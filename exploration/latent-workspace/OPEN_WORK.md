@@ -181,3 +181,9 @@ subsets, split hashes, supervision counts and full-training diagnostics verified
 That completed checkpoint had $197 reserved against the initial $200 allocation.
 See the current drafting-first status above for subsequent reservations and cap.
 Checkpoints: `/runs/small-layer-controls-01/{baseline,dropout,null,dropout-null}/`.
+
+Prototype update: prefix preparation is now wired behind the default-one bounded
+`prose_prefixes_per_article` option. 108 CPU tests pass, including actual manifest
+extension/quarantine checks. Source-group counts are distinct from examples.
+GPU smoke and large-pool preparation remain unexecuted; this checkout has no budget
+ledger and must not launch jobs. See docs/dflash-prefix-coverage.md.

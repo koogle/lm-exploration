@@ -1,4 +1,4 @@
-"""Prototype extra training-only article prefixes; not wired into GPU preparation."""
+"""Additional training-only article prefixes with explicit source-group provenance."""
 
 import hashlib
 

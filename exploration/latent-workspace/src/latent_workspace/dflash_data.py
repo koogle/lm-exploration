@@ -38,6 +38,8 @@ class PromptRegistry:
         self.sources = set()
         self.source_splits = {}
         self.source_groups = {}
+        self.source_offsets = defaultdict(set)
+        self.unknown_offset_groups = set()
         self.prefixes = set()
         self.shingles = []
         self.index = defaultdict(set)
@@ -99,6 +101,11 @@ class PromptRegistry:
         self.sources.add(record["source_hash"])
         self.source_splits[record["source_hash"]] = record["split"]
         self.source_groups[source_group] = record["split"]
+        offset = record.get("source_token_offset")
+        if type(offset) is int and offset >= 0:
+            self.source_offsets[source_group].add(offset)
+        else:
+            self.unknown_offset_groups.add(source_group)
         self.prefixes.add(key)
         record["prompt_sha256"] = key
         return True

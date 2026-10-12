@@ -196,6 +196,7 @@ def restore_continuation(cfg, previous, state, drafter, optimizer, generator):
     old = previous["config"]
     for key, default in (
         ("teacher_parent", ""),
+        ("prose_prefixes_per_article", 1),
         ("train_limit", 0),
         ("schedule_steps", 0),
         ("teacher_prompt_style", "raw"),

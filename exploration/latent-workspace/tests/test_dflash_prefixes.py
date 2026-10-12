@@ -162,3 +162,107 @@ def test_mapped_cache_keeps_frozen_labels_private_even_under_shared_global_defau
     restored = load_teacher_cache(path)["train"][0]
     assert torch.equal(restored["tokens"], tokens)
     assert torch.equal(restored["memory"], memory)
+
+
+@pytest.mark.parametrize("mode", ["enabled", "default", "historical_holdout", "unknown_offset"])
+def test_manifest_prefix_extension_preserves_article_split_and_existing_records(
+    tmp_path, monkeypatch, mode
+):
+    import copy
+    from types import SimpleNamespace
+
+    from latent_workspace.corpus import DOMAINS, SOURCES
+    from latent_workspace.dflash import DraftConfig
+    from latent_workspace.dflash_scaling import diverse_manifest
+
+    article = next(
+        f"article-{i}"
+        for i in range(1000)
+        if repository_split(f"prose:{digest(f'article-{i}')}") == "train"
+    )
+    source_hash = digest(article)
+    source_group = f"prose:{source_hash}"
+    repository = next(str(i) for i in range(1000) if repository_split(str(i)) == "train")
+    english = next(
+        f"english-{i}"
+        for i in range(1000)
+        if repository_split(f"translation:{digest(f'english-{i}')}") == "train"
+    )
+    records = []
+    for split in ("train", "validation", "test"):
+        for domain in DOMAINS:
+            i = len(records) + 1
+            records.append(
+                {
+                    "domain": domain,
+                    "split": split,
+                    "group": f"old-{i}",
+                    "source_hash": f"old-source-{i}",
+                    "source_token_offset": 0,
+                    "prompt_ids": list(range(10000 * i, 10000 * i + 64)),
+                }
+            )
+    first = next(r for r in records if r["domain"] == "prose" and r["split"] == "train")
+    first.update(group=source_group, source_hash=source_hash, prompt_ids=list(range(64)))
+    if mode == "unknown_offset":
+        first.pop("source_token_offset")
+    historical = {
+        "window_groups": {
+            "train": [],
+            "validation": [source_group] if mode == "historical_holdout" else [],
+            "test": [],
+        },
+        "sources": {d: {"revision": "pinned"} for d in DOMAINS},
+    }
+    rows = {
+        SOURCES["prose"][0]: [{"text": article}],
+        SOURCES["code"][0]: [{"content": "new-code", "repo_name": repository}],
+        SOURCES["translation"][0]: [{"translation": {"en": english}}],
+    }
+    monkeypatch.setattr("datasets.load_dataset", lambda repo, *a, **kw: iter(rows[repo]))
+    monkeypatch.setattr(
+        "latent_workspace.dflash_scaling.documents", lambda rows: (r["text"] for r in rows)
+    )
+    tokenizer = SimpleNamespace(
+        encode=lambda text, **kw: (
+            list(range(2048))
+            if text == article
+            else list(range(2000, 2600))
+            if text == "new-code"
+            else list(range(3000, 3032))
+        )
+    )
+    cfg = DraftConfig(
+        train_prompts=6,
+        validation_prompts=3,
+        test_prompts=3,
+        prompt_tokens=64,
+        prose_prefixes_per_article=1 if mode == "default" else 4,
+    )
+    original = copy.deepcopy(records)
+    if mode != "enabled":
+        with pytest.raises(ValueError, match="insufficient diverse prompts"):
+            diverse_manifest(
+                cfg, tokenizer, tmp_path, float("inf"), historical, {"records": records}, records
+            )
+        assert records == original
+        return
+    manifest = diverse_manifest(
+        cfg, tokenizer, tmp_path, float("inf"), historical, {"records": records}, records
+    )
+    assert manifest["records"][: len(records)] == original
+    assert records == original
+    extra = [r for r in manifest["records"][len(records) :] if r["domain"] == "prose"]
+    assert len(extra) == 1
+    assert extra[0]["source_group"] == source_group
+    assert extra[0]["source_token_offset"] >= 64
+    assert manifest["source_group_counts"]["train"]["prose"] == 1
+    assert all(r["split"] == "train" for r in manifest["records"][len(records) :])
+
+
+@pytest.mark.parametrize("cap", [0, 9, True, 1.5])
+def test_config_rejects_unbounded_or_noninteger_prefix_cap(cap):
+    from latent_workspace.dflash import DraftConfig
+
+    with pytest.raises(ValueError, match="prose prefix cap"):
+        DraftConfig(prose_prefixes_per_article=cap).validate()

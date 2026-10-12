@@ -28,26 +28,34 @@ holdouts; they are not additional independent documents.
   tensors and Python metadata still consume RAM; this is not a claim that arbitrary
   pool creation fits any memory budget.
 
-100 CPU tests pass, including existing exact continuation/warm-start/cache tests,
+108 CPU tests pass, including existing exact continuation/warm-start/cache tests,
 new article/prefix quarantine tests, and a test that private mapped data cannot
 modify the source file even when a shared global mapping default was configured.
 Ruff, formatting and diff checks pass. No large-cache or GPU smoke has run for this
 branch; no training-quality claim follows from these tests.
 
-## Not integrated or selected yet
+## Manifest integration, locally verified
 
-The prefix helper is not called by the manifest builder. There is no CLI/config
-option or actual expanded manifest yet. Before using it:
+`DraftConfig.prose_prefixes_per_article` now enables a bounded 1–8 prefix cap
+(default 1). Diverse pool preparation calls the helper for training prose only,
+registers all prior manifests, retains all existing records, and records distinct
+source groups separately from example counts. Articles with unknown historical
+prefix offsets are skipped for expansion. Validation/test examples are unchanged.
+Extension cannot decrease the retained cap; exact training continuation checks it.
 
-1. Integrate a bounded per-article option into prepared-pool generation, preserving
-   the exact legacy behavior by default and all existing records/teacher labels.
-2. Supply every historical held-out group, register prior manifests, and preserve
-   source-group metadata through teacher caching. Report examples and distinct
-   source groups separately; keep validation/test identities unchanged.
-3. Validate extension/resume compatibility and run a bounded real-model smoke from
-   the authoritative ledger after the active matched study finishes.
-4. Select the next experiment from completed learning curves/full-fitting audits;
-   do not treat this prototype as a decision to train another model.
+Integration tests exercise the actual manifest builder with controlled source rows:
+opt-in expansion, unchanged legacy cap, historical holdout rejection, unknown-offset
+rejection, and preservation of all existing records. Cache tests still verify that
+old teacher labels/features are unchanged and test is not generated.
+
+No GPU smoke or full-size manifest has run. Before using this branch:
+
+1. Reconcile and merge only after current fits finish; keep active audit provenance.
+2. Run bounded real-model preparation smoke from the authoritative main ledger,
+   including extension of a prefix-enabled pool and unchanged held-out cache hashes.
+3. Validate actual full-size prompt capacity, filtering, memory and preparation time.
+4. Select the next experiment using completed curves/full-fitting audits. Extra
+   prefixes remain correlated contexts from existing articles, not new documents.
 
 Reference protocol: [improvement series](dflash-improvement-series.md).
 Source-capacity evidence: [pinned article counts](../results/dflash-prose-source-capacity.json).

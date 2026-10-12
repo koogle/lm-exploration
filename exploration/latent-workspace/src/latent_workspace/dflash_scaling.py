@@ -10,6 +10,7 @@ from pathlib import Path
 from .corpus import DOMAINS, SOURCES, SPLITS, digest, repository_split
 from .data import documents
 from .dflash_data import PromptRegistry, load_teacher_cache
+from .dflash_prefixes import training_prose_prefixes
 from .train import write_json
 
 
@@ -67,7 +68,7 @@ def diverse_manifest(
     old_groups = historical["window_groups"]
     old_all = {g for values in old_groups.values() for g in values}
     old_heldout = {g for split in ("validation", "test") for g in old_groups[split]}
-    registry = PromptRegistry()
+    registry = PromptRegistry(allow_training_prefixes=cfg.prose_prefixes_per_article > 1)
     for record in prior_manifest["records"]:
         if not registry.add(dict(record)):
             raise ValueError("prior manifest is not internally disjoint")
@@ -117,6 +118,7 @@ def diverse_manifest(
             else:
                 # Tokenize only bounded source text; the full source hash remains the group identity.
                 ids = tokenizer.encode(text[:100000], add_special_tokens=False)
+                full_ids = ids
                 piece = continuation_slice(ids, cfg.prompt_tokens, group, cfg.seed)
                 if piece is None:
                     continue
@@ -132,6 +134,26 @@ def diverse_manifest(
             if registry.add(record):
                 records.append(record)
                 counts[domain, split] += 1
+            if (
+                domain == "prose"
+                and split == "train"
+                and cfg.prose_prefixes_per_article > 1
+                and group not in registry.unknown_offset_groups
+            ):
+                for extra in training_prose_prefixes(
+                    full_ids,
+                    source_hash,
+                    context=cfg.prompt_tokens,
+                    seed=cfg.seed,
+                    existing_offsets=registry.source_offsets[group],
+                    max_prefixes=cfg.prose_prefixes_per_article,
+                    excluded_groups=old_heldout,
+                ):
+                    if counts[domain, split] >= limits[split]:
+                        break
+                    if registry.add(extra):
+                        records.append(extra)
+                        counts[domain, split] += 1
             if all(counts[domain, s] == limits[s] for s in SPLITS):
                 break
         print(f"Diverse prompts {domain}: {dict(counts)}", flush=True)
@@ -143,7 +165,28 @@ def diverse_manifest(
         "seed": cfg.seed,
         "model": cfg.model,
         "model_revision": cfg.model_revision,
-        "sampling": "4096-item seeded buffer shuffle after prose document assembly; deterministic varied prose/code token offsets; one prompt per group; first 100000 source characters maximum",
+        "sampling": (
+            "4096-item seeded buffer shuffle after prose document assembly; deterministic varied prose/code token offsets; "
+            + (
+                "one prompt per group"
+                if cfg.prose_prefixes_per_article == 1
+                else f"up to {cfg.prose_prefixes_per_article} nonoverlapping prefixes per training prose article; one prompt per other group"
+            )
+            + "; first 100000 source characters maximum"
+        ),
+        "source_group_counts": {
+            split: {
+                domain: len(
+                    {
+                        r.get("source_group", r["group"])
+                        for r in records
+                        if r["split"] == split and r["domain"] == domain
+                    }
+                )
+                for domain in DOMAINS
+            }
+            for split in SPLITS
+        },
         "split_policy": "only official source train pools; deterministic 80/10/10 group hash; code by repository, prose by whole document hash, translation by English source sentence hash",
         "quarantine": "prior DFlash manifest registered before sampling; new held-out groups exclude all historical groups; new training excludes historical held-out groups",
         "near_duplicate_policy": "cross-split prompt token-5-gram Jaccard >=0.8; not a comprehensive document/translation-family audit",
@@ -165,6 +208,9 @@ def teacher_statistics(data, block_size=8):
             ]
             by_split[split][domain] = {
                 "prompts": len(responses),
+                "source_groups": len(
+                    {e.get("source_group", e["group"]) for e in rows if e["domain"] == domain}
+                ),
                 "response_tokens": sum(map(len, responses)),
                 "eligible_anchors": sum(max(0, len(r) - block_size + 1) for r in responses),
                 "mean_unique_response_4gram_fraction": sum(
@@ -338,6 +384,8 @@ def prepare_pool(cfg, output, on_checkpoint=None):
         if not parent_report.get("completed"):
             raise ValueError("extension parent incomplete")
         old_cfg = parent_report["config"]
+        if cfg.prose_prefixes_per_article < old_cfg.get("prose_prefixes_per_article", 1):
+            raise ValueError("extension cannot reduce the retained prose prefix cap")
         for key in (
             "model",
             "model_revision",
