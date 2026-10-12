@@ -20,17 +20,26 @@ initial-weight, source and validation hashes. The smaller full-training/zero-mem
 is complete: final training NEW 6.999959 versus validation 0.44514; selected
 training NEW 2.30198 versus validation 0.57378. Validation entries and sampler
 replay match exactly. `dflash-exposure-24576-audit-01` is still running.
-Next: verify both audit validation entries reproduce their training reports, compare
-selected/final full fitting and sampler replay, then choose the next intervention.
+The larger selected checkpoint has now been fully audited: training NEW 3.19508
+versus validation 1.02179, with exact validation agreement and verified downloaded
+checkpoint SHA. Its final-checkpoint audit remains pending.
 
 The conditional 54k-prompt pool has 53476 usable training responses (17769 prose,
 17898 code, 17809 translation), preserving the five-depth parent cache and all 192
-validation examples. No fit on this new pool has been launched. No test responses
-have been generated; keep test sealed until the declared validation gate passes.
+validation examples. Both selected audits informed the next matched pair, now running as
+`dflash-expansion-24576-01` and `dflash-expansion-49152-01`, from configs
+`configs/dflash-expansion-{24576,49152}.json`. Both use the same selected 79M weights
+(`/runs/dflash-exposure-24576-01/best.pt`, step 10000), fresh AdamW/sampler, batch48,
+eight anchors, 6e-4 LR and one fixed 20000-update schedule. Keep package source
+unchanged; resume only remaining updates after bounded workers if needed.
+Initial worker allocation is four $5 reservations for this pair. Verify step-zero
+validation/initial weights and retained 24576 group/token identities once live
+reports are available. See `results/dflash-expansion-selection.json`.
+No test responses have been generated; keep test sealed until the declared gate passes.
 Goal is NOT complete; representation experiments and speed work remain deferred.
 
 82 local tests pass, as do Ruff/format/diff checks. Conservative reservations are
-**$338.50/$500**, not billed cost. Retain failed/stopped reservations. Stop the
+**$348.50/$500**, not billed cost. Retain failed/stopped reservations. Stop the
 active goal only when useful quality is demonstrated or further work is blocked.
 
 Historical completed: [Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md).

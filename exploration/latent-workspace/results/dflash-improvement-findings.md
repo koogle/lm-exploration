@@ -170,3 +170,21 @@ verification call for prose/code/translation change from **0.305/0.881/0.280** t
 **0.442/1.016/0.469**. Different arithmetic (FP32) and trajectories/anchor positions
 mean these are not interchangeable with cached BF16 validation scores. No speed
 qualification is inferred. Both preserve checked target outputs exactly.
+
+
+### Selected larger-corpus audit and next experiment
+
+The 24576-response selected head (step 10000) scores **3.19508 NEW / 7**, NLL
+**1.81112**, on its full training corpus, versus validation **1.02179**, NLL
+**5.24906**. Its validation dictionary exactly matches the training report.
+Zero-memory validation is 0.03785. The downloaded selected checkpoint SHA matches
+the audit: `2338dba807e2c94e9bc844265f987cb8abc5eef4a7248c74f55131582e14a88f`.
+The final-checkpoint audit is still running, so no final full-training score is
+claimed yet. Both selected checkpoints have now been audited.
+
+The next paired fits compare 24576 versus 49152 responses from identical selected
+weights, retaining all prior training groups and labels. The complete recipe and
+selection provenance were committed before launch in `dflash-expansion-selection.json`
+and the improvement protocol. Both are running on Modal; no outcome is claimed.
+This is further data coverage for our separate 79M drafter and frozen 0.5B target,
+with no architecture or inference-speed change. Reservations: **$348.50/$500**.
