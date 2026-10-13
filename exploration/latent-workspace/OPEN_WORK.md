@@ -68,3 +68,12 @@ were early-stopped; intermediate98k launch canceled; only the two large curricul
 arms completed their100k schedules. This is not a completed equal-final-exposure
 five-way comparison. Historical evidence and negative results remain linked in
 [knowledge index](docs/knowledge/INDEX.md).
+
+## Authorized qualification execution
+
+User requests both pending tasks. Frozen selection: long-response step70585.
+[Protocol](docs/dflash-qualification.md) and `configs/qualification-long-196k.json`
+are recorded before GPU execution. Standalone evaluator tests leakage/parity
+guards and does not modify the frozen training package. One bounded qualification
+input will perform24 longer validation rollouts, then192 reserved test prompts
+only if parity passes; GPU execution is pending at this publication.

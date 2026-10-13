@@ -1,0 +1,22 @@
+{
+  "checkpoint_parent": "/runs/fresh-grid-196608-r256-11",
+  "checkpoint_step": 70585,
+  "training_source_sha256": "47d71073e55a03e87c4bdb59df6aa684cedc532815d30c9f44167ff97da919ae",
+  "model": "Qwen/Qwen2.5-0.5B",
+  "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "layers": [2, 7, 12, 17, 22],
+  "draft_layers": 5,
+  "qk_norm": true,
+  "block_size": 8,
+  "manifest_parent": "/runs/long-manifest-216k-02",
+  "teacher_parent": "/runs/long-teacher-216k-07",
+  "rollouts_per_domain": 8,
+  "rollout_tokens": 256,
+  "response_tokens": 256,
+  "teacher_batch_size": 32,
+  "max_seconds": 3300,
+  "selection_rule": "Long-response arm's validation-selected checkpoint; no test-based selection or retuning",
+  "test_exclusion_rule": "Responses shorter than one full block or exact duplicates of existing train/validation or earlier test responses; report every exclusion",
+  "test_gate": "Macro consecutive correct NEW >=2/7 and >=1/7 in each domain",
+  "arithmetic": "Long verified rollouts FP32 on stored BF16 target weights; test teacher and trajectory evaluation BF16 as in validation"
+}

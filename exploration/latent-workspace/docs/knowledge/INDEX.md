@@ -32,3 +32,5 @@ Isolated data-coverage prototype: [status, invariants and remaining integration]
 Fresh data/response grid: [protocol](../dflash-fresh-grid.md).
 
 Conditional learning failure diagnosis: [activation/loss/gradient plan](../dflash-learning-diagnostics.md).
+
+Frozen long-rollout/sealed-test qualification: [protocol](../dflash-qualification.md).
