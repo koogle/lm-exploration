@@ -154,3 +154,16 @@
   Mark the drafting holdout consumed; no test-based checkpoint/hyperparameter
   retuning. Working-drafter criterion met for this head; original representation
   hypotheses and broad speed/human-quality claims remain unestablished.
+
+- 2026-10-13: User requests a short drafter learnings write-up, then returns to
+  J-space on the now-qualified decoder, followed by unverified2/3-token generation
+  and quality benchmarking. Publish334-word/one-page summary with charts. Define
+  new J-space as sparse nonnegative original-space reconstruction; the old weighted
+  vocabulary proxy is a different construction. Preserve competent initialization,
+  matched controls and fresh holdouts; do not reuse consumed test for tuning.
+
+- 2026-10-13: User clarifies J-space is an added conditioning signal, intended
+  to expose semantic features useful to the trained drafter. Keep raw states;
+  primary comparison is raw/control versus raw+J versus raw+random frame.
+  J-only is optional later. Any efficiency claim must include extraction/cache
+  costs and quality loss in unverified generation.

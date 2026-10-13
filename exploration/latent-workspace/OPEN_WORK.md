@@ -85,3 +85,14 @@ only if parity passes; GPU execution completed: `qualification-long-196k-01`,240
 `results/qualification-findings.md`, full report, chart and conditional
 source-group bootstrap intervals. Both requested tasks pass. Only the selected
 long-response checkpoint was qualified; the short arm was not selected for test.
+
+## New user-directed stages
+
+Short write-up published:334 words and one-page PDF with three charts, linked in
+README. Next: actual sparse J-space conditioning on the qualified head, primarily
+augmentation alongside raw states, with raw and random-frame controls. J-only is
+a later optional ablation after the user clarified the semantic side-channel goal. See
+`docs/jspace-capable-drafter.md`. Training-only Jacobian/projection helpers and
+local safeguards are implemented; bounded real-model profiling is pending.
+No new J comparison or unverified/benchmark result exists yet. Prior consumed
+test remains unavailable for selecting these variants.

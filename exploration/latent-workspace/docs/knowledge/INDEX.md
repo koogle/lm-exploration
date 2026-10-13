@@ -38,3 +38,5 @@ Frozen long-rollout/sealed-test qualification: [protocol](../dflash-qualificatio
 Completed frozen qualification: [findings and limits](../../results/qualification-findings.md).
 
 Short drafter write-up: [learnings](../implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md).
+
+Next J-space and unverified-generation stages: [controlled protocol](../jspace-capable-drafter.md).

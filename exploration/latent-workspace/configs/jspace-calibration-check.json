@@ -1,0 +1,12 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B",
+  "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "teacher_parent": "/runs/long-teacher-216k-07",
+  "layers": [2, 7, 12, 17, 22],
+  "calibration_prompts": 1000,
+  "fit_prompts": 2,
+  "dim_batch": 16,
+  "seed": 42,
+  "max_seconds": 720,
+  "profile_projection": true
+}

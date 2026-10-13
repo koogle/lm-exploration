@@ -31,6 +31,18 @@ current goal. Treat tokenizer, prompt formatting and draft-capacity differences
 as confounds, and keep hybrid-cache verification explicitly unimplemented. Standard fixed target-feature
 conditioning is part of DFlash; it is not an auxiliary hidden-state generation task.
 
+## Current priority (2026-10-13 update)
+
+The strong drafter baseline now meets the frozen validation/test criterion.
+User authorizes returning to J-space as additional conditioning alongside existing hidden states, followed by unverified2/3-token
+block generation and benchmark quality comparisons. Read
+[capable-drafter J-space protocol](docs/jspace-capable-drafter.md). Preserve the
+qualified checkpoint; the old drafting test is consumed and must not select new
+variants. Distinguish the paper's sparse nonnegative J-space component from the
+old weighted top-k vocabulary readout. Train-only calibration and representation
+profiling may proceed; controlled fits need capacity/data/exposure controls and
+fresh held-out evaluation. Native context pretraining remains deferred.
+
 ## Architecture and invariants
 
 - Python/PyTorch; **uv** owns dependency resolution, commands and `uv.lock`.

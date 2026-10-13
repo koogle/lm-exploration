@@ -18,10 +18,10 @@ These are one-seed, adaptively selected validation results; curriculum/exposure
 confound a pure data-size comparison. The selected long-response head meets the study
 qualification criterion; further architecture/representation research remains open. See [open work](OPEN_WORK.md) and [study protocol](docs/dflash-fresh-grid.md).
 
-Current priority: build a **DFlash-style drafter for frozen Qwen targets**
-that predicts useful multi-token blocks. Train on Qwen-generated continuations,
-condition on a known anchor, and verify proposals with Qwen. The original J-space,
-workspace and layer-selection experiments are deferred until this baseline works.
+Current priority: [J-space conditioning on the capable drafter](docs/jspace-capable-drafter.md),
+then unverified two/three-token blocks and benchmark quality against frozen Qwen.
+The qualified DFlash-style head supplies the baseline. The previous drafting test
+is consumed; new variants require fresh held-out evaluation.
 No backbone pretraining or collaborative proposal module.
 
 The [completed Qwen3.5-2B quality comparison](results/dflash-qwen35-2b-findings.md)
