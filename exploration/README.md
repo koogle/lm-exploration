@@ -16,3 +16,10 @@ further J-space and representation experiments remain separate, unfinished work.
 Run its commands from `exploration/latent-workspace/`. Its research trains a
 drafter around an existing frozen model; [training](../training/) is the separate
 effort to learn how to train a language model from scratch.
+
+Implementation lives here alongside the reports: [model and decoding code](latent-workspace/src/latent_workspace/),
+[drafter training](latent-workspace/src/latent_workspace/dflash_train.py),
+[Modal training runner](latent-workspace/modal_dflash.py),
+[J-space study](latent-workspace/jspace_study.py),
+[Modal J-space runner](latent-workspace/modal_jspace_study.py),
+[configs](latent-workspace/configs/) and [tests](latent-workspace/tests/).

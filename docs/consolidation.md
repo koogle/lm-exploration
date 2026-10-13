@@ -21,6 +21,17 @@ README link checks pass. No GPU training or evaluation was launched.
 Earlier notes below describe the original migration and temporary period of
 iteration. This reconciliation does not archive or delete the standalone repository.
 
+## Code completeness check, 2026-10-13
+
+Fetched all source repositories again following the request to include all code.
+Every one of the 197 tracked standalone latent-workspace files has a corresponding
+path under `exploration/latent-workspace/`; the consolidated versions retain newer
+implementation changes. Consolidated main also includes the J-space study and
+Modal runner added in `c22a2e5`. Web and phone source main branches differ from
+their imported tips only in repository-status README notices, with no additional
+code to copy. The restored browser implementation remains in `inference/web/`.
+Root and exploration READMEs now link directly to implementation files.
+
 ## Layout and provenance
 
 | Source | Imported tip | Destination |
