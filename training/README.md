@@ -64,7 +64,16 @@ uv run lm-ui
 
 # Train the fixed 100M architecture with code-defined defaults; no flags required.
 uv run python train.py
+
+# Sample from a trusted checkpoint (prompt characters must be in its vocabulary).
+uv run lm-generate --checkpoint runs/<id>/checkpoint.pt --prompt 'ROMEO:' \
+  --max-new-tokens 300
 ```
+
+`lm-generate` reads the model configuration and tokenizer from the checkpoint. It
+runs on CPU by default (`--device mps` is optional) and seeds from the training
+seed unless `--seed` is given. It samples from the full softmax; temperature and
+top-k are not implemented.
 
 Edit `TrainConfig` near the top of `train.py` for the dataset, steps, batch size,
 learning rate, seed, device and logging/checkpoint cadence. Model dimensions and
