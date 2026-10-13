@@ -101,3 +101,8 @@ Write-up corrected: distinguish severe small-set memorization from modest late
 validation degradation in the large long-response fit. Middle/right charts now
 share consecutive-match metric and 0–7 scale; late NLL rise is explicitly labeled.
 The tiny 12-example training diagnostic is not a full-training generalization gap.
+
+One-pager now typeset in LaTeX with automatic wrapping and explicit column break.
+Rebuild: `uv run --with matplotlib python scripts/render_drafter_learnings.py`
+(requires pdflatex, pdfinfo and pdftoppm). Source saved in
+`results/drafter-learnings.tex`; build checks one page and no overfull boxes.

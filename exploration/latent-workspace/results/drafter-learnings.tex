@@ -1,0 +1,36 @@
+% Generated from the Markdown write-up by scripts/render_drafter_learnings.py.
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=16mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype,multicol,graphicx,xcolor}
+\usepackage[hidelinks]{hyperref}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\columnsep}{7mm}
+\definecolor{heading}{HTML}{274963}
+\begin{document}
+{\LARGE\bfseries Implementing and training a\\diffusion-style drafter\par}
+{\large\color{heading} From scratch: learnings\par}
+\vspace{2mm}
+\begin{multicols}{2}
+We trained a separate \textbf{79M-parameter, five-layer drafter from random weights} for frozen \textbf{Qwen2.5-0.5B}. Following DFlash, it attends to five target hidden-state depths and predicts seven masked future tokens jointly after one known anchor. Only the drafter learns; target embeddings and vocabulary weights stay frozen.
+
+\textbf{What helped.} Controlled early comparisons improved validation consecutive-token matches from \textbf{0.384 $\rightarrow$ 0.484} with query/key RMSNorm, then \textbf{$\rightarrow$ 0.520} with five draft layers. Adding five feature depths reached \textbf{0.530}, but that incremental benefit was uncertain. Correct target-generated labels, causal context masks, normalized conditioning, and verified generation made the pipeline credible; these implementation checks were not independent improvement ablations.
+
+\textbf{Data and response coverage mattered most.} A matched 6K$\rightarrow$24K response study improved acceptance \textbf{0.57$\rightarrow$1.02}; a later 24K$\rightarrow$49K study reached \textbf{1.46}. Longer teacher responses gave the largest subsequent gain: at 6K updates on the same 49K examples, 64$\rightarrow$256-token caps improved long-context validation \textbf{1.76$\rightarrow$2.96}; short-context gains were smaller. The final large fits started fresh on 131K prose/code examples, then added translation to reach \textbf{196K}, preserving optimizer state. Translation improved rapidly after inclusion. Multiple prose prefixes increased contexts, not independent articles.
+
+\columnbreak
+
+\textbf{Overfitting and unsuccessful approaches.} Small datasets fit almost perfectly but generalized poorly, consistent with memorization. Larger training sets and longer teacher responses substantially reduced that problem. The large long-response run showed only modest late degradation: validation matches fell \textbf{4.033$\rightarrow$4.007}, while loss rose \textbf{2.105$\rightarrow$2.171} after the selected checkpoint. Increasing data improved generalization; it did not eliminate overfitting. Earlier weak-decoder tests found no consistent benefit from layer dropout/null memory, probe-selected layers, or compressed Jacobian-lens conditioning. That conditioning was not the paper's sparse J-space projection; these controls still need repeating on the capable drafter.
+
+\textbf{Outcome.} The selected 70.6K-update checkpoint scores \textbf{4.03/7 on validation and 3.94/7 on the once-opened test}: prose \textbf{5.01}, code \textbf{4.96}, translation \textbf{1.84}; 189 usable prompts. All \textbf{24 longer rollouts} matched Qwen exactly. Actual accepted draft tokens per verification were \textbf{4.51/4.30/1.20} by domain. These are one-seed target-imitation results; repetitive teacher outputs and changing data/exposure limit causal claims. Human answer quality and speedup were not established.
+\end{multicols}
+\vspace{1mm}
+\includegraphics[width=\linewidth]{drafter-learnings-charts.pdf}
+
+{\footnotesize \textbf{Reading the charts.} NEW means consecutive correct draft tokens beyond the supplied anchor, out of seven. Middle/right share a metric and scale; the left panel shows earlier, weaker models. One seed; exposure budgets differ across experiments. Matching Qwen is not a human-quality score.\par}
+\vspace{1mm}
+{\footnotesize \textbf{References.} \href{https://arxiv.org/abs/2602.06036}{DFlash (arXiv:2602.06036)}; \href{https://transformer-circuits.pub/2026/workspace/index.html}{Anthropic workspace / Jacobian lens}. Full reports and protocols are retained in the repository.\par}
+\end{document}

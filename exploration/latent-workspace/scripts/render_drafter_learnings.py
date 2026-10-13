@@ -2,7 +2,8 @@
 
 import json
 import re
-import textwrap
+import subprocess
+import tempfile
 from pathlib import Path
 
 import matplotlib
@@ -15,17 +16,7 @@ text = (
     root / "docs/implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md"
 ).read_text()
 paragraphs = text.split("\n\n")[1:6]
-plain = [p.replace("**", "").replace("→", " → ") for p in paragraphs]
-left = "\n\n".join(textwrap.fill(p, width=84) for p in plain[:3])
-right = "\n\n".join(textwrap.fill(p, width=84) for p in plain[3:])
-fig = plt.figure(figsize=(11.7, 8.3), facecolor="white")
-fig.text(
-    0.035, 0.955, "Implementing and training a diffusion-style drafter", fontsize=18, weight="bold"
-)
-fig.text(0.035, 0.921, "From scratch: learnings", fontsize=14, color="#274963")
-fig.text(0.035, 0.875, left, fontsize=9.1, va="top", linespacing=1.18)
-fig.text(0.525, 0.875, right, fontsize=9.1, va="top", linespacing=1.18)
-axes = [fig.add_axes([x, 0.12, 0.28, 0.26]) for x in (0.055, 0.38, 0.705)]
+fig, axes = plt.subplots(1, 3, figsize=(10.4, 3.35), layout="constrained")
 a = axes[0]
 a.bar(
     range(4),
@@ -113,18 +104,102 @@ for a in axes:
     a.tick_params(labelsize=8)
     a.title.set_fontsize(10)
     a.grid(axis="y", alpha=0.15)
-fig.text(
-    0.035,
-    0.045,
-    "One seed; different experiments have different exposure budgets. Middle/right use the same metric and scale. Matching Qwen is not human quality.",
-    fontsize=8,
+
+fig.savefig(root / "results/drafter-learnings-charts.pdf")
+
+
+def latex_escape(value):
+    escapes = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+        "→": r"$\rightarrow$",
+        "’": "'",
+        "–": "--",
+    }
+    parts = re.split(r"\*\*(.*?)\*\*", value)
+    return "".join(
+        (r"\textbf{" if i % 2 else "")
+        + "".join(escapes.get(char, char) for char in part)
+        + ("}" if i % 2 else "")
+        for i, part in enumerate(parts)
+    )
+
+
+body = "\n\n".join(latex_escape(p) for p in paragraphs[:3])
+body += "\n\n" + r"\columnbreak" + "\n\n"
+body += "\n\n".join(latex_escape(p) for p in paragraphs[3:])
+source = (
+    r"""% Generated from the Markdown write-up by scripts/render_drafter_learnings.py.
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=16mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype,multicol,graphicx,xcolor}
+\usepackage[hidelinks]{hyperref}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\columnsep}{7mm}
+\definecolor{heading}{HTML}{274963}
+\begin{document}
+{\LARGE\bfseries Implementing and training a\\diffusion-style drafter\par}
+{\large\color{heading} From scratch: learnings\par}
+\vspace{2mm}
+\begin{multicols}{2}
+"""
+    + body
+    + r"""
+\end{multicols}
+\vspace{1mm}
+\includegraphics[width=\linewidth]{drafter-learnings-charts.pdf}
+
+{\footnotesize \textbf{Reading the charts.} NEW means consecutive correct draft tokens beyond the supplied anchor, out of seven. Middle/right share a metric and scale; the left panel shows earlier, weaker models. One seed; exposure budgets differ across experiments. Matching Qwen is not a human-quality score.\par}
+\vspace{1mm}
+{\footnotesize \textbf{References.} \href{https://arxiv.org/abs/2602.06036}{DFlash (arXiv:2602.06036)}; \href{https://transformer-circuits.pub/2026/workspace/index.html}{Anthropic workspace / Jacobian lens}. Full reports and protocols are retained in the repository.\par}
+\end{document}
+"""
 )
-fig.text(
-    0.035,
-    0.024,
-    "Sources: DFlash arXiv:2602.06036; Anthropic workspace/Jacobian lens; full reports and protocol in the repository.",
-    fontsize=8,
-)
-fig.savefig(root / "results/drafter-learnings.png", dpi=160)
-fig.savefig(root / "results/drafter-learnings.pdf")
+(root / "results/drafter-learnings.tex").write_text(source)
+with tempfile.TemporaryDirectory() as build:
+    subprocess.run(
+        [
+            "pdflatex",
+            "-halt-on-error",
+            "-interaction=nonstopmode",
+            f"-output-directory={build}",
+            "drafter-learnings.tex",
+        ],
+        cwd=root / "results",
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
+    log = Path(build, "drafter-learnings.log").read_text()
+    if "Overfull" in log:
+        raise RuntimeError("LaTeX overflow detected; inspect the page layout")
+    pdf = Path(build, "drafter-learnings.pdf")
+    info = subprocess.check_output(["pdfinfo", str(pdf)], text=True)
+    if not re.search(r"Pages:\s+1\b", info):
+        raise RuntimeError("Write-up exceeds one page")
+    (root / "results/drafter-learnings.pdf").write_bytes(pdf.read_bytes())
+    subprocess.run(
+        [
+            "pdftoppm",
+            "-singlefile",
+            "-scale-to",
+            "2000",
+            "-png",
+            str(pdf),
+            str((root / "results/drafter-learnings").resolve()),
+        ],
+        check=True,
+    )
 print("Body words:", len(re.findall(r"\S+", " ".join(paragraphs))))
+print("LaTeX: one page, no overfull boxes")

@@ -13,3 +13,5 @@ We trained a separate **79M-parameter, five-layer drafter from random weights** 
 ![Architecture controls, modest late validation degradation, and held-out result](../results/drafter-learnings.png)
 
 [One-page PDF](../results/drafter-learnings.pdf) · [Measured evidence](../results/qualification-findings.md) · [DFlash](https://arxiv.org/abs/2602.06036) · [J-space / Jacobian lens](https://transformer-circuits.pub/2026/workspace/index.html)
+
+[LaTeX source](../results/drafter-learnings.tex). Rebuild with `uv run --with matplotlib python scripts/render_drafter_learnings.py` (requires TeX Live and Poppler).
