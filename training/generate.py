@@ -2,7 +2,8 @@
 
 Loads the model configuration and character tokenizer stored in the checkpoint,
 so no training settings are needed. Prompt characters outside the training
-vocabulary are errors. Sampling uses the full softmax distribution.
+vocabulary are errors. Output streams one token at a time as it is sampled.
+Sampling uses the full softmax distribution.
 """
 
 import argparse
@@ -12,7 +13,7 @@ from model_100m.model import GPT, ModelConfig
 from training_data.loading import CharacterTokenizer
 
 from run_utils import load_checkpoint
-from train import sample
+from train import sample_tokens
 
 
 def build_parser():
@@ -41,7 +42,11 @@ def main():
         model.to(args.device)
         tokenizer = CharacterTokenizer(checkpoint["tokenizer"]["characters"])
         seed = args.seed if args.seed is not None else checkpoint["config"]["training"]["seed"] + 2
-        print(sample(model, tokenizer, args.prompt, args.max_new_tokens, seed))
+        # Print the prompt, then each sampled character the moment it is generated.
+        print(args.prompt, end="", flush=True)
+        for token in sample_tokens(model, tokenizer, args.prompt, args.max_new_tokens, seed):
+            print(tokenizer.decode([token]), end="", flush=True)
+        print()
     except (ValueError, OSError) as error:
         parser.error(str(error))
 

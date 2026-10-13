@@ -70,7 +70,8 @@ uv run lm-generate --checkpoint runs/<id>/checkpoint.pt --prompt 'ROMEO:' \
   --max-new-tokens 300
 ```
 
-`lm-generate` reads the model configuration and tokenizer from the checkpoint. It
+`lm-generate` reads the model configuration and tokenizer from the checkpoint and
+prints each character as it is sampled. It
 runs on CPU by default (`--device mps` is optional) and seeds from the training
 seed unless `--seed` is given. It samples from the full softmax; temperature and
 top-k are not implemented.
