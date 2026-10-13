@@ -45,15 +45,43 @@ for i, v in enumerate([0.384, 0.484, 0.520, 0.530]):
 r = json.loads((root / "results/large-curriculum-final.json").read_text())["reports"]["256"]
 c = [p for p in r["curve"] if p["step"] > r["curriculum_transition"]["step"]]
 a = axes[1]
-a.plot([p["step"] / 1000 for p in c], [p["validation"]["nll"] for p in c], label="Validation")
 a.plot(
     [p["step"] / 1000 for p in c],
-    [p["training_diagnostic"]["nll"] for p in c],
-    linestyle="--",
-    label="12 training examples",
+    [p["validation"]["accepted_beyond_anchor"] for p in c],
+    label="Validation",
 )
-a.set(title="Long fit: late overfitting", xlabel="Updates (thousands)", ylabel="NLL")
-a.legend(fontsize=7)
+selected = next(p for p in c if p["step"] == 70585)
+final = c[-1]
+a.scatter(
+    [selected["step"] / 1000, final["step"] / 1000],
+    [
+        selected["validation"]["accepted_beyond_anchor"],
+        final["validation"]["accepted_beyond_anchor"],
+    ],
+    color=["#2a9d8f", "#d97732"],
+    zorder=3,
+)
+a.annotate(
+    "Selected 4.033",
+    (70.585, 4.03251),
+    xytext=(42, 5.15),
+    fontsize=8,
+    arrowprops={"arrowstyle": "->", "color": "#555555"},
+)
+a.annotate(
+    "Final 4.007",
+    (100, 4.00693),
+    xytext=(64, 3.1),
+    fontsize=8,
+    arrowprops={"arrowstyle": "->", "color": "#555555"},
+)
+a.text(0.04, 0.06, "Late validation NLL: 2.105 → 2.171 (+3.1%)", transform=a.transAxes, fontsize=7)
+a.set(
+    title="Large long fit: modest late decline",
+    xlabel="Updates (thousands)",
+    ylabel="Correct NEW / 7",
+    ylim=(0, 7),
+)
 r = json.loads((root / "results/qualification-long-196k-01.json").read_text())
 a = axes[2]
 keys = ["prose", "code", "translation"]
@@ -88,7 +116,7 @@ for a in axes:
 fig.text(
     0.035,
     0.045,
-    "One seed; different experiments have different exposure budgets. Training diagnostic is tiny. Matching Qwen is not a human-quality score.",
+    "One seed; different experiments have different exposure budgets. Middle/right use the same metric and scale. Matching Qwen is not human quality.",
     fontsize=8,
 )
 fig.text(

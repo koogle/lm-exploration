@@ -88,7 +88,7 @@ long-response checkpoint was qualified; the short arm was not selected for test.
 
 ## New user-directed stages
 
-Short write-up published:334 words and one-page PDF with three charts, linked in
+Short write-up published: one-page PDF with three charts, linked in
 README. Next: actual sparse J-space conditioning on the qualified head, primarily
 augmentation alongside raw states, with raw and random-frame controls. J-only is
 a later optional ablation after the user clarified the semantic side-channel goal. See
@@ -96,3 +96,8 @@ a later optional ablation after the user clarified the semantic side-channel goa
 local safeguards are implemented; bounded real-model profiling is pending.
 No new J comparison or unverified/benchmark result exists yet. Prior consumed
 test remains unavailable for selecting these variants.
+
+Write-up corrected: distinguish severe small-set memorization from modest late
+validation degradation in the large long-response fit. Middle/right charts now
+share consecutive-match metric and 0–7 scale; late NLL rise is explicitly labeled.
+The tiny 12-example training diagnostic is not a full-training generalization gap.
