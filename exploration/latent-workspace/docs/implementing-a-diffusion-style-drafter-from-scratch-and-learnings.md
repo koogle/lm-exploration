@@ -1,14 +1,14 @@
 # Implementing and training a diffusion-style drafter from scratch: learnings
 
-We trained a separate **79M-parameter, five-layer drafter from random weights** for frozen **Qwen2.5-0.5B**. Following DFlash, it attends to five target hidden-state depths and predicts seven masked future tokens jointly after one known anchor. Only the drafter learns; target embeddings and vocabulary weights stay frozen.
+We wanted to train a small drafter around a frozen Qwen model and see whether it could predict several tokens together. We trained a **79M-parameter, five-layer drafter from scratch** for **Qwen2.5-0.5B**. It uses Qwen's hidden states and predicts seven new tokens after one known anchor. Qwen stays frozen throughout.
 
-**What helped.** Controlled early comparisons improved validation consecutive-token matches from **0.384 → 0.484** with query/key RMSNorm, then **→ 0.520** with five draft layers. Adding five feature depths reached **0.530**, but that incremental benefit was uncertain. Correct target-generated labels, causal context masks, normalized conditioning, and verified generation made the pipeline credible; these implementation checks were not independent improvement ablations.
+**What helped.** Query/key normalization improved our early validation score from **0.384 to 0.484** correct new tokens. A deeper drafter reached **0.520**. Using five hidden-state depths reached **0.530**, but that last difference was too small to be confident about. Getting the labels and context masks right was also necessary: the drafter should learn Qwen's next tokens without seeing them in its context.
 
-**Data and response coverage mattered most.** A matched 6K→24K response study improved acceptance **0.57→1.02**; a later 24K→49K study reached **1.46**. Longer teacher responses gave the largest subsequent gain: at 6K updates on the same 49K examples, 64→256-token caps improved long-context validation **1.76→2.96**; short-context gains were smaller. The final large fits started fresh on 131K prose/code examples, then added translation to reach **196K**, preserving optimizer state.
+**The biggest improvement came from the data.** More examples helped: **6K to 24K responses moved the score from 0.57 to 1.02**, and a later 49K run reached **1.46**. Longer responses helped even more. On the same 49K examples, at the same 6K updates, extending responses from 64 to 256 tokens moved long-context validation from **1.76 to 2.96**. We then trained on **196K examples across prose, code and translation**.
 
-**Overfitting and unsuccessful approaches.** Small datasets fit almost perfectly but generalized poorly, consistent with memorization. Larger training sets and longer teacher responses substantially reduced that problem. The large long-response run showed only modest late degradation: validation matches fell **4.033→4.007**, while loss rose **2.105→2.171** after the selected checkpoint. Increasing data improved generalization; it did not eliminate overfitting. Earlier weak-decoder tests found no consistent benefit from layer dropout/null memory, probe-selected layers, or compressed Jacobian-lens conditioning.
+**The small runs looked like memorization.** They fit the training data well but did poorly on validation. More data and longer responses substantially improved that. The large long-response run only slipped slightly after its best checkpoint: **4.033 to 4.007** correct new tokens, with validation loss rising about **3.1%**. We kept the earlier checkpoint. Layer dropout, selected layers and the earlier compressed Jacobian-lens conditioning had not given us a consistent improvement.
 
-**Outcome.** The selected 70.6K-update checkpoint scores **4.03/7 on validation and 3.94/7 on the once-opened test**: prose **5.01**, code **4.96**, translation **1.84**; 189 usable prompts. All **24 longer rollouts** matched Qwen exactly. Actual accepted draft tokens per verification were **4.51/4.30/1.20** by domain. These are one-seed target-imitation results; repetitive teacher outputs and changing data/exposure limit causal claims. Human answer quality and speedup were not established.
+**Where we ended up.** The selected drafter scored **4.03 out of seven on validation and 3.94 on test**: **5.01 for prose, 4.96 for code and 1.84 for translation**. All **24 longer verified generations** matched Qwen exactly. We now have a drafter that learns and generalizes on this evaluation. We have not yet shown better answer quality or an overall speedup.
 
 ![Validation performance by domain and average, with a visual explanation of scoring](../results/drafter-learnings.png)
 
@@ -16,57 +16,64 @@ We trained a separate **79M-parameter, five-layer drafter from random weights** 
 
 [LaTeX source](../results/drafter-learnings.tex). Rebuild with `uv run --with matplotlib python scripts/render_drafter_learnings.py` (requires TeX Live and Poppler).
 
+## Detailed report: what we built and how we trained it
 
-## Detailed report: model and training
+### The drafter
 
-### What we built
+The idea was to train a new, small drafting model for an already trained LLM. **The 79M drafter learns from random weights; Qwen2.5-0.5B stays frozen.** We use Qwen's tokenizer, token embeddings and output vocabulary weights. We train the drafter's own layers and its projection of Qwen's hidden states.
 
-A separate **79M-parameter, five-layer DFlash-style drafter** learns from random weights while **Qwen2.5-0.5B stays frozen**. This is training a proposal model around an existing language model, not pretraining Qwen itself. The drafter uses Qwen's tokenizer, input embeddings and vocabulary projection; those shared weights remain frozen. Its learned layers and conditioning projection are the trainable component.
+Following DFlash, we take Qwen's hidden states after blocks **2, 7, 12, 17 and 22**, join them together, and project and normalize them into context memory. The five draft layers attend to that memory and to the tokens in the proposed block. They use query/key RMSNorm, rotary positions and a gated MLP. One known anchor is followed by **seven masked positions**. The drafter predicts all seven in one pass. This is diffusion-style masked drafting; we are not doing repeated denoising rounds here.
 
-Target hidden states from post-block depths **2, 7, 12, 17 and 22** are concatenated, projected and normalized into context memory. Each draft layer attends to this memory and the current block. The selected architecture uses query/key RMSNorm, rotary positions and a gated MLP. One known anchor precedes **seven masked future positions**, predicted jointly in one pass; “diffusion-style” does not imply iterative denoising in this implementation.
+### The training data
 
-### How we trained it
+We train on **responses generated by Qwen**, rather than asking the drafter to copy human text that Qwen might not generate. For each response, we sample places to start a block. The drafter gets the anchor token and Qwen's hidden states strictly before it. It then learns the next seven tokens. The attention mask keeps future tokens out of its context and keeps separate training blocks from attending to each other.
 
-Qwen-generated continuations supply the labels. At sampled anchors, the drafter sees only eligible pre-anchor target features and an isolated masked block. Cross-entropy supervises the seven new tokens, with exponential position weighting (gamma 4); the supplied anchor is excluded. Causal memory masks prevent future-label leakage. The final runs extract teacher features online while keeping the target frozen.
+We compared teacher responses capped at **64 tokens and 256 tokens**, training a fresh drafter for each. Both started on **131,072 prose/code examples**, then added translation to reach **196,608 balanced examples**. We kept the optimizer and sampling state when adding translation. Translation arrived at update 17,985 in the short-response run and 11,472 in the long-response run, so this final comparison also changes how long each model trained on translation.
 
-Two fresh models compared **64-token and 256-token teacher-response caps**. Both began with **131,072 prose/code examples** (65,536 per domain), then added translation to reach **196,608 balanced examples**. The transition preserved each model's optimizer, RNG and global schedule. It occurred at update 17,985 for the short arm and 11,472 for the long arm, so this comparison also changes domain-exposure timing.
+### The training setup
 
-Each arm completed **100,000 updates** and **268.8M supervised new-token exposures**: batch 48, eight anchors per response and seven labels per anchor. AdamW used learning rate 0.0006, weight decay 0.01, 4% warmup, cosine scheduling and gradient clipping at 1. Seed was 42. These are token exposures with repeated sampling, not 268.8M unique tokens. Bounded Modal workers checkpointed and resumed the global run.
+Each model completed **100,000 updates**. A batch had 48 responses, eight sampled anchors per response and seven new-token labels per anchor: **268.8M label exposures per model**. These include repeated sampling of the same responses; they are not 268.8M unique tokens. We ran the training in bounded Modal jobs and resumed from checkpoints.
 
-### How we added it to generation
+We used AdamW with learning rate 0.0006, weight decay 0.01, 4% warmup, a cosine schedule and gradient clipping at 1. The seed was 42. The loss was cross-entropy, with more weight on earlier draft positions using an exponential decay with gamma 4. The anchor was excluded from the loss. Qwen's hidden states were extracted during training, with its weights frozen.
 
-**1. Prefill:** Qwen processes the prompt, supplies its greedy next token as the anchor, and provides hidden-state memory. **2. Propose:** the drafter predicts up to seven following tokens in parallel. **3. Verify:** Qwen processes the proposed block; accept only the consecutive matching prefix. **4. Continue:** emit the anchor plus accepted proposals, discard rejected cache positions, append committed target features, and use Qwen's correction as the next anchor.
+### How generation works
 
-This is a **greedy verified decoding path**, not a standalone replacement for Qwen. The longer parity checks use FP32 verification on stored BF16 target weights. The Qwen3.5 hybrid-cache rollback path remains unimplemented. No deployment into the custom Apple inference runtime is claimed.
+Qwen processes the prompt and gives us the next token, which becomes the anchor. The drafter proposes the following seven tokens together. Qwen then checks that block. We keep the consecutive matching prefix and stop accepting at the first disagreement. We discard rejected cache positions, keep the committed context, and use Qwen's correction as the next anchor.
+
+The verifier is why this path can reproduce Qwen's greedy output exactly. The drafter helps propose tokens; Qwen still decides which ones to commit. Our longer correctness checks used FP32 verification on the stored BF16 Qwen weights.
 
 <!-- report-page -->
 
-## Detailed report: evidence and lessons
+## Detailed report: what we learned and what comes next
 
-### What changed performance
+### What made it work
 
-Early matched comparisons moved validation consecutive matches from **0.384 to 0.484** with query/key normalization, then to **0.520** with five draft layers. Five target feature depths reached **0.530**, with uncertain incremental benefit. Larger response pools and longer teacher continuations then produced the biggest improvements. These are separate studies, not one controlled cumulative attribution of the final gain.
+Normalization helped early, and a deeper drafter helped too. The deeper model also had more parameters, so we have not separated depth from capacity. Adding more hidden-state depths gave a much smaller, uncertain improvement. These were separate early comparisons; we should not read them as a complete explanation of the final model's performance.
 
-On the same 49K examples at 6K updates, changing response caps from 64 to 256 improved long-context validation from **1.76 to 2.96**. In the final curriculum, selected short/long scores were **2.195 and 4.033 new tokens out of seven**. Keep the long-response checkpoint at **update 70,585**, not the final weights: by update 100,000, matches declined slightly to 4.007 and NLL rose from 2.105 to 2.171.
+The strongest improvements came from **more training examples and longer teacher responses**. On the same 49K examples at 6K updates, longer responses moved long-context validation from **1.76 to 2.96**. In the final large runs, the best short-response model reached **2.195** correct new tokens and the best long-response model reached **4.033**. Longer responses let us sample more places in a continuation, including contexts after Qwen had already generated some text.
 
-### Held-out qualification
+The long run's best checkpoint was at **update 70,585**. By 100,000 updates, its score was **4.007** and loss had risen from **2.105 to 2.171**. Training beyond 20K still helped, but the later gains were smaller. Four is a plateau for this setup, not an established ceiling for drafting.
 
-The selected long-response checkpoint was frozen before opening the test. On **189 usable prompts**, evenly split across prose, code and translation, consecutive-match scores were **5.014 / 4.958 / 1.843**, for an equal-domain average of **3.938 out of seven**. The conditional 95% bootstrap interval for that average was **3.764–4.106**. This passes the predeclared threshold of average at least two and every domain at least one.
+### What we actually validated
 
-All **24 longer verified rollouts**, totaling **3,906 generated tokens**, matched ordinary greedy Qwen output exactly. Actual accepted new draft tokens per verification call were **4.514 prose / 4.300 code / 1.195 translation**. These live-rollout measurements use different prompts and arithmetic from cached teacher-trajectory scoring; the two metrics are not interchangeable. The chart's anchor is never counted, nor are tokens after the first mismatch.
+We selected and froze the long-response checkpoint before opening the test. It scored **3.938 correct new tokens out of seven** across **189 usable prompts**, with 63 in each domain. Prose scored **5.014**, code **4.958** and translation **1.843**. We weight the three domains equally. A source-group bootstrap gave a 95% interval of **3.764 to 4.106** for the overall score, conditional on this one trained model.
 
-### What we learned, and what did not work
+We also ran **24 longer verified generations**, totaling **3,906 tokens**. Every output matched ordinary greedy Qwen generation. In these live runs, the average accepted new draft tokens per verification call were **4.514 for prose, 4.300 for code and 1.195 for translation**. That is a separate measurement from predicting blocks along recorded teacher responses. In both cases, the anchor is excluded and tokens after the first mismatch do not count.
 
-Tiny training pools could be memorized while held-out drafting stayed poor. More examples and longer responses improved generalization, but did not remove late overfitting. The training diagnostic sampled only twelve responses; it is not a full-corpus generalization-gap estimate. Earlier weak-decoder studies found no consistent gain from dropout/null-memory controls, probe-selected layers or compressed Jacobian-lens conditioning.
+### What did not help
 
-A separate Qwen3.5-2B target comparison remained weak (0.170 versus 0.387 new matches for the small-target comparison on shared validation sources). Target family, tokenizer, formatting and draft capacity also changed, so this does not show that larger targets inherently draft worse.
+On small datasets, the drafter could fit the training examples while validation remained poor. That looked like memorization. Scaling the data and using longer responses substantially improved generalization, although we still saw some late overfitting. Our training diagnostic only sampled twelve responses, so its gap from validation should not be treated as a full training-set measurement.
 
-### Limits and next work
+Earlier tests with weaker decoders did not show a consistent benefit from layer dropout/null memory, probe-selected layers or compressed Jacobian-lens conditioning. We learned much less from those tests because the drafting baseline itself was still weak.
 
-These are **one-seed target-imitation results**, not evidence of human answer quality or a general wall-clock speedup. Repetitive teacher outputs, adaptive validation selection and changing curriculum/exposure limit causal claims. The drafting test is now consumed and cannot select later variants. The trained drafter does not establish from-scratch language-model capability in the separate training project.
+### The J-space question
 
-The next J-space study is an **unfinished follow-up**: add sparse semantic conditioning alongside existing raw hidden states, with raw-only and random-frame controls and fresh held-out evaluation. Training-only helpers exist, but no new J-space fit, unverified two/three-token generation benchmark or resulting quality improvement is established. Preserve the qualified baseline while testing those hypotheses.
+Now that we have a capable drafter, we are testing whether **adding J-space alongside the existing hidden states** helps it use the concepts represented there. We are comparing raw states, raw states plus sparse J-space, and raw states plus a random-frame control. Each starts from the same qualified drafter and gets the same data and updates, with fresh validation and test prompts.
 
-### Evidence and reproducibility
+At the last checked checkpoint, **2,530 of 30,000 updates**, the validation scores were **3.948 for raw states, 3.938 with J-space and 3.941 with the random frame**. So far, we have not seen a convincing J-space benefit. The comparison is still running, and its fresh test remains unopened.
 
-The repository retains the full curriculum report, qualification findings, frozen checkpoint manifest, final model configuration, and executable training/decoding code. The selected checkpoint is best.pt in the fresh-grid-196608-r256-11 Modal run; its full checksum and evaluation identities are retained in the frozen manifest. No new training was run to prepare this report.
+### What this tells us
+
+We have shown that our drafter can learn to imitate Qwen beyond its training examples. This is one seed, and some teacher responses are repetitive. We still need separate evidence for answer quality, speed, and what happens if we commit two or three tokens without verification. The original drafting test is now consumed; later model choices need fresh held-out evaluation.
+
+The repository keeps the configurations, training curves, qualification results, paper references and checkpoint checksums. The selected baseline is best.pt in the fresh-grid-196608-r256-11 Modal run. The J-space comparison is tracked separately so its unfinished results do not get mixed into the completed baseline study.

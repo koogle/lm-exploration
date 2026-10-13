@@ -150,3 +150,13 @@ Initial controller-epoch reservations:$189.625/$500, not actual bill; remote
 ledger becomes authoritative for subsequent workers and controller handoffs.
 Checks before launch:130 tests pass, Ruff/diff checks pass. Source package remains
 frozen. No J-space quality comparison has completed yet.
+
+## Report prose revision
+
+Rewrote the summary and both detailed pages in direct first-person plural prose,
+following the user's explanations of the project. Keep the original measurements,
+performance/scoring visuals and paper references. Remove the distracting larger-
+target aside from the short report. Replace stale J-space preparation-only text
+with the last checked2530-update comparison (unfinished; fresh test unopened).
+LaTeX rebuild checked three pages and no overfull boxes; all pages visually
+inspected. Ruff/format and diff checks pass. No training code or live job changed.
