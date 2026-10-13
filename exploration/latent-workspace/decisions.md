@@ -147,3 +147,10 @@
   to balanced 196608 with the same optimizer/RNG/global schedule after full
   teacher preparation. Record this as a curriculum and its exact transition
   steps, not a fresh all-domain 196k fit from update zero. Keep validation fixed.
+
+- 2026-10-13: User authorized both pending qualification tasks. Freeze long-response
+  update70585;24 longer verified outputs match target before opening sealed test.
+  One-time test passes macro3.93836 with every domain>=1 on189 usable prompts.
+  Mark the drafting holdout consumed; no test-based checkpoint/hyperparameter
+  retuning. Working-drafter criterion met for this head; original representation
+  hypotheses and broad speed/human-quality claims remain unestablished.

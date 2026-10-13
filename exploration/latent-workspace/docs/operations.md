@@ -308,3 +308,14 @@ continuation configs. Both calls were confirmed active; no package source or
 optimizer reset. Failed reservations remain. Current authoritative ledger under
 `fresh-grid-controller-09/`, launch reservations117.125/500. New checkpoints, not
 launch state alone, establish further training progress.
+
+### Completed one-time qualification
+
+`qualification-long-196k-01` passed24 longer output-parity checks before test
+labels were opened, then evaluated189 usable sealed prompts with fixed selection.
+Frozen manifest records checkpoint44865d84 SHA and helper/source fingerprints.
+Full report and bootstrap summary are in results; test is now consumed. Local
+`artifacts/qualification-handle.json` preserves the completed call for read-only
+status. Ledger includes its$5 reservation, current epoch167.125/500. Do not
+repeat this test to select different checkpoints or settings. Training weights
+remain at the selected checkpoint on the Modal volume.

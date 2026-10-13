@@ -1,7 +1,7 @@
 # Open work
 
-The large-data curriculum training is **complete**. Useful-drafter research and
-sealed-test qualification remain unfinished. Use uv; direct main commits/pushes
+The large-data curriculum training is **complete**. The selected long-response drafter has now passed longer-rollout and sealed-test
+qualification. Further architecture/representation research remains open. Use uv; direct main commits/pushes
 remain authorized. No active training workers or coordinator remain.
 
 ## Completed result
@@ -24,22 +24,27 @@ keeping the global schedule. Dataset transitions occur at 17985/11472 updates
   saturation; selected head improves on historical49k/256 best3.60350.
 - Both selected heads pass the preliminary validation macro>=2/every-domain>=1
   criterion. All twelve short verified rollouts per head match target output.
-  Test remains sealed; no longer-rollout/full-test qualification exists.
+  [Qualification](results/qualification-findings.md) is complete for the selected
+  long-response head:24/24 longer-rollout parity, test NEW3.93836 and every
+  domain>=1; test is now consumed.
 
 Selected files: `/runs/fresh-grid-196608-r64-08/best.pt` and
-`/runs/fresh-grid-196608-r256-11/best.pt`. Freeze/checksum the long selected head
-and evaluation configuration next. These paths inherit best weights, not final.
+`/runs/fresh-grid-196608-r256-11/best.pt`. The long selected head and evaluation configuration are frozen and checksummed
+in `results/qualification-frozen.json`. These paths inherit best weights, not final.
 Frozen training package SHA:
 `47d71073e55a03e87c4bdb59df6aa684cedc532815d30c9f44167ff97da919ae`.
 
-## Remaining qualification and analysis
+## Completed qualification and remaining research
 
-- Longer verified rollouts and actual acceptance, with FP32 target arithmetic
-  matching the existing correctness reference; parity is required.
+- Longer rollout task completed:24/24 outputs and3906 generated tokens match
+  FP32 target greedy output. Actual NEW/call prose4.514/code4.300/translation1.195.
 - Repetition/position/context-length validation slices. Some greedy teacher
   responses are repetitive; acceptance is not a human answer-quality score.
-- Freeze selected checkpoint/config and evaluate the sealed drafting test once.
-  Preserve historical already-used conditioning test as a distinct partition.
+- Frozen sealed-test task completed once:189 usable prompts (63/domain),
+  NEW3.93836/NLL2.09540; two duplicate responses and one short response excluded
+  by the fixed policy. No test-based retuning. The drafting test is now used;
+  future model choices require validation and a new final holdout. Preserve the
+  historical conditioning test as a distinct already-used partition.
 - Full-corpus fitting diagnostics if needed; current train curves sample only
   twelve responses. Per-layer activation/gradient/projection diagnostics remain
   authorized but unexecuted: [plan](docs/dflash-learning-diagnostics.md).
@@ -56,7 +61,7 @@ Local ledger `artifacts/budget.json` is synced to the authoritative remote ledge
 Ownership marker released only after confirming terminal state/no active workers;
 handle archived as `artifacts/budget_remote_controller-09-complete.json`.
 
-Current user-reset epoch reservations: **$162.125/$500**, not actual Modal bill.
+Current user-reset epoch reservations: **$167.125/$500**, not actual Modal bill.
 Historical $468 ledger stays archived separately; failed/canceled reservations
 are retained. Do not reset or drop this accounting without user instruction.
 Single-use GPU containers prevent retained mmap handles blocking reload between
@@ -76,4 +81,7 @@ User requests both pending tasks. Frozen selection: long-response step70585.
 are recorded before GPU execution. Standalone evaluator tests leakage/parity
 guards and does not modify the frozen training package. One bounded qualification
 input will perform24 longer validation rollouts, then192 reserved test prompts
-only if parity passes; GPU execution is pending at this publication.
+only if parity passes; GPU execution completed: `qualification-long-196k-01`,240 seconds. See
+`results/qualification-findings.md`, full report, chart and conditional
+source-group bootstrap intervals. Both requested tasks pass. Only the selected
+long-response checkpoint was qualified; the short arm was not selected for test.

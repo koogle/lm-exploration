@@ -1,0 +1,21 @@
+{
+  "processed": 192,
+  "exclusions": [
+    {
+      "group": "prose:a4d6499e78500cd1cd2e79a822305575c2d23980d72f5db3a04a2d9776cb5d0e",
+      "domain": "prose",
+      "reason": "exact_response_duplicate"
+    },
+    {
+      "group": "code:aeron15/ruffus",
+      "domain": "code",
+      "reason": "exact_response_duplicate"
+    },
+    {
+      "group": "translation:8014f594f1a5300f18f7ae9d5884a06ca5cc90fb21190cd04dc3c05f31b8a52d",
+      "domain": "translation",
+      "reason": "short"
+    }
+  ],
+  "usable": 189
+}

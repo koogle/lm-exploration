@@ -38,3 +38,8 @@ frozen selection/config and already-generated labels; never launch a new selecti
 Implemented local safeguards: source-group and exact-prefix leakage rejection,
 parity fails closed on any mismatch/empty check, domain floor cannot be hidden by
 macro success. GPU evaluation is still pending at protocol publication.
+
+Completed outcome: [findings](../results/qualification-findings.md).24/24 long
+rollouts match; frozen test passes with3.93836 NEW/7 on189 prompts. Selected
+checkpoint checksum, evaluator/protocol fingerprints and every exclusion are
+archived. This test is now consumed; no further selection or retuning on it.

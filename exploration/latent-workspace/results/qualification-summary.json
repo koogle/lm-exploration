@@ -1,0 +1,148 @@
+{
+  "checkpoint_step": 70585,
+  "checkpoint_sha256": "44865d84016898f575cf009c5cd2c2acb919564f009e912170cf4ba131b4e768",
+  "test_gate_passed": true,
+  "test_NEW": 3.9383597883597883,
+  "test_NLL": 2.0954038302103677,
+  "test_by_domain": {
+    "prose": {
+      "nll": 1.195212721824646,
+      "nll_by_draft_position": [
+        0.7090129256248474,
+        0.8930414319038391,
+        1.0736064910888672,
+        1.1933878660202026,
+        1.3146740198135376,
+        1.4969114065170288,
+        1.6858550310134888
+      ],
+      "accuracy_by_draft_position": [
+        0.8452380895614624,
+        0.8134920597076416,
+        0.7996031641960144,
+        0.7638888955116272,
+        0.7400793433189392,
+        0.716269850730896,
+        0.6865079402923584
+      ],
+      "mean_accepted_beyond_anchor": 5.013888888888889,
+      "full_draft_acceptance": 0.6190476190476191,
+      "prompts": 63,
+      "blocks": 504,
+      "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+    },
+    "code": {
+      "nll": 1.1551676988601685,
+      "nll_by_draft_position": [
+        0.41540297865867615,
+        0.613014817237854,
+        0.8811259269714355,
+        1.2358888387680054,
+        1.4796233177185059,
+        1.6650952100753784,
+        1.7960236072540283
+      ],
+      "accuracy_by_draft_position": [
+        0.9126983880996704,
+        0.8551587462425232,
+        0.8194444179534912,
+        0.7876983880996704,
+        0.7400793433189392,
+        0.6726190447807312,
+        0.636904776096344
+      ],
+      "mean_accepted_beyond_anchor": 4.958333333333333,
+      "full_draft_acceptance": 0.5317460317460317,
+      "prompts": 63,
+      "blocks": 504,
+      "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+    },
+    "translation": {
+      "nll": 3.935831069946289,
+      "nll_by_draft_position": [
+        1.4517210721969604,
+        2.837350845336914,
+        3.7937769889831543,
+        4.404484272003174,
+        5.078878879547119,
+        4.995034694671631,
+        4.989570140838623
+      ],
+      "accuracy_by_draft_position": [
+        0.6897959113121033,
+        0.5346938967704773,
+        0.40612244606018066,
+        0.30612245202064514,
+        0.24285714328289032,
+        0.26734694838523865,
+        0.23061224818229675
+      ],
+      "mean_accepted_beyond_anchor": 1.8428571428571427,
+      "full_draft_acceptance": 0.04897959183673469,
+      "prompts": 63,
+      "blocks": 490,
+      "acceptance_note": "Consecutive matches on held-out greedy teacher trajectories; anchor excluded. Actual rollout is benchmarked separately."
+    }
+  },
+  "NEW_95pct_CI": {
+    "prose": [
+      4.73015873015873,
+      5.279761904761905
+    ],
+    "code": [
+      4.628968253968254,
+      5.273809523809524
+    ],
+    "translation": [
+      1.5743791132955176,
+      2.1434422348484845
+    ],
+    "overall": [
+      3.764105107383098,
+      4.106469950559923
+    ]
+  },
+  "long_rollouts": {
+    "prose": {
+      "prompts": 8,
+      "output_tokens": 1828,
+      "accepted_new_per_verification": 4.513595166163142,
+      "verification_calls": 331,
+      "all_outputs_match": true
+    },
+    "code": {
+      "prompts": 8,
+      "output_tokens": 1789,
+      "accepted_new_per_verification": 4.299703264094956,
+      "verification_calls": 337,
+      "all_outputs_match": true
+    },
+    "translation": {
+      "prompts": 8,
+      "output_tokens": 289,
+      "accepted_new_per_verification": 1.1953125,
+      "verification_calls": 128,
+      "all_outputs_match": true
+    }
+  },
+  "usable_test_prompts": 189,
+  "reserved_test_prompts": 192,
+  "exclusions": [
+    {
+      "group": "prose:a4d6499e78500cd1cd2e79a822305575c2d23980d72f5db3a04a2d9776cb5d0e",
+      "domain": "prose",
+      "reason": "exact_response_duplicate"
+    },
+    {
+      "group": "code:aeron15/ruffus",
+      "domain": "code",
+      "reason": "exact_response_duplicate"
+    },
+    {
+      "group": "translation:8014f594f1a5300f18f7ae9d5884a06ca5cc90fb21190cd04dc3c05f31b8a52d",
+      "domain": "translation",
+      "reason": "short"
+    }
+  ],
+  "uncertainty_note": "10000 source-group bootstrap samples, stratified by domain, blocks weighted within domains. Conditional on the frozen selected checkpoint; excludes seed variability and validation-selection uncertainty."
+}

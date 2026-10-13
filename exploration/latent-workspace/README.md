@@ -6,13 +6,15 @@ Two fresh 79M drafters for frozen Qwen2.5-0.5B finished 100000 updates on a
 **4.03 correct consecutive NEW tokens / 7**, versus 2.19 for short responses and
 3.60 in the historical49k long-response study. Late overfitting favors retaining
 the selected70.6k checkpoint. All12 short verified rollouts per head match Qwen;
-longer verification and sealed-test qualification remain pending.
+[Longer verification and sealed-test qualification](results/qualification-findings.md)
+now pass:24/24 longer outputs match Qwen; sealed test scores **3.94 NEW / 7**
+(prose5.01, code4.96, translation1.84) on189 usable held-out prompts.
 
 ![Completed large-data training](results/large-curriculum-final.png)
 
 These are one-seed, adaptively selected validation results; curriculum/exposure
-confound a pure data-size comparison. Useful-drafter qualification remains
-unfinished. See [open work](OPEN_WORK.md) and [study protocol](docs/dflash-fresh-grid.md).
+confound a pure data-size comparison. The selected long-response head meets the study
+qualification criterion; further architecture/representation research remains open. See [open work](OPEN_WORK.md) and [study protocol](docs/dflash-fresh-grid.md).
 
 Current priority: build a **DFlash-style drafter for frozen Qwen targets**
 that predicts useful multi-token blocks. Train on Qwen-generated continuations,
