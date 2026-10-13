@@ -2,7 +2,7 @@
 
 The large-data curriculum training is **complete**. The selected long-response drafter has now passed longer-rollout and sealed-test
 qualification. Further architecture/representation research remains open. Use uv; direct main commits/pushes
-remain authorized. No original curriculum workers remain. The new J-space study has active calibration/data preparation; see below.
+remain authorized. No original curriculum workers remain. The new J-space study is paused at4237 updates; checkpoints are retained.
 
 ## Completed result
 
@@ -123,7 +123,7 @@ integration, qualification evidence, negative findings and remaining J-space wor
 The same renderer now checks **three pages** and no overfull boxes; the earlier
 one-page build notes above describe the previous version. README links point to
 the expanded report. This documentation update did not launch training.
-## Active J-space augmentation comparison
+## J-space augmentation setup (now paused)
 
 - Full calibration: `jspace-calibration-1000-01`, goal1000 training prefixes,
   resumed from successful2-prefix check. Persisted333 at the first status read.
@@ -168,3 +168,29 @@ no demonstrated semantic gain over random frame. Full interim report archived
 in `results/jspace-interim-4237.json`; PDF progress updated. Calibration1000
 complete; training continues, fresh test unopened. These are interim validation
 scores, not final paired-test conclusions.
+
+## Current J-space status: paused
+
+User questioned continuing without improvement after the first ~10% of updates.
+Paused the study after workspace connectivity recovered. Modal app02 is confirmed
+stopped with zero tasks at2026-10-13 19:23 UTC. Last committed checkpoint remains
+worker05,4237/30000 updates; interrupted worker06 had no committed report. All
+three saved models/optimizers/RNG/global schedule and selected weights remain.
+Fresh test stays unopened. Do not automatically resume this experiment.
+Evidence:`results/jspace-paused.json`, also `/runs/jspace-study-controller-02/pause.json`.
+
+Controller01 had failed on restart with FileExistsError: it recreated an existing
+output directory. Its pending worker05 had completed4237 despite parent state3385.
+After terminal checks, synced its$214.625 ledger and retained every reservation.
+Controller02 adopted the completed call and launched worker06 with unchanged
+training code. The new helper makes initialization idempotent, preserves the
+remote ledger, reconciles child journals/calls and makes completed tests terminal.
+Recovery evidence:`results/jspace-recovery-01.json`.
+
+Current local ledger is synced from controller02:$225.625/$500 reservations,
+not actual bill. Ownership marker archived only after stopped app/zero tasks were
+confirmed. Existing controller state files saying running are historical snapshots;
+check actual app/call status and the pause record. No training source changed.
+
+Verification before push:132 tests pass, Ruff/format/diff checks pass; updated
+PDF is three pages with no overfull boxes. The Modal app is stopped/zero tasks.

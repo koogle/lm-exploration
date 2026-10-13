@@ -167,3 +167,13 @@ score3.958409/3.965139/3.967037 NEW; all started3.959133. These changes are
 small and J-space has not outperformed the random control. Training continues
 on the declared schedule; fresh test labels remain unopened.
 [Full interim report](../results/jspace-interim-4237.json).
+
+## Study paused
+
+User questioned completing30k updates without an early semantic benefit. Stopped
+Modal app02 and confirmed zero running tasks after workspace access recovered.
+Last durable checkpoint is4237 in worker05; worker06 was interrupted without a
+committed report. No fresh test accessed. The comparison is incomplete, and its
+small interim validation differences do not establish a semantic benefit or a
+universal negative result. Preserve weights and calibration for diagnostics.
+See `results/jspace-paused.json`; do not automatically resume.

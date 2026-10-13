@@ -1,0 +1,12 @@
+{
+  "prior_controller": "jspace-study-controller-01",
+  "failure": "FileExistsError when the restarted controller attempted to recreate its existing output directory",
+  "confirmed_controller_terminal": true,
+  "confirmed_last_gpu_worker_completed": true,
+  "last_worker": "jspace-matched-30k-05",
+  "saved_step": 4237,
+  "prior_reserved_usd": 214.625,
+  "retained_optimizers_sampler_rng_and_schedule": true,
+  "training_source_unchanged": true,
+  "test_status": "unopened"
+}

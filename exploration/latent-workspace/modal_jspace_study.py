@@ -19,6 +19,7 @@ image = (
     .env({"PATH": "/project/.venv/bin:/usr/local/bin:/usr/bin:/bin", "HF_HOME": "/cache/hf"})
     .add_local_file("jspace_next.py", "/project/jspace_next.py", copy=True)
     .add_local_file("jspace_study.py", "/project/jspace_study.py", copy=True)
+    .add_local_file("jspace_controller_state.py", "/project/jspace_controller_state.py", copy=True)
     .add_local_python_source("latent_workspace")
 )
 
@@ -83,6 +84,7 @@ def gpu_worker(protocol, run_id, phase, calibration="", resume=""):
     image=image,
     cpu=2,
     memory=4096,
+    max_containers=1,
     timeout=86400,
     retries=0,
     single_use_containers=True,
@@ -98,25 +100,9 @@ def controller(protocol, calibration_protocol, run_id, ledger, handles, continua
 
     runs.reload()
     root = Path(f"/runs/{run_id}")
-    root.mkdir(exist_ok=continuation is not None)
-    if continuation is None:
-        write_json(root / "budget.json", ledger)
-    state = {
-        "status": "running",
-        "phase": "calibration",
-        "children": [],
-        "protocol": protocol,
-        "calibration_protocol": calibration_protocol,
-        "calibration_parent": f"/runs/{handles['calibration']['run_id']}",
-        "training_parent": "",
-        "calibration_chunks": 1,
-        "training_chunks": 0,
-        "heldout_call_id": handles["holdout"]["call_id"],
-        "profile_call_id": handles["profile"]["call_id"],
-    }
-    if continuation is not None:
-        state = continuation
-        state["status"] = "running"
+    from jspace_controller_state import apply_child, initialize
+
+    state = initialize(root, protocol, calibration_protocol, ledger, handles, continuation)
     started = time.monotonic()
 
     def persist():
@@ -178,6 +164,21 @@ def controller(protocol, calibration_protocol, run_id, ledger, handles, continua
 
     try:
         persist()
+        if state["status"] == "completed":
+            return state
+        if state.get("pending_child"):
+            pending = state["pending_child"]
+            if not pending.get("call_id"):
+                raise ValueError(
+                    "Reserved child has no persisted call ID; reconcile before resubmitting"
+                )
+            result = wait_call(pending["call_id"])
+            state["children"].append({**state.pop("pending_child"), "result": result})
+            apply_child(state, pending, result)
+            persist()
+            if state["status"] == "completed":
+                return state
+
         profile_result = wait_call(handles["profile"]["call_id"])
         if (
             not profile_result["initial_predictions_identical"]
@@ -238,7 +239,7 @@ def controller(protocol, calibration_protocol, run_id, ledger, handles, continua
 
 
 @app.local_entrypoint()
-def main(protocol: str, run_id: str, phase: str = "profile"):
+def main(protocol: str, run_id: str, phase: str = "profile", resume_state: str = ""):
     cfg = json.loads(Path(protocol).read_text())
     if phase == "controller":
         handles = {
@@ -249,7 +250,8 @@ def main(protocol: str, run_id: str, phase: str = "profile"):
         calibration_cfg = json.loads(Path("configs/jspace-calibration-full.json").read_text())
         reserve("artifacts/budget.json", run_id, "CPU", timeout_seconds=86400)
         ledger = json.loads(Path("artifacts/budget.json").read_text())
-        call = controller.spawn(cfg, calibration_cfg, run_id, ledger, handles)
+        continuation = json.loads(Path(resume_state).read_text()) if resume_state else None
+        call = controller.spawn(cfg, calibration_cfg, run_id, ledger, handles, continuation)
         handle = {
             "run_id": run_id,
             "call_id": call.object_id,

@@ -319,3 +319,23 @@ Full report and bootstrap summary are in results; test is now consumed. Local
 status. Ledger includes its$5 reservation, current epoch167.125/500. Do not
 repeat this test to select different checkpoints or settings. Training weights
 remain at the selected checkpoint on the Modal volume.
+
+### J-space controller recovery and user-directed pause
+
+Controller01 failed on restart with FileExistsError because its output directory
+already existed. Its state stayed at3385 while worker05 completed4237. The pure
+`jspace_controller_state.py` helper now adopts existing directories, retains the
+authoritative ledger, reconciles completed child journals and pending call IDs,
+and treats a completed test as terminal. A reserved child without a persisted
+call ID fails closed. Controller02 recovered worker05 with the same training code
+and optimizer/sampling/schedule state. Regression tests cover these cases.
+
+User then questioned further training without a semantic improvement. Workspace
+connectivity temporarily prevented cancellation; once restored, stopped app02
+with `uv run modal app stop ap-iAFvTHIKo3jlb54esEqvTF --yes`. Modal app list confirms
+stopped/zero tasks. Last durable model checkpoint is worker05 at4237; worker06
+has no committed report. Fresh test was not opened. All reservations remain;
+local ledger synced to$225.625 and ownership marker archived after terminal checks.
+`results/jspace-paused.json` and the remote pause.json are the authoritative pause
+record. Historical controller state can still say running; it is not liveness
+proof. Do not automatically resume without new user direction.

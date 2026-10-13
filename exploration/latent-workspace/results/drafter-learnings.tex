@@ -89,11 +89,11 @@ Earlier tests with weaker decoders did not show a consistent benefit from layer 
 
 Now that we have a capable drafter, we are testing whether \textbf{adding J-space alongside the existing hidden states} helps it use the concepts represented there. We are comparing raw states, raw states plus sparse J-space, and raw states plus a random-frame control. Each starts from the same qualified drafter and gets the same data and updates, with fresh validation and test prompts.
 
-At the last checked checkpoint, \textbf{4,237 of 30,000 updates}, the validation scores were \textbf{3.958 for raw states, 3.965 with J-space and 3.967 with the random frame}. All three started at 3.959. The changes are still tiny, and J-space has not beaten the random control. We do not yet have convincing evidence that semantic conditioning helps. Training continues, and the fresh test remains unopened.
+At the last checked checkpoint, \textbf{4,237 of 30,000 updates}, the validation scores were \textbf{3.958 for raw states, 3.965 with J-space and 3.967 with the random frame}. All three started at 3.959. The changes are still tiny, and J-space has not beaten the random control. We do not yet have convincing evidence that semantic conditioning helps. We paused the run here rather than spending the remaining budget without a clear benefit. The checkpoints are retained, and the fresh test remains unopened.
 
 \vspace{2mm}{\large\bfseries What this tells us\par}
 
 We have shown that our drafter can learn to imitate Qwen beyond its training examples. This is one seed, and some teacher responses are repetitive. We still need separate evidence for answer quality, speed, and what happens if we commit two or three tokens without verification. The original drafting test is now consumed; later model choices need fresh held-out evaluation.
 
-The repository keeps the configurations, training curves, qualification results, paper references and checkpoint checksums. The selected baseline is best.pt in the fresh-grid-196608-r256-11 Modal run. The J-space comparison is tracked separately so its unfinished results do not get mixed into the completed baseline study.
+The repository keeps the configurations, training curves, qualification results, paper references and checkpoint checksums. The selected baseline is best.pt in the fresh-grid-196608-r256-11 Modal run. The paused J-space comparison is tracked separately so its interim results do not get mixed into the completed baseline study.
 \end{document}

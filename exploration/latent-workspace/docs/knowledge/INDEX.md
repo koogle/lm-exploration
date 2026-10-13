@@ -39,4 +39,4 @@ Completed frozen qualification: [findings and limits](../../results/qualificatio
 
 Short drafter write-up: [learnings](../implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md).
 
-Active J-space augmentation and following unverified-generation stages: [controlled protocol](../jspace-capable-drafter.md).
+Paused J-space augmentation and following unverified-generation stages: [controlled protocol](../jspace-capable-drafter.md).

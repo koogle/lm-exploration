@@ -1,0 +1,16 @@
+{
+  "status": "paused_by_user_direction",
+  "app_id": "ap-iAFvTHIKo3jlb54esEqvTF",
+  "app_state": "stopped",
+  "running_containers": 0,
+  "stopped_at_utc": "2026-10-13 19:23:07+00:00",
+  "last_complete_step": 4237,
+  "target_steps": 30000,
+  "checkpoint_parent": "/runs/jspace-matched-30k-05",
+  "interrupted_worker": "jspace-matched-30k-06",
+  "interrupted_worker_has_committed_report": false,
+  "reserved_usd": 225.625,
+  "test_status": "fresh test unopened",
+  "reason": "No convincing semantic benefit over random-frame control after roughly 14% of planned updates",
+  "no_automatic_resumption": true
+}
