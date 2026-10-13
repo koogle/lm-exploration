@@ -1,0 +1,8 @@
+{
+  "completed": true,
+  "new_validation": 192,
+  "new_test": 192,
+  "prior_manifest_sha256": "a64552bbc9c9aeb81d2279dc3644fd28a3145c79c562063a429b2002cafe1b10",
+  "training_placeholders_not_used": true,
+  "test_labels_status": "unopened"
+}

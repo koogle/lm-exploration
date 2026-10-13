@@ -1,0 +1,26 @@
+{
+  "initial_predictions_identical": true,
+  "correction_gradient_norms": {
+    "raw": 0.5837741494178772,
+    "jspace": 0.17149996757507324,
+    "random": 0.18908385932445526
+  },
+  "future_feature_perturbation_max_nll_difference": 0.0,
+  "projection_seconds": 2.7163318679999975,
+  "train_step_seconds_by_arm": {
+    "raw": 0.5215348720000037,
+    "jspace": 0.27568122700000686,
+    "random": 0.2723848230000101
+  },
+  "estimated_30k_hours_excluding_loading_eval_checkpoint": 31.54943991666682,
+  "batch_shape": [
+    12,
+    384,
+    4480
+  ],
+  "anchors_per_sequence": 32,
+  "peak_cuda_memory_bytes": 12404585984,
+  "target_gradients_absent": true,
+  "calibration_prompts": 2,
+  "note": "Plumbing/timing check only; not a conditioning benefit measurement"
+}

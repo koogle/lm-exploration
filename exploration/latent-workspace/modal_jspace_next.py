@@ -17,8 +17,8 @@ image = (
     .add_local_file("uv.lock", "/project/uv.lock", copy=True)
     .run_commands("cd /project && uv sync --frozen --no-install-project")
     .env({"PATH": "/project/.venv/bin:/usr/local/bin:/usr/bin:/bin", "HF_HOME": "/cache/hf"})
-    .add_local_python_source("latent_workspace")
     .add_local_file("jspace_next.py", "/project/jspace_next.py", copy=True)
+    .add_local_python_source("latent_workspace")
 )
 
 
@@ -27,12 +27,12 @@ image = (
     gpu="L40S",
     cpu=4,
     memory=131072,
-    timeout=900,
+    timeout=3600,
     retries=0,
     single_use_containers=True,
     volumes={"/runs": runs, "/cache": cache},
 )
-def calibration_check(protocol, run_id):
+def calibration_check(protocol, run_id, resume=""):
     import sys
 
     sys.path.insert(0, "/project")
@@ -41,17 +41,17 @@ def calibration_check(protocol, run_id):
 
     runs.reload()
     try:
-        return calibrate(protocol, f"/runs/{run_id}", runs.commit)
+        return calibrate(protocol, f"/runs/{run_id}", runs.commit, resume)
     finally:
         runs.commit()
         cache.commit()
 
 
 @app.local_entrypoint()
-def main(protocol: str, run_id: str):
+def main(protocol: str, run_id: str, resume: str = ""):
     cfg = json.loads(Path(protocol).read_text())
-    reserve("artifacts/budget.json", run_id, "L40S", timeout_seconds=900)
-    call = calibration_check.spawn(cfg, run_id)
+    reserve("artifacts/budget.json", run_id, "L40S", timeout_seconds=3600)
+    call = calibration_check.spawn(cfg, run_id, resume)
     Path("artifacts/jspace-check-handle.json").write_text(
         json.dumps({"run_id": run_id, "call_id": call.object_id}, indent=2) + "\n"
     )

@@ -2,7 +2,7 @@
 
 The large-data curriculum training is **complete**. The selected long-response drafter has now passed longer-rollout and sealed-test
 qualification. Further architecture/representation research remains open. Use uv; direct main commits/pushes
-remain authorized. No active training workers or coordinator remain.
+remain authorized. No original curriculum workers remain. The new J-space study has active calibration/data preparation; see below.
 
 ## Completed result
 
@@ -50,7 +50,8 @@ Frozen training package SHA:
   authorized but unexecuted: [plan](docs/dflash-learning-diagnostics.md).
 - Repeated seeds/source-diversity controls remain untested. Do not attribute the
   complete gain purely to data size or claim final statistical significance.
-- J-space/layer-selection/dropout, collaborative generation, native pretraining,
+- J-space augmentation is now authorized and running its preparation stage;
+  layer-selection/dropout, collaborative generation, native pretraining,
   larger-target controls and speed work remain deferred.
 
 ## Execution and cost accounting
@@ -61,7 +62,7 @@ Local ledger `artifacts/budget.json` is synced to the authoritative remote ledge
 Ownership marker released only after confirming terminal state/no active workers;
 handle archived as `artifacts/budget_remote_controller-09-complete.json`.
 
-Current user-reset epoch reservations: **$167.125/$500**, not actual Modal bill.
+Qualification-end user-reset epoch reservations: **$167.125/$500**, not actual Modal bill.
 Historical $468 ledger stays archived separately; failed/canceled reservations
 are retained. Do not reset or drop this accounting without user instruction.
 Single-use GPU containers prevent retained mmap handles blocking reload between
@@ -93,7 +94,8 @@ README. Next: actual sparse J-space conditioning on the qualified head, primaril
 augmentation alongside raw states, with raw and random-frame controls. J-only is
 a later optional ablation after the user clarified the semantic side-channel goal. See
 `docs/jspace-capable-drafter.md`. Training-only Jacobian/projection helpers and
-local safeguards are implemented; bounded real-model profiling is pending.
+local safeguards and bounded real-model profiling have passed; full calibration
+and fresh holdout preparation are launched.
 No new J comparison or unverified/benchmark result exists yet. Prior consumed
 test remains unavailable for selecting these variants.
 
@@ -121,3 +123,30 @@ integration, qualification evidence, negative findings and remaining J-space wor
 The same renderer now checks **three pages** and no overfull boxes; the earlier
 one-page build notes above describe the previous version. README links point to
 the expanded report. This documentation update did not launch training.
+## Active J-space augmentation comparison
+
+- Full calibration: `jspace-calibration-1000-01`, goal1000 training prefixes,
+  resumed from successful2-prefix check. Persisted333 at the first status read.
+- Fresh source-disjoint192 validation +192 test prompt preparation:
+  `jspace-fresh-holdout-01` completed; test labels remain unopened.
+- Profiling checks01/02 passed initial three-arm equality, auxiliary gradient
+  flow and causal masking. Profile02 estimates31.55h excluding overhead.
+- Frozen study: `configs/jspace-comparison.json`, raw/raw+J/raw+random-frame,
+  qualified baseline70585, exact196608 training examples,30k matched updates,
+  80.64M additional label exposures/arm. All capable raw paths remain intact.
+- Controller handles/ledger ownership are stored under ignored `artifacts/`.
+  After launch its remote budget is authoritative; do not submit local GPU work
+  while ownership marker exists. Controller resumes one-hour single-use workers,
+  performs bounded next-controller handoffs if needed, then freezes selections
+  before the fresh paired test. No quality benefit result exists yet.
+- Local reservations before controller:$183.625/$500, including failed/profiling
+  allocations, not actual bill. Do not reset historical accounting.
+
+Controller launch confirmed:`jspace-study-controller-01`, call
+`fc-01M4TDXCB162NN6A47PT6E4WBZ`, app
+https://modal.com/apps/radiantai/main/ap-yAFona1yP5gwH5QbiTablB.
+Remote ledger/state:`/runs/jspace-study-controller-01/{budget,state}.json`.
+Initial controller-epoch reservations:$189.625/$500, not actual bill; remote
+ledger becomes authoritative for subsequent workers and controller handoffs.
+Checks before launch:130 tests pass, Ruff/diff checks pass. Source package remains
+frozen. No J-space quality comparison has completed yet.

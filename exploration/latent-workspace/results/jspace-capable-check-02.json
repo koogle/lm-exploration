@@ -1,0 +1,65 @@
+{
+  "completed": true,
+  "counts": 2,
+  "goal": 2,
+  "protocol": {
+    "model": "Qwen/Qwen2.5-0.5B",
+    "model_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+    "teacher_parent": "/runs/long-teacher-216k-07",
+    "layers": [
+      2,
+      7,
+      12,
+      17,
+      22
+    ],
+    "calibration_prompts": 1000,
+    "fit_prompts": 2,
+    "dim_batch": 16,
+    "seed": 42,
+    "max_seconds": 720,
+    "profile_projection": true
+  },
+  "prefix_selection_sha256": "a4e37eb30e9bd5f99b1e74a03260fd7adafa60d7c2033ea29428f9a9aa007a0e",
+  "elapsed_seconds": 68.099543236,
+  "target_gradients_absent": true,
+  "test_status": "Previously consumed drafting test is not opened; calibration uses training prefixes only",
+  "projection_profile": [
+    {
+      "layer": 2,
+      "finite": true,
+      "max_active": 25,
+      "negative_coefficients": false,
+      "mean_relative_reconstruction_error": 0.9200080633163452
+    },
+    {
+      "layer": 7,
+      "finite": true,
+      "max_active": 25,
+      "negative_coefficients": false,
+      "mean_relative_reconstruction_error": 0.9257036447525024
+    },
+    {
+      "layer": 12,
+      "finite": true,
+      "max_active": 25,
+      "negative_coefficients": false,
+      "mean_relative_reconstruction_error": 0.9486886858940125
+    },
+    {
+      "layer": 17,
+      "finite": true,
+      "max_active": 25,
+      "negative_coefficients": false,
+      "mean_relative_reconstruction_error": 0.9502885341644287
+    },
+    {
+      "layer": 22,
+      "finite": true,
+      "max_active": 25,
+      "negative_coefficients": false,
+      "mean_relative_reconstruction_error": 0.9487557411193848
+    }
+  ],
+  "peak_cuda_memory_bytes": 3033213952
+}

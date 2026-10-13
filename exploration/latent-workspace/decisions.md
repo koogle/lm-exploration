@@ -172,3 +172,12 @@
   the visual summary and expand the report to three pages with model/training,
   verified decoding and qualification details. Distinguish the completed trained
   drafter from unfinished J-space work and separate from-scratch LM training.
+### 2026-10-13: execute capable-drafter J augmentation
+
+Run raw, raw+paper-style sparse J component, and raw+rotated-frame controls from
+the qualified70585 checkpoint, exact196608 examples and matched30k updates.
+Freeze the learned raw FC; add equal-sized zero-initialized corrections, retain
+normalized raw context and train the remaining trunk identically.1000 train-only
+calibration prefixes; fresh192/192 source-disjoint holdout; paired test only after
+validation selections freeze.2-prefix GPU checks validate plumbing, not benefit.
+Use bounded resumable Modal workers and preserve the$500 reservation cap.

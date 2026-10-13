@@ -31,7 +31,7 @@ search approximation, not an exact global cone projection or an SAE. Profile
 full-vocabulary scoring and per-token projection before selecting training
 throughput/storage. Do not silently replace it with the old softmax-vector proxy.
 
-## Planned controlled comparison
+## Declared controlled comparison
 
 Use the qualified step70585 draft as the common competent initialization; all
 arms use the same196k teacher sequences and exact sample/anchor streams. The
@@ -56,13 +56,31 @@ Keep other draft weights trainable identically. Do not replace raw conditioning
 in the main comparison. This isolates
 conditioning relative to a working trunk; it is not another full from-scratch fit.
 
-Declare30000 updates/80.64M NEW-label exposures per arm, common lower LR and
-schedule before fitting, with learning curves/domain/position metrics and paired
-source-group uncertainty. Only calibration/projection plumbing is implemented
-now; these fits have not run. A negative augmentation result can reflect extraction/calibration or adaptation
+The frozen configuration in `configs/jspace-comparison.json` declares30000
+updates/80.64M additional NEW-label exposures per arm, batch12 with32 anchors per
+sequence, LR3e-5,500 warmup updates then a common cosine schedule, seed42. All
+arms are updated sequentially on the same batch/anchors in one worker; projection
+chunk1024 changes extraction batching only. `jspace_study.py` implements matched
+fits, per-domain/position metrics and paired source-group bootstrap intervals.
+`modal_jspace_study.py` sequences calibration, resumable fitting and a fresh test.
+Initial and every1000-update/deadline evaluations preserve curves; each arm
+selects by validation consecutive matches then NLL, permitting step0. Fresh test
+compares these frozen selections plus the unchanged qualified baseline; it must
+not tune further variants. Quality results are not available yet. A negative augmentation result can reflect extraction/calibration or adaptation
 difficulty; it is not proof that no future information is present.
 A representation derived from raw states does not add independent information;
 any gain concerns accessible features/inductive bias and finite-budget training.
+
+A fresh192-validation/192-test prompt manifest is prepared from pinned source
+pools, excluding prior manifest and historical source groups and prompt near
+duplicates. It uses official source train pools and deterministic source hash
+splits, with code split by repository, as in the established sampler. Training
+stays the exact qualified196608-example pool. Validation/test responses shorter
+than a block or exact duplicate of training/old validation or earlier responses
+in the new split are excluded by a fixed rule; test also excludes new validation
+responses. Require at least32 usable cases/domain and report all exclusions.
+Three old registered training placeholders satisfy the sampling helper contract
+only; they are never new training or evaluation examples.
 
 Reserve a new untouched evaluation holdout before choosing new hyperparameters;
 the prior189-prompt drafting test is consumed. Use validation for choices, then
@@ -105,3 +123,38 @@ Cache only features for newly committed tokens at inference, retaining existing
 raw/J cache for earlier context. For unverified2/3-token blocks, compare benchmark
 quality at identical output budgets alongside total latency. Prediction gain alone
 does not establish a speed gain; exact sparse extraction may cost more than it saves.
+
+
+## Executed plumbing and current run
+
+`jspace-capable-check-02` calibrated2 prefixes and produced finite, nonnegative
+components with at most25 active atoms at every depth; target gradients absent.
+The2-prefix matrices are used only for plumbing/profiling, never quality fits.
+`jspace-augmentation-profile-01/02` exercise the actual qualified checkpoint.
+All three initial predictions match, correction gradients are nonzero, and
+perturbing anchor/future features changes earlier-block NLL by exactly zero.
+Profile02 uses1024-token projection chunks:2.716s for both auxiliary projections,
+1.070s for the three optimizer steps together;12.40GB peak allocated GPU memory.
+This estimates31.55h for30k joint steps, excluding target feature extraction,
+loading, evaluation and checkpointing. It is a training-cost profile, not an
+inference speed measurement. Reports are retained in `results/`.
+
+The first Modal launch failed image construction before any GPU execution.
+Fix: copy helper files into the image before the non-copy local Python mount.
+Full calibration1000 is now launched and resumable from the2-prefix checkpoint.
+Fresh holdout preparation completed with192 validation and192 test prompts,
+source-disjoint from the registered prior manifest; no test labels generated. Local tests cover exact
+initialization, causal side-channel masking, incremental cache and paired
+aggregation. The bounded `jspace-study-controller-01` is launched to run the declared study
+in Modal workspace `radiantai`. Its first app is
+https://modal.com/apps/radiantai/main/ap-yAFona1yP5gwH5QbiTablB.
+It owns `/runs/jspace-study-controller-01/budget.json`; bounded GPU workers are
+single-use and preserve all three optimizers, sampler/RNG and global schedule.
+At22h a bounded CPU controller hands off to its successor, up to three times,
+using the same authoritative ledger and state path. Handoff call IDs are stored
+in `handoff-N.json`. Stop on nonfinite values, leakage/provenance failure, no
+checkpoint progress, worker failure or reservation cap. There are no blind retries.
+Until training/test reports exist, there is no new J-space benefit result.
+
+Executed verification before launch:130 tests pass; Ruff check/format and diff
+check pass. The frozen training package is unchanged; new helpers are standalone.
