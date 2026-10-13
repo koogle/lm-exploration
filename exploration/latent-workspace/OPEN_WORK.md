@@ -88,7 +88,7 @@ long-response checkpoint was qualified; the short arm was not selected for test.
 
 ## New user-directed stages
 
-Short write-up published: one-page PDF with three charts, linked in
+Short write-up published: one-page PDF with performance and scoring visuals, linked in
 README. Next: actual sparse J-space conditioning on the qualified head, primarily
 augmentation alongside raw states, with raw and random-frame controls. J-only is
 a later optional ablation after the user clarified the semantic side-channel goal. See
@@ -106,3 +106,8 @@ One-pager now typeset in LaTeX with automatic wrapping and explicit column break
 Rebuild: `uv run --with matplotlib python scripts/render_drafter_learnings.py`
 (requires pdflatex, pdfinfo and pdftoppm). Source saved in
 `results/drafter-learnings.tex`; build checks one page and no overfull boxes.
+
+One-pager visuals consolidated: validation curves for prose/code/translation and
+equal-domain average, plus illustrative token-level scoring. Domain means are
+block-weighted, not means of per-prompt averages; the anchor and tokens after the
+first mismatch are excluded. Architecture comparisons remain in the prose.

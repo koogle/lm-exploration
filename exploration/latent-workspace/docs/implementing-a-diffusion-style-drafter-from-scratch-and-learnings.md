@@ -10,7 +10,7 @@ We trained a separate **79M-parameter, five-layer drafter from random weights** 
 
 **Outcome.** The selected 70.6K-update checkpoint scores **4.03/7 on validation and 3.94/7 on the once-opened test**: prose **5.01**, code **4.96**, translation **1.84**; 189 usable prompts. All **24 longer rollouts** matched Qwen exactly. Actual accepted draft tokens per verification were **4.51/4.30/1.20** by domain. These are one-seed target-imitation results; repetitive teacher outputs and changing data/exposure limit causal claims. Human answer quality and speedup were not established.
 
-![Architecture controls, modest late validation degradation, and held-out result](../results/drafter-learnings.png)
+![Validation performance by domain and average, with a visual explanation of scoring](../results/drafter-learnings.png)
 
 [One-page PDF](../results/drafter-learnings.pdf) · [Measured evidence](../results/qualification-findings.md) · [DFlash](https://arxiv.org/abs/2602.06036) · [J-space / Jacobian lens](https://transformer-circuits.pub/2026/workspace/index.html)
 

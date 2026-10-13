@@ -30,7 +30,7 @@ We trained a separate \textbf{79M-parameter, five-layer drafter from random weig
 \vspace{1mm}
 \includegraphics[width=\linewidth]{drafter-learnings-charts.pdf}
 
-{\footnotesize \textbf{Reading the charts.} NEW means consecutive correct draft tokens beyond the supplied anchor, out of seven. Middle/right share a metric and scale; the left panel shows earlier, weaker models. One seed; exposure budgets differ across experiments. Matching Qwen is not a human-quality score.\par}
+{\footnotesize \textbf{Reading the charts.} The performance curve uses held-out teacher trajectories; live verified rollouts are measured separately. The scoring example is illustrative. Domain scores average sampled blocks (up to eight per prompt); the overall score weights domains equally. One seed; matching Qwen is not human answer quality.\par}
 \vspace{1mm}
 {\footnotesize \textbf{References.} \href{https://arxiv.org/abs/2602.06036}{DFlash (arXiv:2602.06036)}; \href{https://transformer-circuits.pub/2026/workspace/index.html}{Anthropic workspace / Jacobian lens}. Full reports and protocols are retained in the repository.\par}
 \end{document}
