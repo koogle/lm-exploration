@@ -206,3 +206,13 @@ teacher-resume configuration normalization, not any drafter/training operation.
 Since different response caps can reach worker boundaries at different update
 counts, domain-transition timing may differ. Record both; do not interpret their
 final comparison as an isolated response-length effect without that caveat.
+
+## Completed training, qualification pending
+
+Both large curriculum arms finished100000 updates. Long cap selected validation
+NEW4.03251 at70585, short cap2.19454 at51475. All twelve short rollout checks
+per selected head match target output. Preserve selected rather than final
+weights; late validation loss worsens while training loss falls. Full findings,
+raw reports, curves and limitations: [final result](../results/large-curriculum-final.md).
+Test has not been evaluated. Coordinator09 is terminal; ledger synced and local
+lease released, reservations162.125/500 for the current user-reset epoch.

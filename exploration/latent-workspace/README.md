@@ -1,21 +1,18 @@
 # Latent workspace block generation
 
-Next active study: [fresh-drafter 50k–200k / 64–256-token grid](docs/dflash-fresh-grid.md).
-Five full fits start from random draft weights; longer teacher preparation is
-resumable. Preparation and real-model checks are underway; no grid result exists yet.
+Completed training: [large-data curriculum findings](results/large-curriculum-final.md).
+Two fresh 79M drafters for frozen Qwen2.5-0.5B finished 100000 updates on a
+131k prose/code → 196k balanced curriculum. Best long-response validation reaches
+**4.03 correct consecutive NEW tokens / 7**, versus 2.19 for short responses and
+3.60 in the historical49k long-response study. Late overfitting favors retaining
+the selected70.6k checkpoint. All12 short verified rollouts per head match Qwen;
+longer verification and sealed-test qualification remain pending.
 
-Active: [small-Qwen drafter improvement studies](docs/dflash-improvement-series.md),
-with controlled attention/depth comparisons and a predeclared held-out quality gate.
-[Current findings](results/dflash-improvement-findings.md): completed fidelity studies
-improve validation NEW matches from 0.384 to 0.530. The separate 79M drafter reaches 1.022 NEW matches / 7 with 24576 training
-responses and 53.76M additional labels. The matched smaller-data fit scores 0.574. Completed full-fitting audits confirm
-overfitting. The completed next matched 24576/49152-response comparison improves
-selected validation NEW from 1.022 to **1.462**; all twelve checked rollouts match
-for both heads. Full-corpus audits of this stage are running.
+![Completed large-data training](results/large-curriculum-final.png)
 
-![Completed response expansion](results/dflash-expansion-scaling.png)
-The two-token quality gate remains unmet.
-Useful multi-token drafting remains unsolved; the frozen target is Qwen2.5-0.5B.
+These are one-seed, adaptively selected validation results; curriculum/exposure
+confound a pure data-size comparison. Useful-drafter qualification remains
+unfinished. See [open work](OPEN_WORK.md) and [study protocol](docs/dflash-fresh-grid.md).
 
 Current priority: build a **DFlash-style drafter for frozen Qwen targets**
 that predicts useful multi-token blocks. Train on Qwen-generated continuations,
