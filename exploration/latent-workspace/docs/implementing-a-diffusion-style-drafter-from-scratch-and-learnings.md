@@ -1,0 +1,15 @@
+# Implementing and training a diffusion-style drafter from scratch: learnings
+
+We trained a separate **79M-parameter, five-layer drafter from random weights** for frozen **Qwen2.5-0.5B**. Following DFlash, it attends to five target hidden-state depths and predicts seven masked future tokens jointly after one known anchor. Only the drafter learns; target embeddings and vocabulary weights stay frozen.
+
+**What helped.** Controlled early comparisons improved validation consecutive-token matches from **0.384 → 0.484** with query/key RMSNorm, then **→ 0.520** with five draft layers. Adding five feature depths reached **0.530**, but that incremental benefit was uncertain. Correct target-generated labels, causal context masks, normalized conditioning, and verified generation made the pipeline credible; these implementation checks were not independent improvement ablations.
+
+**Data and response coverage mattered most.** A matched 6K→24K response study improved acceptance **0.57→1.02**; a later 24K→49K study reached **1.46**. Longer teacher responses gave the largest subsequent gain: at 6K updates on the same 49K examples, 64→256-token caps improved long-context validation **1.76→2.96**; short-context gains were smaller. The final large fits started fresh on 131K prose/code examples, then added translation to reach **196K**, preserving optimizer state. Translation improved rapidly after inclusion. Multiple prose prefixes increased contexts, not independent articles.
+
+**What did not establish a win.** Tiny datasets memorized almost perfectly but generalized poorly. More repetitions eventually worsened validation loss; select the earlier checkpoint. The 2B-target experiment underfit and did not improve drafting, with family/tokenizer/capacity confounds. Historical four-token experiments found no benefit from layer dropout/null memory; parallel prediction matched or beat diffusion. Probe-selected layers did not beat all-layer conditioning. Compressed top-25 Jacobian-lens conditioning worsened loss; it was not the paper’s sparse J-space projection, and does not settle the new question. None of these older controls was repeated on the qualified drafter.
+
+**Outcome.** The selected 70.6K-update checkpoint scores **4.03/7 on validation and 3.94/7 on the once-opened test**: prose **5.01**, code **4.96**, translation **1.84**; 189 usable prompts. All **24 longer rollouts** matched Qwen exactly. Actual accepted draft tokens per verification were **4.51/4.30/1.20** by domain. These are one-seed target-imitation results; repetitive teacher outputs and changing data/exposure limit causal claims. Human answer quality and speedup were not established.
+
+![Architecture controls, training curve, and held-out result](../results/drafter-learnings.png)
+
+[One-page PDF](../results/drafter-learnings.pdf) · [Measured evidence](../results/qualification-findings.md) · [DFlash](https://arxiv.org/abs/2602.06036) · [J-space / Jacobian lens](https://transformer-circuits.pub/2026/workspace/index.html)

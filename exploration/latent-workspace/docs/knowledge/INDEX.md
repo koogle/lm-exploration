@@ -36,3 +36,5 @@ Conditional learning failure diagnosis: [activation/loss/gradient plan](../dflas
 Frozen long-rollout/sealed-test qualification: [protocol](../dflash-qualification.md).
 
 Completed frozen qualification: [findings and limits](../../results/qualification-findings.md).
+
+Short drafter write-up: [learnings](../implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md).
