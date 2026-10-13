@@ -1,8 +1,25 @@
 # Repository consolidation
 
 Consolidation date: 2026-10-11. The destination is the existing private
-`koogle/0-to-llm` repository, titled **LM Exploration** in its README. The intended
-final GitHub name is `koogle/lm-exploration`.
+`koogle/0-to-llm` repository, since renamed to `koogle/lm-exploration`.
+
+## Research follow-up, 2026-10-13
+
+The completed latent-workspace training, qualification, reports and one-page
+write-up are already on consolidated `main` through `9d8b9bb`. The
+`drafter-data-coverage` branch is fully contained in that history (no outstanding
+commits), and the standalone source has no code or result changes since the initial
+import; only repository-status README notices differ. No older source snapshot was
+copied over the newer consolidated work.
+
+The root README now links directly to the research, learnings PDF and qualification
+results. Continue from `exploration/latent-workspace/` in this repository. The study
+is complete; the separately documented J-space follow-up is not a completed result.
+Verification at reconciliation: all 126 local tests, Ruff lint/format checks and
+README link checks pass. No GPU training or evaluation was launched.
+
+Earlier notes below describe the original migration and temporary period of
+iteration. This reconciliation does not archive or delete the standalone repository.
 
 ## Layout and provenance
 
