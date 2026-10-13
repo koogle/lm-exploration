@@ -158,3 +158,12 @@ Until training/test reports exist, there is no new J-space benefit result.
 
 Executed verification before launch:130 tests pass; Ruff check/format and diff
 check pass. The frozen training package is unchanged; new helpers are standalone.
+
+## Interim validation at4237 updates
+
+Calibration1000 completed. Each arm has11,389,056 additional label exposures.
+On191 fresh validation cases (64prose/64code/63translation), raw/J/random
+score3.958409/3.965139/3.967037 NEW; all started3.959133. These changes are
+small and J-space has not outperformed the random control. Training continues
+on the declared schedule; fresh test labels remain unopened.
+[Full interim report](../results/jspace-interim-4237.json).

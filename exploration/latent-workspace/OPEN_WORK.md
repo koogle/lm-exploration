@@ -160,3 +160,11 @@ target aside from the short report. Replace stale J-space preparation-only text
 with the last checked2530-update comparison (unfinished; fresh test unopened).
 LaTeX rebuild checked three pages and no overfull boxes; all pages visually
 inspected. Ruff/format and diff checks pass. No training code or live job changed.
+
+Latest checked J-space checkpoint:4237/30000 updates,11.389M additional label
+exposures/arm. Fresh validation191 cases:raw3.958409/J3.965139/random3.967037
+NEW; NLL2.110425/2.111006/2.110989. Initial all3.959133. Changes remain tiny;
+no demonstrated semantic gain over random frame. Full interim report archived
+in `results/jspace-interim-4237.json`; PDF progress updated. Calibration1000
+complete; training continues, fresh test unopened. These are interim validation
+scores, not final paired-test conclusions.

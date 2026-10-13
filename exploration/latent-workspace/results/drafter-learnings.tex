@@ -89,7 +89,7 @@ Earlier tests with weaker decoders did not show a consistent benefit from layer 
 
 Now that we have a capable drafter, we are testing whether \textbf{adding J-space alongside the existing hidden states} helps it use the concepts represented there. We are comparing raw states, raw states plus sparse J-space, and raw states plus a random-frame control. Each starts from the same qualified drafter and gets the same data and updates, with fresh validation and test prompts.
 
-At the last checked checkpoint, \textbf{2,530 of 30,000 updates}, the validation scores were \textbf{3.948 for raw states, 3.938 with J-space and 3.941 with the random frame}. So far, we have not seen a convincing J-space benefit. The comparison is still running, and its fresh test remains unopened.
+At the last checked checkpoint, \textbf{4,237 of 30,000 updates}, the validation scores were \textbf{3.958 for raw states, 3.965 with J-space and 3.967 with the random frame}. All three started at 3.959. The changes are still tiny, and J-space has not beaten the random control. We do not yet have convincing evidence that semantic conditioning helps. Training continues, and the fresh test remains unopened.
 
 \vspace{2mm}{\large\bfseries What this tells us\par}
 
