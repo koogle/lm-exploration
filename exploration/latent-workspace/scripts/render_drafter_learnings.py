@@ -1,4 +1,4 @@
-"""Export the short research write-up and performance and scoring visuals as one page."""
+"""Export a three-page research report with a summary and measured charts."""
 
 import json
 import re
@@ -129,6 +129,25 @@ def latex_escape(value):
 body = "\n\n".join(latex_escape(p) for p in paragraphs[:3])
 body += "\n\n" + r"\columnbreak" + "\n\n"
 body += "\n\n".join(latex_escape(p) for p in paragraphs[3:])
+detail = text[text.index("## Detailed report:") :]
+detail_pages = detail.split("<!-- report-page -->")
+if len(detail_pages) != 2:
+    raise ValueError("Expected two detailed report pages after the summary")
+appendix = []
+for page in detail_pages:
+    appendix.append(r"\newpage\small")
+    for paragraph in page.strip().split("\n\n"):
+        if paragraph.startswith("### "):
+            appendix.append(
+                r"\vspace{2mm}{\large\bfseries " + latex_escape(paragraph[4:]) + r"\par}"
+            )
+        elif paragraph.startswith("## "):
+            appendix.append(
+                r"{\Large\bfseries " + latex_escape(paragraph[3:]) + r"\par}\vspace{3mm}"
+            )
+        else:
+            appendix.append(latex_escape(paragraph))
+appendix_text = "\n\n".join(appendix)
 source = (
     r"""% Generated from the Markdown write-up by scripts/render_drafter_learnings.py.
 \documentclass[11pt,a4paper]{article}
@@ -157,8 +176,11 @@ source = (
 {\footnotesize \textbf{Reading the charts.} The performance curve uses held-out teacher trajectories; live verified rollouts are measured separately. The scoring example is illustrative. Domain scores average sampled blocks (up to eight per prompt); the overall score weights domains equally. One seed; matching Qwen is not human answer quality.\par}
 \vspace{1mm}
 {\footnotesize \textbf{References.} \href{https://arxiv.org/abs/2602.06036}{DFlash (arXiv:2602.06036)}; \href{https://transformer-circuits.pub/2026/workspace/index.html}{Anthropic workspace / Jacobian lens}. Full reports and protocols are retained in the repository.\par}
-\end{document}
 """
+    + appendix_text
+    + "\n"
+    + r"\end{document}"
+    + "\n"
 )
 (root / "results/drafter-learnings.tex").write_text(source)
 with tempfile.TemporaryDirectory() as build:
@@ -179,8 +201,8 @@ with tempfile.TemporaryDirectory() as build:
         raise RuntimeError("LaTeX overflow detected; inspect the page layout")
     pdf = Path(build, "drafter-learnings.pdf")
     info = subprocess.check_output(["pdfinfo", str(pdf)], text=True)
-    if not re.search(r"Pages:\s+1\b", info):
-        raise RuntimeError("Write-up exceeds one page")
+    if not re.search(r"Pages:\s+3\b", info):
+        raise RuntimeError("Expected exactly three pages; inspect report layout")
     (root / "results/drafter-learnings.pdf").write_bytes(pdf.read_bytes())
     subprocess.run(
         [
@@ -195,4 +217,4 @@ with tempfile.TemporaryDirectory() as build:
         check=True,
     )
 print("Body words:", len(re.findall(r"\S+", " ".join(paragraphs))))
-print("LaTeX: one page, no overfull boxes")
+print("LaTeX: three pages, no overfull boxes")

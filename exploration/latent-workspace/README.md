@@ -1,6 +1,6 @@
 # Latent workspace block generation
 
-[Short learnings write-up](docs/implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md) · [One-page PDF with charts](results/drafter-learnings.pdf).
+[Short learnings write-up](docs/implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md) · [Research PDF with charts](results/drafter-learnings.pdf).
 
 Completed training: [large-data curriculum findings](results/large-curriculum-final.md).
 Two fresh 79M drafters for frozen Qwen2.5-0.5B finished 100000 updates on a

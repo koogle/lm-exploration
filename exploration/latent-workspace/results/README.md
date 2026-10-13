@@ -1,6 +1,12 @@
 # Experiment evidence
 
-Latest: [Qwen3.5-2B quality comparison](dflash-qwen35-2b-findings.md).
+Latest: [three-page research PDF](drafter-learnings.pdf) and
+[qualification findings](qualification-findings.md). The selected 79M drafter
+for frozen Qwen2.5-0.5B passes the declared criterion: 3.938/7 new matches on
+189 held-out prompts; all 24 longer verified rollouts match greedy target output.
+See the report for training, integration, domain results and limitations.
+
+Historical: [Qwen3.5-2B quality comparison](dflash-qwen35-2b-findings.md).
 The 2B setup does not improve drafting: 0.170 versus 0.387 NEW matches on shared
 validation source prompts, and weak full-training prediction. Family/tokenizer/
 prompt/draft-capacity differences prevent a pure-size conclusion.

@@ -111,3 +111,13 @@ One-pager visuals consolidated: validation curves for prose/code/translation and
 equal-domain average, plus illustrative token-level scoring. Domain means are
 block-weighted, not means of per-prompt averages; the anchor and tokens after the
 first mismatch are excluded. Architecture comparisons remain in the prose.
+
+
+## Expanded research PDF (2026-10-13)
+
+The report now retains the visual summary as page one and adds two pages covering
+the architecture, training curriculum and hyperparameters, verified-generation
+integration, qualification evidence, negative findings and remaining J-space work.
+The same renderer now checks **three pages** and no overfull boxes; the earlier
+one-page build notes above describe the previous version. README links point to
+the expanded report. This documentation update did not launch training.

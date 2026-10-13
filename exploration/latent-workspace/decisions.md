@@ -167,3 +167,8 @@
   primary comparison is raw/control versus raw+J versus raw+random frame.
   J-only is optional later. Any efficiency claim must include extraction/cache
   costs and quality loss in unverified generation.
+
+- 2026-10-13: User requests the latest workspace progress in the PDFs. Preserve
+  the visual summary and expand the report to three pages with model/training,
+  verified decoding and qualification details. Distinguish the completed trained
+  drafter from unfinished J-space work and separate from-scratch LM training.
