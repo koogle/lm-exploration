@@ -20,6 +20,7 @@ import torch
 from model_100m import model as architecture
 from model_100m.model import GPT, ModelConfig
 from torch import nn
+from torch.nn import functional as F
 from tqdm import tqdm
 from training_data.loading import get_batch, load_data
 
@@ -58,12 +59,14 @@ def evaluate(model, data, args):
     # Fixed held-out windows, independent of the training batch RNG.
     generator = torch.Generator().manual_seed(args.seed + 1)
     model.eval()
-    losses = [
-        model(*get_batch(data, args.batch_size, model.config.block_size, generator, args.device))[
-            1
-        ].item()
-        for _ in range(args.eval_batches)
-    ]
+    losses = []
+    for _ in range(args.eval_batches):
+        tokens, targets = get_batch(
+            data, args.batch_size, model.config.block_size, generator, args.device
+        )
+        logits = model(tokens)
+        loss = F.cross_entropy(logits.flatten(0, 1), targets.flatten())
+        losses.append(loss.item())
     model.train()
     return sum(losses) / len(losses)
 
@@ -78,7 +81,7 @@ def sample(model, tokenizer, prompt, max_new_tokens, seed):
     model.eval()
     for _ in range(max_new_tokens):
         tokens = torch.tensor([context[-model.config.block_size :]], device=device)
-        logits, _ = model(tokens)
+        logits = model(tokens)
         probabilities = logits[0, -1].softmax(dim=-1).cpu()
         token = torch.multinomial(probabilities, 1, generator=generator).item()
         context.append(token)
@@ -218,7 +221,8 @@ def train(args, *, model_config=None):
                     args.device,
                 )
                 optimizer.zero_grad(set_to_none=True)
-                _, loss = model(x, y)
+                logits = model(x)
+                loss = F.cross_entropy(logits.flatten(0, 1), y.flatten())
                 if not torch.isfinite(loss):
                     raise ValueError("non-finite training loss; no optimizer update performed")
                 loss.backward()

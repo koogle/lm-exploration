@@ -46,18 +46,20 @@ def self_test():
     x = torch.tensor([[0, 1, 2, 3, 0, 1, 2, 3]])
     changed = x.clone()
     changed[:, 4:] = (changed[:, 4:] + 1) % 4
-    torch.testing.assert_close(model(x)[0][:, :4], model(changed)[0][:, :4], rtol=0, atol=0)
+    logits = model(x)
+    assert isinstance(logits, torch.Tensor) and logits.shape == (1, 8, 4)
+    torch.testing.assert_close(logits[:, :4], model(changed)[:, :4], rtol=0, atol=0)
     y = (x + 1) % 4
-    initial = model(x, y)[1].item()
+    initial = F.cross_entropy(logits.flatten(0, 1), y.flatten()).item()
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.02)
     for _ in range(40):
         optimizer.zero_grad(set_to_none=True)
-        loss = model(x, y)[1]
+        loss = F.cross_entropy(model(x).flatten(0, 1), y.flatten())
         loss.backward()
         optimizer.step()
-    final = model(x, y)[1].item()
+    final = F.cross_entropy(model(x).flatten(0, 1), y.flatten()).item()
     assert final < initial * 0.4, (initial, final)
-    assert torch.isfinite(model(x)[0]).all()
+    assert torch.isfinite(model(x)).all()
     tokenizer = CharacterTokenizer(list("abcd"))
     before_sampling = torch.get_rng_state().clone()
     assert len(sample(model, tokenizer, "ab", 12, 123)) == 14
@@ -120,7 +122,7 @@ def self_test():
             assert_same(full[key], resumed[key])
         reloaded = GPT(ModelConfig(**full["config"]["model"]))
         reloaded.load_state_dict(full["model"])
-        assert torch.isfinite(reloaded(x)[0]).all()
+        assert torch.isfinite(reloaded(x)).all()
         for directory in ("full", "split"):
             records = [
                 json.loads(line)

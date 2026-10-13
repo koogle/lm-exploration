@@ -10,7 +10,6 @@ from dataclasses import asdict, dataclass
 
 import torch
 from torch import nn
-from torch.nn import functional as F
 
 
 # Model: B = batch, T = sequence length, C = embedding width, H = heads.
@@ -106,7 +105,7 @@ class GPT(nn.Module):
             if isinstance(module, nn.Linear) and module.bias is not None:
                 nn.init.zeros_(module.bias)
 
-    def forward(self, tokens, targets=None):
+    def forward(self, tokens):
         if not 0 < tokens.size(1) <= self.config.block_size:
             raise ValueError("sequence length must be within the model's block_size")
         positions = torch.arange(tokens.size(1), device=tokens.device)
@@ -115,9 +114,4 @@ class GPT(nn.Module):
             self.final_norm(self.blocks(x))
         )  # [B, T, vocabulary]; normalize the final hidden states before projecting them to token scores.
 
-        loss = (
-            None
-            if targets is None
-            else F.cross_entropy(logits.reshape(-1, self.config.vocab_size), targets.reshape(-1))
-        )
-        return logits, loss
+        return logits
