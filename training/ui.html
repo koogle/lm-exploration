@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bench · local training</title>
+<style>
+:root{color-scheme:light;--bg:#f4f5f7;--surface:#fff;--fg:#16181d;--muted:#5c6371;--line:#dadee5;--accent:#2b4fd8;--soft:#e6ebfc;--val:#338670}
+@media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#111317;--surface:#191c22;--fg:#e8eaee;--muted:#9aa1ad;--line:#2b3039;--accent:#8ea6ff;--soft:#232b45;--val:#6fd3b8}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Helvetica Neue",sans-serif}main{max-width:1120px;margin:auto;padding:32px 24px}header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:24px}h1{font-size:22px;letter-spacing:-.035em;margin:0}h2{font-size:16px;margin:0 0 16px}h3{font-size:13px;margin:0 0 8px}p{margin:0 0 12px}.muted,small{color:var(--muted)}.mono,pre,.stat strong{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums}.layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:24px}.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px;margin-bottom:18px}label{display:block;color:var(--muted);font-size:12px}input,select,button{font:inherit;border:1px solid var(--line);border-radius:5px;padding:8px;background:var(--surface);color:var(--fg)}input,select{width:100%;margin:4px 0 12px}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.5}button.primary{background:var(--accent);color:var(--surface);border-color:var(--accent);width:100%;margin-top:12px;font-weight:600}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}summary{cursor:pointer;color:var(--muted);font-size:12px;margin:8px 0 12px}.dataset-note{font-size:12px;overflow-wrap:anywhere}.runs{display:grid;gap:6px;max-height:380px;overflow:auto}.run{text-align:left;width:100%;padding:12px}.run[aria-pressed=true]{border-color:var(--accent);background:var(--soft)}.run span{display:block}.run small{font-size:11px}.detail-head{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}.detail-head h2{margin:0;overflow-wrap:anywhere}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}.stat{border-top:1px solid var(--line);padding-top:10px}.stat span{display:block;color:var(--muted);font-size:11px}.stat strong{font-size:19px;font-weight:500}progress{width:100%;height:6px;accent-color:var(--accent)}svg{width:100%;display:block;height:auto;overflow:visible}.chart-label{font-size:11px;fill:var(--muted);font-family:ui-monospace,monospace}.legend{display:flex;gap:16px;margin-bottom:12px;font-size:12px}.legend .train{color:var(--accent)}.legend .val{color:var(--val)}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto;font-size:12px;margin:0;border:1px solid var(--line);border-radius:5px;padding:12px;background:var(--bg)}#error{color:#c13e50;white-space:pre-wrap;margin-bottom:16px}#error:empty{display:none}.section{border-top:1px solid var(--line);padding-top:18px;margin-top:20px}.empty{padding:36px 12px;text-align:center;color:var(--muted)}[hidden]{display:none!important}@media(max-width:760px){main{padding:20px 14px}.layout{grid-template-columns:1fr}header{align-items:start;gap:12px}.stats{gap:6px}.stat strong{font-size:16px}}
+</style>
+<main>
+<header><h1>Bench <span class="muted">/ local training</span></h1><small>One job · no cloud compute</small></header>
+<div id="error" role="alert"></div>
+<div class="layout">
+<aside>
+<section class="panel"><h2>New run</h2>
+<p><strong>100M · Fundamentals</strong><br><small>14 layers · width 768 · 12 heads. Exact count is vocabulary-dependent. FP32 training needs several GiB; CPU runs can be slow.</small></p>
+<form id="start-form">
+<label>Dataset<select id="dataset" name="dataset_id" required></select></label>
+<p id="dataset-note" class="dataset-note muted"></p>
+<div class="fields">
+<label>Steps<input name="steps" type="number" min="1" max="10000" required></label>
+<label>Batch size<input name="batch_size" type="number" min="1" max="8" required></label>
+<label>Context length<input name="block_size" type="number" min="8" max="256" required></label>
+</div>
+<details><summary>Advanced settings</summary><div class="fields">
+<label>Layers<input name="n_layer" type="number" min="1" max="14" required></label>
+<label>Width<input name="n_embd" type="number" min="16" max="768" required></label>
+<label>Heads<input name="n_head" type="number" min="1" max="12" required></label>
+<label>Learning rate<input name="lr" type="number" min="0.000001" max="0.01" step="any" required></label>
+<label>Seed<input name="seed" type="number" min="0" max="2147483647" required></label>
+<label>Device<select name="device"><option>cpu</option><option>mps</option><option>cuda</option></select></label>
+</div><small>Width must divide evenly by heads. Devices must be available locally. Override dimensions for tiny smoke tests; defaults target roughly 100M parameters.</small></details>
+<button id="start" class="primary" type="submit" disabled>Start training</button>
+<p id="job-note" class="muted" style="font-size:12px;margin:10px 0 0">Loading datasets…</p>
+</form></section>
+<section class="panel"><h2>Runs</h2><div id="runs" class="runs"></div></section>
+</aside>
+<section class="panel">
+<div id="empty" class="empty">Start a run or select one to inspect its actual artifacts.</div>
+<div id="detail" hidden>
+<div class="detail-head"><div><h2 id="run-title"></h2><small id="run-id" class="mono"></small></div><button id="stop" type="button" hidden>Stop</button></div>
+<p id="status"></p><small id="run-note" class="muted"></small>
+<div class="stats"><div class="stat"><span>Train loss</span><strong id="train-loss">—</strong></div><div class="stat"><span>Validation loss</span><strong id="val-loss">—</strong></div><div class="stat"><span>Completed steps</span><strong id="steps">—</strong></div></div>
+<progress id="progress" value="0" max="1" aria-label="Training progress"></progress>
+<div class="section"><h3>Loss / optimizer step</h3><div class="legend"><span class="train">Train</span><span class="val">Validation</span></div><svg id="curve" viewBox="0 0 620 220" role="img" aria-label="Recorded training and validation losses"></svg><small id="metric-note"></small></div>
+<details class="section"><summary>Run settings & dataset provenance</summary><pre id="settings"></pre></details>
+<div class="section"><h3>Sample</h3><pre id="sample"></pre><small id="sample-note"></small></div>
+<details class="section" open><summary>Trainer log · last 32 KiB</summary><pre id="log"></pre><small id="log-note"></small></details>
+</div>
+</section>
+</div>
+</main>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const form = $('start-form');
+let datasets = [], selected = null, active = false, busy = false, initialized = false;
+const activeStates = ['starting', 'running', 'stopping'];
+const fmt = value => Number.isFinite(value) ? value.toFixed(4) : '—';
+function error(message) { $('error').textContent = message; }
+async function api(path, payload) {
+  const options = payload === undefined ? {} : {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)};
+  const response = await fetch(path, options);
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+  return body;
+}
+function updateStart() {
+  const eligible = datasets.some(d => d.id === $('dataset').value && d.training_eligible);
+  $('start').disabled = !initialized || !eligible || active || busy;
+  $('job-note').textContent = active ? 'A local job is active. Stop it or wait for completion.' : eligible ? 'Starts a real local PyTorch job.' : 'No eligible local dataset is registered.';
+}
+function datasetNote() {
+  const d = datasets.find(d => d.id === $('dataset').value);
+  $('dataset-note').textContent = d ? `${d.description} ${d.license_notes}` : '';
+  updateStart();
+}
+function renderRuns(runs) {
+  $('runs').replaceChildren();
+  active = runs.some(r => activeStates.includes(r.status));
+  if (!runs.length) { const p=document.createElement('small'); p.textContent='No runs yet.'; $('runs').append(p); }
+  for (const run of runs) {
+    const button=document.createElement('button'); button.type='button'; button.className='run';
+    button.setAttribute('aria-pressed', String(selected===run.id));
+    const name=document.createElement('span'); name.textContent=run.dataset.name;
+    const sub=document.createElement('small'); sub.textContent=`${run.status} · ${run.latest.step ?? 0}/${run.settings.steps} steps · ${run.id.slice(0,10)}`;
+    button.append(name,sub); button.onclick=()=>{selected=run.id; refresh().catch(e=>error(e.message));};
+    $('runs').append(button);
+  }
+  updateStart();
+}
+function svg(tag, attributes={}, text) {
+  const element=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  for(const [key,value] of Object.entries(attributes)) element.setAttribute(key,value);
+  if(text!==undefined) element.textContent=text;
+  return element;
+}
+function plot(records) {
+  const chart=$('curve'); chart.replaceChildren();
+  const values=records.flatMap(r=>[r.train_loss,r.val_loss]).filter(Number.isFinite);
+  if(!values.length) {chart.append(svg('text',{x:50,y:100,class:'chart-label'},'No recorded losses yet.'));return;}
+  const low=Math.min(...values), high=Math.max(...values), range=Math.max(high-low,0.1);
+  const first=Math.min(...records.map(r=>r.step)), last=Math.max(...records.map(r=>r.step));
+  const x=s=>52+(s-first)/Math.max(last-first,1)*548, y=v=>182-(v-low)/range*158;
+  for(let i=0;i<3;i++) { const value=low+range*i/2, yy=y(value); chart.append(svg('line',{x1:52,x2:600,y1:yy,y2:yy,stroke:'var(--line)'}),svg('text',{x:0,y:yy+4,class:'chart-label'},value.toFixed(2))); }
+  chart.append(svg('text',{x:52,y:208,class:'chart-label'},String(first)),svg('text',{x:600,y:208,'text-anchor':'end',class:'chart-label'},String(last)));
+  for(const [key,color] of [['train_loss','var(--accent)'],['val_loss','var(--val)']]) {
+    const points=records.filter(r=>Number.isFinite(r[key]));
+    chart.append(svg('polyline',{points:points.map(r=>`${x(r.step)},${y(r[key])}`).join(' '),fill:'none',stroke:color,'stroke-width':1.8}));
+    if(points.length===1) chart.append(svg('circle',{cx:x(points[0].step),cy:y(points[0][key]),r:3,fill:color}));
+  }
+}
+function renderDetail(run) {
+  $('empty').hidden=true; $('detail').hidden=false;
+  $('run-title').textContent=run.dataset.name; $('run-id').textContent=run.id;
+  $('status').textContent=`${run.status} · ${new Date(run.created_at).toLocaleString()}`;
+  const modelLabel=Number.isInteger(run.parameter_count)?`${run.parameter_count.toLocaleString()} parameters`:'100M · Fundamentals';
+  $('run-note').textContent=`${modelLabel}. ${run.note || 'Metrics appear only after the trainer writes them.'}`;
+  $('train-loss').textContent=fmt(run.train_loss); $('val-loss').textContent=fmt(run.val_loss);
+  const step=run.latest.step ?? 0;
+  $('steps').textContent=`${step} / ${run.settings.steps}`;
+  $('progress').max=run.settings.steps; $('progress').value=step;
+  $('stop').hidden=!activeStates.includes(run.status); $('stop').disabled=busy || run.status==='stopping';
+  $('stop').textContent=run.status==='stopping'?'Stopping…':'Stop';
+  $('settings').textContent=JSON.stringify({settings:run.settings,dataset:run.dataset,checkpoint_available:run.checkpoint_available},null,2);
+  $('sample').textContent=run.sample || 'No sample artifact yet.';
+  $('log').textContent=run.log || 'No trainer output yet.';
+  $('sample-note').textContent=run.sample_truncated?'Showing only the last 16 KiB. Full sample remains in the run folder.':'';
+  $('log-note').textContent=run.log_truncated?'Log display is truncated. Full log remains in the run folder.':'';
+  $('metric-note').textContent=run.metrics_truncated?'Showing the bounded recent metric history; full history remains in metrics.jsonl.':'Only recorded values are shown. Validation is evaluated periodically.';
+  plot(run.metrics);
+}
+async function refresh() {
+  const {runs}=await api('/api/runs');
+  if(!selected && runs.length) selected=runs[0].id;
+  renderRuns(runs);
+  if(selected) { const run=await api(`/api/runs/${selected}`); if(run.id===selected) renderDetail(run); }
+}
+form.onsubmit=async event=>{
+  event.preventDefault(); busy=true; updateStart(); error('');
+  try {
+    const payload=Object.fromEntries(new FormData(form));
+    for(const key of Object.keys(payload)) if(!['dataset_id','device'].includes(key)) payload[key]=Number(payload[key]);
+    const run=await api('/api/runs',payload); selected=run.id; await refresh();
+  } catch(e) { error(e.message); }
+  finally { busy=false; updateStart(); }
+};
+$('stop').onclick=async()=>{
+  busy=true; $('stop').disabled=true; error('');
+  try {await api(`/api/runs/${selected}/stop`,{}); await refresh();} catch(e) {error(e.message);}
+  finally {busy=false; updateStart();}
+};
+$('dataset').onchange=datasetNote;
+async function init() {
+  try {
+    const data=await api('/api/datasets'); datasets=data.datasets;
+    for(const d of datasets) {const option=document.createElement('option');option.value=d.id;option.textContent=d.name;option.disabled=!d.training_eligible;$('dataset').append(option);}
+    const eligible=datasets.find(d=>d.training_eligible); if(eligible) $('dataset').value=eligible.id;
+    for(const [key,value] of Object.entries(data.defaults)) if(form.elements[key]) form.elements[key].value=value;
+    initialized=true; datasetNote(); await refresh();
+  } catch(e) {error(e.message);}
+  // Serial polling avoids overlapping requests or recreating fictional progress.
+  async function poll() {try {await refresh();} catch(e) {error(e.message);} setTimeout(poll,1500);}
+  setTimeout(poll,1500);
+}
+init();
+</script>
+</html>

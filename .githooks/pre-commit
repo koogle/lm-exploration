@@ -1,0 +1,13 @@
+#!/bin/sh
+# Lint and format-check staged Python files with the ruff version pinned in training/uv.lock.
+# Each file uses its nearest pyproject.toml [tool.ruff] settings.
+# Enable once per checkout: git config core.hooksPath .githooks
+set -eu
+root=$(git rev-parse --show-toplevel)
+files=$(git diff --cached --name-only --diff-filter=ACMR -z -- '*.py' | tr '\0' '\n')
+[ -n "$files" ] || exit 0
+cd "$root"
+echo "$files" | tr '\n' '\0' | xargs -0 sh -c 'uv run --quiet --frozen --project training ruff check -- "$@"' ruff-check || {
+    echo "pre-commit: ruff check failed; run 'uv run --project training ruff check --fix <files>'" >&2; exit 1; }
+echo "$files" | tr '\n' '\0' | xargs -0 sh -c 'uv run --quiet --frozen --project training ruff format --check -- "$@"' ruff-format || {
+    echo "pre-commit: unformatted files; run 'uv run --project training ruff format <files>'" >&2; exit 1; }

@@ -1,0 +1,42 @@
+[project]
+name = "lm-exploration-training"
+version = "0.1.0"
+description = "Readable from-scratch language model training experiments"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy>=2.5.4",
+    "torch>=2.5,<3",
+]
+
+[project.scripts]
+lm-train = "train:main"
+lm-ui = "ui:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["model_100m", "training_data"]
+py-modules = ["train", "run_utils", "model_checks", "ui"]
+
+[tool.setuptools.package-dir]
+model_100m = "100m"
+training_data = "data"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Manifest/config validation raises ValueError on purpose; callers catch ValueError.
+ignore = ["TRY004"]
+
+[tool.ruff.lint.per-file-ignores]
+# The folder name is the model size; setuptools installs it as `model_100m`.
+"100m/__init__.py" = ["N999"]

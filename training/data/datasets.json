@@ -1,0 +1,14 @@
+{
+  "datasets": [
+    {
+      "id": "toy-demo",
+      "name": "Workshop notes · demo only",
+      "path": "toy.txt",
+      "description": "Project-authored miniature workshop stories for exercising the local trainer and UI. Demo only, not a selected research corpus or a quality benchmark.",
+      "source": "Original synthetic prose authored for this project's local training fixture; no external corpus or third-party passages were used.",
+      "license_notes": "Project-authored demo fixture, eligible only for this local learning demonstration. No third-party licensing approval or research corpus selection is implied.",
+      "languages": ["en"],
+      "training_eligible": true
+    }
+  ]
+}

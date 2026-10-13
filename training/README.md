@@ -29,20 +29,66 @@ research effort, with its own resources and budget.
 
 ## Current state
 
-This folder contains a plan and interactive HTML designs, not a training system.
-The [Run Board](designs/run-board-web.html) and
-[earlier training studies](designs/train-design-studies.html) were imported from
-[web-inference PR #1](https://github.com/koogle/web-inference/pull/1).
-Their runs and metrics are illustrative. No from-scratch trainer, connected
-GitHub integration or Modal dashboard has been implemented here.
+The first local implementation is available:
 
-Open the HTML files locally, or run this from `training/`:
+- [`100m/model.py`](100m/model.py): **architecture only**, preserving the user's
+  explanatory comments. Defaults are 14 layers, width 768 and 12 attention heads,
+  approximately 100M parameters. The exact count depends on vocabulary/context.
+- [`train.py`](train.py): training, evaluation, generation and the CLI.
+- [`data/loading.py`](data/loading.py): character tokenization, text loading,
+  deterministic splits and batching.
+- [`run_utils.py`](run_utils.py): checkpoints, RNG state, provenance and signals.
+- [`model_checks.py`](model_checks.py): reference and tiny-model validation.
+- [`ui.py`](ui.py) and [`ui.html`](ui.html): a minimal localhost Run Board that
+  starts one real local job, displays loss/progress/logs/samples and stops it.
+- [`data/`](data/README.md): curated dataset definitions and an original toy
+  fixture. This is demonstration data, not a selected research corpus.
+- `runs/<id>/`: local artifacts, ignored by Git. Model configuration, metrics,
+  checkpoints and dataset provenance remain available independently of the UI.
+
+`training/` is a uv-managed project with `pyproject.toml`, `uv.lock` and a Python
+3.12 pin. It has its own ignored `.venv`; the latent-workspace environment is
+separate. uv installs the model folder as `model_100m` and the data folder as
+`training_data`, so imports work without manual `PYTHONPATH` settings.
+
+Run from `training/`:
 
 ```sh
-python3 -m http.server 5174 --bind 127.0.0.1
+uv sync --locked
+
+# ~100M count checked on the meta device; actual training tests use tiny models.
+uv run lm-train self-test
+
+# Start the local interface, then open http://127.0.0.1:5174.
+uv run lm-ui
+
+# Cheap CPU smoke test using tiny overrides of the same architecture.
+uv run lm-train train --data data/toy.txt --out-dir runs/manual-demo \
+  --steps 20 --batch-size 2 --block-size 16 --n-layer 1 --n-head 2 --n-embd 16
+
+# Generate from a trusted local checkpoint (unknown prompt characters are errors).
+uv run lm-train generate --checkpoint runs/manual-demo/checkpoint.pt \
+  --prompt 'The ' --max-new-tokens 100
 ```
 
-Then open http://127.0.0.1:5174/designs/run-board-web.html.
+For the configured ~100M architecture, omit the layer/head/width overrides.
+The UI defaults to that architecture with a small batch and step budget. FP32
+training requires several GiB and CPU execution can be slow; hardware throughput
+and a full 100M training run have **not** been measured. No full-size or paid run
+is launched by setup, imports or self-tests. The included text remains demo-only.
+
+Resume with `--resume runs/manual-demo/checkpoint.pt` and a larger total `--steps`,
+keeping the same data/model/optimizer settings. Only load trusted checkpoints.
+CPU continuation was tested within the same runtime; cross-device bitwise
+reproducibility is not promised. The UI does not yet expose resume. The first
+trainer reads text into RAM and is deliberately not a large-corpus system.
+
+The historical [Run Board](designs/run-board-web.html) and
+[earlier training studies](designs/train-design-studies.html), imported from
+[web-inference PR #1](https://github.com/koogle/web-inference/pull/1), remain
+interactive mockups with illustrative runs and metrics. Open those HTML files
+locally to inspect the original designs. GitHub integration, Modal job execution,
+custom kernels and the larger experiment framework are not implemented.
 
 ## Staged research plan
 
@@ -221,10 +267,14 @@ the UI.
 
 ## Next concrete milestone
 
-Proposed first implementation: a tiny baseline with reference checks, deterministic
-data sampling, checkpoint/resume and generation, followed by one bounded Modal
-throughput pilot. Then connect the Run Board to those real artifacts before
-scaling the experiment matrix.
+The tiny local baseline and minimal Run Board are implemented. Bounded CPU checks
+cover reference attention/gradients, causality, tiny-set fitting, reproducible
+resume, real UI-driven training and cooperative stop/checkpoint continuation.
+These checks demonstrate mechanics, not useful language capability.
+
+Next: choose the first research data/tokenizer recipe and an explicit GPU/budget
+bound, then implement and measure one bounded Modal throughput pilot before
+scaling the experiment matrix. No Modal jobs or paid compute have been launched.
 
 Still to decide:
 
@@ -241,4 +291,13 @@ Extracted on 2026-10-12 from the user-supplied transcript of
 together with the repository-consolidation instructions. The transcript was read
 from the supplied text, not from the inaccessible shared-page body. This README
 separates stated goals from assistant-proposed recipes and unverified external
-claims. No training runs, data ingestion or deployment were performed for this update.
+claims. No training runs, data ingestion or deployment were performed for that
+original documentation update. The later local fundamentals/UI implementation
+has been exercised with bounded CPU demonstration runs, not GPU training or
+research-corpus ingestion.
+
+## Linting
+
+Ruff is a dev dependency configured in `pyproject.toml`. From `training/`, run
+`uv run ruff check --fix .` and `uv run ruff format .`. The repository pre-commit
+hook in `../.githooks/` checks staged Python files across the whole repository.
