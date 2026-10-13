@@ -117,9 +117,10 @@ def load_datasets(root):
         if Path(entry["path"]).is_absolute() or ".." in Path(entry["path"]).parts:
             raise ValueError("Dataset path must be relative to data/, without parent traversal")
         path = confined(base, entry["path"])
-        if not path.is_file():
-            raise ValueError(f"Dataset file missing: {entry['id']}")
         datasets[entry["id"]] = entry.copy()
+        if not path.is_file():
+            # Downloadable datasets stay listed but cannot start a run until fetched.
+            datasets[entry["id"]].update(training_eligible=False, missing=True)
     return datasets
 
 

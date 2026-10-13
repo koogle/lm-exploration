@@ -12,6 +12,7 @@ import argparse
 import json
 import math
 import random
+import sys
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -20,6 +21,7 @@ import torch
 from model_100m import model as architecture
 from model_100m.model import GPT, ModelConfig
 from torch import nn
+from tqdm import tqdm
 from training_data.loading import CharacterTokenizer, get_batch, load_data
 
 from run_utils import (
@@ -172,7 +174,15 @@ def train(args):
             }
             atomic_write(out / "checkpoint.pt", lambda stream: torch.save(state, stream))
 
-        with (out / "metrics.jsonl").open("a", encoding="utf-8") as metrics:
+        # Progress bar only in an interactive shell; the UI captures plain JSON lines.
+        progress = tqdm(
+            total=args.steps,
+            initial=step,
+            unit="step",
+            dynamic_ncols=True,
+            disable=not sys.stdout.isatty(),
+        )
+        with progress, (out / "metrics.jsonl").open("a", encoding="utf-8") as metrics:
             while step < args.steps and not stop[0]:
                 model.train()
                 x, y = get_batch(
@@ -187,6 +197,7 @@ def train(args):
                 optimizer.step()
                 step += 1
                 last_loss = loss.item()
+                progress.update()
                 final = step == args.steps or stop[0]
                 if step % args.log_interval == 0 or step % args.eval_interval == 0 or final:
                     record = {
@@ -201,7 +212,16 @@ def train(args):
                     line = json.dumps(record, allow_nan=False)
                     metrics.write(line + "\n")
                     metrics.flush()
-                    print(line, flush=True)
+                    if progress.disable:
+                        print(line, flush=True)
+                    else:
+                        progress.set_postfix(
+                            loss=f"{last_loss:.3f}", tok_s=f"{record['tokens_per_second']:,.0f}"
+                        )
+                        if "val_loss" in record:
+                            progress.write(
+                                f"step {step:>6}  train {last_loss:.4f}  val {record['val_loss']:.4f}"
+                            )
                 if step % args.checkpoint_interval == 0:
                     save()
         save()

@@ -71,6 +71,29 @@ uv run lm-train generate --checkpoint runs/manual-demo/checkpoint.pt \
   --prompt 'The ' --max-new-tokens 100
 ```
 
+### Tiny Shakespeare on Apple MPS
+
+The text is not committed. Fetch it into the ignored `data/raw/`, pinned by SHA-256:
+
+```sh
+uv run python -m training_data.fetch_tinyshakespeare
+
+# Small char-level model (~10.7M parameters) on the Mac GPU. In a terminal, tqdm
+# shows progress with the latest loss; validation loss prints every --eval-interval.
+uv run lm-train train --data data/raw/tinyshakespeare.txt --out-dir runs/shakespeare-mps \
+  --device mps --steps 2000 --batch-size 32 --block-size 128 \
+  --n-layer 6 --n-head 6 --n-embd 384 --lr 1e-3 \
+  --eval-interval 100 --eval-batches 20 --checkpoint-interval 500
+
+uv run lm-train generate --checkpoint runs/shakespeare-mps/checkpoint.pt \
+  --prompt 'ROMEO:' --max-new-tokens 300
+```
+
+Every logged step is also in `runs/shakespeare-mps/metrics.jsonl`. When output is not a
+terminal (for example, the UI), the trainer prints JSON lines instead of a progress bar.
+The dataset also appears in the UI once downloaded. Throughput and final loss for this
+configuration have not been recorded here.
+
 For the configured ~100M architecture, omit the layer/head/width overrides.
 The UI defaults to that architecture with a small batch and step budget. FP32
 training requires several GiB and CPU execution can be slow; hardware throughput

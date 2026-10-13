@@ -7,7 +7,21 @@
       "description": "Project-authored miniature workshop stories for exercising the local trainer and UI. Demo only, not a selected research corpus or a quality benchmark.",
       "source": "Original synthetic prose authored for this project's local training fixture; no external corpus or third-party passages were used.",
       "license_notes": "Project-authored demo fixture, eligible only for this local learning demonstration. No third-party licensing approval or research corpus selection is implied.",
-      "languages": ["en"],
+      "languages": [
+        "en"
+      ],
+      "training_eligible": true
+    },
+    {
+      "id": "tiny-shakespeare",
+      "name": "Tiny Shakespeare · character benchmark",
+      "path": "raw/tinyshakespeare.txt",
+      "description": "About 1.1 MB (40,000 lines) of Shakespeare plays, the classic char-rnn/nanoGPT character-level sanity benchmark. Useful for checking that loss falls and samples become Shakespeare-like; not a research corpus. Not committed: fetch it with `uv run python -m training_data.fetch_tinyshakespeare`.",
+      "source": "https://github.com/karpathy/char-rnn/blob/370cbcd448eb7daf32f21a6be560b70e0b33c4e3/data/tinyshakespeare/input.txt (SHA-256 86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed)",
+      "license_notes": "Shakespeare's works are public domain; the compilation is distributed in the MIT-licensed char-rnn repository. Kept out of Git and downloaded locally for this learning benchmark only.",
+      "languages": [
+        "en"
+      ],
       "training_eligible": true
     }
   ]

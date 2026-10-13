@@ -155,7 +155,7 @@ $('dataset').onchange=datasetNote;
 async function init() {
   try {
     const data=await api('/api/datasets'); datasets=data.datasets;
-    for(const d of datasets) {const option=document.createElement('option');option.value=d.id;option.textContent=d.name;option.disabled=!d.training_eligible;$('dataset').append(option);}
+    for(const d of datasets) {const option=document.createElement('option');option.value=d.id;option.textContent=d.missing?`${d.name} · not downloaded`:d.name;option.disabled=!d.training_eligible;$('dataset').append(option);}
     const eligible=datasets.find(d=>d.training_eligible); if(eligible) $('dataset').value=eligible.id;
     for(const [key,value] of Object.entries(data.defaults)) if(form.elements[key]) form.elements[key].value=value;
     initialized=true; datasetNote(); await refresh();
