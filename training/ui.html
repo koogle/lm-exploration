@@ -21,16 +21,12 @@
 <div class="fields">
 <label>Steps<input name="steps" type="number" min="1" max="10000" required></label>
 <label>Batch size<input name="batch_size" type="number" min="1" max="8" required></label>
-<label>Context length<input name="block_size" type="number" min="8" max="256" required></label>
 </div>
 <details><summary>Advanced settings</summary><div class="fields">
-<label>Layers<input name="n_layer" type="number" min="1" max="14" required></label>
-<label>Width<input name="n_embd" type="number" min="16" max="768" required></label>
-<label>Heads<input name="n_head" type="number" min="1" max="12" required></label>
 <label>Learning rate<input name="lr" type="number" min="0.000001" max="0.01" step="any" required></label>
 <label>Seed<input name="seed" type="number" min="0" max="2147483647" required></label>
 <label>Device<select name="device"><option>cpu</option><option>mps</option><option>cuda</option></select></label>
-</div><small>Width must divide evenly by heads. Devices must be available locally. Override dimensions for tiny smoke tests; defaults target roughly 100M parameters.</small></details>
+</div><small>The architecture is fixed by 100m/model.py. Devices must be available locally; only training settings are editable here.</small></details>
 <button id="start" class="primary" type="submit" disabled>Start training</button>
 <p id="job-note" class="muted" style="font-size:12px;margin:10px 0 0">Loading datasets…</p>
 </form></section>

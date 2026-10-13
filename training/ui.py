@@ -2,6 +2,7 @@
 """Local UI for train.py and the 100M architecture. From training/: uv run lm-ui."""
 
 import argparse
+import errno
 import fcntl
 import hashlib
 import importlib.util
@@ -15,12 +16,15 @@ import sys
 import threading
 import time
 import uuid
+from dataclasses import asdict
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from model_100m.model import ModelConfig
+
+from train import TrainConfig
 
 ROOT = Path(__file__).resolve().parent
 RUN_ID = re.compile(r"r-[0-9a-f]{32}\Z")
@@ -29,27 +33,14 @@ READ_LIMIT = 256 * 1024
 DATA_LIMIT = 64 * 1024 * 1024
 STOP_TIMEOUT = 30
 DEFAULTS = {
-    "steps": 10,
-    "batch_size": 1,
-    "block_size": ModelConfig.block_size,
-    "n_layer": ModelConfig.n_layer,
-    "n_head": ModelConfig.n_head,
-    "n_embd": ModelConfig.n_embd,
-    "lr": 0.0003,
-    "seed": 42,
-    "device": "cpu",
-    "eval_interval": 5,
-    "log_interval": 1,
-    "eval_batches": 2,
-    "checkpoint_interval": 5,
+    key: value
+    for key, value in asdict(TrainConfig()).items()
+    if key not in ("data", "out_dir", "resume")
 }
+DEFAULTS["steps"] = 10
 BOUNDS = {
     "steps": (1, 10000),
     "batch_size": (1, 8),
-    "block_size": (8, 256),
-    "n_layer": (1, ModelConfig.n_layer),
-    "n_head": (1, ModelConfig.n_head),
-    "n_embd": (16, ModelConfig.n_embd),
     "seed": (0, 2**31 - 1),
     "eval_interval": (1, 10000),
     "log_interval": (1, 10000),
@@ -157,13 +148,7 @@ def validate_settings(payload, datasets):
         raise APIError(400, "lr must be finite and in [0.000001, 0.01]")
     if settings["device"] not in ("cpu", "mps", "cuda"):
         raise APIError(400, "device must be cpu, mps or cuda")
-    if settings["n_embd"] % settings["n_head"]:
-        raise APIError(400, "Model width must be divisible by heads")
-    if settings["batch_size"] * settings["block_size"] > 8192:
-        raise APIError(400, "batch_size × block_size must not exceed 8192")
-    if settings["n_layer"] * settings["n_embd"] ** 2 > ModelConfig.n_layer * ModelConfig.n_embd**2:
-        raise APIError(400, "Model exceeds the configured 100M size class")
-    if settings["steps"] * settings["batch_size"] * settings["block_size"] > 10000000:
+    if settings["steps"] * settings["batch_size"] * ModelConfig.block_size > 10000000:
         raise APIError(400, "Local run bound: at most 10 million training token exposures")
     return dataset_id, settings
 
@@ -325,18 +310,9 @@ class RunManager:
             run_id = "r-" + uuid.uuid4().hex
             directory = self.runs / run_id
             directory.mkdir()
-            argv = [
-                sys.executable,
-                "-u",
-                str(trainer),
-                "train",
-                "--data",
-                str(data_path),
-                "--out-dir",
-                str(directory),
-            ]
-            for key, value in settings.items():
-                argv.extend(["--" + key.replace("_", "-"), str(value)])
+            settings_path = directory / "training.json"
+            write_json(settings_path, dict(settings, data=str(data_path), out_dir=str(directory)))
+            argv = [sys.executable, "-u", str(trainer), "--config", str(settings_path)]
             record = {
                 "id": run_id,
                 "model": "100m",
@@ -562,16 +538,33 @@ class LocalServer(ThreadingHTTPServer):
     daemon_threads = True
 
 
+def bind_server(start_port):
+    # Attempt the actual bind (not a racy availability probe), then try next ports.
+    last_port = min(start_port + 99, 65535)
+    for port in range(start_port, last_port + 1):
+        try:
+            return LocalServer(("127.0.0.1", port), Handler)
+        except OSError as error:
+            if error.errno != errno.EADDRINUSE:
+                raise
+    raise OSError(errno.EADDRINUSE, f"No available port from {start_port} to {last_port}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=5174)
+    parser.add_argument(
+        "--port", type=int, default=5174, help="first port to try; skips busy ports"
+    )
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("port must be in [1, 65535]")
+    server = None
     try:
-        server = LocalServer(("127.0.0.1", args.port), Handler)
+        server = bind_server(args.port)
         manager = RunManager()
     except (OSError, ValueError) as error:
+        if server is not None:
+            server.server_close()
         parser.exit(1, f"Cannot start local UI: {error}\n")
     server.manager = manager
     stop = threading.Event()
@@ -579,7 +572,9 @@ def main():
         signal.signal(sig, lambda *_: stop.set())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    print(f"Local training UI: http://127.0.0.1:{args.port}", flush=True)
+    if server.server_port != args.port:
+        print(f"Port {args.port} is busy; using {server.server_port} instead.", flush=True)
+    print(f"Local training UI: http://127.0.0.1:{server.server_port}", flush=True)
     try:
         stop.wait()
     finally:

@@ -11,12 +11,16 @@ from torch.nn import functional as F
 from training_data.loading import CharacterTokenizer
 
 from run_utils import load_checkpoint
-from train import build_parser, sample, train
+from train import TrainConfig, build_parser, sample, train
 
 
 def self_test():
     torch.set_num_threads(1)
     torch.manual_seed(123)
+    options = build_parser().parse_args([])
+    assert options.config is None and options.resume is None
+    assert set(vars(options)) == {"config", "resume"}
+    print("PASS no-argument training CLI; architecture is not a command-line setting")
     with torch.device("meta"):
         configured = GPT(ModelConfig(256))
     count = sum(parameter.numel() for parameter in configured.parameters())
@@ -83,41 +87,21 @@ def self_test():
         data.write_text("abcd abc dab cab\n" * 40, encoding="utf-8")
 
         def run(directory, steps, resume=None):
-            args = build_parser().parse_args(
-                [
-                    "train",
-                    "--data",
-                    str(data),
-                    "--out-dir",
-                    str(root / directory),
-                    "--steps",
-                    str(steps),
-                    "--batch-size",
-                    "2",
-                    "--block-size",
-                    "8",
-                    "--n-layer",
-                    "1",
-                    "--n-head",
-                    "2",
-                    "--n-embd",
-                    "16",
-                    "--lr",
-                    "0.003",
-                    "--seed",
-                    "42",
-                    "--eval-interval",
-                    "2",
-                    "--log-interval",
-                    "2",
-                    "--eval-batches",
-                    "2",
-                    "--checkpoint-interval",
-                    "2",
-                ]
-                + (["--resume", str(resume)] if resume else [])
+            config = TrainConfig(
+                data=str(data),
+                out_dir=str(root / directory),
+                steps=steps,
+                batch_size=2,
+                lr=0.003,
+                seed=42,
+                eval_interval=2,
+                log_interval=2,
+                eval_batches=2,
+                checkpoint_interval=2,
+                resume=str(resume) if resume else None,
             )
-            train(args)
+            tiny = ModelConfig(len(set(data.read_text())), 8, 1, 2, 16)
+            train(config, model_config=tiny)
             saved = load_checkpoint(root / directory / "checkpoint.pt")
             count = sum(tensor.numel() for tensor in saved["model"].values())
             assert saved["config"]["parameter_count"] == count

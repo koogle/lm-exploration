@@ -57,51 +57,36 @@ Run from `training/`:
 uv sync --locked
 
 # ~100M count checked on the meta device; actual training tests use tiny models.
-uv run lm-train self-test
+uv run lm-checks
 
-# Start the local interface, then open http://127.0.0.1:5174.
+# Start the interface; open the URL printed in the terminal.
 uv run lm-ui
 
-# Cheap CPU smoke test using tiny overrides of the same architecture.
-uv run lm-train train --data data/toy.txt --out-dir runs/manual-demo \
-  --steps 20 --batch-size 2 --block-size 16 --n-layer 1 --n-head 2 --n-embd 16
-
-# Generate from a trusted local checkpoint (unknown prompt characters are errors).
-uv run lm-train generate --checkpoint runs/manual-demo/checkpoint.pt \
-  --prompt 'The ' --max-new-tokens 100
+# Train the fixed 100M architecture with code-defined defaults; no flags required.
+uv run python train.py
 ```
 
-### Tiny Shakespeare on Apple MPS
+Edit `TrainConfig` near the top of `train.py` for the dataset, steps, batch size,
+learning rate, seed, device and logging/checkpoint cadence. Model dimensions and
+context length live only in `100m/model.py`, not in CLI flags or UI controls.
+Defaults use the tracked `data/tinyshakespeare.txt` on CPU, with each direct run
+writing a fresh `runs/manual-*` directory. To use Apple acceleration, set
+`TrainConfig.device = "mps"` on supported hardware. An interactive terminal shows
+tqdm progress; the UI captures real JSON metric lines instead.
 
-The text is not committed. Fetch it into the ignored `data/raw/`, pinned by SHA-256:
+The UI starts at port 5174 and automatically tries subsequent ports if occupied.
+Its Start button writes `runs/<id>/training.json` and invokes
+`train.py --config <path>`. This is the optional interface for run settings,
+not an architecture selector. Stop requests checkpointing at an optimizer boundary.
 
-```sh
-uv run python -m training_data.fetch_tinyshakespeare
+FP32 ~100M training requires several GiB and CPU execution can be slow. Full-size
+throughput and model quality have **not** been measured; setup/imports/checks do
+not launch a full-size or paid run. Shakespeare and the toy fixture are learning
+corpora, not evidence of broad language capability.
 
-# Small char-level model (~10.7M parameters) on the Mac GPU. In a terminal, tqdm
-# shows progress with the latest loss; validation loss prints every --eval-interval.
-uv run lm-train train --data data/raw/tinyshakespeare.txt --out-dir runs/shakespeare-mps \
-  --device mps --steps 2000 --batch-size 32 --block-size 128 \
-  --n-layer 6 --n-head 6 --n-embd 384 --lr 1e-3 \
-  --eval-interval 100 --eval-batches 20 --checkpoint-interval 500
-
-uv run lm-train generate --checkpoint runs/shakespeare-mps/checkpoint.pt \
-  --prompt 'ROMEO:' --max-new-tokens 300
-```
-
-Every logged step is also in `runs/shakespeare-mps/metrics.jsonl`. When output is not a
-terminal (for example, the UI), the trainer prints JSON lines instead of a progress bar.
-The dataset also appears in the UI once downloaded. Throughput and final loss for this
-configuration have not been recorded here.
-
-For the configured ~100M architecture, omit the layer/head/width overrides.
-The UI defaults to that architecture with a small batch and step budget. FP32
-training requires several GiB and CPU execution can be slow; hardware throughput
-and a full 100M training run have **not** been measured. No full-size or paid run
-is launched by setup, imports or self-tests. The included text remains demo-only.
-
-Resume with `--resume runs/manual-demo/checkpoint.pt` and a larger total `--steps`,
-keeping the same data/model/optimizer settings. Only load trusted checkpoints.
+To resume, increase `TrainConfig.steps` (the total update target), retain the
+original training settings, and run `uv run python train.py --resume <checkpoint>`.
+Only load trusted checkpoints.
 CPU continuation was tested within the same runtime; cross-device bitwise
 reproducibility is not promised. The UI does not yet expose resume. The first
 trainer reads text into RAM and is deliberately not a large-corpus system.
