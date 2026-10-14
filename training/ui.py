@@ -262,7 +262,9 @@ class RunManager:
             record["latest"] = latest
             for key in ("train_loss", "val_loss"):
                 record[key] = next((item[key] for item in reversed(metrics) if key in item), None)
-            record["checkpoint_available"] = confined(directory, "checkpoint.pt").is_file()
+            record["checkpoint_available"] = any(
+                confined(directory, "checkpoints").glob("step-*.pt")
+            )
             config = None
             try:
                 config = read_json(confined(directory, "config.json"))
@@ -377,9 +379,12 @@ class RunManager:
                 status = "stopped" if code in (0, -signal.SIGTERM, -signal.SIGINT) else "failed"
                 note = "Stop requested; inspect the checkpoint and log before resuming."
             else:
-                artifacts = ("config.json", "metrics.jsonl", "checkpoint.pt", "sample.txt")
-                complete = code == 0 and all(
-                    (self.directory(job["id"]) / name).is_file() for name in artifacts
+                directory = self.directory(job["id"])
+                artifacts = ("config.json", "metrics.jsonl", "sample.txt")
+                complete = (
+                    code == 0
+                    and all((directory / name).is_file() for name in artifacts)
+                    and any((directory / "checkpoints").glob("step-*.pt"))
                 )
                 status = "completed" if complete else "failed"
                 note = (

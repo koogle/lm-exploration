@@ -29,7 +29,7 @@ def build_parser():
 
 def build_generate_parser():
     parser = argparse.ArgumentParser(description=GENERATE_DESCRIPTION)
-    parser.add_argument("--checkpoint", required=True, help="trusted checkpoint.pt to load")
+    parser.add_argument("--checkpoint", required=True, help="trusted checkpoint file to load")
     parser.add_argument("--prompt", default="", help="text to continue (default: empty)")
     parser.add_argument("--max-new-tokens", type=int, default=300)
     parser.add_argument("--seed", type=int, help="sampling seed (default: training seed + 2)")

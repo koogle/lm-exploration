@@ -18,9 +18,14 @@ from torch.nn import functional as F
 from tqdm import tqdm
 from training_data.loading import get_batch, load_data
 
-from .checkpoints import load_checkpoint, restore_checkpoint, save_checkpoint, validate_resume
+from .checkpoints import (
+    load_checkpoint,
+    restore_checkpoint,
+    runtime_provenance,
+    save_checkpoint,
+    validate_resume,
+)
 from .config import ROOT, validate_train_args
-from .provenance import runtime_provenance
 from .sampling import sample
 
 
@@ -134,9 +139,8 @@ def train(args, *, model_config=None):
         def save():
             # A new file per save: an interrupted write never damages an earlier checkpoint.
             nonlocal saved_step
-            path = out / "checkpoints" / f"step-{step:06d}.pt"
             save_checkpoint(
-                path,
+                out / "checkpoints" / f"step-{step:06d}.pt",
                 config=config,
                 model=model,
                 tokenizer=tokenizer,
@@ -148,7 +152,6 @@ def train(args, *, model_config=None):
                 train_loss=last_loss,
             )
             saved_step = step
-            return path
 
         # Progress bar only in an interactive shell; the UI captures plain JSON lines.
         progress = tqdm(
@@ -205,11 +208,13 @@ def train(args, *, model_config=None):
                             )
                 if step % args.checkpoint_interval == 0:
                     save()
-        path = save() if step != saved_step else out / "checkpoints" / f"step-{step:06d}.pt"
+        if step != saved_step:
+            save()
+        latest = out / "checkpoints" / f"step-{step:06d}.pt"
         text = sample(model, tokenizer, "", 80, args.seed + 2)
         (out / "sample.txt").write_text(text, encoding="utf-8")
         print(
             f"{'Stopped' if stop[0] else 'Completed'} at step {step}; "
-            f"{config['parameter_count']} parameters; checkpoint: {path}",
+            f"{config['parameter_count']} parameters; checkpoint: {latest}",
             flush=True,
         )

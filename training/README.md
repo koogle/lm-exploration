@@ -36,8 +36,7 @@ The first local implementation is available:
   approximately 100M parameters. The exact count depends on vocabulary/context.
 - [`cli.py`](cli.py): thin `lm-train` and `lm-generate` commands; parses settings and loads the trainer or a checkpoint.
 - [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,
-  checkpoint loading/saving/resume, atomic run artifacts/provenance and shared
-  sampling.
+  checkpoint loading/saving/resume, run provenance and shared sampling.
 - [`data/loading.py`](data/loading.py): character tokenization, text loading,
   deterministic splits and batching.
 - [`model_checks.py`](model_checks.py): reference and tiny-model validation.
@@ -47,6 +46,7 @@ The first local implementation is available:
   Tiny Shakespeare is a learning benchmark, not a selected research corpus.
 - `runs/<id>/`: local artifacts, ignored by Git. Model configuration, metrics,
   checkpoints and dataset provenance remain available independently of the UI.
+  Each save writes a new `checkpoints/step-NNNNNN.pt`; nothing is overwritten.
 
 `training/` is a uv-managed project with `pyproject.toml`, `uv.lock` and a Python
 3.12 pin. It has its own ignored `.venv`; the latent-workspace environment is
@@ -69,7 +69,7 @@ uv run python -m training_data.fetching.fetch_tinyshakespeare
 uv run lm-train
 
 # Sample from a trusted checkpoint (prompt characters must be in its vocabulary).
-uv run lm-generate --checkpoint runs/<id>/checkpoint.pt --prompt 'ROMEO:' \
+uv run lm-generate --checkpoint runs/<id>/checkpoints/step-000100.pt --prompt 'ROMEO:' \
   --max-new-tokens 300
 ```
 
@@ -83,7 +83,7 @@ Edit `TrainConfig` in `trainer/config.py` for the dataset, steps, batch size,
 learning rate, seed, device and logging/checkpoint cadence. Model dimensions and
 context length live only in `100m/model.py`, not in CLI flags or UI controls.
 Defaults use the locally fetched `data/raw/tinyshakespeare.txt` on CPU, with each direct run
-writing a fresh `runs/manual-*` directory. To use Apple acceleration, set
+writing a fresh `runs/<uuid>/` directory. To use Apple acceleration, set
 `TrainConfig.device = "mps"` on supported hardware. An interactive terminal shows
 tqdm progress; the UI captures real JSON metric lines instead.
 

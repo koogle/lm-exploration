@@ -134,7 +134,7 @@ def self_test():
             )
             tiny = ModelConfig(len(set(data.read_text())), 8, 1, 2, 16)
             train(config, model_config=tiny)
-            saved = load_checkpoint(root / directory / "checkpoint.pt")
+            saved = load_checkpoint(root / directory / "checkpoints" / f"step-{steps:06d}.pt")
             count = sum(tensor.numel() for tensor in saved["model"].values())
             assert saved["config"]["parameter_count"] == count
             assert (
@@ -151,7 +151,6 @@ def self_test():
             ("training_config", "trainer/config.py"),
             ("checkpoints", "trainer/checkpoints.py"),
             ("sampling", "trainer/sampling.py"),
-            ("artifacts", "trainer/artifacts.py"),
             ("cli", "cli.py"),
         ):
             source = Path(__file__).resolve().parent / filename
@@ -196,7 +195,7 @@ def self_test():
                 "-c",
                 "from cli import generate; generate()",
                 "--checkpoint",
-                str(root / "full" / "checkpoint.pt"),
+                str(root / "full" / "checkpoints" / "step-000008.pt"),
                 "--prompt",
                 "ab",
                 "--max-new-tokens",
@@ -268,7 +267,7 @@ def self_test():
         print("PASS UI launches the thin CLI with dataset and run settings")
         split = run("split", 3)
         assert split["step"] == 3
-        resumed = run("split", 8, root / "split" / "checkpoint.pt")
+        resumed = run("split", 8, root / "split" / "checkpoints" / "step-000003.pt")
         assert resumed["step"] == full["step"] == 8
         for key in ("model", "optimizer", "rng", "dataset_fingerprint", "train_loss"):
             assert_same(full[key], resumed[key])
@@ -291,7 +290,7 @@ def self_test():
             raise AssertionError("existing run was overwritten without --resume")
         data.write_text(data.read_text() + "a", encoding="utf-8")
         try:
-            run("rejected", 9, root / "split" / "checkpoint.pt")
+            run("rejected", 9, root / "split" / "checkpoints" / "step-000008.pt")
         except ValueError as error:
             assert "identical data" in str(error)
         else:

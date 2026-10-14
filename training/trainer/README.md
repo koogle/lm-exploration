@@ -16,10 +16,9 @@ configurations are not exposed through the CLI or UI.
   handling at optimizer-step boundaries. Checkpoint operations are delegated to
   `checkpoints.py`.
 - `checkpoints.py`: trusted checkpoint loading, resume compatibility checks,
-  restoring model/optimizer/RNG state and atomic checkpoint saving.
+  restoring model/optimizer/RNG state, checkpoint saving and the source hashes,
+  git commit and runtime details stored in `config.json` and each checkpoint.
 - `sampling.py`: shared sampling for training previews and `lm-generate`.
-- `artifacts.py`: atomic writes for `config.json`, `sample.txt` and
-  `checkpoint.pt`, plus the source/runtime provenance stored in `config.json`.
 
 ## Commands
 
@@ -35,7 +34,7 @@ uv run lm-train
 uv run lm-train --config path/to/training.json
 
 # Resume a trusted checkpoint with an increased total step target.
-uv run lm-train --config path/to/training.json --resume runs/<id>/checkpoint.pt
+uv run lm-train --config path/to/training.json --resume runs/<id>/checkpoints/step-000100.pt
 ```
 
 `uv run python -m cli` invokes the same command. Edit `TrainConfig` in
