@@ -13,14 +13,18 @@ run artifacts under `runs/`.
 
 ## Initial scope
 
-The only included dataset is `toy-demo`: original, project-authored workshop
-stories in `toy.txt`. It is **demo-only**, eligible for exercising the local UI,
-next-token training, checkpointing and sampling. It is not a selected research
-corpus, an independent evaluation set, or evidence of useful language capability.
-Repetition and shared style make its validation loss unsuitable for claims about
-generalization. No external text was downloaded, and no third-party licensing
-approval is asserted. Licensed real corpus choices and language mixtures remain
-undecided.
+The only registered dataset is `tiny-shakespeare`, a character-level learning
+benchmark for exercising training, checkpointing and sampling. Its text is not
+committed to Git. From `training/`, fetch it before starting the UI:
+
+```sh
+uv run python -m training_data.fetching.fetch_tinyshakespeare
+```
+
+The fetcher verifies the pinned SHA-256 and saves the text to
+`data/raw/tinyshakespeare.txt`. Source and license notes are in `datasets.json`.
+This benchmark is not a selected research corpus or evidence of useful language
+capability. Research corpus choices and language mixtures remain undecided.
 
 ## Add an eligible local text dataset
 
@@ -57,6 +61,6 @@ undecided.
    a run is starting or running: the trainer independently fingerprints its input
    in `config.json` and checkpoints, and owns resume compatibility checks.
 
-Definitions and this toy fixture are tracked; `raw/`, `cache/` and `../runs/` are
-not. Each research dataset needs its own evidence; this README is not a license
+Dataset definitions and fetching scripts are tracked; `raw/`, `cache/` and
+`../runs/` are not. Each research dataset needs its own evidence; this README is not a license
 allowlist or an approval of the candidate sources in the training plan.

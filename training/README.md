@@ -41,8 +41,8 @@ The first local implementation is available:
 - [`model_checks.py`](model_checks.py): reference and tiny-model validation.
 - [`ui.py`](ui.py) and [`ui.html`](ui.html): a minimal localhost Run Board that
   starts one real local job, displays loss/progress/logs/samples and stops it.
-- [`data/`](data/README.md): curated dataset definitions and an original toy
-  fixture. This is demonstration data, not a selected research corpus.
+- [`data/`](data/README.md): curated dataset definitions and fetching scripts.
+  Tiny Shakespeare is a learning benchmark, not a selected research corpus.
 - `runs/<id>/`: local artifacts, ignored by Git. Model configuration, metrics,
   checkpoints and dataset provenance remain available independently of the UI.
 
@@ -91,8 +91,8 @@ not an architecture selector. Stop requests checkpointing at an optimizer bounda
 
 FP32 ~100M training requires several GiB and CPU execution can be slow. Full-size
 throughput and model quality have **not** been measured; setup/imports/checks do
-not launch a full-size or paid run. Shakespeare and the toy fixture are learning
-corpora, not evidence of broad language capability.
+not launch a full-size or paid run. Shakespeare is a learning corpus, not evidence
+of broad language capability.
 
 To resume, increase `TrainConfig.steps` (the total update target), retain the
 original training settings, and run `uv run python train.py --resume <checkpoint>`.
