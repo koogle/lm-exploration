@@ -29,6 +29,9 @@ research effort, with its own resources and budget.
 
 ## Current state
 
+For a minimal NumPy example of forward passes, handwritten backpropagation and
+gradient descent, start with [the XOR example](examples/README.md).
+
 The first local implementation is available:
 
 - [`100m/model.py`](100m/model.py): **architecture only**, preserving the user's
