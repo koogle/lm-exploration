@@ -55,6 +55,14 @@ def self_test():
         f"PASS 100M default architecture: {count:,} parameters (meta device, no weight allocation)"
     )
 
+    from model_10m import model as vanilla
+
+    with torch.device("meta"):
+        vanilla_model = vanilla.GPT(vanilla.ModelConfig(65))
+    assert sum(p.numel() for p in vanilla_model.parameters()) == 10_795_776
+    assert vanilla_model.config.block_size == 256
+    print("PASS 10M vanilla definition: 10,795,776 parameters")
+
     tensors = [torch.randn(2, 2, 5, 4, requires_grad=True) for _ in range(3)]
     reference = [tensor.detach().clone().requires_grad_() for tensor in tensors]
     actual = causal_attention(*tensors)
@@ -117,6 +125,22 @@ def self_test():
         root = Path(temporary)
         data = root / "text.txt"
         data.write_text("abcd abc dab cab\n" * 40, encoding="utf-8")
+        bounded = TrainConfig(
+            data=str(data),
+            out_dir=str(root / "bounded"),
+            steps=100,
+            eval_batches=1,
+            checkpoint_interval=100,
+        )
+        train(
+            bounded,
+            architecture_module=vanilla,
+            model_config=vanilla.ModelConfig(6, 8, 1, 2, 16),
+            max_seconds=1e-9,
+        )
+        stopped = load_checkpoint(root / "bounded/checkpoints/step-000001.pt")
+        assert stopped["step"] == 1 and stopped["config"]["model_name"] == "model_10m"
+        print("PASS explicit 10M architecture and bounded cooperative stop/save")
 
         def run(directory, steps, resume=None):
             config = TrainConfig(

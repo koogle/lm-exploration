@@ -12,7 +12,6 @@ from pathlib import Path
 
 import torch
 from model_100m import model as architecture
-from model_100m.model import GPT, ModelConfig
 from torch import nn
 from torch.nn import functional as F
 from tqdm import tqdm
@@ -61,8 +60,13 @@ def evaluate(model, data, args):
     return sum(losses) / len(losses)
 
 
-def train(args, *, model_config=None):
-    # model_config is an internal tiny-test seam, never a CLI or UI setting.
+def train(args, *, model_config=None, architecture_module=None, max_seconds=None):
+    # Explicit architectures are used by bounded experiment workers, not the local UI.
+    selected_architecture = architecture_module or architecture
+    model_class = selected_architecture.GPT
+    config_class = selected_architecture.ModelConfig
+    if max_seconds is not None and max_seconds <= 0:
+        raise ValueError("max_seconds must be positive")
     validate_train_args(args)
     if args.out_dir is None:
         args = replace(args, out_dir=str(ROOT / "runs" / uuid.uuid4().hex))
@@ -74,9 +78,9 @@ def train(args, *, model_config=None):
             "output directory already has a run; use --resume or choose a new directory"
         )
     with stop_at_step_boundary() as stop:
-        block_size = model_config.block_size if model_config else ModelConfig.block_size
+        block_size = model_config.block_size if model_config else config_class.block_size
         tokenizer, train_data, val_data, fingerprint = load_data(args.data, block_size)
-        model_config = model_config or ModelConfig(vocab_size=len(tokenizer.characters))
+        model_config = model_config or config_class(vocab_size=len(tokenizer.characters))
         if model_config.vocab_size != len(tokenizer.characters):
             raise ValueError("model vocabulary must match the dataset tokenizer")
         settings = {
@@ -101,12 +105,12 @@ def train(args, *, model_config=None):
             gradient_clip_norm=1.0,
         )
         config = {
-            "model_name": "100m",
+            "model_name": selected_architecture.__package__,
             "model": asdict(model_config),
             "training": settings,
             "tokenizer": tokenizer.config(),
             "dataset": {"path": str(Path(args.data).resolve()), **fingerprint},
-            "runtime": runtime_provenance(args.device, architecture.__file__),
+            "runtime": runtime_provenance(args.device, selected_architecture.__file__),
         }
         checkpoint = load_checkpoint(args.resume) if args.resume else None
         if checkpoint:
@@ -114,7 +118,7 @@ def train(args, *, model_config=None):
         random.seed(args.seed)
         torch.manual_seed(args.seed)
         batch_generator = torch.Generator().manual_seed(args.seed)
-        model = GPT(model_config).to(device=args.device, dtype=torch.float32)
+        model = model_class(model_config).to(device=args.device, dtype=torch.float32)
         config["parameter_count"] = sum(parameter.numel() for parameter in model.parameters())
         optimizer = torch.optim.AdamW(
             model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.1
@@ -180,6 +184,8 @@ def train(args, *, model_config=None):
                 nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True)
                 optimizer.step()
                 step += 1
+                if max_seconds is not None and time.perf_counter() - started >= max_seconds:
+                    stop[0] = True
                 last_loss = loss.item()
                 progress.update()
                 final = step == args.steps or stop[0]

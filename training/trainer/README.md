@@ -1,8 +1,9 @@
 # Trainer implementation
 
 The trainer is an installed Python package within the `training/` uv project.
-It uses the fixed architecture in `../100m/model.py`; internal tiny-model test
-configurations are not exposed through the CLI or UI.
+The local CLI/UI uses `../100m/model.py`. The bounded Shakespeare Modal worker
+explicitly supplies `../10m/model.py` through the architecture-module argument.
+Tiny test configurations remain internal; see [10M training](../10m/README.md).
 
 ## Responsibilities
 
@@ -12,7 +13,7 @@ configurations are not exposed through the CLI or UI.
 - `config.py`: `TrainConfig`, training-setting validation and the training root.
   Dataset and output paths are anchored to `training/`, not this package folder.
 - `loop.py`: run setup, model/optimizer construction, evaluation and the core
-  optimizer-step loop, metrics, preview generation and cooperative SIGINT/SIGTERM
+  optimizer-step loop, metrics, preview generation, optional wall-time bounds and cooperative SIGINT/SIGTERM
   handling at optimizer-step boundaries. Checkpoint operations are delegated to
   `checkpoints.py`.
 - `checkpoints.py`: trusted checkpoint loading, resume compatibility checks,

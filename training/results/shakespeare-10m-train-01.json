@@ -1,0 +1,312 @@
+{
+  "run_id": "shakespeare-10m-train-01",
+  "smoke": false,
+  "gpu": "NVIDIA L4",
+  "config": {
+    "model_name": "model_10m",
+    "model": {
+      "vocab_size": 65,
+      "block_size": 256,
+      "n_layer": 6,
+      "n_head": 6,
+      "n_embd": 384
+    },
+    "training": {
+      "steps": 4000,
+      "batch_size": 32,
+      "lr": 0.0003,
+      "seed": 1337,
+      "device": "cuda",
+      "eval_interval": 200,
+      "log_interval": 200,
+      "eval_batches": 20,
+      "checkpoint_interval": 200,
+      "dtype": "float32",
+      "optimizer": "AdamW",
+      "betas": [
+        0.9,
+        0.95
+      ],
+      "weight_decay": 0.1,
+      "gradient_clip_norm": 1.0
+    },
+    "tokenizer": {
+      "type": "character",
+      "characters": [
+        "\n",
+        " ",
+        "!",
+        "$",
+        "&",
+        "'",
+        ",",
+        "-",
+        ".",
+        "3",
+        ":",
+        ";",
+        "?",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "J",
+        "K",
+        "L",
+        "M",
+        "N",
+        "O",
+        "P",
+        "Q",
+        "R",
+        "S",
+        "T",
+        "U",
+        "V",
+        "W",
+        "X",
+        "Y",
+        "Z",
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+        "g",
+        "h",
+        "i",
+        "j",
+        "k",
+        "l",
+        "m",
+        "n",
+        "o",
+        "p",
+        "q",
+        "r",
+        "s",
+        "t",
+        "u",
+        "v",
+        "w",
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    "dataset": {
+      "path": "/usr/local/lib/python3.12/site-packages/training_data/raw/tinyshakespeare.txt",
+      "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
+      "bytes": 1115394,
+      "characters": 1115394,
+      "train_tokens": 1003854,
+      "validation_tokens": 111540
+    },
+    "runtime": {
+      "python": "3.12.10",
+      "torch": "2.6.0+cu124",
+      "platform": "Linux-4.19.0-gvisor-x86_64-with-glibc2.36",
+      "device": "cuda",
+      "git_commit": null,
+      "source_hashes": {
+        "model": "cee2225572e14f2243f0e7f774f010305bb715a9e1e8dc9d0ff34008dc79dfe5",
+        "training": "2cf6562f84122a69ab178331507d10ee4f57b77c24488f598303726f738cd347",
+        "training_config": "ca357b69b1aa71e24c800fa4ba02943fa82a3a6d8fb4ab08bbfd1ef3e622e46f",
+        "checkpoints": "d585ce766665b0611ffe2114e726c93b938fbb39e87d681670727d75b832a418",
+        "sampling": "31ce756c27f6c216aab7e492721011332d2065bfec7d6905567f214cd7b16d4e",
+        "cli": "0ba40c28de8a93ca82c9281f5e091578be2eae8330edc04bd4f8bf3dfc4a671f"
+      },
+      "cuda": "12.4",
+      "cpu_threads": 4
+    },
+    "parameter_count": 10795776
+  },
+  "selected": {
+    "step": 1800,
+    "train_loss": 1.198578119277954,
+    "tokens_seen": 14745600,
+    "val_loss": 1.5448332369327544,
+    "elapsed_seconds": 224.852859454,
+    "tokens_per_second": 65578.8858358576
+  },
+  "final": {
+    "step": 4000,
+    "train_loss": 0.6580971479415894,
+    "tokens_seen": 32768000,
+    "val_loss": 2.106900769472122,
+    "elapsed_seconds": 498.484365304,
+    "tokens_per_second": 65735.26128550989
+  },
+  "worker_elapsed_seconds": 503.291740609,
+  "sample": "hang our love cousin\nIn tread him and flight for that way\nSent from the seed: wo",
+  "selection": "lowest measured validation loss among saved checkpoints",
+  "limits": "one seed; contiguous 90/10 split; no sealed test or broad capability claims",
+  "metrics": [
+    {
+      "step": 200,
+      "train_loss": 2.3350350856781006,
+      "tokens_seen": 1638400,
+      "val_loss": 2.350240397453308,
+      "elapsed_seconds": 25.840790118999998,
+      "tokens_per_second": 63403.63403963144
+    },
+    {
+      "step": 400,
+      "train_loss": 1.9366458654403687,
+      "tokens_seen": 3276800,
+      "val_loss": 2.025248610973358,
+      "elapsed_seconds": 51.050665820999996,
+      "tokens_per_second": 64187.21376699594
+    },
+    {
+      "step": 600,
+      "train_loss": 1.6835201978683472,
+      "tokens_seen": 4915200,
+      "val_loss": 1.830774438381195,
+      "elapsed_seconds": 75.789770746,
+      "tokens_per_second": 64853.07913745619
+    },
+    {
+      "step": 800,
+      "train_loss": 1.540116786956787,
+      "tokens_seen": 6553600,
+      "val_loss": 1.7123047888278962,
+      "elapsed_seconds": 100.471299626,
+      "tokens_per_second": 65228.57795604802
+    },
+    {
+      "step": 1000,
+      "train_loss": 1.433538556098938,
+      "tokens_seen": 8192000,
+      "val_loss": 1.6355282366275787,
+      "elapsed_seconds": 125.421501796,
+      "tokens_per_second": 65315.75433791579
+    },
+    {
+      "step": 1200,
+      "train_loss": 1.3501133918762207,
+      "tokens_seen": 9830400,
+      "val_loss": 1.5898750603199006,
+      "elapsed_seconds": 150.450881008,
+      "tokens_per_second": 65339.59744295072
+    },
+    {
+      "step": 1400,
+      "train_loss": 1.2918107509613037,
+      "tokens_seen": 11468800,
+      "val_loss": 1.560926181077957,
+      "elapsed_seconds": 175.301482954,
+      "tokens_per_second": 65423.29138772586
+    },
+    {
+      "step": 1600,
+      "train_loss": 1.249556303024292,
+      "tokens_seen": 13107200,
+      "val_loss": 1.5539032578468324,
+      "elapsed_seconds": 200.085537286,
+      "tokens_per_second": 65507.98312456095
+    },
+    {
+      "step": 1800,
+      "train_loss": 1.198578119277954,
+      "tokens_seen": 14745600,
+      "val_loss": 1.5448332369327544,
+      "elapsed_seconds": 224.852859454,
+      "tokens_per_second": 65578.8858358576
+    },
+    {
+      "step": 2000,
+      "train_loss": 1.2043274641036987,
+      "tokens_seen": 16384000,
+      "val_loss": 1.5545622766017915,
+      "elapsed_seconds": 249.76134371700002,
+      "tokens_per_second": 65598.62209327481
+    },
+    {
+      "step": 2200,
+      "train_loss": 1.164804220199585,
+      "tokens_seen": 18022400,
+      "val_loss": 1.5567232966423035,
+      "elapsed_seconds": 274.706151836,
+      "tokens_per_second": 65606.1026647827
+    },
+    {
+      "step": 2400,
+      "train_loss": 1.084175705909729,
+      "tokens_seen": 19660800,
+      "val_loss": 1.5833039700984954,
+      "elapsed_seconds": 299.626354974,
+      "tokens_per_second": 65617.72578952897
+    },
+    {
+      "step": 2600,
+      "train_loss": 1.0343438386917114,
+      "tokens_seen": 21299200,
+      "val_loss": 1.6075954496860505,
+      "elapsed_seconds": 324.43542818099996,
+      "tokens_per_second": 65650.04358314822
+    },
+    {
+      "step": 2800,
+      "train_loss": 0.9767570495605469,
+      "tokens_seen": 22937600,
+      "val_loss": 1.6446179270744323,
+      "elapsed_seconds": 349.299280336,
+      "tokens_per_second": 65667.46996425453
+    },
+    {
+      "step": 3000,
+      "train_loss": 0.9299113750457764,
+      "tokens_seen": 24576000,
+      "val_loss": 1.7107438921928406,
+      "elapsed_seconds": 374.17785462399996,
+      "tokens_per_second": 65679.9960133816
+    },
+    {
+      "step": 3200,
+      "train_loss": 0.860476553440094,
+      "tokens_seen": 26214400,
+      "val_loss": 1.755651593208313,
+      "elapsed_seconds": 399.07801185899996,
+      "tokens_per_second": 65687.40752688206
+    },
+    {
+      "step": 3400,
+      "train_loss": 0.7723264694213867,
+      "tokens_seen": 27852800,
+      "val_loss": 1.8479944348335267,
+      "elapsed_seconds": 423.899935252,
+      "tokens_per_second": 65706.07278682897
+    },
+    {
+      "step": 3600,
+      "train_loss": 0.7482029795646667,
+      "tokens_seen": 29491200,
+      "val_loss": 1.9050734043121338,
+      "elapsed_seconds": 448.728870972,
+      "tokens_per_second": 65721.64598216861
+    },
+    {
+      "step": 3800,
+      "train_loss": 0.7179887294769287,
+      "tokens_seen": 31129600,
+      "val_loss": 2.0155235707759855,
+      "elapsed_seconds": 473.57163944399997,
+      "tokens_per_second": 65733.66605430156
+    },
+    {
+      "step": 4000,
+      "train_loss": 0.6580971479415894,
+      "tokens_seen": 32768000,
+      "val_loss": 2.106900769472122,
+      "elapsed_seconds": 498.484365304,
+      "tokens_per_second": 65735.26128550989
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "repo_id": "jfrick/shakespeare-vanilla-gpt-10m",
+  "revision": "48b3eb9b56fd03056943bb905b8cd7637009588c",
+  "url": "https://huggingface.co/jfrick/shakespeare-vanilla-gpt-10m",
+  "public": true,
+  "anonymous_download_verified": true,
+  "weight_sha256": "3fa6cc070991c884eaeb487583e0bfc918f7dc655a6a8bccdd06c95d8f54827c",
+  "definition_sha256": "cee2225572e14f2243f0e7f774f010305bb715a9e1e8dc9d0ff34008dc79dfe5",
+  "strict_load_verified": true,
+  "seeded_generation_verified": true,
+  "selected_step": 1800,
+  "parameter_count": 10795776
+}

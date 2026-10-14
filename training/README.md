@@ -27,6 +27,16 @@ are optional later work. The frozen-Qwen drafter in
 [exploration/latent-workspace](../exploration/latent-workspace/) is a separate
 research effort, with its own resources and budget.
 
+## Shakespeare 10M publication
+
+A separate [vanilla 10M definition and bounded Modal workflow](10m/README.md)
+now has a [trained public model](https://huggingface.co/jfrick/shakespeare-vanilla-gpt-10m) with its complete definition and tokenizer.
+The selected update is 1,800 (validation loss 1.54483 nats/character); the later
+4,000-update head overfit and was not published.
+Its L4 jobs, dedicated volume and bounded allocation are separate from latent-workspace.
+See the owning guide and `results/shakespeare-10m-*.json` for executed results.
+The local UI below continues to use the 100M architecture.
+
 ## Current state
 
 The first local implementation is available:
@@ -109,8 +119,9 @@ The historical [Run Board](designs/run-board-web.html) and
 [earlier training studies](designs/train-design-studies.html), imported from
 [web-inference PR #1](https://github.com/koogle/web-inference/pull/1), remain
 interactive mockups with illustrative runs and metrics. Open those HTML files
-locally to inspect the original designs. GitHub integration, Modal job execution,
-custom kernels and the larger experiment framework are not implemented.
+locally to inspect the original designs. GitHub integration and Modal job controls in the UI, custom kernels and the larger
+experiment framework are not implemented; the separate bounded 10M CLI workflow
+now runs on Modal.
 
 ## Staged research plan
 
@@ -296,7 +307,7 @@ These checks demonstrate mechanics, not useful language capability.
 
 Next: choose the first research data/tokenizer recipe and an explicit GPU/budget
 bound, then implement and measure one bounded Modal throughput pilot before
-scaling the experiment matrix. No Modal jobs or paid compute have been launched.
+scaling the experiment matrix. The separate 10M Shakespeare workflow has now launched bounded Modal jobs; larger research training remains unexecuted.
 
 Still to decide:
 
