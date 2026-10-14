@@ -7,7 +7,7 @@ import sys
 import time
 import uuid
 from contextlib import contextmanager
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from pathlib import Path
 
 import torch
@@ -29,7 +29,7 @@ from .sampling import sample
 
 
 @contextmanager
-def stop_at_step_boundary():
+def stop_signal_handler():
     requested = [False]
 
     def request_stop(signum, frame):
@@ -60,7 +60,8 @@ def evaluate(model, data, args):
     return sum(losses) / len(losses)
 
 
-def train(args, *, model_config=None, architecture_module=None, max_seconds=None):
+def train(args, run_dir=None, *, model_config=None, architecture_module=None, max_seconds=None):
+    # run_dir is set only by the UI, workers and tests; model_config is a tiny-test seam.
     # Explicit architectures are used by bounded experiment workers, not the local UI.
     selected_architecture = architecture_module or architecture
     model_class = selected_architecture.GPT
@@ -68,16 +69,15 @@ def train(args, *, model_config=None, architecture_module=None, max_seconds=None
     if max_seconds is not None and max_seconds <= 0:
         raise ValueError("max_seconds must be positive")
     validate_train_args(args)
-    if args.out_dir is None:
-        args = replace(args, out_dir=str(ROOT / "runs" / uuid.uuid4().hex))
-    out = Path(args.out_dir)
+    if run_dir is None and args.resume:
+        # Resume continues in the run folder that owns runs/<id>/checkpoints/step-*.pt.
+        run_dir = Path(args.resume).resolve().parents[1]
+    out = Path(run_dir) if run_dir else ROOT / "runs" / uuid.uuid4().hex
     if not args.resume and any(
         (out / name).exists() for name in ("config.json", "metrics.jsonl", "checkpoints")
     ):
-        raise ValueError(
-            "output directory already has a run; use --resume or choose a new directory"
-        )
-    with stop_at_step_boundary() as stop:
+        raise ValueError("run directory already has a run; use --resume or choose a new directory")
+    with stop_signal_handler() as stop:
         block_size = model_config.block_size if model_config else config_class.block_size
         tokenizer, train_data, val_data, fingerprint = load_data(args.data, block_size)
         model_config = model_config or config_class(vocab_size=len(tokenizer.characters))

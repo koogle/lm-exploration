@@ -24,6 +24,8 @@ def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, help="optional JSON training settings (used by UI)")
     parser.add_argument("--resume", help="trusted checkpoint to continue")
+    # Internal: the UI pre-creates runs/<id>/; lm-train otherwise picks runs/<uuid>/.
+    parser.add_argument("--run-dir", type=Path, help=argparse.SUPPRESS)
     return parser
 
 
@@ -50,7 +52,7 @@ def main():
             config = TrainConfig(**json.loads(options.config.read_text(encoding="utf-8")))
         if options.resume:
             config = replace(config, resume=options.resume)
-        train(config)
+        train(config, options.run_dir)
     except (ValueError, TypeError, OSError) as error:
         parser.error(str(error))
 

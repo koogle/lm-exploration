@@ -8,7 +8,8 @@ Tiny test configurations remain internal; see [10M training](../10m/README.md).
 ## Responsibilities
 
 - `../cli.py`: thin `lm-train` and `lm-generate` entry points. Parses `--config` and `--resume`,
-  loads settings and calls the trainer. Importing it or asking for help does not
+  loads settings and calls the trainer. New runs always go to `runs/<uuid>/`;
+  the UI passes a hidden `--run-dir` for the folder it pre-creates. Importing it or asking for help does not
   load the training loop or start a run.
 - `config.py`: `TrainConfig`, training-setting validation and the training root.
   Dataset and output paths are anchored to `training/`, not this package folder.

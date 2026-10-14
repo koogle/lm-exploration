@@ -49,7 +49,6 @@ def execute(run_id, smoke):
     cfg = architecture.ModelConfig(vocab_size=len(tokenizer.characters))
     args = TrainConfig(
         data=str(data),
-        out_dir=str(root),
         device="cuda",
         steps=5 if smoke else 4000,
         batch_size=2 if smoke else 32,
@@ -64,6 +63,7 @@ def execute(run_id, smoke):
     try:
         train(
             args,
+            root,
             architecture_module=architecture,
             model_config=cfg,
             max_seconds=60 if smoke else 1200,

@@ -27,7 +27,8 @@ def self_test():
     torch.manual_seed(123)
     options = build_parser().parse_args([])
     assert options.config is None and options.resume is None
-    assert set(vars(options)) == {"config", "resume"}
+    assert set(vars(options)) == {"config", "resume", "run_dir"}
+    assert "--run-dir" not in build_parser().format_help()  # Internal UI/test seam.
     assert (
         Path(TrainConfig().data) == Path(__file__).resolve().parent / "data/raw/tinyshakespeare.txt"
     )
@@ -127,13 +128,13 @@ def self_test():
         data.write_text("abcd abc dab cab\n" * 40, encoding="utf-8")
         bounded = TrainConfig(
             data=str(data),
-            out_dir=str(root / "bounded"),
             steps=100,
             eval_batches=1,
             checkpoint_interval=100,
         )
         train(
             bounded,
+            root / "bounded",
             architecture_module=vanilla,
             model_config=vanilla.ModelConfig(6, 8, 1, 2, 16),
             max_seconds=1e-9,
@@ -145,7 +146,6 @@ def self_test():
         def run(directory, steps, resume=None):
             config = TrainConfig(
                 data=str(data),
-                out_dir=str(root / directory),
                 steps=steps,
                 batch_size=2,
                 lr=0.003,
@@ -157,7 +157,7 @@ def self_test():
                 resume=str(resume) if resume else None,
             )
             tiny = ModelConfig(len(set(data.read_text())), 8, 1, 2, 16)
-            train(config, model_config=tiny)
+            train(config, root / directory, model_config=tiny)
             saved = load_checkpoint(root / directory / "checkpoints" / f"step-{steps:06d}.pt")
             count = sum(tensor.numel() for tensor in saved["model"].values())
             assert saved["config"]["parameter_count"] == count
@@ -282,6 +282,7 @@ def self_test():
                     raise AssertionError("expected test launch failure")
                 argv = launch.call_args.args[0]
                 assert argv[:4] == [sys.executable, "-u", str(ui_root / "cli.py"), "--config"]
+                assert argv[5:] == ["--run-dir", str(Path(argv[4]).parent)]
                 assert launch.call_args.kwargs["cwd"] == ui_root
                 ui_settings = json.loads(Path(argv[4]).read_text())
                 assert ui_settings["steps"] == 2

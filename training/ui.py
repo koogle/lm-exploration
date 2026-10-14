@@ -33,9 +33,7 @@ READ_LIMIT = 256 * 1024
 DATA_LIMIT = 64 * 1024 * 1024
 STOP_TIMEOUT = 30
 DEFAULTS = {
-    key: value
-    for key, value in asdict(TrainConfig()).items()
-    if key not in ("data", "out_dir", "resume")
+    key: value for key, value in asdict(TrainConfig()).items() if key not in ("data", "resume")
 }
 DEFAULTS["steps"] = 10
 BOUNDS = {
@@ -315,8 +313,16 @@ class RunManager:
             directory = self.runs / run_id
             directory.mkdir()
             settings_path = directory / "training.json"
-            write_json(settings_path, dict(settings, data=str(data_path), out_dir=str(directory)))
-            argv = [sys.executable, "-u", str(entry_point), "--config", str(settings_path)]
+            write_json(settings_path, dict(settings, data=str(data_path)))
+            argv = [
+                sys.executable,
+                "-u",
+                str(entry_point),
+                "--config",
+                str(settings_path),
+                "--run-dir",
+                str(directory),
+            ]
             record = {
                 "id": run_id,
                 "model": "100m",

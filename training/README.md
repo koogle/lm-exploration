@@ -109,8 +109,8 @@ not launch a full-size or paid run. Shakespeare is a learning corpus, not eviden
 of broad language capability.
 
 To resume, increase `TrainConfig.steps` (the total update target), retain the
-original training settings, and run `uv run lm-train --resume <checkpoint>`.
-Only load trusted checkpoints.
+original training settings, and run `uv run lm-train --resume <checkpoint>`. Resumed training continues in the
+checkpoint's own `runs/<id>/` folder. Only load trusted checkpoints.
 CPU continuation was tested within the same runtime; cross-device bitwise
 reproducibility is not promised. The UI does not yet expose resume. The first
 trainer reads text into RAM and is deliberately not a large-corpus system.

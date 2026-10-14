@@ -13,7 +13,6 @@ ROOT = Path(__file__).resolve().parents[1]
 class TrainConfig:
     # All normal training choices are here, not a long command line.
     data: str = str(ROOT / "data" / "raw" / "tinyshakespeare.txt")
-    out_dir: str | None = None  # A new runs/<uuid>/ directory for each invocation.
     steps: int = 100
     batch_size: int = 1
     lr: float = 3e-4
