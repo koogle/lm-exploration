@@ -1,0 +1,12 @@
+{
+  "repo_id": "jfrick/qwen2.5-0.5b-dflash-drafter-79m",
+  "public": true,
+  "revision": "680d2beaf0bc846d50db585329346068ff393704",
+  "source_checkpoint_sha256": "44865d84016898f575cf009c5cd2c2acb919564f009e912170cf4ba131b4e768",
+  "inference_checkpoint_sha256": "4135b185a8e96fe3186d8beb6b229b83246f127699b710996659188e938c61d6",
+  "checkpoint_step": 70585,
+  "draft_parameters": 78578432,
+  "anonymous_download_checksum_verified": true,
+  "strict_state_dict_load_verified": true,
+  "new_gpu_evaluation": false
+}

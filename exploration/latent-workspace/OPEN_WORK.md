@@ -194,3 +194,7 @@ check actual app/call status and the pause record. No training source changed.
 
 Verification before push:132 tests pass, Ruff/format/diff checks pass; updated
 PDF is three pages with no overfull boxes. The Modal app is stopped/zero tasks.
+
+## Hugging Face publication (2026-10-14, completed)
+
+Qualified step70585 drafter is [public](https://huggingface.co/jfrick/qwen2.5-0.5b-dflash-drafter-79m). Inference-only export, pinned Hub loading and publishing commands implemented. Anonymous download checksum and strict draft-weight loading verified; 135 tests, Ruff lint/format and diff checks passed. No new GPU experiment launched. See [operations](docs/operations.md#public-hugging-face-drafter-2026-10-14).

@@ -339,3 +339,32 @@ local ledger synced to$225.625 and ownership marker archived after terminal chec
 `results/jspace-paused.json` and the remote pause.json are the authoritative pause
 record. Historical controller state can still say running; it is not liveness
 proof. Do not automatically resume without new user direction.
+
+## Public Hugging Face drafter (2026-10-14)
+
+[Public model](https://huggingface.co/jfrick/qwen2.5-0.5b-dflash-drafter-79m),
+pinned release `680d2beaf0bc846d50db585329346068ff393704`.
+The qualified original checkpoint was retrieved from the existing Modal runs
+volume and matched SHA256 `44865d84016898f575cf009c5cd2c2acb919564f009e912170cf4ba131b4e768`.
+The public export retains only drafter weights, config, mask token ID and step;
+optimizer/RNG/data and frozen Qwen weights are excluded. The public package
+includes loading code, dependencies, upstream DFlash notice and a model card.
+It requires the frozen pinned Qwen target, rather than standalone causal-LM loading.
+
+```bash
+uv run latent-workspace export-hf --checkpoint artifacts/qualified-drafter.pt \
+  --output artifacts/huggingface-qualified \
+  --expected-sha256 44865d84016898f575cf009c5cd2c2acb919564f009e912170cf4ba131b4e768
+# Set HF_TOKEN through your environment's secret configuration before publishing.
+uv run latent-workspace push-hf --folder artifacts/huggingface-qualified \
+  --repo-id jfrick/qwen2.5-0.5b-dflash-drafter-79m
+uv run latent-workspace draft --repo-id jfrick/qwen2.5-0.5b-dflash-drafter-79m \
+  --revision 680d2beaf0bc846d50db585329346068ff393704 \
+  --prompt 'The capital of France is' --tokens 32
+```
+
+Exports require a new output directory. Checksum mismatch fails before creating
+it. Hub inference requires an explicit revision. Publishing only uploads the
+export's allowlisted files and rejects an existing private destination. Model
+cards assert qualification metrics only for the checksum-matched qualified head.
+No new training, GPU evaluation, or speed benchmark is part of this publication.

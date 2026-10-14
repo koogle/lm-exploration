@@ -1,6 +1,6 @@
 # Latent workspace block generation
 
-[Short learnings write-up](docs/implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md) · [Research PDF with charts](results/drafter-learnings.pdf).
+[Public Hugging Face drafter](https://huggingface.co/jfrick/qwen2.5-0.5b-dflash-drafter-79m) · [Short learnings write-up](docs/implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md) · [Research PDF with charts](results/drafter-learnings.pdf).
 
 Completed training: [large-data curriculum findings](results/large-curriculum-final.md).
 Two fresh 79M drafters for frozen Qwen2.5-0.5B finished 100000 updates on a

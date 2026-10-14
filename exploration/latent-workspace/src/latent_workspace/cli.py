@@ -17,18 +17,40 @@ def main():
     gen.add_argument("--tokens", type=int, default=32)
     gen.add_argument("--temperature", type=float, default=0)
     draft = sub.add_parser("draft", help="DFlash-style greedy drafting with Qwen verification")
-    draft.add_argument("--checkpoint", required=True)
+    draft_source = draft.add_mutually_exclusive_group(required=True)
+    draft_source.add_argument("--checkpoint")
+    draft_source.add_argument("--repo-id")
+    draft.add_argument("--revision")
     draft.add_argument("--prompt", required=True)
     draft.add_argument("--tokens", type=int, default=128)
+    export = sub.add_parser("export-hf", help="Export an inference-only drafting model")
+    export.add_argument("--checkpoint", required=True)
+    export.add_argument("--output", required=True)
+    export.add_argument("--expected-sha256")
+    publish = sub.add_parser("push-hf", help="Publish an exported drafting model publicly")
+    publish.add_argument("--folder", required=True)
+    publish.add_argument("--repo-id", required=True)
     args = parser.parse_args()
-    if args.command == "train":
+    if args.command == "export-hf":
+        from .hub import export_checkpoint
+
+        print(export_checkpoint(args.checkpoint, args.output, args.expected_sha256))
+    elif args.command == "push-hf":
+        from .hub import publish_checkpoint
+
+        print(json.dumps(publish_checkpoint(args.folder, args.repo_id), indent=2))
+    elif args.command == "train":
         from .train import run
 
         print(json.dumps(run(Config.load(args.config), args.output, resume=args.resume), indent=2))
     elif args.command == "draft":
         from .dflash_cli import generate_checkpoint
+        from .hub import download_checkpoint
 
-        print(json.dumps(generate_checkpoint(args.checkpoint, args.prompt, args.tokens), indent=2))
+        checkpoint = (
+            download_checkpoint(args.repo_id, args.revision) if args.repo_id else args.checkpoint
+        )
+        print(json.dumps(generate_checkpoint(checkpoint, args.prompt, args.tokens), indent=2))
     else:
         import torch
 

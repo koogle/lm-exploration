@@ -40,3 +40,5 @@ Completed frozen qualification: [findings and limits](../../results/qualificatio
 Short drafter write-up: [learnings](../implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md).
 
 Paused J-space augmentation and following unverified-generation stages: [controlled protocol](../jspace-capable-drafter.md).
+
+Public Hugging Face export and pinned inference: [Operations](../operations.md#public-hugging-face-drafter-2026-10-14).

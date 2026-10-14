@@ -181,3 +181,5 @@ normalized raw context and train the remaining trunk identically.1000 train-only
 calibration prefixes; fresh192/192 source-disjoint holdout; paired test only after
 validation selections freeze.2-prefix GPU checks validate plumbing, not benefit.
 Use bounded resumable Modal workers and preserve the$500 reservation cap.
+
+- 2026-10-14: Publish the qualified step70585 79M drafter publicly on Hugging Face at `jfrick/qwen2.5-0.5b-dflash-drafter-79m`. Export inference-only state plus loading code and measured limitations; keep source checkpoint and pinned frozen-target provenance. No new research training or evaluation.
