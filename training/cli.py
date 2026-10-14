@@ -1,4 +1,17 @@
-"""Sample text from a trusted checkpoint: uv run lm-generate --checkpoint <path>.
+"""Train the architecture in 100m/model.py: uv run lm-train.
+
+Edit trainer/config.py to change training settings; model dimensions belong in
+100m/model.py. --config is an optional JSON settings file used by the local UI.
+--resume optionally continues a trusted checkpoint; steps is the TOTAL target.
+FP32 ~100M training needs several GiB; CPU can be slow. No run starts on import.
+"""
+
+import argparse
+import json
+from dataclasses import replace
+from pathlib import Path
+
+GENERATE_DESCRIPTION = """Sample text from a trusted checkpoint: uv run lm-generate --checkpoint <path>.
 
 Loads the model configuration and character tokenizer stored in the checkpoint,
 so no training settings are needed. Prompt characters outside the training
@@ -6,18 +19,16 @@ vocabulary are errors. Output streams one token at a time as it is sampled.
 Sampling uses the full softmax distribution.
 """
 
-import argparse
-
-import torch
-from model_100m.model import GPT, ModelConfig
-from training_data.loading import CharacterTokenizer
-
-from run_utils import load_checkpoint
-from train import sample_tokens
-
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path, help="optional JSON training settings (used by UI)")
+    parser.add_argument("--resume", help="trusted checkpoint to continue")
+    return parser
+
+
+def build_generate_parser():
+    parser = argparse.ArgumentParser(description=GENERATE_DESCRIPTION)
     parser.add_argument("--checkpoint", required=True, help="trusted checkpoint.pt to load")
     parser.add_argument("--prompt", default="", help="text to continue (default: empty)")
     parser.add_argument("--max-new-tokens", type=int, default=300)
@@ -28,7 +39,33 @@ def build_parser():
 
 def main():
     parser = build_parser()
+    options = parser.parse_args()
+    # Keep the entry point thin; --help does not import PyTorch or the trainer.
+    from trainer.config import TrainConfig
+    from trainer.loop import train
+
+    try:
+        config = TrainConfig()
+        if options.config:
+            config = TrainConfig(**json.loads(options.config.read_text(encoding="utf-8")))
+        if options.resume:
+            config = replace(config, resume=options.resume)
+        train(config)
+    except (ValueError, TypeError, OSError) as error:
+        parser.error(str(error))
+
+
+def generate():
+    parser = build_generate_parser()
     args = parser.parse_args()
+    # Imported here for the same reason as in main().
+    import torch
+    from model_100m.model import GPT, ModelConfig
+    from training_data.loading import CharacterTokenizer
+
+    from trainer.checkpoints import load_checkpoint
+    from trainer.sampling import sample_tokens
+
     try:
         if args.max_new_tokens < 0:
             raise ValueError("--max-new-tokens must be nonnegative")

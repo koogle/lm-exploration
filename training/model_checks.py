@@ -1,17 +1,25 @@
 """Bounded validation harness; no test or run infrastructure lives in model.py."""
 
+import copy
+import hashlib
 import json
 import math
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import torch
 from model_100m.model import GPT, ModelConfig, causal_attention
 from torch.nn import functional as F
 from training_data.loading import CharacterTokenizer
 
-from run_utils import load_checkpoint
-from train import TrainConfig, build_parser, sample, train
+from cli import build_parser
+from trainer.checkpoints import load_checkpoint, validate_resume
+from trainer.config import TrainConfig
+from trainer.loop import train
+from trainer.sampling import sample
 
 
 def self_test():
@@ -20,7 +28,24 @@ def self_test():
     options = build_parser().parse_args([])
     assert options.config is None and options.resume is None
     assert set(vars(options)) == {"config", "resume"}
-    print("PASS no-argument training CLI; architecture is not a command-line setting")
+    assert (
+        Path(TrainConfig().data) == Path(__file__).resolve().parent / "data/raw/tinyshakespeare.txt"
+    )
+    subprocess.run(
+        [sys.executable, "-c", "import cli, sys; assert 'trainer.loop' not in sys.modules"],
+        check=True,
+        capture_output=True,
+        timeout=30,
+    )
+    help_result = subprocess.run(
+        [sys.executable, "-m", "cli", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert "--config" in help_result.stdout and "--resume" in help_result.stdout
+    print("PASS thin training CLI, no training on import, and default dataset path")
     with torch.device("meta"):
         configured = GPT(ModelConfig(256))
     count = sum(parameter.numel() for parameter in configured.parameters())
@@ -69,6 +94,11 @@ def self_test():
         f"PASS causality, fixed-batch fit ({initial:.4f} -> {final:.4f}), generation and isolated RNG"
     )
 
+    def model_from_checkpoint(checkpoint):
+        model = GPT(ModelConfig(**checkpoint["config"]["model"]))
+        model.load_state_dict(checkpoint["model"])
+        return model
+
     def assert_same(left, right):
         if isinstance(left, torch.Tensor):
             torch.testing.assert_close(left, right, rtol=0, atol=0)
@@ -114,6 +144,128 @@ def self_test():
             return saved
 
         full = run("full", 8)
+        assert full["format_version"] == 1
+        hashes = full["config"]["runtime"]["source_hashes"]
+        for name, filename in (
+            ("training", "trainer/loop.py"),
+            ("training_config", "trainer/config.py"),
+            ("checkpoints", "trainer/checkpoints.py"),
+            ("sampling", "trainer/sampling.py"),
+            ("artifacts", "trainer/artifacts.py"),
+            ("cli", "cli.py"),
+        ):
+            source = Path(__file__).resolve().parent / filename
+            assert hashes[name] == hashlib.sha256(source.read_bytes()).hexdigest()
+        invalid_path = root / "unsupported.pt"
+        torch.save({"format_version": 2}, invalid_path)
+        try:
+            load_checkpoint(invalid_path)
+        except ValueError as error:
+            assert "unsupported checkpoint format" in str(error)
+        else:
+            raise AssertionError("unsupported checkpoint format was accepted")
+        changed = copy.deepcopy(full["config"])
+        changed["training"]["lr"] *= 2
+        for config, steps, message in (
+            (changed, 9, "identical data"),
+            (full["config"], 7, "smaller than"),
+        ):
+            try:
+                validate_resume(full, config, full["dataset_fingerprint"], steps)
+            except ValueError as error:
+                assert message in str(error)
+            else:
+                raise AssertionError("incompatible resume settings were accepted")
+        settings_path = root / "training.json"
+        settings_path.write_text(json.dumps({"data": str(data), "steps": 12}))
+        with (
+            patch(
+                "sys.argv", ["lm-train", "--config", str(settings_path), "--resume", "trusted.pt"]
+            ),
+            patch("trainer.loop.train") as launch,
+        ):
+            from cli import main
+
+            main()
+            launched = launch.call_args.args[0]
+            assert launched.data == str(data) and launched.steps == 12
+            assert launched.resume == "trusted.pt"
+        generated = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from cli import generate; generate()",
+                "--checkpoint",
+                str(root / "full" / "checkpoint.pt"),
+                "--prompt",
+                "ab",
+                "--max-new-tokens",
+                "12",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert (
+            generated.stdout
+            == sample(
+                model_from_checkpoint(full),
+                CharacterTokenizer(full["tokenizer"]["characters"]),
+                "ab",
+                12,
+                full["config"]["training"]["seed"] + 2,
+            )
+            + "\n"
+        )
+        print(
+            "PASS checkpoint format, resume guards, source hashes, CLI dispatch and generation CLI"
+        )
+        # Check UI dispatch without allocating the full-sized architecture or starting a server.
+        from ui import APIError, RunManager
+
+        ui_root = (root / "ui").resolve()
+        (ui_root / "data").mkdir(parents=True)
+        (ui_root / "trainer").mkdir()
+        (ui_root / "cli.py").touch()
+        (ui_root / "trainer" / "loop.py").touch()
+        (ui_root / "data" / "fixture.txt").write_text(data.read_text())
+        (ui_root / "data" / "datasets.json").write_text(
+            json.dumps(
+                {
+                    "datasets": [
+                        {
+                            "id": "fixture",
+                            "name": "Test fixture",
+                            "path": "fixture.txt",
+                            "description": "Temporary test data",
+                            "source": "Original test text",
+                            "license_notes": "Test-only fixture",
+                            "languages": ["en"],
+                            "training_eligible": True,
+                        }
+                    ]
+                }
+            )
+        )
+        manager = RunManager(ui_root)
+        try:
+            with patch("ui.subprocess.Popen", side_effect=OSError("test launch")) as launch:
+                try:
+                    manager.start({"dataset_id": "fixture", "steps": 2})
+                except APIError as error:
+                    assert error.status == 503 and "test launch" in error.message
+                else:
+                    raise AssertionError("expected test launch failure")
+                argv = launch.call_args.args[0]
+                assert argv[:4] == [sys.executable, "-u", str(ui_root / "cli.py"), "--config"]
+                assert launch.call_args.kwargs["cwd"] == ui_root
+                ui_settings = json.loads(Path(argv[4]).read_text())
+                assert ui_settings["steps"] == 2
+                assert ui_settings["data"] == str(ui_root / "data" / "fixture.txt")
+        finally:
+            manager.close()
+        print("PASS UI launches the thin CLI with dataset and run settings")
         split = run("split", 3)
         assert split["step"] == 3
         resumed = run("split", 8, root / "split" / "checkpoint.pt")

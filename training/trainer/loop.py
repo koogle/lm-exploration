@@ -1,19 +1,13 @@
-"""Train the one architecture in 100m/model.py: uv run python train.py.
+"""Run setup, evaluation and the core optimizer-step loop. No run starts on import."""
 
-Edit TrainConfig below to change training settings; model dimensions belong in
-100m/model.py. --config is an optional JSON settings file used by the local UI.
---resume optionally continues a trusted checkpoint; steps is the TOTAL target.
-FP32 ~100M training needs several GiB; CPU can be slow. No run starts on import.
-"""
-
-import argparse
 import json
-import math
 import random
+import signal
 import sys
-import tempfile
 import time
-from dataclasses import asdict, dataclass, replace
+import uuid
+from contextlib import contextmanager
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import torch
@@ -24,34 +18,25 @@ from torch.nn import functional as F
 from tqdm import tqdm
 from training_data.loading import get_batch, load_data
 
-from run_utils import (
-    atomic_write,
-    load_checkpoint,
-    restore_rng,
-    rng_state,
-    runtime_provenance,
-    stop_at_step_boundary,
-    write_json,
-)
-
-ROOT = Path(__file__).resolve().parent
+from .checkpoints import load_checkpoint, restore_checkpoint, save_checkpoint, validate_resume
+from .config import ROOT, validate_train_args
+from .provenance import runtime_provenance
+from .sampling import sample
 
 
-@dataclass
-class TrainConfig:
-    # All normal training choices are here, not a long command line.
-    data: str = str(ROOT / "data" / "tinyshakespeare.txt")
-    out_dir: str | None = None  # A new runs/manual-* directory for each invocation.
-    steps: int = 100
-    batch_size: int = 1
-    lr: float = 3e-4
-    seed: int = 1337
-    device: str = "cpu"
-    eval_interval: int = 10
-    log_interval: int = 1
-    eval_batches: int = 2
-    checkpoint_interval: int = 10
-    resume: str | None = None
+@contextmanager
+def stop_at_step_boundary():
+    requested = [False]
+
+    def request_stop(signum, frame):
+        requested[0] = True  # Never raise while optimizer weights are being updated.
+
+    previous = {sig: signal.signal(sig, request_stop) for sig in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        yield requested
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
 
 
 @torch.no_grad()
@@ -71,40 +56,14 @@ def evaluate(model, data, args):
     return sum(losses) / len(losses)
 
 
-@torch.no_grad()
-def sample_tokens(model, tokenizer, prompt, max_new_tokens, seed):
-    # Yields each new token id as soon as it is sampled, so callers can stream output.
-    context = tokenizer.encode(prompt) or [0]
-    generator = torch.Generator().manual_seed(seed)
-    device = next(model.parameters()).device
-    was_training = model.training
-    model.eval()
-    try:
-        for _ in range(max_new_tokens):
-            tokens = torch.tensor([context[-model.config.block_size :]], device=device)
-            logits = model(tokens)
-            probabilities = logits[0, -1].softmax(dim=-1).cpu()
-            token = torch.multinomial(probabilities, 1, generator=generator).item()
-            context.append(token)
-            yield token
-    finally:
-        model.train(was_training)
-
-
-def sample(model, tokenizer, prompt, max_new_tokens, seed):
-    generated = list(sample_tokens(model, tokenizer, prompt, max_new_tokens, seed))
-    return prompt + tokenizer.decode(generated)
-
-
 def train(args, *, model_config=None):
     # model_config is an internal tiny-test seam, never a CLI or UI setting.
     validate_train_args(args)
     if args.out_dir is None:
-        (ROOT / "runs").mkdir(exist_ok=True)
-        args = replace(args, out_dir=tempfile.mkdtemp(prefix="manual-", dir=ROOT / "runs"))
+        args = replace(args, out_dir=str(ROOT / "runs" / uuid.uuid4().hex))
     out = Path(args.out_dir)
     if not args.resume and any(
-        (out / name).exists() for name in ("config.json", "metrics.jsonl", "checkpoint.pt")
+        (out / name).exists() for name in ("config.json", "metrics.jsonl", "checkpoints")
     ):
         raise ValueError(
             "output directory already has a run; use --resume or choose a new directory"
@@ -146,29 +105,7 @@ def train(args, *, model_config=None):
         }
         checkpoint = load_checkpoint(args.resume) if args.resume else None
         if checkpoint:
-            old = checkpoint["config"]
-            compatible = (
-                checkpoint["dataset_fingerprint"] == fingerprint
-                and old["model"] == config["model"]
-                and old["tokenizer"] == config["tokenizer"]
-            )
-            fixed = (
-                "batch_size",
-                "lr",
-                "seed",
-                "device",
-                "dtype",
-                "optimizer",
-                "betas",
-                "weight_decay",
-                "gradient_clip_norm",
-            )
-            if not compatible or any(old["training"][key] != settings[key] for key in fixed):
-                raise ValueError(
-                    "resume requires identical data, tokenizer, model and optimizer/batch/seed/device settings"
-                )
-            if args.steps < checkpoint["step"]:
-                raise ValueError("steps cannot be smaller than the checkpoint's completed step")
+            validate_resume(checkpoint, config, fingerprint, args.steps)
         random.seed(args.seed)
         torch.manual_seed(args.seed)
         batch_generator = torch.Generator().manual_seed(args.seed)
@@ -179,34 +116,39 @@ def train(args, *, model_config=None):
         )
         step, elapsed_before, last_loss = 0, 0.0, None
         if checkpoint:
-            model.load_state_dict(checkpoint["model"])
-            optimizer.load_state_dict(checkpoint["optimizer"])
-            step, elapsed_before, last_loss = (
-                checkpoint[key] for key in ("step", "elapsed_seconds", "train_loss")
+            step, elapsed_before, last_loss = restore_checkpoint(
+                checkpoint, model, optimizer, batch_generator
             )
-            restore_rng(checkpoint["rng"], batch_generator)
-        out.mkdir(parents=True, exist_ok=True)
-        write_json(out / "config.json", config)
+        (out / "checkpoints").mkdir(parents=True, exist_ok=True)
+        (out / "config.json").write_text(
+            json.dumps(config, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
+            encoding="utf-8",
+        )
         print(
             f"Model: {config['parameter_count']:,} parameters; device: {args.device}; FP32",
             flush=True,
         )
         started = time.perf_counter()
+        saved_step = step
 
         def save():
-            state = {
-                "format_version": 1,
-                "config": config,
-                "model": model.state_dict(),
-                "tokenizer": tokenizer.config(),
-                "optimizer": optimizer.state_dict(),
-                "step": step,
-                "rng": rng_state(batch_generator),
-                "dataset_fingerprint": fingerprint,
-                "elapsed_seconds": elapsed_before + time.perf_counter() - started,
-                "train_loss": last_loss,
-            }
-            atomic_write(out / "checkpoint.pt", lambda stream: torch.save(state, stream))
+            # A new file per save: an interrupted write never damages an earlier checkpoint.
+            nonlocal saved_step
+            path = out / "checkpoints" / f"step-{step:06d}.pt"
+            save_checkpoint(
+                path,
+                config=config,
+                model=model,
+                tokenizer=tokenizer,
+                optimizer=optimizer,
+                step=step,
+                batch_generator=batch_generator,
+                fingerprint=fingerprint,
+                elapsed_seconds=elapsed_before + time.perf_counter() - started,
+                train_loss=last_loss,
+            )
+            saved_step = step
+            return path
 
         # Progress bar only in an interactive shell; the UI captures plain JSON lines.
         progress = tqdm(
@@ -263,59 +205,11 @@ def train(args, *, model_config=None):
                             )
                 if step % args.checkpoint_interval == 0:
                     save()
-        save()
+        path = save() if step != saved_step else out / "checkpoints" / f"step-{step:06d}.pt"
         text = sample(model, tokenizer, "", 80, args.seed + 2)
-        atomic_write(out / "sample.txt", lambda stream: stream.write(text.encode("utf-8")))
+        (out / "sample.txt").write_text(text, encoding="utf-8")
         print(
             f"{'Stopped' if stop[0] else 'Completed'} at step {step}; "
-            f"{config['parameter_count']} parameters; checkpoint: {out / 'checkpoint.pt'}",
+            f"{config['parameter_count']} parameters; checkpoint: {path}",
             flush=True,
         )
-
-
-def validate_train_args(args):
-    for name in (
-        "steps",
-        "batch_size",
-        "eval_interval",
-        "log_interval",
-        "eval_batches",
-        "checkpoint_interval",
-    ):
-        if type(getattr(args, name)) is not int or getattr(args, name) <= 0:
-            raise ValueError(f"{name} must be a positive integer")
-    if not math.isfinite(args.lr) or args.lr <= 0:
-        raise ValueError("lr must be finite and positive")
-    if type(args.seed) is not int or not 0 <= args.seed < 2**63 - 2:
-        raise ValueError("seed must be between 0 and 2**63 - 3")
-    if args.device not in ("cpu", "mps", "cuda"):
-        raise ValueError("device must be cpu, mps or cuda")
-    if args.device == "cuda" and not torch.cuda.is_available():
-        raise ValueError("CUDA is not available")
-    if args.device == "mps" and not torch.backends.mps.is_available():
-        raise ValueError("MPS is not available")
-
-
-def build_parser():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, help="optional JSON training settings (used by UI)")
-    parser.add_argument("--resume", help="trusted checkpoint to continue")
-    return parser
-
-
-def main():
-    parser = build_parser()
-    options = parser.parse_args()
-    try:
-        config = TrainConfig()
-        if options.config:
-            config = TrainConfig(**json.loads(options.config.read_text(encoding="utf-8")))
-        if options.resume:
-            config = replace(config, resume=options.resume)
-        train(config)
-    except (ValueError, TypeError, OSError) as error:
-        parser.error(str(error))
-
-
-if __name__ == "__main__":
-    main()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local UI for train.py and the 100M architecture. From training/: uv run lm-ui."""
+"""Local UI for the shared trainer and 100M architecture. From training/: uv run lm-ui."""
 
 import argparse
 import errno
@@ -24,7 +24,7 @@ from urllib.parse import urlsplit
 
 from model_100m.model import ModelConfig
 
-from train import TrainConfig
+from trainer.config import TrainConfig
 
 ROOT = Path(__file__).resolve().parent
 RUN_ID = re.compile(r"r-[0-9a-f]{32}\Z")
@@ -263,6 +263,7 @@ class RunManager:
             for key in ("train_loss", "val_loss"):
                 record[key] = next((item[key] for item in reversed(metrics) if key in item), None)
             record["checkpoint_available"] = confined(directory, "checkpoint.pt").is_file()
+            config = None
             try:
                 config = read_json(confined(directory, "config.json"))
                 count = config.get("parameter_count") if isinstance(config, dict) else None
@@ -271,6 +272,7 @@ class RunManager:
                 record["parameter_count"] = None
             record["metrics_truncated"] = truncated
             if full:
+                record["config"] = config if isinstance(config, dict) else None
                 record["metrics"] = metrics
                 record["log"], record["log_truncated"] = tail(
                     confined(directory, "trainer.log"), 32768
@@ -296,10 +298,10 @@ class RunManager:
         with self.lock:
             if self.closing or self.active:
                 raise APIError(409, "A local job is already active or the server is closing")
-            trainer = self.root / "train.py"
-            if not trainer.is_file():
+            entry_point = self.root / "cli.py"
+            if not entry_point.is_file() or not (self.root / "trainer" / "loop.py").is_file():
                 raise APIError(
-                    503, "train.py is missing; restore the shared trainer before starting"
+                    503, "shared trainer is missing; restore cli.py and trainer/ before starting"
                 )
             if importlib.util.find_spec("torch") is None:
                 raise APIError(503, "PyTorch is missing; run uv sync --locked, then uv run lm-ui")
@@ -312,7 +314,7 @@ class RunManager:
             directory.mkdir()
             settings_path = directory / "training.json"
             write_json(settings_path, dict(settings, data=str(data_path), out_dir=str(directory)))
-            argv = [sys.executable, "-u", str(trainer), "--config", str(settings_path)]
+            argv = [sys.executable, "-u", str(entry_point), "--config", str(settings_path)]
             record = {
                 "id": run_id,
                 "model": "100m",

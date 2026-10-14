@@ -1,165 +1,299 @@
 <!doctype html>
 <html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bench · local training</title>
+<title>Bench Runs · local training</title>
 <style>
-:root{color-scheme:light;--bg:#f4f5f7;--surface:#fff;--fg:#16181d;--muted:#5c6371;--line:#dadee5;--accent:#2b4fd8;--soft:#e6ebfc;--val:#338670}
-@media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#111317;--surface:#191c22;--fg:#e8eaee;--muted:#9aa1ad;--line:#2b3039;--accent:#8ea6ff;--soft:#232b45;--val:#6fd3b8}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Helvetica Neue",sans-serif}main{max-width:1120px;margin:auto;padding:32px 24px}header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:24px}h1{font-size:22px;letter-spacing:-.035em;margin:0}h2{font-size:16px;margin:0 0 16px}h3{font-size:13px;margin:0 0 8px}p{margin:0 0 12px}.muted,small{color:var(--muted)}.mono,pre,.stat strong{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums}.layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:24px}.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px;margin-bottom:18px}label{display:block;color:var(--muted);font-size:12px}input,select,button{font:inherit;border:1px solid var(--line);border-radius:5px;padding:8px;background:var(--surface);color:var(--fg)}input,select{width:100%;margin:4px 0 12px}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.5}button.primary{background:var(--accent);color:var(--surface);border-color:var(--accent);width:100%;margin-top:12px;font-weight:600}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}summary{cursor:pointer;color:var(--muted);font-size:12px;margin:8px 0 12px}.dataset-note{font-size:12px;overflow-wrap:anywhere}.runs{display:grid;gap:6px;max-height:380px;overflow:auto}.run{text-align:left;width:100%;padding:12px}.run[aria-pressed=true]{border-color:var(--accent);background:var(--soft)}.run span{display:block}.run small{font-size:11px}.detail-head{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}.detail-head h2{margin:0;overflow-wrap:anywhere}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}.stat{border-top:1px solid var(--line);padding-top:10px}.stat span{display:block;color:var(--muted);font-size:11px}.stat strong{font-size:19px;font-weight:500}progress{width:100%;height:6px;accent-color:var(--accent)}svg{width:100%;display:block;height:auto;overflow:visible}.chart-label{font-size:11px;fill:var(--muted);font-family:ui-monospace,monospace}.legend{display:flex;gap:16px;margin-bottom:12px;font-size:12px}.legend .train{color:var(--accent)}.legend .val{color:var(--val)}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto;font-size:12px;margin:0;border:1px solid var(--line);border-radius:5px;padding:12px;background:var(--bg)}#error{color:#c13e50;white-space:pre-wrap;margin-bottom:16px}#error:empty{display:none}.section{border-top:1px solid var(--line);padding-top:18px;margin-top:20px}.empty{padding:36px 12px;text-align:center;color:var(--muted)}[hidden]{display:none!important}@media(max-width:760px){main{padding:20px 14px}.layout{grid-template-columns:1fr}header{align-items:start;gap:12px}.stats{gap:6px}.stat strong{font-size:16px}}
+/* The instrument UI inside designs/run-board-web.html, not its outer study page. */
+:root{color-scheme:dark;--bg:#0e1115;--surface:#131820;--fg:#cfd6e0;--bright:#e7ecf3;--muted:#8b96a6;--quiet:#6f7a8a;--line:#222832;--accent:#7cc4f8;--val:#6fd3b8;--bad:#ff8fa3;--display:"Schibsted Grotesk","Helvetica Neue",Arial,sans-serif;--mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:12px/1.5 var(--mono)}button,input,select{font:inherit;color:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.45}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid #4a8fe0;outline-offset:2px}button{background:none;border:0}h1,h2,h3,h4,p{margin:0}h1,h2,h3{font-family:var(--display)}.app{height:100dvh;min-height:640px;display:flex;flex-direction:column}.hdr{min-height:50px;display:flex;align-items:center;gap:18px;padding:10px 18px;border-bottom:1px solid var(--line);flex:none}.logo{font:800 17px var(--display);letter-spacing:-.02em;color:var(--bright)}.grp{display:grid;gap:1px;line-height:1.3;padding-right:18px;border-right:1px solid var(--line)}.lbl{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--quiet)}.val{font-size:12px;color:var(--bright)}.sp{flex:1}.runtime{font-size:11px;color:var(--muted);white-space:nowrap}.dot{display:inline-block;width:6px;height:6px;margin-right:7px;border-radius:50%;background:var(--val)}.btn{height:30px;padding:0 12px;border:1px solid #2c3440;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:11px;white-space:nowrap}.btn.pri{background:var(--bright);border-color:var(--bright);color:var(--bg);font-weight:600}.btn.danger{border-color:#5b303c;color:var(--bad)}.body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 500px}.main{min-width:0;min-height:0;display:flex;flex-direction:column;border-right:1px solid var(--line)}.side{min-width:0;overflow:auto;scrollbar-width:thin}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid var(--line)}.sum{min-width:0;padding:12px 16px;display:grid;gap:3px;border-right:1px solid var(--line)}.sum:last-child{border:0}.sum>span{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--quiet)}.sum b{font-size:16px;font-weight:500;color:var(--bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sum small{font:11px/1.4 var(--display);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ph{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--quiet)}.ph b{font-weight:500;color:var(--fg)}.legend{display:flex;gap:12px;letter-spacing:0;text-transform:none;white-space:nowrap}.legend span{display:flex;align-items:center;gap:5px}.legend i{display:inline-block;width:14px;border-top:2px solid var(--bright)}.legend .a{border-top-style:dashed;border-color:#9aa3b0}.chartwrap{padding:0 16px 12px;border-bottom:1px solid var(--line)}svg{display:block;width:100%;overflow:visible}.chart-label{font:10px var(--mono);fill:var(--quiet)}.chart-note{font:11px var(--display);color:var(--quiet);margin-top:3px}.tablewrap{flex:1;min-height:0;overflow:auto;scrollbar-width:thin}table{border-collapse:collapse;font-variant-numeric:tabular-nums}table.runs{width:100%;min-width:700px;table-layout:fixed}.runs th{position:sticky;top:0;background:var(--bg);text-align:left;font-weight:400;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--quiet);padding:9px 10px;border-bottom:1px solid var(--line);z-index:1}.runs td{padding:10px;border-bottom:1px solid #1a1f26;vertical-align:middle}.runs tr[data-run]{cursor:pointer}.runs tr[data-run]:hover td{background:#121820}.runs tr.isB td{background:#141b24}.runs tr.isA:not(.isB) td{background:#11161d}.ab{display:inline-flex;gap:3px}.ab button{width:20px;height:20px;padding:0;border-radius:4px;border:1px solid #2c3440;font-size:10px;color:var(--quiet)}.ab .on.a{background:#9aa3b0;border-color:#9aa3b0;color:var(--bg)}.ab .on.b{background:var(--bright);border-color:var(--bright);color:var(--bg)}.rn{display:grid;gap:3px;min-width:0}.rn b{font:500 13px var(--display);color:var(--bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rn small{font-size:9px;color:var(--quiet);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}.status{display:grid;gap:5px;font-size:10px}.s-running,.s-starting{color:var(--val)}.s-completed{color:#9fb4d9}.s-failed,.s-interrupted{color:var(--bad)}.s-stopping,.s-stopped{color:#f0b35a}.bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;background:var(--val)}.loss-cell{font-size:12px;font-weight:500;color:var(--bright)}.tokens{font-size:10px;color:var(--muted)}.chips{display:flex;flex-wrap:wrap;gap:4px}.chip{font-size:9px;padding:2px 6px;border-radius:4px;line-height:1.5;overflow-wrap:anywhere}.chip em{font-style:normal;font-size:8px;letter-spacing:.08em;margin-right:5px}.chip.code{background:#221b36;color:#d6c2ff}.chip.data{background:#10302b;color:#9ff0da}.chip.config{background:#33280f;color:#f5c77d}.chip.same{border:1px solid #2c3440;color:var(--quiet)}.board-empty{padding:38px 20px;text-align:center;color:var(--muted)}.board-empty h2{font-size:16px;font-weight:500;color:var(--bright);margin-bottom:7px}.board-empty p{font:12px/1.6 var(--display);max-width:360px;margin:0 auto 16px}.cmphead{padding:16px 18px 14px;border-bottom:1px solid var(--line);display:grid;gap:12px;background:var(--bg)}.vs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center}.vs>div{min-width:0;display:grid;gap:4px}.vs>div:last-child{text-align:right}.vs b{font:600 13px var(--display);color:var(--bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vs small{font-size:9px;color:var(--quiet)}.vs .mid{font-size:9px;color:var(--quiet);letter-spacing:.1em}.tag{display:inline-block;font:600 9px var(--mono);padding:1px 5px;border-radius:3px;margin-right:5px;vertical-align:1px}.tag.a{background:#9aa3b0;color:var(--bg)}.tag.b{background:var(--bright);color:var(--bg)}.explain{font:12px/1.6 var(--display);color:var(--fg);padding:10px 12px;border-radius:5px;background:var(--surface);border-left:3px solid #4a5566}.explain.many{border-left-color:#f0b35a}.explain.fail{border-left-color:var(--bad)}.inspector-empty{padding:18px}.inspector-empty h2{font-size:14px;color:var(--bright);margin-bottom:12px}.inspector-empty .sec{padding:18px 0;border-bottom:1px solid #1a1f26}.placeholder{font:12px/1.6 var(--display);color:var(--quiet)}.sec{padding:4px 18px 16px;display:grid;gap:10px;border-bottom:1px solid #1a1f26}.sec h3{margin-top:10px;font:400 9px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--quiet);display:flex;justify-content:space-between;gap:8px}.sec h3 span:last-child{letter-spacing:0;text-transform:none}.kv{width:100%;font-size:10px;table-layout:fixed}.kv th{text-align:left;font-weight:400;font-size:9px;color:var(--quiet);padding:4px 0}.kv td{padding:6px 0;border-top:1px solid #1a1f26;vertical-align:top;overflow-wrap:anywhere}.kv th:not(:first-child),.kv td:not(:first-child){text-align:right}.kv td:first-child{color:var(--muted)}.kv td:last-child{color:var(--bright)}.subtle{color:var(--quiet);font:11px/1.5 var(--display)}.detail-actions{display:flex;align-items:center;justify-content:space-between;gap:8px}.detail-status{font-size:10px}.diff{border:1px solid var(--line);border-radius:5px;overflow:hidden}.diff .file{padding:6px 10px;background:#161b22;color:var(--bright);font-size:10px}.diff pre{padding:10px}.mixbar{height:12px;border-radius:3px;background:#10302b;overflow:hidden}.mixbar i{display:block;height:100%;width:100%;background:var(--val)}.dataset-line{display:flex;justify-content:space-between;gap:12px;font-size:10px}.dataset-line span:last-child{color:var(--quiet)}pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:10px/1.7 var(--mono);color:var(--muted);max-height:230px;overflow:auto;scrollbar-width:thin}.sample-box{padding:10px 12px;border:1px solid var(--line);border-radius:5px;font:12px/1.6 var(--display);color:var(--bright)}details summary{cursor:pointer;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--quiet);padding:8px 0}details pre{padding:8px 0}.run-footer{font-size:9px;color:var(--quiet);padding:12px 18px;overflow-wrap:anywhere}progress{width:100%;height:4px;accent-color:var(--val)}#error{padding:10px 18px;background:#2d1820;border-bottom:1px solid #5b303c;color:var(--bad);white-space:pre-wrap;font-size:11px}#error:empty{display:none}[hidden]{display:none!important}dialog{width:min(480px,calc(100% - 32px));max-height:calc(100dvh - 40px);padding:0;border:1px solid #2c3440;border-radius:10px;background:var(--bg);color:var(--fg);box-shadow:0 24px 80px #0008}dialog::backdrop{background:#0009;backdrop-filter:blur(3px)}.dialog-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.dialog-head h2{font-size:16px;color:var(--bright)}.dialog-head button{color:var(--quiet);padding:3px 7px;font-size:18px}.dialog-body{padding:20px}.model-note{margin:12px 0 20px;font:12px/1.6 var(--display);color:var(--muted)}label{display:block;font-size:10px;color:var(--muted)}input,select{display:block;width:100%;margin:5px 0 14px;padding:9px 10px;border:1px solid #2c3440;border-radius:5px;background:#131820;color:var(--bright)}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px}.dataset-note{margin-bottom:16px;font:11px/1.6 var(--display);color:var(--quiet)}.dialog-footer{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}#start{width:100%;height:36px}#job-note{margin-top:10px;font:11px/1.5 var(--display);color:var(--quiet)}#dialog-error{font-size:11px;color:var(--bad);margin-bottom:12px;white-space:pre-wrap}#dialog-error:empty{display:none}@media(min-width:1700px){.body{grid-template-columns:minmax(0,1fr) 500px}}@media(max-width:1100px){.body{grid-template-columns:minmax(0,1fr) 360px}.hdr{gap:12px}.grp{padding-right:12px}.summary .sum{padding:10px}.sum b{font-size:14px}.legend{gap:6px}}@media(max-width:850px){.app{height:auto;min-height:100dvh}.body{grid-template-columns:1fr}.main{border-right:0}.side{border-top:1px solid var(--line)}.hdr .workspace,.runtime{display:none}.tablewrap{max-height:420px}.chartwrap{min-height:220px}.sum{padding:10px}.sum small{font-size:10px}.ph{flex-wrap:wrap}.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.sum:nth-child(2){border-right:0}.sum:nth-child(-n+2){border-bottom:1px solid var(--line)}.cmphead{position:static}}@media(prefers-reduced-motion:reduce){dialog::backdrop{backdrop-filter:none}}
 </style>
-<main>
-<header><h1>Bench <span class="muted">/ local training</span></h1><small>One job · no cloud compute</small></header>
+</head>
+<body>
+<div class="app">
+<header class="hdr">
+<h1 class="logo">bench</h1>
+<div class="grp workspace"><span class="lbl">Workspace</span><span class="val">lm-exploration</span></div>
+<div class="grp"><span class="lbl">Model</span><span class="val">100M · Fundamentals</span></div>
+<span class="sp"></span><span class="runtime"><i class="dot" aria-hidden="true"></i><span id="runtime">local · idle</span></span>
+<button id="new-run" class="btn pri" type="button">+ New local run…</button>
+</header>
 <div id="error" role="alert"></div>
-<div class="layout">
-<aside>
-<section class="panel"><h2>New run</h2>
-<p><strong>100M · Fundamentals</strong><br><small>14 layers · width 768 · 12 heads. Exact count is vocabulary-dependent. FP32 training needs several GiB; CPU runs can be slow.</small></p>
-<form id="start-form">
-<label>Dataset<select id="dataset" name="dataset_id" required></select></label>
-<p id="dataset-note" class="dataset-note muted"></p>
-<div class="fields">
-<label>Steps<input name="steps" type="number" min="1" max="10000" required></label>
-<label>Batch size<input name="batch_size" type="number" min="1" max="8" required></label>
+<div class="body">
+<main class="main">
+<div class="summary">
+<div class="sum"><span>Baseline A</span><b id="baseline-title">—</b><small id="baseline-note">Choose a recorded run</small></div>
+<div class="sum"><span>Selected B · val loss</span><b id="summary-loss">—</b><small id="summary-note">No recorded metrics</small></div>
+<div class="sum"><span>Running</span><b id="running-count">0</b><small id="running-note">No active local job</small></div>
+<div class="sum"><span>Failed / interrupted</span><b id="failed-count">0</b><small id="failed-note">No failed local runs</small></div>
 </div>
-<details><summary>Advanced settings</summary><div class="fields">
-<label>Learning rate<input name="lr" type="number" min="0.000001" max="0.01" step="any" required></label>
-<label>Seed<input name="seed" type="number" min="0" max="2147483647" required></label>
-<label>Device<select name="device"><option>cpu</option><option>mps</option><option>cuda</option></select></label>
-</div><small>The architecture is fixed by 100m/model.py. Devices must be available locally; only training settings are editable here.</small></details>
-<button id="start" class="primary" type="submit" disabled>Start training</button>
-<p id="job-note" class="muted" style="font-size:12px;margin:10px 0 0">Loading datasets…</p>
-</form></section>
-<section class="panel"><h2>Runs</h2><div id="runs" class="runs"></div></section>
-</aside>
-<section class="panel">
-<div id="empty" class="empty">Start a run or select one to inspect its actual artifacts.</div>
-<div id="detail" hidden>
-<div class="detail-head"><div><h2 id="run-title"></h2><small id="run-id" class="mono"></small></div><button id="stop" type="button" hidden>Stop</button></div>
-<p id="status"></p><small id="run-note" class="muted"></small>
-<div class="stats"><div class="stat"><span>Train loss</span><strong id="train-loss">—</strong></div><div class="stat"><span>Validation loss</span><strong id="val-loss">—</strong></div><div class="stat"><span>Completed steps</span><strong id="steps">—</strong></div></div>
-<progress id="progress" value="0" max="1" aria-label="Training progress"></progress>
-<div class="section"><h3>Loss / optimizer step</h3><div class="legend"><span class="train">Train</span><span class="val">Validation</span></div><svg id="curve" viewBox="0 0 620 220" role="img" aria-label="Recorded training and validation losses"></svg><small id="metric-note"></small></div>
-<details class="section"><summary>Run settings & dataset provenance</summary><pre id="settings"></pre></details>
-<div class="section"><h3>Sample</h3><pre id="sample"></pre><small id="sample-note"></small></div>
-<details class="section" open><summary>Trainer log · last 32 KiB</summary><pre id="log"></pre><small id="log-note"></small></details>
-</div>
-</section>
+<div class="ph"><span>Validation loss · tokens seen</span><div class="legend"><span><i class="a"></i>A dashed</span><span><i></i>B bold</span><span>others faint</span></div></div>
+<div class="chartwrap"><svg id="curve" viewBox="0 0 840 260" role="img" aria-label="Recorded validation losses against training tokens"></svg><p id="metric-note" class="chart-note">Real measurements only. No training has been started by opening this page.</p></div>
+<div class="ph"><span>Run board <b id="run-count">0 runs</b></span><span>Pick A as reference · click a row for B</span></div>
+<div class="tablewrap">
+<table class="runs" aria-label="Local training runs"><colgroup><col style="width:60px"><col style="width:28%"><col style="width:122px"><col style="width:88px"><col style="width:82px"><col></colgroup><thead><tr><th scope="col">A / B</th><th scope="col">Run</th><th scope="col">Status</th><th scope="col">Val loss</th><th scope="col">Tokens</th><th scope="col">Recipe</th></tr></thead><tbody id="runs"></tbody></table>
+<div id="empty" class="board-empty"><h2>No local runs yet</h2><p>Start with the fixed model and a small step budget. Loss curves and results will appear when the trainer writes them.</p><button id="empty-new-run" class="btn" type="button">Configure your first run</button></div>
 </div>
 </main>
+<aside class="side" aria-label="Run inspector">
+<div id="inspector-empty" class="inspector-empty"><h2>Run inspector</h2><p class="explain">Select a run to inspect its results, configuration, dataset and generated sample. This board uses local training artifacts, not the study’s example metrics.</p><div class="sec"><span class="lbl">Result</span><p class="placeholder">Waiting for a recorded run.</p></div><div class="sec"><span class="lbl">Code · config · data</span><div class="chips"><span class="chip code">100m/model.py</span><span class="chip config">TrainConfig</span><span class="chip data">Registered local corpus</span></div></div><div class="sec"><span class="lbl">Sample</span><p class="placeholder">Generated text appears after training finishes or stops.</p></div></div>
+<div id="detail" hidden>
+<div class="cmphead"><div class="vs"><div><b><span class="tag a">A</span><span id="a-title"></span></b><small id="a-id"></small></div><span class="mid">VS</span><div><b><span class="tag b">B</span><span id="run-title"></span></b><small id="run-id"></small></div></div><p id="comparison-note" class="explain"></p><div class="detail-actions"><span id="status" class="detail-status"></span><button id="stop" class="btn danger" type="button" hidden>Stop run</button></div><small id="run-note" class="subtle"></small><progress id="progress" value="0" max="1" aria-label="Selected run progress"></progress></div>
+<section class="sec"><h3><span>Result</span><span>latest recorded values</span></h3><table class="kv"><thead><tr><th scope="col">Metric</th><th scope="col">A</th><th scope="col">B</th></tr></thead><tbody id="results"></tbody></table><p class="subtle">These are latest values, not an equal-token comparison. Different datasets or evaluation settings are not directly comparable.</p></section>
+<section class="sec"><h3><span>Recipe</span><span id="changes-label"></span></h3><div id="changes" class="chips"></div><h3><span>Code · model</span><span id="parameter-count"></span></h3><div class="diff"><div class="file">100m/model.py · resolved model settings</div><pre id="model-settings"></pre></div><h3><span>Training config</span><span>train.py</span></h3><table class="kv"><thead><tr><th scope="col">Setting</th><th scope="col">A</th><th scope="col">B</th></tr></thead><tbody id="config-values"></tbody></table><h3><span>Data</span><span>single corpus</span></h3><div class="mixbar" aria-hidden="true"><i></i></div><div class="dataset-line"><span id="dataset-name"></span><span id="dataset-hash"></span></div><p id="dataset-provenance" class="subtle"></p><details><summary>Settings & dataset provenance</summary><pre id="settings"></pre></details></section>
+<section class="sec"><h3><span>Sample · B</span><span>sample.txt</span></h3><pre id="sample" class="sample-box"></pre><small id="sample-note" class="subtle"></small></section>
+<section class="sec"><details><summary>Trainer log · last 32 KiB</summary><pre id="log"></pre><small id="log-note" class="subtle"></small></details></section>
+<p id="run-folder" class="run-footer"></p>
+</div>
+</aside>
+</div>
+</div>
+<dialog id="new-run-dialog" aria-labelledby="dialog-title"><div class="dialog-head"><h2 id="dialog-title">New local run</h2><button id="close-dialog" type="button" aria-label="Close new run dialog">×</button></div><div class="dialog-body"><div class="chips"><span class="chip code">100M · Fundamentals</span><span class="chip same">PyTorch · local</span></div><p class="model-note">The architecture is fixed in <b>100m/model.py</b>. FP32 training needs several GiB; CPU runs can be slow. No cloud compute is launched.</p><form id="start-form"><div id="dialog-error" role="alert"></div><label>Dataset<select id="dataset" name="dataset_id" required></select></label><p id="dataset-note" class="dataset-note"></p><div class="fields"><label>Total steps<input name="steps" type="number" min="1" max="10000" required></label><label>Batch size<input name="batch_size" type="number" min="1" max="8" required></label></div><details><summary>Training settings</summary><div class="fields"><label>Learning rate<input name="lr" type="number" min="0.000001" max="0.01" step="any" required></label><label>Seed<input name="seed" type="number" min="0" max="2147483647" required></label><label>Device<select name="device"><option>cpu</option><option>mps</option><option>cuda</option></select></label></div><p class="subtle">The chosen device must be available locally. Model dimensions are not UI settings.</p></details><div class="dialog-footer"><button id="start" class="btn pri" type="submit" disabled>Start training</button><p id="job-note">Loading datasets…</p></div></form></div></dialog>
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
 const form = $('start-form');
-let datasets = [], selected = null, active = false, busy = false, initialized = false;
+const dialog = $('new-run-dialog');
 const activeStates = ['starting', 'running', 'stopping'];
-const fmt = value => Number.isFinite(value) ? value.toFixed(4) : '—';
-function error(message) { $('error').textContent = message; }
+const palette = ['#7cc4f8', '#6fd3b8', '#c5a3ff', '#f0b35a', '#ff8fa3'];
+let datasets = [], runs = [], selected = null, baseline = null;
+let active = false, busy = false, initialized = false, refreshing = false, tableSignature = '';
+const histories = new Map();
+const historySignatures = new Map();
+const fmt = value => Number.isFinite(value) ? value.toFixed(3) : '—';
+const number = value => Number.isFinite(value) ? Math.round(value).toLocaleString() : '—';
+const shortTokens = value => !Number.isFinite(value) ? '—' : value >= 1e6 ? `${(value / 1e6).toFixed(1)}M` : value >= 1e3 ? `${(value / 1e3).toFixed(1)}k` : String(Math.round(value));
+const current = id => histories.get(id) || runs.find(run => run.id === id);
+function node(tag, className = '', text) { const element = document.createElement(tag); element.className = className; if (text !== undefined) element.textContent = text; return element; }
+function error(message) { $('error').textContent = message; $('dialog-error').textContent = message; }
+function color(run) { if (run.id === selected) return '#e7ecf3'; if (run.id === baseline) return '#9aa3b0'; let hash = 0; for (const char of run.id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0; return palette[hash % palette.length]; }
 async function api(path, payload) {
-  const options = payload === undefined ? {} : {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)};
+  const options = payload === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)};
   const response = await fetch(path, options);
   const body = await response.json();
   if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
   return body;
 }
 function updateStart() {
-  const eligible = datasets.some(d => d.id === $('dataset').value && d.training_eligible);
+  const eligible = datasets.some(dataset => dataset.id === $('dataset').value && dataset.training_eligible);
   $('start').disabled = !initialized || !eligible || active || busy;
-  $('job-note').textContent = active ? 'A local job is active. Stop it or wait for completion.' : eligible ? 'Starts a real local PyTorch job.' : 'No eligible local dataset is registered.';
+  $('start').textContent = busy ? 'Starting…' : 'Start training';
+  $('job-note').textContent = active ? 'A local job is active. Stop it or wait for completion.' : eligible ? 'Starts one real local PyTorch job with these settings.' : 'No eligible local dataset is registered.';
 }
 function datasetNote() {
-  const d = datasets.find(d => d.id === $('dataset').value);
-  $('dataset-note').textContent = d ? `${d.description} ${d.license_notes}` : '';
+  const dataset = datasets.find(item => item.id === $('dataset').value);
+  $('dataset-note').textContent = dataset ? `${dataset.description} ${dataset.license_notes}` : '';
   updateStart();
 }
-function renderRuns(runs) {
-  $('runs').replaceChildren();
-  active = runs.some(r => activeStates.includes(r.status));
-  if (!runs.length) { const p=document.createElement('small'); p.textContent='No runs yet.'; $('runs').append(p); }
-  for (const run of runs) {
-    const button=document.createElement('button'); button.type='button'; button.className='run';
-    button.setAttribute('aria-pressed', String(selected===run.id));
-    const name=document.createElement('span'); name.textContent=run.dataset.name;
-    const sub=document.createElement('small'); sub.textContent=`${run.status} · ${run.latest.step ?? 0}/${run.settings.steps} steps · ${run.id.slice(0,10)}`;
-    button.append(name,sub); button.onclick=()=>{selected=run.id; refresh().catch(e=>error(e.message));};
-    $('runs').append(button);
+function openDialog() { error(''); if (!dialog.open) dialog.showModal(); }
+$('new-run').onclick = openDialog;
+$('empty-new-run').onclick = openDialog;
+$('close-dialog').onclick = () => dialog.close();
+function chip(area, text) { const element = node('span', `chip ${area}`); element.append(node('em', '', area.toUpperCase()), document.createTextNode(text)); return element; }
+function differences(a, b) {
+  const changes = [];
+  if (!a || !b || a.id === b.id) return changes;
+  for (const key of new Set([...Object.keys(a.settings), ...Object.keys(b.settings)])) {
+    if (JSON.stringify(a.settings[key]) !== JSON.stringify(b.settings[key])) changes.push({area:'config', key, value:`${key} ${a.settings[key]} → ${b.settings[key]}`});
   }
+  if (a.dataset.sha256 !== b.dataset.sha256 || a.dataset.id !== b.dataset.id) changes.push({area:'data', key:'dataset', value:`${a.dataset.name} → ${b.dataset.name}`});
+  if (a.config?.model && b.config?.model && JSON.stringify(a.config.model) !== JSON.stringify(b.config.model)) changes.push({area:'code', key:'model', value:'model configuration differs'});
+  return changes;
+}
+function renderSummary() {
+  const a = current(baseline), b = current(selected);
+  const running = runs.filter(run => activeStates.includes(run.status));
+  const failed = runs.filter(run => ['failed', 'interrupted'].includes(run.status));
+  active = running.length > 0;
+  $('baseline-title').textContent = a ? a.dataset.name : '—';
+  $('baseline-note').textContent = a ? `val ${fmt(a.val_loss)} · ${shortTokens(a.latest.tokens_seen)} tokens` : 'Choose a recorded run';
+  $('summary-loss').textContent = fmt(b?.val_loss);
+  $('summary-note').textContent = b ? `${b.dataset.name} · ${b.latest.step ?? 0}/${b.settings.steps} steps` : 'No recorded metrics';
+  $('running-count').textContent = running.length;
+  $('running-count').style.color = running.length ? 'var(--val)' : 'var(--bright)';
+  $('running-note').textContent = running.length ? `${running[0].dataset.name} · ${running[0].status}` : 'No active local job';
+  $('failed-count').textContent = failed.length;
+  $('failed-count').style.color = failed.length ? 'var(--bad)' : 'var(--bright)';
+  $('failed-note').textContent = failed.length ? `${failed[0].dataset.name} · ${failed[0].status}` : 'No failed local runs';
+  $('runtime').textContent = active ? 'local · training' : 'local · idle';
+  $('run-count').textContent = `${runs.length} ${runs.length === 1 ? 'run' : 'runs'}`;
   updateStart();
 }
-function svg(tag, attributes={}, text) {
-  const element=document.createElementNS('http://www.w3.org/2000/svg',tag);
-  for(const [key,value] of Object.entries(attributes)) element.setAttribute(key,value);
-  if(text!==undefined) element.textContent=text;
+function selectRun(id, asBaseline = false) {
+  if (asBaseline) baseline = id; else selected = id;
+  render();
+  refresh().catch(e => error(e.message));
+}
+function renderRuns() {
+  const signature = JSON.stringify([runs, selected, baseline]);
+  if (signature === tableSignature) return;
+  tableSignature = signature;
+  const focused = document.activeElement;
+  const focusRun = focused?.dataset?.runId, focusSlot = focused?.dataset?.slot;
+  $('runs').replaceChildren();
+  $('empty').hidden = runs.length > 0;
+  for (const run of runs) {
+    const row = node('tr', run.id === selected ? 'isB' : run.id === baseline ? 'isA' : '');
+    row.dataset.run = run.id; row.tabIndex = 0;
+    row.setAttribute('aria-label', `Inspect ${run.dataset.name}, ${run.status}`);
+    row.onclick = () => selectRun(run.id);
+    row.onkeydown = event => { if (event.target === row && ['Enter', ' '].includes(event.key)) { event.preventDefault(); selectRun(run.id); } };
+    const slots = node('td'), choices = node('span', 'ab');
+    for (const [slot, id] of [['a', baseline], ['b', selected]]) {
+      const button = node('button', `${slot}${run.id === id ? ' on' : ''}`, slot.toUpperCase());
+      button.type = 'button'; button.dataset.runId = run.id; button.dataset.slot = slot;
+      button.setAttribute('aria-pressed', String(run.id === id));
+      button.setAttribute('aria-label', `Set ${run.dataset.name} as ${slot.toUpperCase()}`);
+      button.onclick = event => { event.stopPropagation(); selectRun(run.id, slot === 'a'); };
+      choices.append(button);
+      if (focusRun === run.id && focusSlot === slot) queueMicrotask(() => button.focus());
+    }
+    slots.append(choices);
+    const title = node('td'), name = node('div', 'rn'), label = node('b');
+    const swatch = node('span', 'sw'); swatch.style.background = color(run);
+    label.append(swatch, document.createTextNode(run.dataset.name)); label.title = run.dataset.name;
+    const description = node('small', '', `${run.settings.device} · ${run.id.slice(0,10)} · ${new Date(run.created_at).toLocaleDateString()}`);
+    name.append(label, description); title.append(name);
+    const statusCell = node('td'), status = node('div', 'status');
+    const step = run.latest.step ?? 0, total = run.settings.steps;
+    status.append(node('span', `s-${run.status}`, `${run.status} · ${step}/${total}`));
+    if (activeStates.includes(run.status)) { const bar = node('span', 'bar'), fill = node('i'); fill.style.width = `${Math.min(100, Math.max(0, step / Math.max(total,1) * 100))}%`; bar.append(fill); status.append(bar); }
+    statusCell.append(status);
+    const loss = node('td', 'loss-cell', fmt(run.val_loss));
+    const tokens = node('td', 'tokens', shortTokens(run.latest.tokens_seen));
+    const recipe = node('td'), chips = node('div', 'chips');
+    const changes = differences(current(baseline), current(run.id) || run);
+    if (run.id === baseline) chips.append(node('span', 'chip same', 'reference'));
+    else if (changes.length) { for (const change of changes.slice(0,2)) chips.append(chip(change.area, change.key === 'dataset' ? run.dataset.name : `${change.key} ${run.settings[change.key] ?? 'differs'}`)); if (changes.length > 2) chips.append(node('span', 'chip same', `+${changes.length - 2}`)); }
+    else chips.append(node('span', 'chip same', 'same recorded settings'));
+    recipe.append(chips); row.append(slots, title, statusCell, loss, tokens, recipe); $('runs').append(row);
+  }
+}
+function svg(tag, attributes = {}, text) {
+  const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+  if (text !== undefined) element.textContent = text;
   return element;
 }
-function plot(records) {
-  const chart=$('curve'); chart.replaceChildren();
-  const values=records.flatMap(r=>[r.train_loss,r.val_loss]).filter(Number.isFinite);
-  if(!values.length) {chart.append(svg('text',{x:50,y:100,class:'chart-label'},'No recorded losses yet.'));return;}
-  const low=Math.min(...values), high=Math.max(...values), range=Math.max(high-low,0.1);
-  const first=Math.min(...records.map(r=>r.step)), last=Math.max(...records.map(r=>r.step));
-  const x=s=>52+(s-first)/Math.max(last-first,1)*548, y=v=>182-(v-low)/range*158;
-  for(let i=0;i<3;i++) { const value=low+range*i/2, yy=y(value); chart.append(svg('line',{x1:52,x2:600,y1:yy,y2:yy,stroke:'var(--line)'}),svg('text',{x:0,y:yy+4,class:'chart-label'},value.toFixed(2))); }
-  chart.append(svg('text',{x:52,y:208,class:'chart-label'},String(first)),svg('text',{x:600,y:208,'text-anchor':'end',class:'chart-label'},String(last)));
-  for(const [key,color] of [['train_loss','var(--accent)'],['val_loss','var(--val)']]) {
-    const points=records.filter(r=>Number.isFinite(r[key]));
-    chart.append(svg('polyline',{points:points.map(r=>`${x(r.step)},${y(r[key])}`).join(' '),fill:'none',stroke:color,'stroke-width':1.8}));
-    if(points.length===1) chart.append(svg('circle',{cx:x(points[0].step),cy:y(points[0][key]),r:3,fill:color}));
+function plot() {
+  const chart = $('curve'); chart.replaceChildren();
+  const visible = new Set([...runs.slice(0,10).map(run => run.id), baseline, selected]);
+  const series = runs.filter(run => visible.has(run.id)).map(run => ({run, points:(histories.get(run.id)?.metrics || []).filter(record => Number.isFinite(record.val_loss) && Number.isFinite(record.tokens_seen))}));
+  const points = series.flatMap(item => item.points);
+  if (!points.length) {
+    for (const y of [35,95,155,215]) chart.append(svg('line', {x1:44,x2:824,y1:y,y2:y,stroke:'#1b2129'}));
+    chart.append(svg('text', {x:420,y:122,'text-anchor':'middle',class:'chart-label'}, 'No recorded validation losses yet.'), svg('text', {x:420,y:143,'text-anchor':'middle',class:'chart-label'}, 'The chart fills from metrics.jsonl, not example data.'));
+    return;
   }
+  let low = Infinity, high = -Infinity, last = 1;
+  for (const point of points) { low = Math.min(low, point.val_loss); high = Math.max(high, point.val_loss); last = Math.max(last, point.tokens_seen); }
+  const padding = Math.max((high - low) * .12, .06); low -= padding; high += padding;
+  const x = tokens => 44 + tokens / last * 780, y = value => 222 - (value - low) / (high - low) * 200;
+  for (let i = 0; i < 5; i++) {
+    const value = low + (high - low) * i / 4, yy = y(value);
+    chart.append(svg('line', {x1:44,x2:824,y1:yy,y2:yy,stroke:'#1b2129'}), svg('text', {x:36,y:yy+3,'text-anchor':'end',class:'chart-label'}, value.toFixed(2)));
+  }
+  for (let i = 0; i < 5; i++) chart.append(svg('text', {x:x(last*i/4),y:246,'text-anchor':i===0?'start':i===4?'end':'middle',class:'chart-label'}, `${shortTokens(last*i/4)} tok`));
+  series.sort((a,b) => Number(a.run.id === selected) - Number(b.run.id === selected));
+  for (const {run, points: recorded} of series) {
+    if (!recorded.length) continue;
+    const highlight = run.id === selected || run.id === baseline;
+    const attributes = {points:recorded.map(point => `${x(point.tokens_seen)},${y(point.val_loss)}`).join(' '), fill:'none', stroke:color(run), 'stroke-width':highlight?2.2:1, opacity:highlight?1:.32};
+    if (run.id === baseline && run.id !== selected) attributes['stroke-dasharray'] = '5 3';
+    chart.append(svg('polyline', attributes));
+    const lastPoint = recorded.at(-1);
+    if (highlight || recorded.length === 1) chart.append(svg('circle', {cx:x(lastPoint.tokens_seen),cy:y(lastPoint.val_loss),r:highlight?3:2,fill:color(run),opacity:highlight?1:.4}));
+  }
+  $('metric-note').textContent = `Recorded validation only · ${series.length} ${series.length===1?'run':'runs'}${series.some(item => histories.get(item.run.id)?.metrics_truncated)?' · recent bounded history; full data stays in metrics.jsonl':''}.`;
 }
-function renderDetail(run) {
-  $('empty').hidden=true; $('detail').hidden=false;
-  $('run-title').textContent=run.dataset.name; $('run-id').textContent=run.id;
-  $('status').textContent=`${run.status} · ${new Date(run.created_at).toLocaleString()}`;
-  const modelLabel=Number.isInteger(run.parameter_count)?`${run.parameter_count.toLocaleString()} parameters`:'100M · Fundamentals';
-  $('run-note').textContent=`${modelLabel}. ${run.note || 'Metrics appear only after the trainer writes them.'}`;
-  $('train-loss').textContent=fmt(run.train_loss); $('val-loss').textContent=fmt(run.val_loss);
-  const step=run.latest.step ?? 0;
-  $('steps').textContent=`${step} / ${run.settings.steps}`;
-  $('progress').max=run.settings.steps; $('progress').value=step;
-  $('stop').hidden=!activeStates.includes(run.status); $('stop').disabled=busy || run.status==='stopping';
-  $('stop').textContent=run.status==='stopping'?'Stopping…':'Stop';
-  $('settings').textContent=JSON.stringify({settings:run.settings,dataset:run.dataset,checkpoint_available:run.checkpoint_available},null,2);
-  $('sample').textContent=run.sample || 'No sample artifact yet.';
-  $('log').textContent=run.log || 'No trainer output yet.';
-  $('sample-note').textContent=run.sample_truncated?'Showing only the last 16 KiB. Full sample remains in the run folder.':'';
-  $('log-note').textContent=run.log_truncated?'Log display is truncated. Full log remains in the run folder.':'';
-  $('metric-note').textContent=run.metrics_truncated?'Showing the bounded recent metric history; full history remains in metrics.jsonl.':'Only recorded values are shown. Validation is evaluated periodically.';
-  plot(run.metrics);
+function renderDetail(run, a) {
+  $('inspector-empty').hidden = true; $('detail').hidden = false;
+  $('run-title').textContent = run.dataset.name; $('run-id').textContent = run.id.slice(0,12);
+  $('a-title').textContent = a?.dataset.name || 'No baseline'; $('a-id').textContent = a?.id.slice(0,12) || 'Choose A in the run table';
+  const changes = differences(a, run);
+  let explanation = a?.id === run.id ? 'A and B are the same run. Choose another row to inspect its recorded results against A.' : !a ? 'Choose A in the table to inspect recorded settings side by side.' : changes.length ? `${changes.length} recorded ${changes.length===1?'setting differs':'settings differ'} from A. Latest losses alone do not establish which change caused a result.` : 'The recorded training settings and corpus match. This does not verify identical source code or evaluation conditions.';
+  if (a && a.dataset.sha256 !== run.dataset.sha256) explanation += ' The corpora differ; their losses are not directly comparable.';
+  $('comparison-note').textContent = explanation;
+  $('comparison-note').className = `explain${run.status==='failed'?' fail':changes.length>1?' many':''}`;
+  $('status').textContent = run.status; $('status').className = `detail-status s-${run.status}`;
+  $('run-note').textContent = run.note || `Created ${new Date(run.created_at).toLocaleString()}.`;
+  const step = run.latest.step ?? 0;
+  $('progress').max = Math.max(1,run.settings.steps); $('progress').value = step;
+  $('stop').hidden = !activeStates.includes(run.status); $('stop').disabled = busy || run.status==='stopping';
+  $('stop').textContent = run.status==='stopping' ? 'Stopping…' : 'Stop run';
+  $('results').replaceChildren();
+  for (const [label, value, format] of [['Train loss',r=>r.train_loss,fmt],['Validation loss',r=>r.val_loss,fmt],['Steps',r=>r.latest.step,number],['Tokens seen',r=>r.latest.tokens_seen,number],['Tokens / s',r=>r.latest.tokens_per_second,number]]) {
+    const row = node('tr'); row.append(node('td','',label),node('td','',a?format(value(a)):'—'),node('td','',format(value(run)))); $('results').append(row);
+  }
+  $('changes-label').textContent = a?.id === run.id ? 'reference run' : `${changes.length} recorded changes`;
+  $('changes').replaceChildren();
+  if (changes.length) for (const change of changes) $('changes').append(chip(change.area,change.value));
+  else $('changes').append(node('span','chip same',a?.id===run.id?'reference':'same recorded settings'));
+  $('parameter-count').textContent = Number.isInteger(run.parameter_count)?`${number(run.parameter_count)} params`:'count not recorded yet';
+  $('model-settings').textContent = JSON.stringify(run.config?.model || {architecture:'100m/model.py',note:'Resolved dimensions are stored in this run’s config.json.'},null,2);
+  $('config-values').replaceChildren();
+  for (const key of ['steps','batch_size','lr','seed','device']) { const row=node('tr');row.append(node('td','',key),node('td','',String(a?.settings[key]??'—')),node('td','',String(run.settings[key]??'—')));$('config-values').append(row); }
+  $('dataset-name').textContent = run.dataset.name; $('dataset-hash').textContent = run.dataset.sha256 ? `sha256 ${run.dataset.sha256.slice(0,10)}…` : 'hash not recorded';
+  $('dataset-provenance').textContent = `${run.dataset.description || ''} ${run.dataset.license_notes || ''}`;
+  $('settings').textContent = JSON.stringify({settings:run.settings,dataset:run.dataset,config:run.config || undefined,checkpoint_available:run.checkpoint_available},null,2);
+  $('sample').textContent = run.sample || 'No sample artifact yet.';
+  $('log').textContent = run.log || 'No trainer output yet.';
+  $('sample-note').textContent = run.sample_truncated?'Showing the last 16 KiB. The full sample remains in the run folder.':'This is the saved generated sample, not a controlled A/B sample comparison.';
+  $('log-note').textContent = run.log_truncated?'Showing the last 32 KiB. The full log remains in the run folder.':'';
+  $('run-folder').textContent = `runs/${run.id}/ · ${run.checkpoint_available?'checkpoint available':'no checkpoint yet'}`;
+}
+function render() {
+  renderSummary(); renderRuns(); plot();
+  const run=current(selected);if(run)renderDetail(run,current(baseline));
 }
 async function refresh() {
-  const {runs}=await api('/api/runs');
-  if(!selected && runs.length) selected=runs[0].id;
-  renderRuns(runs);
-  if(selected) { const run=await api(`/api/runs/${selected}`); if(run.id===selected) renderDetail(run); }
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    ({runs} = await api('/api/runs'));
+    if (!runs.some(run=>run.id===selected)) selected=runs[0]?.id || null;
+    if (!runs.some(run=>run.id===baseline)) baseline=runs.findLast(run=>run.status==='completed')?.id || runs.at(-1)?.id || null;
+    const needed = new Set([...runs.slice(0,12).map(run=>run.id),selected,baseline].filter(Boolean));
+    await Promise.all([...needed].map(async id => {
+      const run=runs.find(item=>item.id===id);
+      const signature=JSON.stringify([run.status,run.latest,run.parameter_count,run.checkpoint_available]);
+      if (id===selected || id===baseline || signature!==historySignatures.get(id)) { histories.set(id,await api(`/api/runs/${id}`));historySignatures.set(id,signature); }
+    }));
+    for (const id of histories.keys()) if (!needed.has(id)) {histories.delete(id);historySignatures.delete(id);}
+    render();
+  } finally {refreshing=false;}
 }
-form.onsubmit=async event=>{
-  event.preventDefault(); busy=true; updateStart(); error('');
+form.onsubmit = async event => {
+  event.preventDefault(); if (busy || $('start').disabled) return;
+  busy=true;updateStart();error('');
   try {
     const payload=Object.fromEntries(new FormData(form));
-    for(const key of Object.keys(payload)) if(!['dataset_id','device'].includes(key)) payload[key]=Number(payload[key]);
-    const run=await api('/api/runs',payload); selected=run.id; await refresh();
-  } catch(e) { error(e.message); }
-  finally { busy=false; updateStart(); }
+    for(const key of Object.keys(payload))if(!['dataset_id','device'].includes(key))payload[key]=Number(payload[key]);
+    const run=await api('/api/runs',payload);selected=run.id;if(!baseline)baseline=run.id;dialog.close();await refresh();
+  } catch(e) {error(e.message);}
+  finally {busy=false;updateStart();}
 };
-$('stop').onclick=async()=>{
-  busy=true; $('stop').disabled=true; error('');
-  try {await api(`/api/runs/${selected}/stop`,{}); await refresh();} catch(e) {error(e.message);}
-  finally {busy=false; updateStart();}
+$('stop').onclick = async () => {
+  busy=true;$('stop').disabled=true;error('');
+  try {await api(`/api/runs/${selected}/stop`,{});await refresh();} catch(e) {error(e.message);}
+  finally {busy=false;updateStart();const run=current(selected);if(run)renderDetail(run,current(baseline));}
 };
 $('dataset').onchange=datasetNote;
 async function init() {
+  plot();
   try {
-    const data=await api('/api/datasets'); datasets=data.datasets;
-    for(const d of datasets) {const option=document.createElement('option');option.value=d.id;option.textContent=d.missing?`${d.name} · not downloaded`:d.name;option.disabled=!d.training_eligible;$('dataset').append(option);}
-    const eligible=datasets.find(d=>d.training_eligible); if(eligible) $('dataset').value=eligible.id;
-    for(const [key,value] of Object.entries(data.defaults)) if(form.elements[key]) form.elements[key].value=value;
-    initialized=true; datasetNote(); await refresh();
+    const data=await api('/api/datasets');datasets=data.datasets;
+    for(const dataset of datasets){const option=node('option','',dataset.missing?`${dataset.name} · not downloaded`:dataset.name);option.value=dataset.id;option.disabled=!dataset.training_eligible;$('dataset').append(option);}
+    const eligible=datasets.find(dataset=>dataset.training_eligible);if(eligible)$('dataset').value=eligible.id;
+    for(const [key,value] of Object.entries(data.defaults))if(form.elements[key])form.elements[key].value=value;
+    initialized=true;datasetNote();await refresh();
   } catch(e) {error(e.message);}
-  // Serial polling avoids overlapping requests or recreating fictional progress.
-  async function poll() {try {await refresh();} catch(e) {error(e.message);} setTimeout(poll,1500);}
+  // Poll serially; progress and curves always come from saved trainer records.
+  async function poll(){try{await refresh();}catch(e){error(e.message);}setTimeout(poll,1500);}
   setTimeout(poll,1500);
 }
 init();
 </script>
+</body>
 </html>

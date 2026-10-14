@@ -34,10 +34,12 @@ The first local implementation is available:
 - [`100m/model.py`](100m/model.py): **architecture only**, preserving the user's
   explanatory comments. Defaults are 14 layers, width 768 and 12 attention heads,
   approximately 100M parameters. The exact count depends on vocabulary/context.
-- [`train.py`](train.py): training, evaluation, generation and the CLI.
+- [`cli.py`](cli.py): thin `lm-train` and `lm-generate` commands; parses settings and loads the trainer or a checkpoint.
+- [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,
+  checkpoint loading/saving/resume, atomic run artifacts/provenance and shared
+  sampling.
 - [`data/loading.py`](data/loading.py): character tokenization, text loading,
   deterministic splits and batching.
-- [`run_utils.py`](run_utils.py): checkpoints, RNG state, provenance and signals.
 - [`model_checks.py`](model_checks.py): reference and tiny-model validation.
 - [`ui.py`](ui.py) and [`ui.html`](ui.html): a minimal localhost Run Board that
   starts one real local job, displays loss/progress/logs/samples and stops it.
@@ -62,8 +64,9 @@ uv run lm-checks
 # Start the interface; open the URL printed in the terminal.
 uv run lm-ui
 
-# Train the fixed 100M architecture with code-defined defaults; no flags required.
-uv run python train.py
+# Fetch the local benchmark, then train with code-defined defaults; no flags required.
+uv run python -m training_data.fetching.fetch_tinyshakespeare
+uv run lm-train
 
 # Sample from a trusted checkpoint (prompt characters must be in its vocabulary).
 uv run lm-generate --checkpoint runs/<id>/checkpoint.pt --prompt 'ROMEO:' \
@@ -76,17 +79,18 @@ runs on CPU by default (`--device mps` is optional) and seeds from the training
 seed unless `--seed` is given. It samples from the full softmax; temperature and
 top-k are not implemented.
 
-Edit `TrainConfig` near the top of `train.py` for the dataset, steps, batch size,
+Edit `TrainConfig` in `trainer/config.py` for the dataset, steps, batch size,
 learning rate, seed, device and logging/checkpoint cadence. Model dimensions and
 context length live only in `100m/model.py`, not in CLI flags or UI controls.
-Defaults use the tracked `data/tinyshakespeare.txt` on CPU, with each direct run
+Defaults use the locally fetched `data/raw/tinyshakespeare.txt` on CPU, with each direct run
 writing a fresh `runs/manual-*` directory. To use Apple acceleration, set
 `TrainConfig.device = "mps"` on supported hardware. An interactive terminal shows
 tqdm progress; the UI captures real JSON metric lines instead.
 
 The UI starts at port 5174 and automatically tries subsequent ports if occupied.
 Its Start button writes `runs/<id>/training.json` and invokes
-`train.py --config <path>`. This is the optional interface for run settings,
+`cli.py --config <path>` (the same entry point as `lm-train`). This is the optional
+interface for run settings,
 not an architecture selector. Stop requests checkpointing at an optimizer boundary.
 
 FP32 ~100M training requires several GiB and CPU execution can be slow. Full-size
@@ -95,7 +99,7 @@ not launch a full-size or paid run. Shakespeare is a learning corpus, not eviden
 of broad language capability.
 
 To resume, increase `TrainConfig.steps` (the total update target), retain the
-original training settings, and run `uv run python train.py --resume <checkpoint>`.
+original training settings, and run `uv run lm-train --resume <checkpoint>`.
 Only load trusted checkpoints.
 CPU continuation was tested within the same runtime; cross-device bitwise
 reproducibility is not promised. The UI does not yet expose resume. The first

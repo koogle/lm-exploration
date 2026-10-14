@@ -4,10 +4,10 @@
 UTF-8 text file and does not depend on this registry. Paths in the registry are
 relative to this `data/` directory, not to the shell's working directory.
 
-The initial UI launches only the trusted `training/1m/model.py` trainer
-(**1M · Fundamentals**, a nominal size class; the trainer reports the exact count).
-It does not accept a model/executable path or expose an architecture picker.
-From `training/`, start it with `uv run --python 3.12 --with torch ui.py` and open
+The UI launches the shared `training/trainer/` implementation through `cli.py`
+with the fixed `training/100m/model.py` architecture (the trainer reports the
+exact parameter count). It does not accept a model/executable path or expose an
+architecture picker. From `training/`, start it with `uv run lm-ui` and open
 http://127.0.0.1:5174. Trainer cwd stays `training/`; inputs stay under `data/` and
 run artifacts under `runs/`.
 

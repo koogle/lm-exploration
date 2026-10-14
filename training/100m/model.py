@@ -1,7 +1,7 @@
 """Architecture only: a roughly 100M-parameter, decoder-only character GPT.
 
 14 layers, width 768, 12 heads, learned positions, pre-LayerNorm and GELU MLPs.
-The exact count depends on context length and vocabulary; train.py records it.
+The exact count depends on context length and vocabulary; trainer/loop.py records it.
 Training, data loading, checkpoints and CLI code deliberately live elsewhere.
 """
 
