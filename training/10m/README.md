@@ -3,7 +3,8 @@
 The complete, readable architecture is in [model.py](model.py): six pre-LayerNorm
 causal decoder blocks, width 384, six attention heads, learned positions, GELU
 MLPs, and a separate output projection. With 65 characters and context 256 it has
-**10,795,776 parameters**. The existing 100M model and local UI remain separate.
+**10,795,776 parameters**. [`100m/model.py`](../100m/model.py) imports this definition unchanged and only
+scales its dimensions; the local UI remains separate.
 
 The model starts from random weights and learns next-character prediction from
 Tiny Shakespeare. This is a learning benchmark, not an instruction-following
@@ -17,18 +18,20 @@ The Modal image explicitly pins PyTorch 2.6.0, safetensors 0.8.0 and tqdm 4.70.1
 independently of the newer version selected by the local training project's lock.
 The executed versions and source hashes are saved in every run's config.
 
+The published runs used the former `modal_shakespeare.py` (commit `ec5ebd1`). The
+same settings are now the [`shakespeare-10m` recipe](../recipes/shakespeare-10m.json),
+launched with the generic [recipe launcher](../recipes/README.md) (use a new run ID):
+
 ```bash
-uv run --with 'modal[api-proxy-support]==1.6.1' modal run modal_shakespeare.py \
-  --run-id shakespeare-10m-smoke-01 --smoke
-uv run --with 'modal[api-proxy-support]==1.6.1' modal run --detach modal_shakespeare.py \
-  --run-id shakespeare-10m-train-01
+uv run --with 'modal[api-proxy-support]==1.6.1' modal run modal_train.py \
+  --recipe recipes/shakespeare-10m.json --run-id shakespeare-10m-smoke-02 --smoke
 ```
 
-Dedicated app: `lm-exploration-shakespeare-10m`; dedicated volume:
+The original runs used app `lm-exploration-shakespeare-10m` and volume
 `lm-exploration-training`. The smoke worker has a 120-second hard timeout; the
 training worker a 1,500-second hard timeout and a cooperative 1,200-second training
 limit. Both use one L4, no retries, and persist artifacts on exit. A separate
-ignored `runs/shakespeare-budget.json` reserves the full worker time at a
+ignored `runs/shakespeare-budget.json` (now `runs/modal-budget.json`) reserved the full worker time at a
 conservative $5/hour, with a $3 allocation ceiling. This is reservation accounting,
 not an actual bill or an account-wide spending limit. No latent-workspace ledger
 or research volume is used.

@@ -56,6 +56,7 @@ language capability. Research corpus choices and language mixtures remain undeci
    | `source` | Authorship or source URL/repository and pinned revision; reference retained record-level provenance when applicable |
    | `license_notes` | Actual terms and eligibility review, obligations and limits; do not invent approvals |
    | `languages` | Nonempty array of language identifiers, e.g. `["en"]` |
+   | `fetch` | Optional module in `fetching/` whose `main()` downloads and verifies the file; required for recipes and Modal runs |
    | `training_eligible` | Boolean; `true` only after the above review for the intended use |
 
    The file must exist even for an ineligible entry. Ineligible entries remain

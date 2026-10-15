@@ -1,0 +1,16 @@
+{
+  "description": "The same 10M architecture and settings on Complete Shakespeare (~5x Tiny Shakespeare). Not yet run.",
+  "model": {"architecture": "model_10m", "config": {}},
+  "dataset": "shakespeare-complete",
+  "training": {
+    "steps": 4000,
+    "batch_size": 32,
+    "lr": 0.0003,
+    "seed": 1337,
+    "eval_interval": 200,
+    "log_interval": 200,
+    "eval_batches": 20,
+    "checkpoint_interval": 200
+  },
+  "backend": {"kind": "modal", "gpu": "L4", "max_seconds": 1200, "timeout_seconds": 1500}
+}

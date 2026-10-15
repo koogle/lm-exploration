@@ -110,7 +110,11 @@ def train(args, run_dir=None, *, model_config=None, architecture_module=None, ma
             "training": settings,
             "tokenizer": tokenizer.config(),
             "dataset": {"path": str(Path(args.data).resolve()), **fingerprint},
-            "runtime": runtime_provenance(args.device, selected_architecture.__file__),
+            "runtime": runtime_provenance(
+                args.device,
+                selected_architecture.__file__,
+                sys.modules[model_class.__module__].__file__,
+            ),
         }
         checkpoint = load_checkpoint(args.resume) if args.resume else None
         if checkpoint:

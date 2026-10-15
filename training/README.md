@@ -35,6 +35,12 @@ The selected update is 1,800 (validation loss 1.54483 nats/character); the later
 4,000-update head overfit and was not published.
 Its L4 jobs, dedicated volume and bounded allocation are separate from latent-workspace.
 See the owning guide and `results/shakespeare-10m-*.json` for executed results.
+
+## Modal training recipes
+
+Modal runs are launched from a JSON [recipe](recipes/README.md) naming the architecture,
+registered dataset, training settings and GPU limits:
+`modal run modal_train.py --recipe recipes/<name>.json --run-id <id> [--smoke]`.
 The local UI below continues to use the 100M architecture.
 
 ## Current state
@@ -44,9 +50,11 @@ gradient descent, start with [the XOR example](examples/README.md).
 
 The first local implementation is available:
 
-- [`100m/model.py`](100m/model.py): **architecture only**, preserving the user's
-  explanatory comments. Defaults are 14 layers, width 768 and 12 attention heads,
-  approximately 100M parameters. The exact count depends on vocabulary/context.
+- [`100m/model.py`](100m/model.py): **architecture only**. It imports every module
+  unchanged from [`10m/model.py`](10m/model.py), which keeps the explanatory
+  comments, and only scales the defaults: 14 layers, width 768, 12 attention heads
+  and context 128, approximately 100M parameters. The exact count depends on
+  vocabulary/context. Run provenance hashes both files.
 - [`cli.py`](cli.py): thin `lm-train` and `lm-generate` commands; parses settings and loads the trainer or a checkpoint.
 - [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,
   checkpoint loading/saving/resume, run provenance and shared sampling.
@@ -123,8 +131,8 @@ The historical [Run Board](designs/run-board-web.html) and
 [web-inference PR #1](https://github.com/koogle/web-inference/pull/1), remain
 interactive mockups with illustrative runs and metrics. Open those HTML files
 locally to inspect the original designs. GitHub integration and Modal job controls in the UI, custom kernels and the larger
-experiment framework are not implemented; the separate bounded 10M CLI workflow
-now runs on Modal.
+experiment framework are not implemented; recipe-based CLI training
+runs on Modal.
 
 ## Staged research plan
 

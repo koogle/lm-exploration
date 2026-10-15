@@ -104,7 +104,7 @@ def save_checkpoint(
     torch.save(state, path)
 
 
-def runtime_provenance(device, model_source):
+def runtime_provenance(device, model_source, model_definition=None):
     root = Path(__file__).resolve().parent.parent
     try:
         commit = subprocess.check_output(
@@ -122,6 +122,9 @@ def runtime_provenance(device, model_source):
         "data": root / "data" / "loading.py",
         "dependencies": root / "uv.lock",
     }
+    # A scaled model imports its modules from another file; hash that lineage too.
+    if model_definition and Path(model_definition) != Path(model_source):
+        files["model_definition"] = Path(model_definition)
     return {
         "python": platform.python_version(),
         "torch": str(torch.__version__),

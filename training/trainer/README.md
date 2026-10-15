@@ -1,8 +1,8 @@
 # Trainer implementation
 
 The trainer is an installed Python package within the `training/` uv project.
-The local CLI/UI uses `../100m/model.py`. The bounded Shakespeare Modal worker
-explicitly supplies `../10m/model.py` through the architecture-module argument.
+The local CLI/UI uses `../100m/model.py`. Modal runs go through recipes, which
+supply an architecture such as `../10m/model.py` through the architecture-module argument.
 Tiny test configurations remain internal; see [10M training](../10m/README.md).
 
 ## Responsibilities
@@ -20,6 +20,8 @@ Tiny test configurations remain internal; see [10M training](../10m/README.md).
 - `checkpoints.py`: trusted checkpoint loading, resume compatibility checks,
   restoring model/optimizer/RNG state, checkpoint saving and the source hashes,
   git commit and runtime details stored in `config.json` and each checkpoint.
+- `recipe.py`: [recipe](../recipes/README.md) validation, dataset fetching, best-checkpoint
+  selection and the run report used by `../modal_train.py`.
 - `sampling.py`: shared sampling for training previews and `lm-generate`.
 
 ## Commands
