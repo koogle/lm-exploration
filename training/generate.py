@@ -23,11 +23,10 @@ def build_parser():
 
 
 def load_model(checkpoint):
-    from trainer.recipe import load_architecture
+    from trainer.recipe import MODELS
 
-    # Older checkpoints record no model_name (all 100m) or the bare folder name ("100m").
-    name = checkpoint["config"].get("model_name", "model_100m")
-    architecture = load_architecture(name if name.startswith("model_") else f"model_{name}")
+    # model_name is the package (model_10m); older checkpoints have "100m" or nothing (100m).
+    architecture = MODELS[checkpoint["config"].get("model_name", "100m").removeprefix("model_")]
     model = architecture.GPT(architecture.ModelConfig(**checkpoint["config"]["model"]))
     model.load_state_dict(checkpoint["model"])
     return model

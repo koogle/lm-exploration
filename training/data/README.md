@@ -1,9 +1,10 @@
 # Training datasets
 
-`datasets.json` is the curated registry that [recipes](../recipes/README.md) select
-from by `id`. Paths in the registry are relative to this `data/` directory, not to
-the shell's working directory. Raw text is never baked into the Modal image: each
-worker runs the entry's `fetch` module, which downloads and verifies the file.
+`datasets.json` records each dataset's source, license review and eligibility.
+Paths in it are relative to this `data/` directory. [Recipes](../recipes/README.md)
+select a dataset by `id` from the `DATASETS` table in `trainer/recipe.py`, which maps
+it to its fetch module. Raw text is never baked into the Modal image: each worker
+runs that module, which downloads and verifies the file.
 
 ## Registered datasets
 
@@ -36,7 +37,8 @@ language capability. Research corpus choices and language mixtures remain undeci
    separately when aggregating documents, and inspect for credentials and personal
    information. Do not commit private or unreviewed corpus content.
 2. Write a fetch module in `fetching/` whose `main()` downloads one nonempty UTF-8
-   text file to `raw/` and verifies a pinned SHA-256 (see the existing fetchers).
+   text file to its `DESTINATION` under `raw/` and verifies a pinned SHA-256 (see
+   the existing fetchers).
    `raw/` and `cache/` are ignored by Git and excluded from the Modal image. The
    trainer reads the whole file into RAM; this is not a large-corpus ingestion
    system. Use enough text for the trainer's context window and held-out split.
@@ -51,12 +53,11 @@ language capability. Research corpus choices and language mixtures remain undeci
    | `source` | Authorship or source URL/repository and pinned revision; reference retained record-level provenance when applicable |
    | `license_notes` | Actual terms and eligibility review, obligations and limits; do not invent approvals |
    | `languages` | Nonempty array of language identifiers, e.g. `["en"]` |
-   | `fetch` | Module name in `fetching/` whose `main()` downloads and verifies the file; Modal workers run it |
    | `training_eligible` | Boolean; `true` only after the above review for the intended use |
 
-   Ineligible entries cannot be selected by a recipe. Do not add an undecided
-   candidate source as an eligible entry.
-4. Reference the `id` from a recipe and launch a `--smoke` run. The trainer
+   Do not add an undecided candidate source as an eligible entry.
+4. Only eligible datasets go into `DATASETS` in `trainer/recipe.py`, mapped from
+   their `id` to the fetch module. Reference the `id` from a recipe and launch a `--smoke` run. The trainer
    fingerprints the exact bytes it trained on in each run's `config.json` and
    checkpoints.
 

@@ -19,12 +19,12 @@ There is no CPU or MPS training path.
 - `checkpoints.py`: trusted checkpoint loading, resume compatibility checks,
   restoring model/optimizer/RNG state, checkpoint saving and the source hashes,
   git commit and runtime details stored in `config.json` and each checkpoint.
-- `recipe.py`: recipe validation, dataset fetching, best-checkpoint selection and
-  the run report.
+- `recipe.py`: the `Recipe` dataclass, the fixed `MODELS` and `DATASETS` tables,
+  dataset fetching, best-checkpoint selection and the run report.
 - `sampling.py`: shared sampling for training previews and `lm-generate`.
 
 Checkpoint format version 1 is preserved. The loop still supports resume
-(`TrainConfig.resume`), which requires identical data, tokenizer, model and fixed
+(`train(..., resume=<checkpoint>)`), which requires identical data, tokenizer, model and fixed
 optimizer/batch/seed/device settings, but no launcher exposes it yet. Only load
 trusted checkpoints: RNG restoration requires Python objects, so checkpoint
 loading is not safe for untrusted files.

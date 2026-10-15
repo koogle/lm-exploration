@@ -1,6 +1,6 @@
 {
   "description": "Vanilla 10M character GPT on Tiny Shakespeare; the settings of the published shakespeare-10m-train-01 run.",
-  "model": {"architecture": "model_10m", "config": {}},
+  "model": "10m",
   "dataset": "tiny-shakespeare",
   "training": {
     "steps": 4000,
@@ -12,5 +12,9 @@
     "eval_batches": 20,
     "checkpoint_interval": 200
   },
-  "backend": {"kind": "modal", "gpu": "L4", "max_seconds": 1200, "timeout_seconds": 1500}
+  "backend": {
+    "gpu": "L4",
+    "max_seconds": 1200,
+    "timeout_seconds": 1500
+  }
 }

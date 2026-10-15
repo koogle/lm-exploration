@@ -58,7 +58,7 @@ def evaluate(model, data, args):
     return sum(losses) / len(losses)
 
 
-def train(args, run_dir, *, architecture_module, model_config, max_seconds=None):
+def train(args, data, run_dir, *, architecture_module, model_config, resume=None, max_seconds=None):
     # Called by trainer/recipe.py on a Modal GPU worker; see ../recipes/README.md.
     selected_architecture = architecture_module
     model_class = selected_architecture.GPT
@@ -68,12 +68,12 @@ def train(args, run_dir, *, architecture_module, model_config, max_seconds=None)
         raise ValueError("max_seconds must be positive")
     validate_train_args(args)
     out = Path(run_dir)
-    if not args.resume and any(
+    if not resume and any(
         (out / name).exists() for name in ("config.json", "metrics.jsonl", "checkpoints")
     ):
-        raise ValueError("run directory already has a run; use --resume or choose a new directory")
+        raise ValueError("run directory already has a run; resume it or choose a new directory")
     with stop_signal_handler() as stop:
-        tokenizer, train_data, val_data, fingerprint = load_data(args.data, model_config.block_size)
+        tokenizer, train_data, val_data, fingerprint = load_data(data, model_config.block_size)
         if model_config.vocab_size != len(tokenizer.characters):
             raise ValueError("model vocabulary must match the dataset tokenizer")
         settings = {
@@ -102,14 +102,14 @@ def train(args, run_dir, *, architecture_module, model_config, max_seconds=None)
             "model": asdict(model_config),
             "training": settings,
             "tokenizer": tokenizer.config(),
-            "dataset": {"path": str(Path(args.data).resolve()), **fingerprint},
+            "dataset": {"path": str(Path(data).resolve()), **fingerprint},
             "runtime": runtime_provenance(
                 DEVICE,
                 selected_architecture.__file__,
                 sys.modules[model_class.__module__].__file__,
             ),
         }
-        checkpoint = load_checkpoint(args.resume) if args.resume else None
+        checkpoint = load_checkpoint(resume) if resume else None
         if checkpoint:
             validate_resume(checkpoint, config, fingerprint, args.steps)
         random.seed(args.seed)

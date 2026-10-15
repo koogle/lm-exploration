@@ -9,7 +9,7 @@ from pathlib import Path
 
 import modal
 
-from trainer.recipe import RUN_ID, load_recipe
+from trainer.recipe import load_recipe
 
 LEDGER = Path("runs/modal-budget.json")
 
@@ -41,12 +41,12 @@ image = (
 
 
 @app.function(image=image, gpu="L4", retries=0, max_containers=1, volumes={"/runs": volume})
-def worker(recipe: dict, run_id: str):
+def worker(recipe, run_id: str):
     import torch
 
     from trainer.recipe import run_recipe
 
-    torch.set_num_threads(recipe["backend"]["cpu"])
+    torch.set_num_threads(recipe.backend.cpu)
     try:
         return run_recipe(recipe, Path("/runs") / run_id)
     finally:
@@ -74,17 +74,21 @@ def reserve(run_id, timeout_seconds):
 
 @app.local_entrypoint()
 def main(recipe: str, run_id: str, smoke: bool = False):
-    if not RUN_ID.fullmatch(run_id):
-        raise ValueError("run ID: 1-80 letters, digits, _ or -")
-    resolved = load_recipe(recipe, smoke=smoke)
-    backend = resolved["backend"]
-    reserve(run_id, backend["timeout_seconds"])
+    # The run ID becomes a folder on the volume and a results/ file name.
+    plain = run_id.replace("-", "").replace("_", "")
+    if not (plain.isascii() and plain.isalnum()) or len(run_id) > 80:
+        raise ValueError("run ID: up to 80 letters, digits, _ or -")
+    loaded = load_recipe(recipe)
+    if smoke:
+        loaded = loaded.as_smoke()
+    backend = loaded.backend
+    reserve(run_id, backend.timeout_seconds)
     configured = worker.with_options(
-        gpu=backend["gpu"],
-        cpu=backend["cpu"],
-        memory=backend["memory_mib"],
-        timeout=backend["timeout_seconds"],
+        gpu=backend.gpu,
+        cpu=backend.cpu,
+        memory=backend.memory_mib,
+        timeout=backend.timeout_seconds,
     )
-    report = configured.remote(resolved, run_id)
+    report = configured.remote(loaded, run_id)
     Path("results").mkdir(exist_ok=True)
     Path(f"results/{run_id}.json").write_text(json.dumps(report, indent=2) + "\n")
