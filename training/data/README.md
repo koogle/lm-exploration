@@ -11,20 +11,27 @@ architecture picker. From `training/`, start it with `uv run lm-ui` and open
 http://127.0.0.1:5174. Trainer cwd stays `training/`; inputs stay under `data/` and
 run artifacts under `runs/`.
 
-## Initial scope
+## Registered datasets
 
-The only registered dataset is `tiny-shakespeare`, a character-level learning
-benchmark for exercising training, checkpointing and sampling. Its text is not
-committed to Git. From `training/`, fetch it before starting the UI:
+Both registered datasets are character-level Shakespeare learning corpora for
+exercising training, checkpointing and sampling. Their text is not committed to
+Git. From `training/`, fetch them before starting the UI:
 
 ```sh
 uv run python -m training_data.fetching.fetch_tinyshakespeare
+uv run python -m training_data.fetching.fetch_shakespeare_complete
 ```
 
-The fetcher verifies the pinned SHA-256 and saves the text to
-`data/raw/tinyshakespeare.txt`. Source and license notes are in `datasets.json`.
-This benchmark is not a selected research corpus or evidence of useful language
-capability. Research corpus choices and language mixtures remain undecided.
+- `tiny-shakespeare` (~1.1 MB): the char-rnn benchmark, saved to
+  `data/raw/tinyshakespeare.txt`.
+- `shakespeare-complete` (~5.4 MB): Project Gutenberg eBook #100, saved to
+  `data/raw/shakespeare-complete.txt` with the Gutenberg header and license footer
+  removed and line endings normalized. Gutenberg revises this eBook in place, so
+  a new revision fails the pinned check until the hashes are deliberately updated.
+
+Each fetcher verifies a pinned SHA-256. Source and license notes are in
+`datasets.json`. These are not selected research corpora or evidence of useful
+language capability. Research corpus choices and language mixtures remain undecided.
 
 ## Add an eligible local text dataset
 
