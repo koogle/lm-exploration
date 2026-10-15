@@ -11,6 +11,18 @@
         "en"
       ],
       "training_eligible": true
+    },
+    {
+      "id": "shakespeare-complete",
+      "name": "Complete Shakespeare · Project Gutenberg #100",
+      "path": "raw/shakespeare-complete.txt",
+      "description": "About 5.4 MB of Shakespeare's complete works (plays, sonnets and poems; 100 distinct characters including curly quotes, dashes and a few accented letters), roughly five times Tiny Shakespeare. Contents, stage directions and Gutenberg line numbering in the poems are retained; only the Project Gutenberg header and license footer are removed. A larger learning corpus, not a research corpus. Not committed: fetch it with `uv run python -m training_data.fetching.fetch_shakespeare_complete`.",
+      "source": "https://www.gutenberg.org/cache/epub/100/pg100.txt, revision updated 2025-08-24 (download SHA-256 3cf4b3d44ee14cff4e14e78e2ad3318eff76f3f7f2afc3cee6bb925879110a37; stripped text SHA-256 bfb5a5764506115cbae33bfdf66014697ef69d06339f001db209d3f2a56c83fc)",
+      "license_notes": "Shakespeare's works are public domain in the United States. The Project Gutenberg header and license footer are stripped, so the saved file is the public-domain text without Project Gutenberg trademarks. Kept out of Git and downloaded locally for learning experiments only.",
+      "languages": [
+        "en"
+      ],
+      "training_eligible": true
     }
   ]
 }
