@@ -53,9 +53,11 @@ The first local implementation is available:
 - [`100m/model.py`](100m/model.py): **architecture only**. It imports every module
   unchanged from [`10m/model.py`](10m/model.py), which keeps the explanatory
   comments, and only scales the defaults: 14 layers, width 768, 12 attention heads
-  and context 128, approximately 100M parameters. The exact count depends on
+  and the same context of 256, approximately 100M parameters. The exact count depends on
   vocabulary/context. Run provenance hashes both files.
-- [`cli.py`](cli.py): thin `lm-train` and `lm-generate` commands; parses settings and loads the trainer or a checkpoint.
+- [`cli.py`](cli.py): thin `lm-train` command; parses settings and loads the trainer.
+- [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a
+  prompt, and reads the architecture, configuration and tokenizer from the checkpoint.
 - [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,
   checkpoint loading/saving/resume, run provenance and shared sampling.
 - [`data/loading.py`](data/loading.py): character tokenization, text loading,
@@ -94,7 +96,7 @@ uv run lm-generate --checkpoint runs/<id>/checkpoints/step-000100.pt --prompt 'R
   --max-new-tokens 300
 ```
 
-`lm-generate` reads the model configuration and tokenizer from the checkpoint and
+`lm-generate` reads the architecture, model configuration and tokenizer from the checkpoint and
 prints each character as it is sampled. It
 runs on CPU by default (`--device mps` is optional) and seeds from the training
 seed unless `--seed` is given. It samples from the full softmax; temperature and

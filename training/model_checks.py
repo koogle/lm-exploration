@@ -217,7 +217,7 @@ def self_test():
             [
                 sys.executable,
                 "-c",
-                "from cli import generate; generate()",
+                "from generate import main; main()",
                 "--checkpoint",
                 str(root / "full" / "checkpoints" / "step-000008.pt"),
                 "--prompt",

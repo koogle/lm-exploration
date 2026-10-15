@@ -45,20 +45,10 @@ writes a report, metrics, source/runtime/dataset provenance and a sample.
 
 ## Export and publication
 
-Recover the selected trusted training checkpoint, then export safetensors rather
-than publishing optimizer or RNG state. Export checks the parameter count, selected
-update and hash of the exact architecture used for training.
-
-```bash
-uv run --with 'modal[api-proxy-support]==1.6.1' modal volume get \
-  lm-exploration-training shakespeare-10m-train-01/best.pt runs/shakespeare-10m-best.pt
-uv run --with huggingface-hub --with safetensors python publish_shakespeare.py \
-  --checkpoint runs/shakespeare-10m-best.pt --report results/shakespeare-10m-train-01.json \
-  --output runs/shakespeare-10m-hf --repo-id jfrick/shakespeare-vanilla-gpt-10m
-```
-
-Publishing uses `HF_TOKEN` from environment secrets, uploads only inference files,
-and requires a public destination. Use a new output directory for each export.
+The published model was exported with `publish_shakespeare.py`, removed after
+publication (see commit `ec5ebd1`). It exported the validation-selected checkpoint
+to safetensors without optimizer or RNG state, checked the parameter count,
+selected update and architecture hash, and uploaded only inference files.
 The public bundle includes `model.py`, `generate.py`, safetensors weights, exact
 configuration/tokenizer, provenance, requirements and the measured training report.
 From the downloaded bundle run `python generate.py --prompt 'ROMEO:' --tokens 300`.

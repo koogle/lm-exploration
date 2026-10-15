@@ -12,7 +12,7 @@ dependencies = [
 [project.scripts]
 lm-train = "cli:main"
 lm-checks = "model_checks:self_test"
-lm-generate = "cli:generate"
+lm-generate = "generate:main"
 lm-ui = "ui:main"
 
 [build-system]
@@ -21,7 +21,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["model_10m", "model_100m", "training_data", "training_data.fetching", "trainer"]
-py-modules = ["cli", "model_checks", "ui"]
+py-modules = ["cli", "generate", "model_checks", "ui"]
 
 [tool.setuptools.package-dir]
 model_10m = "10m"
