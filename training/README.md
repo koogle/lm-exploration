@@ -36,103 +36,73 @@ The selected update is 1,800 (validation loss 1.54483 nats/character); the later
 Its L4 jobs, dedicated volume and bounded allocation are separate from latent-workspace.
 See the owning guide and `results/shakespeare-10m-*.json` for executed results.
 
-## Modal training recipes
+## Training runs on Modal
 
-Modal runs are launched from a JSON [recipe](recipes/README.md) naming the architecture,
-registered dataset, training settings and GPU limits:
+All training runs on Modal GPU workers; there is no CPU or MPS training path.
+A JSON [recipe](recipes/README.md) names the architecture, registered dataset,
+training settings and GPU limits:
 `modal run modal_train.py --recipe recipes/<name>.json --run-id <id> [--smoke]`.
-The local UI below continues to use the 100M architecture.
+Local commands validate recipes and sample from downloaded checkpoints only.
 
 ## Current state
 
 For a minimal NumPy example of forward passes, handwritten backpropagation and
 gradient descent, start with [the XOR example](examples/README.md).
 
-The first local implementation is available:
-
 - [`100m/model.py`](100m/model.py): **architecture only**. It imports every module
   unchanged from [`10m/model.py`](10m/model.py), which keeps the explanatory
   comments, and only scales the defaults: 14 layers, width 768, 12 attention heads
   and the same context of 256, approximately 100M parameters. The exact count depends on
   vocabulary/context. Run provenance hashes both files.
-- [`cli.py`](cli.py): thin `lm-train` command; parses settings and loads the trainer.
+- [`modal_train.py`](modal_train.py) and [`recipes/`](recipes/README.md): the only way
+  to start training. Validates a recipe locally, reserves budget, then trains on Modal.
 - [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a
   prompt, and reads the architecture, configuration and tokenizer from the checkpoint.
 - [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,
-  checkpoint loading/saving/resume, run provenance and shared sampling.
+  checkpoint loading/saving, run provenance, recipes and shared sampling.
 - [`data/loading.py`](data/loading.py): character tokenization, text loading,
   deterministic splits and batching.
-- [`model_checks.py`](model_checks.py): reference and tiny-model validation.
-- [`ui.py`](ui.py) and [`ui.html`](ui.html): a minimal localhost Run Board that
-  starts one real local job, displays loss/progress/logs/samples and stops it.
 - [`data/`](data/README.md): curated dataset definitions and fetching scripts.
   Tiny Shakespeare is a learning benchmark, not a selected research corpus.
-- `runs/<id>/`: local artifacts, ignored by Git. Model configuration, metrics,
-  checkpoints and dataset provenance remain available independently of the UI.
+- Run artifacts live on the `lm-exploration-training` Modal volume under `<run-id>/`.
   Each save writes a new `checkpoints/step-NNNNNN.pt`; nothing is overwritten.
+  Reports are copied to `results/<run-id>.json`.
 
 `training/` is a uv-managed project with `pyproject.toml`, `uv.lock` and a Python
 3.12 pin. It has its own ignored `.venv`; the latent-workspace environment is
-separate. uv installs the model folder as `model_100m` and the data folder as
-`training_data`, so imports work without manual `PYTHONPATH` settings.
+separate. uv installs the model folders as `model_10m`/`model_100m` and the data
+folder as `training_data`, so imports work without manual `PYTHONPATH` settings.
 
 Run from `training/`:
 
 ```sh
 uv sync --locked
 
-# ~100M count checked on the meta device; actual training tests use tiny models.
-uv run lm-checks
-
-# Start the interface; open the URL printed in the terminal.
-uv run lm-ui
-
-# Fetch the local benchmark, then train with code-defined defaults; no flags required.
-uv run python -m training_data.fetching.fetch_tinyshakespeare
-uv run lm-train
-
-# Sample from a trusted checkpoint (prompt characters must be in its vocabulary).
-uv run lm-generate --checkpoint runs/<id>/checkpoints/step-000100.pt --prompt 'ROMEO:' \
-  --max-new-tokens 300
+# Download a run's selected checkpoint, then sample from it locally.
+uv run --with 'modal[api-proxy-support]==1.6.1' modal volume get \
+  lm-exploration-training <run-id>/best.pt runs/<run-id>-best.pt
+uv run lm-generate --checkpoint runs/<run-id>-best.pt --prompt 'ROMEO:' --max-new-tokens 300
 ```
 
-`lm-generate` reads the architecture, model configuration and tokenizer from the checkpoint and
-prints each character as it is sampled. It
-runs on CPU by default (`--device mps` is optional) and seeds from the training
-seed unless `--seed` is given. It samples from the full softmax; temperature and
-top-k are not implemented.
+`lm-generate` reads the architecture, model configuration and tokenizer from the
+checkpoint and prints each character as it is sampled. It runs on CPU by default
+(`--device mps` is optional) and seeds from the training seed unless `--seed` is
+given. It samples from the full softmax; temperature and top-k are not implemented.
 
-Edit `TrainConfig` in `trainer/config.py` for the dataset, steps, batch size,
-learning rate, seed, device and logging/checkpoint cadence. Model dimensions and
-context length live only in `100m/model.py`, not in CLI flags or UI controls.
-Defaults use the locally fetched `data/raw/tinyshakespeare.txt` on CPU, with each direct run
-writing a fresh `runs/<uuid>/` directory. To use Apple acceleration, set
-`TrainConfig.device = "mps"` on supported hardware. An interactive terminal shows
-tqdm progress; the UI captures real JSON metric lines instead.
+Full-size throughput and model quality have **not** been measured. Shakespeare is
+a learning corpus, not evidence of broad language capability. The trainer still
+contains checkpoint resume, but no launcher exposes it yet. It reads text into
+RAM and is deliberately not a large-corpus system.
 
-The UI starts at port 5174 and automatically tries subsequent ports if occupied.
-Its Start button writes `runs/<id>/training.json` and invokes
-`cli.py --config <path>` (the same entry point as `lm-train`). This is the optional
-interface for run settings,
-not an architecture selector. Stop requests checkpointing at an optimizer boundary.
-
-FP32 ~100M training requires several GiB and CPU execution can be slow. Full-size
-throughput and model quality have **not** been measured; setup/imports/checks do
-not launch a full-size or paid run. Shakespeare is a learning corpus, not evidence
-of broad language capability.
-
-To resume, increase `TrainConfig.steps` (the total update target), retain the
-original training settings, and run `uv run lm-train --resume <checkpoint>`. Resumed training continues in the
-checkpoint's own `runs/<id>/` folder. Only load trusted checkpoints.
-CPU continuation was tested within the same runtime; cross-device bitwise
-reproducibility is not promised. The UI does not yet expose resume. The first
-trainer reads text into RAM and is deliberately not a large-corpus system.
+The local Run Board (`ui.py`), `lm-train` CLI and `lm-checks` CPU test suite were
+removed when training moved to Modal only; they remain in Git history before
+that change.
 
 The historical [Run Board](designs/run-board-web.html) and
 [earlier training studies](designs/train-design-studies.html), imported from
 [web-inference PR #1](https://github.com/koogle/web-inference/pull/1), remain
 interactive mockups with illustrative runs and metrics. Open those HTML files
-locally to inspect the original designs. GitHub integration and Modal job controls in the UI, custom kernels and the larger
+locally to inspect the original designs. A web UI with GitHub integration and Modal job controls, custom kernels and the larger
 experiment framework are not implemented; recipe-based CLI training
 runs on Modal.
 
@@ -313,10 +283,10 @@ the UI.
 
 ## Next concrete milestone
 
-The tiny local baseline and minimal Run Board are implemented. Bounded CPU checks
-cover reference attention/gradients, causality, tiny-set fitting, reproducible
-resume, real UI-driven training and cooperative stop/checkpoint continuation.
-These checks demonstrate mechanics, not useful language capability.
+Training is Modal-only and recipe-driven. Earlier bounded CPU checks (since
+removed) covered reference attention/gradients, causality, tiny-set fitting,
+reproducible resume and cooperative stop/checkpoint continuation. They
+demonstrated mechanics, not useful language capability.
 
 Next: choose the first research data/tokenizer recipe and an explicit GPU/budget
 bound, then implement and measure one bounded Modal throughput pilot before
@@ -339,8 +309,8 @@ from the supplied text, not from the inaccessible shared-page body. This README
 separates stated goals from assistant-proposed recipes and unverified external
 claims. No training runs, data ingestion or deployment were performed for that
 original documentation update. The later local fundamentals/UI implementation
-has been exercised with bounded CPU demonstration runs, not GPU training or
-research-corpus ingestion.
+was exercised with bounded CPU demonstration runs before training moved to Modal
+only; the 10M Shakespeare model is the only completed GPU training run.
 
 ## Linting
 

@@ -2,8 +2,7 @@
 training settings and backend resources. No run starts on import.
 
 load_recipe() resolves and validates a recipe locally, before any paid worker
-starts; run_recipe() executes the resolved dict (on a Modal worker, or locally on
-CPU for checks). See ../recipes/README.md for the file format.
+starts; run_recipe() executes the resolved dict on a Modal GPU worker. See ../recipes/README.md for the file format.
 """
 
 import importlib
@@ -21,8 +20,8 @@ from .config import TrainConfig, validate_train_args
 RUN_ID = re.compile(r"[a-zA-Z0-9_-]{1,80}")
 ARCHITECTURE = re.compile(r"model_[a-z0-9_]+")
 DATA_DIR = Path(training_data.__file__).resolve().parent
-# data and device are chosen by the runner; resume is not part of a fresh recipe run.
-TRAINING_KEYS = {field.name for field in fields(TrainConfig)} - {"data", "device", "resume"}
+# data is chosen by the runner; resume is not part of a fresh recipe run.
+TRAINING_KEYS = {field.name for field in fields(TrainConfig)} - {"data", "resume"}
 BACKEND_DEFAULTS = {
     "kind": "modal",
     "gpu": "L4",
@@ -92,7 +91,7 @@ def load_recipe(path, *, smoke=False):
         backend = backend | SMOKE_BACKEND
     if not 0 < backend["max_seconds"] < backend["timeout_seconds"]:
         raise ValueError("backend needs 0 < max_seconds < timeout_seconds")
-    validate_train_args(TrainConfig(data="", device="cpu", **training))
+    validate_train_args(TrainConfig(data="", **training))
     return {
         "name": Path(path).stem,
         "description": recipe.get("description", ""),
@@ -104,7 +103,7 @@ def load_recipe(path, *, smoke=False):
     }
 
 
-def run_recipe(recipe, run_dir, device):
+def run_recipe(recipe, run_dir):
     """Fetch the dataset, train, select the best saved checkpoint and write report.json."""
     import torch
     from training_data.loading import load_data
@@ -121,7 +120,7 @@ def run_recipe(recipe, run_dir, device):
     overrides = recipe["model"]["config"]
     block_size = model_config(architecture, overrides, vocab_size=1).block_size
     tokenizer, _, _, _ = load_data(data, block_size)
-    args = TrainConfig(data=str(data), device=device, **recipe["training"])
+    args = TrainConfig(data=str(data), **recipe["training"])
     started = time.perf_counter()
     train(
         args,
@@ -144,7 +143,7 @@ def run_recipe(recipe, run_dir, device):
         "run_id": run_dir.name,
         "recipe": recipe,
         "smoke": recipe["smoke"],
-        "device": torch.cuda.get_device_name() if device == "cuda" else device,
+        "gpu": torch.cuda.get_device_name(),
         "config": json.loads((run_dir / "config.json").read_text()),
         "selected": best,
         "final": metrics[-1],

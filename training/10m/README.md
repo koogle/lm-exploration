@@ -4,7 +4,7 @@ The complete, readable architecture is in [model.py](model.py): six pre-LayerNor
 causal decoder blocks, width 384, six attention heads, learned positions, GELU
 MLPs, and a separate output projection. With 65 characters and context 256 it has
 **10,795,776 parameters**. [`100m/model.py`](../100m/model.py) imports this definition unchanged and only
-scales its dimensions; the local UI remains separate.
+scales its dimensions.
 
 The model starts from random weights and learns next-character prediction from
 Tiny Shakespeare. This is a learning benchmark, not an instruction-following

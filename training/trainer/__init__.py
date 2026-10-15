@@ -1,1 +1,1 @@
-"""Training implementation; use lm-train to start a run."""
+"""Training implementation; runs launch from recipes via ../modal_train.py."""

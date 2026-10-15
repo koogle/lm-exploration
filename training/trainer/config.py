@@ -1,23 +1,19 @@
-"""Training settings; model dimensions belong in 100m/model.py."""
+"""Training settings. Runs come from recipes (../recipes/) and train on a Modal GPU."""
 
 import math
 from dataclasses import dataclass
-from pathlib import Path
 
-import torch
-
-ROOT = Path(__file__).resolve().parents[1]
+# Training runs only on Modal GPU workers; there is no CPU or MPS training path.
+DEVICE = "cuda"
 
 
 @dataclass
 class TrainConfig:
-    # All normal training choices are here, not a long command line.
-    data: str = str(ROOT / "data" / "raw" / "tinyshakespeare.txt")
+    data: str
     steps: int = 100
     batch_size: int = 1
     lr: float = 3e-4
     seed: int = 1337
-    device: str = "cpu"
     eval_interval: int = 10
     log_interval: int = 1
     eval_batches: int = 2
@@ -26,6 +22,7 @@ class TrainConfig:
 
 
 def validate_train_args(args):
+    # Settings only; the CUDA check happens when a worker starts training.
     for name in (
         "steps",
         "batch_size",
@@ -40,9 +37,3 @@ def validate_train_args(args):
         raise ValueError("lr must be finite and positive")
     if type(args.seed) is not int or not 0 <= args.seed < 2**63 - 2:
         raise ValueError("seed must be between 0 and 2**63 - 3")
-    if args.device not in ("cpu", "mps", "cuda"):
-        raise ValueError("device must be cpu, mps or cuda")
-    if args.device == "cuda" and not torch.cuda.is_available():
-        raise ValueError("CUDA is not available")
-    if args.device == "mps" and not torch.backends.mps.is_available():
-        raise ValueError("MPS is not available")

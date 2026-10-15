@@ -48,7 +48,7 @@ def worker(recipe: dict, run_id: str):
 
     torch.set_num_threads(recipe["backend"]["cpu"])
     try:
-        return run_recipe(recipe, Path("/runs") / run_id, "cuda")
+        return run_recipe(recipe, Path("/runs") / run_id)
     finally:
         volume.commit()
 

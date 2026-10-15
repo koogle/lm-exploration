@@ -20,8 +20,6 @@ def rng_state(batch_generator):
     }
     if torch.cuda.is_available():
         state["cuda"] = torch.cuda.get_rng_state_all()
-    if torch.backends.mps.is_available():
-        state["mps"] = torch.mps.get_rng_state()
     return state
 
 
@@ -31,8 +29,6 @@ def restore_rng(state, batch_generator):
     batch_generator.set_state(state["batches"])
     if "cuda" in state:
         torch.cuda.set_rng_state_all(state["cuda"])
-    if "mps" in state:
-        torch.mps.set_rng_state(state["mps"])
 
 
 def load_checkpoint(path):
@@ -118,7 +114,6 @@ def runtime_provenance(device, model_source, model_definition=None):
         "training_config": root / "trainer" / "config.py",
         "checkpoints": root / "trainer" / "checkpoints.py",
         "sampling": root / "trainer" / "sampling.py",
-        "cli": root / "cli.py",
         "data": root / "data" / "loading.py",
         "dependencies": root / "uv.lock",
     }
