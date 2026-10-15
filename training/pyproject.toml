@@ -5,6 +5,7 @@ description = "Readable from-scratch language model training experiments"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "numpy>=2.5.4",
+    "pydantic>=2.11",
     "torch>=2.5,<3",
     "tqdm>=4.70.1",
 ]

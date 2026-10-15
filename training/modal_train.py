@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 import modal
+from pydantic import BaseModel, ConfigDict, PositiveFloat
 
 from trainer.recipe import load_recipe
 
@@ -17,7 +18,9 @@ app = modal.App("lm-exploration-training")
 volume = modal.Volume.from_name("lm-exploration-training", create_if_missing=True)
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install("torch==2.6.0", "numpy>=1.26,<3", "tqdm==4.70.1", "safetensors==0.8.0")
+    .pip_install(
+        "torch==2.6.0", "numpy>=1.26,<3", "tqdm==4.70.1", "safetensors==0.8.0", "pydantic==2.14.1"
+    )
     # The whole uv project, so new architectures and fetchers need no image edits.
     .add_local_dir(
         ".",
@@ -53,23 +56,41 @@ def worker(recipe, run_id: str):
         volume.commit()
 
 
+class Reservation(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    run_id: str
+    timeout_seconds: int
+    usd: float
+
+
+class Ledger(BaseModel):
+    """Reservation accounting at a conservative rate, not an actual bill."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    cap_usd: PositiveFloat
+    conservative_gpu_hour_usd: PositiveFloat
+    reservations: list[Reservation] = []
+    authorization: str = ""
+
+
 def reserve(run_id, timeout_seconds):
-    # Reservation accounting at a conservative rate, not an actual bill.
     if not LEDGER.exists():
         raise ValueError(
             f"{LEDGER} is missing: restore it, or create it with an approved cap, e.g. "
             '{"cap_usd": 10.0, "conservative_gpu_hour_usd": 5.0, "reservations": []}'
         )
-    ledger = json.loads(LEDGER.read_text())
-    amount = timeout_seconds / 3600 * ledger["conservative_gpu_hour_usd"]
-    if any(row["run_id"] == run_id for row in ledger["reservations"]):
+    ledger = Ledger.model_validate_json(LEDGER.read_text())
+    amount = timeout_seconds / 3600 * ledger.conservative_gpu_hour_usd
+    if any(row.run_id == run_id for row in ledger.reservations):
         raise ValueError("run ID already reserved; inspect its existing execution")
-    if sum(row["usd"] for row in ledger["reservations"]) + amount > ledger["cap_usd"]:
+    if sum(row.usd for row in ledger.reservations) + amount > ledger.cap_usd:
         raise ValueError("training budget allocation exhausted")
-    ledger["reservations"].append(
-        {"run_id": run_id, "timeout_seconds": timeout_seconds, "usd": amount}
+    ledger.reservations.append(
+        Reservation(run_id=run_id, timeout_seconds=timeout_seconds, usd=amount)
     )
-    LEDGER.write_text(json.dumps(ledger, indent=2) + "\n")
+    LEDGER.write_text(ledger.model_dump_json(indent=2) + "\n")
 
 
 @app.local_entrypoint()

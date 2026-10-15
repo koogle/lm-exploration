@@ -1,6 +1,6 @@
 # Training recipes
 
-A recipe is one JSON file that maps directly onto the `Recipe` dataclass in
+A recipe is one JSON file that is validated by the pydantic `Recipe` model in
 [`trainer/recipe.py`](../trainer/recipe.py):
 
 | Key | Meaning |
@@ -8,12 +8,13 @@ A recipe is one JSON file that maps directly onto the `Recipe` dataclass in
 | `model` | `"10m"` or `"100m"`: a key of `MODELS` |
 | `dataset` | `"tiny-shakespeare"` or `"shakespeare-complete"`: a key of `DATASETS` |
 | `training` | `TrainConfig` fields: `steps`, `batch_size`, `lr`, `seed` and eval/log/checkpoint cadence |
-| `model_config` | Optional `ModelConfig` overrides (e.g. `block_size`, `n_layer`). `vocab_size` always comes from the dataset |
-| `backend` | Optional Modal resources: `gpu` (default `L4`), `cpu`, `memory_mib`, `max_seconds` (cooperative training limit, default 1,200) and `timeout_seconds` (hard worker limit and budget reservation, default 1,500) |
+| `model_overrides` | Optional `ModelConfig` overrides (e.g. `block_size`, `n_layer`). `vocab_size` always comes from the dataset |
+| `backend` | Optional Modal resources: `gpu` (one of `T4`, `L4`, `A10G`, `L40S`, `A100`, `A100-80GB`, `H100`, `H200`, `B200`; default `L4`), `cpu`, `memory_mib`, `max_seconds` (cooperative training limit, default 1,200) and `timeout_seconds` (hard worker limit and budget reservation, default 1,500) |
 | `description` | Optional free text |
 
-Recipes are validated locally before anything starts: unknown keys, an unlisted
-model or dataset, invalid model dimensions and bad settings fail without a Modal call.
+Recipes are validated locally before anything starts: unknown keys, wrong types,
+an unlisted model, dataset or GPU, invalid model dimensions, bad settings and
+datasets not marked `training_eligible` fail without a Modal call.
 `--smoke` keeps the model and dataset but uses 5 updates of batch 2, a 60-second
 training limit and a 180-second worker timeout.
 
@@ -33,7 +34,8 @@ selects the saved checkpoint with the lowest validation loss as `best.pt`, and
 writes `report.json` (including the resolved recipe) to `<run-id>/` on the
 `lm-exploration-training` volume. The launcher also saves the report to
 `results/<run-id>.json`. The image copies the whole uv project. To add a model or
-dataset, add its entry to `MODELS` or `DATASETS` in `trainer/recipe.py` (a new
+dataset, add its entry to `MODELS` or `DATASETS` and its name to `ModelName` or
+`DatasetName` in `trainer/recipe.py` (a new
 model folder also needs a `pyproject.toml` package entry).
 
 Before launching, the launcher reserves the full worker timeout at the ledger's

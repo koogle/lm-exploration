@@ -22,7 +22,7 @@ from .checkpoints import (
     save_checkpoint,
     validate_resume,
 )
-from .config import DEVICE, validate_train_args
+from .config import DEVICE
 from .sampling import sample
 
 
@@ -66,7 +66,6 @@ def train(args, data, run_dir, *, architecture_module, model_config, resume=None
         raise ValueError("training runs on Modal GPU workers; CUDA is not available")
     if max_seconds is not None and max_seconds <= 0:
         raise ValueError("max_seconds must be positive")
-    validate_train_args(args)
     out = Path(run_dir)
     if not resume and any(
         (out / name).exists() for name in ("config.json", "metrics.jsonl", "checkpoints")

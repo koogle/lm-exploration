@@ -11,7 +11,7 @@ There is no CPU or MPS training path.
 - `../modal_train.py`: the Modal app, image, budget reservation and launcher.
 - `../generate.py`: model-agnostic local `lm-generate`; loads the architecture named
   by a checkpoint's `model_name` and streams samples.
-- `config.py`: `TrainConfig`, training-setting validation and the fixed CUDA device.
+- `config.py`: the pydantic `TrainConfig` (validated hyperparameters) and the fixed CUDA device.
 - `loop.py`: run setup, model/optimizer construction, evaluation and the core
   optimizer-step loop, metrics, preview generation, optional wall-time bounds and cooperative SIGINT/SIGTERM
   handling at optimizer-step boundaries. Checkpoint operations are delegated to
@@ -19,7 +19,7 @@ There is no CPU or MPS training path.
 - `checkpoints.py`: trusted checkpoint loading, resume compatibility checks,
   restoring model/optimizer/RNG state, checkpoint saving and the source hashes,
   git commit and runtime details stored in `config.json` and each checkpoint.
-- `recipe.py`: the `Recipe` dataclass, the fixed `MODELS` and `DATASETS` tables,
+- `recipe.py`: the pydantic `Recipe`/`Backend`/`MetricRow` models, the fixed `MODELS` and `DATASETS` tables,
   dataset fetching, best-checkpoint selection and the run report.
 - `sampling.py`: shared sampling for training previews and `lm-generate`.
 

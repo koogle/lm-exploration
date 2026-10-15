@@ -1,6 +1,7 @@
 # Training datasets
 
-`datasets.json` records each dataset's source, license review and eligibility.
+`datasets.json` records each dataset's source, license review and eligibility;
+[`registry.py`](registry.py) validates it with pydantic.
 Paths in it are relative to this `data/` directory. [Recipes](../recipes/README.md)
 select a dataset by `id` from the `DATASETS` table in `trainer/recipe.py`, which maps
 it to its fetch module. Raw text is never baked into the Modal image: each worker
@@ -56,8 +57,8 @@ language capability. Research corpus choices and language mixtures remain undeci
    | `training_eligible` | Boolean; `true` only after the above review for the intended use |
 
    Do not add an undecided candidate source as an eligible entry.
-4. Only eligible datasets go into `DATASETS` in `trainer/recipe.py`, mapped from
-   their `id` to the fetch module. Reference the `id` from a recipe and launch a `--smoke` run. The trainer
+4. Add the `id` to `DatasetName` and `DATASETS` in `trainer/recipe.py`, mapped to
+   the fetch module. Recipes refuse datasets that are not `training_eligible`. Reference the `id` from a recipe and launch a `--smoke` run. The trainer
    fingerprints the exact bytes it trained on in each run's `config.json` and
    checkpoints.
 
