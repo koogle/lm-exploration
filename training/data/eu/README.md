@@ -393,3 +393,14 @@ Logical round IDs also enforce the original wall-time and attempt budgets across
 platform restarts. An interrupted attempt reserves one uncommitted batch against
 its limit; replaying a completed round returns its saved result without new source
 requests. This prevents a restart from silently granting another full allowance.
+
+### Continuation recovery: 16 October 2026
+
+Network access recovered and both three-round expansion campaigns were launched
+on Modal. The [recovery record](research/continuation-recovery-2026-10-16.json)
+contains call IDs, durable campaign claims and a verified baseline: **903 rows,
+16,940,394 characters, 2,572,438 whitespace words, 17,019,084 UTF-8 text bytes,
+9,712,532 Parquet bytes and 104,038,873 compressed-original bytes**. Both pinned
+repository audits passed, including independent checks of the new counters.
+These are baseline counts while collection continues; consult HF dataset cards
+or `uv run status.py both` for current totals.
