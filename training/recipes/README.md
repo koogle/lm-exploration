@@ -5,7 +5,7 @@ A recipe is one JSON file that is validated by the pydantic `Recipe` model in
 
 | Key | Meaning |
 | --- | --- |
-| `model` | `"10m"` or `"100m"`: a key of `MODELS` |
+| `model` | `"10m"` or `"100m"`: a key of `MODELS`. New [100M models](../100m/README.md) use tied embeddings. |
 | `dataset` | `"tiny-shakespeare"` or `"shakespeare-complete"`: a key of `DATASETS` |
 | `training` | `TrainConfig` fields: `steps`, `batch_size`, `lr`, `seed` and eval/log/checkpoint cadence |
 | `model_overrides` | Optional `ModelConfig` overrides (e.g. `block_size`, `n_layer`). `vocab_size` always comes from the dataset |
@@ -62,3 +62,9 @@ The trainer is generic over architectures that expose `GPT(config)` and a
 dataset. It is still fixed to a character tokenizer, one dataset per run (no
 mixtures), a contiguous 90/10 split, FP32 AdamW with fixed betas, weight decay and
 clipping, no learning-rate schedule, and one GPU.
+
+`100m` uses the [modern architecture](../100m/README.md) by default: RMSNorm,
+RoPE, SwiGLU and tied embeddings. No separate tied/untied model selection is
+needed. Older checkpoints without a version load through the version-1 legacy
+compatibility path; new checkpoints record the version and cannot resume across
+different versions.

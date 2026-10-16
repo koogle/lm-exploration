@@ -66,11 +66,11 @@ Local commands validate recipes and sample from downloaded checkpoints only.
 For a minimal NumPy example of forward passes, handwritten backpropagation and
 gradient descent, start with [the XOR example](examples/README.md).
 
-- [`100m/model.py`](100m/model.py): **architecture only**. It imports every module
-  unchanged from [`10m/model.py`](10m/model.py), which keeps the explanatory
-  comments, and only scales the defaults: 14 layers, width 768, 12 attention heads
-  and the same context of 256, approximately 100M parameters. The exact count depends on
-  vocabulary/context. Run provenance hashes both files.
+- [`100m/model.py`](100m/model.py): **architecture only**. The [updated model](100m/README.md)
+  uses RMSNorm, RoPE and SwiGLU at 14 layers, width 768, 12 attention heads and
+  context 256. Version 1 preserves the historical vanilla blocks for old
+  checkpoints. New 100M models tie input/output embeddings by default and have
+  124,389,632 parameters with the frozen 32K tokenizer. The original 10M is unchanged.
 - [`modal_train.py`](modal_train.py) and [`recipes/`](recipes/README.md): the only way
   to start training. Validates a recipe locally, reserves budget, then trains on Modal.
 - [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a
