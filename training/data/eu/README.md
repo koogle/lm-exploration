@@ -325,3 +325,21 @@ does not estimate the uncrawled corpus. Status and audit commands do not write t
 Modal detached local entrypoints only guarantee survival of their last triggered
 function after disconnection; keep the two-source coordinator alive. If either
 worker stops, rerun with a new run ID to resume from its HF checkpoint.
+
+### First Modal pilot: 16 October 2026
+
+The [checkpoint report](research/modal-pilot-2026-10-16.json) records actual HF
+readback: 20 ECB rows and 139 EMA rows passed shard, text-hash, unique-ID and
+progress-reference checks. ECB was still running at that snapshot. EMA was
+stopped after persistent HTTP 429 responses; 500 attempts (139 successes,
+361 failures) were durably recorded, with possible additional uncommitted work.
+The initial implementation continued after 429s; that behavior is now fixed.
+Future runs stop on the first 429, atomically save pending work, honor Retry-After
+(or a 15-minute fallback), and refuse restarts during the durable source cooldown.
+EMA now has a five-second minimum request interval. The fix passed offline tests;
+a corrected live EMA run has not yet been attempted.
+
+The selected inventories contain 6,752 ECB and 11,864 EMA document-language URLs.
+Those are candidate counts, not extracted-document or token totals. Some document
+footers and related links remain in extracted text. Token counting requires the
+OpenAI vocabulary file; its download was denied by this environment proxy (403).

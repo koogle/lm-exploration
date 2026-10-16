@@ -76,6 +76,8 @@ def harness(tmp_path, monkeypatch):
         def fetch(self, url, source):
             fetched.append(url)
             data = bodies[url]
+            if isinstance(data, dict):
+                return None, data
             return data, {
                 "content_type": "text/html",
                 "final_url": url,
@@ -93,7 +95,14 @@ def harness(tmp_path, monkeypatch):
         enumerate_collection=enumerate_collection,
     )
     monkeypatch.setattr(pipeline, "Collector", FakeCollector)
-    monkeypatch.setattr(pipeline.importlib, "import_module", lambda name: adapter)
+    original_import = pipeline.importlib.import_module
+    monkeypatch.setattr(
+        pipeline.importlib,
+        "import_module",
+        lambda name, *args, **kwargs: (
+            adapter if name == "fake" else original_import(name, *args, **kwargs)
+        ),
+    )
     # Source-specific selectors would intentionally reject these synthetic HTML bodies.
     original_extract = pipeline.extract_record
     monkeypatch.setattr(
@@ -134,6 +143,7 @@ def harness(tmp_path, monkeypatch):
         )
 
     return SimpleNamespace(
+        bodies=bodies,
         candidate=candidate,
         run=run,
         inventories=inventories,
@@ -153,7 +163,7 @@ def test_resume_and_round_robin_document_limit(harness):
     )
     store = DurableStore()
     first = h.run(store, maximum=2)
-    assert first["attempted"] == first["extracted"] == 2
+    assert first["attempted"] == first["extracted"] == 2, store.state["failures"]
     assert [row["document_id"] for row in store.rows] == ["a1", "b1"]
     assert len(store.state["completed"]) == 2
     second = h.run(store, maximum=2)
@@ -248,3 +258,58 @@ def test_per_organization_limit_and_authorized_bound(harness, source):
     assert result["pending_candidates"] == 2
     with pytest.raises(ValueError, match="authorized bound"):
         h.run(store, source=source, maximum=1001)
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        {"http_status": 429, "error": "http_429"},
+        {"error": "http_429", "headers": {"Retry-After": "1200"}},
+        {"status": 429, "retry_after": "invalid"},
+    ],
+)
+def test_rate_limit_flushes_success_and_stops_next_request(harness, monkeypatch, failure):
+    h = harness
+    first = h.candidate("success")
+    blocked = h.candidate("limited", "b")
+    untouched = h.candidate("untouched")
+    h.inventories.update({"a": [first, untouched], "b": [blocked]})
+    h.bodies[blocked["url"]] = failure
+    monkeypatch.setattr(pipeline.time, "time", lambda: 10000)
+    store = DurableStore()
+    result = h.run(store)
+    assert h.fetched == [first["url"], blocked["url"]]
+    assert result["status"] == "paused_rate_limit"
+    assert result["attempted"] == 2
+    assert result["extracted"] == result["failed"] == result["total_rows"] == 1
+    assert result["pending_candidates"] == 2
+    expected_retry = 11200 if "headers" in failure else 10900
+    assert result["retry_after_epoch"] == expected_retry
+    assert store.state["source_retry_after_epoch"] == expected_retry
+    assert result["source_config"]["id"] == "ecb"
+    saved = store.state["failures"][pipeline.item_key(blocked)]
+    assert saved["attempts"] == 1
+    assert saved["retry_after_epoch"] == expected_retry
+    assert pipeline.item_key(first) in store.state["completed"]
+    assert pipeline.item_key(untouched) not in store.state["completed"]
+    assert store.state["runs"][-1]["status"] == "paused_rate_limit"
+
+
+def test_rate_limit_http_date():
+    assert (
+        pipeline.rate_limit_retry_epoch(
+            {"headers": {"retry-after": "Thu, 01 Jan 1970 03:20:00 GMT"}}, 10000
+        )
+        == 12000
+    )
+
+
+def test_source_cooldown_stops_resume_before_network(harness, monkeypatch):
+    store = DurableStore()
+    store.state["source_retry_after_epoch"] = 11000
+    monkeypatch.setattr(pipeline.time, "time", lambda: 10000)
+    with pytest.raises(ValueError, match="rate-limited until"):
+        harness.run(store)
+    assert not harness.fetched
+    assert not harness.enumerated
+    assert not store.state["runs"]

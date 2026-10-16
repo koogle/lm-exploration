@@ -9,6 +9,7 @@ import importlib
 import json
 import time
 from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from itertools import zip_longest
 from pathlib import Path
 
@@ -55,6 +56,26 @@ def pending(record, state, timestamp=None, max_attempts=3):
     return failure.get("attempts", 0) < max_attempts and failure.get("retry_after_epoch", 0) <= (
         timestamp or time.time()
     )
+
+
+def rate_limit_retry_epoch(provenance, timestamp):
+    """Honor Retry-After seconds/date; use a 15-minute fallback when absent/invalid."""
+    headers = provenance.get("headers") or provenance.get("response_headers") or {}
+    value = provenance.get("retry_after") or next(
+        (v for k, v in headers.items() if k.lower() == "retry-after"), None
+    )
+    if value is not None:
+        try:
+            return timestamp + max(0, int(value))
+        except (TypeError, ValueError):
+            try:
+                date = parsedate_to_datetime(str(value))
+                if date.tzinfo is None:
+                    date = date.replace(tzinfo=UTC)
+                return max(timestamp, date.timestamp())
+            except (TypeError, ValueError, OverflowError):
+                pass
+    return timestamp + 900
 
 
 def extract_record(candidate, data, provenance, source):
@@ -134,6 +155,11 @@ def run_source(
     store = store or HFStore(config["repo_id"])
     store.ensure(private=mapping["private"])
     state, revision = store.load()
+    if state.get("source_retry_after_epoch", 0) > time.time():
+        raise ValueError(
+            f"Source {source_id} is rate-limited until epoch "
+            f"{state['source_retry_after_epoch']}; no collection attempted"
+        )
     output = Path(artifacts_root or ROOT / "artifacts" / "pipeline") / source_id / run_id
     # A container restart can reuse a run_id but never overwrite a previous local attempt.
     output = output / datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f")
@@ -144,6 +170,7 @@ def run_source(
     run = {
         "run_id": run_id,
         "source_id": source_id,
+        "source_config": copy.deepcopy(source),
         "started_at": now(),
         "status": "running",
         "max_documents": max_documents,
@@ -218,8 +245,16 @@ def run_source(
             key = item_key(candidate)
             active_run()["attempted"] += 1
             since_commit += 1
+            provenance = {}
+            rate_limited = False
             try:
                 data, provenance = collector.fetch(candidate["url"], source)
+                rate_limited = (
+                    str(provenance.get("http_status", provenance.get("status"))) == "429"
+                    or provenance.get("error") == "http_429"
+                )
+                if rate_limited:
+                    raise ValueError("http_429")
                 if data is None:
                     raise ValueError(provenance.get("error", "fetch_failed"))
                 record = extract_record(candidate, data, provenance, source)
@@ -250,9 +285,20 @@ def run_source(
                     "attempts": attempts,
                     "error": str(error)[:1000],
                     "failed_at": now(),
-                    "retry_after_epoch": time.time() + 300 * attempts,
+                    "retry_after_epoch": (
+                        rate_limit_retry_epoch(provenance, time.time())
+                        if rate_limited
+                        else time.time() + 300 * attempts
+                    ),
                 }
                 active_run()["failed"] += 1
+                if rate_limited:
+                    state["source_retry_after_epoch"] = state["failures"][key]["retry_after_epoch"]
+                    active_run()["status"] = "paused_rate_limit"
+                    active_run()["retry_after_epoch"] = state["failures"][key]["retry_after_epoch"]
+                    # Flush accumulated rows and this failure together below; never
+                    # request the next candidate after a server rate-limit response.
+                    break
             if since_commit >= bounds["batch_size"]:
                 active_run()["heartbeat_at"] = now()
                 revision = checkpoint(
@@ -268,7 +314,8 @@ def run_source(
                     flush=True,
                 )
                 records, raw_files, since_commit = [], {}, 0
-        active_run()["status"] = "bounded_complete"
+        if active_run()["status"] == "running":
+            active_run()["status"] = "bounded_complete"
         active_run()["finished_at"] = now()
         active_run()["elapsed_seconds"] = round(time.monotonic() - started, 2)
         active_run()["pending_candidates"] = sum(

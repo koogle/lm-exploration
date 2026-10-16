@@ -172,7 +172,8 @@
       "content_selector": "article.ema-news--full",
       "remove_selectors": [
         ".ema-social-media-share"
-      ]
+      ],
+      "min_delay_seconds": 5
     },
     {
       "id": "eib",

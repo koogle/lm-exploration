@@ -12,75 +12,76 @@
     }
   },
   "progress": {
-    "observed_at": "2026-10-16T11:46:27.939055+00:00",
+    "observed_at": "2026-10-16T11:54:11.533840+00:00",
     "sources": [
       {
         "source_id": "ecb",
         "repo_id": "jfrick/eu-ecb",
         "url": "https://huggingface.co/datasets/jfrick/eu-ecb",
-        "revision": "05ae6ebb457b4f73cec8b3a03bab7435a030e2cc",
+        "revision": "1a9f29205f59df80eef2ea8ca2e82df2e298b38c",
         "visibility": "private",
-        "rows": 0,
-        "shards": 0,
-        "completed": 0,
+        "rows": 20,
+        "shards": 6,
+        "completed": 20,
         "duplicates": 0,
         "failures": 0,
         "collections": {
           "speeches": {
-            "candidates": null,
-            "reported_total": null,
-            "enumeration_complete": null,
-            "updated_at": null,
-            "completed": 0,
+            "candidates": 3077,
+            "reported_total": 3079,
+            "enumeration_complete": true,
+            "updated_at": "2026-10-16T11:50:39.902000+00:00",
+            "completed": 4,
             "failures": 0,
-            "rows": 0
+            "rows": 4
           },
           "press_releases": {
-            "candidates": null,
-            "reported_total": null,
-            "enumeration_complete": null,
-            "updated_at": null,
-            "completed": 0,
+            "candidates": 2713,
+            "reported_total": 2557,
+            "enumeration_complete": true,
+            "updated_at": "2026-10-16T11:50:50.057692+00:00",
+            "completed": 4,
             "failures": 0,
-            "rows": 0
+            "rows": 4
           },
           "interviews": {
-            "candidates": null,
-            "reported_total": null,
-            "enumeration_complete": null,
-            "updated_at": null,
-            "completed": 0,
+            "candidates": 617,
+            "reported_total": 617,
+            "enumeration_complete": true,
+            "updated_at": "2026-10-16T11:50:55.062466+00:00",
+            "completed": 4,
             "failures": 0,
-            "rows": 0
+            "rows": 4
           },
           "meeting_accounts": {
-            "candidates": null,
-            "reported_total": null,
-            "enumeration_complete": null,
-            "updated_at": null,
-            "completed": 0,
+            "candidates": 97,
+            "reported_total": 97,
+            "enumeration_complete": true,
+            "updated_at": "2026-10-16T11:50:59.937061+00:00",
+            "completed": 4,
             "failures": 0,
-            "rows": 0
+            "rows": 4
           },
           "decisions": {
-            "candidates": null,
-            "reported_total": null,
-            "enumeration_complete": null,
-            "updated_at": null,
-            "completed": 0,
+            "candidates": 248,
+            "reported_total": 248,
+            "enumeration_complete": true,
+            "updated_at": "2026-10-16T11:51:05.011551+00:00",
+            "completed": 4,
             "failures": 0,
-            "rows": 0
+            "rows": 4
           }
         },
         "run_count": 1,
         "recent_runs": [
           {
             "adapter_sha256": "ed14d6fb85c6ce8efea3874db911f87347303b0b5a5b13d2b9a466fd96ae8453",
-            "attempted": 0,
+            "attempted": 20,
             "collector_sha256": "e94d1a0c851a34961f16bb8ba1099980cc1e65b5cbb66a1d7068ca479fe1721d",
             "duplicates": 0,
-            "extracted": 0,
+            "extracted": 20,
             "failed": 0,
+            "heartbeat_at": "2026-10-16T11:52:45.020292+00:00",
             "max_documents": 1000,
             "pipeline_sha256": "13fa6a61723af8a5f506e581e722f156e0c9a896d4d0f71c9393ee90ffb1ab29",
             "run_id": "eu-pilot-20261016",
@@ -90,216 +91,192 @@
             "work_seconds": 3000
           }
         ],
-        "failure_samples": []
+        "failure_samples": [],
+        "audit": {
+          "revision": "1a9f29205f59df80eef2ea8ca2e82df2e298b38c",
+          "passed": true,
+          "shards_checked": 6,
+          "rows": 20,
+          "unique_row_ids": 20,
+          "characters": 454196,
+          "words": 70576,
+          "duplicate_normalized_texts": 0,
+          "languages": {
+            "en": 18,
+            "de": 2
+          },
+          "formats": {
+            "html": 18,
+            "pdf": 2
+          },
+          "collections": {
+            "decisions": 4,
+            "interviews": 4,
+            "meeting_accounts": 4,
+            "press_releases": 4,
+            "speeches": 4
+          },
+          "checks": {
+            "duplicate_row_ids": 0,
+            "text_hash_mismatches": 0,
+            "text_size_mismatches": 0,
+            "partition_mismatches": 0,
+            "completed_references_missing": 0,
+            "text_index_references_missing": 0,
+            "shard_issues": []
+          },
+          "samples": [
+            {
+              "id": "8336f2e2fbed2f63baba1dc71c218e0c6aa9f1fdbfd3b5c5efff28d23e2c5154",
+              "url": "https://www.ecb.europa.eu/press/govcdec/otherdec/2026/html/ecb.gc260522~a4812a8f23.en.html",
+              "language": "en",
+              "format": "html",
+              "collection_id": "decisions"
+            },
+            {
+              "id": "aed10f78b8dccb651cc34e6c302eb13e4804a607525931d3e796a5d4741e6c64",
+              "url": "https://www.ecb.europa.eu/press/govcdec/otherdec/2026/html/ecb.gc260724~eebbc30622.en.html",
+              "language": "en",
+              "format": "html",
+              "collection_id": "decisions"
+            },
+            {
+              "id": "af81ce29c28c5f6dd1b5928e4c6af85b9e9472c89c043cb727784ebaaca9d8f4",
+              "url": "https://www.ecb.europa.eu/press/govcdec/otherdec/2026/html/ecb.gc261002~54c6b5672b.en.html",
+              "language": "en",
+              "format": "html",
+              "collection_id": "decisions"
+            },
+            {
+              "id": "c5c70b93f79ebebed957fefa6d2dde966131f93e95e90fd7b32a5d5334eb8443",
+              "url": "https://www.ecb.europa.eu/press/govcdec/otherdec/2026/html/ecb.gc260612~12de4776f6.en.html",
+              "language": "en",
+              "format": "html",
+              "collection_id": "decisions"
+            },
+            {
+              "id": "47495f7505ff0c6a5fab7651491b47fc1b3d689a0e22a9f3fce8038e931e3bcf",
+              "url": "https://www.ecb.europa.eu/press/inter/date/2026/html/ecb.in261008~3184e7d0d0.en.html",
+              "language": "en",
+              "format": "html",
+              "collection_id": "interviews"
+            }
+          ]
+        }
       },
       {
         "source_id": "ema",
         "repo_id": "jfrick/eu-ema",
         "url": "https://huggingface.co/datasets/jfrick/eu-ema",
-        "revision": "9f53397377a1b318abe2442617da965b883d63ff",
+        "revision": "5a556c84e15adffc9e438dd08b10aa4a1dcf40ab",
         "visibility": "private",
-        "rows": 113,
-        "shards": 18,
-        "completed": 113,
+        "rows": 139,
+        "shards": 32,
+        "completed": 139,
         "duplicates": 0,
-        "failures": 7,
+        "failures": 361,
         "collections": {
           "news": {
             "candidates": 3894,
             "reported_total": 3894,
             "enumeration_complete": true,
             "updated_at": "2026-10-16T11:43:30.907227+00:00",
-            "completed": 40,
-            "failures": 0,
-            "rows": 40
+            "completed": 53,
+            "failures": 114,
+            "rows": 53
           },
           "scientific_guidelines": {
             "candidates": 2793,
             "reported_total": 50525,
             "enumeration_complete": true,
             "updated_at": "2026-10-16T11:43:35.871336+00:00",
-            "completed": 40,
-            "failures": 0,
-            "rows": 40
+            "completed": 47,
+            "failures": 120,
+            "rows": 47
           },
           "committee_documents": {
             "candidates": 5177,
             "reported_total": 50525,
             "enumeration_complete": true,
             "updated_at": "2026-10-16T11:43:37.200762+00:00",
-            "completed": 33,
-            "failures": 7,
-            "rows": 33
+            "completed": 39,
+            "failures": 127,
+            "rows": 39
           }
         },
         "run_count": 1,
         "recent_runs": [
           {
             "adapter_sha256": "515e7a33aedfcccbf1dc5f1f63a06806ce58be55580304f0b00da1b4e327a6f3",
-            "attempted": 120,
+            "attempted": 500,
             "collector_sha256": "e94d1a0c851a34961f16bb8ba1099980cc1e65b5cbb66a1d7068ca479fe1721d",
             "duplicates": 0,
-            "extracted": 113,
-            "failed": 7,
-            "heartbeat_at": "2026-10-16T11:46:15.410902+00:00",
+            "extracted": 139,
+            "failed": 361,
+            "finished_at": "2026-10-16T11:53:48.897364+00:00",
+            "heartbeat_at": "2026-10-16T11:52:59.903722+00:00",
             "max_documents": 1000,
             "pipeline_sha256": "13fa6a61723af8a5f506e581e722f156e0c9a896d4d0f71c9393ee90ffb1ab29",
             "run_id": "eu-pilot-20261016",
             "source_id": "ema",
             "started_at": "2026-10-16T11:43:28.961755+00:00",
-            "status": "running",
+            "status": "stopped_rate_limit",
+            "stop_reason": "Operator cancelled Modal worker after persistent HTTP 429. Source cooldown and stop-on-429 added for subsequent runs.",
             "work_seconds": 3000
           }
         ],
         "failure_samples": [
           {
-            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-20-23-july-2026-chmp-minutes_en.xlsx",
-            "collection_id": "committee_documents",
+            "url": "https://www.ema.europa.eu/en/documents/scientific-guideline/draft-eltrombopag-film-coated-tablets-125-mg-25-mg-50-mg-75-mg-powder-oral-suspension-25-mg-product-specific-bioequivalence-guidance_en.pdf",
+            "collection_id": "scientific_guidelines",
             "attempts": 1,
-            "failed_at": "2026-10-16T11:44:37.892205+00:00"
+            "failed_at": "2026-10-16T11:50:40.006757+00:00"
           },
           {
-            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-15-18-september-2025-chmp-minutes_en.xlsx",
+            "url": "https://www.ema.europa.eu/en/documents/agenda/agenda-regulatory-sandbox-new-pharmaceutical-legislation_en.pdf",
             "collection_id": "committee_documents",
             "attempts": 1,
-            "failed_at": "2026-10-16T11:44:33.857728+00:00"
+            "failed_at": "2026-10-16T11:46:47.943276+00:00"
           },
           {
-            "url": "https://www.ema.europa.eu/en/documents/agenda/annex-agenda-chmp-meeting-12-15-october-2026_en.xlsx",
+            "url": "https://www.ema.europa.eu/en/documents/agenda/agenda-ad-hoc-executive-steering-group-shortages-safety-medicinal-products-mssg-12-june-2026_en.pdf",
             "collection_id": "committee_documents",
             "attempts": 1,
-            "failed_at": "2026-10-16T11:44:12.776302+00:00"
+            "failed_at": "2026-10-16T11:51:08.235805+00:00"
           },
           {
-            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-20-23-april-2026-chmp-minutes_en.xlsx",
+            "url": "https://www.ema.europa.eu/en/documents/scientific-guideline/reflection-paper-investigation-assessment-cardiovascular-safety-anticancer-medicinal-products_en.pdf",
+            "collection_id": "scientific_guidelines",
+            "attempts": 1,
+            "failed_at": "2026-10-16T11:49:08.877338+00:00"
+          },
+          {
+            "url": "https://www.ema.europa.eu/en/documents/minutes/minutes-prac-meeting-7-10-april-2026_en.pdf",
             "collection_id": "committee_documents",
             "attempts": 1,
-            "failed_at": "2026-10-16T11:44:46.760640+00:00"
-          },
-          {
-            "url": "https://www.ema.europa.eu/en/documents/agenda/agenda-pdco-agenda-13-16-october-2026-meeting_en.xlsx",
-            "collection_id": "committee_documents",
-            "attempts": 1,
-            "failed_at": "2026-10-16T11:43:56.204010+00:00"
-          }
-        ]
-      }
-    ]
-  },
-  "verified_checkpoint": {
-    "observed_at": "2026-10-16T11:45:30.389396+00:00",
-    "sources": [
-      {
-        "source_id": "ema",
-        "repo_id": "jfrick/eu-ema",
-        "url": "https://huggingface.co/datasets/jfrick/eu-ema",
-        "revision": "815a045097aed18cb6345f2ab6ad12428d44228f",
-        "visibility": "private",
-        "rows": 74,
-        "shards": 12,
-        "completed": 74,
-        "duplicates": 0,
-        "failures": 6,
-        "collections": {
-          "news": {
-            "candidates": 3894,
-            "reported_total": 3894,
-            "enumeration_complete": true,
-            "updated_at": "2026-10-16T11:43:30.907227+00:00",
-            "completed": 27,
-            "failures": 0,
-            "rows": 27
-          },
-          "scientific_guidelines": {
-            "candidates": 2793,
-            "reported_total": 50525,
-            "enumeration_complete": true,
-            "updated_at": "2026-10-16T11:43:35.871336+00:00",
-            "completed": 27,
-            "failures": 0,
-            "rows": 27
-          },
-          "committee_documents": {
-            "candidates": 5177,
-            "reported_total": 50525,
-            "enumeration_complete": true,
-            "updated_at": "2026-10-16T11:43:37.200762+00:00",
-            "completed": 20,
-            "failures": 6,
-            "rows": 20
-          }
-        },
-        "run_count": 1,
-        "recent_runs": [
-          {
-            "adapter_sha256": "515e7a33aedfcccbf1dc5f1f63a06806ce58be55580304f0b00da1b4e327a6f3",
-            "attempted": 80,
-            "collector_sha256": "e94d1a0c851a34961f16bb8ba1099980cc1e65b5cbb66a1d7068ca479fe1721d",
-            "duplicates": 0,
-            "extracted": 74,
-            "failed": 6,
-            "heartbeat_at": "2026-10-16T11:45:13.940856+00:00",
-            "max_documents": 1000,
-            "pipeline_sha256": "13fa6a61723af8a5f506e581e722f156e0c9a896d4d0f71c9393ee90ffb1ab29",
-            "run_id": "eu-pilot-20261016",
-            "source_id": "ema",
-            "started_at": "2026-10-16T11:43:28.961755+00:00",
-            "status": "running",
-            "work_seconds": 3000
-          }
-        ],
-        "failure_samples": [
-          {
-            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-20-23-july-2026-chmp-minutes_en.xlsx",
-            "collection_id": "committee_documents",
-            "attempts": 1,
-            "failed_at": "2026-10-16T11:44:37.892205+00:00"
-          },
-          {
-            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-15-18-september-2025-chmp-minutes_en.xlsx",
-            "collection_id": "committee_documents",
-            "attempts": 1,
-            "failed_at": "2026-10-16T11:44:33.857728+00:00"
-          },
-          {
-            "url": "https://www.ema.europa.eu/en/documents/agenda/annex-agenda-chmp-meeting-12-15-october-2026_en.xlsx",
-            "collection_id": "committee_documents",
-            "attempts": 1,
-            "failed_at": "2026-10-16T11:44:12.776302+00:00"
-          },
-          {
-            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-20-23-april-2026-chmp-minutes_en.xlsx",
-            "collection_id": "committee_documents",
-            "attempts": 1,
-            "failed_at": "2026-10-16T11:44:46.760640+00:00"
-          },
-          {
-            "url": "https://www.ema.europa.eu/en/documents/agenda/agenda-pdco-agenda-13-16-october-2026-meeting_en.xlsx",
-            "collection_id": "committee_documents",
-            "attempts": 1,
-            "failed_at": "2026-10-16T11:43:56.204010+00:00"
+            "failed_at": "2026-10-16T11:51:42.165639+00:00"
           }
         ],
         "audit": {
-          "revision": "815a045097aed18cb6345f2ab6ad12428d44228f",
+          "revision": "5a556c84e15adffc9e438dd08b10aa4a1dcf40ab",
           "passed": true,
-          "shards_checked": 12,
-          "rows": 74,
-          "unique_row_ids": 74,
-          "characters": 1715821,
-          "words": 242252,
+          "shards_checked": 32,
+          "rows": 139,
+          "unique_row_ids": 139,
+          "characters": 4315759,
+          "words": 605346,
           "duplicate_normalized_texts": 0,
           "languages": {
-            "en": 74
+            "en": 139
           },
           "formats": {
-            "pdf": 47,
-            "html": 27
+            "pdf": 86,
+            "html": 53
           },
           "collections": {
-            "committee_documents": 20,
-            "news": 27,
-            "scientific_guidelines": 27
+            "committee_documents": 39,
+            "news": 53,
+            "scientific_guidelines": 47
           },
           "checks": {
             "duplicate_row_ids": 0,
@@ -352,15 +329,26 @@
     ]
   },
   "validation": {
-    "tests_passed": 37,
+    "tests_passed": 43,
     "ruff": "passed",
     "sample_raw_hash_checks": 3
   },
   "limitations": [
-    "Pilot is still running; counts are not final.",
+    "ECB pilot still running; EMA stopped on rate limiting. Counts are a timestamped checkpoint, not final totals.",
     "XLSX/DOC/DOCX extraction and OCR are not implemented.",
     "Initial EMA audited sample is English, not a representative multilingual sample.",
     "o200k_base token measurement attempted but tokenizer vocabulary download received proxy HTTP 403; no token count claimed.",
     "No periodic schedule deployed; explicit resume and inventory refresh commands are implemented."
-  ]
+  ],
+  "rate_limit_incident": {
+    "source": "ema",
+    "status": "stopped_rate_limit",
+    "persisted_rows": 139,
+    "persisted_attempts": 500,
+    "persisted_failures": 361,
+    "reason": "Persistent HTTP 429 after initial successful documents. Worker cancelled; last atomic checkpoint preserved.",
+    "fix": "Future workers stop on first 429, commit accumulated documents and failure state, honor Retry-After or a 900-second fallback, and reject restarts before durable source cooldown. EMA request spacing increased to 5 seconds.",
+    "fix_validation": "Offline integration tests; corrected EMA worker not rerun during cooldown.",
+    "budget_note": "500 attempted documents recorded durably; cancelled in-flight work can add uncommitted attempts. Any continuation must allow for that rather than assume the full remaining 500."
+  }
 }

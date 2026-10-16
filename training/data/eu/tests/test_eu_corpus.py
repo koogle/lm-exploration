@@ -209,3 +209,17 @@ def test_source_delay_is_respected(tmp_path):
     c, elapsed = collector(tmp_path, handle)
     assert c.fetch("https://eu.test/doc/1", {**SOURCE, "min_delay_seconds": 5})[0] == b"text"
     assert elapsed[0] == 5
+
+
+def test_rate_limit_retains_retry_after(tmp_path):
+    def handle(request):
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        return httpx.Response(429, headers={"Retry-After": "1200"})
+
+    c, _ = collector(tmp_path, handle)
+    data, record = c.fetch("https://eu.test/doc/1", SOURCE)
+    assert data is None
+    assert record["error"] == "http_429"
+    assert record["retry_after"] == "1200"
+    assert records(c.output, "attempts")[-1]["retry_after"] == "1200"

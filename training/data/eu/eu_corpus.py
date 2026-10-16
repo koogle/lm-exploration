@@ -218,7 +218,11 @@ class Collector:
                         }
                     )
                 with self.client.stream("GET", url, headers=headers) as response:
-                    record.update(final_url=url, http_status=response.status_code)
+                    record.update(
+                        final_url=url,
+                        http_status=response.status_code,
+                        retry_after=response.headers.get("retry-after"),
+                    )
                     if response.status_code in {301, 302, 303, 307, 308}:
                         location = response.headers.get("location")
                         if not location:
