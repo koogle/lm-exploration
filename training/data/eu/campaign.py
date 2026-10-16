@@ -29,6 +29,7 @@ def run_campaign(
     max_documents=1000,
     work_seconds=3000,
     *,
+    after_campaign="",
     spawn_callable=None,
     call_loader=None,
     store=None,
@@ -63,7 +64,13 @@ def run_campaign(
         raise ValueError("Worker timeout must bound work and be at most 3600 seconds")
     store = store or HFStore(config["repo_id"])
     store.ensure(private=mapping["private"])
+    invocation_started = clock()
+    if after_campaign:
+        wait_for_predecessor(store, after_campaign, clock=clock, sleep=sleep)
     settings = {"rounds": rounds, "max_documents": max_documents, "work_seconds": work_seconds}
+
+    if after_campaign:
+        settings["after_campaign"] = after_campaign
 
     def save(state, revision, message):
         store.commit(state, revision, [], message=message)
@@ -125,7 +132,7 @@ def run_campaign(
             "settings": settings,
             "status": "planned",
             "started_at_epoch": clock(),
-            "deadline_epoch": clock() + 4 * 3600,
+            "deadline_epoch": invocation_started + 4 * 3600,
             "rounds": [
                 {"run_id": f"{campaign_id}-round-{i + 1}", "status": "planned"}
                 for i in range(rounds)
@@ -247,3 +254,22 @@ def wait_for_dispatch(
         if remaining <= 0:
             raise TimeoutError("Supervisor did not persist child call ID before dispatch deadline")
         sleep(min(2, remaining))
+
+
+def wait_for_predecessor(store, campaign_id, *, clock=time.time, sleep=time.sleep):
+    """Read-only wait, at most 30 minutes; only confirmed completion permits writing."""
+    deadline = clock() + 1800
+    while True:
+        state, _ = store.load()
+        predecessor = state.get("campaigns", {}).get(campaign_id)
+        if predecessor is None:
+            raise ValueError("Predecessor campaign does not exist")
+        status = predecessor["status"]
+        if status == "complete":
+            return
+        if status in STOPPED:
+            raise RuntimeError(f"Predecessor has not completed safely: {status}")
+        remaining = deadline - clock()
+        if remaining <= 0:
+            raise TimeoutError("Predecessor did not complete within 30 minutes")
+        sleep(min(60, remaining))

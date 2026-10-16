@@ -223,3 +223,46 @@ def test_call_id_cas_retry_reloads_state_without_respawning():
     assert result["status"] == "complete"
     assert len(spawned) == 1
     assert store.state["unrelated_worker_progress"] == {"rows": 7}
+
+
+def test_predecessor_waits_without_writes():
+    from campaign import wait_for_predecessor
+
+    store = Store()
+    store.state.setdefault("campaigns", {})["previous"] = {"status": "running"}
+    epoch = [0]
+
+    def sleep(seconds):
+        epoch[0] += seconds
+        store.state["campaigns"]["previous"]["status"] = "complete"
+
+    wait_for_predecessor(store, "previous", clock=lambda: epoch[0], sleep=sleep)
+    assert epoch[0] == 60
+    assert store.revision == 0
+
+
+@pytest.mark.parametrize("status", ["ambiguous", "failed", "deadline_reached"])
+def test_predecessor_unsafe_states_refuse(status):
+    from campaign import wait_for_predecessor
+
+    store = Store()
+    store.state.setdefault("campaigns", {})["previous"] = {"status": status}
+    with pytest.raises(RuntimeError):
+        wait_for_predecessor(store, "previous")
+    assert store.revision == 0
+
+
+def test_predecessor_wait_is_bounded():
+    from campaign import wait_for_predecessor
+
+    store = Store()
+    store.state.setdefault("campaigns", {})["previous"] = {"status": "running"}
+    epoch = [0]
+
+    def sleep(seconds):
+        epoch[0] += seconds
+
+    with pytest.raises(TimeoutError):
+        wait_for_predecessor(store, "previous", clock=lambda: epoch[0], sleep=sleep)
+    assert epoch[0] == 1800
+    assert store.revision == 0

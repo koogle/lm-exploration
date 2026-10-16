@@ -74,7 +74,9 @@ def collect_ema(
 @app.function(
     image=image, secrets=[secret], cpu=0.125, memory=512, timeout=14400, max_containers=1, retries=0
 )
-def campaign_ecb(campaign_id: str, rounds: int, max_documents: int, work_seconds: int):
+def campaign_ecb(
+    campaign_id: str, rounds: int, max_documents: int, work_seconds: int, after_campaign: str = ""
+):
     from campaign import run_campaign
 
     return run_campaign(
@@ -84,6 +86,7 @@ def campaign_ecb(campaign_id: str, rounds: int, max_documents: int, work_seconds
         rounds,
         max_documents,
         work_seconds,
+        after_campaign=after_campaign,
         spawn_callable=collect_ecb.spawn,
         call_loader=modal.FunctionCall.from_id,
     )
@@ -92,7 +95,9 @@ def campaign_ecb(campaign_id: str, rounds: int, max_documents: int, work_seconds
 @app.function(
     image=image, secrets=[secret], cpu=0.125, memory=512, timeout=14400, max_containers=1, retries=0
 )
-def campaign_ema(campaign_id: str, rounds: int, max_documents: int, work_seconds: int):
+def campaign_ema(
+    campaign_id: str, rounds: int, max_documents: int, work_seconds: int, after_campaign: str = ""
+):
     from campaign import run_campaign
 
     return run_campaign(
@@ -102,6 +107,7 @@ def campaign_ema(campaign_id: str, rounds: int, max_documents: int, work_seconds
         rounds,
         max_documents,
         work_seconds,
+        after_campaign=after_campaign,
         spawn_callable=collect_ema.spawn,
         call_loader=modal.FunctionCall.from_id,
     )
@@ -116,6 +122,7 @@ def main(
     refresh: bool = False,
     check_only: bool = False,
     rounds: int = 1,
+    after_campaign: str = "",
 ):
     mapping = json.loads((ROOT / "pipeline_sources.json").read_text())
     if source not in {"both", "ecb", "ema"}:
@@ -128,6 +135,8 @@ def main(
         raise ValueError("Campaign rounds outside configured bound")
     if rounds > 1 and refresh:
         raise ValueError("Refresh inventories in a single round before starting a campaign")
+    if after_campaign and (source == "both" or rounds == 1):
+        raise ValueError("A predecessor requires one source and a multi-round campaign")
     access = verify_access.remote()
     print(json.dumps(access), flush=True)
     if access["hf_owner"] != mapping["owner"] or any(
@@ -151,6 +160,7 @@ def main(
         "reserved_at": datetime.now(UTC).isoformat(),
         "max_documents_each": max_documents,
         "rounds": rounds,
+        "after_campaign": after_campaign,
         "max_attempts_each_campaign": max_documents * rounds,
         "worker_seconds_each": 3600,
         "reserved_vcpu_seconds": len(sources) * (3600 * rounds + (1800 if rounds > 1 else 0)),
@@ -162,7 +172,8 @@ def main(
     if rounds > 1:
         supervisors = {"ecb": campaign_ecb, "ema": campaign_ema}
         calls = {
-            s: supervisors[s].spawn(run_id, rounds, max_documents, work_seconds) for s in sources
+            s: supervisors[s].spawn(run_id, rounds, max_documents, work_seconds, after_campaign)
+            for s in sources
         }
     else:
         calls = {
@@ -171,6 +182,7 @@ def main(
     launch = {
         "run_id": run_id,
         "rounds": rounds,
+        "after_campaign": after_campaign,
         "calls": {s: c.object_id for s, c in calls.items()},
         "datasets": {s: mapping["sources"][s]["repo_id"] for s in sources},
     }

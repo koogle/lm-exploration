@@ -413,3 +413,19 @@ launching a replacement writer. The worker waits briefly for that durable claim;
 metadata conflicts use bounded retries with fresh HF state. A dispatch whose call
 ID was never saved still stops as ambiguous. Confirm the original child has failed
 or stopped before starting a new campaign for that organization.
+
+### Queue a bounded continuation
+
+For a single source, a multi-round campaign can take
+`--after-campaign PREVIOUS_CAMPAIGN_ID`. Its supervisor waits read-only for up
+to 30 minutes for that campaign's `complete` status before claiming new work.
+A missing, ambiguous, failed, or timed-out predecessor prevents collection.
+Waiting counts against the new supervisor's four-hour deadline. The local
+launch record and compute reservation include the dependency; the new HF
+campaign plan is written only after the predecessor completes. This is a
+finite continuation, not a recurring schedule or a general distributed lock.
+Launch only one successor per source.
+
+The [additional collection record](research/continuation-more-2026-10-16.json)
+captures the 2,866-document / 182,334,783-character checkpoint and the next
+three-round ECB supervisor. EMA's existing three-round campaign continues.
