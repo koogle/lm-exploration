@@ -17,8 +17,6 @@ Keep the root README short. Put plans and run instructions in their owning folde
 Distinguish mockups, implemented behavior and measured results. Preserve experiment
 provenance and negative results. Run project commands from the documented working
 directory. A repository consolidation does not require GPU training or deployment.
-Keep credentials, local checkpoints and budget ledgers out of Git. A restored
-budget ledger is not required for user-authorized jobs. Set explicit resource requests,
-concurrency limits and runtime bounds before launching them.
+Keep credentials and local checkpoints out of Git.
 
 See [migration notes](docs/consolidation.md) for imported histories and source PRs.
