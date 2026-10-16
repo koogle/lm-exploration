@@ -92,6 +92,23 @@ class LearningCurveTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             CorpusBuilder(self.root / "data", changed, recipe)
 
+    def test_interrupted_uncommitted_batch_replays_from_durable_cursor(self):
+        builder, reader, rows = fixture(self.root / "data")
+        self.addCleanup(builder.close)
+        builder.collect("fineweb_edu", max_records=3, reader=reader)
+        before = builder.counts("fineweb_edu")
+
+        def interrupted(source, shard, start):
+            yield start, rows[start]
+            raise OSError("simulated network interruption")
+
+        with self.assertRaises(OSError):
+            builder.collect("fineweb_edu", reader=interrupted)
+        self.assertEqual(builder.db.execute("SELECT row FROM cursors").fetchone()[0], 3)
+        self.assertEqual(builder.counts("fineweb_edu"), before)
+        builder.collect("fineweb_edu", reader=reader)
+        self.assertTrue(builder.complete("fineweb_edu"))
+
     def test_cross_split_duplicate_quarantine(self):
         builder, _, _ = fixture(self.root / "data")
         self.addCleanup(builder.close)

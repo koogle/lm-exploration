@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-16",
+  "active_run_id": "learning-curve-20261016-v2",
+  "status": "collecting_corpus",
+  "modal_app_url": "https://modal.com/apps/radiantai/main/ap-A86MK9NsJAHwye2lcVuxyv",
+  "local_tests_passed": 16,
+  "remote_research_tests_passed": 4,
+  "attempts": [
+    {
+      "app_id": "ap-zrRin23bx0E5h11kA5Pxec",
+      "outcome": "image_configuration_failed_before_worker_execution",
+      "resolution": "Moved image environment configuration before add_local_* mounts."
+    },
+    {
+      "app_id": "ap-RkN0bYeRHWNVTdndcNZ7pR",
+      "outcome": "remote_smoke_failed_before_collection",
+      "resolution": "Resolved adapter source hash from the imported function rather than a checkout-specific filesystem path."
+    },
+    {
+      "app_id": "ap-5NdqpPYSaOsIIAbQdHc80V",
+      "outcome": "remote_tests_passed_collection_stopped_for_throughput_improvement",
+      "resolution": "Batched transactional writes; preserved partial v1 corpus and started a fresh v2 version. No tokenizer candidates fitted in this attempt."
+    },
+    {
+      "app_id": "ap-GSsPP18jVU2lZFhFnYy8Vw",
+      "outcome": "collection_checkpoint_preserved_then_resumed"
+    },
+    {
+      "app_id": "ap-A86MK9NsJAHwye2lcVuxyv",
+      "outcome": "remote_tests_passed_collection_resumed",
+      "resolution": "Upload checkpoints at one-minute intervals; same sampling code, spec and corpus identity."
+    }
+  ],
+  "authorization": "User explicitly authorized Modal measurements and removed the restored-ledger prerequisite. Resource and time bounds remain enforced."
+}

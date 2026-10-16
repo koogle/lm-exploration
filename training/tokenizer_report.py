@@ -192,6 +192,27 @@ def generate(folder):
         ax.set_title("Benefit of increasing fitting data at a fixed vocabulary size")
         ax.legend()
         save(fig, "data-size-gains")
+    shared_sizes = [size for size in SIZES if all((size, v) in by_key for v in VOCABS)]
+    if shared_sizes:
+        selected_size = max(shared_sizes)
+        terms = list(by_key[(selected_size, VOCABS[0])]["metrics"]["fragmentation"])
+        fig, ax = plt.subplots(figsize=(13, 5))
+        locations = np.arange(len(terms))
+        for index, vocab in enumerate(VOCABS):
+            values = by_key[(selected_size, vocab)]["metrics"]["fragmentation"]
+            ax.bar(
+                locations + (index - 1) * 0.25,
+                [values[t] for t in terms],
+                width=0.25,
+                color=COLORS[vocab],
+                label=f"{vocab:,}",
+            )
+        ax.set_xticks(locations, terms, rotation=30, ha="right")
+        ax.set_ylabel("Tokens per fixed probe (lower means less fragmentation)")
+        ax.set_title(f"Technical, code and numeric probes — {selected_size} MiB fitting sample")
+        ax.legend()
+        fig.tight_layout()
+        save(fig, "fragmentation-probes")
     complete = len(compact) == 18
     overview = (
         f"{len(compact)} of 18 requested candidates have measured Modal results. "
@@ -310,6 +331,18 @@ def generate(folder):
                 "At width 768 with tied embeddings, 32K adds 12.58M parameters over 16K; "
                 "50K adds 25.82M. Untied input/output weights double those increases. "
                 "A final choice needs matched model-compute experiments."
+            ),
+        ]
+    if shared_sizes:
+        lines += [
+            "",
+            "## Fixed-term fragmentation",
+            "",
+            "![Fragmentation probes](fragmentation-probes.png)",
+            "",
+            (
+                "These are diagnostic examples, not a representative task benchmark. "
+                "Fewer pieces are not automatically better, particularly for numbers."
             ),
         ]
     lines += [

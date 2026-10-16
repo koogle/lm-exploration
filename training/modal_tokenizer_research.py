@@ -32,6 +32,8 @@ image = (
     volumes={"/data": data_volume},
 )
 def collect(run_id: str):
+    import time
+
     from training_data.scholarly import load_recipe
 
     from tokenizer_research import CorpusBuilder, load_spec
@@ -40,6 +42,16 @@ def collect(run_id: str):
     recipe = load_recipe("/project/" + spec["source_recipe"])
     root = Path("/data/tokenizer-research") / run_id
     builder = CorpusBuilder(root, spec, recipe)
+    last_commit = time.monotonic()
+
+    def checkpoint():
+        nonlocal last_commit
+        # SQLite commits batches locally. Uploading the growing database on every
+        # batch makes network checkpoint latency dominate corpus collection.
+        if time.monotonic() - last_commit >= 60:
+            data_volume.commit()
+            last_commit = time.monotonic()
+
     try:
         if (root / "frozen/manifest.json").exists():
             from tokenizer_research import verify_corpus
@@ -51,7 +63,7 @@ def collect(run_id: str):
                 name = source["name"]
                 if not builder.complete(name):
                     print(f"Collecting {name}: {builder.counts(name)}", flush=True)
-                    builder.collect(name, checkpoint=data_volume.commit)
+                    builder.collect(name, checkpoint=checkpoint)
                     data_volume.commit()
                     print(f"Collected {name}: {builder.counts(name)}", flush=True)
             if all(builder.complete(s["name"]) for s in recipe["sources"]):
