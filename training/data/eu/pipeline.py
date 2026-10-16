@@ -313,6 +313,17 @@ def run_source(
             rate_limited = False
             try:
                 data, provenance = collector.fetch(candidate["url"], source)
+                if data is None and (
+                    str(provenance.get("http_status", provenance.get("status"))) == "404"
+                    or provenance.get("error") == "http_404"
+                ):
+                    alternatives = getattr(adapter, "alternate_document_urls", lambda _: [])(
+                        candidate
+                    )
+                    if alternatives:
+                        original_fetch = {"url": candidate["url"], **provenance}
+                        data, provenance = collector.fetch(alternatives[0], source)
+                        provenance["original_fetch"] = original_fetch
                 rate_limited = (
                     str(provenance.get("http_status", provenance.get("status"))) == "429"
                     or provenance.get("error") == "http_429"

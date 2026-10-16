@@ -404,3 +404,12 @@ contains call IDs, durable campaign claims and a verified baseline: **903 rows,
 repository audits passed, including independent checks of the new counters.
 These are baseline counts while collection continues; consult HF dataset cards
 or `uv run status.py both` for current totals.
+
+### Supervisor recovery
+
+New Modal campaigns persist each child `call_id` before the worker starts loading
+its progress. A restarted supervisor can reattach to that same call without
+launching a replacement writer. The worker waits briefly for that durable claim;
+metadata conflicts use bounded retries with fresh HF state. A dispatch whose call
+ID was never saved still stops as ambiguous. Confirm the original child has failed
+or stopped before starting a new campaign for that organization.

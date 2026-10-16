@@ -112,3 +112,27 @@ def test_verified_research_series_and_historical_pdf_forms():
     assert {url for url, _, _ in records} == {
         "https://www.ecb.europa.eu" + path for path in urls[:2]
     }
+
+
+def test_alternatives_only_for_verified_standalone_articles():
+    from adapters.ecb import VERIFIED_HISTORICAL_ARTICLES, alternate_document_urls
+
+    for original, resolved_url in VERIFIED_HISTORICAL_ARTICLES.items():
+        record = {
+            "url": original,
+            "document_id": "stable",
+            "collection_id": "economic_bulletin_articles",
+        }
+        assert alternate_document_urls(record) == [resolved_url]
+        assert record["url"] == original
+        assert record["document_id"] == "stable"
+        assert alternate_document_urls({**record, "collection_id": "other"}) == []
+    assert (
+        alternate_document_urls(
+            {
+                "url": "https://www.ecb.europa.eu/press/economic-bulletin/articles/2014/pdf/unverified.pdf",
+                "collection_id": "economic_bulletin_articles",
+            }
+        )
+        == []
+    )

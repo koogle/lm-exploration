@@ -171,3 +171,25 @@ def enumerate_collection(collection_id, fetch, limit=1000):
             "limitations": limitations,
         },
     }
+
+
+# Exact standalone assets verified on 2026-10-16. No blanket prefix rewrite:
+# inventory errors in other historical files need their own verification.
+VERIFIED_HISTORICAL_ARTICLES = {
+    BASE + "/press/economic-bulletin/articles/2014/pdf/art1_mb201402en_pp77-96en.pdf": BASE
+    + "/pub/pdf/other/art1_mb201402en_pp77-96en.pdf",
+    BASE + "/press/economic-bulletin/articles/2014/pdf/art3_mb201401en_pp83-97en.pdf": BASE
+    + "/pub/pdf/other/art3_mb201401en_pp83-97en.pdf",
+}
+
+
+def alternate_document_urls(record):
+    """Return verified standalone alternatives for use only after primary HTTP 404.
+
+    Caller retains the original inventory record for identity/provenance. No
+    whole-issue substitution or unverified global prefix rewrite is performed.
+    """
+    target = VERIFIED_HISTORICAL_ARTICLES.get(record["url"])
+    if target and record.get("collection_id") == "economic_bulletin_articles":
+        return [target]
+    return []

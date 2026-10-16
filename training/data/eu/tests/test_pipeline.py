@@ -150,6 +150,7 @@ def harness(tmp_path, monkeypatch):
         fetched=fetched,
         enumerated=enumerated,
         mapping=mapping,
+        adapter=adapter,
     )
 
 
@@ -395,3 +396,25 @@ def test_restart_uses_remaining_wall_time_for_fetch_deadline(harness, monkeypatc
     result = h.run(store)
     assert result["attempted"] == 1
     assert len(h.fetched) == 1
+
+
+@pytest.mark.parametrize("status", [404, 403, 429])
+def test_verified_fallback_only_after_404(harness, status):
+    h = harness
+    original = h.candidate("original")
+    alternate = h.candidate("alternate")
+    h.bodies[original["url"]] = {"http_status": status, "error": f"http_{status}"}
+    h.inventories.update({"a": [original], "b": []})
+    h.adapter.alternate_document_urls = lambda record: [alternate["url"]]
+    store = DurableStore()
+    h.run(store)
+    if status == 404:
+        assert h.fetched == [original["url"], alternate["url"]]
+        assert pipeline.item_key(original) in store.state["completed"]
+        provenance = json.loads(store.rows[0]["provenance_json"])
+        assert provenance["inventory_record"]["url"] == original["url"]
+        assert provenance["fetch"]["original_fetch"]["http_status"] == 404
+        assert store.rows[0]["url"] == alternate["url"]
+    else:
+        assert h.fetched == [original["url"]]
+        assert not store.rows

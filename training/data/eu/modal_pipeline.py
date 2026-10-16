@@ -51,8 +51,10 @@ def verify_access():
 def collect_ecb(
     run_id: str, max_documents: int = 1000, work_seconds: int = 3000, refresh: bool = False
 ):
+    from campaign import wait_for_dispatch
     from pipeline import run_source
 
+    wait_for_dispatch("ecb", run_id)
     return run_source("ecb", run_id, max_documents, work_seconds, refresh)
 
 
@@ -62,8 +64,10 @@ def collect_ecb(
 def collect_ema(
     run_id: str, max_documents: int = 1000, work_seconds: int = 3000, refresh: bool = False
 ):
+    from campaign import wait_for_dispatch
     from pipeline import run_source
 
+    wait_for_dispatch("ema", run_id)
     return run_source("ema", run_id, max_documents, work_seconds, refresh)
 
 
@@ -73,7 +77,16 @@ def collect_ema(
 def campaign_ecb(campaign_id: str, rounds: int, max_documents: int, work_seconds: int):
     from campaign import run_campaign
 
-    return run_campaign("ecb", campaign_id, collect_ecb.remote, rounds, max_documents, work_seconds)
+    return run_campaign(
+        "ecb",
+        campaign_id,
+        collect_ecb.remote,
+        rounds,
+        max_documents,
+        work_seconds,
+        spawn_callable=collect_ecb.spawn,
+        call_loader=modal.FunctionCall.from_id,
+    )
 
 
 @app.function(
@@ -82,7 +95,16 @@ def campaign_ecb(campaign_id: str, rounds: int, max_documents: int, work_seconds
 def campaign_ema(campaign_id: str, rounds: int, max_documents: int, work_seconds: int):
     from campaign import run_campaign
 
-    return run_campaign("ema", campaign_id, collect_ema.remote, rounds, max_documents, work_seconds)
+    return run_campaign(
+        "ema",
+        campaign_id,
+        collect_ema.remote,
+        rounds,
+        max_documents,
+        work_seconds,
+        spawn_callable=collect_ema.spawn,
+        call_loader=modal.FunctionCall.from_id,
+    )
 
 
 @app.local_entrypoint()
