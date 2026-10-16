@@ -1,0 +1,366 @@
+{
+  "status": "in_progress_snapshot",
+  "launch": {
+    "run_id": "eu-pilot-20261016",
+    "calls": {
+      "ecb": "fc-01M528C9JSB36KTB5RAFKBH9VZ",
+      "ema": "fc-01M528C9S9T9VVC9ZZ0TZG96NW"
+    },
+    "datasets": {
+      "ecb": "jfrick/eu-ecb",
+      "ema": "jfrick/eu-ema"
+    }
+  },
+  "progress": {
+    "observed_at": "2026-10-16T11:46:27.939055+00:00",
+    "sources": [
+      {
+        "source_id": "ecb",
+        "repo_id": "jfrick/eu-ecb",
+        "url": "https://huggingface.co/datasets/jfrick/eu-ecb",
+        "revision": "05ae6ebb457b4f73cec8b3a03bab7435a030e2cc",
+        "visibility": "private",
+        "rows": 0,
+        "shards": 0,
+        "completed": 0,
+        "duplicates": 0,
+        "failures": 0,
+        "collections": {
+          "speeches": {
+            "candidates": null,
+            "reported_total": null,
+            "enumeration_complete": null,
+            "updated_at": null,
+            "completed": 0,
+            "failures": 0,
+            "rows": 0
+          },
+          "press_releases": {
+            "candidates": null,
+            "reported_total": null,
+            "enumeration_complete": null,
+            "updated_at": null,
+            "completed": 0,
+            "failures": 0,
+            "rows": 0
+          },
+          "interviews": {
+            "candidates": null,
+            "reported_total": null,
+            "enumeration_complete": null,
+            "updated_at": null,
+            "completed": 0,
+            "failures": 0,
+            "rows": 0
+          },
+          "meeting_accounts": {
+            "candidates": null,
+            "reported_total": null,
+            "enumeration_complete": null,
+            "updated_at": null,
+            "completed": 0,
+            "failures": 0,
+            "rows": 0
+          },
+          "decisions": {
+            "candidates": null,
+            "reported_total": null,
+            "enumeration_complete": null,
+            "updated_at": null,
+            "completed": 0,
+            "failures": 0,
+            "rows": 0
+          }
+        },
+        "run_count": 1,
+        "recent_runs": [
+          {
+            "adapter_sha256": "ed14d6fb85c6ce8efea3874db911f87347303b0b5a5b13d2b9a466fd96ae8453",
+            "attempted": 0,
+            "collector_sha256": "e94d1a0c851a34961f16bb8ba1099980cc1e65b5cbb66a1d7068ca479fe1721d",
+            "duplicates": 0,
+            "extracted": 0,
+            "failed": 0,
+            "max_documents": 1000,
+            "pipeline_sha256": "13fa6a61723af8a5f506e581e722f156e0c9a896d4d0f71c9393ee90ffb1ab29",
+            "run_id": "eu-pilot-20261016",
+            "source_id": "ecb",
+            "started_at": "2026-10-16T11:43:28.914569+00:00",
+            "status": "running",
+            "work_seconds": 3000
+          }
+        ],
+        "failure_samples": []
+      },
+      {
+        "source_id": "ema",
+        "repo_id": "jfrick/eu-ema",
+        "url": "https://huggingface.co/datasets/jfrick/eu-ema",
+        "revision": "9f53397377a1b318abe2442617da965b883d63ff",
+        "visibility": "private",
+        "rows": 113,
+        "shards": 18,
+        "completed": 113,
+        "duplicates": 0,
+        "failures": 7,
+        "collections": {
+          "news": {
+            "candidates": 3894,
+            "reported_total": 3894,
+            "enumeration_complete": true,
+            "updated_at": "2026-10-16T11:43:30.907227+00:00",
+            "completed": 40,
+            "failures": 0,
+            "rows": 40
+          },
+          "scientific_guidelines": {
+            "candidates": 2793,
+            "reported_total": 50525,
+            "enumeration_complete": true,
+            "updated_at": "2026-10-16T11:43:35.871336+00:00",
+            "completed": 40,
+            "failures": 0,
+            "rows": 40
+          },
+          "committee_documents": {
+            "candidates": 5177,
+            "reported_total": 50525,
+            "enumeration_complete": true,
+            "updated_at": "2026-10-16T11:43:37.200762+00:00",
+            "completed": 33,
+            "failures": 7,
+            "rows": 33
+          }
+        },
+        "run_count": 1,
+        "recent_runs": [
+          {
+            "adapter_sha256": "515e7a33aedfcccbf1dc5f1f63a06806ce58be55580304f0b00da1b4e327a6f3",
+            "attempted": 120,
+            "collector_sha256": "e94d1a0c851a34961f16bb8ba1099980cc1e65b5cbb66a1d7068ca479fe1721d",
+            "duplicates": 0,
+            "extracted": 113,
+            "failed": 7,
+            "heartbeat_at": "2026-10-16T11:46:15.410902+00:00",
+            "max_documents": 1000,
+            "pipeline_sha256": "13fa6a61723af8a5f506e581e722f156e0c9a896d4d0f71c9393ee90ffb1ab29",
+            "run_id": "eu-pilot-20261016",
+            "source_id": "ema",
+            "started_at": "2026-10-16T11:43:28.961755+00:00",
+            "status": "running",
+            "work_seconds": 3000
+          }
+        ],
+        "failure_samples": [
+          {
+            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-20-23-july-2026-chmp-minutes_en.xlsx",
+            "collection_id": "committee_documents",
+            "attempts": 1,
+            "failed_at": "2026-10-16T11:44:37.892205+00:00"
+          },
+          {
+            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-15-18-september-2025-chmp-minutes_en.xlsx",
+            "collection_id": "committee_documents",
+            "attempts": 1,
+            "failed_at": "2026-10-16T11:44:33.857728+00:00"
+          },
+          {
+            "url": "https://www.ema.europa.eu/en/documents/agenda/annex-agenda-chmp-meeting-12-15-october-2026_en.xlsx",
+            "collection_id": "committee_documents",
+            "attempts": 1,
+            "failed_at": "2026-10-16T11:44:12.776302+00:00"
+          },
+          {
+            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-20-23-april-2026-chmp-minutes_en.xlsx",
+            "collection_id": "committee_documents",
+            "attempts": 1,
+            "failed_at": "2026-10-16T11:44:46.760640+00:00"
+          },
+          {
+            "url": "https://www.ema.europa.eu/en/documents/agenda/agenda-pdco-agenda-13-16-october-2026-meeting_en.xlsx",
+            "collection_id": "committee_documents",
+            "attempts": 1,
+            "failed_at": "2026-10-16T11:43:56.204010+00:00"
+          }
+        ]
+      }
+    ]
+  },
+  "verified_checkpoint": {
+    "observed_at": "2026-10-16T11:45:30.389396+00:00",
+    "sources": [
+      {
+        "source_id": "ema",
+        "repo_id": "jfrick/eu-ema",
+        "url": "https://huggingface.co/datasets/jfrick/eu-ema",
+        "revision": "815a045097aed18cb6345f2ab6ad12428d44228f",
+        "visibility": "private",
+        "rows": 74,
+        "shards": 12,
+        "completed": 74,
+        "duplicates": 0,
+        "failures": 6,
+        "collections": {
+          "news": {
+            "candidates": 3894,
+            "reported_total": 3894,
+            "enumeration_complete": true,
+            "updated_at": "2026-10-16T11:43:30.907227+00:00",
+            "completed": 27,
+            "failures": 0,
+            "rows": 27
+          },
+          "scientific_guidelines": {
+            "candidates": 2793,
+            "reported_total": 50525,
+            "enumeration_complete": true,
+            "updated_at": "2026-10-16T11:43:35.871336+00:00",
+            "completed": 27,
+            "failures": 0,
+            "rows": 27
+          },
+          "committee_documents": {
+            "candidates": 5177,
+            "reported_total": 50525,
+            "enumeration_complete": true,
+            "updated_at": "2026-10-16T11:43:37.200762+00:00",
+            "completed": 20,
+            "failures": 6,
+            "rows": 20
+          }
+        },
+        "run_count": 1,
+        "recent_runs": [
+          {
+            "adapter_sha256": "515e7a33aedfcccbf1dc5f1f63a06806ce58be55580304f0b00da1b4e327a6f3",
+            "attempted": 80,
+            "collector_sha256": "e94d1a0c851a34961f16bb8ba1099980cc1e65b5cbb66a1d7068ca479fe1721d",
+            "duplicates": 0,
+            "extracted": 74,
+            "failed": 6,
+            "heartbeat_at": "2026-10-16T11:45:13.940856+00:00",
+            "max_documents": 1000,
+            "pipeline_sha256": "13fa6a61723af8a5f506e581e722f156e0c9a896d4d0f71c9393ee90ffb1ab29",
+            "run_id": "eu-pilot-20261016",
+            "source_id": "ema",
+            "started_at": "2026-10-16T11:43:28.961755+00:00",
+            "status": "running",
+            "work_seconds": 3000
+          }
+        ],
+        "failure_samples": [
+          {
+            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-20-23-july-2026-chmp-minutes_en.xlsx",
+            "collection_id": "committee_documents",
+            "attempts": 1,
+            "failed_at": "2026-10-16T11:44:37.892205+00:00"
+          },
+          {
+            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-15-18-september-2025-chmp-minutes_en.xlsx",
+            "collection_id": "committee_documents",
+            "attempts": 1,
+            "failed_at": "2026-10-16T11:44:33.857728+00:00"
+          },
+          {
+            "url": "https://www.ema.europa.eu/en/documents/agenda/annex-agenda-chmp-meeting-12-15-october-2026_en.xlsx",
+            "collection_id": "committee_documents",
+            "attempts": 1,
+            "failed_at": "2026-10-16T11:44:12.776302+00:00"
+          },
+          {
+            "url": "https://www.ema.europa.eu/en/documents/minutes/annex-20-23-april-2026-chmp-minutes_en.xlsx",
+            "collection_id": "committee_documents",
+            "attempts": 1,
+            "failed_at": "2026-10-16T11:44:46.760640+00:00"
+          },
+          {
+            "url": "https://www.ema.europa.eu/en/documents/agenda/agenda-pdco-agenda-13-16-october-2026-meeting_en.xlsx",
+            "collection_id": "committee_documents",
+            "attempts": 1,
+            "failed_at": "2026-10-16T11:43:56.204010+00:00"
+          }
+        ],
+        "audit": {
+          "revision": "815a045097aed18cb6345f2ab6ad12428d44228f",
+          "passed": true,
+          "shards_checked": 12,
+          "rows": 74,
+          "unique_row_ids": 74,
+          "characters": 1715821,
+          "words": 242252,
+          "duplicate_normalized_texts": 0,
+          "languages": {
+            "en": 74
+          },
+          "formats": {
+            "pdf": 47,
+            "html": 27
+          },
+          "collections": {
+            "committee_documents": 20,
+            "news": 27,
+            "scientific_guidelines": 27
+          },
+          "checks": {
+            "duplicate_row_ids": 0,
+            "text_hash_mismatches": 0,
+            "text_size_mismatches": 0,
+            "partition_mismatches": 0,
+            "completed_references_missing": 0,
+            "text_index_references_missing": 0,
+            "shard_issues": []
+          },
+          "samples": [
+            {
+              "id": "36fa7e9d7a5e25f403e2b762cf8f17c8e565983094b4aebe373af1e91dffc8fb",
+              "url": "https://www.ema.europa.eu/en/documents/agenda/agenda-medicine-shortages-spoc-working-party-meeting-13-14-october-2026_en.pdf",
+              "language": "en",
+              "format": "pdf",
+              "collection_id": "committee_documents"
+            },
+            {
+              "id": "4f956f41fc4b0ca66793f0a3664a21dd3e789e0a07e592bbe69be2552bb61331",
+              "url": "https://www.ema.europa.eu/en/documents/agenda/agenda-meeting-hma-ema-group-focused-ai-industry-stakeholders-october-2026_en.pdf",
+              "language": "en",
+              "format": "pdf",
+              "collection_id": "committee_documents"
+            },
+            {
+              "id": "60426042c71ec9c97bd7485bbc5e1b5907f13e1dbb2a0b0248c233e2342ee5a6",
+              "url": "https://www.ema.europa.eu/en/documents/agenda/agenda-sme-info-day-navigating-ema-support-innovation-marketing-authorisation_en.pdf",
+              "language": "en",
+              "format": "pdf",
+              "collection_id": "committee_documents"
+            },
+            {
+              "id": "62ddbf75c0e6a6cf19372fc5fa75e7ce73dd03a4a90e44cc29fc4e3ea3b2c16d",
+              "url": "https://www.ema.europa.eu/en/documents/agenda/agenda-seventeenth-meeting-industry-stakeholder-platform-operation-centralised-procedure-human-medicines_en.pdf",
+              "language": "en",
+              "format": "pdf",
+              "collection_id": "committee_documents"
+            },
+            {
+              "id": "6845bf38045f1b8318392b879df67fff9c22f0f266bc794f0c29e3addbc19caf",
+              "url": "https://www.ema.europa.eu/en/documents/agenda/agenda-ema-paediatric-investigation-plans-person-training-course_en.pdf",
+              "language": "en",
+              "format": "pdf",
+              "collection_id": "committee_documents"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "validation": {
+    "tests_passed": 37,
+    "ruff": "passed",
+    "sample_raw_hash_checks": 3
+  },
+  "limitations": [
+    "Pilot is still running; counts are not final.",
+    "XLSX/DOC/DOCX extraction and OCR are not implemented.",
+    "Initial EMA audited sample is English, not a representative multilingual sample.",
+    "o200k_base token measurement attempted but tokenizer vocabulary download received proxy HTTP 403; no token count claimed.",
+    "No periodic schedule deployed; explicit resume and inventory refresh commands are implemented."
+  ]
+}
