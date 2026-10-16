@@ -5,7 +5,7 @@ A recipe is one JSON file that is validated by the pydantic `Recipe` model in
 
 | Key | Meaning |
 | --- | --- |
-| `model` | `"10m"` or `"100m"`: a key of `MODELS` |
+| `model` | `"10m"`, `"100m"` or `"100m_tied"`: a key of `MODELS`. See the [embedding-tying experiment](../100m_tied/README.md). |
 | `dataset` | `"tiny-shakespeare"` or `"shakespeare-complete"`: a key of `DATASETS` |
 | `training` | `TrainConfig` fields: `steps`, `batch_size`, `lr`, `seed` and eval/log/checkpoint cadence |
 | `model_overrides` | Optional `ModelConfig` overrides (e.g. `block_size`, `n_layer`). `vocab_size` always comes from the dataset |

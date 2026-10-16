@@ -32,12 +32,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["model_10m", "model_100m", "training_data", "training_data.fetching", "trainer"]
+packages = ["model_10m", "model_100m", "model_100m_tied", "training_data", "training_data.fetching", "trainer"]
 py-modules = ["generate", "prepare_scholarly", "tokenizer_research", "tokenizer_report", "tokenizer_evaluation"]
 
 [tool.setuptools.package-dir]
 model_10m = "10m"
 model_100m = "100m"
+model_100m_tied = "100m_tied"
 training_data = "data"
 
 [dependency-groups]
@@ -56,4 +57,5 @@ ignore = ["TRY004"]
 [tool.ruff.lint.per-file-ignores]
 # The folder name is the model size; setuptools installs it as `model_100m`.
 "100m/__init__.py" = ["N999"]
+"100m_tied/__init__.py" = ["N999"]
 "10m/__init__.py" = ["N999"]

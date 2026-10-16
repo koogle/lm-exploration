@@ -73,6 +73,9 @@ gradient descent, start with [the XOR example](examples/README.md).
   vocabulary/context. Run provenance hashes both files.
 - [`modal_train.py`](modal_train.py) and [`recipes/`](recipes/README.md): the only way
   to start training. Validates a recipe locally, reserves budget, then trains on Modal.
+- [`100m_tied/`](100m_tied/README.md): an independent input/output weight-tying
+  experiment with the existing 100M shape. Its checks use the merged frozen 32K
+  tokenizer; the general recipe trainer remains character-only.
 - [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a
   prompt, and reads the architecture, configuration and tokenizer from the checkpoint.
 - [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,

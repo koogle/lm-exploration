@@ -45,6 +45,9 @@ def validate_resume(checkpoint, config, fingerprint, steps):
         checkpoint["dataset_fingerprint"] == fingerprint
         and old["model"] == config["model"]
         and old["tokenizer"] == config["tokenizer"]
+        # Tied/untied models have matching tensor shapes but different optimizer semantics.
+        and old.get("model_name", "100m").removeprefix("model_")
+        == config.get("model_name", "100m").removeprefix("model_")
     )
     fixed = (
         "batch_size",
@@ -100,7 +103,7 @@ def save_checkpoint(
     torch.save(state, path)
 
 
-def runtime_provenance(device, model_source, model_definition=None):
+def runtime_provenance(device, model_source, model_definition=None, *, model_dependencies=None):
     root = Path(__file__).resolve().parent.parent
     try:
         commit = subprocess.check_output(
@@ -120,6 +123,8 @@ def runtime_provenance(device, model_source, model_definition=None):
     # A scaled model imports its modules from another file; hash that lineage too.
     if model_definition and Path(model_definition) != Path(model_source):
         files["model_definition"] = Path(model_definition)
+    # Variants can inherit both a scaled configuration and the original block definition.
+    files.update({name: Path(path) for name, path in (model_dependencies or {}).items()})
     return {
         "python": platform.python_version(),
         "torch": str(torch.__version__),
