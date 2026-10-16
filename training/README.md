@@ -1,5 +1,13 @@
 # Training from scratch
 
+## Current handoff — 2026-10-16
+
+Start with the [scholarly/code pretraining plan](plans/SCHOLARLY_CODE_PRETRAINING.md).
+It records the latest agreed dataset proportions, approximately 150M-parameter
+goal, 20B-token target with a conditional 50B extension, frozen 16K tokenizer,
+and next-agent checklist. It supersedes older undecided mixture/tokenizer
+notes and illustrative token budgets below for this experiment.
+
 A personal learning project: train small language models from random initialization,
 understand how architecture and data affect them, then add instruction tuning,
 reasoning and reinforcement learning. Use Modal for training and local Apple
