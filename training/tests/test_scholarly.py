@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from training_data.scholarly import Stager, adapt, load_recipe
-from training_data.subword import DEFAULT_FOLDER, load_frozen
+from training_data.subword import DEFAULT_FOLDER, VOCAB_SIZE, load_frozen
 from training_data.token_stream import TokenMixture
 
 
@@ -49,8 +49,23 @@ class CorpusTests(unittest.TestCase):
         )
         return stager
 
+    def test_new_vocabulary_ids_and_old_snapshot_rejection(self):
+        stage = self.stage(self.root / "stage", [row_for(self.source, "train", "Ssh")])
+        stage.export(self.root / "export")
+        path = self.root / "export/manifest.json"
+        loader = TokenMixture(path, context=8, allow_unreviewed=True)
+        self.assertIn(32767, loader.next_block()["input_ids"])
+        manifest = json.loads(path.read_text())
+        manifest["tokenizer_sha256"] = (
+            "2a6bd2343ab29e3955dd7a5e17330e706afc8c650618b1339ceedab5e77fde04"
+        )
+        path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, "Tokenizer identity mismatch"):
+            TokenMixture(path, allow_unreviewed=True)
+
     def test_frozen_hash_and_round_trip(self):
         tokenizer = load_frozen()
+        self.assertEqual(tokenizer.get_vocab_size(), 32768)
         text = "def square(x):\r\n\treturn x ** 2 # α²\r\n"
         ids = tokenizer.encode(text, add_special_tokens=False).ids
         self.assertEqual(tokenizer.decode(ids, skip_special_tokens=False), text)
@@ -224,7 +239,9 @@ class CorpusTests(unittest.TestCase):
         stage.export(self.root / "export")
         loader = TokenMixture(self.root / "export/manifest.json", context=16, allow_unreviewed=True)
         x, y = loader.next_batch(1)
-        model = GPT(ModelConfig(vocab_size=16384, block_size=16, n_layer=1, n_head=1, n_embd=16))
+        model = GPT(
+            ModelConfig(vocab_size=VOCAB_SIZE, block_size=16, n_layer=1, n_head=1, n_embd=16)
+        )
         logits = model(x)
         logits.retain_grad()
         loss = F.cross_entropy(logits.flatten(0, 1), y.flatten(), ignore_index=-100)

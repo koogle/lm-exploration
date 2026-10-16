@@ -124,8 +124,9 @@ evaluation throughput is measured in the new two-CPU rescoring workers.
 
 All 18 measured candidates are packaged in
 [`jfrick/scholarly-code-tokenizer`](https://huggingface.co/jfrick/scholarly-code-tokenizer).
-The default is 2 GiB / 32K, balancing compression and vocabulary parameter overhead;
-this is a starting point, not a downstream model-quality optimum. Each alternative
+The original default was 2 GiB / 32K. The user subsequently selected the
+code-focused `structured-code-v1` 32K tokenizer as the default. Its frozen assets
+and Hub revision are in `../structured-code-v1/`. Each alternative
 is available through `subfolder="variants/<MiB>mib-<vocab>"` in `AutoTokenizer`.
 The existing frozen v1 assets in this repository remain unchanged.
 
@@ -173,4 +174,5 @@ limits and timeouts. Existing artifact paths refuse overwrite; use a fresh run
 version for a new collection. Raw per-parent scores remain under
 `runs/structured-code-v1/` locally and on the results volume. The generated report
 retains compact metrics, paired bootstrap intervals and provenance. Original
-published tokenizers and the default remain unchanged.
+published variants remain available; the user subsequently promoted the focused
+32K candidate to the default. Historical reports preserve their measured conclusions.

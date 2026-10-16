@@ -4,7 +4,7 @@
 
 Start with the [scholarly/code pretraining plan](plans/SCHOLARLY_CODE_PRETRAINING.md).
 It records the latest agreed dataset proportions, approximately 150M-parameter
-goal, 20B-token target with a conditional 50B extension, frozen 16K tokenizer,
+goal, 20B-token target with a conditional 50B extension, frozen code-focused 32K tokenizer,
 and next-agent checklist. It supersedes older undecided mixture/tokenizer
 notes and illustrative token budgets below for this experiment.
 

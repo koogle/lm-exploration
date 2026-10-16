@@ -5,7 +5,7 @@ import itertools
 import json
 from pathlib import Path
 
-from .subword import TOKENIZER_SHA256, digest
+from .subword import TOKENIZER_SHA256, VOCAB_SIZE, digest
 
 
 class TokenMixture:
@@ -62,7 +62,7 @@ class TokenMixture:
                     for line in handle:
                         row = json.loads(line)
                         if not row["ids"] or any(
-                            type(t) is not int or t < 4 or t >= 16384 for t in row["ids"]
+                            type(t) is not int or t < 4 or t >= VOCAB_SIZE for t in row["ids"]
                         ):
                             raise ValueError("Invalid content token IDs")
                         tokens = [1, *row["ids"], 2]

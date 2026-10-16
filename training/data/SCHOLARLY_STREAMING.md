@@ -75,7 +75,7 @@ from training_data.token_stream import TokenMixture
 data = TokenMixture("/data/scholarly-code/v1/snapshots/pilot/manifest.json",
                     context=2048, allow_unreviewed=True)
 x, targets = data.next_batch(batch_size=8, device="cuda")
-# logits = model(x), with vocab_size=16384
+# logits = model(x), with vocab_size=32768
 # loss = F.cross_entropy(logits.flatten(0, 1), targets.flatten(), ignore_index=-100)
 # Save this together with model/optimizer state at the same optimizer boundary:
 data_state = data.state_dict()

@@ -4,8 +4,9 @@ import hashlib
 import json
 from pathlib import Path
 
-TOKENIZER_SHA256 = "2a6bd2343ab29e3955dd7a5e17330e706afc8c650618b1339ceedab5e77fde04"
-DEFAULT_FOLDER = Path(__file__).resolve().parents[1] / "tokenizer/scholarly-code-v1"
+TOKENIZER_SHA256 = "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9"
+VOCAB_SIZE = 32768
+DEFAULT_FOLDER = Path(__file__).resolve().parents[1] / "tokenizer/structured-code-v1"
 
 
 def digest(path):
@@ -27,7 +28,7 @@ def load_frozen(folder=DEFAULT_FOLDER):
         if Path(name).name != name or digest(folder / name) != expected:
             raise ValueError(f"Frozen artifact failed verification: {name}")
     tokenizer = Tokenizer.from_file(str(folder / "tokenizer.json"))
-    if tokenizer.get_vocab_size() != 16384:
+    if tokenizer.get_vocab_size() != VOCAB_SIZE:
         raise ValueError("Unexpected vocabulary")
     for index, name in enumerate(("pad", "bos", "eos", "unk")):
         if tokenizer.token_to_id(f"<|{name}|>") != index:

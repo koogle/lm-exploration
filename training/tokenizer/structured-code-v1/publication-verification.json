@@ -1,0 +1,17 @@
+{
+  "location": "jfrick/scholarly-code-tokenizer",
+  "revision": "0ebdb4fe4c8d21ccc06cfe6f5b464eac74773a80",
+  "status": "passed",
+  "default_and_variants_checked": 20,
+  "probes_per_variant": 6,
+  "checks": [
+    "artifact_hashes",
+    "special_ids",
+    "vocabulary_size",
+    "token_id_equivalence",
+    "exact_roundtrips",
+    "no_automatic_boundaries"
+  ],
+  "transformers_version": "4.57.6",
+  "tokenizers_version": "0.22.2"
+}

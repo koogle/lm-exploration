@@ -1,6 +1,6 @@
 """CPU-only bounded preparation on the existing mixture data volume.
 
-No app launches on import. Restore the training budget ledger before running.
+No app launches on import. Uses bounded CPU resources for authorized jobs.
 """
 
 import json
@@ -35,9 +35,7 @@ def prepare(version: str, snapshot: str, max_records: int):
     from training_data.scholarly import Stager, load_recipe
 
     recipe = load_recipe("/project/tokenizer/recipe-v1.json")
-    stager = Stager(
-        Path("/data/scholarly-code") / version, recipe, "/project/tokenizer/scholarly-code-v1"
-    )
+    stager = Stager(Path("/data/scholarly-code") / version, recipe)
     try:
         for source in recipe["sources"]:
             count = stager.prepare(source["name"], max_records)
@@ -56,11 +54,6 @@ def main(version: str, snapshot: str, max_records: int = 100):
             raise ValueError("Version and snapshot must be simple unique names")
     if not 1 <= max_records <= 100_000:
         raise ValueError("max_records must be between 1 and 100000 per source")
-    # Reuse the existing conservative reservation mechanism. It intentionally
-    # requires restoring runs/modal-budget.json; no invented fresh allocation.
-    from modal_train import reserve
-
-    reserve(f"prep-{version}-{snapshot}", 1800)
     report = prepare.remote(version, snapshot, max_records)
     Path("results").mkdir(exist_ok=True)
     Path(f"results/prep-{version}-{snapshot}.json").write_text(json.dumps(report, indent=2) + "\n")

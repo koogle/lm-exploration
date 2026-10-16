@@ -1,0 +1,9 @@
+{
+  "repo_id": "jfrick/scholarly-code-tokenizer",
+  "revision": "0ebdb4fe4c8d21ccc06cfe6f5b464eac74773a80",
+  "url": "https://huggingface.co/jfrick/scholarly-code-tokenizer",
+  "variant": "structured-code-v1-32768",
+  "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+  "vocab_size": 32768,
+  "selection": "User explicitly selected code-focused 32K as repository and Hub default."
+}
