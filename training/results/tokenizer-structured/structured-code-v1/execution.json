@@ -1,0 +1,32 @@
+{
+  "execution": "modal-cpu",
+  "remote_tests_passed": 2,
+  "candidates_scored": 21,
+  "focused_fits": 3,
+  "correctness_passed": true,
+  "prepare": {
+    "cpu": 4,
+    "memory_mib": 8192,
+    "timeout_seconds": 1800
+  },
+  "fit": {
+    "cpu": 4,
+    "memory_mib": 8192,
+    "timeout_seconds": 1800,
+    "max_concurrency": 3
+  },
+  "score": {
+    "cpu": 2,
+    "memory_mib": 4096,
+    "timeout_seconds": 1200,
+    "max_concurrency": 3
+  },
+  "resource_settings": "CPU/memory requests and hard caps",
+  "modal_app_url": "https://modal.com/apps/radiantai/main/ap-g5niWKfDfEsYHQ1NEra6Ao",
+  "local_tests_passed": 4,
+  "tokenizers_version": "0.22.2",
+  "generator_implementation_sha256": "cd1f6e5351aad5acce1a1021af649c4dd8a099c2b0d506e7cc67cd5aee230163",
+  "tokenizer_core_sha256": "5d992fec42941a33951b22ffb7468ae58811f6de79364cd9f5bcfd714ee772aa",
+  "tokenizer_config_sha256": "78620acfac5a23364592a2216d4048828b5d416e43baef5762f09930ac3f98f4",
+  "general_evaluation_correctness_passed": true
+}

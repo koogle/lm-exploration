@@ -156,3 +156,21 @@ uv run --isolated --no-project --with transformers==4.57.6 \
   --with tokenizers==0.22.2 python verify_tokenizer_publication.py \
   jfrick/scholarly-code-tokenizer --revision <commit-sha>
 ```
+
+## JSON, code, diffs and tool calls
+
+The [structured-output follow-up](../../results/tokenizer-structured/structured-code-v1/REPORT.md)
+scores all 18 original candidates and three fresh 64 MiB code-focused fits at
+16K/32K/50K. It uses 512 disjoint held-out Python parents to construct each of four
+workloads. JSON, patches and tool formats are controlled generated fixtures, not
+independent production traces. The focused mixture is 40/20/20/20 by UTF-8 bytes;
+all new candidates are also checked on the original scholarly mixture.
+
+Run `modal run --detach modal_structured_tokenizer.py`, then
+`python structured_tokenizer_report.py` from `training/`. The Modal entrypoint
+runs two remote tests first and uses explicit CPU/memory hard caps, concurrency
+limits and timeouts. Existing artifact paths refuse overwrite; use a fresh run
+version for a new collection. Raw per-parent scores remain under
+`runs/structured-code-v1/` locally and on the results volume. The generated report
+retains compact metrics, paired bootstrap intervals and provenance. Original
+published tokenizers and the default remain unchanged.
