@@ -1,0 +1,335 @@
+{
+  "schema_version": 1,
+  "scope": "EU institutional content; inventories are not claims of completeness or novelty",
+  "sources": [
+    {
+      "id": "eurlex",
+      "name": "EUR-Lex / CELLAR laws",
+      "institution": "Publications Office of the European Union",
+      "priority": 1,
+      "pilot": true,
+      "description": "Published laws, regulations, directives and decisions. Start with negotiated native XHTML; expand using CELLAR metadata and change feeds.",
+      "seed_urls": [
+        "https://publications.europa.eu/resource/celex/32016R0679"
+      ],
+      "allowed_hosts": [
+        "publications.europa.eu",
+        "eur-lex.europa.eu",
+        "op.europa.eu"
+      ],
+      "request_headers": {
+        "Accept": "application/xhtml+xml",
+        "Accept-Language": "eng"
+      },
+      "language": "en",
+      "document_url_patterns": [
+        "/resource/celex/",
+        "/resource/cellar/.*/DOC_",
+        "/legal-content/[^/]+/TXT/"
+      ],
+      "discovery_url_patterns": [],
+      "reference_urls": [
+        "https://op.europa.eu/en/web/cellar/cellar-data/publications",
+        "https://op.europa.eu/en/web/cellar/cellar-data/rss-and-atom-feeds"
+      ],
+      "expansion": [
+        "SPARQL inventory",
+        "all available document languages",
+        "notification feed",
+        "version relationships"
+      ],
+      "existing_overlap": "Eurlex Resources, MultiLegalPile, JRC-Acquis and DGT; no novelty assumed."
+    },
+    {
+      "id": "commission-press",
+      "name": "Commission Press Corner",
+      "institution": "European Commission",
+      "priority": 2,
+      "pilot": true,
+      "description": "Press releases, statements, speeches and questions-and-answers from Commission departments.",
+      "seed_urls": [
+        "https://ec.europa.eu/commission/presscorner/api/rss?language=en"
+      ],
+      "allowed_hosts": [
+        "ec.europa.eu",
+        "commission.europa.eu"
+      ],
+      "document_url_patterns": [
+        "/commission/presscorner/detail/"
+      ],
+      "discovery_url_patterns": [
+        "/commission/presscorner/api/rss"
+      ],
+      "reference_urls": [
+        "https://ec.europa.eu/commission/presscorner/home/en"
+      ],
+      "expansion": [
+        "native text API behind detail page",
+        "language variants",
+        "historical pagination",
+        "department tagging"
+      ]
+    },
+    {
+      "id": "ecb",
+      "name": "ECB press releases and speeches",
+      "institution": "European Central Bank",
+      "priority": 3,
+      "pilot": true,
+      "description": "Press releases, monetary policy decisions, speeches, interviews and meeting accounts.",
+      "seed_urls": [
+        "https://www.ecb.europa.eu/rss/press.html"
+      ],
+      "allowed_hosts": [
+        "www.ecb.europa.eu",
+        "www.bankingsupervision.europa.eu"
+      ],
+      "document_url_patterns": [
+        "/press/.*/html/[^/]+\\.[a-z]{2}\\.html$"
+      ],
+      "discovery_url_patterns": [
+        "/rss/press\\.html"
+      ],
+      "reference_urls": [
+        "https://www.ecb.europa.eu/press/html/index.en.html"
+      ],
+      "expansion": [
+        "banking supervision publications",
+        "research papers",
+        "press conference audio",
+        "language variants"
+      ],
+      "remove_selectors": [
+        ".address-box",
+        ".related-topics"
+      ],
+      "min_delay_seconds": 5
+    },
+    {
+      "id": "esma",
+      "name": "ESMA news and publications",
+      "institution": "European Securities and Markets Authority",
+      "priority": 4,
+      "pilot": true,
+      "description": "Market supervision news, press releases, consultations, guidelines and reports.",
+      "seed_urls": [
+        "https://www.esma.europa.eu/press-news/esma-news"
+      ],
+      "allowed_hosts": [
+        "www.esma.europa.eu"
+      ],
+      "document_url_patterns": [
+        "^https://www\\.esma\\.europa\\.eu/press-news/esma-news/(?!rss\\.xml)[^/?#]+/?$",
+        "^https://www\\.esma\\.europa\\.eu/sites/default/files/.+\\.pdf(?:\\?.*)?$"
+      ],
+      "discovery_url_patterns": [
+        "/press-news/esma-news(?:\\?|$)"
+      ],
+      "reference_urls": [
+        "https://www.esma.europa.eu/publications-and-data"
+      ],
+      "expansion": [
+        "listing pagination",
+        "publication library",
+        "consultation annexes",
+        "native alternatives to PDF"
+      ],
+      "remove_selectors": [
+        ".more-on-same-topic"
+      ],
+      "min_delay_seconds": 2,
+      "content_selector": "article.node--view-mode-full"
+    },
+    {
+      "id": "ema",
+      "name": "EMA news and scientific documents",
+      "institution": "European Medicines Agency",
+      "priority": 5,
+      "pilot": true,
+      "description": "News, scientific guidance, assessments and committee publications; JSON inventories expose document links and translation mappings.",
+      "seed_urls": [
+        "https://www.ema.europa.eu/en/news"
+      ],
+      "allowed_hosts": [
+        "www.ema.europa.eu"
+      ],
+      "document_url_patterns": [
+        "/en/news/[^/?]+",
+        "\\.pdf$"
+      ],
+      "discovery_url_patterns": [
+        "/en/news(?:\\?|$)"
+      ],
+      "reference_urls": [
+        "https://www.ema.europa.eu/en/scientific-guidelines/download-website-data-json-data-format"
+      ],
+      "expansion": [
+        "JSON inventory adapter",
+        "committee minutes",
+        "translated documents",
+        "twice-daily inventory diff"
+      ],
+      "content_selector": "article.ema-news--full",
+      "remove_selectors": [
+        ".ema-social-media-share"
+      ]
+    },
+    {
+      "id": "eib",
+      "name": "EIB press and research",
+      "institution": "European Investment Bank",
+      "priority": 6,
+      "pilot": false,
+      "description": "Press releases, economic research, investment reports and project publications. Initial entry points not yet collector-validated.",
+      "seed_urls": [
+        "https://www.eib.org/en/press/all/index"
+      ],
+      "allowed_hosts": [
+        "www.eib.org"
+      ],
+      "document_url_patterns": [
+        "/en/press/all/[0-9]",
+        "\\.pdf$"
+      ],
+      "discovery_url_patterns": [
+        "/en/press/all/index"
+      ],
+      "reference_urls": [
+        "https://www.eib.org/en/publications/index"
+      ],
+      "expansion": [
+        "press pagination",
+        "research publications",
+        "language variants"
+      ]
+    },
+    {
+      "id": "parliament",
+      "name": "Parliament committees and proceedings",
+      "institution": "European Parliament",
+      "priority": 7,
+      "pilot": false,
+      "description": "Meeting agendas, committee reports, questions, research briefings and plenary proceedings. Entry points need API/browser adapter validation.",
+      "seed_urls": [
+        "https://www.europarl.europa.eu/committees/en/meetings/meeting-documents"
+      ],
+      "allowed_hosts": [
+        "www.europarl.europa.eu",
+        "data.europarl.europa.eu"
+      ],
+      "document_url_patterns": [
+        "/doceo/document/",
+        "/RegData/.*\\.(?:pdf|xml|html)$"
+      ],
+      "discovery_url_patterns": [
+        "/committees/"
+      ],
+      "reference_urls": [
+        "https://data.europarl.europa.eu/en/developer-corner/opendata-api/minor-release?version=2"
+      ],
+      "expansion": [
+        "committee-document API",
+        "meeting attachments",
+        "verbatim proceedings",
+        "event-recording linkage"
+      ]
+    },
+    {
+      "id": "council",
+      "name": "Council public papers and press",
+      "institution": "Council of the EU and European Council",
+      "priority": 8,
+      "pilot": false,
+      "description": "Press releases, conclusions, public register records and working-party papers. Registered records may lack public full text.",
+      "seed_urls": [
+        "https://www.consilium.europa.eu/en/press/press-releases/"
+      ],
+      "allowed_hosts": [
+        "www.consilium.europa.eu",
+        "data.consilium.europa.eu",
+        "newsroom.consilium.europa.eu"
+      ],
+      "document_url_patterns": [
+        "/en/press/press-releases/[0-9]{4}/",
+        "/doc/document/"
+      ],
+      "discovery_url_patterns": [
+        "/en/press/press-releases/"
+      ],
+      "reference_urls": [
+        "https://www.consilium.europa.eu/en/documents/public-register/"
+      ],
+      "expansion": [
+        "working-party references",
+        "public attachments",
+        "press conference recordings",
+        "version and language mapping"
+      ]
+    },
+    {
+      "id": "expert-groups",
+      "name": "Expert groups and comitology",
+      "institution": "European Commission expert groups and committees",
+      "priority": 9,
+      "pilot": false,
+      "description": "Discover groups, subgroups, meetings and annexes; inspect comitology CSV inventories. Requires interactive discovery beyond generic HTML.",
+      "seed_urls": [
+        "https://commission.europa.eu/about/service-standards-and-principles/transparency/register-expert-groups_en"
+      ],
+      "allowed_hosts": [
+        "commission.europa.eu",
+        "ec.europa.eu"
+      ],
+      "document_url_patterns": [
+        "/document/download/",
+        "\\.(?:pdf|docx|txt)$"
+      ],
+      "discovery_url_patterns": [
+        "/transparency/",
+        "/register-expert-groups"
+      ],
+      "reference_urls": [
+        "https://ec.europa.eu/transparency/comitology-register/screen/datasets"
+      ],
+      "expansion": [
+        "subgroup meeting navigation",
+        "CSV inventory",
+        "date-dependent site migrations",
+        "annexes"
+      ]
+    },
+    {
+      "id": "audiovisual",
+      "name": "EU audiovisual events and transcripts",
+      "institution": "Commission, Parliament and Council audiovisual services",
+      "priority": 10,
+      "pilot": false,
+      "description": "Press conferences, briefings, hearings and proceedings. Inventory recordings and official transcripts/captions; ASR is a future separate stage.",
+      "seed_urls": [
+        "https://audiovisual.ec.europa.eu/en/media/video"
+      ],
+      "allowed_hosts": [
+        "audiovisual.ec.europa.eu",
+        "multimedia.europarl.europa.eu",
+        "newsroom.consilium.europa.eu"
+      ],
+      "document_url_patterns": [],
+      "discovery_url_patterns": [
+        "/en/media/video",
+        "/en/video/",
+        "/en/ebs/"
+      ],
+      "reference_urls": [
+        "https://audiovisual.ec.europa.eu/en/faq",
+        "https://www.europarl.europa.eu/news/en/media-services/multimedia-centre"
+      ],
+      "expansion": [
+        "event schedules",
+        "media/caption manifests",
+        "original versus interpreted tracks",
+        "timestamped transcription",
+        "late official transcripts"
+      ]
+    }
+  ]
+}

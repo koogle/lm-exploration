@@ -1,5 +1,9 @@
 # Local training datasets
 
+[EU institutional corpus exploration](eu/README.md) is a separate discovery and
+extraction project with ten source candidates, bounded crawlers, agent research
+notes and Parquet export. Its artifacts are not registered training inputs.
+
 `datasets.json` is the UI's curated registry. The trainer itself accepts a plain
 UTF-8 text file and does not depend on this registry. Paths in the registry are
 relative to this `data/` directory, not to the shell's working directory.

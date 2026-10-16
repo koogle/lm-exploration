@@ -1,0 +1,104 @@
+{
+  "source_id": "commission-press",
+  "research_date_utc": "2026-10-16",
+  "probe_method": "urllib GET, 35 second timeout, max 3000000 bytes per response; raw bodies kept in ignored artifacts/source-probes",
+  "recommended_source": {
+    "id": "commission-press",
+    "name": "European Commission Press Corner",
+    "seed_urls": [
+      "https://ec.europa.eu/commission/presscorner/api/rss?language=en"
+    ],
+    "allowed_hosts": [
+      "ec.europa.eu"
+    ],
+    "document_url_patterns": [
+      "^https://ec\\.europa\\.eu/commission/presscorner/detail/[a-z]{2}/[a-z]+_\\d+_\\d+$",
+      "^https://ec\\.europa\\.eu/commission/presscorner/api/files/document/print/"
+    ],
+    "discovery_url_patterns": [
+      "^https://ec\\.europa\\.eu/commission/presscorner/api/rss\\?"
+    ],
+    "notes": "RSS discovery verified; detail HTML is an Angular shell. Needs API/browser adapter or PDF fallback before text collection. RSS descriptions are summaries, not full text."
+  },
+  "observations": [
+    {
+      "url": "https://ec.europa.eu/robots.txt",
+      "observed_at": "2026-10-16T08:59:41.108698+00:00",
+      "status": 200,
+      "final_url": "https://ec.europa.eu/robots.txt",
+      "content_type": "text/plain; charset=UTF-8",
+      "bytes": 10670,
+      "body_truncated_at_probe_limit": false
+    },
+    {
+      "url": "https://ec.europa.eu/commission/presscorner/home/en",
+      "observed_at": "2026-10-16T08:59:41.109727+00:00",
+      "status": 200,
+      "final_url": "https://ec.europa.eu/commission/presscorner/home/en",
+      "content_type": "text/html",
+      "bytes": 21533,
+      "body_truncated_at_probe_limit": false
+    },
+    {
+      "url": "https://ec.europa.eu/commission/presscorner/api/rss?language=en",
+      "observed_at": "2026-10-16T08:59:41.110401+00:00",
+      "status": 200,
+      "final_url": "https://ec.europa.eu/commission/presscorner/api/rss?language=en",
+      "content_type": "application/rss+xml;charset=UTF-8",
+      "bytes": 7005,
+      "body_truncated_at_probe_limit": false
+    },
+    {
+      "url": "https://ec.europa.eu/commission/presscorner/api/documents?language=en&page=0&pageSize=5",
+      "observed_at": "2026-10-16T08:59:41.111042+00:00",
+      "error": "HTTP Error 400: Bad Request",
+      "status": 400,
+      "body_truncated_at_probe_limit": false
+    },
+    {
+      "url": "https://ec.europa.eu/commission/presscorner/detail/en/ip_26_2175",
+      "observed_at": "2026-10-16T09:00:09.874773+00:00",
+      "status": 200,
+      "final_url": "https://ec.europa.eu/commission/presscorner/detail/en/ip_26_2175",
+      "content_type": "text/html",
+      "bytes": 22165,
+      "body_truncated_at_probe_limit": false
+    },
+    {
+      "url": "https://ec.europa.eu/commission/presscorner/api/documents/ip_26_2175?language=en",
+      "observed_at": "2026-10-16T09:00:09.875564+00:00",
+      "error": "HTTP Error 404: Not Found",
+      "status": 404,
+      "body_truncated_at_probe_limit": false
+    },
+    {
+      "url": "https://ec.europa.eu/commission/presscorner/api/files/document/print/en/ip_26_2175/IP_26_2175_EN.pdf",
+      "observed_at": "2026-10-16T09:00:09.876231+00:00",
+      "status": 200,
+      "final_url": "https://ec.europa.eu/commission/presscorner/api/files/document/print/en/ip_26_2175/IP_26_2175_EN.pdf",
+      "content_type": "application/pdf",
+      "bytes": 82742,
+      "body_truncated_at_probe_limit": false
+    },
+    {
+      "url": "https://ec.europa.eu/commission/presscorner/main-B2LO35GF.js",
+      "observed_at": "2026-10-16T09:00:29.657998+00:00",
+      "status": 200,
+      "final_url": "https://ec.europa.eu/commission/presscorner/main-B2LO35GF.js",
+      "content_type": "text/javascript",
+      "bytes": 473885,
+      "body_truncated_at_probe_limit": false
+    }
+  ],
+  "training_eligible": false,
+  "release_status": "research only; no publication or training registration",
+  "findings": {
+    "native_full_text_verified": false,
+    "rss_items": 10,
+    "detail_page": "HTTP 200 Angular application shell with no p elements; cannot treat HTTP success as text extraction success.",
+    "pdf_fallback_verified": true,
+    "pdf_text_extraction_verified": false,
+    "robots": "No presscorner rule found in observed robots.txt; archives blocked.",
+    "next_adapter": "Use browser network inspection to identify actual detail API; tested guessed documents list API returned 400 and guessed item API returned 404. Do not use RSS summary as full document."
+  }
+}
