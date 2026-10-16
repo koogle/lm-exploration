@@ -36,6 +36,7 @@ def audit_shards(store, state, revision, encoder=None):
             filename=shard["path"],
             revision=revision,
         )
+        counts["parquet_bytes"] += Path(local).stat().st_size
         table = pq.read_table(local)
         rows = table.to_pylist()
         if len(rows) != shard["rows"]:
@@ -61,7 +62,12 @@ def audit_shards(store, state, revision, encoder=None):
                 counts["text_size_mismatches"] += 1
             if row["collection_id"] != shard["collection_id"] or row["format"] != shard["format"]:
                 counts["partition_mismatches"] += 1
-            counts.update(rows=1, characters=characters, words=words)
+            counts.update(
+                rows=1,
+                characters=characters,
+                words=words,
+                text_utf8_bytes=len(text.encode("utf-8")),
+            )
             if encoder is not None:
                 counts["tokens"] += len(encoder.encode(text, disallowed_special=()))
             languages[row["language"] or "und"] += 1
@@ -81,6 +87,11 @@ def audit_shards(store, state, revision, encoder=None):
         "completed_references_missing": len(missing),
         "text_index_references_missing": len(bad_index),
         "shard_issues": issues,
+        "metric_mismatches": {
+            key: {"stored": state["metrics"].get(key), "measured": counts[key]}
+            for key in ("rows", "characters", "words", "text_utf8_bytes", "parquet_bytes")
+            if "metrics" in state and state["metrics"].get(key) != counts[key]
+        },
     }
     return {
         "revision": revision,
@@ -90,6 +101,8 @@ def audit_shards(store, state, revision, encoder=None):
         "unique_row_ids": len(seen),
         "characters": counts["characters"],
         "words": counts["words"],
+        "text_utf8_bytes": counts["text_utf8_bytes"],
+        "parquet_bytes": counts["parquet_bytes"],
         "duplicate_normalized_texts": counts["duplicate_normalized_texts"],
         "languages": dict(languages),
         "formats": dict(formats),
@@ -125,6 +138,11 @@ def source_status(source_id, config, audit=False, encoder=None):
         "revision": revision,
         "visibility": "private" if info.private else "public",
         "rows": rows,
+        "metrics": state.get("metrics"),
+        "collection_metrics": state.get("collection_metrics"),
+        "metrics_history_count": len(state.get("metrics_history", [])),
+        "recent_metrics": state.get("metrics_history", [])[-5:],
+        "campaigns": state.get("campaigns", {}),
         "shards": len(state["shards"]),
         "completed": len(state["completed"]),
         "duplicates": sum(x.get("status") == "duplicate" for x in state["completed"].values()),
@@ -171,6 +189,11 @@ def main():
             result = {"source_id": source, "error_type": type(error).__name__}
             failed = True
         output["sources"].append(result)
+    available_metrics = [source.get("metrics") for source in output["sources"]]
+    if all(available_metrics):
+        output["combined_metrics"] = {
+            key: sum(metrics[key] for metrics in available_metrics) for key in available_metrics[0]
+        }
     print(json.dumps(output, indent=2, ensure_ascii=False))
     return 1 if failed else 0
 

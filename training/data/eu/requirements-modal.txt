@@ -36,6 +36,8 @@ colorama==0.4.6 ; sys_platform == 'win32'
     # via tqdm
 filelock==4.2.0
     # via huggingface-hub
+fonttools==4.67.0
+    # via eu-corpus-discovery
 frozenlist==1.8.0
     # via
     #   aiohttp

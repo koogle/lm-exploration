@@ -12,6 +12,7 @@ dependencies = [
     "huggingface-hub>=0.34,<2",
     "modal[api-proxy-support]>=1.0,<2",
     "tiktoken>=0.12,<1",
+    "fonttools>=4,<5",
 ]
 
 [dependency-groups]

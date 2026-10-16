@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from adapters.ecb import DATABASE, canonical_url, enumerate_collection
+from adapters.ecb import (
+    COLLECTIONS,
+    DATABASE,
+    _representations,
+    canonical_url,
+    enumerate_collection,
+)
 
 
 def fixture_fetch(rows):
@@ -88,3 +94,21 @@ def test_canonical_external_host_and_content_fragment():
     assert canonical_url("https://elsewhere.test/x") is None
     fetch, _ = fixture_fetch([row(1, ["/press/key/a_content.en.html"])])
     assert enumerate_collection("speeches", fetch)["records"] == []
+
+
+def test_verified_research_series_and_historical_pdf_forms():
+    assert COLLECTIONS["working_papers"]["type_ids"] == ["2"]
+    assert COLLECTIONS["occasional_papers"]["type_ids"] == ["3"]
+    assert COLLECTIONS["economic_bulletin_articles"]["type_ids"] == ["24"]
+    assert COLLECTIONS["economic_bulletin_boxes"]["type_ids"] == ["25"]
+    urls = [
+        "/pub/pdf/scpwps/ecbwp001.pdf",
+        "/press/economic-bulletin/articles/1999/pdf/p.11_16_mb199901en.pdf",
+        "/pub/pdf/not-a-document.xlsx",
+    ]
+    records = _representations({"documentTypes": urls})
+    assert len(records) == 2
+    assert all(language == "und" and fmt == "pdf" for _, language, fmt in records)
+    assert {url for url, _, _ in records} == {
+        "https://www.ecb.europa.eu" + path for path in urls[:2]
+    }

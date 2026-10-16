@@ -6,13 +6,30 @@
     "ecb": {
       "repo_id": "jfrick/eu-ecb",
       "adapter": "adapters.ecb",
-      "collections": ["speeches", "press_releases", "interviews", "meeting_accounts", "decisions"],
+      "collections": [
+        "working_papers",
+        "occasional_papers",
+        "economic_bulletin_articles",
+        "economic_bulletin_boxes",
+        "speeches",
+        "press_releases",
+        "interviews",
+        "meeting_accounts",
+        "decisions"
+      ],
       "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text."
     },
     "ema": {
       "repo_id": "jfrick/eu-ema",
       "adapter": "adapters.ema",
-      "collections": ["news", "scientific_guidelines", "committee_documents"],
+      "collections": [
+        "epar_overviews",
+        "epar_product_information",
+        "epar_assessment_reports",
+        "news",
+        "scientific_guidelines",
+        "committee_documents"
+      ],
       "description": "European Medicines Agency news, scientific guidelines and committee documents, enumerated from official JSON inventories."
     }
   },
@@ -24,6 +41,8 @@
     "inventory_limit_per_collection": 100000,
     "max_inventory_bytes": 67108864,
     "max_document_bytes": 20971520,
-    "max_attempts_per_item": 3
+    "max_attempts_per_item": 3,
+    "campaign_max_rounds": 3,
+    "campaign_max_seconds": 14400
   }
 }

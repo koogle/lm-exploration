@@ -20,6 +20,8 @@ class FakeAPI:
         self.exists = True
         self.fail = False
         self.commits = []
+        self.downloads = []
+        self.metadata_requests = []
 
     def create_repo(self, **kwargs):
         if not self.exists:
@@ -27,10 +29,19 @@ class FakeAPI:
             self.exists = True
 
     def repo_info(self, **kwargs):
-        return SimpleNamespace(sha=self.sha)
+        if kwargs.get("files_metadata"):
+            assert kwargs["revision"] == self.sha
+            self.metadata_requests.append(kwargs)
+        return SimpleNamespace(
+            sha=self.sha,
+            siblings=[
+                SimpleNamespace(rfilename=path, size=len(body)) for path, body in self.files.items()
+            ],
+        )
 
     def hf_hub_download(self, filename, revision, **kwargs):
         assert revision == self.sha
+        self.downloads.append(filename)
         if filename not in self.files:
             raise EntryNotFoundError("missing")
         path = self.tmp_path / "download.json"
@@ -173,3 +184,132 @@ def test_inventory_and_raw_snapshot_in_same_commit(tmp_path):
     assert raw_path in api.commits[0]
     assert inventory_path in api.commits[0]
     assert store.read_json(inventory_path, revision=revision) == inventory
+
+
+def test_metrics_accumulate_unicode_bytes_restart_and_duplicate_retry(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    first = record() | {"text": "Grüße 世界", "raw_sha256": "c" * 64}
+    raw_path = "raw/" + "c" * 64 + ".gz"
+    revision = store.commit(state, revision, [first], raw_files={raw_path: b"first-raw"})
+    first_metrics = copy.deepcopy(state["metrics"])
+    assert first_metrics["rows"] == 1
+    assert first_metrics["characters"] == len("Grüße 世界")
+    assert first_metrics["text_utf8_bytes"] == len("Grüße 世界".encode())
+    assert first_metrics["words"] == 2
+    assert first_metrics["stored_raw_gzip_bytes"] == 9
+    assert first_metrics["parquet_bytes"] == len(api.files[state["shards"][0]["path"]])
+    # Reload is sufficient to continue totals; no process-local accumulator exists.
+    state, revision = store.load()
+    second = record() | {"id": "doc-2", "collection_id": "news", "raw_sha256": "c" * 64}
+    revision = store.commit(state, revision, [second], raw_files={raw_path: b"first-raw"})
+    assert state["metrics"]["rows"] == 2
+    assert state["metrics"]["stored_raw_gzip_bytes"] == 9
+    assert state["collection_metrics"]["news"]["stored_raw_gzip_bytes"] == 0
+    assert state["collection_metrics"]["speeches"]["stored_raw_gzip_bytes"] == 9
+    before = copy.deepcopy(state["metrics"])
+    store.commit(state, revision, [second], raw_files={raw_path: b"first-raw"})
+    assert state["metrics"] == before
+    assert b"Text UTF-8 bytes" in api.files["README.md"]
+
+
+def test_metric_backfill_pinned_historical_shard_and_source(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    raw_path = "raw/" + "d" * 64 + ".gz"
+    revision = store.commit(
+        state,
+        revision,
+        [record() | {"raw_sha256": "d" * 64}],
+        raw_files={raw_path: b"historical-raw"},
+    )
+    expected = copy.deepcopy(state["metrics"])
+    for field in ("metrics_version", "metrics", "collection_metrics", "raw_blob_metrics"):
+        state.pop(field)
+    for shard in state["shards"]:
+        shard.pop("metrics")
+    commits_before = len(api.commits)
+    api.downloads.clear()
+    store.migrate_metrics(state, revision)
+    assert raw_path not in api.downloads
+    assert api.metadata_requests[-1]["revision"] == revision
+    assert state["metrics"] == expected
+    assert state["shards"][0]["metrics"] == expected
+    assert len(api.commits) == commits_before  # Migration itself never writes remotely.
+    # Once migrated, a missing historical download no longer forces rereads.
+    api.files.pop(raw_path)
+    store.migrate_metrics(state, revision)
+    assert state["metrics"] == expected
+
+
+def test_failed_commit_does_not_advance_metrics(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    revision = store.commit(state, revision, [record()])
+    before = copy.deepcopy(state)
+    remote = copy.deepcopy(api.files)
+    api.fail = True
+    with pytest.raises(RuntimeError):
+        store.commit(state, revision, [record() | {"id": "doc-2"}])
+    assert state == before
+    assert api.files == remote
+
+
+def test_missing_historical_raw_never_fabricates_zero_metrics(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    path = "raw/" + "e" * 64 + ".gz"
+    revision = store.commit(
+        state, revision, [record() | {"raw_sha256": "e" * 64}], raw_files={path: b"raw"}
+    )
+    state.pop("metrics_version")
+    before = copy.deepcopy(state)
+    api.files.pop(path)
+    with pytest.raises(EntryNotFoundError):
+        store.migrate_metrics(state, revision)
+    assert state == before
+
+
+def test_metrics_history_tracks_only_committed_growth(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    revision = store.commit(state, revision, [record()])
+    assert len(state["metrics_history"]) == 1
+    assert state["metrics_history"][0]["metrics"]["rows"] == 1
+    assert state["metrics_history"][0]["revision_parent"] == "initial"
+    revision = store.commit(state, revision, [record()])
+    assert len(state["metrics_history"]) == 1
+    previous_revision = revision
+    revision = store.commit(state, revision, [record() | {"id": "doc-2"}])
+    assert len(state["metrics_history"]) == 2
+    assert state["metrics_history"][-1]["revision_parent"] == previous_revision
+    assert state["metrics_history"][-1]["metrics"]["rows"] == 2
+    before = copy.deepcopy(state["metrics_history"])
+    api.fail = True
+    with pytest.raises(RuntimeError):
+        store.commit(state, revision, [record() | {"id": "doc-3"}])
+    assert state["metrics_history"] == before
+
+
+def test_backfill_downloads_raw_when_metadata_has_no_size(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    raw_path = "raw/" + "f" * 64 + ".gz"
+    revision = store.commit(
+        state,
+        revision,
+        [record() | {"raw_sha256": "f" * 64}],
+        raw_files={raw_path: b"fallback-body"},
+    )
+    state.pop("metrics_version")
+    api.repo_info = lambda **kwargs: SimpleNamespace(sha=api.sha, siblings=None)
+    api.downloads.clear()
+    store.migrate_metrics(state, revision)
+    assert raw_path in api.downloads
+    assert state["metrics"]["stored_raw_gzip_bytes"] == len(b"fallback-body")

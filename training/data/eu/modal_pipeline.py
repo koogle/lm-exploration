@@ -18,7 +18,14 @@ ca_bundle = os.environ.get("SSL_CERT_FILE")
 if ca_bundle and Path(ca_bundle).is_file():
     image = image.env({"SSL_CERT_FILE": "/root/eu-ca.pem", "REQUESTS_CA_BUNDLE": "/root/eu-ca.pem"})
     image = image.add_local_file(ca_bundle, "/root/eu-ca.pem")
-for name in ("pipeline.py", "hf_store.py", "eu_corpus.py", "sources.json", "pipeline_sources.json"):
+for name in (
+    "pipeline.py",
+    "campaign.py",
+    "hf_store.py",
+    "eu_corpus.py",
+    "sources.json",
+    "pipeline_sources.json",
+):
     image = image.add_local_file(ROOT / name, f"/root/eu/{name}")
 image = image.add_local_dir(ROOT / "adapters", "/root/eu/adapters", ignore=["__pycache__/"])
 secret = modal.Secret.from_name("eu-corpus-huggingface", required_keys=["HF_TOKEN"])
@@ -60,6 +67,24 @@ def collect_ema(
     return run_source("ema", run_id, max_documents, work_seconds, refresh)
 
 
+@app.function(
+    image=image, secrets=[secret], cpu=0.125, memory=512, timeout=14400, max_containers=1, retries=0
+)
+def campaign_ecb(campaign_id: str, rounds: int, max_documents: int, work_seconds: int):
+    from campaign import run_campaign
+
+    return run_campaign("ecb", campaign_id, collect_ecb.remote, rounds, max_documents, work_seconds)
+
+
+@app.function(
+    image=image, secrets=[secret], cpu=0.125, memory=512, timeout=14400, max_containers=1, retries=0
+)
+def campaign_ema(campaign_id: str, rounds: int, max_documents: int, work_seconds: int):
+    from campaign import run_campaign
+
+    return run_campaign("ema", campaign_id, collect_ema.remote, rounds, max_documents, work_seconds)
+
+
 @app.local_entrypoint()
 def main(
     run_id: str = "",
@@ -68,6 +93,7 @@ def main(
     work_seconds: int = 3000,
     refresh: bool = False,
     check_only: bool = False,
+    rounds: int = 1,
 ):
     mapping = json.loads((ROOT / "pipeline_sources.json").read_text())
     if source not in {"both", "ecb", "ema"}:
@@ -76,6 +102,10 @@ def main(
         raise ValueError("max_documents outside configured bound")
     if not 1 <= work_seconds <= mapping["limits"]["work_seconds"]:
         raise ValueError("work_seconds outside configured bound")
+    if not 1 <= rounds <= mapping["limits"]["campaign_max_rounds"]:
+        raise ValueError("Campaign rounds outside configured bound")
+    if rounds > 1 and refresh:
+        raise ValueError("Refresh inventories in a single round before starting a campaign")
     access = verify_access.remote()
     print(json.dumps(access), flush=True)
     if access["hf_owner"] != mapping["owner"] or any(
@@ -98,16 +128,27 @@ def main(
         "sources": sources,
         "reserved_at": datetime.now(UTC).isoformat(),
         "max_documents_each": max_documents,
+        "rounds": rounds,
+        "max_attempts_each_campaign": max_documents * rounds,
         "worker_seconds_each": 3600,
-        "reserved_vcpu_seconds": len(sources) * 3600,
-        "reserved_gib_seconds": len(sources) * 2 * 3600,
+        "reserved_vcpu_seconds": len(sources) * (3600 * rounds + (1800 if rounds > 1 else 0)),
+        "reserved_gib_seconds": len(sources) * (2 * 3600 * rounds + (7200 if rounds > 1 else 0)),
     }
     ledger["runs"].append(reservation)
     ledger_path.write_text(json.dumps(ledger, indent=2) + "\n")
     functions = {"ecb": collect_ecb, "ema": collect_ema}
-    calls = {s: functions[s].spawn(run_id, max_documents, work_seconds, refresh) for s in sources}
+    if rounds > 1:
+        supervisors = {"ecb": campaign_ecb, "ema": campaign_ema}
+        calls = {
+            s: supervisors[s].spawn(run_id, rounds, max_documents, work_seconds) for s in sources
+        }
+    else:
+        calls = {
+            s: functions[s].spawn(run_id, max_documents, work_seconds, refresh) for s in sources
+        }
     launch = {
         "run_id": run_id,
+        "rounds": rounds,
         "calls": {s: c.object_id for s, c in calls.items()},
         "datasets": {s: mapping["sources"][s]["repo_id"] for s in sources},
     }

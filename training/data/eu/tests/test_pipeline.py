@@ -130,10 +130,10 @@ def harness(tmp_path, monkeypatch):
             "modified_at": "2026-01-01",
         }
 
-    def run(store, source="ecb", maximum=1000, refresh=False):
+    def run(store, source="ecb", maximum=1000, refresh=False, run_id="test-run"):
         return pipeline.run_source(
             source,
-            "test-run",
+            run_id,
             max_documents=maximum,
             work_seconds=30,
             mapping_path=mapping_path,
@@ -166,12 +166,12 @@ def test_resume_and_round_robin_document_limit(harness):
     assert first["attempted"] == first["extracted"] == 2, store.state["failures"]
     assert [row["document_id"] for row in store.rows] == ["a1", "b1"]
     assert len(store.state["completed"]) == 2
-    second = h.run(store, maximum=2)
+    second = h.run(store, maximum=2, run_id="round-two")
     assert second["attempted"] == 2
     assert [row["document_id"] for row in store.rows] == ["a1", "b1", "a2", "b2"]
     assert h.enumerated == ["a", "b"]  # Resumed immutable inventory, no network enumeration.
     assert len(h.fetched) == 4
-    third = h.run(store, maximum=2)
+    third = h.run(store, maximum=2, run_id="round-three")
     assert third["attempted"] == 0
     assert third["total_rows"] == 4
 
@@ -193,7 +193,7 @@ def test_exact_duplicates_share_persisted_record(harness):
     entries = list(store.state["completed"].values())
     assert {entry["status"] for entry in entries} == {"extracted", "duplicate"}
     assert len({entry["record_id"] for entry in entries}) == 1
-    assert h.run(store)["attempted"] == 0
+    assert h.run(store, run_id="next-round")["attempted"] == 0
 
 
 def test_failed_document_commit_replays_uncommitted_documents(harness):
@@ -223,7 +223,7 @@ def test_new_extraction_version_revisits_completed_candidates(harness, monkeypat
     h.run(store)
     old_keys = set(store.state["completed"])
     monkeypatch.setattr(pipeline, "EXTRACTION_VERSION", "new-extractor")
-    result = h.run(store)
+    result = h.run(store, run_id="new-extractor-run")
     assert result["attempted"] == 1
     assert len(store.state["completed"]) == 2
     assert old_keys < store.state["completed"].keys()
@@ -237,7 +237,7 @@ def test_modified_source_revision_revisited_after_refresh(harness):
     store = DurableStore()
     h.run(store)
     item["modified_at"] = "2026-02-01"
-    result = h.run(store, refresh=True)
+    result = h.run(store, refresh=True, run_id="refresh-run")
     assert result["attempted"] == 1
     assert len(store.state["completed"]) == 2
     assert h.enumerated == ["a", "b", "a", "b"]
@@ -313,3 +313,85 @@ def test_source_cooldown_stops_resume_before_network(harness, monkeypatch):
     assert not harness.fetched
     assert not harness.enumerated
     assert not store.state["runs"]
+
+
+def test_terminal_run_reinvocation_is_read_only(harness):
+    h = harness
+    h.inventories.update({"a": [h.candidate("a1"), h.candidate("a2")], "b": []})
+    store = DurableStore()
+    first = h.run(store, maximum=1)
+    revision = store.revision
+    repeated = h.run(store, maximum=1000, refresh=True)
+    assert repeated == first
+    assert store.revision == revision
+    assert len(h.fetched) == 1
+    assert h.enumerated == ["a", "b"]
+
+
+def interrupted_run(attempted=0, started_at="1970-01-01T00:16:30+00:00"):
+    return {
+        "run_id": "test-run",
+        "source_id": "ecb",
+        "started_at": started_at,
+        "status": "running",
+        "max_documents": 7,
+        "work_seconds": 30,
+        "attempted": attempted,
+        "extracted": attempted,
+        "failed": 0,
+        "duplicates": 0,
+    }
+
+
+def test_restart_reserves_uncommitted_batches_and_keeps_first_bound(harness, monkeypatch):
+    h = harness
+    h.inventories.update({"a": [h.candidate(f"a{i}") for i in range(10)], "b": []})
+    monkeypatch.setattr(pipeline.time, "time", lambda: 1000)
+    store = DurableStore()
+    # Original 7-attempt authorization: 2 checkpointed + 2 possibly lost leaves 3.
+    store.state["runs"].append(interrupted_run(attempted=2))
+    result = h.run(store, maximum=1000)
+    assert result["attempted"] == 3
+    assert result["remaining_seconds_at_start"] == 20
+    assert result["logical_run_attempts_persisted"] == 2
+    assert result["logical_run_attempts_reserved"] == 2
+    assert len(h.fetched) == 3
+
+
+@pytest.mark.parametrize("reason", ["time", "attempts"])
+def test_exhausted_restart_finalizes_without_source_io(harness, monkeypatch, reason):
+    monkeypatch.setattr(pipeline.time, "time", lambda: 1000)
+    store = DurableStore()
+    old = interrupted_run(attempted=5 if reason == "attempts" else 0)
+    if reason == "time":
+        old["started_at"] = "1970-01-01T00:16:00+00:00"
+    store.state["runs"].append(old)
+    # Budget finalization takes precedence over a current source cooldown.
+    store.state["source_retry_after_epoch"] = 1100
+    result = harness.run(store)
+    assert result["status"] == "bounded_complete"
+    assert result["stop_reason"] == "logical_run_budget_exhausted"
+    assert not harness.fetched
+    assert not harness.enumerated
+    assert len(store.state["runs"]) == 1
+    assert store.revision == 1
+
+
+def test_budget_sums_all_interrupted_attempts_from_first_start():
+    first = interrupted_run(attempted=1)
+    second = interrupted_run(attempted=1, started_at="1970-01-01T00:16:39+00:00")
+    assert pipeline.run_budget([first, second], 1000, 3000, 2, 1000) == (1, 20, 2, 4)
+
+
+def test_restart_uses_remaining_wall_time_for_fetch_deadline(harness, monkeypatch):
+    h = harness
+    h.inventories.update({"a": [h.candidate("a1"), h.candidate("a2")], "b": []})
+    monkeypatch.setattr(pipeline.time, "time", lambda: 1000)
+    # 10 seconds already elapsed: the new deadline is 120, not 130.
+    ticks = iter([100, 100, 110, 121, 121])
+    monkeypatch.setattr(pipeline.time, "monotonic", lambda: next(ticks))
+    store = DurableStore()
+    store.state["runs"].append(interrupted_run())
+    result = h.run(store)
+    assert result["attempted"] == 1
+    assert len(h.fetched) == 1

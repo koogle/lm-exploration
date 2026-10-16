@@ -123,7 +123,7 @@ reported relative to these selected interfaces, not the whole institution.
 
 `pipeline.py` enumerates and saves each collection, then interleaves candidate
 lists round-robin so one large collection does not consume the entire budget.
-The initial limit is **1,000 attempted documents per organization per invocation**,
+The limit is **1,000 attempted documents per organization per round**,
 including failed downloads/extractions. Inventory requests are additional. A source
 worker gets 3,000 seconds of work time and a 3,600-second Modal timeout; a request
 already in progress can run beyond the work deadline. Each worker uses one CPU and
@@ -155,8 +155,9 @@ uv run python modal_cli.py run --detach modal_pipeline.py --run-id eu-pilot-002 
 uv run python modal_cli.py run --detach modal_pipeline.py --run-id eu-refresh-001 --source both --refresh
 ```
 
-No schedule is installed by these commands. Each additional invocation authorizes
-another bounded batch; the 1,000-document limit is not a lifetime repository cap.
+No recurring schedule is installed by these commands. Single-round commands run
+one bounded batch; `--rounds 3` launches a finite continuation campaign. The
+1,000-document limit is not a lifetime repository cap.
 The Modal entrypoint checks the HF identity against the configured owner and tests
 both institutions' robots endpoints before collection. It reserves compute in
 `artifacts/modal-ingestion-budget.json`, independently of training experiments,
@@ -189,8 +190,8 @@ Commits require the previously loaded HF revision; a conflict aborts the worker
 rather than overwriting another writer's progress. An interrupted worker resumes
 from the last committed checkpoint. Uncommitted downloads may repeat; committed
 items are skipped. A stale `running` entry is evidence of interruption, not a claim
-that the worker is still alive. Modal automatic retries are disabled; rerun the
-bounded command explicitly with a fresh run ID.
+that the worker is still alive. Application-level Modal retries are disabled. Platform interruptions can still
+restart a worker; durable progress determines which documents remain.
 
 Completed-item keys include source, document ID, URL, language, known modification
 date and extractor version. Exact normalized-text duplicates point to the existing
@@ -343,3 +344,52 @@ The selected inventories contain 6,752 ECB and 11,864 EMA document-language URLs
 Those are candidate counts, not extracted-document or token totals. Some document
 footers and related links remain in extracted text. Token counting requires the
 OpenAI vocabulary file; its download was denied by this environment proxy (403).
+
+## Running totals and expanded collection campaigns
+
+Every HF commit now records exact `metrics` and `collection_metrics`: stored rows,
+Unicode characters, whitespace words, UTF-8 text bytes, Parquet file bytes, and
+compressed original-file bytes. `metrics_history` retains timestamped growth
+checkpoints. HF dataset cards show current totals and a per-collection table;
+`uv run status.py both` reports both organizations and combined totals without
+redownloading corpus files. Historical rows are backfilled from pinned Parquet
+and HF object-size metadata before counters are enabled. These are stored-data
+counts, not token counts, network traffic, or total HF repository billing size.
+Shared raw blobs count once; inventories, progress and Git history are excluded.
+
+Added collections:
+
+| Organization | Collection IDs | Observed inventory |
+| --- | --- | --- |
+| ECB | `working_papers`, `occasional_papers`, `economic_bulletin_articles`, `economic_bulletin_boxes` | 6,032 publication records in the observed snapshot |
+| EMA | `epar_overviews`, `epar_product_information`, `epar_assessment_reports` | 50,656 / 55,214 / 1,891 accepted PDF language URLs |
+
+EMA EPAR collections include 26 languages. They are scheduled instead of the
+umbrella EPAR collection to avoid overlapping collection lists. Historic ECB PDFs
+without a language suffix are retained as `und`, not assumed English. See
+[ECB expansion](research/ecb-expansion.md) and [EMA expansion](research/ema-expansion.md).
+
+Launch each source separately so a detached local entrypoint has one durable
+supervisor call. Each campaign allows at most three rounds of 1,000 attempted
+documents; each collection worker has a 3,600-second hard timeout and 3,000-second
+work budget. Supervisors have a four-hour deadline and low CPU allocation. They
+respect the saved source cooldown before another round, and stop if a crashed
+supervisor cannot determine whether a claimed worker already ran. Plans, claims,
+round results and metrics live in HF `state/progress.json` under `campaigns`.
+
+```sh
+uv run python modal_cli.py run --detach modal_pipeline.py --source ecb \
+  --run-id ecb-expansion-001 --rounds 3
+uv run python modal_cli.py run --detach modal_pipeline.py --source ema \
+  --run-id ema-expansion-001 --rounds 3
+uv run status.py both
+```
+
+EMA requests now have a ten-second minimum interval; ECB uses five seconds.
+A 429 ends the current round immediately. There is no indefinite or recurring schedule: campaigns stop at their bounds and preserve
+all committed progress for the next authorized continuation.
+
+Logical round IDs also enforce the original wall-time and attempt budgets across
+platform restarts. An interrupted attempt reserves one uncommitted batch against
+its limit; replaying a completed round returns its saved result without new source
+requests. This prevents a restart from silently granting another full allowance.

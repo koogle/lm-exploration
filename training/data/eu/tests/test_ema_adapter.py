@@ -85,3 +85,37 @@ def test_truncated_inventory_and_bad_input_fail():
         ema.enumerate_collection("missing", inventory([]))
     with pytest.raises(ValueError, match="non-negative"):
         ema.enumerate_collection("news", inventory([]), limit=-1)
+
+
+@pytest.mark.parametrize("collection,kind", list(ema.EPAR_SERIES.items()))
+def test_epar_series_exact_filter_preserves_identity(collection, kind):
+    selected = document(
+        kind,
+        "812",
+        medicine_name="Example medicine",
+        ema_product_number="EMEA/H/C/000001",
+        translations={"fr": f"https://www.ema.europa.eu/fr/documents/{kind}/example_fr.pdf"},
+    )
+    items = [selected, document("variation-report", "813")]
+    result = ema.enumerate_collection(collection, inventory(items), limit=100000)
+    records = result["records"]
+    assert len(records) == 2
+    assert {r["language"] for r in records} == {"en", "fr"}
+    assert {r["document_type"] for r in records} == {kind}
+    assert records[0]["ema_product_number"] == "EMEA/H/C/000001"
+    assert records[0]["medicine_name"] == "Example medicine"
+    assert result["enumeration"]["complete"]
+    assert result["enumeration"]["overlaps_collections"] == ["epar_documents"]
+    umbrella = ema.enumerate_collection("epar_documents", inventory(items))["records"]
+    assert {r["document_id"] for r in records} <= {r["document_id"] for r in umbrella}
+
+
+def test_epar_bound_is_machine_readable():
+    result = ema.enumerate_collection(
+        "epar_overviews", inventory([document("overview", "1"), document("overview", "2")]), limit=1
+    )
+    summary = result["enumeration"]
+    assert summary["selection_truncated"]
+    assert summary["unselected_count"] == 1
+    assert summary["selection_limit"] == 1
+    assert not summary["complete"]

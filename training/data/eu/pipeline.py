@@ -124,6 +124,42 @@ def checkpoint(store, state, revision, records, raw_files, extra_files=None, mes
     return store.commit(state, revision, records, raw_files, extra_files, message)
 
 
+def run_budget(previous, max_documents, work_seconds, batch_size, timestamp):
+    """Bound a logical run across preemptions, including possibly lost batches."""
+    if not previous:
+        return max_documents, work_seconds, 0, 0
+    first = previous[0]
+    document_bound = min(max_documents, first["max_documents"])
+    seconds_bound = min(work_seconds, first["work_seconds"])
+    elapsed = max(0, timestamp - datetime.fromisoformat(first["started_at"]).timestamp())
+    persisted = sum(run["attempted"] for run in previous)
+    # A running marker can hide up to one fetched but not checkpointed batch.
+    reserved = sum(
+        run.get("checkpoint_batch_size", batch_size)
+        for run in previous
+        if run["status"] == "running"
+    )
+    return (
+        max(0, document_bound - persisted - reserved),
+        max(0, seconds_bound - elapsed),
+        persisted,
+        reserved,
+    )
+
+
+def run_result(config, state, revision, run):
+    return {
+        "repo_id": config["repo_id"],
+        "revision": revision,
+        **run,
+        "metrics": state.get("metrics"),
+        "collection_metrics": state.get("collection_metrics"),
+        "total_rows": sum(s["rows"] for s in state["shards"]),
+        "total_completed": len(state["completed"]),
+        "total_failures": len(state["failures"]),
+    }
+
+
 def run_source(
     source_id,
     run_id,
@@ -155,6 +191,28 @@ def run_source(
     store = store or HFStore(config["repo_id"])
     store.ensure(private=mapping["private"])
     state, revision = store.load()
+    previous = [run for run in state["runs"] if run["run_id"] == run_id]
+    terminal = next(
+        (run for run in reversed(previous) if run["status"] == "bounded_complete"), None
+    )
+    if terminal is not None:
+        return run_result(config, state, revision, terminal)
+    budget_checked_at = time.monotonic()
+    remaining_documents, remaining_seconds, persisted_attempts, reserved_attempts = run_budget(
+        previous, max_documents, work_seconds, bounds["batch_size"], time.time()
+    )
+    if previous and (remaining_documents == 0 or remaining_seconds == 0):
+        # Finalize the last durable attempt without opening a source HTTP client.
+        last = previous[-1]
+        last["status"] = "bounded_complete"
+        last["finished_at"] = now()
+        last["stop_reason"] = "logical_run_budget_exhausted"
+        last["logical_run_attempts_persisted"] = persisted_attempts
+        last["logical_run_attempts_reserved"] = reserved_attempts
+        revision = checkpoint(
+            store, state, revision, [], {}, message=f"Finish exhausted {source_id} run {run_id}"
+        )
+        return run_result(config, state, revision, last)
     if state.get("source_retry_after_epoch", 0) > time.time():
         raise ValueError(
             f"Source {source_id} is rate-limited until epoch "
@@ -165,7 +223,7 @@ def run_source(
     output = output / datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f")
     collector = Collector(output, max_bytes=bounds["max_inventory_bytes"])
     started = time.monotonic()
-    deadline = started + work_seconds
+    deadline = budget_checked_at + remaining_seconds
     inventory_cache = {}
     run = {
         "run_id": run_id,
@@ -175,6 +233,12 @@ def run_source(
         "status": "running",
         "max_documents": max_documents,
         "work_seconds": work_seconds,
+        "checkpoint_batch_size": bounds["batch_size"],
+        "logical_run_started_at": previous[0]["started_at"] if previous else now(),
+        "logical_run_attempts_persisted": persisted_attempts,
+        "logical_run_attempts_reserved": reserved_attempts,
+        "remaining_documents_at_start": remaining_documents,
+        "remaining_seconds_at_start": remaining_seconds,
         "attempted": 0,
         "extracted": 0,
         "duplicates": 0,
@@ -238,7 +302,7 @@ def run_source(
         collector.max_bytes = bounds["max_document_bytes"]
         since_commit = 0
         for candidate in round_robin(collection_records):
-            if active_run()["attempted"] >= max_documents or time.monotonic() >= deadline:
+            if active_run()["attempted"] >= remaining_documents or time.monotonic() >= deadline:
                 break
             if not pending(candidate, state, max_attempts=bounds["max_attempts_per_item"]):
                 continue
@@ -329,14 +393,7 @@ def run_source(
             raw_files,
             message=f"Finish bounded {source_id} run {run_id}",
         )
-        result = {
-            "repo_id": config["repo_id"],
-            "revision": revision,
-            **active_run(),
-            "total_rows": sum(s["rows"] for s in state["shards"]),
-            "total_completed": len(state["completed"]),
-            "total_failures": len(state["failures"]),
-        }
+        result = run_result(config, state, revision, active_run())
         (output / "result.json").write_bytes(json_bytes(result))
         return result
     finally:

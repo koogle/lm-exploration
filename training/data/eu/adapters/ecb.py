@@ -18,6 +18,10 @@ COLLECTIONS = {
     "interviews": {"name": "ECB interviews", "type_ids": ["27"]},
     "meeting_accounts": {"name": "ECB monetary policy meeting accounts", "type_ids": ["20"]},
     "decisions": {"name": "ECB other Governing Council decisions", "type_ids": ["55"]},
+    "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
+    "occasional_papers": {"name": "ECB Occasional Paper Series", "type_ids": ["3"]},
+    "economic_bulletin_articles": {"name": "ECB Economic Bulletin articles", "type_ids": ["24"]},
+    "economic_bulletin_boxes": {"name": "ECB Economic Bulletin boxes", "type_ids": ["25"]},
 }
 for _key, _collection in COLLECTIONS.items():
     _collection.update(
@@ -45,13 +49,21 @@ def _representations(row):
         if not url:
             continue
         match = re.search(r"\.([a-z]{2,3})\.(html|pdf)$", url)
-        if not match or "_content." in url:
+        if "_content." in url:
             continue
-        language, fmt = match.groups()
-        # Inventory documentTypes are alternative representations of this work.
-        if language not in choices or fmt == "html":
-            choices[language] = (url, fmt)
-    return [(url, language, fmt) for language, (url, fmt) in sorted(choices.items())]
+        if match:
+            language, fmt = match.groups()
+            key = language
+        elif url.endswith(".pdf"):
+            # Verified historical papers include ecbwp001.pdf and mb199901en.pdf.
+            # The English inventory is UI metadata, not evidence of text language.
+            language, fmt, key = "und", "pdf", url
+        else:
+            continue
+        # Only explicitly same-language alternatives can safely replace each other.
+        if key not in choices or fmt == "html":
+            choices[key] = (url, language, fmt)
+    return [value for _, value in sorted(choices.items())]
 
 
 def enumerate_collection(collection_id, fetch, limit=1000):
@@ -137,6 +149,7 @@ def enumerate_collection(collection_id, fetch, limit=1000):
         ),
         "Reported total counts publication records, not language/format URLs.",
         "HTML preferred over PDF for each publication-language pair.",
+        "Historical PDFs without explicit language suffix are retained with language=und.",
         "Inventory coverage is not a claim of complete institutional or historical coverage.",
     ]
     if not exhausted:

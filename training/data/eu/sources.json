@@ -173,7 +173,7 @@
       "remove_selectors": [
         ".ema-social-media-share"
       ],
-      "min_delay_seconds": 5
+      "min_delay_seconds": 10
     },
     {
       "id": "eib",

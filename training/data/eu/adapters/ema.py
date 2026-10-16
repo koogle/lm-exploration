@@ -12,6 +12,11 @@ NON_EPAR = BASE + "documents-output-non_epar_documents_json-report_en.json"
 EPAR = BASE + "documents-output-epar_documents_json-report_en.json"
 COMMITTEE_TYPES = {"agenda", "minutes", "committee-report"}
 GUIDELINE_TYPES = {"scientific-guideline"}
+EPAR_SERIES = {
+    "epar_product_information": "product-information",
+    "epar_overviews": "overview",
+    "epar_assessment_reports": "assessment-report",
+}
 COLLECTIONS = {
     "news": {
         "name": "EMA news and press releases",
@@ -45,6 +50,16 @@ COLLECTIONS = {
     },
 }
 
+for _collection_id, _document_type in EPAR_SERIES.items():
+    COLLECTIONS[_collection_id] = {
+        "name": f"EMA EPAR {_document_type.replace('-', ' ')}",
+        "description": f"Full EPAR inventory attachments with exact type {_document_type}.",
+        "formats": ["pdf", "docx", "doc"],
+        "inventory_url": EPAR,
+        "document_types": [_document_type],
+        "overlaps_collections": ["epar_documents"],
+    }
+
 
 def _date(value):
     if not value:
@@ -68,6 +83,8 @@ def _url(value):
 
 def _included(collection_id, item):
     kind = item.get("type", "")
+    if collection_id in EPAR_SERIES:
+        return kind == EPAR_SERIES[collection_id]
     if collection_id == "scientific_guidelines":
         return kind in GUIDELINE_TYPES
     if collection_id == "committee_documents":
@@ -140,6 +157,8 @@ def enumerate_collection(collection_id, fetch, limit=1000):
                     "modified_at": _date(item.get("last_updated_date")),
                     "inventory_document_id": item.get("id"),
                     "reference_number": item.get("reference_number"),
+                    "medicine_name": item.get("medicine_name"),
+                    "ema_product_number": item.get("ema_product_number"),
                     "inventory_url": inventory_url,
                     "original_document_url": original_url,
                 },
@@ -155,6 +174,10 @@ def enumerate_collection(collection_id, fetch, limit=1000):
         "Newest modified/published records first; bounded pilot is not a representative sample.",
         "Inventory metadata is not full text; download and extract each document separately.",
     ]
+    if collection_id in EPAR_SERIES:
+        limitations.append(
+            "This targeted series overlaps epar_documents; do not collect both without ID deduplication."
+        )
     if len(ordered) > limit:
         limitations.append(
             f"Pilot limit {limit} leaves {len(ordered) - limit} candidates unselected."
@@ -173,6 +196,11 @@ def enumerate_collection(collection_id, fetch, limit=1000):
             "matching_inventory_records": matched,
             "available_document_language_records": len(ordered),
             "enumerated_count": len(selected),
+            "selection_limit": limit,
+            "unselected_count": len(ordered) - len(selected),
+            "selection_truncated": len(ordered) > limit,
+            "document_type_filter": COLLECTIONS[collection_id].get("document_types"),
+            "overlaps_collections": COLLECTIONS[collection_id].get("overlaps_collections", []),
             "skipped_urls": skipped,
             "complete": len(selected) == len(ordered) and skipped == 0,
             "limitations": limitations,
