@@ -105,7 +105,11 @@ def train(args, data, run_dir, *, architecture_module, model_config, resume=None
             "runtime": runtime_provenance(
                 DEVICE,
                 selected_architecture.__file__,
-                sys.modules[model_class.__module__].__file__,
+                getattr(
+                    selected_architecture,
+                    "BASE_MODEL_SOURCE",
+                    sys.modules[model_class.__module__].__file__,
+                ),
             ),
         }
         checkpoint = load_checkpoint(resume) if resume else None
