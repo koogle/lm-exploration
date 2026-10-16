@@ -62,3 +62,8 @@ The trainer is generic over architectures that expose `GPT(config)` and a
 dataset. It is still fixed to a character tokenizer, one dataset per run (no
 mixtures), a contiguous 90/10 split, FP32 AdamW with fixed betas, weight decay and
 clipping, no learning-rate schedule, and one GPU.
+
+`100m` and `100m_tied` use the [modern architecture](../100m/README.md) by default
+(RMSNorm, RoPE, SwiGLU). Set `model_overrides: {"architecture_version": 1}` for
+historical vanilla blocks. Older checkpoints without a version load as version 1;
+new checkpoints record the version and cannot resume across different versions.

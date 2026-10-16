@@ -23,9 +23,11 @@ but it also restricts the model: input lookup and output classification can no
 longer learn independent matrices. It is a hypothesis to compare, not a
 guaranteed quality improvement in this repository.
 
-Depth, width, context, LayerNorm, learned positions, GELU, attention, biases and
-initialization remain unchanged. There is no RoPE, RMSNorm, SwiGLU or GQA change.
-The original `100m` and `10m` architectures stay untied. The new registry key is
+The tied wrapper changes no other layer. The updated [`100m` base](../100m/README.md)
+now defaults to RMSNorm, RoPE and SwiGLU (`architecture_version=2`); this variant
+inherits all three. Use version 1 for the historical LayerNorm/learned-position/GELU
+blocks. Depth, width, context, attention, biases and initialization policies stay
+fixed. The `100m` and original `10m` architectures stay untied. The new registry key is
 `100m_tied`; checkpoints identify the package as `model_100m_tied`.
 
 ## Actual merged tokenizer and parameter budget
@@ -41,15 +43,16 @@ At the current configuration (14 layers, width 768, 12 heads, context 256):
 
 | Model | Unique parameters |
 | --- | ---: |
-| Existing `100m`, untied, with the 32K vocabulary | 149,760,000 |
-| `100m_tied`, same shape and vocabulary | 124,594,176 |
+| Updated `100m`, untied, with the 32K vocabulary | 149,555,456 |
+| Updated `100m_tied`, same shape and vocabulary | 124,389,632 |
 | Saving: `32,768 × 768` | **25,165,824** |
 
 The historical `100m` name describes the character model's approximate scale;
 its total grows when replacing its small character vocabulary with 32K subwords.
 This PR does not resize layers to force a 100M total, or reinvest the saving in
 extra layers. The separate scholarly/code plan's approximately 150M target is
-unchanged. Increasing context also changes learned-position parameter counts.
+unchanged. Historical version 1 totals were 149,760,000 untied and 124,594,176
+tied at context 256; its learned position table also changes size with context.
 
 For a forward pass using the frozen tokenizer, from `training/`:
 
@@ -85,8 +88,10 @@ restore the shared Parameter and identical logits. Resume now checks model
 identity, because tied/untied variants otherwise have identical config fields
 and state-dict key shapes but different optimizer layouts and semantics. Resume
 between them is rejected; legacy `100m`, `model_100m` and missing-name 100M
-checkpoints remain equivalent. Intentional conversion of an old checkpoint is
-not implemented. Start this comparison from random initialization.
+checkpoints remain equivalent. Older configurations without an architecture
+version load the historical blocks; new ones record their version explicitly.
+Resume across versions is also rejected. Intentional conversion of an old
+checkpoint is not implemented. Start the modern comparison from random initialization.
 
 Provenance records the tied wrapper plus inherited 100M configuration and 10M
 block sources. The trainer's default behavior for architectures without declared
@@ -112,7 +117,7 @@ actual frozen-tokenizer IDs (including the highest valid index), and full-size
 parameter counts. These are CPU correctness checks, not a training entrypoint.
 
 For a quality comparison, train fresh tied and untied models with the same
-frozen tokenizer/hash, prepared data/splits, shape, optimizer, schedule, token
+frozen tokenizer/hash, prepared data/splits, shape, architecture version, optimizer, schedule, token
 budget, runtime and evaluation windows. Do not spend the saved parameters in
 the same experiment. Compare validation loss versus token exposure and elapsed
 time, throughput and peak memory; repeat promising results across paired seeds.

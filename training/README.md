@@ -66,16 +66,16 @@ Local commands validate recipes and sample from downloaded checkpoints only.
 For a minimal NumPy example of forward passes, handwritten backpropagation and
 gradient descent, start with [the XOR example](examples/README.md).
 
-- [`100m/model.py`](100m/model.py): **architecture only**. It imports every module
-  unchanged from [`10m/model.py`](10m/model.py), which keeps the explanatory
-  comments, and only scales the defaults: 14 layers, width 768, 12 attention heads
-  and the same context of 256, approximately 100M parameters. The exact count depends on
-  vocabulary/context. Run provenance hashes both files.
+- [`100m/model.py`](100m/model.py): **architecture only**. The [updated model](100m/README.md)
+  uses RMSNorm, RoPE and SwiGLU at 14 layers, width 768, 12 attention heads and
+  context 256. Version 1 preserves the historical vanilla blocks for old
+  checkpoints and controls. With the frozen 32K tokenizer, version 2 has
+  149,555,456 untied parameters. The original 10M definition is unchanged.
 - [`modal_train.py`](modal_train.py) and [`recipes/`](recipes/README.md): the only way
   to start training. Validates a recipe locally, reserves budget, then trains on Modal.
 - [`100m_tied/`](100m_tied/README.md): an independent input/output weight-tying
-  experiment with the existing 100M shape. Its checks use the merged frozen 32K
-  tokenizer; the general recipe trainer remains character-only.
+  experiment on the updated RMSNorm/RoPE/SwiGLU backbone: 124,389,632 parameters
+  with the merged frozen 32K tokenizer. The general recipe trainer remains character-only.
 - [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a
   prompt, and reads the architecture, configuration and tokenizer from the checkpoint.
 - [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,

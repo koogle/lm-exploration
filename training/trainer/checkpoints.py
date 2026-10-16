@@ -41,9 +41,17 @@ def load_checkpoint(path):
 
 def validate_resume(checkpoint, config, fingerprint, steps):
     old = checkpoint["config"]
+
+    def model_settings(record):
+        settings = dict(record["model"])
+        name = record.get("model_name", "100m").removeprefix("model_")
+        if name in ("100m", "100m_tied"):
+            settings.setdefault("architecture_version", 1)
+        return settings
+
     compatible = (
         checkpoint["dataset_fingerprint"] == fingerprint
-        and old["model"] == config["model"]
+        and model_settings(old) == model_settings(config)
         and old["tokenizer"] == config["tokenizer"]
         # Tied/untied models have matching tensor shapes but different optimizer semantics.
         and old.get("model_name", "100m").removeprefix("model_")

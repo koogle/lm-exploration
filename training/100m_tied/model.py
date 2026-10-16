@@ -1,6 +1,6 @@
 """Weight-tying-only variant of 100m/model.py; depth, width and blocks are unchanged.
 
-Initialize the vanilla model first, then reuse its input embedding Parameter as
+Initialize the selected base model first, then reuse its input embedding Parameter as
 the output projection. This preserves all other initial weights under the same
 seed and registers the shared matrix once in model.parameters().
 """

@@ -134,8 +134,8 @@ class TiedEmbeddingTests(unittest.TestCase):
             tied = variant.GPT(variant.ModelConfig(VOCAB_SIZE))
         original_count = sum(p.numel() for p in original.parameters())
         tied_count = sum(p.numel() for p in tied.parameters())
-        self.assertEqual(original_count, 149_760_000)
-        self.assertEqual(tied_count, 124_594_176)
+        self.assertEqual(original_count, 149_555_456)
+        self.assertEqual(tied_count, 124_389_632)
         self.assertEqual(original_count - tied_count, VOCAB_SIZE * 768)
         self.assertEqual(asdict(original.config), asdict(tied.config))
 
