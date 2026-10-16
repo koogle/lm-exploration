@@ -1,0 +1,246 @@
+{
+  "date": "2026-10-16",
+  "status": "bounded_local_streaming_smoke_passed_not_training_ready",
+  "tokenizer_sha256": "2a6bd2343ab29e3955dd7a5e17330e706afc8c650618b1339ceedab5e77fde04",
+  "implementation_sha256": "34a07ec99175e0f1fb1df19c75b0e380a75179df3d516c1350ed68b672a28f9f",
+  "manifest_sha256": "5cb6024b0e016cacba2afa14b95ec5630d3220d772e7c1a6006fbdd74ff4c6f1",
+  "sample_policy": "First 32 records of each pinned first shard; LibreTexts continued to 160 records to obtain training parents. Not representative or full capacity.",
+  "sources": {
+    "fineweb_edu": {
+      "repo": "HuggingFaceFW/fineweb-edu",
+      "revision": "87f09149ef4734204d70ed1d046ddc9ca3f2b8f9",
+      "decisions": {
+        "accepted": 28,
+        "excluded_test": 4
+      },
+      "train_documents": 24,
+      "train_loss_tokens": 21455,
+      "validation_documents": 4,
+      "validation_loss_tokens": 1674,
+      "cursor": {
+        "shard": 0,
+        "row": 32
+      }
+    },
+    "code_python": {
+      "repo": "codeparrot/codeparrot-clean-train",
+      "revision": "3e6ab65f2864931e041f6a82db9b5a6ec2b71ab4",
+      "decisions": {
+        "accepted": 15,
+        "code_license": 15,
+        "excluded_test": 2
+      },
+      "train_documents": 15,
+      "train_loss_tokens": 40989,
+      "validation_documents": 0,
+      "validation_loss_tokens": 0,
+      "cursor": {
+        "shard": 0,
+        "row": 32
+      }
+    },
+    "finemath_4plus": {
+      "repo": "HuggingFaceTB/finemath",
+      "revision": "e92b25a616738fe95dc186b64dfb19f9c8525594",
+      "decisions": {
+        "accepted": 28,
+        "excluded_test": 4
+      },
+      "train_documents": 24,
+      "train_loss_tokens": 31641,
+      "validation_documents": 4,
+      "validation_loss_tokens": 1466,
+      "cursor": {
+        "shard": 0,
+        "row": 32
+      }
+    },
+    "pes2o": {
+      "repo": "common-pile/peS2o_filtered",
+      "revision": "297747513bfb0ff1fbf61ddad3b03319d0f04597",
+      "decisions": {
+        "accepted": 29,
+        "excluded_test": 3
+      },
+      "train_documents": 27,
+      "train_loss_tokens": 188800,
+      "validation_documents": 2,
+      "validation_loss_tokens": 15893,
+      "cursor": {
+        "shard": 0,
+        "row": 32
+      }
+    },
+    "pubmed": {
+      "repo": "common-pile/pubmed_filtered",
+      "revision": "c156f0569a92d8f2edc33cebe1f72f7d3e1cae84",
+      "decisions": {
+        "excluded_test": 3,
+        "accepted": 29
+      },
+      "train_documents": 24,
+      "train_loss_tokens": 115886,
+      "validation_documents": 5,
+      "validation_loss_tokens": 30898,
+      "cursor": {
+        "shard": 0,
+        "row": 32
+      }
+    },
+    "arxiv": {
+      "repo": "common-pile/arxiv_papers_filtered",
+      "revision": "033cf7f53f9b348deec868c1a5a48484f3ee9e52",
+      "decisions": {
+        "accepted": 25,
+        "excluded_test": 7
+      },
+      "train_documents": 20,
+      "train_loss_tokens": 414976,
+      "validation_documents": 5,
+      "validation_loss_tokens": 157590,
+      "cursor": {
+        "shard": 0,
+        "row": 32
+      }
+    },
+    "pressbooks": {
+      "repo": "common-pile/pressbooks_filtered",
+      "revision": "1a1d3b50d77f834370f8eb4c0d174668dd1676bb",
+      "decisions": {
+        "accepted": 32
+      },
+      "train_documents": 32,
+      "train_loss_tokens": 19567,
+      "validation_documents": 0,
+      "validation_loss_tokens": 0,
+      "cursor": {
+        "shard": 0,
+        "row": 32
+      }
+    },
+    "libretexts": {
+      "repo": "common-pile/libretexts_filtered",
+      "revision": "70388bca52b4a93515e14b1d56618fd7944988fd",
+      "decisions": {
+        "accepted": 160
+      },
+      "train_documents": 11,
+      "train_loss_tokens": 34388,
+      "validation_documents": 149,
+      "validation_loss_tokens": 207052,
+      "cursor": {
+        "shard": 0,
+        "row": 160
+      }
+    },
+    "doab": {
+      "repo": "common-pile/doab_filtered",
+      "revision": "defb24ca72ef6aba6ce0228b669eec06dcfbffbc",
+      "decisions": {
+        "accepted": 32
+      },
+      "train_documents": 32,
+      "train_loss_tokens": 1951141,
+      "validation_documents": 0,
+      "validation_loss_tokens": 0,
+      "cursor": {
+        "shard": 0,
+        "row": 32
+      }
+    },
+    "gutenberg": {
+      "repo": "common-pile/project_gutenberg_filtered",
+      "revision": "3cdf6879c807f4e4e063f2ceb23bc268d8c29ab7",
+      "decisions": {
+        "excluded_test": 3,
+        "oversize": 2,
+        "accepted": 27
+      },
+      "train_documents": 23,
+      "train_loss_tokens": 1341755,
+      "validation_documents": 4,
+      "validation_loss_tokens": 210643,
+      "cursor": {
+        "shard": 0,
+        "row": 32
+      }
+    },
+    "pre_1929_books": {
+      "repo": "common-pile/pre_1929_books_filtered",
+      "revision": "23f9d96dbb1db3324bbc9fbfe1f8299cc799c4d1",
+      "decisions": {
+        "accepted": 29,
+        "excluded_test": 3
+      },
+      "train_documents": 25,
+      "train_loss_tokens": 1930184,
+      "validation_documents": 4,
+      "validation_loss_tokens": 259242,
+      "cursor": {
+        "shard": 0,
+        "row": 32
+      }
+    },
+    "library_of_congress": {
+      "repo": "common-pile/library_of_congress_filtered",
+      "revision": "56725c7aa1bb320703e22eb5f42903173d5bac3d",
+      "decisions": {
+        "accepted": 27,
+        "excluded_test": 5
+      },
+      "train_documents": 24,
+      "train_loss_tokens": 975272,
+      "validation_documents": 3,
+      "validation_loss_tokens": 114795,
+      "cursor": {
+        "shard": 0,
+        "row": 32
+      }
+    }
+  },
+  "total_train_loss_tokens": 7066054,
+  "total_validation_loss_tokens": 999253,
+  "checks": {
+    "unit_tests_passed": 9,
+    "ruff": "passed",
+    "lockfile": "passed",
+    "live_sources": 12,
+    "live_resume_next_batch_identical": true,
+    "live_loader_exposures": {
+      "fineweb_edu": 800,
+      "code_python": 2214,
+      "finemath_4plus": 1490,
+      "pes2o": 768,
+      "pubmed": 256,
+      "arxiv": 192,
+      "pressbooks": 244,
+      "libretexts": 256,
+      "doab": 320,
+      "gutenberg": 384,
+      "pre_1929_books": 576,
+      "library_of_congress": 256
+    },
+    "cpu_optimizer_step": {
+      "torch": "2.6.0+cpu",
+      "layers": 1,
+      "width": 16,
+      "context": 64,
+      "batch_size": 4,
+      "seed": 20261016,
+      "loss": 9.717668533325195,
+      "note": "Tiny correctness probe; not a 150M model or quality result."
+    }
+  },
+  "modal": {
+    "job_launched": false,
+    "volume_listing": "failed: Could not connect to the Modal server",
+    "http_probe": "api.modal.com returned HTTP 503",
+    "budget_ledger_restored": false
+  },
+  "pending": [
+    "reconcile tokenizer mixture-split-v1 parent assignments",
+    "global near deduplication and cross-source parent reconciliation",
+    "benchmark contamination and eligibility/provenance review",
+    "full usable capacity measurement"
+  ]
+}

@@ -8,6 +8,11 @@ goal, 20B-token target with a conditional 50B extension, frozen 16K tokenizer,
 and next-agent checklist. It supersedes older undecided mixture/tokenizer
 notes and illustrative token budgets below for this experiment.
 
+The [streaming preparation guide](data/SCHOLARLY_STREAMING.md) now provides
+bounded upstream ingestion, immutable token snapshots, a Modal CPU entrypoint,
+and a resumable token-mixture loader. Its snapshots remain pending corpus audits;
+the new model and substantial training have not been launched.
+
 A personal learning project: train small language models from random initialization,
 understand how architecture and data affect them, then add instruction tuning,
 reasoning and reinforcement learning. Use Modal for training and local Apple
