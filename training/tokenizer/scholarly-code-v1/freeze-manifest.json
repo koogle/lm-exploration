@@ -1,0 +1,11 @@
+{
+  "id": "scholarly-code-bpe-v1",
+  "status": "frozen",
+  "files": {
+    "config.json": "78620acfac5a23364592a2216d4048828b5d416e43baef5762f09930ac3f98f4",
+    "tokenizer.json": "2a6bd2343ab29e3955dd7a5e17330e706afc8c650618b1339ceedab5e77fde04",
+    "recipe.json": "fd46ab8248c5a631f7968d71e8ce61643a91e09b5418b1add7568c9e02462e04",
+    "evaluation.json": "0534712c682fd7f805e865cd87d9fe16d84d174b7f7f71b33061ce6fd149c0cf"
+  },
+  "contract": "Never modify files in this version. Training data shards and model checkpoints must record and verify tokenizer.json SHA256. A change requires a new tokenizer version and explicit retokenization."
+}
