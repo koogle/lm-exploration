@@ -22,6 +22,9 @@ test. A fixed, source-weighted 32 MiB evaluation corpus serves all candidates.
 The original tokenizer's collector split was not retained, so its historical
 metrics are not mixed into this matched experiment; 64 MiB candidates are new.
 
+The initial 8 KiB evaluation cap exhausted LibreTexts at 636,017 bytes; the
+retained failed attempt documents why the final cap is 16 KiB.
+
 Exact whitespace-normalized chunks are deduplicated across the selected sample.
 Cross-split collisions quarantine both copies, and quotas are rechecked before
 freezing. Fuzzy near deduplication and cross-source parent identity resolution
@@ -38,7 +41,7 @@ From `training/`:
 uv sync --locked --extra corpus --extra research
 uv run python -m unittest discover -s tests -v
 uv run modal run --detach modal_tokenizer_research.py \
-  --run-id learning-curve-20261016-v1 --phase all
+  --run-id learning-curve-20261016-v2 --phase all
 ```
 
 In this managed environment, the SDK needs its proxy-support extra and system CA
@@ -47,14 +50,15 @@ without disabling TLS verification:
 
 ```sh
 uv run python -c "import truststore,runpy; truststore.inject_into_ssl(); runpy.run_module('modal',run_name='__main__')" \
-  run --detach modal_tokenizer_research.py --run-id learning-curve-20261016-v1 --phase all
+  run --detach modal_tokenizer_research.py --run-id learning-curve-20261016-v2 --phase all
 ```
 
 The workflow runs remote tests, collects/freezes the corpus, then fits all 18
-candidates with at most three concurrent workers. Collection uses four CPUs,
-16 GiB RAM and a two-hour timeout. Each candidate uses eight CPUs, 64 GiB RAM,
+candidates with at most three concurrent workers. Collection requests four CPUs and
+16 GiB RAM with a two-hour timeout. Each candidate requests eight CPUs and 64 GiB RAM,
 a two-hour timeout, and no retries. A fresh subprocess isolates candidate peak
-RSS. No GPU or ledger is required. Resource/time bounds are not billing estimates.
+RSS. No GPU or ledger is required. CPU/memory settings are requests, not hard caps; candidate Rayon threads are set to eight.
+Concurrency and timeout bounds are enforced. Resource settings are not billing estimates.
 
 Phases: `smoke`, `collect`, `train`, `all`, or `candidate` with `--size-mib 64
 --vocab-size 16384`. Inspect completed/partial results before retrying. Preserve
@@ -88,3 +92,67 @@ evaluation throughput. Throughput includes decoding and measurement overhead.
 Intervals describe evaluation-sample uncertainty, not seed variance or model
 quality. Check all domains and embedding/output parameter costs before choosing
 a tokenizer. Matched model-compute comparisons using bits per byte are later work.
+
+## Broader held-out parent coverage
+
+The first corpus audit found only five LibreTexts evaluation parents. Before
+interpreting curves, we kept the fitting corpus and all tokenizer weights fixed
+and rebuilt evaluation with a 16 KiB document/parent cap, retaining the same
+32 MiB source quotas and parent split. A separate dedup index reserves all selected
+fitting chunk hashes. This broadens coverage but does not fix near duplicates or
+cross-source parent identity. Original evaluation metrics remain on Modal.
+
+```sh
+uv run modal run --detach modal_tokenizer_evaluation.py \
+  --run-id learning-curve-20261016-v2 --phase collect
+# After collection and all 18 fits have finished:
+uv run modal run --detach modal_tokenizer_evaluation.py \
+  --run-id learning-curve-20261016-v2 --phase evaluate
+uv run python tokenizer_report.py results/tokenizer-learning-curve/learning-curve-20261016-v2
+```
+
+Collection has four CPU/16 GiB requests and hard caps and a two-hour timeout.
+Rescoring has two CPU/8 GiB requests and hard caps, three concurrent containers,
+and a 20-minute timeout. The evaluation manifest is downloaded alongside the
+original fitting manifest. `result-balanced-evaluation.json` is saved next to
+original `result.json` on the results volume. Local raw results are replaced only
+after all 18 rescoring jobs return successfully. Report generation rejects mixed
+evaluation hashes. Fitting time and peak RSS retain their original measurements;
+evaluation throughput is measured in the new two-CPU rescoring workers.
+
+## Hugging Face publication
+
+All 18 measured candidates are packaged in
+[`jfrick/scholarly-code-tokenizer`](https://huggingface.co/jfrick/scholarly-code-tokenizer).
+The default is 2 GiB / 32K, balancing compression and vocabulary parameter overhead;
+this is a starting point, not a downstream model-quality optimum. Each alternative
+is available through `subfolder="variants/<MiB>mib-<vocab>"` in `AutoTokenizer`.
+The existing frozen v1 assets in this repository remain unchanged.
+
+After downloading candidate `tokenizer.json` files into
+`<artifacts>/variants/<MiB>mib-<vocab>/`, build a fresh publication directory:
+
+```sh
+uv run python package_tokenizer_research.py \
+  results/tokenizer-learning-curve/learning-curve-20261016-v2 \
+  <artifacts> <new-publication-folder> --repo-id jfrick/scholarly-code-tokenizer
+```
+
+Packaging verifies all candidate hashes and the shared audited evaluation manifest.
+It includes standard Hugging Face tokenizer configuration, all 18 variants, a model
+card, the report/figures and provenance. No raw dataset text or model weights are
+included. Standard loading was checked with `transformers==4.57.6` and
+`tokenizers==0.22.2` in an isolated environment. Publication uses the authenticated
+Hugging Face account; credentials are never stored in the artifacts.
+
+To verify a downloaded publication, use an isolated Transformers environment
+(the older Transformers Hub dependency differs from the corpus collector):
+
+```sh
+uv run --isolated --no-project --with transformers==4.57.6 \
+  --with tokenizers==0.22.2 python verify_tokenizer_publication.py <publication-folder>
+# Or check the published repository at its immutable commit:
+uv run --isolated --no-project --with transformers==4.57.6 \
+  --with tokenizers==0.22.2 python verify_tokenizer_publication.py \
+  jfrick/scholarly-code-tokenizer --revision <commit-sha>
+```

@@ -1,0 +1,11 @@
+{
+  "repo_id": "jfrick/scholarly-code-tokenizer",
+  "url": "https://huggingface.co/jfrick/scholarly-code-tokenizer",
+  "commit_sha": "6bbbc6f1526e16085a5f5d244cb0c3631daa425e",
+  "commit_url": "https://huggingface.co/jfrick/scholarly-code-tokenizer/commit/6bbbc6f1526e16085a5f5d244cb0c3631daa425e",
+  "default_variant": "2048mib-32768",
+  "variants": 18,
+  "local_wrapper_verification": "passed",
+  "remote_commit_verification": "passed",
+  "default_and_variants_checked": 19
+}

@@ -1,10 +1,10 @@
 {
   "date": "2026-10-16",
   "active_run_id": "learning-curve-20261016-v2",
-  "status": "collecting_corpus",
+  "status": "completed",
   "modal_app_url": "https://modal.com/apps/radiantai/main/ap-A86MK9NsJAHwye2lcVuxyv",
-  "local_tests_passed": 16,
-  "remote_research_tests_passed": 4,
+  "local_tests_passed": 21,
+  "remote_research_tests_passed": 5,
   "attempts": [
     {
       "app_id": "ap-zrRin23bx0E5h11kA5Pxec",
@@ -27,9 +27,39 @@
     },
     {
       "app_id": "ap-A86MK9NsJAHwye2lcVuxyv",
-      "outcome": "remote_tests_passed_collection_resumed",
+      "outcome": "corpus_frozen_all_18_candidates_completed",
       "resolution": "Upload checkpoints at one-minute intervals; same sampling code, spec and corpus identity."
+    },
+    {
+      "app_id": "ap-S2OL0auRAcvbx1kCqH7Njd",
+      "outcome": "evaluation_8k_parent_cap_exhausted_libretexts_inventory",
+      "resolution": "Preserved failed evaluation staging; fresh balanced-evaluation-v2 uses a 16 KiB parent/document cap and unchanged 32 MiB source quotas. No tokenizer was retrained."
+    },
+    {
+      "app_id": "ap-F9Q0Rx6GiCDPRcyHzGCaFo",
+      "outcome": "broader_evaluation_frozen",
+      "evaluation_bytes": 33554432,
+      "source_scoped_parents": 4673,
+      "libretexts_parents": 67
+    },
+    {
+      "app_id": "ap-gOCdUYX2WO6VMVzaDuLZVX",
+      "outcome": "all_18_candidates_rescored_on_shared_broader_evaluation",
+      "correctness_passed": 18
     }
   ],
-  "authorization": "User explicitly authorized Modal measurements and removed the restored-ledger prerequisite. Resource and time bounds remain enforced."
+  "authorization": "User explicitly authorized Modal measurements and removed the restored-ledger prerequisite. Resource and time bounds remain enforced.",
+  "remote_test_app_url": "https://modal.com/apps/radiantai/main/ap-CrETuNnj4IkJF8aPh4mqmq",
+  "evaluation_audit": {
+    "original_libretexts_parents": 5,
+    "initial_broader_cap_bytes": 8192,
+    "libretexts_bytes_available_at_8k_cap": 636017,
+    "final_broader_cap_bytes": 16384,
+    "decision_basis": "Parent-coverage audit before interpretation of candidate learning curves."
+  },
+  "fitted_candidates": 18,
+  "rescored_candidates": 18,
+  "evaluation_app_url": "https://modal.com/apps/radiantai/main/ap-gOCdUYX2WO6VMVzaDuLZVX",
+  "sum_fitting_seconds": 927.888957187,
+  "max_peak_process_rss_mib": 3531.80859375
 }
