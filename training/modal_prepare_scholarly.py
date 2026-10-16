@@ -16,9 +16,9 @@ image = (
     .pip_install(
         "tokenizers==0.22.2", "requests==2.34.2", "pyarrow==26.0.0", "huggingface-hub==1.33.0"
     )
+    .env({"PYTHONPATH": "/project"})
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer")
-    .env({"PYTHONPATH": "/project"})
 )
 
 

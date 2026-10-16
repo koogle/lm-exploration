@@ -17,6 +17,11 @@ corpus = [
     "pyarrow==26.0.0",
     "huggingface-hub==1.33.0",
 ]
+research = [
+    "matplotlib==3.11.2",
+    "modal[api-proxy-support]==1.6.2",
+    "truststore==0.10.5",
+]
 
 [project.scripts]
 lm-generate = "generate:main"
@@ -28,7 +33,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["model_10m", "model_100m", "training_data", "training_data.fetching", "trainer"]
-py-modules = ["generate", "prepare_scholarly"]
+py-modules = ["generate", "prepare_scholarly", "tokenizer_research", "tokenizer_report"]
 
 [tool.setuptools.package-dir]
 model_10m = "10m"

@@ -13,6 +13,10 @@ bounded upstream ingestion, immutable token snapshots, a Modal CPU entrypoint,
 and a resumable token-mixture loader. Its snapshots remain pending corpus audits;
 the new model and substantial training have not been launched.
 
+The [tokenizer learning-curve experiment](tokenizer/research/README.md) compares
+64 MiB through 2 GiB at 16K, 32K and 50K vocabularies on Modal, with a shared
+held-out corpus and a generated research report.
+
 A personal learning project: train small language models from random initialization,
 understand how architecture and data affect them, then add instruction tuning,
 reasoning and reinforcement learning. Use Modal for training and local Apple
