@@ -4,9 +4,18 @@
 
 Start with the [scholarly/code pretraining plan](plans/SCHOLARLY_CODE_PRETRAINING.md).
 It records the latest agreed dataset proportions, approximately 150M-parameter
-goal, 20B-token target with a conditional 50B extension, frozen 16K tokenizer,
+goal, 20B-token target with a conditional 50B extension, frozen code-focused 32K tokenizer,
 and next-agent checklist. It supersedes older undecided mixture/tokenizer
 notes and illustrative token budgets below for this experiment.
+
+The [streaming preparation guide](data/SCHOLARLY_STREAMING.md) now provides
+bounded upstream ingestion, immutable token snapshots, a Modal CPU entrypoint,
+and a resumable token-mixture loader. Its snapshots remain pending corpus audits;
+the new model and substantial training have not been launched.
+
+The [tokenizer learning-curve experiment](tokenizer/research/README.md) compares
+64 MiB through 2 GiB at 16K, 32K and 50K vocabularies on Modal, with a shared
+held-out corpus and a generated research report.
 
 A personal learning project: train small language models from random initialization,
 understand how architecture and data affect them, then add instruction tuning,
