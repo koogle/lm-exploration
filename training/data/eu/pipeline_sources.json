@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "owner": "jfrick",
+  "private": true,
+  "sources": {
+    "ecb": {
+      "repo_id": "jfrick/eu-ecb",
+      "adapter": "adapters.ecb",
+      "collections": ["speeches", "press_releases", "interviews", "meeting_accounts", "decisions"],
+      "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text."
+    },
+    "ema": {
+      "repo_id": "jfrick/eu-ema",
+      "adapter": "adapters.ema",
+      "collections": ["news", "scientific_guidelines", "committee_documents"],
+      "description": "European Medicines Agency news, scientific guidelines and committee documents, enumerated from official JSON inventories."
+    }
+  },
+  "limits": {
+    "max_documents_per_source": 1000,
+    "worker_timeout_seconds": 3600,
+    "work_seconds": 3000,
+    "batch_size": 20,
+    "inventory_limit_per_collection": 100000,
+    "max_inventory_bytes": 67108864,
+    "max_document_bytes": 20971520,
+    "max_attempts_per_item": 3
+  }
+}

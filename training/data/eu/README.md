@@ -22,6 +22,8 @@ volume is established by this pilot.
   failures, exact-text deduplication and Zstandard-compressed Parquet export.
 - Portable per-source agent task briefs, with separate report paths so research
   agents can work in parallel and the parent can integrate their findings.
+- ECB and EMA collection adapters, durable Hugging Face checkpoints, and bounded
+  CPU workers on Modal. Source-to-repository mappings live in code.
 
 The [first measured pilot](research/pilot-2026-10-16.md) produced **14 unique
 documents, 491,330 characters and 76,499 whitespace words** from four of the five
@@ -31,9 +33,12 @@ are small-sample observations, not a token forecast.
 The research agents in the initial implementation were delegated by the coding
 assistant. `pilot.py` itself is a deterministic collection loop: it does not invoke
 an LLM or a browser autonomously. Task briefs are inputs to an agent host such as
-Codex, not an invented agent API. An unattended agent executor, persistent refresh,
-Modal deployment, ASR, OCR, near-deduplication and Hugging Face upload are future
-stages. No scheduled or cloud jobs are launched by these commands.
+Codex, not an invented agent API. `pipeline.py` runs the integrated ECB/EMA adapters
+and uploads atomic checkpoints to Hugging Face; `modal_pipeline.py` runs those
+workers remotely. Neither harness autonomously invokes an LLM. Autonomous adapter
+repair, scheduled refresh, ASR, OCR and near-deduplication remain future stages.
+The implementation below is not itself evidence of a successful cloud run; record
+measured run outcomes separately.
 
 ## Ten starting collections
 
@@ -79,7 +84,7 @@ uv run eu_corpus.py crawl --source ecb --max-pages 6 --max-depth 1 \
 uv run eu_corpus.py export --input artifacts/ecb-example \
   --output artifacts/ecb-example/documents.parquet
 
-uv run pytest -q
+uv run python -m pytest -q
 uv run ruff check .
 uv run ruff format --check .
 ```
@@ -92,10 +97,122 @@ requests by at least one second and honors supported robots crawl delays. No
 authentication or browser challenge bypass is implemented. Failed robots access
 is recorded and stops that origin; 404/410 robots responses allow normal crawling.
 
-Every run requires a new directory. Current repeated runs fetch again; ETags and
-Last-Modified values are recorded but conditional refresh and resume are not yet
-implemented. Generic JSON inventories are not traversed automatically. A source
-can therefore be useful even when this first collector yields zero documents.
+The original `pilot.py` and `eu_corpus.py` commands require a new output directory
+and fetch again on repeated runs. Their generic crawler does not traverse arbitrary
+JSON inventories. ETags and Last-Modified values are recorded but conditional HTTP
+requests are not implemented. The ECB/EMA pipeline below adds explicit inventory
+adapters and durable resume; its behavior differs from these original commands.
+
+## ECB/EMA durable collection pipeline
+
+[pipeline_sources.json](pipeline_sources.json) is the authoritative organization →
+HF repository → adapter → collection mapping. Repositories are created private;
+existing repository visibility is preserved. Current destinations and configs:
+
+| Source | Hugging Face repository | Collection configs |
+| --- | --- | --- |
+| ECB | `jfrick/eu-ecb` | `speeches`, `press_releases`, `interviews`, `meeting_accounts`, `decisions` |
+| EMA | `jfrick/eu-ema` | `news`, `scientific_guidelines`, `committee_documents` |
+
+The ECB adapter resolves the versioned FOEDB inventory used by its publications
+website, enumerates type indexes, and prefers HTML over PDF for each explicitly
+listed language. It does not enumerate all other language databases or linked
+attachments. The EMA adapter reads official JSON inventories, partitions records
+by document category, and expands listed translations. Inventory completeness is
+reported relative to these selected interfaces, not the whole institution.
+
+`pipeline.py` enumerates and saves each collection, then interleaves candidate
+lists round-robin so one large collection does not consume the entire budget.
+The initial limit is **1,000 attempted documents per organization per invocation**,
+including failed downloads/extractions. Inventory requests are additional. A source
+worker gets 3,000 seconds of work time and a 3,600-second Modal timeout; a request
+already in progress can run beyond the work deadline. Each worker uses one CPU and
+2 GiB memory, with no GPU. These are upper bounds, not promised yields.
+
+### Run, resume, and refresh
+
+Authenticate Hugging Face locally with a token authorized to create and write
+these dataset repositories. Configure a Modal secret named
+`eu-corpus-huggingface` containing `HF_TOKEN`; never commit credentials. Modal's
+own account authentication must also be configured.
+
+```sh
+# Local worker: writes to the mapped HF repository, not just local artifacts.
+uv run pipeline.py ecb --run-id ecb-pilot-001 --max-documents 1000 --work-seconds 3000
+
+# Remote credential and source-access checks, without starting collection.
+uv run python modal_cli.py run modal_pipeline.py --check-only
+
+# Start both CPU workers; keep the coordinator alive until both finish.
+uv run python modal_cli.py run --detach modal_pipeline.py --run-id eu-pilot-001 \
+  --source both --max-documents 1000 --work-seconds 3000
+
+# Resume one organization using its saved inventories and completed-item state.
+# Use a new run ID: the local reservation ledger rejects duplicate run IDs.
+uv run python modal_cli.py run --detach modal_pipeline.py --run-id eu-pilot-002 --source ema
+
+# Re-enumerate current inventories, retaining progress for known document revisions.
+uv run python modal_cli.py run --detach modal_pipeline.py --run-id eu-refresh-001 --source both --refresh
+```
+
+No schedule is installed by these commands. Each additional invocation authorizes
+another bounded batch; the 1,000-document limit is not a lifetime repository cap.
+The Modal entrypoint checks the HF identity against the configured owner and tests
+both institutions' robots endpoints before collection. It reserves compute in
+`artifacts/modal-ingestion-budget.json`, independently of training experiments,
+and records call IDs and returned summaries under `artifacts/`. Reservations are
+conservative limits, not measured bills. Preserve this local ledger between sessions.
+Only one writer per organization should run at a time; remote functions are limited
+to one container each, and HF compare-and-swap protects against overlapping writers.
+
+### Durable layout and crash recovery
+
+| HF path | Contents |
+| --- | --- |
+| `data/<collection>/<format>/part-<hash>.parquet` | Extracted text, stable schema, document/revision IDs and provenance |
+| `state/progress.json` | Completed items, failures, retry times, dedup index, collection inventory paths, source mapping and run summaries |
+| `inventories/<collection>/<hash>.json` | Enumerated document-language candidates and coverage evidence |
+| `raw/<sha256>.gz` | Compressed original bodies for successfully retained documents |
+| `README.md` | Collection configs, stored row counts and unreviewed/mixed source-term status |
+
+Collection configs use `data/<collection>/**/*.parquet` as their `train` split;
+formats are directory partitions within each collection. Each stored row includes
+source URL, document ID, language, dates, extracted text, character/word counts,
+raw/text hashes, extractor version and JSON provenance. Raw bodies for rejected
+or exact-duplicate documents and complete HTTP logs are not all persisted to HF;
+local worker artifacts are ephemeral on Modal.
+
+A checkpoint commits new Parquet shards, their raw bodies, progress and the dataset
+card together. Enumeration checkpoints atomically save an inventory with its state
+reference. Document checkpoints occur every 20 attempts and at normal completion.
+Commits require the previously loaded HF revision; a conflict aborts the worker
+rather than overwriting another writer's progress. An interrupted worker resumes
+from the last committed checkpoint. Uncommitted downloads may repeat; committed
+items are skipped. A stale `running` entry is evidence of interruption, not a claim
+that the worker is still alive. Modal automatic retries are disabled; rerun the
+bounded command explicitly with a fresh run ID.
+
+Completed-item keys include source, document ID, URL, language, known modification
+date and extractor version. Exact normalized-text duplicates point to the existing
+row and retain their source mapping in progress. The dedup index spans collections
+within an organization, so a duplicate may reference a row in another collection.
+Unchanged text after an extractor upgrade can likewise retain the original row's
+extraction-version metadata. Deduplication does not span organizations.
+
+Download/extraction failures are saved with up to three attempts per item and a
+retry delay of 300 seconds times the attempt count. The worker does not sleep until
+a retry becomes eligible; a later invocation retries it. Items at the attempt cap
+require deliberate state repair or a new item revision before retrying. Do not
+modify progress independently of the data it references.
+
+`--refresh` reloads inventories; it does **not** unconditionally redownload completed
+URLs. In particular, ECB inventory records currently lack a modification timestamp,
+so content changes at an existing URL can go undetected. Periodic forced revalidation,
+conditional requests, deletions, cross-document version relationships, DOC/DOCX
+extraction, OCR, automatic repair and scheduled collection are not implemented.
+Inventories are bounded to 100,000 candidates per collection; read their recorded
+coverage limitations before calling a backfill complete. Counts are not tokenizer
+measurements or evidence of dataset novelty.
 
 ## Research-agent workflow
 
@@ -116,7 +233,8 @@ original document; never paraphrase it into a supposedly native training example
 
 ## Outputs and provenance
 
-Each run writes:
+The original local discovery/pilot commands write the following artifacts; the
+HF-backed pipeline uses the durable layout above:
 
 | File | Meaning |
 | --- | --- |
@@ -162,7 +280,7 @@ result or a cap. Do not extrapolate from six recent pages or the long GDPR sampl
 
 - Discover with agents; run stable adapters with cheap workers; return failures
   and new subcollections to the discovery queue.
-- Maintain a durable source/document registry and raw object store. Use change
+- Extend the implemented HF progress registry and raw snapshots with change
   feeds, conditional HTTP and inventory diffs; reconcile periodically for missed,
   backdated, changed or removed records. CELLAR publishes change notifications.
 - On Modal, separate browser discovery, CPU downloads/extraction and GPU ASR/OCR.
@@ -193,3 +311,17 @@ result or a cap. Do not extrapolate from six recent pages or the long GDPR sampl
 - [Bundestag open data](https://www.bundestag.de/services/opendata),
   [French parliamentary debates](https://data.assemblee-nationale.fr/travaux-parlementaires/debats),
   [BOE API](https://www.boe.es/datosabiertos/api/api.php).
+
+### Inspect durable progress and count tokens
+
+```sh
+uv run status.py both
+uv run status.py both --audit --tokens > artifacts/hf-audit.json
+```
+
+The audit pins each repository revision, downloads its Parquet shards, validates
+IDs and text hashes, and counts actual text tokens with OpenAI `o200k_base`. It
+does not estimate the uncrawled corpus. Status and audit commands do not write to HF.
+Modal detached local entrypoints only guarantee survival of their last triggered
+function after disconnection; keep the two-source coordinator alive. If either
+worker stops, rerun with a new run ID to resume from its HF checkpoint.

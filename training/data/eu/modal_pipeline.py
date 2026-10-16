@@ -1,0 +1,128 @@
+"""Bounded CPU collectors: one serial writer per organization, HF-backed resume."""
+
+import json
+import os
+from datetime import UTC, datetime
+from pathlib import Path
+
+import modal
+
+ROOT = Path(__file__).resolve().parent
+app = modal.App("lm-exploration-eu-corpus")
+image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install_from_requirements(str(ROOT / "requirements-modal.txt"))
+    .env({"PYTHONPATH": "/root/eu"})
+)
+ca_bundle = os.environ.get("SSL_CERT_FILE")
+if ca_bundle and Path(ca_bundle).is_file():
+    image = image.env({"SSL_CERT_FILE": "/root/eu-ca.pem", "REQUESTS_CA_BUNDLE": "/root/eu-ca.pem"})
+    image = image.add_local_file(ca_bundle, "/root/eu-ca.pem")
+for name in ("pipeline.py", "hf_store.py", "eu_corpus.py", "sources.json", "pipeline_sources.json"):
+    image = image.add_local_file(ROOT / name, f"/root/eu/{name}")
+image = image.add_local_dir(ROOT / "adapters", "/root/eu/adapters", ignore=["__pycache__/"])
+secret = modal.Secret.from_name("eu-corpus-huggingface", required_keys=["HF_TOKEN"])
+
+
+@app.function(image=image, secrets=[secret], cpu=1, memory=2048, timeout=120, max_containers=1)
+def verify_access():
+    import httpx
+    from huggingface_hub import HfApi
+
+    identity = HfApi().whoami()["name"]
+    outcomes = {}
+    with httpx.Client(timeout=30, follow_redirects=True) as client:
+        for host in ["www.ecb.europa.eu", "www.ema.europa.eu"]:
+            response = client.get(f"https://{host}/robots.txt")
+            outcomes[host] = response.status_code
+    return {"hf_owner": identity, "robots_status": outcomes}
+
+
+@app.function(
+    image=image, secrets=[secret], cpu=1, memory=2048, timeout=3600, max_containers=1, retries=0
+)
+def collect_ecb(
+    run_id: str, max_documents: int = 1000, work_seconds: int = 3000, refresh: bool = False
+):
+    from pipeline import run_source
+
+    return run_source("ecb", run_id, max_documents, work_seconds, refresh)
+
+
+@app.function(
+    image=image, secrets=[secret], cpu=1, memory=2048, timeout=3600, max_containers=1, retries=0
+)
+def collect_ema(
+    run_id: str, max_documents: int = 1000, work_seconds: int = 3000, refresh: bool = False
+):
+    from pipeline import run_source
+
+    return run_source("ema", run_id, max_documents, work_seconds, refresh)
+
+
+@app.local_entrypoint()
+def main(
+    run_id: str = "",
+    source: str = "both",
+    max_documents: int = 1000,
+    work_seconds: int = 3000,
+    refresh: bool = False,
+    check_only: bool = False,
+):
+    mapping = json.loads((ROOT / "pipeline_sources.json").read_text())
+    if source not in {"both", "ecb", "ema"}:
+        raise ValueError("source must be both, ecb or ema")
+    if not 1 <= max_documents <= mapping["limits"]["max_documents_per_source"]:
+        raise ValueError("max_documents outside configured bound")
+    if not 1 <= work_seconds <= mapping["limits"]["work_seconds"]:
+        raise ValueError("work_seconds outside configured bound")
+    access = verify_access.remote()
+    print(json.dumps(access), flush=True)
+    if access["hf_owner"] != mapping["owner"] or any(
+        v != 200 for v in access["robots_status"].values()
+    ):
+        raise RuntimeError("Remote credential/source access check failed")
+    if check_only:
+        return
+    run_id = run_id or datetime.now(UTC).strftime("eu-%Y%m%dT%H%M%S")
+    # Dedicated ingestion ledger: separate from training/latent-workspace budgets.
+    # This is a conservative compute reservation, not a measured bill.
+    ledger_path = ROOT / "artifacts" / "modal-ingestion-budget.json"
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    ledger = json.loads(ledger_path.read_text()) if ledger_path.exists() else {"runs": []}
+    if any(r["run_id"] == run_id for r in ledger["runs"]):
+        raise ValueError("run_id already reserved locally; choose a new ID to resume HF progress")
+    sources = ["ecb", "ema"] if source == "both" else [source]
+    reservation = {
+        "run_id": run_id,
+        "sources": sources,
+        "reserved_at": datetime.now(UTC).isoformat(),
+        "max_documents_each": max_documents,
+        "worker_seconds_each": 3600,
+        "reserved_vcpu_seconds": len(sources) * 3600,
+        "reserved_gib_seconds": len(sources) * 2 * 3600,
+    }
+    ledger["runs"].append(reservation)
+    ledger_path.write_text(json.dumps(ledger, indent=2) + "\n")
+    functions = {"ecb": collect_ecb, "ema": collect_ema}
+    calls = {s: functions[s].spawn(run_id, max_documents, work_seconds, refresh) for s in sources}
+    launch = {
+        "run_id": run_id,
+        "calls": {s: c.object_id for s, c in calls.items()},
+        "datasets": {s: mapping["sources"][s]["repo_id"] for s in sources},
+    }
+    (ROOT / "artifacts" / f"modal-launch-{run_id}.json").write_text(
+        json.dumps(launch, indent=2) + "\n"
+    )
+    print(json.dumps(launch), flush=True)
+    # Keep this coordinator alive for both workers. Detached local entrypoints only
+    # guarantee survival of the last triggered function; HF checkpoints survive either.
+    for s, call in calls.items():
+        try:
+            result = call.get()
+        except Exception as error:  # noqa: BLE001 - retain per-source failure and collect sibling result
+            result = {"source_id": s, "run_id": run_id, "status": "failed", "error": str(error)}
+        (ROOT / "artifacts" / f"modal-result-{run_id}-{s}.json").write_text(
+            json.dumps(result, indent=2) + "\n"
+        )
+        print(json.dumps(result), flush=True)
