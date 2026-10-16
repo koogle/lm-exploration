@@ -8,8 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import torch
-from model_100m import model as baseline
-from model_100m_tied import model as variant
+from model_100m import model as variant
 from torch.nn import functional as F
 from training_data.subword import TOKENIZER_SHA256, VOCAB_SIZE, load_frozen
 
@@ -24,15 +23,10 @@ class TiedEmbeddingTests(unittest.TestCase):
         torch.manual_seed(42)
         self.config = variant.ModelConfig(11, 8, 1, 3, 24)
 
-    def test_shares_one_parameter_and_preserves_other_initial_weights(self):
-        control = baseline.GPT(self.config)
-        torch.manual_seed(42)
+    def test_default_shares_one_parameter_and_preserves_alias_on_conversion(self):
         model = variant.GPT(self.config)
         self.assertIs(model.lm_head.weight, model.token_embedding.weight)
         self.assertEqual(sum(p is model.lm_head.weight for p in model.parameters()), 1)
-        for name, parameter in control.named_parameters():
-            if name != "lm_head.weight":
-                torch.testing.assert_close(parameter, model.state_dict()[name], rtol=0, atol=0)
         optimizer = torch.optim.AdamW(model.parameters())
         parameters = [p for group in optimizer.param_groups for p in group["params"]]
         self.assertEqual(sum(p is model.lm_head.weight for p in parameters), 1)
@@ -40,9 +34,9 @@ class TiedEmbeddingTests(unittest.TestCase):
 
     def test_gradient_sums_input_and_output_roles(self):
         model = variant.GPT(self.config)
-        control = baseline.GPT(self.config)
-        # Give the untied reference identical VALUES, retaining two independent Parameters.
-        control.load_state_dict(model.state_dict())
+        # An untied mathematical reference exists only inside this test.
+        control = copy.deepcopy(model)
+        control.lm_head.weight = torch.nn.Parameter(model.lm_head.weight.detach().clone())
         self.assertIsNot(control.lm_head.weight, control.token_embedding.weight)
         tokens = torch.randint(self.config.vocab_size, (2, 8))
         targets = (tokens + 1) % self.config.vocab_size
@@ -65,7 +59,7 @@ class TiedEmbeddingTests(unittest.TestCase):
     def test_checkpoint_roundtrip_preserves_alias_and_logits(self):
         model = variant.GPT(self.config)
         payload = {
-            "config": {"model_name": "model_100m_tied", "model": asdict(self.config)},
+            "config": {"model_name": "model_100m", "model": asdict(self.config)},
             "model": model.state_dict(),
         }
         stream = io.BytesIO()
@@ -75,13 +69,6 @@ class TiedEmbeddingTests(unittest.TestCase):
         self.assertIs(reloaded.lm_head.weight, reloaded.token_embedding.weight)
         tokens = torch.randint(self.config.vocab_size, (2, 8))
         torch.testing.assert_close(model(tokens), reloaded(tokens), rtol=0, atol=0)
-        control = baseline.GPT(self.config)
-        old_payload = {
-            "config": {"model_name": "model_100m", "model": asdict(self.config)},
-            "model": control.state_dict(),
-        }
-        old = load_model(old_payload)
-        self.assertIsNot(old.lm_head.weight, old.token_embedding.weight)
 
     def test_rejects_cross_architecture_resume_and_keeps_legacy_names(self):
         training = {
@@ -96,7 +83,7 @@ class TiedEmbeddingTests(unittest.TestCase):
             "gradient_clip_norm": 1.0,
         }
         config = {
-            "model_name": "model_100m_tied",
+            "model_name": "model_100m",
             "model": asdict(self.config),
             "tokenizer": {"sha256": TOKENIZER_SHA256},
             "training": training,
@@ -105,16 +92,16 @@ class TiedEmbeddingTests(unittest.TestCase):
         fingerprint = checkpoint["dataset_fingerprint"]
         validate_resume(checkpoint, config, fingerprint, 3)
         different = copy.deepcopy(config)
-        different["model_name"] = "model_100m"
+        different["model_name"] = "model_10m"
         with self.assertRaisesRegex(ValueError, "identical"):
             validate_resume(checkpoint, different, fingerprint, 3)
         with self.assertRaisesRegex(ValueError, "identical"):
             validate_resume({**checkpoint, "config": different}, config, fingerprint, 3)
-        legacy = copy.deepcopy(different)
+        legacy = copy.deepcopy(config)
         legacy["model_name"] = "100m"
-        validate_resume({**checkpoint, "config": legacy}, different, fingerprint, 3)
+        validate_resume({**checkpoint, "config": legacy}, config, fingerprint, 3)
         del legacy["model_name"]
-        validate_resume({**checkpoint, "config": legacy}, different, fingerprint, 3)
+        validate_resume({**checkpoint, "config": legacy}, config, fingerprint, 3)
 
     def test_frozen_tokenizer_forward_backward_and_parameter_counts(self):
         tokenizer = load_frozen()
@@ -130,19 +117,18 @@ class TiedEmbeddingTests(unittest.TestCase):
         F.cross_entropy(logits[:, :-1].flatten(0, 1), tokens[:, 1:].flatten()).backward()
         self.assertTrue(torch.isfinite(model.token_embedding.weight.grad).all())
         with torch.device("meta"):
-            original = baseline.GPT(baseline.ModelConfig(VOCAB_SIZE))
             tied = variant.GPT(variant.ModelConfig(VOCAB_SIZE))
-        original_count = sum(p.numel() for p in original.parameters())
         tied_count = sum(p.numel() for p in tied.parameters())
-        self.assertEqual(original_count, 149_555_456)
         self.assertEqual(tied_count, 124_389_632)
-        self.assertEqual(original_count - tied_count, VOCAB_SIZE * 768)
-        self.assertEqual(asdict(original.config), asdict(tied.config))
+        # state_dict names both uses; parameters() counts the shared matrix once.
+        named_tensor_count = sum(p.numel() for p in tied.state_dict().values())
+        self.assertEqual(named_tensor_count - tied_count, VOCAB_SIZE * 768)
 
     def test_registration_and_inherited_source_provenance(self):
-        self.assertIs(MODELS["100m_tied"], variant)
-        recipe = Recipe(model="100m_tied", dataset="tiny-shakespeare", training={})
-        self.assertEqual(recipe.build_model_config(11), baseline.ModelConfig(11))
+        self.assertIs(MODELS["100m"], variant)
+        self.assertNotIn("100m_tied", MODELS)
+        recipe = Recipe(model="100m", dataset="tiny-shakespeare", training={})
+        self.assertEqual(recipe.build_model_config(11), variant.ModelConfig(11))
         sources = runtime_provenance(
             "cpu", variant.__file__, model_dependencies=variant.MODEL_DEPENDENCIES
         )["source_hashes"]

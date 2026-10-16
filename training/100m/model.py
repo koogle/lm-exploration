@@ -1,8 +1,8 @@
-"""100M-family decoder: RMSNorm, RoPE and parameter-matched SwiGLU by default.
+"""100M-family decoder: RMSNorm, RoPE, SwiGLU and tied embeddings by default.
 
 Keep 14 layers, width 768, 12 MHA heads, context 256, projection biases and
 vanilla weight initialization. architecture_version=1 reproduces the historical
-LayerNorm/learned-position/GELU model for old checkpoints and controlled comparisons.
+LayerNorm/learned-position/GELU model only for legacy checkpoint compatibility.
 """
 
 from dataclasses import dataclass
@@ -102,6 +102,7 @@ class GPT(vanilla.GPT):
         self.final_norm = RMSNorm(config.n_embd)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.apply(self.initialize)
+        self.lm_head.weight = self.token_embedding.weight
 
     def forward(self, tokens):
         if self.config.architecture_version == 1:

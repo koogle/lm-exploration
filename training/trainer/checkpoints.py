@@ -45,7 +45,7 @@ def validate_resume(checkpoint, config, fingerprint, steps):
     def model_settings(record):
         settings = dict(record["model"])
         name = record.get("model_name", "100m").removeprefix("model_")
-        if name in ("100m", "100m_tied"):
+        if name == "100m":
             settings.setdefault("architecture_version", 1)
         return settings
 
@@ -53,7 +53,7 @@ def validate_resume(checkpoint, config, fingerprint, steps):
         checkpoint["dataset_fingerprint"] == fingerprint
         and model_settings(old) == model_settings(config)
         and old["tokenizer"] == config["tokenizer"]
-        # Tied/untied models have matching tensor shapes but different optimizer semantics.
+        # Matching dimensions alone do not identify the architecture/optimizer layout.
         and old.get("model_name", "100m").removeprefix("model_")
         == config.get("model_name", "100m").removeprefix("model_")
     )

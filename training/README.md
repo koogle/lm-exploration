@@ -69,13 +69,10 @@ gradient descent, start with [the XOR example](examples/README.md).
 - [`100m/model.py`](100m/model.py): **architecture only**. The [updated model](100m/README.md)
   uses RMSNorm, RoPE and SwiGLU at 14 layers, width 768, 12 attention heads and
   context 256. Version 1 preserves the historical vanilla blocks for old
-  checkpoints and controls. With the frozen 32K tokenizer, version 2 has
-  149,555,456 untied parameters. The original 10M definition is unchanged.
+  checkpoints. New 100M models tie input/output embeddings by default and have
+  124,389,632 parameters with the frozen 32K tokenizer. The original 10M is unchanged.
 - [`modal_train.py`](modal_train.py) and [`recipes/`](recipes/README.md): the only way
   to start training. Validates a recipe locally, reserves budget, then trains on Modal.
-- [`100m_tied/`](100m_tied/README.md): an independent input/output weight-tying
-  experiment on the updated RMSNorm/RoPE/SwiGLU backbone: 124,389,632 parameters
-  with the merged frozen 32K tokenizer. The general recipe trainer remains character-only.
 - [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a
   prompt, and reads the architecture, configuration and tokenizer from the checkpoint.
 - [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,

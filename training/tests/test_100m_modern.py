@@ -36,6 +36,7 @@ class Modern100MTests(unittest.TestCase):
         with torch.device("meta"):
             instance = model.GPT(config)
         self.assertFalse(hasattr(instance, "position_embedding"))
+        self.assertIs(instance.lm_head.weight, instance.token_embedding.weight)
         norms = [m for m in instance.modules() if isinstance(m, model.RMSNorm)]
         self.assertEqual(len(norms), 29)
         self.assertTrue(all(m.eps == 1e-5 for m in norms))
@@ -141,17 +142,16 @@ class Modern100MTests(unittest.TestCase):
         del settings["architecture_version"]
         tokens = torch.randint(11, (1, 8))
         original = vanilla.GPT(vanilla.ModelConfig(**settings))
-        for name in (None, "100m", "model_100m", "model_100m_tied"):
+        for name in (None, "100m", "model_100m"):
             config = {"model": settings}
             if name is not None:
                 config["model_name"] = name
             reference = copy.deepcopy(original)
-            if name == "model_100m_tied":
-                reference.lm_head.weight = reference.token_embedding.weight
             restored = load_model({"config": config, "model": reference.state_dict()})
             self.assertEqual(restored.config.architecture_version, 1)
             self.assertIsInstance(restored.final_norm, torch.nn.LayerNorm)
             self.assertTrue(hasattr(restored, "position_embedding"))
+            self.assertIsNot(restored.lm_head.weight, restored.token_embedding.weight)
             torch.testing.assert_close(restored(tokens), reference(tokens), rtol=0, atol=0)
         with torch.device("meta"):
             old = model.GPT(model.ModelConfig(32768, architecture_version=1))

@@ -29,7 +29,7 @@ def load_model(checkpoint):
     name = checkpoint["config"].get("model_name", "100m").removeprefix("model_")
     architecture = MODELS[name]
     settings = dict(checkpoint["config"]["model"])
-    if name in ("100m", "100m_tied"):
+    if name == "100m":
         # Checkpoints before the modern 100M update used vanilla blocks.
         settings.setdefault("architecture_version", 1)
     model = architecture.GPT(architecture.ModelConfig(**settings))

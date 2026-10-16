@@ -1,81 +1,82 @@
 # Updated 100M-family architecture
 
-`model.py` now defaults to **RMSNorm, RoPE and SwiGLU**, keeping 14 layers,
-width 768, 12 ordinary attention heads (head dimension 64) and context 256.
-The [tied variant](../100m_tied/README.md) inherits these blocks and shares the
-input/output embedding Parameter. The published vanilla 10M is unchanged.
+`model.py` uses **RMSNorm, RoPE, SwiGLU and tied input/output embeddings** by
+default. There is one `100m` model choice, keeping 14 layers, width 768, 12 ordinary
+attention heads (head dimension 64) and context 256. The original vanilla 10M
+model and its individual ablation PRs are unchanged.
 
-| Component | Historical version 1 | Default version 2 |
-| --- | --- | --- |
-| Normalization | Pre-LayerNorm + final LayerNorm | Pre-RMSNorm + final RMSNorm |
-| Positions | Learned absolute table at input | RoPE on Q/K in every layer |
-| Feedforward | GELU, hidden width 3,072 | SwiGLU, hidden width 2,048 |
-| Projection biases | Present | Present |
-| Attention kernel | Explicit causal MHA | Same explicit causal MHA |
-| Initialization | Normal std 0.02 | Same normal std 0.02 |
-| `100m` embedding/output weights | Separate | Separate |
-| `100m_tied` embedding/output weights | Shared | Shared |
+| Component | Current default |
+| --- | --- |
+| Normalization | Pre-RMSNorm and final RMSNorm, epsilon 1e-5 |
+| Positions | RoPE on Q/K in every layer, theta 10,000 |
+| Feedforward | SwiGLU, hidden width 2,048 |
+| Projection biases | Present |
+| Attention kernel | Original explicit causal MHA |
+| Initialization | Normal std 0.02 |
+| Input/output weights | One shared Parameter |
 
-## Mechanisms and evidence
+## Mechanisms and references
 
-- **RMSNorm:** `gamma * x / sqrt(mean(x**2) + epsilon)` omits mean centering
-  and normalization offsets. Epsilon remains **1e-5**, matching old LayerNorm.
-  Low-precision statistics accumulate in FP32. [Zhang & Sennrich (2019)](https://arxiv.org/abs/1910.07467)
-  motivate simpler magnitude normalization. Actual speed depends on kernels;
-  fewer operations do not establish a measured speedup here.
-- **RoPE:** rotates adjacent Q/K feature pairs using theta **10,000**. Values
-  stay unchanged; the positional dependence of Q/K dot products is relative.
+- **RMSNorm:** `gamma * x / sqrt(mean(x**2) + epsilon)` omits mean centering and
+  normalization offsets. Epsilon matches historical LayerNorm; low-precision
+  statistics accumulate in FP32. [Zhang & Sennrich (2019)](https://arxiv.org/abs/1910.07467)
+  motivate simpler normalization. Actual speed depends on kernels.
+- **RoPE:** rotates adjacent query/key feature pairs; values stay unchanged.
+  The positional dependence of Q/K dot products is relative.
   [RoFormer, Su et al. (2021)](https://arxiv.org/abs/2104.09864) gives the construction.
-  Context is still bounded by `block_size`: no GQA, KV cache or long-context
-  scaling is added.
+  Context remains capped by `block_size`: no GQA, KV cache or long-context scaling.
 - **SwiGLU:** `down(SiLU(gate(x)) * up(x))` provides input-dependent feature
   modulation. Hidden width `ceil(8 * width / 3)` exactly matches the old MLP's
-  matrix-parameter count at width 768. All three projections retain biases.
-  [Shazeer (2020)](https://arxiv.org/abs/2002.05202) reports matched-budget T5
-  improvements over GELU; that motivates a causal-GPT experiment, not a claimed
-  improvement in this repository.
+  matrix-parameter budget at width 768. Projections keep biases.
+  [Shazeer (2020)](https://arxiv.org/abs/2002.05202) reports matched-budget T5 gains;
+  that motivates a causal-GPT experiment, not a claimed improvement here.
+- **Tied embeddings:** `self.lm_head.weight = self.token_embedding.weight`.
+  The shared table `E[vocabulary, width]` supplies input rows and output logits
+  `hidden @ E.T`. Gradients from both uses accumulate into the same Parameter,
+  which appears once in the optimizer's parameter list.
+  [Press & Wolf (2017)](https://arxiv.org/abs/1608.05859) study the parameter/quality
+  tradeoff. Sharing saves parameters but constrains the representations.
 
-[LLaMA §2.2](https://arxiv.org/abs/2302.13971) adopts all three in a decoder.
-This update combines them as requested; it cannot establish each component's
-quality contribution. The independent 10M ablations serve that purpose.
+[LLaMA §2.2](https://arxiv.org/abs/2302.13971) adopts RMSNorm, RoPE and SwiGLU.
+This update combines the requested choices; it cannot establish each component's
+quality contribution. The individual 10M ablations serve that purpose. No quality
+gain has been measured for this combined model.
 
-## Counts with the merged frozen tokenizer
+## Frozen tokenizer and parameter count
 
-Use existing `structured-code-v1`: **32,768 entries**, unchanged tokenizer hash
+Use merged `structured-code-v1`: **32,768 entries**, unchanged tokenizer hash
 `add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9`.
-At context 256 and the unchanged 14×768 shape:
+At context 256 and the unchanged 14×768 shape, the model has **124,389,632 unique
+parameters**. Tying saves **25,165,824** (`32,768 × 768`) versus separate matrices
+on the same modern backbone. There is no maintained untied modern variant,
+separate package or recipe key for tying.
 
-| Version | Untied `100m` | Tied `100m_tied` |
-| --- | ---: | ---: |
-| 1: historical blocks | 149,760,000 | 124,594,176 |
-| 2: RMSNorm + RoPE + SwiGLU | **149,555,456** | **124,389,632** |
+The historical vanilla 100M had 149,760,000 parameters at this vocabulary.
+Besides tying, the modern blocks remove 196,608 position parameters and 22,272
+normalization offsets, and add 14,336 FFN bias parameters. FFN matrix parameters
+match. The `100m` label is historical: a 32K vocabulary changes the total relative
+to the character model. No saving is reinvested in extra layers.
 
-Version 2 removes 196,608 position parameters and 22,272 normalization offsets,
-and adds 14,336 FFN bias parameters. FFN matrix parameters match. Tying saves
-**25,165,824** parameters in either version. The `100m` name is historical:
-including a 32K vocabulary changes its total relative to the character model.
-
-## Versioning and integration
+## Usage and compatibility
 
 ```python
 from model_100m.model import GPT, ModelConfig
 
-modern = ModelConfig(vocab_size=32768)  # architecture_version=2
-legacy = ModelConfig(vocab_size=32768, architecture_version=1)
+model = GPT(ModelConfig(vocab_size=32768))
+assert model.lm_head.weight is model.token_embedding.weight
 ```
 
-Recipes selecting `100m` or `100m_tied` build version 2 by default. For a legacy
-control, use `model_overrides: {"architecture_version": 1}`. New checkpoints
-record the version. The loader interprets pre-version 100M/tied-100M checkpoints
-as version 1, preserving their original blocks and exact logits; it does not
-silently convert weights. Resume across versions or tied/untied architectures
-is rejected. Explicit version 1 can resume a compatible pre-version checkpoint.
+Recipes continue to select `model="100m"`; no tying flag is needed. New checkpoints
+record `architecture_version=2`. A small version-1 compatibility path reuses the
+original vanilla implementation to load historical 100M checkpoints, preserving
+their original untied weights and exact logits. Missing version metadata means
+legacy; the loader does not silently tie or modernize old weights. Resume across
+architecture versions is rejected. This is not a second modern model variant.
 
 The general recipe trainer and generation CLI remain character-only; the frozen
-BPE preparation pipeline still needs a model-training integration. Tests run
-actual frozen-tokenizer IDs through tiny modern models, not a completed subword
-pretraining or text-generation workflow. No GPU run or comparative quality
-result is part of this update.
+BPE preparation pipeline still needs model-training integration. Tests run real
+frozen-tokenizer IDs through tiny modern models, not a completed subword
+pretraining or text-generation workflow. No GPU run is part of this update.
 
 ## Verification
 
@@ -86,8 +87,7 @@ uv sync --locked --extra corpus --extra research
 uv run --extra corpus --extra research python -m unittest discover -s tests -v
 ```
 
-Checks cover independent RMSNorm/RoPE/SwiGLU output/gradient references, combined
-causality and finite gradients, context/config bounds, counts, recipe versioning,
-and old checkpoint loading/resume. The tying tests cover shared identity, summed
-input/output gradients, optimizer deduplication, dtype conversion, checkpoint
-roundtrip and the merged tokenizer's full ID range.
+Checks cover independent block output/gradient references, causality, finite
+gradients, counts, config bounds and old checkpoint loading/resume. Tying checks
+cover shared identity, summed gradients against a test-only reference, optimizer
+deduplication, dtype conversion, checkpoint roundtrip and tokenizer ID bounds.
