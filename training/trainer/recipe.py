@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Literal, get_args
 
 from model_10m import model as model_10m
+from model_10m_rmsnorm import model as model_10m_rmsnorm
 from model_10m_rope import model as model_10m_rope
 from model_100m import model as model_100m
 from pydantic import BaseModel, ConfigDict, PositiveInt, model_validator
@@ -19,11 +20,16 @@ from training_data.fetching import fetch_shakespeare_complete, fetch_tinyshakesp
 
 from .config import TrainConfig
 
-ModelName = Literal["10m", "100m", "10m_rope"]
+ModelName = Literal["10m", "100m", "10m_rmsnorm", "10m_rope"]
 DatasetName = Literal["tiny-shakespeare", "shakespeare-complete"]
 GpuName = Literal["T4", "L4", "A10G", "L40S", "A100", "A100-80GB", "H100", "H200", "B200"]
 
-MODELS = {"10m": model_10m, "100m": model_100m, "10m_rope": model_10m_rope}
+MODELS = {
+    "10m": model_10m,
+    "100m": model_100m,
+    "10m_rmsnorm": model_10m_rmsnorm,
+    "10m_rope": model_10m_rope,
+}
 DATASETS = {
     "tiny-shakespeare": fetch_tinyshakespeare,
     "shakespeare-complete": fetch_shakespeare_complete,

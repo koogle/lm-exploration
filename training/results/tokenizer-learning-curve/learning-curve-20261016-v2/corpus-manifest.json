@@ -1,0 +1,1046 @@
+{
+  "identity": {
+    "adapters": "34a07ec99175e0f1fb1df19c75b0e380a75179df3d516c1350ed68b672a28f9f",
+    "implementation": "5d992fec42941a33951b22ffb7468ae58811f6de79364cd9f5bcfd714ee772aa",
+    "recipe": {
+      "id": "scholarly-code-bpe-v1",
+      "library": "tokenizers==0.22.2",
+      "max_chunk_characters": 4096,
+      "max_chunks_per_document": 4,
+      "max_document_characters": 4000000,
+      "max_scanned_documents_per_source": 100000,
+      "model_target": "About150Mtotalparameters; embeddings included; model training not part of tokenizer job",
+      "sampling_weight_unit": "UTF-8 bytes before tokenizer exists; actual resulting token shares reported",
+      "seed": 20261016,
+      "selection_rule": "Prefer16K unless32K reduces total held-out tokens by at least10% and no individual source needs over2%moretokens; all roundtrip and bytecoverage checks must pass",
+      "sources": [
+        {
+          "files": [
+            "sample/10BT/000_00000.parquet",
+            "sample/10BT/001_00000.parquet",
+            "sample/10BT/002_00000.parquet",
+            "sample/10BT/003_00000.parquet",
+            "sample/10BT/004_00000.parquet",
+            "sample/10BT/005_00000.parquet",
+            "sample/10BT/006_00000.parquet",
+            "sample/10BT/007_00000.parquet",
+            "sample/10BT/008_00000.parquet",
+            "sample/10BT/009_00000.parquet",
+            "sample/10BT/010_00000.parquet",
+            "sample/10BT/011_00000.parquet",
+            "sample/10BT/012_00000.parquet",
+            "sample/10BT/013_00000.parquet"
+          ],
+          "format": "parquet",
+          "name": "fineweb_edu",
+          "repo": "HuggingFaceFW/fineweb-edu",
+          "revision": "87f09149ef4734204d70ed1d046ddc9ca3f2b8f9",
+          "source_url": "https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu",
+          "synthetic": false,
+          "weight_percent": 10
+        },
+        {
+          "adapter": "codeparrot",
+          "allowed_spdx_licenses": [
+            "MIT",
+            "Apache-2.0",
+            "BSD-2-Clause",
+            "BSD-3-Clause",
+            "ISC"
+          ],
+          "files": [
+            "file-000000000001.json.gz",
+            "file-000000000002.json.gz",
+            "file-000000000003.json.gz",
+            "file-000000000004.json.gz",
+            "file-000000000005.json.gz",
+            "file-000000000006.json.gz",
+            "file-000000000007.json.gz",
+            "file-000000000008.json.gz",
+            "file-000000000009.json.gz",
+            "file-000000000010.json.gz",
+            "file-000000000011.json.gz",
+            "file-000000000012.json.gz",
+            "file-000000000013.json.gz",
+            "file-000000000014.json.gz",
+            "file-000000000015.json.gz",
+            "file-000000000016.json.gz",
+            "file-000000000017.json.gz",
+            "file-000000000018.json.gz",
+            "file-000000000019.json.gz",
+            "file-000000000020.json.gz",
+            "file-000000000021.json.gz",
+            "file-000000000022.json.gz",
+            "file-000000000023.json.gz",
+            "file-000000000024.json.gz",
+            "file-000000000025.json.gz",
+            "file-000000000026.json.gz",
+            "file-000000000027.json.gz",
+            "file-000000000028.json.gz",
+            "file-000000000029.json.gz",
+            "file-000000000030.json.gz",
+            "file-000000000031.json.gz",
+            "file-000000000032.json.gz",
+            "file-000000000033.json.gz",
+            "file-000000000034.json.gz",
+            "file-000000000035.json.gz",
+            "file-000000000036.json.gz",
+            "file-000000000037.json.gz",
+            "file-000000000038.json.gz",
+            "file-000000000039.json.gz",
+            "file-000000000040.json.gz",
+            "file-000000000041.json.gz",
+            "file-000000000042.json.gz",
+            "file-000000000043.json.gz",
+            "file-000000000044.json.gz",
+            "file-000000000045.json.gz",
+            "file-000000000046.json.gz",
+            "file-000000000047.json.gz",
+            "file-000000000048.json.gz",
+            "file-000000000049.json.gz",
+            "file-000000000050.json.gz",
+            "file-000000000051.json.gz",
+            "file-000000000052.json.gz",
+            "file-000000000053.json.gz"
+          ],
+          "format": "json.gz",
+          "name": "code_python",
+          "repo": "codeparrot/codeparrot-clean-train",
+          "revision": "3e6ab65f2864931e041f6a82db9b5a6ec2b71ab4",
+          "source_url": "https://huggingface.co/datasets/codeparrot/codeparrot-clean-train",
+          "synthetic": false,
+          "weight_percent": 30
+        },
+        {
+          "files": [
+            "finemath-4plus/train-00000-of-00064.parquet",
+            "finemath-4plus/train-00001-of-00064.parquet",
+            "finemath-4plus/train-00002-of-00064.parquet",
+            "finemath-4plus/train-00003-of-00064.parquet",
+            "finemath-4plus/train-00004-of-00064.parquet",
+            "finemath-4plus/train-00005-of-00064.parquet",
+            "finemath-4plus/train-00006-of-00064.parquet",
+            "finemath-4plus/train-00007-of-00064.parquet",
+            "finemath-4plus/train-00008-of-00064.parquet",
+            "finemath-4plus/train-00009-of-00064.parquet",
+            "finemath-4plus/train-00010-of-00064.parquet",
+            "finemath-4plus/train-00011-of-00064.parquet",
+            "finemath-4plus/train-00012-of-00064.parquet",
+            "finemath-4plus/train-00013-of-00064.parquet",
+            "finemath-4plus/train-00014-of-00064.parquet",
+            "finemath-4plus/train-00015-of-00064.parquet",
+            "finemath-4plus/train-00016-of-00064.parquet",
+            "finemath-4plus/train-00017-of-00064.parquet",
+            "finemath-4plus/train-00018-of-00064.parquet",
+            "finemath-4plus/train-00019-of-00064.parquet",
+            "finemath-4plus/train-00020-of-00064.parquet",
+            "finemath-4plus/train-00021-of-00064.parquet",
+            "finemath-4plus/train-00022-of-00064.parquet",
+            "finemath-4plus/train-00023-of-00064.parquet",
+            "finemath-4plus/train-00024-of-00064.parquet",
+            "finemath-4plus/train-00025-of-00064.parquet",
+            "finemath-4plus/train-00026-of-00064.parquet",
+            "finemath-4plus/train-00027-of-00064.parquet",
+            "finemath-4plus/train-00028-of-00064.parquet",
+            "finemath-4plus/train-00029-of-00064.parquet",
+            "finemath-4plus/train-00030-of-00064.parquet",
+            "finemath-4plus/train-00031-of-00064.parquet",
+            "finemath-4plus/train-00032-of-00064.parquet",
+            "finemath-4plus/train-00033-of-00064.parquet",
+            "finemath-4plus/train-00034-of-00064.parquet",
+            "finemath-4plus/train-00035-of-00064.parquet",
+            "finemath-4plus/train-00036-of-00064.parquet",
+            "finemath-4plus/train-00037-of-00064.parquet",
+            "finemath-4plus/train-00038-of-00064.parquet",
+            "finemath-4plus/train-00039-of-00064.parquet",
+            "finemath-4plus/train-00040-of-00064.parquet",
+            "finemath-4plus/train-00041-of-00064.parquet",
+            "finemath-4plus/train-00042-of-00064.parquet",
+            "finemath-4plus/train-00043-of-00064.parquet",
+            "finemath-4plus/train-00044-of-00064.parquet",
+            "finemath-4plus/train-00045-of-00064.parquet",
+            "finemath-4plus/train-00046-of-00064.parquet",
+            "finemath-4plus/train-00047-of-00064.parquet",
+            "finemath-4plus/train-00048-of-00064.parquet",
+            "finemath-4plus/train-00049-of-00064.parquet",
+            "finemath-4plus/train-00050-of-00064.parquet",
+            "finemath-4plus/train-00051-of-00064.parquet",
+            "finemath-4plus/train-00052-of-00064.parquet",
+            "finemath-4plus/train-00053-of-00064.parquet",
+            "finemath-4plus/train-00054-of-00064.parquet",
+            "finemath-4plus/train-00055-of-00064.parquet",
+            "finemath-4plus/train-00056-of-00064.parquet",
+            "finemath-4plus/train-00057-of-00064.parquet",
+            "finemath-4plus/train-00058-of-00064.parquet",
+            "finemath-4plus/train-00059-of-00064.parquet",
+            "finemath-4plus/train-00060-of-00064.parquet",
+            "finemath-4plus/train-00061-of-00064.parquet",
+            "finemath-4plus/train-00062-of-00064.parquet",
+            "finemath-4plus/train-00063-of-00064.parquet"
+          ],
+          "format": "parquet",
+          "name": "finemath_4plus",
+          "repo": "HuggingFaceTB/finemath",
+          "revision": "e92b25a616738fe95dc186b64dfb19f9c8525594",
+          "synthetic": false,
+          "weight_percent": 20
+        },
+        {
+          "files": [
+            "peS2o-0000.json.gz",
+            "peS2o-0001.json.gz",
+            "peS2o-0002.json.gz",
+            "peS2o-0003.json.gz",
+            "peS2o-0004.json.gz",
+            "peS2o-0005.json.gz",
+            "peS2o-0006.json.gz",
+            "peS2o-0007.json.gz",
+            "peS2o-0008.json.gz",
+            "peS2o-0009.json.gz",
+            "peS2o-0010.json.gz",
+            "peS2o-0011.json.gz",
+            "peS2o-0012.json.gz",
+            "peS2o-0013.json.gz",
+            "peS2o-0014.json.gz",
+            "peS2o-0015.json.gz",
+            "peS2o-0016.json.gz",
+            "peS2o-0017.json.gz",
+            "peS2o-0018.json.gz",
+            "peS2o-0019.json.gz",
+            "peS2o-0020.json.gz",
+            "peS2o-0021.json.gz",
+            "peS2o-0022.json.gz",
+            "peS2o-0023.json.gz",
+            "peS2o-0024.json.gz",
+            "peS2o-0025.json.gz",
+            "peS2o-0026.json.gz",
+            "peS2o-0027.json.gz",
+            "peS2o-0028.json.gz",
+            "peS2o-0029.json.gz",
+            "peS2o-0030.json.gz",
+            "peS2o-0031.json.gz",
+            "peS2o-0032.json.gz",
+            "peS2o-0033.json.gz",
+            "peS2o-0034.json.gz",
+            "peS2o-0035.json.gz",
+            "peS2o-0036.json.gz",
+            "peS2o-0037.json.gz",
+            "peS2o-0038.json.gz",
+            "peS2o-0039.json.gz",
+            "peS2o-0040.json.gz",
+            "peS2o-0041.json.gz",
+            "peS2o-0042.json.gz",
+            "peS2o-0043.json.gz",
+            "peS2o-0044.json.gz",
+            "peS2o-0045.json.gz",
+            "peS2o-0046.json.gz",
+            "peS2o-0047.json.gz",
+            "peS2o-0048.json.gz",
+            "peS2o-0049.json.gz",
+            "peS2o-0050.json.gz",
+            "peS2o-0051.json.gz",
+            "peS2o-0052.json.gz",
+            "peS2o-0053.json.gz",
+            "peS2o-0054.json.gz",
+            "peS2o-0055.json.gz",
+            "peS2o-0056.json.gz",
+            "peS2o-0057.json.gz",
+            "peS2o-0058.json.gz",
+            "peS2o-0059.json.gz",
+            "peS2o-0060.json.gz",
+            "peS2o-0061.json.gz",
+            "peS2o-0062.json.gz",
+            "peS2o-0063.json.gz",
+            "peS2o-0064.json.gz",
+            "peS2o-0065.json.gz",
+            "peS2o-0066.json.gz",
+            "peS2o-0067.json.gz",
+            "peS2o-0068.json.gz",
+            "peS2o-0069.json.gz",
+            "peS2o-0070.json.gz",
+            "peS2o-0071.json.gz",
+            "peS2o-0072.json.gz",
+            "peS2o-0073.json.gz",
+            "peS2o-0074.json.gz",
+            "peS2o-0075.json.gz",
+            "peS2o-0076.json.gz",
+            "peS2o-0077.json.gz",
+            "peS2o-0078.json.gz",
+            "peS2o-0079.json.gz",
+            "peS2o-0080.json.gz",
+            "peS2o-0081.json.gz",
+            "peS2o-0082.json.gz",
+            "peS2o-0083.json.gz",
+            "peS2o-0084.json.gz",
+            "peS2o-0085.json.gz",
+            "peS2o-0086.json.gz",
+            "peS2o-0087.json.gz",
+            "peS2o-0088.json.gz",
+            "peS2o-0089.json.gz",
+            "peS2o-0090.json.gz"
+          ],
+          "format": "json.gz",
+          "name": "pes2o",
+          "repo": "common-pile/peS2o_filtered",
+          "revision": "297747513bfb0ff1fbf61ddad3b03319d0f04597",
+          "source_url": "https://huggingface.co/datasets/common-pile/peS2o_filtered",
+          "synthetic": false,
+          "weight_percent": 10
+        },
+        {
+          "files": [
+            "licensed_pubmed-0000.json.gz",
+            "licensed_pubmed-0001.json.gz",
+            "licensed_pubmed-0002.json.gz",
+            "licensed_pubmed-0003.json.gz",
+            "licensed_pubmed-0004.json.gz",
+            "licensed_pubmed-0005.json.gz",
+            "licensed_pubmed-0006.json.gz",
+            "licensed_pubmed-0007.json.gz",
+            "licensed_pubmed-0008.json.gz",
+            "licensed_pubmed-0009.json.gz",
+            "licensed_pubmed-0010.json.gz",
+            "licensed_pubmed-0011.json.gz",
+            "licensed_pubmed-0012.json.gz",
+            "licensed_pubmed-0013.json.gz",
+            "licensed_pubmed-0014.json.gz",
+            "licensed_pubmed-0015.json.gz",
+            "licensed_pubmed-0016.json.gz"
+          ],
+          "format": "json.gz",
+          "name": "pubmed",
+          "repo": "common-pile/pubmed_filtered",
+          "revision": "c156f0569a92d8f2edc33cebe1f72f7d3e1cae84",
+          "source_url": "https://huggingface.co/datasets/common-pile/pubmed_filtered",
+          "synthetic": false,
+          "weight_percent": 3
+        },
+        {
+          "files": [
+            "arxiv-papers-0000.json.gz",
+            "arxiv-papers-0001.json.gz",
+            "arxiv-papers-0002.json.gz",
+            "arxiv-papers-0003.json.gz",
+            "arxiv-papers-0004.json.gz",
+            "arxiv-papers-0005.json.gz",
+            "arxiv-papers-0006.json.gz",
+            "arxiv-papers-0007.json.gz"
+          ],
+          "format": "json.gz",
+          "name": "arxiv",
+          "repo": "common-pile/arxiv_papers_filtered",
+          "revision": "033cf7f53f9b348deec868c1a5a48484f3ee9e52",
+          "source_url": "https://huggingface.co/datasets/common-pile/arxiv_papers_filtered",
+          "synthetic": false,
+          "weight_percent": 2
+        },
+        {
+          "files": [
+            "pressbooks-0000.json.gz"
+          ],
+          "format": "json.gz",
+          "name": "pressbooks",
+          "repo": "common-pile/pressbooks_filtered",
+          "revision": "1a1d3b50d77f834370f8eb4c0d174668dd1676bb",
+          "source_url": "https://huggingface.co/datasets/common-pile/pressbooks_filtered",
+          "synthetic": false,
+          "weight_percent": 3
+        },
+        {
+          "files": [
+            "libretexts-0000.json.gz"
+          ],
+          "format": "json.gz",
+          "name": "libretexts",
+          "repo": "common-pile/libretexts_filtered",
+          "revision": "70388bca52b4a93515e14b1d56618fd7944988fd",
+          "source_url": "https://huggingface.co/datasets/common-pile/libretexts_filtered",
+          "synthetic": false,
+          "weight_percent": 3
+        },
+        {
+          "files": [
+            "doab-0000.json.gz",
+            "doab-0001.json.gz",
+            "doab-0002.json.gz",
+            "doab-0003.json.gz",
+            "doab-0004.json.gz"
+          ],
+          "format": "json.gz",
+          "name": "doab",
+          "repo": "common-pile/doab_filtered",
+          "revision": "defb24ca72ef6aba6ce0228b669eec06dcfbffbc",
+          "source_url": "https://huggingface.co/datasets/common-pile/doab_filtered",
+          "synthetic": false,
+          "weight_percent": 4
+        },
+        {
+          "files": [
+            "project_gutenberg-dolma-0000.json.gz",
+            "project_gutenberg-dolma-0001.json.gz",
+            "project_gutenberg-dolma-0002.json.gz",
+            "project_gutenberg-dolma-0003.json.gz",
+            "project_gutenberg-dolma-0004.json.gz",
+            "project_gutenberg-dolma-0005.json.gz",
+            "project_gutenberg-dolma-0006.json.gz",
+            "project_gutenberg-dolma-0007.json.gz",
+            "project_gutenberg-dolma-0008.json.gz",
+            "project_gutenberg-dolma-0009.json.gz",
+            "project_gutenberg-dolma-0010.json.gz",
+            "project_gutenberg-dolma-0011.json.gz",
+            "project_gutenberg-dolma-0012.json.gz",
+            "project_gutenberg-dolma-0013.json.gz",
+            "project_gutenberg-dolma-0014.json.gz"
+          ],
+          "format": "json.gz",
+          "name": "gutenberg",
+          "repo": "common-pile/project_gutenberg_filtered",
+          "revision": "3cdf6879c807f4e4e063f2ceb23bc268d8c29ab7",
+          "source_url": "https://huggingface.co/datasets/common-pile/project_gutenberg_filtered",
+          "synthetic": false,
+          "weight_percent": 5
+        },
+        {
+          "files": [
+            "public_library_1929_dolma-0000.json.gz",
+            "public_library_1929_dolma-0001.json.gz",
+            "public_library_1929_dolma-0002.json.gz",
+            "public_library_1929_dolma-0003.json.gz",
+            "public_library_1929_dolma-0004.json.gz",
+            "public_library_1929_dolma-0005.json.gz",
+            "public_library_1929_dolma-0006.json.gz",
+            "public_library_1929_dolma-0007.json.gz",
+            "public_library_1929_dolma-0008.json.gz",
+            "public_library_1929_dolma-0009.json.gz",
+            "public_library_1929_dolma-0010.json.gz",
+            "public_library_1929_dolma-0011.json.gz",
+            "public_library_1929_dolma-0012.json.gz",
+            "public_library_1929_dolma-0013.json.gz",
+            "public_library_1929_dolma-0014.json.gz",
+            "public_library_1929_dolma-0015.json.gz",
+            "public_library_1929_dolma-0016.json.gz",
+            "public_library_1929_dolma-0017.json.gz",
+            "public_library_1929_dolma-0018.json.gz",
+            "public_library_1929_dolma-0019.json.gz",
+            "public_library_1929_dolma-0020.json.gz",
+            "public_library_1929_dolma-0021.json.gz",
+            "public_library_1929_dolma-0022.json.gz",
+            "public_library_1929_dolma-0023.json.gz",
+            "public_library_1929_dolma-0024.json.gz",
+            "public_library_1929_dolma-0025.json.gz"
+          ],
+          "format": "json.gz",
+          "name": "pre_1929_books",
+          "repo": "common-pile/pre_1929_books_filtered",
+          "revision": "23f9d96dbb1db3324bbc9fbfe1f8299cc799c4d1",
+          "synthetic": false,
+          "weight_percent": 7
+        },
+        {
+          "files": [
+            "loc_books_dolma-0000.json.gz",
+            "loc_books_dolma-0001.json.gz",
+            "loc_books_dolma-0002.json.gz",
+            "loc_books_dolma-0003.json.gz",
+            "loc_books_dolma-0004.json.gz",
+            "loc_books_dolma-0005.json.gz",
+            "loc_books_dolma-0006.json.gz",
+            "loc_books_dolma-0007.json.gz",
+            "loc_books_dolma-0008.json.gz",
+            "loc_books_dolma-0009.json.gz",
+            "loc_books_dolma-0010.json.gz",
+            "loc_books_dolma-0011.json.gz",
+            "loc_books_dolma-0012.json.gz",
+            "loc_books_dolma-0013.json.gz",
+            "loc_books_dolma-0014.json.gz",
+            "loc_books_dolma-0015.json.gz",
+            "loc_books_dolma-0016.json.gz",
+            "loc_books_dolma-0017.json.gz",
+            "loc_books_dolma-0018.json.gz",
+            "loc_books_dolma-0019.json.gz",
+            "loc_books_dolma-0020.json.gz",
+            "loc_books_dolma-0021.json.gz",
+            "loc_books_dolma-0022.json.gz",
+            "loc_books_dolma-0023.json.gz",
+            "loc_books_dolma-0024.json.gz"
+          ],
+          "format": "json.gz",
+          "name": "library_of_congress",
+          "repo": "common-pile/library_of_congress_filtered",
+          "revision": "56725c7aa1bb320703e22eb5f42903173d5bac3d",
+          "synthetic": false,
+          "weight_percent": 3
+        }
+      ],
+      "special_tokens": [
+        "<|pad|>",
+        "<|bos|>",
+        "<|eos|>",
+        "<|unk|>"
+      ],
+      "split_policy": "Same mixture-split-v1 parent hash: buckets2..9 training, bucket0 validation, bucket1 excluded; no held-out fitting",
+      "tokenizer": "Byte-level BPE with complete256bytealphabet; no normalization; digit groups up to3; explicit whitespace; no automatic BOS/EOS",
+      "trainer": {
+        "max_token_length": 32,
+        "min_frequency": 2
+      },
+      "training_utf8_bytes": 67108864,
+      "validation_utf8_bytes": 8388608,
+      "vocab_sizes": [
+        16384,
+        32768
+      ]
+    },
+    "spec": {
+      "chunk_bytes": 8192,
+      "cpu": 8,
+      "evaluation_mib": 32,
+      "id": "scholarly-tokenizer-learning-curve-v1",
+      "library": "tokenizers==0.22.2",
+      "max_document_bytes": 65536,
+      "max_parallel_candidates": 3,
+      "max_parent_bytes": 262144,
+      "max_token_length": 32,
+      "memory_mib": 65536,
+      "min_frequency": 2,
+      "sampling": "Seeded permutation of every pinned shard per source; source-weighted UTF-8 byte quotas; nested per-source prefixes",
+      "seed": 20261016,
+      "sizes_mib": [
+        64,
+        128,
+        256,
+        512,
+        1024,
+        2048
+      ],
+      "source_recipe": "tokenizer/recipe-v1.json",
+      "split_policy": "scholarly-parent-v2; bucket 0 evaluation, bucket 1 excluded, buckets 2-9 fitting",
+      "timeout_seconds": 7200,
+      "vocab_sizes": [
+        16384,
+        32768,
+        50000
+      ]
+    }
+  },
+  "sources": {
+    "fineweb_edu": {
+      "weight_percent": 10,
+      "train": {
+        "path": "fineweb_edu-train.jsonl",
+        "sha256": "d50f84b59d36c8cbb81ab7d6e40d285d0464bb6f7d73131e8786603828ae8462",
+        "bytes": 214748365,
+        "chunks": 55847,
+        "parents": 46886,
+        "target_bytes": 214748365
+      },
+      "validation": {
+        "path": "fineweb_edu-validation.jsonl",
+        "sha256": "87c64308527569fd2917e3d1d2fcd971c791bf35de3ac66f219a85fdf6038bae",
+        "bytes": 3355444,
+        "chunks": 895,
+        "parents": 762,
+        "target_bytes": 3355444
+      }
+    },
+    "code_python": {
+      "weight_percent": 30,
+      "train": {
+        "path": "code_python-train.jsonl",
+        "sha256": "5e1c04e310375d9922e008142e7d9813f56e541918b729dd7764eaec3ffbadea",
+        "bytes": 644245095,
+        "chunks": 120955,
+        "parents": 39130,
+        "target_bytes": 644245095
+      },
+      "validation": {
+        "path": "code_python-validation.jsonl",
+        "sha256": "73d44fdab095e9ea0483993698d9d657630489aa5e38b4d1e205b956d1390178",
+        "bytes": 10066330,
+        "chunks": 1836,
+        "parents": 885,
+        "target_bytes": 10066330
+      }
+    },
+    "finemath_4plus": {
+      "weight_percent": 20,
+      "train": {
+        "path": "finemath_4plus-train.jsonl",
+        "sha256": "d496fb1ff323a5abecfbc7554372eb1ee64871ffe09b93a815acef264fdfe450",
+        "bytes": 429496730,
+        "chunks": 108405,
+        "parents": 87795,
+        "target_bytes": 429496730
+      },
+      "validation": {
+        "path": "finemath_4plus-validation.jsonl",
+        "sha256": "a5ce0255f2f3564287979f71ffe5d779fd4779bb7c4fec90e04b2a1d573dc249",
+        "bytes": 6710887,
+        "chunks": 1706,
+        "parents": 1387,
+        "target_bytes": 6710887
+      }
+    },
+    "pes2o": {
+      "weight_percent": 10,
+      "train": {
+        "path": "pes2o-train.jsonl",
+        "sha256": "ad20f8a9b28a5eae7f9e85f0cacfd599d8b4aedb3a013e4635f8460155425669",
+        "bytes": 214748365,
+        "chunks": 29712,
+        "parents": 7302,
+        "target_bytes": 214748365
+      },
+      "validation": {
+        "path": "pes2o-validation.jsonl",
+        "sha256": "2a159c9e0d6f943659961deba809ca2e4c0fbe142891d0401a1074eaa95ea693",
+        "bytes": 3355444,
+        "chunks": 463,
+        "parents": 104,
+        "target_bytes": 3355444
+      }
+    },
+    "pubmed": {
+      "weight_percent": 3,
+      "train": {
+        "path": "pubmed-train.jsonl",
+        "sha256": "dfaf74b557b8f20ad922e646176041a5ae55adcb679ed52d8b918e8a4d6d780f",
+        "bytes": 64424510,
+        "chunks": 8628,
+        "parents": 1689,
+        "target_bytes": 64424510
+      },
+      "validation": {
+        "path": "pubmed-validation.jsonl",
+        "sha256": "78ddd383a8a5b305b2669971f323af6a29b862e30838036c3b02371e47c14f19",
+        "bytes": 1006633,
+        "chunks": 137,
+        "parents": 28,
+        "target_bytes": 1006633
+      }
+    },
+    "arxiv": {
+      "weight_percent": 2,
+      "train": {
+        "path": "arxiv-train.jsonl",
+        "sha256": "6f9056d49ccd62e3a0ea7eb602f49863ab2c9717c861e2b5bbbbea56cb05cbd3",
+        "bytes": 42949673,
+        "chunks": 5500,
+        "parents": 859,
+        "target_bytes": 42949673
+      },
+      "validation": {
+        "path": "arxiv-validation.jsonl",
+        "sha256": "70adc71f486d26203877e1d074f87c24c2970132c1eac946be4c395af0a365c5",
+        "bytes": 671089,
+        "chunks": 84,
+        "parents": 12,
+        "target_bytes": 671089
+      }
+    },
+    "pressbooks": {
+      "weight_percent": 3,
+      "train": {
+        "path": "pressbooks-train.jsonl",
+        "sha256": "8aa0e00775c0706e948b9db49679b8a970d00d5d93734bb247d4764b3638f0ec",
+        "bytes": 64424510,
+        "chunks": 15879,
+        "parents": 859,
+        "target_bytes": 64424510
+      },
+      "validation": {
+        "path": "pressbooks-validation.jsonl",
+        "sha256": "0fbe94b2da8e62e1775d4b92e0a14a8f729264033c700e502cf0ba0ca5d027f8",
+        "bytes": 1006633,
+        "chunks": 346,
+        "parents": 36,
+        "target_bytes": 1006633
+      }
+    },
+    "libretexts": {
+      "weight_percent": 3,
+      "train": {
+        "path": "libretexts-train.jsonl",
+        "sha256": "9b2ab410d4f99b402504f822c99a5b3ca5869be500d9d5708c9f7532d853053b",
+        "bytes": 64424509,
+        "chunks": 12650,
+        "parents": 367,
+        "target_bytes": 64424509
+      },
+      "validation": {
+        "path": "libretexts-validation.jsonl",
+        "sha256": "5f267258cf1bb816af8aaab9bf0b41d05733f192ebd566309e1babc4c5dded29",
+        "bytes": 1006632,
+        "chunks": 237,
+        "parents": 5,
+        "target_bytes": 1006632
+      }
+    },
+    "doab": {
+      "weight_percent": 4,
+      "train": {
+        "path": "doab-train.jsonl",
+        "sha256": "83cdfce4c8eda6c73a890d924af9d42659cd1acdf442feff07b1a9a1d36fc3eb",
+        "bytes": 85899345,
+        "chunks": 14622,
+        "parents": 661,
+        "target_bytes": 85899345
+      },
+      "validation": {
+        "path": "doab-validation.jsonl",
+        "sha256": "b87c6c74be3c3f66310015957cb7b391d5bae0bd89ebcec0e75427dad94b46a7",
+        "bytes": 1342177,
+        "chunks": 219,
+        "parents": 13,
+        "target_bytes": 1342177
+      }
+    },
+    "gutenberg": {
+      "weight_percent": 5,
+      "train": {
+        "path": "gutenberg-train.jsonl",
+        "sha256": "4c8d6979e49b27ef5d83edfe75ce6f2c1c98c8a3eadd9c6815feef0707bfa9d2",
+        "bytes": 107374182,
+        "chunks": 13371,
+        "parents": 1886,
+        "target_bytes": 107374182
+      },
+      "validation": {
+        "path": "gutenberg-validation.jsonl",
+        "sha256": "6f60664c0e3a3fe4251984bb599e1b921d4ffc0df6bf3220a32db38a8861efff",
+        "bytes": 1677721,
+        "chunks": 209,
+        "parents": 28,
+        "target_bytes": 1677721
+      }
+    },
+    "pre_1929_books": {
+      "weight_percent": 7,
+      "train": {
+        "path": "pre_1929_books-train.jsonl",
+        "sha256": "a53d4c3fda6c816f93f492469ca7be2f87d56698e298fe5b0b7e497e2e793169",
+        "bytes": 150323855,
+        "chunks": 18706,
+        "parents": 2672,
+        "target_bytes": 150323855
+      },
+      "validation": {
+        "path": "pre_1929_books-validation.jsonl",
+        "sha256": "0a2f43f51a940cb55e6f131770a4cbc217b79cee63fc8ce148b5a02366dfa5c9",
+        "bytes": 2348810,
+        "chunks": 290,
+        "parents": 38,
+        "target_bytes": 2348810
+      }
+    },
+    "library_of_congress": {
+      "weight_percent": 3,
+      "train": {
+        "path": "library_of_congress-train.jsonl",
+        "sha256": "59edbc730be46a94d37c7f461cb714a9609460579566d14fc1cb495559dba75b",
+        "bytes": 64424509,
+        "chunks": 8071,
+        "parents": 1211,
+        "target_bytes": 64424509
+      },
+      "validation": {
+        "path": "library_of_congress-validation.jsonl",
+        "sha256": "c981b6ffb7ceebf8e57cd360b98c246df7d011648e67fc0419d0f9591ff006a5",
+        "bytes": 1006632,
+        "chunks": 130,
+        "parents": 23,
+        "target_bytes": 1006632
+      }
+    }
+  },
+  "sampling_unit": "UTF-8 bytes, not model-training token proportions",
+  "limitations": [
+    "Seeded shard order with sequential records, not a global reservoir",
+    "Parent identity not reconciled across different datasets",
+    "Normalized exact-chunk deduplication; no fuzzy near-duplicate guarantee",
+    "One sampling seed; candidate differences do not measure seed variance",
+    "Fresh candidates share a held-out split; frozen v1 split overlap unknown"
+  ],
+  "decisions": [
+    [
+      "arxiv",
+      "duplicate_chunk",
+      4
+    ],
+    [
+      "arxiv",
+      "excluded_test",
+      114
+    ],
+    [
+      "arxiv",
+      "sampled",
+      993
+    ],
+    [
+      "code_python",
+      "code_license",
+      59739
+    ],
+    [
+      "code_python",
+      "cross_split_quarantine",
+      33
+    ],
+    [
+      "code_python",
+      "duplicate_chunk",
+      311
+    ],
+    [
+      "code_python",
+      "excluded_test",
+      9590
+    ],
+    [
+      "code_python",
+      "parent_cap",
+      1718
+    ],
+    [
+      "code_python",
+      "sampled",
+      82830
+    ],
+    [
+      "doab",
+      "cross_split_quarantine",
+      1
+    ],
+    [
+      "doab",
+      "duplicate_chunk",
+      6
+    ],
+    [
+      "doab",
+      "empty",
+      3
+    ],
+    [
+      "doab",
+      "excluded_test",
+      1433
+    ],
+    [
+      "doab",
+      "parent_cap",
+      6159
+    ],
+    [
+      "doab",
+      "sampled",
+      8987
+    ],
+    [
+      "finemath_4plus",
+      "cross_split_quarantine",
+      1
+    ],
+    [
+      "finemath_4plus",
+      "duplicate_chunk",
+      13
+    ],
+    [
+      "finemath_4plus",
+      "excluded_test",
+      10858
+    ],
+    [
+      "finemath_4plus",
+      "sampled",
+      98732
+    ],
+    [
+      "fineweb_edu",
+      "cross_split_quarantine",
+      6
+    ],
+    [
+      "fineweb_edu",
+      "duplicate_chunk",
+      11
+    ],
+    [
+      "fineweb_edu",
+      "excluded_test",
+      5872
+    ],
+    [
+      "fineweb_edu",
+      "sampled",
+      52930
+    ],
+    [
+      "gutenberg",
+      "cross_split_quarantine",
+      15
+    ],
+    [
+      "gutenberg",
+      "duplicate_chunk",
+      62
+    ],
+    [
+      "gutenberg",
+      "excluded_test",
+      237
+    ],
+    [
+      "gutenberg",
+      "oversize",
+      4
+    ],
+    [
+      "gutenberg",
+      "sampled",
+      2133
+    ],
+    [
+      "library_of_congress",
+      "cross_split_quarantine",
+      1
+    ],
+    [
+      "library_of_congress",
+      "duplicate_chunk",
+      15
+    ],
+    [
+      "library_of_congress",
+      "empty",
+      4
+    ],
+    [
+      "library_of_congress",
+      "excluded_test",
+      150
+    ],
+    [
+      "library_of_congress",
+      "oversize",
+      2
+    ],
+    [
+      "library_of_congress",
+      "sampled",
+      1367
+    ],
+    [
+      "libretexts",
+      "duplicate_chunk",
+      1
+    ],
+    [
+      "libretexts",
+      "empty",
+      3
+    ],
+    [
+      "libretexts",
+      "excluded_test",
+      2401
+    ],
+    [
+      "libretexts",
+      "parent_cap",
+      10276
+    ],
+    [
+      "libretexts",
+      "sampled",
+      11516
+    ],
+    [
+      "pes2o",
+      "duplicate_chunk",
+      4
+    ],
+    [
+      "pes2o",
+      "excluded_test",
+      909
+    ],
+    [
+      "pes2o",
+      "sampled",
+      8236
+    ],
+    [
+      "pre_1929_books",
+      "cross_split_quarantine",
+      7
+    ],
+    [
+      "pre_1929_books",
+      "duplicate_chunk",
+      28
+    ],
+    [
+      "pre_1929_books",
+      "empty",
+      11
+    ],
+    [
+      "pre_1929_books",
+      "excluded_test",
+      350
+    ],
+    [
+      "pre_1929_books",
+      "oversize",
+      7
+    ],
+    [
+      "pre_1929_books",
+      "sampled",
+      3026
+    ],
+    [
+      "pressbooks",
+      "duplicate_chunk",
+      2
+    ],
+    [
+      "pressbooks",
+      "empty",
+      3
+    ],
+    [
+      "pressbooks",
+      "excluded_test",
+      1195
+    ],
+    [
+      "pressbooks",
+      "parent_cap",
+      387
+    ],
+    [
+      "pressbooks",
+      "sampled",
+      14151
+    ],
+    [
+      "pubmed",
+      "duplicate_chunk",
+      4
+    ],
+    [
+      "pubmed",
+      "excluded_test",
+      182
+    ],
+    [
+      "pubmed",
+      "sampled",
+      1898
+    ]
+  ]
+}
