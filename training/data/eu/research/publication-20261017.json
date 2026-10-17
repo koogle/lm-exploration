@@ -1,0 +1,48 @@
+{
+  "observed_at": "2026-10-17T10:04:03.773242+00:00",
+  "results": [
+    {
+      "repo": "jfrick/eu-ecb",
+      "private": false,
+      "verified": true
+    },
+    {
+      "repo": "jfrick/eu-ema",
+      "private": false,
+      "verified": true
+    },
+    {
+      "repo": "jfrick/eu-eurlex",
+      "private": false,
+      "verified": true
+    },
+    {
+      "repo": "jfrick/eu-commission-press",
+      "private": false,
+      "verified": true
+    }
+  ],
+  "anonymous_checks": [
+    {
+      "repo": "jfrick/eu-ecb",
+      "anonymous_access": true,
+      "private": false
+    },
+    {
+      "repo": "jfrick/eu-ema",
+      "anonymous_access": true,
+      "private": false
+    },
+    {
+      "repo": "jfrick/eu-eurlex",
+      "anonymous_access": true,
+      "private": false
+    },
+    {
+      "repo": "jfrick/eu-commission-press",
+      "anonymous_access": true,
+      "private": false
+    }
+  ],
+  "control_private": true
+}

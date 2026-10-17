@@ -106,7 +106,7 @@ adapters and durable resume; its behavior differs from these original commands.
 ## ECB/EMA durable collection pipeline
 
 [pipeline_sources.json](pipeline_sources.json) is the authoritative organization →
-HF repository → adapter → collection mapping. Repositories are created private;
+HF repository → adapter → collection mapping. Document repositories are created public following the owner's publication request;
 existing repository visibility is preserved. Current destinations and configs:
 
 | Source | Hugging Face repository | Collection configs |
@@ -619,3 +619,13 @@ verified upload succeeds, run `uv run retry_backup.py --interval 600`. The loop
 records attempts and the next retry time in ignored
 `artifacts/hf-code-backup-retries.jsonl`, then saves the verified upload receipt.
 It stops on success or a non-transient error requiring code/configuration repair.
+
+
+### Public document datasets
+
+The owner authorized public visibility for `jfrick/eu-ecb`, `jfrick/eu-ema`,
+`jfrick/eu-eurlex` and `jfrick/eu-commission-press`. Both source mappings now create
+future document repositories as public. Existing workers preserve repository
+visibility when resuming. The separate `jfrick/eu-corpus-control` repository and
+its code backups remain private. Publication does not imply complete website
+coverage; source notices and per-document provenance remain in the corpus.
