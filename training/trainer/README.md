@@ -1,14 +1,14 @@
 # Trainer implementation
 
 The trainer is an installed Python package within the `training/` uv project.
-Training runs only on Modal GPU workers: [`../modal_train.py`](../modal_train.py)
+Training runs only on Modal GPU workers: [`../modal_scripts/modal_train.py`](../modal_scripts/modal_train.py)
 validates a [recipe](../recipes/README.md) locally and calls `recipe.run_recipe()`
 on the worker, which supplies the architecture (e.g. `../10m/model.py`) to the loop.
 There is no CPU or MPS training path.
 
 ## Responsibilities
 
-- `../modal_train.py`: the Modal app, image, budget reservation and launcher.
+- `../modal_scripts/modal_train.py`: the Modal app, image, budget reservation and launcher.
 - `../generate.py`: model-agnostic local `lm-generate`; loads the architecture named
   by a checkpoint's `model_name` and streams samples.
 - `config.py`: the pydantic `TrainConfig` (validated hyperparameters) and the fixed CUDA device.

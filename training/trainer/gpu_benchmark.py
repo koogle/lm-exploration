@@ -17,7 +17,7 @@ def benchmark(
     benchmark_replay=False,
 ):
     import torch
-    from model_10m import model as reference
+    from model_10m import legacy as reference
     from model_100m import model as modern
     from torch.nn import functional as F
     from training_data.token_stream import TokenMixture

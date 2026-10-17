@@ -40,7 +40,7 @@ From `training/`:
 ```sh
 uv sync --locked --extra corpus --extra research
 uv run python -m unittest discover -s tests -v
-uv run modal run --detach modal_tokenizer_research.py \
+uv run modal run --detach modal_scripts/modal_tokenizer_research.py \
   --run-id learning-curve-20261016-v2 --phase all
 ```
 
@@ -50,7 +50,7 @@ without disabling TLS verification:
 
 ```sh
 uv run python -c "import truststore,runpy; truststore.inject_into_ssl(); runpy.run_module('modal',run_name='__main__')" \
-  run --detach modal_tokenizer_research.py --run-id learning-curve-20261016-v2 --phase all
+  run --detach modal_scripts/modal_tokenizer_research.py --run-id learning-curve-20261016-v2 --phase all
 ```
 
 The workflow runs remote tests, collects/freezes the corpus, then fits all 18
@@ -76,7 +76,7 @@ Storage:
 ## Report
 
 ```sh
-uv run python tokenizer_report.py results/tokenizer-learning-curve/<run-id>
+uv run python -m tokenizer.tokenizer_report results/tokenizer-learning-curve/<run-id>
 ```
 
 Generates `REPORT.md`, `research-report.pdf`, compact `measurements.json`, and
@@ -103,12 +103,12 @@ fitting chunk hashes. This broadens coverage but does not fix near duplicates or
 cross-source parent identity. Original evaluation metrics remain on Modal.
 
 ```sh
-uv run modal run --detach modal_tokenizer_evaluation.py \
+uv run modal run --detach modal_scripts/modal_tokenizer_evaluation.py \
   --run-id learning-curve-20261016-v2 --phase collect
 # After collection and all 18 fits have finished:
-uv run modal run --detach modal_tokenizer_evaluation.py \
+uv run modal run --detach modal_scripts/modal_tokenizer_evaluation.py \
   --run-id learning-curve-20261016-v2 --phase evaluate
-uv run python tokenizer_report.py results/tokenizer-learning-curve/learning-curve-20261016-v2
+uv run python -m tokenizer.tokenizer_report results/tokenizer-learning-curve/learning-curve-20261016-v2
 ```
 
 Collection has four CPU/16 GiB requests and hard caps and a two-hour timeout.
@@ -134,7 +134,7 @@ After downloading candidate `tokenizer.json` files into
 `<artifacts>/variants/<MiB>mib-<vocab>/`, build a fresh publication directory:
 
 ```sh
-uv run python package_tokenizer_research.py \
+uv run python -m tokenizer.package_tokenizer_research \
   results/tokenizer-learning-curve/learning-curve-20261016-v2 \
   <artifacts> <new-publication-folder> --repo-id jfrick/scholarly-code-tokenizer
 ```
@@ -151,10 +151,10 @@ To verify a downloaded publication, use an isolated Transformers environment
 
 ```sh
 uv run --isolated --no-project --with transformers==4.57.6 \
-  --with tokenizers==0.22.2 python verify_tokenizer_publication.py <publication-folder>
+  --with tokenizers==0.22.2 python tokenizer/verify_tokenizer_publication.py <publication-folder>
 # Or check the published repository at its immutable commit:
 uv run --isolated --no-project --with transformers==4.57.6 \
-  --with tokenizers==0.22.2 python verify_tokenizer_publication.py \
+  --with tokenizers==0.22.2 python tokenizer/verify_tokenizer_publication.py \
   jfrick/scholarly-code-tokenizer --revision <commit-sha>
 ```
 
@@ -167,8 +167,8 @@ workloads. JSON, patches and tool formats are controlled generated fixtures, not
 independent production traces. The focused mixture is 40/20/20/20 by UTF-8 bytes;
 all new candidates are also checked on the original scholarly mixture.
 
-Run `modal run --detach modal_structured_tokenizer.py`, then
-`python structured_tokenizer_report.py` from `training/`. The Modal entrypoint
+Run `modal run --detach modal_scripts/modal_structured_tokenizer.py`, then
+`uv run python -m tokenizer.structured_tokenizer_report` from `training/`. The Modal entrypoint
 runs two remote tests first and uses explicit CPU/memory hard caps, concurrency
 limits and timeouts. Existing artifact paths refuse overwrite; use a fresh run
 version for a new collection. Raw per-parent scores remain under

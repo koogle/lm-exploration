@@ -13,7 +13,7 @@ from tokenizers import Tokenizer, trainers
 from tokenizers.pre_tokenizers import ByteLevel
 from training_data.subword import digest
 
-from tokenizer_research import new_tokenizer
+from tokenizer.tokenizer_research import new_tokenizer
 
 CATEGORIES = ("python", "json", "git_diff", "tool_call")
 WEIGHTS = dict(zip(CATEGORIES, (40, 20, 20, 20), strict=True))

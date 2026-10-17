@@ -10,7 +10,7 @@ from tokenizers import Tokenizer
 from training_data.scholarly import adapt, stream_rows
 from training_data.subword import digest
 
-from tokenizer_research import CorpusBuilder, evaluate
+from tokenizer.tokenizer_research import CorpusBuilder, evaluate
 
 
 class EvaluationBuilder(CorpusBuilder):

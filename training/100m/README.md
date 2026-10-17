@@ -6,8 +6,9 @@ the architecture-merge verification described below remains separate.
 
 `model.py` uses **RMSNorm, RoPE, SwiGLU and tied input/output embeddings** by
 default. There is one `100m` model choice, keeping 14 layers, width 768, 12 ordinary
-attention heads (head dimension 64) and context 256. The original vanilla 10M
-model and its individual ablation PRs are unchanged.
+attention heads (head dimension 64) and context 256. The implementation is shared
+with the consolidated [10M model](../10m/README.md); only the default dimensions differ.
+Historical vanilla checkpoints retain a version-1 compatibility implementation.
 
 | Component | Current default |
 | --- | --- |
@@ -59,7 +60,8 @@ The diagram is explanatory, not a measured GPU memory trace.
 
 [LLaMA §2.2](https://arxiv.org/abs/2302.13971) adopts RMSNorm, RoPE and SwiGLU.
 This update combines the requested choices; it cannot establish each component's
-quality contribution. The individual 10M ablations serve that purpose. No quality
+quality contribution. The former single-factor 10M ablations are retained in Git
+history, not maintained model choices; they were not trained. No quality
 gain has been measured for this combined model.
 
 ## Frozen tokenizer and parameter count

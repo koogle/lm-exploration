@@ -16,8 +16,6 @@ image = (
         "tokenizers==0.22.2", "requests==2.34.2", "pyarrow==26.0.0", "huggingface-hub==1.33.0"
     )
     .env({"PYTHONPATH": "/project", "RAYON_NUM_THREADS": "2"})
-    .add_local_file("tokenizer_research.py", "/project/tokenizer_research.py")
-    .add_local_file("tokenizer_evaluation.py", "/project/tokenizer_evaluation.py")
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer")
 )
@@ -33,7 +31,7 @@ image = (
     volumes={"/data": data_volume},
 )
 def collect_evaluation(run_id):
-    from tokenizer_evaluation import EvaluationBuilder, validation_rows
+    from tokenizer.tokenizer_evaluation import EvaluationBuilder, validation_rows
 
     training = Path("/data/tokenizer-research") / run_id
     root = training / "balanced-evaluation-v2"
@@ -76,7 +74,7 @@ def collect_evaluation(run_id):
     volumes={"/data": data_volume, "/results": results_volume},
 )
 def evaluate_candidate(run_id, size, vocab):
-    from tokenizer_evaluation import rescore
+    from tokenizer.tokenizer_evaluation import rescore
 
     data_volume.reload()
     folder = Path("/results/tokenizer-research") / run_id / f"{size}mib-{vocab}"

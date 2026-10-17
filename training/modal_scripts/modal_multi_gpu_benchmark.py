@@ -8,9 +8,7 @@ from pathlib import Path
 
 import modal
 
-from modal_scholarly_pilot import image
-
-image = image.add_local_file("modal_scholarly_pilot.py", "/project/modal_scholarly_pilot.py")
+from modal_scripts.modal_scholarly_pilot import image
 
 app = modal.App("lm-exploration-multigpu-comparison")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -139,11 +137,12 @@ def main(
         raise ValueError("Sustained steps must be in 1..100 for the bounded pilot buffer")
     Path("results").mkdir(exist_ok=True)
     files = [
-        Path("modal_multi_gpu_benchmark.py"),
-        Path("modal_scholarly_pilot.py"),
+        Path("modal_scripts/modal_multi_gpu_benchmark.py"),
+        Path("modal_scripts/modal_scholarly_pilot.py"),
         Path("trainer/ddp_benchmark.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
+        Path("10m/legacy.py"),
         *Path("data").glob("*.py"),
     ]
     provenance = {

@@ -15,7 +15,6 @@ image = (
         "tokenizers==0.22.2", "requests==2.34.2", "pyarrow==26.0.0", "huggingface-hub==1.33.0"
     )
     .env({"PYTHONPATH": "/project", "RAYON_NUM_THREADS": "8"})
-    .add_local_file("tokenizer_research.py", "/project/tokenizer_research.py")
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer")
     .add_local_dir("tests", "/project/tests", ignore=["__pycache__"])
@@ -36,7 +35,7 @@ def collect(run_id: str):
 
     from training_data.scholarly import load_recipe
 
-    from tokenizer_research import CorpusBuilder, load_spec
+    from tokenizer.tokenizer_research import CorpusBuilder, load_spec
 
     spec = load_spec("/project/tokenizer/research/learning-curve-v1.json")
     recipe = load_recipe("/project/" + spec["source_recipe"])
@@ -54,7 +53,7 @@ def collect(run_id: str):
 
     try:
         if (root / "frozen/manifest.json").exists():
-            from tokenizer_research import verify_corpus
+            from tokenizer.tokenizer_research import verify_corpus
 
             return verify_corpus(root / "frozen")
         # A later cross-source duplicate can invalidate an earlier source's quota.
@@ -97,7 +96,7 @@ def candidate(run_id: str, size_mib: int, vocab_size: int):
     # Fresh process isolates peak RSS and native tokenizer allocations per candidate.
     script = """
 import sys
-from tokenizer_research import train_candidate
+from tokenizer.tokenizer_research import train_candidate
 train_candidate(sys.argv[1],sys.argv[2],int(sys.argv[3]),int(sys.argv[4]),
                 '/project/tokenizer/scholarly-code-v1/config.json',execution='modal-cpu')
 """

@@ -1,15 +1,15 @@
 # Scholarly/code subword pilot
 
-`modal_scholarly_pilot.py` connects the merged modern 100M-family model to the
+`modal_scripts/modal_scholarly_pilot.py` connects the merged modern 100M-family model to the
 frozen 32K tokenizer and `TokenMixture`. It preserves the merged 14×768 shape
 (124,389,632 unique parameters), with context increased to 1,024. This is a
 bounded execution/learning pilot, not the planned 20B-token run.
 
-From `training/`, first prepare a fresh snapshot with `modal_prepare_scholarly.py`.
+From `training/`, first prepare a fresh snapshot with `modal_scripts/modal_prepare_scholarly.py`.
 Then:
 
 ```sh
-modal run --detach modal_scholarly_pilot.py \
+modal run --detach modal_scripts/modal_scholarly_pilot.py \
   --run-id scholarly-124m-pilot-20261016-01 \
   --snapshot scholarly-124m-20261016/snapshots/pilot-001
 ```

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 
-from structured_tokenizer import CATEGORIES
+from tokenizer.structured_tokenizer import CATEGORIES
 
 ROOT = Path("results/tokenizer-structured/structured-code-v1")
 VOCABS = (16384, 32768, 50000)

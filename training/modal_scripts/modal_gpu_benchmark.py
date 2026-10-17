@@ -7,9 +7,7 @@ from pathlib import Path
 
 import modal
 
-from modal_scholarly_pilot import image
-
-image = image.add_local_file("modal_scholarly_pilot.py", "/project/modal_scholarly_pilot.py")
+from modal_scripts.modal_scholarly_pilot import image
 
 app = modal.App("lm-exploration-gpu-comparison")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -68,10 +66,11 @@ def main(run_id: str = "scholarly-124m-gpu-comparison-20261017-01"):
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
         raise ValueError("Invalid run ID")
     files = [
-        Path("modal_gpu_benchmark.py"),
-        Path("modal_scholarly_pilot.py"),
+        Path("modal_scripts/modal_gpu_benchmark.py"),
+        Path("modal_scripts/modal_scholarly_pilot.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
+        Path("10m/legacy.py"),
         Path("trainer/gpu_benchmark.py"),
         *Path("data").glob("*.py"),
         *Path("tests").glob("test_100m*.py"),

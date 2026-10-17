@@ -17,8 +17,6 @@ image = (
         "tokenizers==0.22.2", "requests==2.34.2", "pyarrow==26.0.0", "huggingface-hub==1.33.0"
     )
     .env({"PYTHONPATH": "/project", "RAYON_NUM_THREADS": "4"})
-    .add_local_file("structured_tokenizer.py", "/project/structured_tokenizer.py")
-    .add_local_file("tokenizer_research.py", "/project/tokenizer_research.py")
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer")
     .add_local_file(
@@ -39,7 +37,7 @@ image = (
 def prepare():
     import subprocess
 
-    from structured_tokenizer import build
+    from tokenizer.structured_tokenizer import build
 
     subprocess.run(
         [
@@ -81,8 +79,8 @@ def prepare():
 def fit_new(vocab):
     from tokenizers import Tokenizer
 
-    from structured_tokenizer import fit
-    from tokenizer_research import evaluate
+    from tokenizer.structured_tokenizer import fit
+    from tokenizer.tokenizer_research import evaluate
 
     data.reload()
     out = Path("/results/tokenizer-research") / RUN / f"64mib-{vocab}"
@@ -110,7 +108,7 @@ def fit_new(vocab):
     volumes={"/data": data, "/results": results},
 )
 def evaluate_candidate(family, size, vocab):
-    from structured_tokenizer import score
+    from tokenizer.structured_tokenizer import score
 
     data.reload()
     results.reload()

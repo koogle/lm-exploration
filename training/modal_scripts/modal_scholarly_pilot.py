@@ -25,6 +25,7 @@ image = (
     .add_local_dir("tokenizer", "/project/tokenizer")
     .add_local_dir("tests", "/project/tests")
     .add_local_file("generate.py", "/project/generate.py")
+    .add_local_dir("modal_scripts", "/project/modal_scripts", ignore=["__pycache__"])
 )
 
 
@@ -77,11 +78,12 @@ def main(run_id: str = "", snapshot: str = "", qualify_only: bool = False):
     import hashlib
 
     files = [
-        Path("modal_scholarly_pilot.py"),
+        Path("modal_scripts/modal_scholarly_pilot.py"),
         *Path("trainer").glob("*.py"),
         *Path("data").glob("*.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
+        Path("10m/legacy.py"),
     ]
     provenance = {
         "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
