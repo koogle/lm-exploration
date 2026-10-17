@@ -579,3 +579,19 @@ were not stopped, but their later state could not be verified. The expanded
 mapping is ready locally and must be deployed after connectivity recovers.
 The new full-Parquet audit was interrupted during a stalled Xet download and is
 not a passed audit. See the [continuation record](research/ecb-ema-expansion-blocked-20261017.json).
+
+### Fresh Modal recovery app
+
+The same harness accepts `EU_MODAL_APP_NAME` and `EU_GOAL_SCHEDULE`. A recovery
+run uses the existing HF control state and reservations, so an unresolved or
+active source still blocks another writer. Disable its schedule while testing;
+creating a new app is not evidence that the existing workers have stopped.
+
+```sh
+EU_MODAL_APP_NAME=lm-exploration-eu-recovery-20261017 EU_GOAL_SCHEDULE=0 \
+  uv run python modal_cli.py run --detach modal_goal.py
+```
+
+The app identity and schedule setting are carried into its image environment so
+remote module hydration uses the same settings. The default app and 15-minute
+schedule remain unchanged when these variables are absent.

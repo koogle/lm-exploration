@@ -1,6 +1,7 @@
 """Scheduled, count-bounded continuation using a separate durable HF control repo."""
 
 import json
+import os
 from pathlib import Path
 
 import modal
@@ -8,7 +9,9 @@ import modal
 ROOT = Path(__file__).resolve().parent
 GOAL_MAPPING = Path("/root/eu/goal_pipeline_sources.json")
 GOAL_CONFIG = Path("/root/eu/collection_goal.json")
-app = modal.App("lm-exploration-eu-100k")
+APP_NAME = os.environ.get("EU_MODAL_APP_NAME", "lm-exploration-eu-100k")
+SCHEDULE_ENABLED = os.environ.get("EU_GOAL_SCHEDULE", "1") == "1"
+app = modal.App(APP_NAME)
 secret = modal.Secret.from_name("eu-corpus-huggingface", required_keys=["HF_TOKEN"])
 image = None
 if modal.is_local():
@@ -16,7 +19,9 @@ if modal.is_local():
     # build-time entrypoint or read local requirements/CA paths during hydration.
     from modal_pipeline import image as base_image
 
-    image = base_image
+    image = base_image.env(
+        {"EU_MODAL_APP_NAME": APP_NAME, "EU_GOAL_SCHEDULE": "1" if SCHEDULE_ENABLED else "0"}
+    )
     for name in ("goal_controller.py", "goal_pipeline_sources.json", "collection_goal.json"):
         image = image.add_local_file(ROOT / name, f"/root/eu/{name}")
 
@@ -147,7 +152,7 @@ def source_snapshots(mapping, goal):
     timeout=600,
     max_containers=1,
     retries=0,
-    schedule=modal.Period(minutes=15),
+    schedule=modal.Period(minutes=15) if SCHEDULE_ENABLED else None,
 )
 def tick():
     from goal_controller import run_tick

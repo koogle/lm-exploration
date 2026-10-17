@@ -98,3 +98,29 @@ def test_existing_capped_inventory_is_pending_expansion(monkeypatch):
     assert modal_goal.source_snapshots(mapping, goal)["ecb"]["discovery_pending"] is True
     state["collections"]["old"]["enumeration_requested_limit"] = 10
     assert modal_goal.source_snapshots(mapping, goal)["ecb"]["discovery_pending"] is False
+
+
+def test_recovery_identity_and_schedule_survive_remote_import():
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    env = dict(os.environ, EU_MODAL_APP_NAME="eu-test-recovery", EU_GOAL_SCHEDULE="0")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import modal, runpy, sys; modal.is_local=lambda:False; "
+                "sys.modules['modal_pipeline']=None; m=runpy.run_path('modal_goal.py'); "
+                "assert m['APP_NAME']=='eu-test-recovery'; assert m['SCHEDULE_ENABLED'] is False"
+            ),
+        ],
+        cwd=Path(modal_goal.__file__).parent,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
