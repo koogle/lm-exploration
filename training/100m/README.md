@@ -19,6 +19,22 @@ model and its individual ablation PRs are unchanged.
 | Initialization | Normal std 0.02 |
 | Input/output weights | One shared Parameter |
 
+## Attention, scaling and FlashAttention
+
+![Attention pipeline: query–key scores are scaled and causally masked before softmax; the resulting weights combine values. FlashAttention computes the same operation in tiles with less memory traffic.](images/attention-sdpa-flashattention.png)
+
+The scale applies to `QKᵀ` scores before softmax, not directly to `V`. Each head
+has 64 dimensions, so scores are divided by `sqrt(64) = 8`. The causal mask
+forbids query–key pairs involving future tokens; masking a key at projection time
+would incorrectly hide it from every query. Optimized kernels can skip fully
+masked tiles instead of computing scores that will be discarded.
+
+PyTorch SDPA selects an attention backend, including FlashAttention when
+supported. FlashAttention uses tiled computation and incremental softmax to avoid
+materializing the full score/probability matrices in GPU global memory. It computes
+the same attention operation, with small floating-point differences possible.
+The diagram is explanatory, not a measured GPU memory trace.
+
 ## Mechanisms and references
 
 - **RMSNorm:** `gamma * x / sqrt(mean(x**2) + epsilon)` omits mean centering and
