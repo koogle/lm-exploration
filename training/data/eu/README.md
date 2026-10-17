@@ -632,3 +632,20 @@ future document repositories as public. Existing workers preserve repository
 visibility when resuming. The separate `jfrick/eu-corpus-control` repository and
 its code backups remain private. Publication does not imply complete website
 coverage; source notices and per-document provenance remain in the corpus.
+
+
+### Annual-report translations and historical convergence reports
+
+The scheduled ECB mapping now follows explicit language-version links on English
+annual-report pages, bounded to 100 seed pages. It accepts only links matching
+the same report path and identifier, preserving report relationships and discovery
+URLs. The 2025 page supplied 23 non-English candidates; live German and French
+samples yielded over 360,000 characters each. These probes are discovery evidence,
+not additional uploaded-document counts. See the [translation investigation](research/ecb-report-translations-2026-10-17.md).
+
+Three broken convergence-report URLs have exact replacement mappings for 2000,
+May 2006 and May 2007. A replacement is accepted only after a primary 404 and a
+match against its verified PDF SHA-256. The original inventory identity remains
+unchanged. See the [retrieval evidence](research/ecb-convergence-links-20261017.md).
+These additions passed the full 195-test suite before deployment; neither implies
+complete historical or multilingual coverage.

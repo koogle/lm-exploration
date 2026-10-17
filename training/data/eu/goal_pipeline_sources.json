@@ -17,7 +17,8 @@
         "meeting_accounts",
         "decisions",
         "annual_reports",
-        "convergence_reports"
+        "convergence_reports",
+        "annual_report_translations"
       ],
       "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text.",
       "collection_weights": {
@@ -31,7 +32,8 @@
         "meeting_accounts": 1,
         "decisions": 1,
         "annual_reports": 3,
-        "convergence_reports": 3
+        "convergence_reports": 3,
+        "annual_report_translations": 2
       }
     },
     "ema": {

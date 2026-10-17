@@ -10,6 +10,7 @@ import json
 import re
 import unicodedata
 from datetime import UTC, datetime
+from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from pypdf import PdfReader
@@ -22,6 +23,7 @@ COLLECTIONS = {
     "interviews": {"name": "ECB interviews", "type_ids": ["27"]},
     "meeting_accounts": {"name": "ECB monetary policy meeting accounts", "type_ids": ["20"]},
     "decisions": {"name": "ECB other Governing Council decisions", "type_ids": ["55"]},
+    "annual_report_translations": {"name": "ECB Annual Report translations", "type_ids": ["132"]},
     "annual_reports": {"name": "ECB Annual Report", "type_ids": ["132"]},
     "convergence_reports": {"name": "ECB Convergence Report", "type_ids": ["22"]},
     "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
@@ -79,6 +81,8 @@ def enumerate_collection(collection_id, fetch, limit=1000):
     not all ECB publications or languages. Retrieval failures propagate so the
     harness cannot mistake an interrupted enumeration for an empty collection.
     """
+    if collection_id == "annual_report_translations":
+        return enumerate_report_translations(fetch, limit=limit)
     config = COLLECTIONS[collection_id]
     if limit < 1:
         raise ValueError("limit must be positive")
@@ -179,8 +183,111 @@ def enumerate_collection(collection_id, fetch, limit=1000):
     }
 
 
+class _AnchorLinks(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self.links.extend(value for key, value in attrs if key == "href" and value)
+
+
+def report_translation_links(body, seed_url):
+    """Only explicit same-path, same-report/hash HTML language counterparts."""
+    seed = canonical_url(seed_url)
+    match = re.fullmatch(r"(.+)\.en\.html", seed or "")
+    if not match:
+        return []
+    parser = _AnchorLinks()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    found = {}
+    for href in parser.links:
+        url = canonical_url(urljoin(seed, href))
+        variant = re.fullmatch(re.escape(match[1]) + r"\.([a-z]{2,3})\.html", url or "")
+        if variant and variant[1] != "en":
+            found[url] = variant[1]
+    return sorted(found.items())
+
+
+def enumerate_report_translations(fetch, limit=1000, seed_limit=100):
+    """Bounded extra HTML translations linked by English annual reports.
+
+    No URL synthesis or recursion. Completeness concerns these inspected links,
+    not all report translations, and language suffixes remain publisher metadata.
+    """
+    if limit < 1 or seed_limit < 1:
+        raise ValueError("limits must be positive")
+    base = enumerate_collection("annual_reports", fetch, limit=1000)
+    seeds = [r for r in base["records"] if r["language"] == "en" and r["format"] == "html"]
+    seen = {r["url"] for r in base["records"]}
+    records, inspected = [], []
+    complete = base["enumeration"]["complete"] and len(seeds) <= seed_limit
+    for seed in seeds[:seed_limit]:
+        if len(records) >= limit:
+            complete = False
+            break
+        body, provenance = fetch(seed["url"])
+        if canonical_url(provenance.get("final_url", seed["url"])) != seed["url"]:
+            raise ValueError("ECB report seed redirected to a different document")
+        inspected.append(seed["url"])
+        for url, language in report_translation_links(body, seed["url"]):
+            if url in seen:
+                continue
+            if len(records) >= limit:
+                complete = False
+                break
+            seen.add(url)
+            records.append(
+                {
+                    **seed,
+                    "collection_id": "annual_report_translations",
+                    "document_type": "annual_report_translations",
+                    "document_id": hashlib.sha256(url.encode()).hexdigest(),
+                    "url": url,
+                    "language": language,
+                    "discovery_url": seed["url"],
+                }
+            )
+    return {
+        "records": records,
+        "enumeration": {
+            **base["enumeration"],
+            "strategy": "FOEDB annual reports plus explicit same-document HTML language anchors",
+            "seed_pages_inspected": inspected,
+            "seed_page_limit": seed_limit,
+            "enumerated_count": len(records),
+            "complete": complete,
+            "limitations": [
+                "Only English HTML seeds in a bounded 1000-URL FOEDB annual report inventory.",
+                "Only explicit same-path report/hash anchors; historical PDF translations omitted.",
+                "English and URLs already listed in the base inventory are excluded.",
+                "Language is the publisher URL label; translated body language is not validated here.",
+                "Complete means bounded linked inventory only, not website or language exhaustion.",
+            ],
+        },
+    }
+
+
 # Exact standalone assets verified on 2026-10-16 and 2026-10-17. No blanket prefix rewrite:
 # inventory errors in other historical files need their own verification.
+# Exact PDF identities verified in research/ecb-convergence-links-20261017.json.
+VERIFIED_CONVERGENCE_REPORTS = {
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2006en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2006en.pdf",
+        "sha256": "8e545100a568ed8752c759365a6261c82e252178427e918c57eeeb5b4b99a3d7",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2000en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2000en.pdf",
+        "sha256": "fccdf76e68a1a61505dd630d2d4f6e5e4f30309f7fcc2338e52bcc04b87fb156",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200705en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200705en.pdf",
+        "sha256": "22076668ff99886ef0f7d15656fea2dc2bf17471a3242a4e6af53ffdcf646cdb",
+    },
+}
+
+
 VERIFIED_HISTORICAL_ARTICLES = {
     BASE + "/press/economic-bulletin/articles/2014/pdf/art1_mb201402en_pp77-96en.pdf": BASE
     + "/pub/pdf/other/art1_mb201402en_pp77-96en.pdf",
@@ -246,6 +353,9 @@ def alternate_document_urls(record):
     Keep original inventory identity and record both fetch URLs in provenance.
     Never use this function without validate_alternate before normal extraction.
     """
+    if record.get("collection_id") == "convergence_reports":
+        verified = VERIFIED_CONVERGENCE_REPORTS.get(record["url"])
+        return [verified["url"]] if verified else []
     if record.get("collection_id") != "economic_bulletin_articles":
         return []
     target = VERIFIED_HISTORICAL_ARTICLES.get(record["url"]) or _inferred_monthly_article_url(
@@ -261,10 +371,16 @@ def _normalize_title(text):
 def validate_alternate(record, data):
     """Reject inferred PDF replacements unless their opening pages contain the title.
 
-    Thirteen exact mappings already have recorded identity evidence. Other URLs
+    Three convergence replacements must match verified PDF SHA-256 hashes.
+    Thirteen article mappings have recorded identity evidence; other article URLs
     must pass the strict Monthly Bulletin rule and conservative title check.
     This check does not turn PDF metadata or a full issue into an article.
     """
+    if record.get("collection_id") == "convergence_reports":
+        verified = VERIFIED_CONVERGENCE_REPORTS.get(record["url"])
+        if not verified or hashlib.sha256(data).hexdigest() != verified["sha256"]:
+            raise ValueError("ECB convergence alternate does not match verified PDF identity")
+        return
     if (
         record.get("collection_id") == "economic_bulletin_articles"
         and record["url"] in VERIFIED_HISTORICAL_ARTICLES

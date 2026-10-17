@@ -261,3 +261,116 @@ def test_full_report_types_keep_native_text_and_distinct_translations(collection
     assert all(r["document_type"] == collection_id for r in result["records"])
     assert all(r["source_document_id"] == "42" for r in result["records"])
     assert COLLECTIONS[collection_id]["type_ids"] == [type_id]
+
+
+def translation_fixture(pages, extra_files=()):
+    rows = [
+        [i, 1700000000, 132, [url, *extra_files], {"Title": "Report"}]
+        for i, url in enumerate(pages)
+    ]
+    fetch, calls = fixture_fetch(rows, type_id="132")
+
+    def translated_fetch(url):
+        if url in pages:
+            calls.append(url)
+            return pages[url].encode(), {}
+        return fetch(url)
+
+    return translated_fetch, calls
+
+
+def test_report_language_links_reject_navigation_other_reports_and_offhost():
+    from adapters.ecb import report_translation_links
+
+    seed = "https://www.ecb.europa.eu/pub/annual/html/ecb.ar2025~abc.en.html"
+    links = [
+        "ecb.ar2025~abc.de.html",
+        "ecb.ar2025~abc.fr.html#section",
+        "ecb.ar2025~abc.de.html",
+        "ecb.ar2025~abc.en.html",
+        "ecb.ar2024~abc.fr.html",
+        "ecb.ar2025~def.fr.html",
+        "/home.fr.html",
+        "https://evil.test/pub/annual/html/ecb.ar2025~abc.fr.html",
+        "ecb.ar2025~abc_content.fr.html",
+        "ecb.ar2025~abc.fr.pdf",
+    ]
+    body = "".join(f'<a href="{url}">Language</a>' for url in links).encode()
+    result = report_translation_links(body, seed)
+    assert [language for _, language in result] == ["de", "fr"]
+    assert report_translation_links(body, seed.replace(".en.", ".de.")) == []
+
+
+def test_translation_enumeration_preserves_identity_and_excludes_inventory_urls():
+    seed = "https://www.ecb.europa.eu/pub/annual/html/ecb.ar2025.en.html"
+    fetch, _ = translation_fixture(
+        {seed: '<a href="ecb.ar2025.fr.html">FR</a><a href="ecb.ar2025.de.html">DE</a>'},
+        [seed.replace(".en.", ".fr.")],
+    )
+    result = enumerate_collection("annual_report_translations", fetch)
+    assert result["enumeration"]["complete"]
+    assert len(result["records"]) == 1
+    record = result["records"][0]
+    assert record["language"] == "de"
+    assert record["source_document_id"] == "0"
+    assert record["discovery_url"] == seed
+    assert record["url"] == seed.replace(".en.", ".de.")
+
+
+def test_translation_output_and_seed_bounds():
+    from adapters.ecb import enumerate_report_translations
+
+    seed = "https://www.ecb.europa.eu/pub/annual/html/ecb.ar2025.en.html"
+    older = seed.replace("2025", "2024")
+    pages = {
+        seed: '<a href="ecb.ar2025.de.html">DE</a><a href="ecb.ar2025.fr.html">FR</a>',
+        older: '<a href="ecb.ar2024.fr.html">FR</a>',
+    }
+    fetch, calls = translation_fixture(pages)
+    result = enumerate_report_translations(fetch, limit=1)
+    assert len(result["records"]) == 1
+    assert not result["enumeration"]["complete"]
+    assert older not in calls
+    fetch, calls = translation_fixture(pages)
+    result = enumerate_report_translations(fetch, seed_limit=1)
+    assert len(result["records"]) == 2
+    assert not result["enumeration"]["complete"]
+    assert older not in calls
+
+
+def test_translation_seed_fetch_failure_is_not_exhaustion():
+    from adapters.ecb import enumerate_report_translations
+
+    seed = "https://www.ecb.europa.eu/pub/annual/html/ecb.ar2025.en.html"
+    fetch, _ = translation_fixture({seed: ""})
+
+    def failing(url):
+        if url == seed:
+            raise RuntimeError("seed unavailable")
+        return fetch(url)
+
+    with pytest.raises(RuntimeError, match="seed unavailable"):
+        enumerate_report_translations(failing)
+
+
+def test_convergence_alternates_are_exact_and_hash_pinned(monkeypatch):
+    import hashlib
+
+    from adapters import ecb
+
+    old = ecb.BASE + "/press/other-publications/convergence/pdf/cr2006en.pdf"
+    record = {"collection_id": "convergence_reports", "url": old}
+    assert ecb.alternate_document_urls(record) == [ecb.BASE + "/pub/pdf/conrep/cr2006en.pdf"]
+    assert ecb.alternate_document_urls({**record, "url": old.replace("2006", "2008")}) == []
+    with pytest.raises(ValueError, match="verified PDF identity"):
+        ecb.validate_alternate(record, b"wrong document")
+    body = b"%PDF-test identity fixture"
+    monkeypatch.setitem(
+        ecb.VERIFIED_CONVERGENCE_REPORTS,
+        old,
+        {
+            "url": ecb.BASE + "/pub/pdf/conrep/cr2006en.pdf",
+            "sha256": hashlib.sha256(body).hexdigest(),
+        },
+    )
+    ecb.validate_alternate(record, body)
