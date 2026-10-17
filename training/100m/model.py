@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 import torch
 from model_10m import model as vanilla
+from model_10m.model import causal_attention
 from torch import nn
 from torch.nn import functional as F
 
@@ -29,15 +30,6 @@ class ModelConfig(vanilla.ModelConfig):
         super().__post_init__()
         if self.architecture_version == 2 and (self.n_embd // self.n_head) % 2:
             raise ValueError("RoPE requires an even head dimension")
-
-
-def causal_attention(query, key, value):
-    """Standard causal SDPA; CUDA selects FlashAttention where supported.
-
-    Same scale, mask and zero dropout as the explicit 10M reference. The legacy
-    architecture retains its original implementation in model_10m.
-    """
-    return F.scaled_dot_product_attention(query, key, value, is_causal=True, dropout_p=0.0)
 
 
 class RMSNorm(nn.Module):
