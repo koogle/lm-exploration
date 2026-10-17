@@ -10,8 +10,13 @@ notes and illustrative token budgets below for this experiment.
 
 The [streaming preparation guide](data/SCHOLARLY_STREAMING.md) now provides
 bounded upstream ingestion, immutable token snapshots, a Modal CPU entrypoint,
-and a resumable token-mixture loader. Its snapshots remain pending corpus audits;
-the new model and substantial training have not been launched.
+and a resumable token-mixture loader. Its snapshots remain pending corpus audits. A [bounded 124.4M subword pilot](results/scholarly-124m-pilot-20261016-01.md)
+has now completed 600 updates / 4.08M tokens on Modal; substantial pretraining
+has not been launched. The [measured GPU comparison](results/scholarly-124m-gpu-comparison-20261017.md)
+compares one, two and three A10, L40S and H100 GPUs with matched global batches.
+Those measurements used SDPA, which is split into a separate PR; the current
+model retains explicit attention. The three-H100 recommendation and timing
+estimates therefore depend on the separately reviewed SDPA implementation.
 
 The [tokenizer learning-curve experiment](tokenizer/research/README.md) compares
 64 MiB through 2 GiB at 16K, 32K and 50K vocabularies on Modal, with a shared
@@ -55,6 +60,10 @@ See the owning guide and `results/shakespeare-10m-*.json` for executed results.
 
 ## Training runs on Modal
 
+The [bounded scholarly/code pilot](100m/PILOT.md) connects the modern 124.4M
+model to the frozen 32K tokenizer and token-mixture loader. Its launcher is
+`modal_scholarly_pilot.py`; the older recipes below remain character-only.
+
 All training runs on Modal GPU workers; there is no CPU or MPS training path.
 A JSON [recipe](recipes/README.md) names the architecture, registered dataset,
 training settings and GPU limits:
@@ -71,8 +80,8 @@ gradient descent, start with [the XOR example](examples/README.md).
   context 256. Version 1 preserves the historical vanilla blocks for old
   checkpoints. New 100M models tie input/output embeddings by default and have
   124,389,632 parameters with the frozen 32K tokenizer. The original 10M is unchanged.
-- [`modal_train.py`](modal_train.py) and [`recipes/`](recipes/README.md): the only way
-  to start training. Validates a recipe locally, reserves budget, then trains on Modal.
+- [`modal_train.py`](modal_train.py) and [`recipes/`](recipes/README.md): the character-level
+  recipe launcher. The [subword pilot](100m/PILOT.md) has its own bounded Modal launcher.
 - [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a
   prompt, and reads the architecture, configuration and tokenizer from the checkpoint.
 - [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,
@@ -106,7 +115,8 @@ checkpoint and prints each character as it is sampled. It runs on CPU by default
 (`--device mps` is optional) and seeds from the training seed unless `--seed` is
 given. It samples from the full softmax; temperature and top-k are not implemented.
 
-Full-size throughput and model quality have **not** been measured. Shakespeare is
+The subword pilot measured actual-model throughput; broad model quality and
+production-corpus throughput remain unverified. Shakespeare is
 a learning corpus, not evidence of broad language capability. The trainer still
 contains checkpoint resume, but no launcher exposes it yet. It reads text into
 RAM and is deliberately not a large-corpus system.

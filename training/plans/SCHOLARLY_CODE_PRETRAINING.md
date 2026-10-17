@@ -21,8 +21,12 @@ these correspond to about 133 and 333 tokens per parameter. The intended model
 is deliberately trained beyond a rough compute-optimal token allocation.
 The earlier references to 100 billion parameters were not the selected scale.
 
-The current task has completed tokenizer fitting only. Architecture, full corpus
-preparation, GPU profiling and the new model's pretraining remain pending.
+As of 2026-10-17, the merged modern architecture has 124,389,632 parameters,
+the [subword pilot](../100m/PILOT.md) has completed 4.08M exposures, and
+[matched GPU profiling](../results/scholarly-124m-gpu-comparison-20261017.md)
+covers one/two/three A10, L40S and H100 GPUs. Full corpus preparation, corpus audits
+and substantial pretraining remain pending. The production launcher still needs
+resumable multi-GPU training; the DDP benchmark does not save training checkpoints.
 Instruction tuning and optional later reasoning training are separate experiments.
 
 ## Dataset mixture

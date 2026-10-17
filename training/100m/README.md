@@ -1,5 +1,9 @@
 # Updated 100M-family architecture
 
+A subsequent [bounded subword pilot](PILOT.md) trained this architecture for
+4.08M tokens on Modal. See its [measured report](../results/scholarly-124m-pilot-20261016-01.md);
+the architecture-merge verification described below remains separate.
+
 `model.py` uses **RMSNorm, RoPE, SwiGLU and tied input/output embeddings** by
 default. There is one `100m` model choice, keeping 14 layers, width 768, 12 ordinary
 attention heads (head dimension 64) and context 256. The original vanilla 10M
@@ -73,10 +77,15 @@ their original untied weights and exact logits. Missing version metadata means
 legacy; the loader does not silently tie or modernize old weights. Resume across
 architecture versions is rejected. This is not a second modern model variant.
 
-The general recipe trainer and generation CLI remain character-only; the frozen
-BPE preparation pipeline still needs model-training integration. Tests run real
-frozen-tokenizer IDs through tiny modern models, not a completed subword
-pretraining or text-generation workflow. No GPU run is part of this update.
+The general recipe trainer and generation CLI remain character-only. The separate
+[subword pilot](PILOT.md) integrates the frozen BPE tokenizer and mixture loader.
+The [GPU comparison](../results/scholarly-124m-gpu-comparison-20261017.md) measures
+SDPA and fused AdamW on the full model, including two- and three-H100 DDP.
+The historical pilot used explicit attention; its original source is archived
+with its run. The SDPA implementation and its regression test are split into a
+separate PR; this branch retains explicit attention. The recorded GPU throughput
+is historical evidence from the SDPA source snapshots, not a measurement of
+the current explicit-attention implementation.
 
 ## Verification
 

@@ -1,0 +1,637 @@
+{
+  "requested_gpu": "H100:3",
+  "world_size": 3,
+  "torch_version": "2.6.0+cu124",
+  "precision": "BF16 autocast / FP32 parameters",
+  "attention": "PyTorch causal SDPA",
+  "optimizer": "fused AdamW",
+  "context": 2048,
+  "effective_windows": 48,
+  "cpu": 12,
+  "host_memory_mib": 32768,
+  "provenance": {
+    "git_commit": "eb4e6d612a4e99af1e93bb5645def93d381012db",
+    "source_sha256": {
+      "modal_multi_gpu_benchmark.py": "1634b25a81a4772286e75fb2665db94e7a5a831bec81d547ab0119c9445ce8d5",
+      "modal_scholarly_pilot.py": "757245f3b3da2ea101b241d68d7a7997e4e06b2dbe3cd4252fdedbf556465996",
+      "trainer/ddp_benchmark.py": "741b3fd7b505ada81eed781bbd2edc3afe9aa790110503dc6649424046d920bd",
+      "100m/model.py": "96bd95eb51ff5b2aa3d4cd9fc07073a6d21dc9003b36bbe9461fa5780a76882d",
+      "10m/model.py": "cee2225572e14f2243f0e7f774f010305bb715a9e1e8dc9d0ff34008dc79dfe5",
+      "data/__init__.py": "d9861942caacf890fc9e7965073d381083fd4631ce88f52ade887d694e6ccc4d",
+      "data/loading.py": "f57194e2c333d5fbee4e0b3d74c497c9e745969d7d2949f072553b8b2fa97293",
+      "data/registry.py": "46891f6bf68996d57ee2af236b3dfba77a97821941f6423e04b36b5fd1ecec14",
+      "data/scholarly.py": "34a07ec99175e0f1fb1df19c75b0e380a75179df3d516c1350ed68b672a28f9f",
+      "data/subword.py": "35e28ba3721f2c39d303622865c73449360b324f9bb59793e550b7b52d5793ad",
+      "data/token_stream.py": "f0e9d20a5dc4a2b482f706746e7b80ae4a7dcc3e66045077a513099468472e5c"
+    }
+  },
+  "sweep": [
+    {
+      "status": "ok",
+      "world_size": 3,
+      "microbatch_per_gpu": 2,
+      "accumulation": 8,
+      "effective_windows": 48,
+      "timed_steps": 6,
+      "warmup_steps": 2,
+      "total_loss_tokens": 379658,
+      "total_seconds": 1.8240995870000027,
+      "median_step_seconds": 0.30315548499999956,
+      "min_step_seconds": 0.29864893899999956,
+      "max_step_seconds": 0.31441033100000126,
+      "peak_allocated_gib_per_gpu": 6.311245918273926,
+      "measurements": [
+        {
+          "seconds": 0.29864893899999956,
+          "loss_tokens": 55955,
+          "loss": 9.596128585470467,
+          "gradient_norm": 1.6218727827072144
+        },
+        {
+          "seconds": 0.31441033100000126,
+          "loss_tokens": 67939,
+          "loss": 9.359716068826447,
+          "gradient_norm": 1.622948169708252
+        },
+        {
+          "seconds": 0.3027078620000019,
+          "loss_tokens": 68786,
+          "loss": 9.193914822783706,
+          "gradient_norm": 1.4135786294937134
+        },
+        {
+          "seconds": 0.3004603649999993,
+          "loss_tokens": 60925,
+          "loss": 8.978161674189577,
+          "gradient_norm": 1.366539716720581
+        },
+        {
+          "seconds": 0.30360310799999723,
+          "loss_tokens": 67284,
+          "loss": 8.879695581416087,
+          "gradient_norm": 1.1917723417282104
+        },
+        {
+          "seconds": 0.3042689820000035,
+          "loss_tokens": 58769,
+          "loss": 8.618748830165563,
+          "gradient_norm": 1.3035504817962646
+        }
+      ],
+      "data_end": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 56,
+          "code_python": 114,
+          "finemath_4plus": 89,
+          "pes2o": 27,
+          "pubmed": 8,
+          "arxiv": 5,
+          "pressbooks": 19,
+          "libretexts": 9,
+          "doab": 19,
+          "gutenberg": 13,
+          "pre_1929_books": 17,
+          "library_of_congress": 8
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 49596,
+          "code_python": 149226,
+          "finemath_4plus": 99865,
+          "pes2o": 49765,
+          "pubmed": 16159,
+          "arxiv": 10240,
+          "pressbooks": 14860,
+          "libretexts": 15599,
+          "doab": 21527,
+          "gutenberg": 24841,
+          "pre_1929_books": 34816,
+          "library_of_congress": 14941
+        }
+      },
+      "masked_ddp_gradient_and_update_check": "passed",
+      "device": "NVIDIA H100 80GB HBM3",
+      "parameters": 124389632,
+      "loss_tokens_per_second": 208134.46957926394
+    },
+    {
+      "status": "ok",
+      "world_size": 3,
+      "microbatch_per_gpu": 4,
+      "accumulation": 4,
+      "effective_windows": 48,
+      "timed_steps": 6,
+      "warmup_steps": 2,
+      "total_loss_tokens": 379658,
+      "total_seconds": 1.370156786999992,
+      "median_step_seconds": 0.22673585199999735,
+      "min_step_seconds": 0.22523737499999896,
+      "max_step_seconds": 0.23630902500000417,
+      "peak_allocated_gib_per_gpu": 9.906160354614258,
+      "measurements": [
+        {
+          "seconds": 0.22678133699999847,
+          "loss_tokens": 55955,
+          "loss": 9.596092842462694,
+          "gradient_norm": 1.621780514717102
+        },
+        {
+          "seconds": 0.23630902500000417,
+          "loss_tokens": 67939,
+          "loss": 9.359727108141126,
+          "gradient_norm": 1.6231091022491455
+        },
+        {
+          "seconds": 0.22669036699999623,
+          "loss_tokens": 68786,
+          "loss": 9.193930269240834,
+          "gradient_norm": 1.4136220216751099
+        },
+        {
+          "seconds": 0.22523737499999896,
+          "loss_tokens": 60925,
+          "loss": 8.97813910545753,
+          "gradient_norm": 1.3664699792861938
+        },
+        {
+          "seconds": 0.22880141899999984,
+          "loss_tokens": 67284,
+          "loss": 8.879754102015339,
+          "gradient_norm": 1.191781759262085
+        },
+        {
+          "seconds": 0.22633726399999432,
+          "loss_tokens": 58769,
+          "loss": 8.61866906872671,
+          "gradient_norm": 1.3035988807678223
+        }
+      ],
+      "data_end": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 56,
+          "code_python": 114,
+          "finemath_4plus": 89,
+          "pes2o": 27,
+          "pubmed": 8,
+          "arxiv": 5,
+          "pressbooks": 19,
+          "libretexts": 9,
+          "doab": 19,
+          "gutenberg": 13,
+          "pre_1929_books": 17,
+          "library_of_congress": 8
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 49596,
+          "code_python": 149226,
+          "finemath_4plus": 99865,
+          "pes2o": 49765,
+          "pubmed": 16159,
+          "arxiv": 10240,
+          "pressbooks": 14860,
+          "libretexts": 15599,
+          "doab": 21527,
+          "gutenberg": 24841,
+          "pre_1929_books": 34816,
+          "library_of_congress": 14941
+        }
+      },
+      "masked_ddp_gradient_and_update_check": "passed",
+      "device": "NVIDIA H100 80GB HBM3",
+      "parameters": 124389632,
+      "loss_tokens_per_second": 277090.916603256
+    },
+    {
+      "status": "ok",
+      "world_size": 3,
+      "microbatch_per_gpu": 8,
+      "accumulation": 2,
+      "effective_windows": 48,
+      "timed_steps": 6,
+      "warmup_steps": 2,
+      "total_loss_tokens": 379658,
+      "total_seconds": 1.2493715419999987,
+      "median_step_seconds": 0.20658144900000153,
+      "min_step_seconds": 0.20476748099999753,
+      "max_step_seconds": 0.21628847000000206,
+      "peak_allocated_gib_per_gpu": 17.174549102783203,
+      "measurements": [
+        {
+          "seconds": 0.20628532799999988,
+          "loss_tokens": 55955,
+          "loss": 9.59606826914485,
+          "gradient_norm": 1.6219301223754883
+        },
+        {
+          "seconds": 0.21628847000000206,
+          "loss_tokens": 67939,
+          "loss": 9.359746426941815,
+          "gradient_norm": 1.622957706451416
+        },
+        {
+          "seconds": 0.20687757000000317,
+          "loss_tokens": 68786,
+          "loss": 9.193942081237461,
+          "gradient_norm": 1.4136147499084473
+        },
+        {
+          "seconds": 0.20476748099999753,
+          "loss_tokens": 60925,
+          "loss": 8.97814526056627,
+          "gradient_norm": 1.3666130304336548
+        },
+        {
+          "seconds": 0.20928831999999886,
+          "loss_tokens": 67284,
+          "loss": 8.879763390999345,
+          "gradient_norm": 1.1918953657150269
+        },
+        {
+          "seconds": 0.20586437299999716,
+          "loss_tokens": 58769,
+          "loss": 8.618740322278752,
+          "gradient_norm": 1.3035541772842407
+        }
+      ],
+      "data_end": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 56,
+          "code_python": 114,
+          "finemath_4plus": 89,
+          "pes2o": 27,
+          "pubmed": 8,
+          "arxiv": 5,
+          "pressbooks": 19,
+          "libretexts": 9,
+          "doab": 19,
+          "gutenberg": 13,
+          "pre_1929_books": 17,
+          "library_of_congress": 8
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 49596,
+          "code_python": 149226,
+          "finemath_4plus": 99865,
+          "pes2o": 49765,
+          "pubmed": 16159,
+          "arxiv": 10240,
+          "pressbooks": 14860,
+          "libretexts": 15599,
+          "doab": 21527,
+          "gutenberg": 24841,
+          "pre_1929_books": 34816,
+          "library_of_congress": 14941
+        }
+      },
+      "masked_ddp_gradient_and_update_check": "passed",
+      "device": "NVIDIA H100 80GB HBM3",
+      "parameters": 124389632,
+      "loss_tokens_per_second": 303879.1802414853
+    },
+    {
+      "status": "ok",
+      "world_size": 3,
+      "microbatch_per_gpu": 16,
+      "accumulation": 1,
+      "effective_windows": 48,
+      "timed_steps": 6,
+      "warmup_steps": 2,
+      "total_loss_tokens": 379658,
+      "total_seconds": 1.1669954730000143,
+      "median_step_seconds": 0.19276908150000338,
+      "min_step_seconds": 0.19161293199999818,
+      "max_step_seconds": 0.20258767200000705,
+      "peak_allocated_gib_per_gpu": 31.23886489868164,
+      "measurements": [
+        {
+          "seconds": 0.19273004200000798,
+          "loss_tokens": 55955,
+          "loss": 9.596052631578948,
+          "gradient_norm": 1.621880054473877
+        },
+        {
+          "seconds": 0.20258767200000705,
+          "loss_tokens": 67939,
+          "loss": 9.359647993052592,
+          "gradient_norm": 1.6230119466781616
+        },
+        {
+          "seconds": 0.19280812099999878,
+          "loss_tokens": 68786,
+          "loss": 9.193922091704707,
+          "gradient_norm": 1.4137792587280273
+        },
+        {
+          "seconds": 0.19161293199999818,
+          "loss_tokens": 60925,
+          "loss": 8.978171932704145,
+          "gradient_norm": 1.3666187524795532
+        },
+        {
+          "seconds": 0.1952110130000051,
+          "loss_tokens": 67284,
+          "loss": 8.879684434635278,
+          "gradient_norm": 1.1917941570281982
+        },
+        {
+          "seconds": 0.1920456929999972,
+          "loss_tokens": 58769,
+          "loss": 8.618681298814,
+          "gradient_norm": 1.303560733795166
+        }
+      ],
+      "data_end": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 56,
+          "code_python": 114,
+          "finemath_4plus": 89,
+          "pes2o": 27,
+          "pubmed": 8,
+          "arxiv": 5,
+          "pressbooks": 19,
+          "libretexts": 9,
+          "doab": 19,
+          "gutenberg": 13,
+          "pre_1929_books": 17,
+          "library_of_congress": 8
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 49596,
+          "code_python": 149226,
+          "finemath_4plus": 99865,
+          "pes2o": 49765,
+          "pubmed": 16159,
+          "arxiv": 10240,
+          "pressbooks": 14860,
+          "libretexts": 15599,
+          "doab": 21527,
+          "gutenberg": 24841,
+          "pre_1929_books": 34816,
+          "library_of_congress": 14941
+        }
+      },
+      "masked_ddp_gradient_and_update_check": "passed",
+      "device": "NVIDIA H100 80GB HBM3",
+      "parameters": 124389632,
+      "loss_tokens_per_second": 325329.45395581267
+    }
+  ],
+  "sustained": {
+    "status": "ok",
+    "world_size": 3,
+    "microbatch_per_gpu": 16,
+    "accumulation": 1,
+    "effective_windows": 48,
+    "timed_steps": 30,
+    "warmup_steps": 2,
+    "total_loss_tokens": 1993452,
+    "total_seconds": 5.9101453030000215,
+    "median_step_seconds": 0.1947023459999997,
+    "min_step_seconds": 0.19082244099999457,
+    "max_step_seconds": 0.23608492600000375,
+    "peak_allocated_gib_per_gpu": 31.23886489868164,
+    "measurements": [
+      {
+        "seconds": 0.19190828499999668,
+        "loss_tokens": 55955,
+        "loss": 9.59601577160218,
+        "gradient_norm": 1.6218808889389038
+      },
+      {
+        "seconds": 0.20225762900000177,
+        "loss_tokens": 67939,
+        "loss": 9.35968663065397,
+        "gradient_norm": 1.623004674911499
+      },
+      {
+        "seconds": 0.1932931480000093,
+        "loss_tokens": 68786,
+        "loss": 9.193894833250953,
+        "gradient_norm": 1.4137128591537476
+      },
+      {
+        "seconds": 0.19202843499999744,
+        "loss_tokens": 60925,
+        "loss": 8.978141157160444,
+        "gradient_norm": 1.3666390180587769
+      },
+      {
+        "seconds": 0.1952888379999962,
+        "loss_tokens": 67284,
+        "loss": 8.879705799298495,
+        "gradient_norm": 1.192028522491455
+      },
+      {
+        "seconds": 0.19289541899999563,
+        "loss_tokens": 58769,
+        "loss": 8.618631846721911,
+        "gradient_norm": 1.3034031391143799
+      },
+      {
+        "seconds": 0.2096860609999993,
+        "loss_tokens": 62269,
+        "loss": 8.492663885721628,
+        "gradient_norm": 1.1181025505065918
+      },
+      {
+        "seconds": 0.1955684679999905,
+        "loss_tokens": 77878,
+        "loss": 8.348623809034644,
+        "gradient_norm": 1.2044118642807007
+      },
+      {
+        "seconds": 0.19372533000000658,
+        "loss_tokens": 57183,
+        "loss": 8.23282815696973,
+        "gradient_norm": 0.9749469757080078
+      },
+      {
+        "seconds": 0.19432987999999796,
+        "loss_tokens": 74478,
+        "loss": 8.11202804855125,
+        "gradient_norm": 0.8993886113166809
+      },
+      {
+        "seconds": 0.1980892760000046,
+        "loss_tokens": 68766,
+        "loss": 7.920783890294622,
+        "gradient_norm": 0.9292343854904175
+      },
+      {
+        "seconds": 0.19450102000000413,
+        "loss_tokens": 68310,
+        "loss": 7.906388156931635,
+        "gradient_norm": 0.8626490831375122
+      },
+      {
+        "seconds": 0.19206006800000353,
+        "loss_tokens": 67351,
+        "loss": 7.641736017282594,
+        "gradient_norm": 1.0303524732589722
+      },
+      {
+        "seconds": 0.1916152950000054,
+        "loss_tokens": 65160,
+        "loss": 7.288934449815838,
+        "gradient_norm": 1.932372808456421
+      },
+      {
+        "seconds": 0.19362919900000009,
+        "loss_tokens": 64227,
+        "loss": 7.845505005682968,
+        "gradient_norm": 1.431304931640625
+      },
+      {
+        "seconds": 0.19417606200001103,
+        "loss_tokens": 63283,
+        "loss": 7.83831508857039,
+        "gradient_norm": 1.6123700141906738
+      },
+      {
+        "seconds": 0.19534299699999735,
+        "loss_tokens": 71391,
+        "loss": 7.743645907747475,
+        "gradient_norm": 0.6259815096855164
+      },
+      {
+        "seconds": 0.1967067979999939,
+        "loss_tokens": 67893,
+        "loss": 7.612228064748943,
+        "gradient_norm": 0.6175399422645569
+      },
+      {
+        "seconds": 0.19082244099999457,
+        "loss_tokens": 64090,
+        "loss": 7.553693048837572,
+        "gradient_norm": 1.0971933603286743
+      },
+      {
+        "seconds": 0.20990666000000147,
+        "loss_tokens": 60642,
+        "loss": 7.627708518848323,
+        "gradient_norm": 1.3270221948623657
+      },
+      {
+        "seconds": 0.19182278499999939,
+        "loss_tokens": 66956,
+        "loss": 7.610356521446921,
+        "gradient_norm": 0.8228085041046143
+      },
+      {
+        "seconds": 0.23608492600000375,
+        "loss_tokens": 68888,
+        "loss": 7.457122430612008,
+        "gradient_norm": 0.794746994972229
+      },
+      {
+        "seconds": 0.1989667389999994,
+        "loss_tokens": 71425,
+        "loss": 7.445890794539727,
+        "gradient_norm": 0.7636083364486694
+      },
+      {
+        "seconds": 0.19222511099999906,
+        "loss_tokens": 70106,
+        "loss": 6.889666184064131,
+        "gradient_norm": 2.3338139057159424
+      },
+      {
+        "seconds": 0.19266438300000743,
+        "loss_tokens": 68911,
+        "loss": 7.562159887390982,
+        "gradient_norm": 0.850419282913208
+      },
+      {
+        "seconds": 0.19514389700000834,
+        "loss_tokens": 66392,
+        "loss": 7.484877696107965,
+        "gradient_norm": 1.0855774879455566
+      },
+      {
+        "seconds": 0.19529009400000064,
+        "loss_tokens": 66750,
+        "loss": 7.561375936329588,
+        "gradient_norm": 0.9715777635574341
+      },
+      {
+        "seconds": 0.19907558100000244,
+        "loss_tokens": 66998,
+        "loss": 7.214600622406639,
+        "gradient_norm": 0.7695211172103882
+      },
+      {
+        "seconds": 0.19490367199999525,
+        "loss_tokens": 65551,
+        "loss": 7.563101630791293,
+        "gradient_norm": 0.7513537406921387
+      },
+      {
+        "seconds": 0.1961368059999984,
+        "loss_tokens": 68896,
+        "loss": 7.247115217138876,
+        "gradient_norm": 0.8179224729537964
+      }
+    ],
+    "data_end": {
+      "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+      "context": 2048,
+      "split": "train",
+      "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+      "positions": {
+        "fineweb_edu": 216,
+        "code_python": 474,
+        "finemath_4plus": 327,
+        "pes2o": 116,
+        "pubmed": 33,
+        "arxiv": 21,
+        "pressbooks": 90,
+        "libretexts": 39,
+        "doab": 62,
+        "gutenberg": 53,
+        "pre_1929_books": 73,
+        "library_of_congress": 32
+      },
+      "loss_token_exposures": {
+        "fineweb_edu": 212115,
+        "code_python": 631444,
+        "finemath_4plus": 422845,
+        "pes2o": 211401,
+        "pubmed": 63283,
+        "arxiv": 43008,
+        "pressbooks": 63446,
+        "libretexts": 65149,
+        "doab": 84947,
+        "gutenberg": 105765,
+        "pre_1929_books": 147733,
+        "library_of_congress": 64093
+      }
+    },
+    "masked_ddp_gradient_and_update_check": "passed",
+    "device": "NVIDIA H100 80GB HBM3",
+    "parameters": 124389632,
+    "loss_tokens_per_second": 337293.2301661201
+  },
+  "elapsed_seconds": 98.061701149,
+  "notes": [
+    "NCCL one-host DDP on one shared model, not independent model replicas.",
+    "Same 48 global windows per update and data prefix as single-GPU trials.",
+    "Timings include loader, scatter, H2D, gradient synchronization and optimizer.",
+    "Unequal loss-token counts and optimizer updates checked against single-model reference.",
+    "Checkpoint/evaluation/preparation/startup excluded from timed steps."
+  ]
+}
