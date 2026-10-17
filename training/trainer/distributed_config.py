@@ -63,8 +63,11 @@ class DistributedConfig:
             raise ValueError("Invalid optimizer settings")
         if self.pilot and self.target_tokens > 5_000_000:
             raise ValueError("Pending-audit pilot override is limited to 5M tokens")
-        if not self.pilot and (self.n_layer, self.n_head, self.n_embd) != (14, 12, 768):
-            raise ValueError("Substantial runs use the merged 124.4M architecture")
+        if not self.pilot and (self.n_layer, self.n_head, self.n_embd) not in (
+            (14, 12, 768),
+            (8, 3, 192),
+        ):
+            raise ValueError("Substantial runs use the 124.4M or modern 9.85M architecture")
 
     def as_dict(self):
         return asdict(self)

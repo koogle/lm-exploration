@@ -24,6 +24,10 @@ class DistributedConfigTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 DistributedConfig(**change)
 
+    def test_modern_small_architecture(self):
+        config = DistributedConfig(n_layer=8, n_head=3, n_embd=192, target_tokens=5_000_000_000)
+        self.assertFalse(config.pilot)
+
     def test_schedule_uses_tokens(self):
         config = DistributedConfig()
         self.assertAlmostEqual(config.learning_rate(config.warmup_tokens), config.peak_lr)
