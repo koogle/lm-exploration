@@ -232,6 +232,9 @@ def test_inferred_pdf_requires_title_in_first_two_pages(monkeypatch):
     [
         ("annual_reports", "132"),
         ("convergence_reports", "22"),
+        ("financial_stability_reviews", "137"),
+        ("statistics_papers", "5"),
+        ("research_bulletins", "61"),
     ],
 )
 def test_full_report_types_keep_native_text_and_distinct_translations(collection_id, type_id):
@@ -374,3 +377,71 @@ def test_convergence_alternates_are_exact_and_hash_pinned(monkeypatch):
         },
     )
     ecb.validate_alternate(record, body)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "mb201404_focus03.en.pdf",
+        "eb201505_focus04.en.pdf",
+        "eb201607_box02.en.pdf",
+        "ebbox201802_06.en.pdf",
+        "ecb.ebbox201803_01.en.pdf",
+    ],
+)
+def test_box_recovery_preserves_recognized_basename(name):
+    import re
+
+    from adapters.ecb import alternate_document_urls
+
+    year = re.search(r"20\d{2}", name)[0]
+    record = {
+        "collection_id": "economic_bulletin_boxes",
+        "url": f"https://www.ecb.europa.eu/press/economic-bulletin/focus/{year}/pdf/{name}",
+    }
+    assert alternate_document_urls(record) == [f"https://www.ecb.europa.eu/pub/pdf/other/{name}"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "2015/pdf/mb201404_focus03.en.pdf",
+        "2014/pdf/mb201413_focus03.en.pdf",
+        "2015/pdf/eb201509_box02.en.pdf",
+        "2018/pdf/ebbox201802_00.en.pdf",
+        "2020/pdf/ebbox202002_01.en.pdf",
+        "2014/pdf/mb201404.en.pdf",
+    ],
+)
+def test_box_recovery_rejects_out_of_scope_names(path):
+    from adapters.ecb import alternate_document_urls
+
+    record = {
+        "collection_id": "economic_bulletin_boxes",
+        "url": f"https://www.ecb.europa.eu/press/economic-bulletin/focus/{path}",
+    }
+    assert alternate_document_urls(record) == []
+
+
+def test_box_recovery_requires_title_and_rejects_full_issue(monkeypatch):
+    from types import SimpleNamespace
+
+    import adapters.ecb as adapter
+
+    record = {
+        "collection_id": "economic_bulletin_boxes",
+        "title": "A verified historical box title",
+        "url": "https://www.ecb.europa.eu/press/economic-bulletin/focus/2014/pdf/mb201404_focus03.en.pdf",
+    }
+    page = SimpleNamespace(extract_text=lambda: record["title"])
+    monkeypatch.setattr(adapter, "PdfReader", lambda _: SimpleNamespace(pages=[page]))
+    adapter.validate_alternate(record, b"%PDF-fixture")
+    with pytest.raises(ValueError, match="title mismatch"):
+        adapter.validate_alternate(
+            {**record, "title": "A completely different official title"}, b"%PDF-fixture"
+        )
+    with pytest.raises(ValueError, match="not a PDF"):
+        adapter.validate_alternate(record, b"HTML response")
+    monkeypatch.setattr(adapter, "PdfReader", lambda _: SimpleNamespace(pages=[page] * 21))
+    with pytest.raises(ValueError):
+        adapter.validate_alternate(record, b"%PDF-fixture")

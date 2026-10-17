@@ -18,7 +18,10 @@
         "decisions",
         "annual_reports",
         "convergence_reports",
-        "annual_report_translations"
+        "annual_report_translations",
+        "financial_stability_reviews",
+        "statistics_papers",
+        "research_bulletins"
       ],
       "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text.",
       "collection_weights": {
@@ -33,7 +36,10 @@
         "decisions": 1,
         "annual_reports": 3,
         "convergence_reports": 3,
-        "annual_report_translations": 2
+        "annual_report_translations": 2,
+        "financial_stability_reviews": 3,
+        "statistics_papers": 3,
+        "research_bulletins": 2
       }
     },
     "ema": {

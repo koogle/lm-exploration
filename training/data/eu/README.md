@@ -717,3 +717,22 @@ collection controller reports its token/document target or verified exhaustion.
 It also stops dispatching at the audit-pair budget. Reaching that budget is an
 operational review point, not a claim that the corpus is complete. Both document
 collection and audit continuation now run remotely without a local shell session.
+
+### ECB collection expansion after paper inventories
+
+The scheduled mapping adds Financial Stability Reviews (FOEDB type 137), Statistics
+Papers (type 5) and Research Bulletins (type 61). Current catalog observations total
+224 publication records; these are candidates, not newly stored documents.
+English full-text samples from all three series were verified. See
+[expansion evidence](research/ecb-next-expansion-20261017.md).
+FSR language-picker links are not enumerated: the tested German route contains
+the English report plus an unavailable-language notice.
+
+Historical Economic Bulletin boxes from 2014–2018 may try one same-basename
+`/pub/pdf/other/` replacement after a primary 404. Only the observed `mb…_focus`,
+`eb…_focus`, `eb…_box`, `ebbox…_` and `ecb.ebbox…_` filename forms qualify;
+issue year/month or number must match the original path. Every response must be
+a PDF of at most 20 pages and contain the full normalized catalog title in its
+first two pages. Original inventory identity and both retrieval URLs are retained.
+Eight live PDFs passed the integrated rules; this does not validate all remaining
+candidates. See [recovery evidence](research/ecb-box-recovery-20261017.md).

@@ -26,6 +26,9 @@ COLLECTIONS = {
     "annual_report_translations": {"name": "ECB Annual Report translations", "type_ids": ["132"]},
     "annual_reports": {"name": "ECB Annual Report", "type_ids": ["132"]},
     "convergence_reports": {"name": "ECB Convergence Report", "type_ids": ["22"]},
+    "financial_stability_reviews": {"name": "ECB Financial Stability Review", "type_ids": ["137"]},
+    "statistics_papers": {"name": "ECB Statistics Paper Series", "type_ids": ["5"]},
+    "research_bulletins": {"name": "ECB Research Bulletin", "type_ids": ["61"]},
     "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
     "occasional_papers": {"name": "ECB Occasional Paper Series", "type_ids": ["3"]},
     "economic_bulletin_articles": {"name": "ECB Economic Bulletin articles", "type_ids": ["24"]},
@@ -347,6 +350,33 @@ def _inferred_monthly_article_url(record):
     return None
 
 
+def _inferred_bulletin_box_url(record):
+    """Propose one historical asset; filename matching alone never validates it."""
+    if record.get("collection_id") != "economic_bulletin_boxes":
+        return None
+    path = re.fullmatch(
+        r"https://www\.ecb\.europa\.eu/press/economic-bulletin/focus/"
+        r"(?P<year>201[4-8])/pdf/(?P<name>[^/]+)",
+        record["url"],
+    )
+    if not path:
+        return None
+    match = re.fullmatch(
+        r"(?P<family>mb|eb|ebbox|ecb\.ebbox)(?P<issue>\d{6})_"
+        r"(?P<kind>focus|box)?(?P<box>\d{2})\.en\.pdf",
+        path["name"],
+    )
+    if not match or match["issue"][:4] != path["year"] or int(match["box"]) < 1:
+        return None
+    allowed = {"mb": {"focus"}, "eb": {"focus", "box"}, "ebbox": {""}, "ecb.ebbox": {""}}
+    if (match["kind"] or "") not in allowed[match["family"]]:
+        return None
+    maximum = 12 if match["family"] == "mb" else 8
+    if not 1 <= int(match["issue"][4:]) <= maximum:
+        return None
+    return BASE + "/pub/pdf/other/" + path["name"]
+
+
 def alternate_document_urls(record):
     """Return one bounded candidate after primary 404; validate inferred PDF bodies.
 
@@ -356,6 +386,9 @@ def alternate_document_urls(record):
     if record.get("collection_id") == "convergence_reports":
         verified = VERIFIED_CONVERGENCE_REPORTS.get(record["url"])
         return [verified["url"]] if verified else []
+    if record.get("collection_id") == "economic_bulletin_boxes":
+        target = _inferred_bulletin_box_url(record)
+        return [target] if target else []
     if record.get("collection_id") != "economic_bulletin_articles":
         return []
     target = VERIFIED_HISTORICAL_ARTICLES.get(record["url"]) or _inferred_monthly_article_url(
@@ -373,7 +406,8 @@ def validate_alternate(record, data):
 
     Three convergence replacements must match verified PDF SHA-256 hashes.
     Thirteen article mappings have recorded identity evidence; other article URLs
-    must pass the strict Monthly Bulletin rule and conservative title check.
+    must pass strict historical filename rules and conservative title checks.
+    Inferred standalone boxes are restricted to 2014–2018 and at most 20 pages.
     This check does not turn PDF metadata or a full issue into an article.
     """
     if record.get("collection_id") == "convergence_reports":
@@ -386,8 +420,8 @@ def validate_alternate(record, data):
         and record["url"] in VERIFIED_HISTORICAL_ARTICLES
     ):
         return
-    if not _inferred_monthly_article_url(record):
-        raise ValueError("ECB alternate is outside the supported historical article rule")
+    if not (_inferred_monthly_article_url(record) or _inferred_bulletin_box_url(record)):
+        raise ValueError("ECB alternate is outside the supported historical article or box rule")
     title = record.get("title") or ""
     normalized = _normalize_title(title)
     if len(normalized) < 12 or len(re.findall(r"[a-zA-Z]+", title)) < 3:
@@ -396,6 +430,8 @@ def validate_alternate(record, data):
         raise ValueError("ECB alternate response is not a PDF")
     try:
         reader = PdfReader(io.BytesIO(data))
+        if record.get("collection_id") == "economic_bulletin_boxes" and len(reader.pages) > 20:
+            raise ValueError("ECB box alternate is too long for the supported standalone-box rule")
         opening = "\n".join(page.extract_text() or "" for page in reader.pages[:2])
     except Exception as error:
         raise ValueError("ECB alternate PDF opening pages could not be extracted") from error
