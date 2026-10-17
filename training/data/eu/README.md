@@ -684,3 +684,13 @@ HF may report stale-parent conflicts as either HTTP 409 or 412. Audit checkpoint
 retries re-read the destination at the new revision and proceed only if that
 source's token-cache bytes have not changed, preserving concurrent controller
 updates and rejecting competing audit writes.
+
+
+### Private visibility restored
+
+The owner subsequently requested that all four document repositories be private
+again: `jfrick/eu-ecb`, `jfrick/eu-ema`, `jfrick/eu-eurlex` and
+`jfrick/eu-commission-press`. Both source mappings now create private repositories.
+Earlier public-visibility records document historical state, not the current
+setting. The control repository remains private. Collection and authenticated
+resume continue without changing document identities or checkpoints.
