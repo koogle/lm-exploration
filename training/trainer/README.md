@@ -1,18 +1,17 @@
 # Trainer implementation
 
 The trainer is an installed Python package within the `training/` uv project.
-The local CLI/UI uses `../100m/model.py`. Modal runs go through recipes, which
-supply an architecture such as `../10m/model.py` through the architecture-module argument.
-Tiny test configurations remain internal; see [10M training](../10m/README.md).
+Training runs only on Modal GPU workers: [`../modal_train.py`](../modal_train.py)
+validates a [recipe](../recipes/README.md) locally and calls `recipe.run_recipe()`
+on the worker, which supplies the architecture (e.g. `../10m/model.py`) to the loop.
+There is no CPU or MPS training path.
 
 ## Responsibilities
 
-- `../cli.py`: thin `lm-train` and `lm-generate` entry points. Parses `--config` and `--resume`,
-  loads settings and calls the trainer. New runs always go to `runs/<uuid>/`;
-  the UI passes a hidden `--run-dir` for the folder it pre-creates. Importing it or asking for help does not
-  load the training loop or start a run.
-- `config.py`: `TrainConfig`, training-setting validation and the training root.
-  Dataset and output paths are anchored to `training/`, not this package folder.
+- `../modal_train.py`: the Modal app, image, budget reservation and launcher.
+- `../generate.py`: model-agnostic local `lm-generate`; loads the architecture named
+  by a checkpoint's `model_name` and streams samples.
+- `config.py`: the pydantic `TrainConfig` (validated hyperparameters) and the fixed CUDA device.
 - `loop.py`: run setup, model/optimizer construction, evaluation and the core
   optimizer-step loop, metrics, preview generation, optional wall-time bounds and cooperative SIGINT/SIGTERM
   handling at optimizer-step boundaries. Checkpoint operations are delegated to
@@ -20,36 +19,12 @@ Tiny test configurations remain internal; see [10M training](../10m/README.md).
 - `checkpoints.py`: trusted checkpoint loading, resume compatibility checks,
   restoring model/optimizer/RNG state, checkpoint saving and the source hashes,
   git commit and runtime details stored in `config.json` and each checkpoint.
-- `recipe.py`: [recipe](../recipes/README.md) validation, dataset fetching, best-checkpoint
-  selection and the run report used by `../modal_train.py`.
+- `recipe.py`: the pydantic `Recipe`/`Backend`/`MetricRow` models, the fixed `MODELS` and `DATASETS` tables,
+  dataset fetching, best-checkpoint selection and the run report.
 - `sampling.py`: shared sampling for training previews and `lm-generate`.
 
-## Commands
-
-Run from `training/`:
-
-```sh
-uv sync --locked
-uv run lm-checks
-uv run python -m training_data.fetching.fetch_tinyshakespeare
-uv run lm-train
-
-# Optional JSON settings, also used by the UI.
-uv run lm-train --config path/to/training.json
-
-# Resume a trusted checkpoint with an increased total step target.
-uv run lm-train --config path/to/training.json --resume runs/<id>/checkpoints/step-000100.pt
-```
-
-`uv run python -m cli` invokes the same command. Edit `TrainConfig` in
-`config.py` for normal settings and `100m/model.py` for architecture dimensions.
-The default benchmark is the ignored `data/raw/tinyshakespeare.txt`.
-Full-sized training needs several GiB; `lm-checks` uses tiny CPU models and a
-meta-device parameter count rather than a full-sized training run.
-
-Checkpoint format version 1 is preserved. Resume requires identical data,
-tokenizer, model and fixed optimizer/batch/seed/device settings. Total steps may
-increase; logging, evaluation and checkpoint cadence can change. Only load
+Checkpoint format version 1 is preserved. The loop still supports resume
+(`train(..., resume=<checkpoint>)`), which requires identical data, tokenizer, model and fixed
+optimizer/batch/seed/device settings, but no launcher exposes it yet. Only load
 trusted checkpoints: RNG restoration requires Python objects, so checkpoint
-loading is not safe for untrusted files. Exact CPU resume is checked within the
-same runtime; cross-device reproducibility is not promised.
+loading is not safe for untrusted files.

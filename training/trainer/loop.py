@@ -5,13 +5,11 @@ import random
 import signal
 import sys
 import time
-import uuid
 from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 
 import torch
-from model_100m import model as architecture
 from torch import nn
 from torch.nn import functional as F
 from tqdm import tqdm
@@ -24,7 +22,7 @@ from .checkpoints import (
     save_checkpoint,
     validate_resume,
 )
-from .config import ROOT, validate_train_args
+from .config import DEVICE
 from .sampling import sample
 
 
@@ -51,7 +49,7 @@ def evaluate(model, data, args):
     losses = []
     for _ in range(args.eval_batches):
         tokens, targets = get_batch(
-            data, args.batch_size, model.config.block_size, generator, args.device
+            data, args.batch_size, model.config.block_size, generator, DEVICE
         )
         logits = model(tokens)
         loss = F.cross_entropy(logits.flatten(0, 1), targets.flatten())
@@ -60,27 +58,21 @@ def evaluate(model, data, args):
     return sum(losses) / len(losses)
 
 
-def train(args, run_dir=None, *, model_config=None, architecture_module=None, max_seconds=None):
-    # run_dir is set only by the UI, workers and tests; model_config is a tiny-test seam.
-    # Explicit architectures are used by bounded experiment workers, not the local UI.
-    selected_architecture = architecture_module or architecture
+def train(args, data, run_dir, *, architecture_module, model_config, resume=None, max_seconds=None):
+    # Called by trainer/recipe.py on a Modal GPU worker; see ../recipes/README.md.
+    selected_architecture = architecture_module
     model_class = selected_architecture.GPT
-    config_class = selected_architecture.ModelConfig
+    if not torch.cuda.is_available():
+        raise ValueError("training runs on Modal GPU workers; CUDA is not available")
     if max_seconds is not None and max_seconds <= 0:
         raise ValueError("max_seconds must be positive")
-    validate_train_args(args)
-    if run_dir is None and args.resume:
-        # Resume continues in the run folder that owns runs/<id>/checkpoints/step-*.pt.
-        run_dir = Path(args.resume).resolve().parents[1]
-    out = Path(run_dir) if run_dir else ROOT / "runs" / uuid.uuid4().hex
-    if not args.resume and any(
+    out = Path(run_dir)
+    if not resume and any(
         (out / name).exists() for name in ("config.json", "metrics.jsonl", "checkpoints")
     ):
-        raise ValueError("run directory already has a run; use --resume or choose a new directory")
+        raise ValueError("run directory already has a run; resume it or choose a new directory")
     with stop_signal_handler() as stop:
-        block_size = model_config.block_size if model_config else config_class.block_size
-        tokenizer, train_data, val_data, fingerprint = load_data(args.data, block_size)
-        model_config = model_config or config_class(vocab_size=len(tokenizer.characters))
+        tokenizer, train_data, val_data, fingerprint = load_data(data, model_config.block_size)
         if model_config.vocab_size != len(tokenizer.characters):
             raise ValueError("model vocabulary must match the dataset tokenizer")
         settings = {
@@ -90,7 +82,6 @@ def train(args, run_dir=None, *, model_config=None, architecture_module=None, ma
                 "batch_size",
                 "lr",
                 "seed",
-                "device",
                 "eval_interval",
                 "log_interval",
                 "eval_batches",
@@ -98,6 +89,7 @@ def train(args, run_dir=None, *, model_config=None, architecture_module=None, ma
             )
         }
         settings.update(
+            device=DEVICE,
             dtype="float32",
             optimizer="AdamW",
             betas=[0.9, 0.95],
@@ -109,20 +101,25 @@ def train(args, run_dir=None, *, model_config=None, architecture_module=None, ma
             "model": asdict(model_config),
             "training": settings,
             "tokenizer": tokenizer.config(),
-            "dataset": {"path": str(Path(args.data).resolve()), **fingerprint},
+            "dataset": {"path": str(Path(data).resolve()), **fingerprint},
             "runtime": runtime_provenance(
-                args.device,
+                DEVICE,
                 selected_architecture.__file__,
-                sys.modules[model_class.__module__].__file__,
+                getattr(
+                    selected_architecture,
+                    "BASE_MODEL_SOURCE",
+                    sys.modules[model_class.__module__].__file__,
+                ),
+                model_dependencies=getattr(selected_architecture, "MODEL_DEPENDENCIES", None),
             ),
         }
-        checkpoint = load_checkpoint(args.resume) if args.resume else None
+        checkpoint = load_checkpoint(resume) if resume else None
         if checkpoint:
             validate_resume(checkpoint, config, fingerprint, args.steps)
         random.seed(args.seed)
         torch.manual_seed(args.seed)
         batch_generator = torch.Generator().manual_seed(args.seed)
-        model = model_class(model_config).to(device=args.device, dtype=torch.float32)
+        model = model_class(model_config).to(device=DEVICE, dtype=torch.float32)
         config["parameter_count"] = sum(parameter.numel() for parameter in model.parameters())
         optimizer = torch.optim.AdamW(
             model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.1
@@ -138,7 +135,7 @@ def train(args, run_dir=None, *, model_config=None, architecture_module=None, ma
             encoding="utf-8",
         )
         print(
-            f"Model: {config['parameter_count']:,} parameters; device: {args.device}; FP32",
+            f"Model: {config['parameter_count']:,} parameters; device: {DEVICE}; FP32",
             flush=True,
         )
         started = time.perf_counter()
@@ -161,7 +158,7 @@ def train(args, run_dir=None, *, model_config=None, architecture_module=None, ma
             )
             saved_step = step
 
-        # Progress bar only in an interactive shell; the UI captures plain JSON lines.
+        # Progress bar only in an interactive shell; Modal logs get plain JSON lines.
         progress = tqdm(
             total=args.steps,
             initial=step,
@@ -177,7 +174,7 @@ def train(args, run_dir=None, *, model_config=None, architecture_module=None, ma
                     args.batch_size,
                     model_config.block_size,
                     batch_generator,
-                    args.device,
+                    DEVICE,
                 )
                 optimizer.zero_grad(set_to_none=True)
                 logits = model(x)

@@ -1,0 +1,922 @@
+{
+  "requested_gpu": "H100",
+  "device": "NVIDIA H100 80GB HBM3",
+  "device_memory_gib": 79.171142578125,
+  "torch_version": "2.6.0+cu124",
+  "cuda_version": "12.4",
+  "model_config": {
+    "vocab_size": 32768,
+    "block_size": 2048,
+    "n_layer": 14,
+    "n_head": 12,
+    "n_embd": 768,
+    "architecture_version": 2
+  },
+  "effective_windows": 48,
+  "precision": "BF16 autocast / FP32 parameters",
+  "attention": "PyTorch causal SDPA",
+  "optimizer": "fused AdamW",
+  "cpu": 4,
+  "host_memory_mib": 24576,
+  "cuda_attention_reference_check": "passed",
+  "provenance": {
+    "git_commit": "eb4e6d612a4e99af1e93bb5645def93d381012db",
+    "source_sha256": {
+      "modal_gpu_benchmark.py": "695a8c0f643273950737f4ac9e3e2a535c298ec74726877d6943fa6814d1b10d",
+      "modal_scholarly_pilot.py": "757245f3b3da2ea101b241d68d7a7997e4e06b2dbe3cd4252fdedbf556465996",
+      "100m/model.py": "96bd95eb51ff5b2aa3d4cd9fc07073a6d21dc9003b36bbe9461fa5780a76882d",
+      "10m/model.py": "cee2225572e14f2243f0e7f774f010305bb715a9e1e8dc9d0ff34008dc79dfe5",
+      "trainer/gpu_benchmark.py": "0a81ac46fb9ae0d7f07744cdfbad4f30c8395d27b76fa4bd27468e37649734ee",
+      "data/__init__.py": "d9861942caacf890fc9e7965073d381083fd4631ce88f52ade887d694e6ccc4d",
+      "data/loading.py": "f57194e2c333d5fbee4e0b3d74c497c9e745969d7d2949f072553b8b2fa97293",
+      "data/registry.py": "46891f6bf68996d57ee2af236b3dfba77a97821941f6423e04b36b5fd1ecec14",
+      "data/scholarly.py": "34a07ec99175e0f1fb1df19c75b0e380a75179df3d516c1350ed68b672a28f9f",
+      "data/subword.py": "35e28ba3721f2c39d303622865c73449360b324f9bb59793e550b7b52d5793ad",
+      "data/token_stream.py": "f0e9d20a5dc4a2b482f706746e7b80ae4a7dcc3e66045077a513099468472e5c",
+      "tests/test_100m_modern.py": "cb19c2d5108a7d92ff5d8622e485baba05825c818b579cc5eac0bd8d2f60d673"
+    }
+  },
+  "sweep": [
+    {
+      "status": "ok",
+      "microbatch": 2,
+      "accumulation": 24,
+      "timed_steps": 6,
+      "warmup_steps": 2,
+      "total_loss_tokens": 379658,
+      "total_seconds": 5.485223698000006,
+      "median_step_seconds": 0.9087907085000033,
+      "min_step_seconds": 0.8599057170000037,
+      "max_step_seconds": 0.9755333620000002,
+      "peak_allocated_gib": 5.840770721435547,
+      "measurements": [
+        {
+          "seconds": 0.9241426120000042,
+          "loss_tokens": 55955,
+          "loss": 9.596110155482084,
+          "gradient_norm": 1.6216140985488892
+        },
+        {
+          "seconds": 0.9492118000000005,
+          "loss_tokens": 67939,
+          "loss": 9.359744127084591,
+          "gradient_norm": 1.624382495880127
+        },
+        {
+          "seconds": 0.8934388050000024,
+          "loss_tokens": 68786,
+          "loss": 9.194035668595355,
+          "gradient_norm": 1.4140115976333618
+        },
+        {
+          "seconds": 0.8599057170000037,
+          "loss_tokens": 60925,
+          "loss": 8.978186551087402,
+          "gradient_norm": 1.3661872148513794
+        },
+        {
+          "seconds": 0.8829914019999947,
+          "loss_tokens": 67284,
+          "loss": 8.879772215534153,
+          "gradient_norm": 1.189886212348938
+        },
+        {
+          "seconds": 0.9755333620000002,
+          "loss_tokens": 58769,
+          "loss": 8.618834706648062,
+          "gradient_norm": 1.3070740699768066
+        }
+      ],
+      "data_start": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 0,
+          "code_python": 0,
+          "finemath_4plus": 0,
+          "pes2o": 0,
+          "pubmed": 0,
+          "arxiv": 0,
+          "pressbooks": 0,
+          "libretexts": 0,
+          "doab": 0,
+          "gutenberg": 0,
+          "pre_1929_books": 0,
+          "library_of_congress": 0
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 0,
+          "code_python": 0,
+          "finemath_4plus": 0,
+          "pes2o": 0,
+          "pubmed": 0,
+          "arxiv": 0,
+          "pressbooks": 0,
+          "libretexts": 0,
+          "doab": 0,
+          "gutenberg": 0,
+          "pre_1929_books": 0,
+          "library_of_congress": 0
+        }
+      },
+      "data_end": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 56,
+          "code_python": 114,
+          "finemath_4plus": 89,
+          "pes2o": 27,
+          "pubmed": 8,
+          "arxiv": 5,
+          "pressbooks": 19,
+          "libretexts": 9,
+          "doab": 19,
+          "gutenberg": 13,
+          "pre_1929_books": 17,
+          "library_of_congress": 8
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 49596,
+          "code_python": 149226,
+          "finemath_4plus": 99865,
+          "pes2o": 49765,
+          "pubmed": 16159,
+          "arxiv": 10240,
+          "pressbooks": 14860,
+          "libretexts": 15599,
+          "doab": 21527,
+          "gutenberg": 24841,
+          "pre_1929_books": 34816,
+          "library_of_congress": 14941
+        }
+      },
+      "parameters": 124389632,
+      "loss_tokens_per_second": 69214.67945572191
+    },
+    {
+      "status": "ok",
+      "microbatch": 4,
+      "accumulation": 12,
+      "timed_steps": 6,
+      "warmup_steps": 2,
+      "total_loss_tokens": 379658,
+      "total_seconds": 3.7304210870000247,
+      "median_step_seconds": 0.6217226555000082,
+      "min_step_seconds": 0.6188798199999894,
+      "max_step_seconds": 0.6269980380000106,
+      "peak_allocated_gib": 9.44301986694336,
+      "measurements": [
+        {
+          "seconds": 0.6219430990000063,
+          "loss_tokens": 55955,
+          "loss": 9.596117974265034,
+          "gradient_norm": 1.6215684413909912
+        },
+        {
+          "seconds": 0.6269980380000106,
+          "loss_tokens": 67939,
+          "loss": 9.359697209997204,
+          "gradient_norm": 1.6243464946746826
+        },
+        {
+          "seconds": 0.6218936870000107,
+          "loss_tokens": 68786,
+          "loss": 9.193972519844154,
+          "gradient_norm": 1.4139569997787476
+        },
+        {
+          "seconds": 0.619154819000002,
+          "loss_tokens": 60925,
+          "loss": 8.978160904800985,
+          "gradient_norm": 1.3660582304000854
+        },
+        {
+          "seconds": 0.6215516240000056,
+          "loss_tokens": 67284,
+          "loss": 8.879737614068723,
+          "gradient_norm": 1.1898832321166992
+        },
+        {
+          "seconds": 0.6188798199999894,
+          "loss_tokens": 58769,
+          "loss": 8.618776480797699,
+          "gradient_norm": 1.307161569595337
+        }
+      ],
+      "data_start": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 0,
+          "code_python": 0,
+          "finemath_4plus": 0,
+          "pes2o": 0,
+          "pubmed": 0,
+          "arxiv": 0,
+          "pressbooks": 0,
+          "libretexts": 0,
+          "doab": 0,
+          "gutenberg": 0,
+          "pre_1929_books": 0,
+          "library_of_congress": 0
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 0,
+          "code_python": 0,
+          "finemath_4plus": 0,
+          "pes2o": 0,
+          "pubmed": 0,
+          "arxiv": 0,
+          "pressbooks": 0,
+          "libretexts": 0,
+          "doab": 0,
+          "gutenberg": 0,
+          "pre_1929_books": 0,
+          "library_of_congress": 0
+        }
+      },
+      "data_end": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 56,
+          "code_python": 114,
+          "finemath_4plus": 89,
+          "pes2o": 27,
+          "pubmed": 8,
+          "arxiv": 5,
+          "pressbooks": 19,
+          "libretexts": 9,
+          "doab": 19,
+          "gutenberg": 13,
+          "pre_1929_books": 17,
+          "library_of_congress": 8
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 49596,
+          "code_python": 149226,
+          "finemath_4plus": 99865,
+          "pes2o": 49765,
+          "pubmed": 16159,
+          "arxiv": 10240,
+          "pressbooks": 14860,
+          "libretexts": 15599,
+          "doab": 21527,
+          "gutenberg": 24841,
+          "pre_1929_books": 34816,
+          "library_of_congress": 14941
+        }
+      },
+      "parameters": 124389632,
+      "loss_tokens_per_second": 101773.4971858949
+    },
+    {
+      "status": "ok",
+      "microbatch": 8,
+      "accumulation": 6,
+      "timed_steps": 6,
+      "warmup_steps": 2,
+      "total_loss_tokens": 379658,
+      "total_seconds": 3.347686834000001,
+      "median_step_seconds": 0.5570324595000002,
+      "min_step_seconds": 0.5536815170000011,
+      "max_step_seconds": 0.5643325970000035,
+      "peak_allocated_gib": 16.707820892333984,
+      "measurements": [
+        {
+          "seconds": 0.5536815170000011,
+          "loss_tokens": 55955,
+          "loss": 9.596114064873559,
+          "gradient_norm": 1.6215225458145142
+        },
+        {
+          "seconds": 0.5643325970000035,
+          "loss_tokens": 67939,
+          "loss": 9.359685250739634,
+          "gradient_norm": 1.62445867061615
+        },
+        {
+          "seconds": 0.5571903090000063,
+          "loss_tokens": 68786,
+          "loss": 9.194017041985287,
+          "gradient_norm": 1.4140807390213013
+        },
+        {
+          "seconds": 0.5568746099999942,
+          "loss_tokens": 60925,
+          "loss": 8.978167059909724,
+          "gradient_norm": 1.3660061359405518
+        },
+        {
+          "seconds": 0.5605765799999887,
+          "loss_tokens": 67284,
+          "loss": 8.879770589961952,
+          "gradient_norm": 1.1898196935653687
+        },
+        {
+          "seconds": 0.5550312210000072,
+          "loss_tokens": 58769,
+          "loss": 8.618794825928635,
+          "gradient_norm": 1.3072651624679565
+        }
+      ],
+      "data_start": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 0,
+          "code_python": 0,
+          "finemath_4plus": 0,
+          "pes2o": 0,
+          "pubmed": 0,
+          "arxiv": 0,
+          "pressbooks": 0,
+          "libretexts": 0,
+          "doab": 0,
+          "gutenberg": 0,
+          "pre_1929_books": 0,
+          "library_of_congress": 0
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 0,
+          "code_python": 0,
+          "finemath_4plus": 0,
+          "pes2o": 0,
+          "pubmed": 0,
+          "arxiv": 0,
+          "pressbooks": 0,
+          "libretexts": 0,
+          "doab": 0,
+          "gutenberg": 0,
+          "pre_1929_books": 0,
+          "library_of_congress": 0
+        }
+      },
+      "data_end": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 56,
+          "code_python": 114,
+          "finemath_4plus": 89,
+          "pes2o": 27,
+          "pubmed": 8,
+          "arxiv": 5,
+          "pressbooks": 19,
+          "libretexts": 9,
+          "doab": 19,
+          "gutenberg": 13,
+          "pre_1929_books": 17,
+          "library_of_congress": 8
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 49596,
+          "code_python": 149226,
+          "finemath_4plus": 99865,
+          "pes2o": 49765,
+          "pubmed": 16159,
+          "arxiv": 10240,
+          "pressbooks": 14860,
+          "libretexts": 15599,
+          "doab": 21527,
+          "gutenberg": 24841,
+          "pre_1929_books": 34816,
+          "library_of_congress": 14941
+        }
+      },
+      "parameters": 124389632,
+      "loss_tokens_per_second": 113409.05491639541
+    },
+    {
+      "status": "ok",
+      "microbatch": 16,
+      "accumulation": 3,
+      "timed_steps": 6,
+      "warmup_steps": 2,
+      "total_loss_tokens": 379658,
+      "total_seconds": 3.1083239640000215,
+      "median_step_seconds": 0.5174709150000041,
+      "min_step_seconds": 0.5139992499999977,
+      "max_step_seconds": 0.523021471000007,
+      "peak_allocated_gib": 31.245479583740234,
+      "measurements": [
+        {
+          "seconds": 0.5139992499999977,
+          "loss_tokens": 55955,
+          "loss": 9.596079997319274,
+          "gradient_norm": 1.6217268705368042
+        },
+        {
+          "seconds": 0.523021471000007,
+          "loss_tokens": 67939,
+          "loss": 9.35974504702748,
+          "gradient_norm": 1.62436044216156
+        },
+        {
+          "seconds": 0.5179128820000045,
+          "loss_tokens": 68786,
+          "loss": 9.194016587677725,
+          "gradient_norm": 1.4140264987945557
+        },
+        {
+          "seconds": 0.516280215000009,
+          "loss_tokens": 60925,
+          "loss": 8.978186294624539,
+          "gradient_norm": 1.3663274049758911
+        },
+        {
+          "seconds": 0.5200811979999997,
+          "loss_tokens": 67284,
+          "loss": 8.87972321614351,
+          "gradient_norm": 1.19005286693573
+        },
+        {
+          "seconds": 0.5170289480000037,
+          "loss_tokens": 58769,
+          "loss": 8.618762921353094,
+          "gradient_norm": 1.306950569152832
+        }
+      ],
+      "data_start": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 0,
+          "code_python": 0,
+          "finemath_4plus": 0,
+          "pes2o": 0,
+          "pubmed": 0,
+          "arxiv": 0,
+          "pressbooks": 0,
+          "libretexts": 0,
+          "doab": 0,
+          "gutenberg": 0,
+          "pre_1929_books": 0,
+          "library_of_congress": 0
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 0,
+          "code_python": 0,
+          "finemath_4plus": 0,
+          "pes2o": 0,
+          "pubmed": 0,
+          "arxiv": 0,
+          "pressbooks": 0,
+          "libretexts": 0,
+          "doab": 0,
+          "gutenberg": 0,
+          "pre_1929_books": 0,
+          "library_of_congress": 0
+        }
+      },
+      "data_end": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 56,
+          "code_python": 114,
+          "finemath_4plus": 89,
+          "pes2o": 27,
+          "pubmed": 8,
+          "arxiv": 5,
+          "pressbooks": 19,
+          "libretexts": 9,
+          "doab": 19,
+          "gutenberg": 13,
+          "pre_1929_books": 17,
+          "library_of_congress": 8
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 49596,
+          "code_python": 149226,
+          "finemath_4plus": 99865,
+          "pes2o": 49765,
+          "pubmed": 16159,
+          "arxiv": 10240,
+          "pressbooks": 14860,
+          "libretexts": 15599,
+          "doab": 21527,
+          "gutenberg": 24841,
+          "pre_1929_books": 34816,
+          "library_of_congress": 14941
+        }
+      },
+      "parameters": 124389632,
+      "loss_tokens_per_second": 122142.35208334847
+    },
+    {
+      "status": "ok",
+      "microbatch": 24,
+      "accumulation": 2,
+      "timed_steps": 6,
+      "warmup_steps": 2,
+      "total_loss_tokens": 379658,
+      "total_seconds": 3.0123673380000184,
+      "median_step_seconds": 0.5004999945000037,
+      "min_step_seconds": 0.49838115600000776,
+      "max_step_seconds": 0.5075213340000033,
+      "peak_allocated_gib": 45.780208587646484,
+      "measurements": [
+        {
+          "seconds": 0.49849854400000027,
+          "loss_tokens": 55955,
+          "loss": 9.59614087212939,
+          "gradient_norm": 1.6217371225357056
+        },
+        {
+          "seconds": 0.5075213340000033,
+          "loss_tokens": 67939,
+          "loss": 9.35976620571395,
+          "gradient_norm": 1.6245193481445312
+        },
+        {
+          "seconds": 0.5002307339999987,
+          "loss_tokens": 68786,
+          "loss": 9.194067015817172,
+          "gradient_norm": 1.4142131805419922
+        },
+        {
+          "seconds": 0.49838115600000776,
+          "loss_tokens": 60925,
+          "loss": 8.97830118998769,
+          "gradient_norm": 1.3664551973342896
+        },
+        {
+          "seconds": 0.5069663149999997,
+          "loss_tokens": 67284,
+          "loss": 8.879812622614589,
+          "gradient_norm": 1.1900626420974731
+        },
+        {
+          "seconds": 0.5007692550000087,
+          "loss_tokens": 58769,
+          "loss": 8.618832845547823,
+          "gradient_norm": 1.3071441650390625
+        }
+      ],
+      "data_start": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 0,
+          "code_python": 0,
+          "finemath_4plus": 0,
+          "pes2o": 0,
+          "pubmed": 0,
+          "arxiv": 0,
+          "pressbooks": 0,
+          "libretexts": 0,
+          "doab": 0,
+          "gutenberg": 0,
+          "pre_1929_books": 0,
+          "library_of_congress": 0
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 0,
+          "code_python": 0,
+          "finemath_4plus": 0,
+          "pes2o": 0,
+          "pubmed": 0,
+          "arxiv": 0,
+          "pressbooks": 0,
+          "libretexts": 0,
+          "doab": 0,
+          "gutenberg": 0,
+          "pre_1929_books": 0,
+          "library_of_congress": 0
+        }
+      },
+      "data_end": {
+        "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+        "context": 2048,
+        "split": "train",
+        "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+        "positions": {
+          "fineweb_edu": 56,
+          "code_python": 114,
+          "finemath_4plus": 89,
+          "pes2o": 27,
+          "pubmed": 8,
+          "arxiv": 5,
+          "pressbooks": 19,
+          "libretexts": 9,
+          "doab": 19,
+          "gutenberg": 13,
+          "pre_1929_books": 17,
+          "library_of_congress": 8
+        },
+        "loss_token_exposures": {
+          "fineweb_edu": 49596,
+          "code_python": 149226,
+          "finemath_4plus": 99865,
+          "pes2o": 49765,
+          "pubmed": 16159,
+          "arxiv": 10240,
+          "pressbooks": 14860,
+          "libretexts": 15599,
+          "doab": 21527,
+          "gutenberg": 24841,
+          "pre_1929_books": 34816,
+          "library_of_congress": 14941
+        }
+      },
+      "parameters": 124389632,
+      "loss_tokens_per_second": 126033.10200941957
+    },
+    {
+      "status": "out_of_memory",
+      "microbatch": 48
+    }
+  ],
+  "sustained": {
+    "microbatch": 24,
+    "accumulation": 2,
+    "timed_steps": 30,
+    "warmup_steps": 2,
+    "total_loss_tokens": 1993452,
+    "total_seconds": 15.166344783,
+    "median_step_seconds": 0.5039883494999984,
+    "min_step_seconds": 0.4998236600000041,
+    "max_step_seconds": 0.538487859,
+    "peak_allocated_gib": 45.780208587646484,
+    "measurements": [
+      {
+        "seconds": 0.4998236600000041,
+        "loss_tokens": 55955,
+        "loss": 9.596107921544098,
+        "gradient_norm": 1.6217268705368042
+      },
+      {
+        "seconds": 0.50908278899999,
+        "loss_tokens": 67939,
+        "loss": 9.359802083486658,
+        "gradient_norm": 1.624678611755371
+      },
+      {
+        "seconds": 0.5000121790000094,
+        "loss_tokens": 68786,
+        "loss": 9.194041574593667,
+        "gradient_norm": 1.4141613245010376
+      },
+      {
+        "seconds": 0.5012069049999894,
+        "loss_tokens": 60925,
+        "loss": 8.978190910956094,
+        "gradient_norm": 1.366384506225586
+      },
+      {
+        "seconds": 0.5028633040000017,
+        "loss_tokens": 67284,
+        "loss": 8.879858138636228,
+        "gradient_norm": 1.1902698278427124
+      },
+      {
+        "seconds": 0.5012924150000089,
+        "loss_tokens": 58769,
+        "loss": 8.618816095645663,
+        "gradient_norm": 1.3069992065429688
+      },
+      {
+        "seconds": 0.5169985670000017,
+        "loss_tokens": 62269,
+        "loss": 8.49285735076844,
+        "gradient_norm": 1.1210806369781494
+      },
+      {
+        "seconds": 0.5024468480000053,
+        "loss_tokens": 77878,
+        "loss": 8.348705266570791,
+        "gradient_norm": 1.1989936828613281
+      },
+      {
+        "seconds": 0.504314616000002,
+        "loss_tokens": 57183,
+        "loss": 8.232928164839201,
+        "gradient_norm": 0.9778639674186707
+      },
+      {
+        "seconds": 0.5039901959999895,
+        "loss_tokens": 74478,
+        "loss": 8.112155602996857,
+        "gradient_norm": 0.8977899551391602
+      },
+      {
+        "seconds": 0.5061000740000026,
+        "loss_tokens": 68766,
+        "loss": 7.9209722555478,
+        "gradient_norm": 0.9300293326377869
+      },
+      {
+        "seconds": 0.5046051399999953,
+        "loss_tokens": 68310,
+        "loss": 7.906400966183575,
+        "gradient_norm": 0.8645196557044983
+      },
+      {
+        "seconds": 0.501007543,
+        "loss_tokens": 67351,
+        "loss": 7.641980074534899,
+        "gradient_norm": 1.0296341180801392
+      },
+      {
+        "seconds": 0.5015106610000117,
+        "loss_tokens": 65160,
+        "loss": 7.289208774554941,
+        "gradient_norm": 1.9391757249832153
+      },
+      {
+        "seconds": 0.5039929499999971,
+        "loss_tokens": 64227,
+        "loss": 7.845524711180656,
+        "gradient_norm": 1.431886076927185
+      },
+      {
+        "seconds": 0.5051712639999977,
+        "loss_tokens": 63283,
+        "loss": 7.838334347297063,
+        "gradient_norm": 1.6152299642562866
+      },
+      {
+        "seconds": 0.5048169989999991,
+        "loss_tokens": 71391,
+        "loss": 7.743727544438374,
+        "gradient_norm": 0.6287342309951782
+      },
+      {
+        "seconds": 0.5074112260000021,
+        "loss_tokens": 67893,
+        "loss": 7.612084456424079,
+        "gradient_norm": 0.6187172532081604
+      },
+      {
+        "seconds": 0.5004243669999937,
+        "loss_tokens": 64090,
+        "loss": 7.5536728136214695,
+        "gradient_norm": 1.1014554500579834
+      },
+      {
+        "seconds": 0.5196842459999971,
+        "loss_tokens": 60642,
+        "loss": 7.627857446159427,
+        "gradient_norm": 1.3265841007232666
+      },
+      {
+        "seconds": 0.5014059409999874,
+        "loss_tokens": 66956,
+        "loss": 7.610346253509768,
+        "gradient_norm": 0.825316309928894
+      },
+      {
+        "seconds": 0.538487859,
+        "loss_tokens": 68888,
+        "loss": 7.457016053231332,
+        "gradient_norm": 0.7949715852737427
+      },
+      {
+        "seconds": 0.5074514180000023,
+        "loss_tokens": 71425,
+        "loss": 7.445730005250263,
+        "gradient_norm": 0.7648230195045471
+      },
+      {
+        "seconds": 0.500328316000008,
+        "loss_tokens": 70106,
+        "loss": 6.888959441773885,
+        "gradient_norm": 2.334333896636963
+      },
+      {
+        "seconds": 0.5014426949999944,
+        "loss_tokens": 68911,
+        "loss": 7.561996633338654,
+        "gradient_norm": 0.8464624285697937
+      },
+      {
+        "seconds": 0.5039865030000072,
+        "loss_tokens": 66392,
+        "loss": 7.485054910606699,
+        "gradient_norm": 1.0877712965011597
+      },
+      {
+        "seconds": 0.5024032310000024,
+        "loss_tokens": 66750,
+        "loss": 7.561651451310861,
+        "gradient_norm": 0.9722067713737488
+      },
+      {
+        "seconds": 0.5076485200000036,
+        "loss_tokens": 66998,
+        "loss": 7.214718163228753,
+        "gradient_norm": 0.7713934183120728
+      },
+      {
+        "seconds": 0.5021499089999963,
+        "loss_tokens": 65551,
+        "loss": 7.562807727952282,
+        "gradient_norm": 0.7483160495758057
+      },
+      {
+        "seconds": 0.5042844419999994,
+        "loss_tokens": 68896,
+        "loss": 7.24706532309568,
+        "gradient_norm": 0.8138112425804138
+      }
+    ],
+    "data_start": {
+      "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+      "context": 2048,
+      "split": "train",
+      "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+      "positions": {
+        "fineweb_edu": 0,
+        "code_python": 0,
+        "finemath_4plus": 0,
+        "pes2o": 0,
+        "pubmed": 0,
+        "arxiv": 0,
+        "pressbooks": 0,
+        "libretexts": 0,
+        "doab": 0,
+        "gutenberg": 0,
+        "pre_1929_books": 0,
+        "library_of_congress": 0
+      },
+      "loss_token_exposures": {
+        "fineweb_edu": 0,
+        "code_python": 0,
+        "finemath_4plus": 0,
+        "pes2o": 0,
+        "pubmed": 0,
+        "arxiv": 0,
+        "pressbooks": 0,
+        "libretexts": 0,
+        "doab": 0,
+        "gutenberg": 0,
+        "pre_1929_books": 0,
+        "library_of_congress": 0
+      }
+    },
+    "data_end": {
+      "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+      "context": 2048,
+      "split": "train",
+      "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+      "positions": {
+        "fineweb_edu": 216,
+        "code_python": 474,
+        "finemath_4plus": 327,
+        "pes2o": 116,
+        "pubmed": 33,
+        "arxiv": 21,
+        "pressbooks": 90,
+        "libretexts": 39,
+        "doab": 62,
+        "gutenberg": 53,
+        "pre_1929_books": 73,
+        "library_of_congress": 32
+      },
+      "loss_token_exposures": {
+        "fineweb_edu": 212115,
+        "code_python": 631444,
+        "finemath_4plus": 422845,
+        "pes2o": 211401,
+        "pubmed": 63283,
+        "arxiv": 43008,
+        "pressbooks": 63446,
+        "libretexts": 65149,
+        "doab": 84947,
+        "gutenberg": 105765,
+        "pre_1929_books": 147733,
+        "library_of_congress": 64093
+      }
+    },
+    "parameters": 124389632,
+    "loss_tokens_per_second": 131439.18515122155
+  },
+  "elapsed_seconds": 106.855360648,
+  "notes": [
+    "Uses actual frozen-tokenizer pilot mixture batches, not synthetic tokens.",
+    "Timings include loader, H2D, forward, backward, clipping and optimizer.",
+    "Checkpoint/evaluation/preparation and cold startup are outside step timing.",
+    "Two warmup steps excluded; fresh model and identical data prefix per trial.",
+    "No full pretraining or production quality claim."
+  ]
+}

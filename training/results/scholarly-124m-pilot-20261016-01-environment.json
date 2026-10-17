@@ -1,0 +1,16 @@
+{
+  "python": "3.12.10",
+  "capture": "Selected runtime dependencies read directly from the running Modal GPU container",
+  "container_id": "ta-01M53AM5A9FZGGQ2B8E8JCHNKR",
+  "packages": {
+    "torch": "2.6.0",
+    "numpy": "2.5.4",
+    "tokenizers": "0.22.2",
+    "pydantic": "2.14.1",
+    "pydantic_core": "2.50.1",
+    "huggingface_hub": "1.33.0",
+    "triton": "3.2.0",
+    "nvidia-cuda-runtime-cu12": "12.4.127",
+    "nvidia-cudnn-cu12": "9.1.0.70"
+  }
+}

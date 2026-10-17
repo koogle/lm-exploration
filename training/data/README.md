@@ -1,25 +1,26 @@
-# Local training datasets
+# Training datasets
 
 [EU institutional corpus exploration](eu/README.md) is a separate discovery and
 extraction project with ten source candidates, bounded crawlers, agent research
 notes and Parquet export. Its artifacts are not registered training inputs.
 
-`datasets.json` is the UI's curated registry. The trainer itself accepts a plain
-UTF-8 text file and does not depend on this registry. Paths in the registry are
-relative to this `data/` directory, not to the shell's working directory.
+For the new frozen-tokenizer corpus, use the separate
+[scholarly/code streaming pipeline](SCHOLARLY_STREAMING.md).
 
-The UI launches the shared `training/trainer/` implementation through `cli.py`
-with the fixed `training/100m/model.py` architecture (the trainer reports the
-exact parameter count). It does not accept a model/executable path or expose an
-architecture picker. From `training/`, start it with `uv run lm-ui` and open
-http://127.0.0.1:5174. Trainer cwd stays `training/`; inputs stay under `data/` and
-run artifacts under `runs/`.
+`datasets.json` records each dataset's source, license review and eligibility;
+[`registry.py`](registry.py) validates it with pydantic.
+Paths in it are relative to this `data/` directory. [Recipes](../recipes/README.md)
+select a dataset by `id` from the `DATASETS` table in `trainer/recipe.py`, which maps
+it to its fetch module. Raw text is never baked into the Modal image: each worker
+runs that module, which downloads and verifies the file.
+
 
 ## Registered datasets
 
 Both registered datasets are character-level Shakespeare learning corpora for
 exercising training, checkpointing and sampling. Their text is not committed to
-Git. From `training/`, fetch them before starting the UI:
+Git. Modal workers fetch them automatically; to inspect them locally, run from
+`training/`:
 
 ```sh
 uv run python -m training_data.fetching.fetch_tinyshakespeare
@@ -44,11 +45,12 @@ language capability. Research corpus choices and language mixtures remain undeci
    not eligibility. Keep record-level source/revision/license/filtering provenance
    separately when aggregating documents, and inspect for credentials and personal
    information. Do not commit private or unreviewed corpus content.
-2. Prepare one nonempty UTF-8 text file under this directory. Local source material
-   can live under `raw/`; derived files under `cache/`. Both directories are ignored
-   by Git. The initial UI limits each file to 64 MiB and each run to small local
-   experiments; this is not a large-corpus ingestion system. Use enough text for
-   the trainer's context window and held-out split.
+2. Write a fetch module in `fetching/` whose `main()` downloads one nonempty UTF-8
+   text file to its `DESTINATION` under `raw/` and verifies a pinned SHA-256 (see
+   the existing fetchers).
+   `raw/` and `cache/` are ignored by Git and excluded from the Modal image. The
+   trainer reads the whole file into RAM; this is not a large-corpus ingestion
+   system. Use enough text for the trainer's context window and held-out split.
 3. Add an object to the `datasets` array in `datasets.json` with all required fields:
 
    | Field | Meaning |
@@ -60,18 +62,13 @@ language capability. Research corpus choices and language mixtures remain undeci
    | `source` | Authorship or source URL/repository and pinned revision; reference retained record-level provenance when applicable |
    | `license_notes` | Actual terms and eligibility review, obligations and limits; do not invent approvals |
    | `languages` | Nonempty array of language identifiers, e.g. `["en"]` |
-   | `fetch` | Optional module in `fetching/` whose `main()` downloads and verifies the file; required for recipes and Modal runs |
    | `training_eligible` | Boolean; `true` only after the above review for the intended use |
 
-   The file must exist even for an ineligible entry. Ineligible entries remain
-   visible but cannot be selected for a run. Do not add an undecided candidate
-   source as an eligible entry.
-4. Restart the UI to reload and validate the registry. Invalid metadata or missing
-   files prevent startup with an error rather than silently changing the registry.
-   On Start, the UI validates UTF-8 and stores the selected metadata, file size and
-   SHA-256 alongside the run in `runs/<id>/ui.json`. Do not modify a dataset while
-   a run is starting or running: the trainer independently fingerprints its input
-   in `config.json` and checkpoints, and owns resume compatibility checks.
+   Do not add an undecided candidate source as an eligible entry.
+4. Add the `id` to `DatasetName` and `DATASETS` in `trainer/recipe.py`, mapped to
+   the fetch module. Recipes refuse datasets that are not `training_eligible`. Reference the `id` from a recipe and launch a `--smoke` run. The trainer
+   fingerprints the exact bytes it trained on in each run's `config.json` and
+   checkpoints.
 
 Dataset definitions and fetching scripts are tracked; `raw/`, `cache/` and
 `../runs/` are not. Each research dataset needs its own evidence; this README is not a license

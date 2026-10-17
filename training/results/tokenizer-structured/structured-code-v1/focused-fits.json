@@ -1,0 +1,539 @@
+[
+  {
+    "vocab": 16384,
+    "training_seconds": 9.156001359,
+    "tokenizer_sha256": "e63d7d483dde1aa536251a2342d6809ff6d327bf958304ead50fd817e72081d5",
+    "corpus_manifest_sha256": "a4328e99a51bee64daaee66efe25e80ce01a263d568a69a130b94f687edef407",
+    "execution": "modal-cpu",
+    "general_metrics": {
+      "sources": {
+        "fineweb_edu": {
+          "bytes": 3355444,
+          "tokens": 1020901,
+          "chunks": 927,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.286747686602325,
+          "chunk_tokens_p95": 2532
+        },
+        "code_python": {
+          "bytes": 10066330,
+          "tokens": 2609022,
+          "chunks": 2092,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.8582771628602597,
+          "chunk_tokens_p95": 2427
+        },
+        "finemath_4plus": {
+          "bytes": 6710887,
+          "tokens": 2335747,
+          "chunks": 1789,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 2.8731223886833632,
+          "chunk_tokens_p95": 3059
+        },
+        "pes2o": {
+          "bytes": 3355444,
+          "tokens": 1011474,
+          "chunks": 422,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.317380377548014,
+          "chunk_tokens_p95": 2800
+        },
+        "pubmed": {
+          "bytes": 1006633,
+          "tokens": 337939,
+          "chunks": 128,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 2.978741725577693,
+          "chunk_tokens_p95": 3348
+        },
+        "arxiv": {
+          "bytes": 671089,
+          "tokens": 231007,
+          "chunks": 83,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 2.905059154051609,
+          "chunk_tokens_p95": 3729
+        },
+        "pressbooks": {
+          "bytes": 1006633,
+          "tokens": 298450,
+          "chunks": 359,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.3728698274417828,
+          "chunk_tokens_p95": 2266
+        },
+        "libretexts": {
+          "bytes": 1006632,
+          "tokens": 302996,
+          "chunks": 285,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.3222616800221787,
+          "chunk_tokens_p95": 2508
+        },
+        "doab": {
+          "bytes": 1342177,
+          "tokens": 421327,
+          "chunks": 315,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.1855945619435735,
+          "chunk_tokens_p95": 2817
+        },
+        "gutenberg": {
+          "bytes": 1677721,
+          "tokens": 561130,
+          "chunks": 210,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 2.989897171778376,
+          "chunk_tokens_p95": 3154
+        },
+        "pre_1929_books": {
+          "bytes": 2348810,
+          "tokens": 743797,
+          "chunks": 291,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.157864309751182,
+          "chunk_tokens_p95": 2958
+        },
+        "library_of_congress": {
+          "bytes": 1006632,
+          "tokens": 326527,
+          "chunks": 127,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.0828446039684314,
+          "chunk_tokens_p95": 3107
+        }
+      },
+      "bytes": 33554432,
+      "tokens": 10200317,
+      "bytes_per_token": 3.2895479620878447,
+      "evaluation_seconds": 17.576802950999998,
+      "evaluation_mib_per_second": 1.8205813701848108,
+      "vocabulary_used": 15530,
+      "vocabulary_use_fraction": 0.9478759765625,
+      "vocabulary_unseen": 854,
+      "vocabulary_used_at_most_10_times": 1325,
+      "roundtrip_failures": 0,
+      "unk_tokens": 0,
+      "probes": [
+        {
+          "text": "def square(x):\r\n\treturn x ** 2\r\n",
+          "tokens": 10,
+          "roundtrip": true
+        },
+        {
+          "text": "\u222b\u2080\u00b9 x\u00b2 dx = \u2153",
+          "tokens": 17,
+          "roundtrip": true
+        },
+        {
+          "text": "12345678901234567890",
+          "tokens": 7,
+          "roundtrip": true
+        },
+        {
+          "text": "na\u00efve caf\u00e9 \u4e2d\u6587 \u0627\u0644\u0639\u0631\u0628\u064a\u0629 \ud83d\ude00",
+          "tokens": 31,
+          "roundtrip": true
+        },
+        {
+          "text": "\u0000\t \r\n",
+          "tokens": 3,
+          "roundtrip": true
+        },
+        {
+          "text": "HTTPRequestHandler snake_case_identifier",
+          "tokens": 6,
+          "roundtrip": true
+        },
+        {
+          "text": "e\u0301 \u2260 \u00e9",
+          "tokens": 9,
+          "roundtrip": true
+        }
+      ],
+      "fragmentation": {
+        "electromagnetism": 6,
+        "deoxyribonucleic": 9,
+        "Schr\u00f6dinger": 6,
+        "HTTPRequestHandler": 2,
+        "get_user_configuration": 3,
+        "np.linalg.eigh": 4,
+        "123456789": 3,
+        "0.000001": 4,
+        "\\frac{a}{b}": 7
+      }
+    },
+    "general_evaluation_sha256": "e4e66512ca51226f56844d61a4d0c065064900b6a6d0bd0243e9e64b8698024f"
+  },
+  {
+    "vocab": 32768,
+    "training_seconds": 11.375954247,
+    "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+    "corpus_manifest_sha256": "a4328e99a51bee64daaee66efe25e80ce01a263d568a69a130b94f687edef407",
+    "execution": "modal-cpu",
+    "general_metrics": {
+      "sources": {
+        "fineweb_edu": {
+          "bytes": 3355444,
+          "tokens": 936322,
+          "chunks": 927,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.583643233844767,
+          "chunk_tokens_p95": 2327
+        },
+        "code_python": {
+          "bytes": 10066330,
+          "tokens": 2469754,
+          "chunks": 2092,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 4.075843181142737,
+          "chunk_tokens_p95": 2286
+        },
+        "finemath_4plus": {
+          "bytes": 6710887,
+          "tokens": 2164157,
+          "chunks": 1789,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.10092428599219,
+          "chunk_tokens_p95": 2854
+        },
+        "pes2o": {
+          "bytes": 3355444,
+          "tokens": 923008,
+          "chunks": 422,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.635335771737623,
+          "chunk_tokens_p95": 2595
+        },
+        "pubmed": {
+          "bytes": 1006633,
+          "tokens": 311772,
+          "chunks": 128,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.2287472896860527,
+          "chunk_tokens_p95": 3130
+        },
+        "arxiv": {
+          "bytes": 671089,
+          "tokens": 210824,
+          "chunks": 83,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.1831717451523547,
+          "chunk_tokens_p95": 3373
+        },
+        "pressbooks": {
+          "bytes": 1006633,
+          "tokens": 272469,
+          "chunks": 359,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.694486345235605,
+          "chunk_tokens_p95": 2091
+        },
+        "libretexts": {
+          "bytes": 1006632,
+          "tokens": 278042,
+          "chunks": 285,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.620431445608937,
+          "chunk_tokens_p95": 2344
+        },
+        "doab": {
+          "bytes": 1342177,
+          "tokens": 383761,
+          "chunks": 315,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.49742938964616,
+          "chunk_tokens_p95": 2570
+        },
+        "gutenberg": {
+          "bytes": 1677721,
+          "tokens": 520584,
+          "chunks": 210,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.2227671230771593,
+          "chunk_tokens_p95": 2958
+        },
+        "pre_1929_books": {
+          "bytes": 2348810,
+          "tokens": 686411,
+          "chunks": 291,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.4218711529972565,
+          "chunk_tokens_p95": 2744
+        },
+        "library_of_congress": {
+          "bytes": 1006632,
+          "tokens": 301653,
+          "chunks": 127,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.337052838857893,
+          "chunk_tokens_p95": 2890
+        }
+      },
+      "bytes": 33554432,
+      "tokens": 9458757,
+      "bytes_per_token": 3.5474462447867094,
+      "evaluation_seconds": 22.144963078000004,
+      "evaluation_mib_per_second": 1.4450238588020279,
+      "vocabulary_used": 28593,
+      "vocabulary_use_fraction": 0.872589111328125,
+      "vocabulary_unseen": 4175,
+      "vocabulary_used_at_most_10_times": 6736,
+      "roundtrip_failures": 0,
+      "unk_tokens": 0,
+      "probes": [
+        {
+          "text": "def square(x):\r\n\treturn x ** 2\r\n",
+          "tokens": 10,
+          "roundtrip": true
+        },
+        {
+          "text": "\u222b\u2080\u00b9 x\u00b2 dx = \u2153",
+          "tokens": 17,
+          "roundtrip": true
+        },
+        {
+          "text": "12345678901234567890",
+          "tokens": 7,
+          "roundtrip": true
+        },
+        {
+          "text": "na\u00efve caf\u00e9 \u4e2d\u6587 \u0627\u0644\u0639\u0631\u0628\u064a\u0629 \ud83d\ude00",
+          "tokens": 30,
+          "roundtrip": true
+        },
+        {
+          "text": "\u0000\t \r\n",
+          "tokens": 3,
+          "roundtrip": true
+        },
+        {
+          "text": "HTTPRequestHandler snake_case_identifier",
+          "tokens": 4,
+          "roundtrip": true
+        },
+        {
+          "text": "e\u0301 \u2260 \u00e9",
+          "tokens": 8,
+          "roundtrip": true
+        }
+      ],
+      "fragmentation": {
+        "electromagnetism": 6,
+        "deoxyribonucleic": 8,
+        "Schr\u00f6dinger": 5,
+        "HTTPRequestHandler": 1,
+        "get_user_configuration": 3,
+        "np.linalg.eigh": 4,
+        "123456789": 3,
+        "0.000001": 4,
+        "\\frac{a}{b}": 7
+      }
+    },
+    "general_evaluation_sha256": "e4e66512ca51226f56844d61a4d0c065064900b6a6d0bd0243e9e64b8698024f"
+  },
+  {
+    "vocab": 50000,
+    "training_seconds": 9.773740467,
+    "tokenizer_sha256": "ce4bf31da579b5be65d25bea6670d071cdbbf2ef95a22ec26807cd8fc997660c",
+    "corpus_manifest_sha256": "a4328e99a51bee64daaee66efe25e80ce01a263d568a69a130b94f687edef407",
+    "execution": "modal-cpu",
+    "general_metrics": {
+      "sources": {
+        "fineweb_edu": {
+          "bytes": 3355444,
+          "tokens": 887035,
+          "chunks": 927,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.782763927015281,
+          "chunk_tokens_p95": 2216
+        },
+        "code_python": {
+          "bytes": 10066330,
+          "tokens": 2411019,
+          "chunks": 2092,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 4.175135077740988,
+          "chunk_tokens_p95": 2224
+        },
+        "finemath_4plus": {
+          "bytes": 6710887,
+          "tokens": 2067410,
+          "chunks": 1789,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.2460358612950504,
+          "chunk_tokens_p95": 2725
+        },
+        "pes2o": {
+          "bytes": 3355444,
+          "tokens": 880780,
+          "chunks": 422,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.8096278298780626,
+          "chunk_tokens_p95": 2488
+        },
+        "pubmed": {
+          "bytes": 1006633,
+          "tokens": 298208,
+          "chunks": 128,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.3756069589011695,
+          "chunk_tokens_p95": 3008
+        },
+        "arxiv": {
+          "bytes": 671089,
+          "tokens": 201611,
+          "chunks": 83,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.32863286229422,
+          "chunk_tokens_p95": 3256
+        },
+        "pressbooks": {
+          "bytes": 1006633,
+          "tokens": 258196,
+          "chunks": 359,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.8987164789539728,
+          "chunk_tokens_p95": 1950
+        },
+        "libretexts": {
+          "bytes": 1006632,
+          "tokens": 265207,
+          "chunks": 285,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.7956464195892266,
+          "chunk_tokens_p95": 2232
+        },
+        "doab": {
+          "bytes": 1342177,
+          "tokens": 364241,
+          "chunks": 315,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.6848597494515993,
+          "chunk_tokens_p95": 2448
+        },
+        "gutenberg": {
+          "bytes": 1677721,
+          "tokens": 497991,
+          "chunks": 210,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.3689785558373546,
+          "chunk_tokens_p95": 2852
+        },
+        "pre_1929_books": {
+          "bytes": 2348810,
+          "tokens": 657482,
+          "chunks": 291,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.5724324011912114,
+          "chunk_tokens_p95": 2649
+        },
+        "library_of_congress": {
+          "bytes": 1006632,
+          "tokens": 288605,
+          "chunks": 127,
+          "roundtrip_failures": 0,
+          "unk_tokens": 0,
+          "bytes_per_token": 3.4879229396580103,
+          "chunk_tokens_p95": 2684
+        }
+      },
+      "bytes": 33554432,
+      "tokens": 9077785,
+      "bytes_per_token": 3.6963237177351083,
+      "evaluation_seconds": 21.129434848000002,
+      "evaluation_mib_per_second": 1.5144749601776002,
+      "vocabulary_used": 39147,
+      "vocabulary_use_fraction": 0.78294,
+      "vocabulary_unseen": 10853,
+      "vocabulary_used_at_most_10_times": 13602,
+      "roundtrip_failures": 0,
+      "unk_tokens": 0,
+      "probes": [
+        {
+          "text": "def square(x):\r\n\treturn x ** 2\r\n",
+          "tokens": 10,
+          "roundtrip": true
+        },
+        {
+          "text": "\u222b\u2080\u00b9 x\u00b2 dx = \u2153",
+          "tokens": 17,
+          "roundtrip": true
+        },
+        {
+          "text": "12345678901234567890",
+          "tokens": 7,
+          "roundtrip": true
+        },
+        {
+          "text": "na\u00efve caf\u00e9 \u4e2d\u6587 \u0627\u0644\u0639\u0631\u0628\u064a\u0629 \ud83d\ude00",
+          "tokens": 30,
+          "roundtrip": true
+        },
+        {
+          "text": "\u0000\t \r\n",
+          "tokens": 3,
+          "roundtrip": true
+        },
+        {
+          "text": "HTTPRequestHandler snake_case_identifier",
+          "tokens": 4,
+          "roundtrip": true
+        },
+        {
+          "text": "e\u0301 \u2260 \u00e9",
+          "tokens": 8,
+          "roundtrip": true
+        }
+      ],
+      "fragmentation": {
+        "electromagnetism": 6,
+        "deoxyribonucleic": 8,
+        "Schr\u00f6dinger": 5,
+        "HTTPRequestHandler": 1,
+        "get_user_configuration": 3,
+        "np.linalg.eigh": 4,
+        "123456789": 3,
+        "0.000001": 4,
+        "\\frac{a}{b}": 7
+      }
+    },
+    "general_evaluation_sha256": "e4e66512ca51226f56844d61a4d0c065064900b6a6d0bd0243e9e64b8698024f"
+  }
+]

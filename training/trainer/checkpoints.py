@@ -20,8 +20,6 @@ def rng_state(batch_generator):
     }
     if torch.cuda.is_available():
         state["cuda"] = torch.cuda.get_rng_state_all()
-    if torch.backends.mps.is_available():
-        state["mps"] = torch.mps.get_rng_state()
     return state
 
 
@@ -31,8 +29,6 @@ def restore_rng(state, batch_generator):
     batch_generator.set_state(state["batches"])
     if "cuda" in state:
         torch.cuda.set_rng_state_all(state["cuda"])
-    if "mps" in state:
-        torch.mps.set_rng_state(state["mps"])
 
 
 def load_checkpoint(path):
@@ -45,10 +41,21 @@ def load_checkpoint(path):
 
 def validate_resume(checkpoint, config, fingerprint, steps):
     old = checkpoint["config"]
+
+    def model_settings(record):
+        settings = dict(record["model"])
+        name = record.get("model_name", "100m").removeprefix("model_")
+        if name == "100m":
+            settings.setdefault("architecture_version", 1)
+        return settings
+
     compatible = (
         checkpoint["dataset_fingerprint"] == fingerprint
-        and old["model"] == config["model"]
+        and model_settings(old) == model_settings(config)
         and old["tokenizer"] == config["tokenizer"]
+        # Matching dimensions alone do not identify the architecture/optimizer layout.
+        and old.get("model_name", "100m").removeprefix("model_")
+        == config.get("model_name", "100m").removeprefix("model_")
     )
     fixed = (
         "batch_size",
@@ -104,7 +111,7 @@ def save_checkpoint(
     torch.save(state, path)
 
 
-def runtime_provenance(device, model_source, model_definition=None):
+def runtime_provenance(device, model_source, model_definition=None, *, model_dependencies=None):
     root = Path(__file__).resolve().parent.parent
     try:
         commit = subprocess.check_output(
@@ -118,13 +125,14 @@ def runtime_provenance(device, model_source, model_definition=None):
         "training_config": root / "trainer" / "config.py",
         "checkpoints": root / "trainer" / "checkpoints.py",
         "sampling": root / "trainer" / "sampling.py",
-        "cli": root / "cli.py",
         "data": root / "data" / "loading.py",
         "dependencies": root / "uv.lock",
     }
     # A scaled model imports its modules from another file; hash that lineage too.
     if model_definition and Path(model_definition) != Path(model_source):
         files["model_definition"] = Path(model_definition)
+    # Variants can inherit both a scaled configuration and the original block definition.
+    files.update({name: Path(path) for name, path in (model_dependencies or {}).items()})
     return {
         "python": platform.python_version(),
         "torch": str(torch.__version__),

@@ -3,8 +3,9 @@
 The complete, readable architecture is in [model.py](model.py): six pre-LayerNorm
 causal decoder blocks, width 384, six attention heads, learned positions, GELU
 MLPs, and a separate output projection. With 65 characters and context 256 it has
-**10,795,776 parameters**. [`100m/model.py`](../100m/model.py) imports this definition unchanged and only
-scales its dimensions; the local UI remains separate.
+**10,795,776 parameters**. The [100M architecture](../100m/README.md) now defaults
+to RMSNorm, RoPE and SwiGLU; its explicit version-1 mode preserves this vanilla
+block design at larger dimensions. This published 10M definition is unchanged.
 
 The model starts from random weights and learns next-character prediction from
 Tiny Shakespeare. This is a learning benchmark, not an instruction-following
@@ -45,20 +46,10 @@ writes a report, metrics, source/runtime/dataset provenance and a sample.
 
 ## Export and publication
 
-Recover the selected trusted training checkpoint, then export safetensors rather
-than publishing optimizer or RNG state. Export checks the parameter count, selected
-update and hash of the exact architecture used for training.
-
-```bash
-uv run --with 'modal[api-proxy-support]==1.6.1' modal volume get \
-  lm-exploration-training shakespeare-10m-train-01/best.pt runs/shakespeare-10m-best.pt
-uv run --with huggingface-hub --with safetensors python publish_shakespeare.py \
-  --checkpoint runs/shakespeare-10m-best.pt --report results/shakespeare-10m-train-01.json \
-  --output runs/shakespeare-10m-hf --repo-id jfrick/shakespeare-vanilla-gpt-10m
-```
-
-Publishing uses `HF_TOKEN` from environment secrets, uploads only inference files,
-and requires a public destination. Use a new output directory for each export.
+The published model was exported with `publish_shakespeare.py`, removed after
+publication (see commit `ec5ebd1`). It exported the validation-selected checkpoint
+to safetensors without optimizer or RNG state, checked the parameter count,
+selected update and architecture hash, and uploaded only inference files.
 The public bundle includes `model.py`, `generate.py`, safetensors weights, exact
 configuration/tokenizer, provenance, requirements and the measured training report.
 From the downloaded bundle run `python generate.py --prompt 'ROMEO:' --tokens 300`.

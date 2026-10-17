@@ -1,0 +1,276 @@
+{
+  "status": "frozen",
+  "selected_vocab_size": 16384,
+  "selection_rule": "Prefer16K unless32K reduces total held-out tokens by at least10% and no individual source needs over2%moretokens; all roundtrip and bytecoverage checks must pass",
+  "token_reduction_32k_vs16k": 0.06466460276569841,
+  "worst_source_token_regression_32k_vs16k": -0.04324835307671859,
+  "candidates": {
+    "16384": {
+      "checks": {
+        "round_trip_cases": 109,
+        "unknown_tokens": 0,
+        "complete_byte_alphabet": true,
+        "digit_groups_max3": true,
+        "code_whitespace_CRLF_Unicode_math_preserved": true
+      },
+      "validation": {
+        "by_source": {
+          "fineweb_edu": {
+            "tokens": 206087,
+            "utf8_bytes": 838861,
+            "characters": 834052,
+            "chunks": 304,
+            "utf8_bytes_per_token": 4.070421715100904,
+            "characters_per_token": 4.047086909897277
+          },
+          "code_python": {
+            "tokens": 686357,
+            "utf8_bytes": 2516582,
+            "characters": 2515728,
+            "chunks": 798,
+            "utf8_bytes_per_token": 3.6665787629469797,
+            "characters_per_token": 3.6653345125058827
+          },
+          "finemath_4plus": {
+            "tokens": 494792,
+            "utf8_bytes": 1677722,
+            "characters": 1661887,
+            "chunks": 581,
+            "utf8_bytes_per_token": 3.390762178854953,
+            "characters_per_token": 3.35875883199405
+          },
+          "pes2o": {
+            "tokens": 200912,
+            "utf8_bytes": 838861,
+            "characters": 837231,
+            "chunks": 221,
+            "utf8_bytes_per_token": 4.17526578800669,
+            "characters_per_token": 4.167152783308115
+          },
+          "pubmed": {
+            "tokens": 72056,
+            "utf8_bytes": 251658,
+            "characters": 249049,
+            "chunks": 65,
+            "utf8_bytes_per_token": 3.4925335849894528,
+            "characters_per_token": 3.4563256356167424
+          },
+          "arxiv": {
+            "tokens": 49237,
+            "utf8_bytes": 167772,
+            "characters": 166965,
+            "chunks": 43,
+            "utf8_bytes_per_token": 3.4074374961918883,
+            "characters_per_token": 3.391047383065581
+          },
+          "pressbooks": {
+            "tokens": 60598,
+            "utf8_bytes": 251658,
+            "characters": 249836,
+            "chunks": 144,
+            "utf8_bytes_per_token": 4.152909336941813,
+            "characters_per_token": 4.122842338030958
+          },
+          "libretexts": {
+            "tokens": 67702,
+            "utf8_bytes": 251658,
+            "characters": 251308,
+            "chunks": 89,
+            "utf8_bytes_per_token": 3.717142772739358,
+            "characters_per_token": 3.7119730584030015
+          },
+          "doab": {
+            "tokens": 82242,
+            "utf8_bytes": 335544,
+            "characters": 334868,
+            "chunks": 95,
+            "utf8_bytes_per_token": 4.079959144962428,
+            "characters_per_token": 4.071739500498529
+          },
+          "gutenberg": {
+            "tokens": 118157,
+            "utf8_bytes": 419431,
+            "characters": 419309,
+            "chunks": 103,
+            "utf8_bytes_per_token": 3.5497769916297806,
+            "characters_per_token": 3.548744467107323
+          },
+          "pre_1929_books": {
+            "tokens": 147170,
+            "utf8_bytes": 587203,
+            "characters": 586130,
+            "chunks": 147,
+            "utf8_bytes_per_token": 3.9899639872256576,
+            "characters_per_token": 3.9826730991370525
+          },
+          "library_of_congress": {
+            "tokens": 65767,
+            "utf8_bytes": 251658,
+            "characters": 250828,
+            "chunks": 63,
+            "utf8_bytes_per_token": 3.826508735384007,
+            "characters_per_token": 3.813888424285736
+          }
+        },
+        "total_tokens": 2251077,
+        "total_utf8_bytes": 8388608,
+        "utf8_bytes_per_token": 3.7264864773617252
+      },
+      "sha256": "2a6bd2343ab29e3955dd7a5e17330e706afc8c650618b1339ceedab5e77fde04"
+    },
+    "32768": {
+      "checks": {
+        "round_trip_cases": 109,
+        "unknown_tokens": 0,
+        "complete_byte_alphabet": true,
+        "digit_groups_max3": true,
+        "code_whitespace_CRLF_Unicode_math_preserved": true
+      },
+      "validation": {
+        "by_source": {
+          "fineweb_edu": {
+            "tokens": 190606,
+            "utf8_bytes": 838861,
+            "characters": 834052,
+            "chunks": 304,
+            "utf8_bytes_per_token": 4.4010209542197,
+            "characters_per_token": 4.375790898502671
+          },
+          "code_python": {
+            "tokens": 640231,
+            "utf8_bytes": 2516582,
+            "characters": 2515728,
+            "chunks": 798,
+            "utf8_bytes_per_token": 3.9307406233062756,
+            "characters_per_token": 3.929406729758478
+          },
+          "finemath_4plus": {
+            "tokens": 469179,
+            "utf8_bytes": 1677722,
+            "characters": 1661887,
+            "chunks": 581,
+            "utf8_bytes_per_token": 3.575867632609303,
+            "characters_per_token": 3.5421171876831656
+          },
+          "pes2o": {
+            "tokens": 186233,
+            "utf8_bytes": 838861,
+            "characters": 837231,
+            "chunks": 221,
+            "utf8_bytes_per_token": 4.504362814323992,
+            "characters_per_token": 4.49561033758786
+          },
+          "pubmed": {
+            "tokens": 67094,
+            "utf8_bytes": 251658,
+            "characters": 249049,
+            "chunks": 65,
+            "utf8_bytes_per_token": 3.7508271976629803,
+            "characters_per_token": 3.7119414552717083
+          },
+          "arxiv": {
+            "tokens": 46017,
+            "utf8_bytes": 167772,
+            "characters": 166965,
+            "chunks": 43,
+            "utf8_bytes_per_token": 3.645870004563531,
+            "characters_per_token": 3.6283330073668427
+          },
+          "pressbooks": {
+            "tokens": 55850,
+            "utf8_bytes": 251658,
+            "characters": 249836,
+            "chunks": 144,
+            "utf8_bytes_per_token": 4.505962399283796,
+            "characters_per_token": 4.473339301700984
+          },
+          "libretexts": {
+            "tokens": 64774,
+            "utf8_bytes": 251658,
+            "characters": 251308,
+            "chunks": 89,
+            "utf8_bytes_per_token": 3.885169975607497,
+            "characters_per_token": 3.8797665730076885
+          },
+          "doab": {
+            "tokens": 76520,
+            "utf8_bytes": 335544,
+            "characters": 334868,
+            "chunks": 95,
+            "utf8_bytes_per_token": 4.385049660219551,
+            "characters_per_token": 4.376215368531103
+          },
+          "gutenberg": {
+            "tokens": 110417,
+            "utf8_bytes": 419431,
+            "characters": 419309,
+            "chunks": 103,
+            "utf8_bytes_per_token": 3.7986089098598947,
+            "characters_per_token": 3.7975040075350717
+          },
+          "pre_1929_books": {
+            "tokens": 137285,
+            "utf8_bytes": 587203,
+            "characters": 586130,
+            "chunks": 147,
+            "utf8_bytes_per_token": 4.277255344720836,
+            "characters_per_token": 4.269439487198165
+          },
+          "library_of_congress": {
+            "tokens": 61306,
+            "utf8_bytes": 251658,
+            "characters": 250828,
+            "chunks": 63,
+            "utf8_bytes_per_token": 4.104948944638371,
+            "characters_per_token": 4.091410302417382
+          }
+        },
+        "total_tokens": 2105512,
+        "total_utf8_bytes": 8388608,
+        "utf8_bytes_per_token": 3.984117877266907
+      },
+      "sha256": "3772ccd63dc00853a715bbc66cb5ff0b33dbcb6c271b571ba407f1d78c63efb3"
+    }
+  },
+  "corpus_manifest_sha256": "d4be138960e148686fa2607ace0a76e7ff883ab6a3596cf0a5a26a71c6a8e648",
+  "verified_parent_group_counts": {
+    "training": 7041,
+    "validation": 933
+  },
+  "fitting_token_counts_by_source": {
+    "fineweb_edu": 1634256,
+    "code_python": 5417800,
+    "finemath_4plus": 3966597,
+    "pes2o": 1614868,
+    "pubmed": 525938,
+    "arxiv": 425813,
+    "pressbooks": 481634,
+    "libretexts": 469971,
+    "doab": 704730,
+    "gutenberg": 936638,
+    "pre_1929_books": 1204138,
+    "library_of_congress": 515538
+  },
+  "fitting_token_shares_percent": {
+    "fineweb_edu": 9.130982307945152,
+    "code_python": 30.27055488735256,
+    "finemath_4plus": 22.162333826370112,
+    "pes2o": 9.022656877298765,
+    "pubmed": 2.938542415065973,
+    "arxiv": 2.3791198988977547,
+    "pressbooks": 2.691005284915494,
+    "libretexts": 2.625841291846131,
+    "doab": 3.937496427657715,
+    "gutenberg": 5.23322233906385,
+    "pre_1929_books": 6.727809336067581,
+    "library_of_congress": 2.8804351075189123
+  },
+  "fitting_total_tokens": 17897921,
+  "runtime": {
+    "python": "3.12.14",
+    "tokenizers": "0.22.2"
+  },
+  "code_sha256": "0af37ef2a99d03b39c4c64d2a6763001b29bc91a9245124ae27ddf368beff578",
+  "elapsed_seconds": 60.70944726900052,
+  "limits": "Bounded shard/sample convenience corpus; exact-document/chunk dedup and deterministic parent splits. No global near-duplicate audit or independent license audit. Weight quotas are bytes, not yet tokenizer tokens. Raw text and provenance retained only in ignored run cache. Tokenizer validation evaluates compression and encoding integrity, not model coherence. No model parameters trained."
+}

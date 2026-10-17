@@ -1,0 +1,71 @@
+"""Sample text from a trusted checkpoint: uv run lm-generate --checkpoint <path>.
+
+Model-agnostic: the architecture (model_name, e.g. model_10m or model_100m), its
+configuration and the character tokenizer are all read from the checkpoint, so no
+training settings are needed. Prompt characters outside the training vocabulary
+are errors. Output streams one token at a time as it is sampled. Sampling uses the
+full softmax distribution.
+
+For a downloaded Hugging Face bundle, use the generate.py shipped in that bundle.
+"""
+
+import argparse
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--checkpoint", required=True, help="trusted checkpoint file to load")
+    parser.add_argument("--prompt", default="", help="text to continue (default: empty)")
+    parser.add_argument("--max-new-tokens", type=int, default=300)
+    parser.add_argument("--seed", type=int, help="sampling seed (default: training seed + 2)")
+    parser.add_argument("--device", choices=("cpu", "mps", "cuda"), default="cpu")
+    return parser
+
+
+def load_model(checkpoint):
+    from trainer.recipe import MODELS
+
+    # model_name is the package (model_10m); older checkpoints have "100m" or nothing (100m).
+    name = checkpoint["config"].get("model_name", "100m").removeprefix("model_")
+    architecture = MODELS[name]
+    settings = dict(checkpoint["config"]["model"])
+    if name == "100m":
+        # Checkpoints before the modern 100M update used vanilla blocks.
+        settings.setdefault("architecture_version", 1)
+    model = architecture.GPT(architecture.ModelConfig(**settings))
+    model.load_state_dict(checkpoint["model"])
+    return model
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    # --help does not import PyTorch or the trainer.
+    import torch
+    from training_data.loading import CharacterTokenizer
+
+    from trainer.checkpoints import load_checkpoint
+    from trainer.sampling import sample_tokens
+
+    try:
+        if args.max_new_tokens < 0:
+            raise ValueError("--max-new-tokens must be nonnegative")
+        if args.device == "cuda" and not torch.cuda.is_available():
+            raise ValueError("CUDA is not available")
+        if args.device == "mps" and not torch.backends.mps.is_available():
+            raise ValueError("MPS is not available")
+        checkpoint = load_checkpoint(args.checkpoint)
+        model = load_model(checkpoint).to(args.device)
+        tokenizer = CharacterTokenizer(checkpoint["tokenizer"]["characters"])
+        seed = args.seed if args.seed is not None else checkpoint["config"]["training"]["seed"] + 2
+        # Print the prompt, then each sampled character the moment it is generated.
+        print(args.prompt, end="", flush=True)
+        for token in sample_tokens(model, tokenizer, args.prompt, args.max_new_tokens, seed):
+            print(tokenizer.decode([token]), end="", flush=True)
+        print()
+    except (ValueError, OSError) as error:
+        parser.error(str(error))
+
+
+if __name__ == "__main__":
+    main()
