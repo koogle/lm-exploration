@@ -736,3 +736,19 @@ a PDF of at most 20 pages and contain the full normalized catalog title in its
 first two pages. Original inventory identity and both retrieval URLs are retained.
 Eight live PDFs passed the integrated rules; this does not validate all remaining
 candidates. See [recovery evidence](research/ecb-box-recovery-20261017.md).
+
+### Targeted EMA scientific-history expansion
+
+The scheduled EMA mapping now includes exact EPAR types `variation-report`,
+`scientific-discussion` and `scientific-discussion-variation`, each as its own
+collection partition. Offline enumeration of the cached official inventory found
+4,121 supported document-language URLs: 3,401 variation reports, 529 scientific
+discussions and 191 scientific-discussion variations. URL overlap with the prior
+configured collections and between these types was zero; organization-wide text
+hash deduplication still applies.
+
+The existing extraction pipeline will fetch and validate these documents during
+subsequent workers. No new full-text sample or uploaded-row total is claimed by
+this inventory-only investigation. Unsupported formats remain explicit gaps.
+The broad `epar_documents` umbrella remains excluded to avoid overlapping types
+and package-listing-heavy discovery. See [inventory evidence](research/ema-targeted-expansion-20261017.md).
