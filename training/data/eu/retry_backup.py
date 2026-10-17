@@ -29,6 +29,7 @@ def main():
             result = subprocess.run(
                 [sys.executable, "backup_code.py"],
                 cwd=ROOT,
+                check=False,
                 capture_output=True,
                 text=True,
                 timeout=180,
