@@ -70,7 +70,7 @@ class AuditCache:
                 return
             except Exception as error:
                 status = getattr(getattr(error, "response", None), "status_code", None)
-                if not (transient_error(error) or commit_busy(error) or status == 409):
+                if not (transient_error(error) or commit_busy(error) or status in {409, 412}):
                     raise
                 head = self._head()
                 current = self._body(head)

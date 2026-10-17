@@ -61,6 +61,7 @@ class Control:
         self.sha = "first"
         self.fail_once = None
         self.writes = []
+        self.conflict_status = 409
 
     def repo_info(self, **kwargs):
         return SimpleNamespace(sha=self.sha)
@@ -78,7 +79,9 @@ class Control:
             self.sha = "concurrent"
             if failure == "audit":
                 self.files["tokens/ecb.json"] = b'{"other": true}'
-            raise Conflict("parent conflict")
+            error = Conflict("parent conflict")
+            error.response = SimpleNamespace(status_code=self.conflict_status)
+            raise error
         self.writes.append({op.path_in_repo for op in operations})
         for op in operations:
             self.files[op.path_in_repo] = op.path_or_fileobj
@@ -121,9 +124,11 @@ def test_content_and_row_count_validation():
         measure_shard(body, {**shard, "sha256": "wrong"}, Encoding())
 
 
-def test_safe_cas_rebase_only_unrelated_control_changes(monkeypatch):
+@pytest.mark.parametrize("status", [409, 412])
+def test_safe_cas_rebase_only_unrelated_control_changes(monkeypatch, status):
     monkeypatch.setattr("token_audit.time.sleep", lambda _: None)
     control = Control()
+    control.conflict_status = status
     cache = AuditCache(control, "ecb")
     assert cache.load() is None
     control.fail_once = "progress"
