@@ -32,6 +32,14 @@ def transient_error(error):
     )
 
 
+def commit_busy(error):
+    """HF's temporary repository lock, distinct from a stale-parent conflict."""
+    return (
+        getattr(getattr(error, "response", None), "status_code", None) == 409
+        and "another commit operation is in progress" in str(error).lower()
+    )
+
+
 def retry_read(operation, **kwargs):
     for attempt in range(3):
         try:
@@ -450,7 +458,7 @@ class HFStore:
                 )
                 return result.oid
             except Exception as error:
-                if not transient_error(error):
+                if not (transient_error(error) or commit_busy(error)):
                     raise
                 try:
                     head = retry_read(
@@ -465,5 +473,5 @@ class HFStore:
                 # Another writer advanced HEAD. Never rebase this stale state.
                 if head != revision or attempt == 2:
                     raise
-                time.sleep(attempt + 1)
+                time.sleep((attempt + 1) * (5 if commit_busy(error) else 1))
         raise AssertionError("unreachable")

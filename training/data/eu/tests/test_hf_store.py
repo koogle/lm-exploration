@@ -488,3 +488,46 @@ def test_download_network_failure_retries_and_is_bounded(tmp_path, monkeypatch):
         store.load()
     assert len(calls) == 3
     assert sleeps == [1, 2]
+
+
+@pytest.mark.parametrize("advance_head", [False, True])
+def test_busy_repository_retries_only_with_unchanged_parent(tmp_path, monkeypatch, advance_head):
+    import httpx
+
+    import hf_store
+
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    before = copy.deepcopy(state)
+    original = api.create_commit
+    calls, sleeps = [], []
+    monkeypatch.setattr(hf_store.time, "sleep", sleeps.append)
+
+    def busy(**kwargs):
+        calls.append(kwargs)
+        assert kwargs["parent_commit"] == revision
+        if len(calls) == 1:
+            if advance_head:
+                api.sha = "other-writer"
+                api.files["state/progress.json"] = b'{"different": true}'
+            raise httpx.HTTPStatusError(
+                "409 Another commit operation is in progress for this repository.",
+                request=httpx.Request("POST", "https://huggingface.co/test"),
+                response=httpx.Response(409),
+            )
+        return original(**kwargs)
+
+    api.create_commit = busy
+    if advance_head:
+        with pytest.raises(httpx.HTTPStatusError):
+            store.commit(state, revision, [record()])
+        assert state == before
+        assert len(calls) == 1
+        assert sleeps == []
+    else:
+        store.commit(state, revision, [record()])
+        assert len(calls) == 2
+        assert sleeps == [5]
+        assert len(api.commits) == 1
+        assert state["metrics"]["rows"] == 1

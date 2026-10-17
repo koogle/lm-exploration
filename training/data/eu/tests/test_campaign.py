@@ -14,7 +14,7 @@ class Store:
         self.revision = 0
 
     def ensure(self, private):
-        assert private
+        assert private is False  # Document repositories are now public.
 
     def load(self):
         return copy.deepcopy(self.state), self.revision

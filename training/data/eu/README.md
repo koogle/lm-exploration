@@ -483,7 +483,10 @@ Transient HF read failures (network errors and HTTP 502/503/504) use at most
 three attempts. A transient commit error is accepted as success only when a
 fresh pinned head contains exactly the intended progress bytes. Retries retain
 the original parent revision; a different writer's state is never overwritten.
-HTTP 403/404/409/429 are not retried by this storage layer.
+HTTP 403/404/409/429 reads are not retried by this storage layer. A commit-only
+exception handles HF's explicit “another commit operation is in progress” 409: it
+rechecks HEAD and retries only the unchanged-parent write, up to three attempts
+with 5/10-second pauses. Ordinary stale-parent conflicts still propagate.
 
 A source can finish its supported inventory while still retaining unsupported or
 retry-exhausted candidates. Runs therefore report both `pending_candidates`
