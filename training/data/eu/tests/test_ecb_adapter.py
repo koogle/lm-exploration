@@ -136,3 +136,92 @@ def test_alternatives_only_for_verified_standalone_articles():
         )
         == []
     )
+
+
+def test_failed_probe_is_only_inferred_not_trusted():
+    from adapters.ecb import VERIFIED_HISTORICAL_ARTICLES, alternate_document_urls
+
+    url = "https://www.ecb.europa.eu/press/economic-bulletin/articles/2014/pdf/art1_mb201411_pp79-90.en.pdf"
+    record = {"url": url, "collection_id": "economic_bulletin_articles"}
+    assert url not in VERIFIED_HISTORICAL_ARTICLES
+    assert alternate_document_urls(record) == [
+        "https://www.ecb.europa.eu/pub/pdf/other/art1_mb201411_pp79-90.en.pdf"
+    ]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "art2_mb201201en_pp75-86en.pdf",
+        "art1_mb201201.en.pdf",
+        "pp75_86_mb201201en.pdf",
+        "p75-86_mb201201en.pdf",
+        "mb201201en_pp75-86en.pdf",
+        "mb201201_75-86en.pdf",
+    ],
+)
+def test_monthly_filename_families(name):
+    from adapters.ecb import alternate_document_urls
+
+    candidate = {
+        "url": f"https://www.ecb.europa.eu/press/economic-bulletin/articles/2012/pdf/{name}",
+        "collection_id": "economic_bulletin_articles",
+    }
+    assert alternate_document_urls(candidate) == ["https://www.ecb.europa.eu/pub/pdf/other/" + name]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "2012/pdf/art2_mb201101en_pp75-86en.pdf",  # year mismatch
+        "2012/pdf/art2_mb201213en_pp75-86en.pdf",  # bad month
+        "2012/pdf/art2_mb201201en_pp86-75en.pdf",  # reversed pages
+        "2012/pdf/art2_mb201201en_pp0-75en.pdf",  # zero page
+        "2015/pdf/art2_mb201501en_pp75-86en.pdf",  # after Monthly Bulletin
+        "2012/pdf/mb201201en.pdf",  # whole issue
+        "2012/pdf/art2_mb201201en_pp75-86en.pdf?x=1",  # query not allowed
+        "2012/pdf/../art2_mb201201en_pp75-86en.pdf",  # nested path
+    ],
+)
+def test_inferred_rule_exclusions(path):
+    from adapters.ecb import alternate_document_urls
+
+    assert (
+        alternate_document_urls(
+            {
+                "url": "https://www.ecb.europa.eu/press/economic-bulletin/articles/" + path,
+                "collection_id": "economic_bulletin_articles",
+            }
+        )
+        == []
+    )
+
+
+def test_inferred_pdf_requires_title_in_first_two_pages(monkeypatch):
+    from types import SimpleNamespace
+
+    from adapters import ecb
+
+    candidate = {
+        "url": "https://www.ecb.europa.eu/press/economic-bulletin/articles/2012/pdf/art2_mb201201en_pp75-86en.pdf",
+        "collection_id": "economic_bulletin_articles",
+        "title": "The euro-area credit market",
+    }
+    pages = ["Cover", "THE EURO AREA\nCREDIT MARKET", "third page"]
+    monkeypatch.setattr(
+        ecb,
+        "PdfReader",
+        lambda data: SimpleNamespace(
+            pages=[SimpleNamespace(extract_text=lambda text=text: text) for text in pages]
+        ),
+    )
+    ecb.validate_alternate(candidate, b"%PDF-1.4 fake fixture")
+    pages[:] = ["Cover", "Wrong article", candidate["title"]]
+    with pytest.raises(ValueError, match="title mismatch"):
+        ecb.validate_alternate(candidate, b"%PDF-1.4 fake fixture")
+    with pytest.raises(ValueError, match="not a PDF"):
+        ecb.validate_alternate(candidate, b"<html>error</html>")
+    with pytest.raises(ValueError, match="too short"):
+        ecb.validate_alternate({**candidate, "title": "Credit"}, b"%PDF-1.4")
+    # Exact mappings use already recorded evidence, not this inferred-body check.
+    ecb.validate_alternate({**candidate, "url": next(iter(ecb.VERIFIED_HISTORICAL_ARTICLES))}, b"")

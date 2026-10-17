@@ -418,3 +418,82 @@ def test_verified_fallback_only_after_404(harness, status):
     else:
         assert h.fetched == [original["url"]]
         assert not store.rows
+
+
+def test_weighted_schedule_preserves_coverage_and_no_repeats():
+    groups = [[f"a{i}" for i in range(7)], [f"b{i}" for i in range(2)], ["c0"]]
+    result = list(pipeline.round_robin(groups, [3, 1, 1]))
+    assert result[:5] == ["a0", "a1", "a2", "b0", "c0"]
+    assert result[5:9] == ["a3", "a4", "a5", "b1"]
+    assert len(result) == len(set(result)) == 10
+    assert result[-1] == "a6"
+
+
+@pytest.mark.parametrize("weights", [[0], [True], [21], [1, 1]])
+def test_invalid_schedule_weights(weights):
+    with pytest.raises(ValueError):
+        list(pipeline.round_robin([["a"]], weights))
+
+
+def test_new_verified_alternate_can_recover_exhausted_original(harness):
+    h = harness
+    original = h.candidate("original")
+    alternate = h.candidate("alternate")
+    h.bodies[original["url"]] = {"http_status": 404, "error": "http_404"}
+    h.inventories.update({"a": [original], "b": []})
+    h.adapter.alternate_document_urls = lambda _: [alternate["url"]]
+    store = DurableStore()
+    key = pipeline.item_key(original)
+    store.state["failures"][key] = {"attempts": 3, "error": "http_404"}
+    h.run(store)
+    assert key in store.state["completed"]
+    assert key not in store.state["failures"]
+    assert len(store.rows) == 1
+
+
+def test_verified_alternate_retry_does_not_loop_or_bypass_cooldown(harness):
+    h = harness
+    record = h.candidate("original")
+    h.adapter.alternate_document_urls = lambda _: ["https://example.org/verified.pdf"]
+    store = DurableStore()
+    failure = {"attempts": 3, "error": "http_404", "retry_after_epoch": 1000}
+    store.state["failures"][pipeline.item_key(record)] = failure
+    assert not pipeline.pending(record, store.state, timestamp=999, adapter=h.adapter)
+    assert pipeline.pending(record, store.state, timestamp=1001, adapter=h.adapter)
+    failure["attempted_alternates"] = ["https://example.org/verified.pdf"]
+    assert not pipeline.pending(record, store.state, timestamp=1001, adapter=h.adapter)
+
+
+def test_unsupported_saved_inventory_is_preserved_without_fetch(harness):
+    h = harness
+    unsupported = h.candidate("spreadsheet")
+    supported = h.candidate("report")
+    h.inventories.update({"a": [unsupported, supported], "b": []})
+    h.adapter.supported_record = lambda record: record["document_id"] != "spreadsheet"
+    store = DurableStore()
+    result = h.run(store)
+    assert result["unsupported_candidates"] == 1
+    assert result["pending_candidates"] == 1
+    assert result["remaining_supported_candidates"] == 0
+    assert h.fetched == [supported["url"]]
+    assert pipeline.item_key(unsupported) not in store.state["completed"]
+
+
+def test_json_html_adapter_preserves_original_raw_hash(harness):
+    h = harness
+    candidate = h.candidate("api-document")
+    html = h.bodies[candidate["url"]]
+    raw = json.dumps({"html": html.decode()}).encode()
+    h.bodies[candidate["url"]] = raw
+    h.adapter.extract_document = lambda candidate, data: (
+        json.loads(data)["html"].encode(),
+        {"field": "html"},
+    )
+    h.inventories.update({"a": [candidate], "b": []})
+    store = DurableStore()
+    h.run(store)
+    row = store.rows[0]
+    assert row["raw_sha256"] == pipeline.digest(raw)
+    assert "Institution report" in row["text"]
+    provenance = json.loads(row["provenance_json"])["fetch"]
+    assert provenance["adapter_transform"] == {"field": "html"}

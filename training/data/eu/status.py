@@ -162,7 +162,12 @@ def source_status(source_id, config, audit=False, encoder=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", choices=["both", "ecb", "ema"], nargs="?", default="both")
+    parser.add_argument(
+        "source",
+        choices=["both", "all", "ecb", "ema", "eurlex", "commission-press"],
+        nargs="?",
+        default="both",
+    )
     parser.add_argument("--mapping", type=Path, default=ROOT / "pipeline_sources.json")
     parser.add_argument(
         "--audit", action="store_true", help="Download and verify all stored shards"
@@ -177,7 +182,11 @@ def main():
         import tiktoken
 
         encoder = tiktoken.get_encoding("o200k_base")
-    sources = ["ecb", "ema"] if args.source == "both" else [args.source]
+    sources = (
+        list(mapping["sources"])
+        if args.source == "all"
+        else (["ecb", "ema"] if args.source == "both" else [args.source])
+    )
     output = {"observed_at": datetime.now(UTC).isoformat(), "sources": []}
     failed = False
     for source in sources:

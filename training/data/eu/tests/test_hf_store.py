@@ -313,3 +313,178 @@ def test_backfill_downloads_raw_when_metadata_has_no_size(tmp_path):
     store.migrate_metrics(state, revision)
     assert raw_path in api.downloads
     assert state["metrics"]["stored_raw_gzip_bytes"] == len(b"fallback-body")
+
+
+def http_error(status):
+    import httpx
+
+    return httpx.HTTPStatusError(
+        str(status),
+        request=httpx.Request("GET", "https://huggingface.co/test"),
+        response=httpx.Response(status),
+    )
+
+
+def test_read_retries_transient_errors(tmp_path, monkeypatch):
+    import hf_store
+
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    sleeps = []
+    monkeypatch.setattr(hf_store.time, "sleep", sleeps.append)
+    original = api.repo_info
+    calls = []
+
+    def flaky(**kwargs):
+        calls.append(kwargs)
+        if len(calls) < 3:
+            raise http_error(503)
+        return original(**kwargs)
+
+    api.repo_info = flaky
+    state, revision = store.load()
+    assert revision == "initial"
+    assert not state["shards"]
+    assert sleeps == [1, 2]
+
+
+@pytest.mark.parametrize("status", [403, 404, 409, 429])
+def test_read_nontransient_status_not_retried(tmp_path, monkeypatch, status):
+    import hf_store
+
+    api = FakeAPI(tmp_path)
+    calls = []
+    monkeypatch.setattr(hf_store.time, "sleep", lambda delay: pytest.fail("unexpected retry"))
+
+    def denied(**kwargs):
+        calls.append(kwargs)
+        raise http_error(status)
+
+    api.repo_info = denied
+    with pytest.raises(Exception, match=str(status)):
+        HFStore("owner/ecb", api).load()
+    assert len(calls) == 1
+
+
+def test_accepted_commit_lost_response_recovers_without_duplicate(tmp_path, monkeypatch):
+    import hf_store
+
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    original = api.create_commit
+    monkeypatch.setattr(hf_store.time, "sleep", lambda delay: pytest.fail("unexpected retry"))
+
+    def accepted_then_lost(**kwargs):
+        original(**kwargs)
+        raise http_error(503)
+
+    api.create_commit = accepted_then_lost
+    new_revision = store.commit(state, revision, [record()])
+    assert new_revision == api.sha
+    assert len(api.commits) == 1
+    assert state["metrics"]["rows"] == 1
+    assert json.loads(api.files["state/progress.json"]) == state
+
+
+def test_precommit_transient_retries_same_cas_fresh_operations(tmp_path, monkeypatch):
+    import hf_store
+
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    original = api.create_commit
+    operations = []
+    sleeps = []
+    monkeypatch.setattr(hf_store.time, "sleep", sleeps.append)
+
+    def flaky(**kwargs):
+        assert kwargs["parent_commit"] == revision
+        operations.append(kwargs["operations"])
+        if len(operations) < 3:
+            raise http_error(503)
+        return original(**kwargs)
+
+    api.create_commit = flaky
+    store.commit(state, revision, [record()])
+    assert sleeps == [1, 2]
+    assert operations[0][0] is not operations[1][0]
+    assert len(api.commits) == 1
+
+
+def test_intervening_writer_not_overwritten_after_transient_error(tmp_path, monkeypatch):
+    import hf_store
+
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    before = copy.deepcopy(state)
+    calls = []
+    monkeypatch.setattr(hf_store.time, "sleep", lambda delay: pytest.fail("unexpected retry"))
+
+    def other_writer(**kwargs):
+        calls.append(kwargs)
+        api.sha = "other-writer"
+        api.files["state/progress.json"] = b'{"different": true}'
+        raise http_error(503)
+
+    api.create_commit = other_writer
+    with pytest.raises(Exception, match="503"):
+        store.commit(state, revision, [record()])
+    assert state == before
+    assert len(calls) == 1
+    assert api.files["state/progress.json"] == b'{"different": true}'
+
+
+def test_commit_conflict_not_retried(tmp_path, monkeypatch):
+    import hf_store
+
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    calls = []
+    monkeypatch.setattr(hf_store.time, "sleep", lambda delay: pytest.fail("unexpected retry"))
+
+    def conflict(**kwargs):
+        calls.append(kwargs)
+        raise http_error(409)
+
+    api.create_commit = conflict
+    with pytest.raises(Exception, match="409"):
+        store.commit(state, revision, [record()])
+    assert len(calls) == 1
+
+
+def test_download_network_failure_retries_and_is_bounded(tmp_path, monkeypatch):
+    import httpx
+
+    import hf_store
+
+    api = FakeAPI(tmp_path)
+    api.files["state/progress.json"] = json.dumps(empty_state()).encode()
+    store = HFStore("owner/ecb", api)
+    original = api.hf_hub_download
+    calls, sleeps = [], []
+    monkeypatch.setattr(hf_store.time, "sleep", sleeps.append)
+
+    def flaky(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise httpx.ConnectError("disconnected")
+        return original(**kwargs)
+
+    api.hf_hub_download = flaky
+    assert store.load()[1] == "initial"
+    assert sleeps == [1]
+    calls.clear()
+    sleeps.clear()
+
+    def unavailable(**kwargs):
+        calls.append(kwargs)
+        raise httpx.ReadTimeout("unavailable")
+
+    api.hf_hub_download = unavailable
+    with pytest.raises(httpx.ReadTimeout):
+        store.load()
+    assert len(calls) == 3
+    assert sleeps == [1, 2]

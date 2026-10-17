@@ -418,9 +418,11 @@ or stopped before starting a new campaign for that organization.
 
 For a single source, a multi-round campaign can take
 `--after-campaign PREVIOUS_CAMPAIGN_ID`. Its supervisor waits read-only for up
-to 30 minutes for that campaign's `complete` status before claiming new work.
+to 30 minutes by default for that campaign's `complete` status before claiming new work.
 A missing, ambiguous, failed, or timed-out predecessor prevents collection.
-Waiting counts against the new supervisor's four-hour deadline. The local
+Use `--predecessor-wait-seconds` to set a bounded wait up to three hours.
+The wait allowance is added to the four-hour campaign deadline; Modal enforces
+a seven-hour outer timeout. Worker rounds retain their original bounds. The local
 launch record and compute reservation include the dependency; the new HF
 campaign plan is written only after the predecessor completes. This is a
 finite continuation, not a recurring schedule or a general distributed lock.
@@ -429,3 +431,62 @@ Launch only one successor per source.
 The [additional collection record](research/continuation-more-2026-10-16.json)
 captures the 2,866-document / 182,334,783-character checkpoint and the next
 three-round ECB supervisor. EMA's existing three-round campaign continues.
+
+## Sustained expansion: 17 October 2026
+
+The latest adapters share download limits, durable HF storage, raw provenance,
+text deduplication, and resumable Modal workers:
+
+| Source argument | HF repository | Initial collection scope |
+| --- | --- | --- |
+| `ecb` | `jfrick/eu-ecb` | Nine research, bulletin and press collections |
+| `ema` | `jfrick/eu-ema` | Six EPAR, news, guidance and committee collections |
+| `eurlex` | `jfrick/eu-eurlex` | CELLAR native multilingual XHTML, legislation years 2023/2024 |
+| `commission-press` | `jfrick/eu-commission-press` | Original English/French/German Press Corner full text |
+
+`uv run status.py all` includes all mapped organizations. `both` retains
+its original ECB/EMA meaning. Launch new sources individually with the same
+`modal_cli.py run --detach modal_pipeline.py --source SOURCE --rounds 3`
+interface and a unique run ID. Never start a second writer for an active source.
+
+New workers filter completed candidates before weighted fair scheduling.
+EMA gives six slots each to assessment reports and product information, and one
+to each remaining collection. Assessments currently skew English; product
+information preserves multilingual coverage. ECB gives five slots to working
+papers, three to occasional papers, and one to each other collection.
+These weights prioritize observed text yield without dropping collections or
+increasing per-host request rates. They take effect only in newly launched images.
+
+EMA's supported-format check also applies to saved inventories, including valid
+Drupal `.pdf-N` filenames. Unsupported containers remain recorded as uncovered
+candidates and do not consume download attempts. A newly verified ECB alternate
+can be tried once even if the original 404 exhausted its retry budget. Inferred
+Monthly Bulletin replacements require matching the inventory title in the first
+two PDF pages; filename inference alone is not accepted as identity proof.
+
+CELLAR uses official SPARQL keyset pagination and actual XHTML item URLs, with
+5,000-item initial caps per year. Metadata is never stored as document text.
+Press Corner uses its official search and JSON document API: only validated
+`htmlContent` and official quote fields become text. Raw JSON remains the
+stored original, with transformation metadata beside the fetch provenance.
+Language fallback and machine translation are rejected at enumeration and
+extraction. Its 131,142 search total counts document families/fallbacks, not
+131,142 native documents in each language. Initial search scans are bounded to
+5,000 rows per language and remain explicitly incomplete.
+
+See [EMA yield](research/ema-yield-20261017.md),
+[ECB link recovery](research/ecb-historical-links.md),
+[CELLAR verification](research/eurlex-scale-20261017.md), and
+[Press Corner verification](research/commission-press-scale-20261017.md).
+
+Transient HF read failures (network errors and HTTP 502/503/504) use at most
+three attempts. A transient commit error is accepted as success only when a
+fresh pinned head contains exactly the intended progress bytes. Retries retain
+the original parent revision; a different writer's state is never overwritten.
+HTTP 403/404/409/429 are not retried by this storage layer.
+
+A source can finish its supported inventory while still retaining unsupported or
+retry-exhausted candidates. Runs therefore report both `pending_candidates`
+(coverage gaps) and `remaining_supported_candidates` (future runnable work).
+Campaign completion uses the latter where available, without claiming website
+exhaustion.

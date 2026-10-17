@@ -119,3 +119,65 @@ def test_epar_bound_is_machine_readable():
     assert summary["unselected_count"] == 1
     assert summary["selection_limit"] == 1
     assert not summary["complete"]
+
+
+@pytest.mark.parametrize("extension", ["xlsx", "xls", "docx", "doc", "zip", "unknown"])
+def test_unsupported_document_formats_are_coverage_gaps(extension):
+    rows = [
+        document("agenda", "1"),
+        document(
+            "agenda",
+            "2",
+            document_url=(
+                f"https://www.ema.europa.eu/en/documents/agenda/attachment_en.{extension}"
+            ),
+        ),
+    ]
+    result = ema.enumerate_collection("committee_documents", inventory(rows), limit=100000)
+    assert len(result["records"]) == 1
+    summary = result["enumeration"]
+    assert summary["skipped_unsupported_formats"] == {extension: 1}
+    assert summary["skipped_unsupported_format_count"] == 1
+    assert summary["matching_inventory_records"] == 2
+    assert not summary["complete"]
+    assert not summary["selection_truncated"]
+
+
+@pytest.mark.parametrize("extension", ["pdf", "txt", "xml", "html", "htm", "xhtml"])
+def test_native_document_format_survives(extension):
+    result = ema.enumerate_collection(
+        "committee_documents",
+        inventory(
+            [document(document_url=f"https://www.ema.europa.eu/en/documents/agenda/a.{extension}")]
+        ),
+    )
+    assert result["records"][0]["format"] == extension
+    assert result["enumeration"]["complete"]
+
+
+@pytest.mark.parametrize("suffix", ["pdf-0", "pdf-1", "pdf-23"])
+def test_drupal_pdf_collision_suffixes_are_retained(suffix):
+    result = ema.enumerate_collection(
+        "committee_documents",
+        inventory(
+            [document(document_url=f"https://www.ema.europa.eu/en/documents/agenda/a.{suffix}")]
+        ),
+    )
+    assert result["records"][0]["format"] == "pdf"
+    assert result["enumeration"]["complete"]
+
+
+@pytest.mark.parametrize(
+    "url,supported",
+    [
+        ("https://www.ema.europa.eu/en/news/a-story", True),
+        ("https://www.ema.europa.eu/fr/documents/overview/a.pdf-0", True),
+        ("https://www.ema.europa.eu/en/documents/minutes/a.xlsx", False),
+        ("https://www.ema.europa.eu/en/documents/minutes/a.docx", False),
+        ("https://www.ema.europa.eu/en/documents/minutes/a.zip", False),
+        ("https://www.ema.europa.eu/en/documents/minutes/unknown", False),
+        ("https://invalid.example/a.pdf", False),
+    ],
+)
+def test_old_manifest_supported_record_ignores_legacy_format(url, supported):
+    assert ema.supported_record({"url": url, "format": "html"}) is supported

@@ -7,14 +7,41 @@ import hashlib
 import io
 import json
 import re
+import time
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 from huggingface_hub import CommitOperationAdd, HfApi
 from huggingface_hub.errors import EntryNotFoundError
+
+
+def transient_error(error):
+    status = getattr(getattr(error, "response", None), "status_code", None)
+    if status is not None:
+        return status in {502, 503, 504}
+    if isinstance(error, (httpx.TransportError, ConnectionError, TimeoutError)):
+        return True
+    # huggingface_hub <1 uses requests; avoid requiring it with the newer httpx SDK.
+    return any(
+        cls.__module__ == "requests.exceptions" and cls.__name__ in {"ConnectionError", "Timeout"}
+        for cls in type(error).__mro__
+    )
+
+
+def retry_read(operation, **kwargs):
+    for attempt in range(3):
+        try:
+            return operation(**kwargs)
+        except Exception as error:
+            if not transient_error(error) or attempt == 2:
+                raise
+            time.sleep(attempt + 1)
+    raise AssertionError("unreachable")
+
 
 STRING_FIELDS = [
     "id",
@@ -193,7 +220,8 @@ class HFStore:
     def read_json(self, path, revision=None):
         if path != "state/progress.json" and not INVENTORY_PATH.fullmatch(path):
             raise ValueError(f"Invalid JSON path: {path!r}")
-        local = self.api.hf_hub_download(
+        local = retry_read(
+            self.api.hf_hub_download,
             repo_id=self.repo_id,
             repo_type="dataset",
             filename=path,
@@ -202,9 +230,10 @@ class HFStore:
         return json.loads(Path(local).read_text())
 
     def load(self):
-        revision = self.api.repo_info(repo_id=self.repo_id, repo_type="dataset").sha
+        revision = retry_read(self.api.repo_info, repo_id=self.repo_id, repo_type="dataset").sha
         try:
-            path = self.api.hf_hub_download(
+            path = retry_read(
+                self.api.hf_hub_download,
                 repo_id=self.repo_id,
                 repo_type="dataset",
                 filename="state/progress.json",
@@ -221,7 +250,8 @@ class HFStore:
         return state, revision
 
     def _download_bytes(self, path, revision):
-        local = self.api.hf_hub_download(
+        local = retry_read(
+            self.api.hf_hub_download,
             repo_id=self.repo_id,
             repo_type="dataset",
             filename=path,
@@ -243,7 +273,8 @@ class HFStore:
         # Pin this lookup to the same revision as the measured Parquet files.
         sizes = {}
         if migrated["shards"]:
-            info = self.api.repo_info(
+            info = retry_read(
+                self.api.repo_info,
                 repo_id=self.repo_id,
                 repo_type="dataset",
                 revision=revision,
@@ -375,18 +406,43 @@ class HFStore:
             )
         additions["state/progress.json"] = json_bytes(next_state)
         additions["README.md"] = dataset_card(next_state)
-        result = self.api.create_commit(
-            repo_id=self.repo_id,
-            repo_type="dataset",
-            parent_commit=revision,
-            commit_message=message,
-            operations=[
-                CommitOperationAdd(path_in_repo=path, path_or_fileobj=body)
-                for path, body in sorted(additions.items())
-            ],
-        )
+        committed_revision = self._commit_with_recovery(additions, revision, message)
         # Callers can keep their state in sync without an extra download. Mutation
         # occurs only after successful commit; conflicts and network failures propagate.
         state.clear()
         state.update(next_state)
-        return result.oid
+        return committed_revision
+
+    def _commit_with_recovery(self, additions, revision, message):
+        """Retry only unchanged-head CAS writes; resolve lost responses by exact state."""
+        for attempt in range(3):
+            try:
+                result = self.api.create_commit(
+                    repo_id=self.repo_id,
+                    repo_type="dataset",
+                    parent_commit=revision,
+                    commit_message=message,
+                    operations=[
+                        CommitOperationAdd(path_in_repo=path, path_or_fileobj=body)
+                        for path, body in sorted(additions.items())
+                    ],
+                )
+                return result.oid
+            except Exception as error:
+                if not transient_error(error):
+                    raise
+                try:
+                    head = retry_read(
+                        self.api.repo_info, repo_id=self.repo_id, repo_type="dataset"
+                    ).sha
+                    if head != revision:
+                        persisted = self._download_bytes("state/progress.json", head)
+                        if persisted == additions["state/progress.json"]:
+                            return head
+                except Exception as verification_error:
+                    raise error from verification_error
+                # Another writer advanced HEAD. Never rebase this stale state.
+                if head != revision or attempt == 2:
+                    raise
+                time.sleep(attempt + 1)
+        raise AssertionError("unreachable")

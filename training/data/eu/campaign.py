@@ -30,6 +30,7 @@ def run_campaign(
     work_seconds=3000,
     *,
     after_campaign="",
+    predecessor_wait_seconds=1800,
     spawn_callable=None,
     call_loader=None,
     store=None,
@@ -66,11 +67,18 @@ def run_campaign(
     store.ensure(private=mapping["private"])
     invocation_started = clock()
     if after_campaign:
-        wait_for_predecessor(store, after_campaign, clock=clock, sleep=sleep)
+        wait_for_predecessor(
+            store,
+            after_campaign,
+            timeout_seconds=predecessor_wait_seconds,
+            clock=clock,
+            sleep=sleep,
+        )
     settings = {"rounds": rounds, "max_documents": max_documents, "work_seconds": work_seconds}
 
     if after_campaign:
         settings["after_campaign"] = after_campaign
+        settings["predecessor_wait_seconds"] = predecessor_wait_seconds
 
     def save(state, revision, message):
         store.commit(state, revision, [], message=message)
@@ -132,7 +140,9 @@ def run_campaign(
             "settings": settings,
             "status": "planned",
             "started_at_epoch": clock(),
-            "deadline_epoch": invocation_started + 4 * 3600,
+            "deadline_epoch": invocation_started
+            + 4 * 3600
+            + (predecessor_wait_seconds if after_campaign else 0),
             "rounds": [
                 {"run_id": f"{campaign_id}-round-{i + 1}", "status": "planned"}
                 for i in range(rounds)
@@ -160,7 +170,12 @@ def run_campaign(
                 entry["metrics"] = copy.deepcopy(state.get("metrics", {}))
                 entry["finished_at_epoch"] = clock()
                 save(state, revision, f"Reconcile campaign round {run_id}")
-                if terminal.get("pending_candidates") == 0:
+                if (
+                    terminal.get(
+                        "remaining_supported_candidates", terminal.get("pending_candidates")
+                    )
+                    == 0
+                ):
                     return finish("complete")
                 break
             if entry["status"] == "running" or matching:
@@ -173,7 +188,10 @@ def run_campaign(
                 result = call_loader(entry["call_id"]).get(timeout=remaining)
                 if not record_result(index, run_id, result):
                     return finish("ambiguous")
-                if result.get("pending_candidates") == 0:
+                if (
+                    result.get("remaining_supported_candidates", result.get("pending_candidates"))
+                    == 0
+                ):
                     return finish("complete")
                 break
             remaining = campaign["deadline_epoch"] - clock()
@@ -206,7 +224,7 @@ def run_campaign(
                 result = call.get(timeout=remaining)
             if not record_result(index, run_id, result):
                 return finish("ambiguous")
-            if result.get("pending_candidates") == 0:
+            if result.get("remaining_supported_candidates", result.get("pending_candidates")) == 0:
                 return finish("complete")
             break
     return finish("complete")
@@ -256,9 +274,13 @@ def wait_for_dispatch(
         sleep(min(2, remaining))
 
 
-def wait_for_predecessor(store, campaign_id, *, clock=time.time, sleep=time.sleep):
-    """Read-only wait, at most 30 minutes; only confirmed completion permits writing."""
-    deadline = clock() + 1800
+def wait_for_predecessor(
+    store, campaign_id, *, timeout_seconds=1800, clock=time.time, sleep=time.sleep
+):
+    """Bounded read-only wait; only confirmed completion permits writing."""
+    if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 10800:
+        raise ValueError("Predecessor wait must be 1–10800 seconds")
+    deadline = clock() + timeout_seconds
     while True:
         state, _ = store.load()
         predecessor = state.get("campaigns", {}).get(campaign_id)
@@ -271,5 +293,5 @@ def wait_for_predecessor(store, campaign_id, *, clock=time.time, sleep=time.slee
             raise RuntimeError(f"Predecessor has not completed safely: {status}")
         remaining = deadline - clock()
         if remaining <= 0:
-            raise TimeoutError("Predecessor did not complete within 30 minutes")
+            raise TimeoutError("Predecessor did not complete within bounded wait")
         sleep(min(60, remaining))

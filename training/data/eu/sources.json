@@ -17,11 +17,6 @@
         "eur-lex.europa.eu",
         "op.europa.eu"
       ],
-      "request_headers": {
-        "Accept": "application/xhtml+xml",
-        "Accept-Language": "eng"
-      },
-      "language": "en",
       "document_url_patterns": [
         "/resource/celex/",
         "/resource/cellar/.*/DOC_",
@@ -38,7 +33,8 @@
         "notification feed",
         "version relationships"
       ],
-      "existing_overlap": "Eurlex Resources, MultiLegalPile, JRC-Acquis and DGT; no novelty assumed."
+      "existing_overlap": "Eurlex Resources, MultiLegalPile, JRC-Acquis and DGT; no novelty assumed.",
+      "min_delay_seconds": 2
     },
     {
       "id": "commission-press",
@@ -68,7 +64,8 @@
         "language variants",
         "historical pagination",
         "department tagging"
-      ]
+      ],
+      "min_delay_seconds": 2
     },
     {
       "id": "ecb",

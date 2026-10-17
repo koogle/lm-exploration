@@ -266,3 +266,48 @@ def test_predecessor_wait_is_bounded():
         wait_for_predecessor(store, "previous", clock=lambda: epoch[0], sleep=sleep)
     assert epoch[0] == 1800
     assert store.revision == 0
+
+
+@pytest.mark.parametrize("timeout", [0, 10801])
+def test_predecessor_rejects_unbounded_wait(timeout):
+    from campaign import wait_for_predecessor
+
+    with pytest.raises(ValueError):
+        wait_for_predecessor(Store(), "previous", timeout_seconds=timeout)
+
+
+def test_long_predecessor_wait_allows_later_completion():
+    from campaign import wait_for_predecessor
+
+    store = Store()
+    store.state["campaigns"] = {"previous": {"status": "running"}}
+    epoch = [0]
+
+    def sleep(seconds):
+        epoch[0] += seconds
+        if epoch[0] >= 1900:
+            store.state["campaigns"]["previous"]["status"] = "complete"
+
+    wait_for_predecessor(
+        store, "previous", timeout_seconds=3600, clock=lambda: epoch[0], sleep=sleep
+    )
+    assert 1900 <= epoch[0] <= 1960
+    assert store.revision == 0
+
+
+def test_campaign_stops_when_only_unsupported_or_exhausted_items_remain():
+    store = Store()
+    calls = []
+
+    def collect(run_id, max_documents, work_seconds):
+        calls.append(run_id)
+        return {
+            "run_id": run_id,
+            "status": "bounded_complete",
+            "pending_candidates": 10,
+            "remaining_supported_candidates": 0,
+        }
+
+    result = run_campaign("ema", "no-more-supported", collect, store=store)
+    assert result["status"] == "complete"
+    assert len(calls) == 1

@@ -10,7 +10,7 @@ import json
 import time
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from itertools import zip_longest
+from itertools import islice
 from pathlib import Path
 
 from eu_corpus import (
@@ -43,18 +43,38 @@ def item_key(record):
     )
 
 
-def round_robin(collections):
-    for group in zip_longest(*collections):
-        yield from (record for record in group if record is not None)
+def round_robin(collections, weights=None):
+    """Weighted fair iteration; every nonempty collection gets at least one slot."""
+    weights = list(weights) if weights is not None else [1] * len(collections)
+    if len(weights) != len(collections) or any(
+        not isinstance(w, int) or isinstance(w, bool) or not 1 <= w <= 20 for w in weights
+    ):
+        raise ValueError("Collection weights must be integers from 1 to 20")
+    active = [(iter(group), weight) for group, weight in zip(collections, weights, strict=True)]
+    while active:
+        remaining = []
+        for iterator, weight in active:
+            group = list(islice(iterator, weight))
+            yield from group
+            if len(group) == weight:
+                remaining.append((iterator, weight))
+        active = remaining
 
 
-def pending(record, state, timestamp=None, max_attempts=3):
+def pending(record, state, timestamp=None, max_attempts=3, adapter=None):
     key = item_key(record)
     if key in state["completed"]:
         return False
     failure = state["failures"].get(key, {})
-    return failure.get("attempts", 0) < max_attempts and failure.get("retry_after_epoch", 0) <= (
-        timestamp or time.time()
+    if failure.get("retry_after_epoch", 0) > (timestamp or time.time()):
+        return False
+    if failure.get("attempts", 0) < max_attempts:
+        return True
+    # Newly verified official replacements get one opportunity even after the
+    # original inventory URL exhausted its retry budget. Never reset old attempts.
+    alternatives = getattr(adapter, "alternate_document_urls", lambda _: [])(record)
+    return failure.get("error") == "http_404" and bool(
+        set(alternatives) - set(failure.get("attempted_alternates", []))
     )
 
 
@@ -276,7 +296,15 @@ def run_source(
                 )
             else:
                 saved = adapter.enumerate_collection(
-                    collection, fetch_inventory, limit=bounds["inventory_limit_per_collection"]
+                    collection,
+                    fetch_inventory,
+                    limit=min(
+                        config.get(
+                            "inventory_limit_per_collection",
+                            bounds["inventory_limit_per_collection"],
+                        ),
+                        bounds["inventory_limit_per_collection"],
+                    ),
                 )
                 saved["observed_at"] = now()
                 inventory_body = json_bytes(saved)
@@ -301,15 +329,40 @@ def run_source(
         inventory_cache.clear()
         collector.max_bytes = bounds["max_document_bytes"]
         since_commit = 0
-        for candidate in round_robin(collection_records):
+        # Filter before scheduling so completed prefixes cannot consume weight slots.
+        supports = getattr(adapter, "supported_record", lambda _: True)
+        active_run()["unsupported_candidates"] = sum(
+            not supports(record) for group in collection_records for record in group
+        )
+        eligible = [
+            [
+                record
+                for record in group
+                if supports(record)
+                and pending(
+                    record, state, max_attempts=bounds["max_attempts_per_item"], adapter=adapter
+                )
+            ]
+            for group in collection_records
+        ]
+        weights = [
+            config.get("collection_weights", {}).get(name, 1) for name in config["collections"]
+        ]
+        active_run()["collection_weights"] = dict(zip(config["collections"], weights, strict=True))
+        for candidate in round_robin(eligible, weights):
             if active_run()["attempted"] >= remaining_documents or time.monotonic() >= deadline:
                 break
-            if not pending(candidate, state, max_attempts=bounds["max_attempts_per_item"]):
+            if not pending(
+                candidate, state, max_attempts=bounds["max_attempts_per_item"], adapter=adapter
+            ):
                 continue
             key = item_key(candidate)
             active_run()["attempted"] += 1
             since_commit += 1
             provenance = {}
+            attempted_alternates = list(
+                state["failures"].get(key, {}).get("attempted_alternates", [])
+            )
             rate_limited = False
             try:
                 data, provenance = collector.fetch(candidate["url"], source)
@@ -322,8 +375,13 @@ def run_source(
                     )
                     if alternatives:
                         original_fetch = {"url": candidate["url"], **provenance}
+                        attempted_alternates.append(alternatives[0])
                         data, provenance = collector.fetch(alternatives[0], source)
                         provenance["original_fetch"] = original_fetch
+                        if data is not None:
+                            validator = getattr(adapter, "validate_alternate", None)
+                            if validator:
+                                validator(candidate, data)
                 rate_limited = (
                     str(provenance.get("http_status", provenance.get("status"))) == "429"
                     or provenance.get("error") == "http_429"
@@ -332,7 +390,17 @@ def run_source(
                     raise ValueError("http_429")
                 if data is None:
                     raise ValueError(provenance.get("error", "fetch_failed"))
-                record = extract_record(candidate, data, provenance, source)
+                parse_data, parse_provenance = data, provenance
+                transform = getattr(adapter, "extract_document", None)
+                if transform:
+                    parse_data, transform_metadata = transform(candidate, data)
+                    parse_provenance = {
+                        **provenance,
+                        "content_type": "text/html",
+                        "original_content_type": provenance.get("content_type"),
+                        "adapter_transform": transform_metadata,
+                    }
+                record = extract_record(candidate, parse_data, parse_provenance, source)
                 text_hash = record["text_sha256"]
                 previous = state["text_index"].get(text_hash)
                 if previous:
@@ -358,6 +426,7 @@ def run_source(
                     "url": candidate["url"],
                     "collection_id": candidate["collection_id"],
                     "attempts": attempts,
+                    "attempted_alternates": sorted(set(attempted_alternates)),
                     "error": str(error)[:1000],
                     "failed_at": now(),
                     "retry_after_epoch": (
@@ -396,6 +465,18 @@ def run_source(
         active_run()["pending_candidates"] = sum(
             item_key(r) not in state["completed"] for group in collection_records for r in group
         )
+        active_run()["remaining_supported_candidates"] = sum(
+            supports(r)
+            and pending(
+                r,
+                state,
+                timestamp=float("inf"),
+                max_attempts=bounds["max_attempts_per_item"],
+                adapter=adapter,
+            )
+            for group in collection_records
+            for r in group
+        )
         revision = checkpoint(
             store,
             state,
@@ -415,7 +496,7 @@ def run_source(
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", choices=["ecb", "ema"])
+    parser.add_argument("source", choices=["ecb", "ema", "eurlex", "commission-press"])
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--max-documents", type=int, default=1000)
     parser.add_argument("--work-seconds", type=int, default=3000)

@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+from collections import Counter
 from datetime import datetime
 from urllib.parse import urlsplit, urlunsplit
 
@@ -10,6 +11,7 @@ BASE = "https://www.ema.europa.eu/en/documents/report/"
 NEWS = BASE + "news-json-report_en.json"
 NON_EPAR = BASE + "documents-output-non_epar_documents_json-report_en.json"
 EPAR = BASE + "documents-output-epar_documents_json-report_en.json"
+SUPPORTED_DOCUMENT_FORMATS = {"pdf", "txt", "xml", "html", "htm", "xhtml"}
 COMMITTEE_TYPES = {"agenda", "minutes", "committee-report"}
 GUIDELINE_TYPES = {"scientific-guideline"}
 EPAR_SERIES = {
@@ -81,6 +83,23 @@ def _url(value):
     return urlunsplit(parts._replace(fragment=""))
 
 
+def _supported_format(url):
+    path = urlsplit(url).path
+    if "/news/" in path:
+        return "html"
+    suffix = path.rsplit(".", 1)[-1].lower() if "." in path.rsplit("/", 1)[-1] else ""
+    # Drupal collision suffixes remain PDF candidates; response bytes decide extraction.
+    if re.fullmatch(r"pdf-\d+", suffix):
+        suffix = "pdf"
+    return suffix if suffix in SUPPORTED_DOCUMENT_FORMATS else None
+
+
+def supported_record(record):
+    """Filter old manifests by URL, not their legacy incorrect `format=html` metadata."""
+    url = _url(record.get("url"))
+    return bool(url and _supported_format(url))
+
+
 def _included(collection_id, item):
     kind = item.get("type", "")
     if collection_id in EPAR_SERIES:
@@ -120,6 +139,7 @@ def enumerate_collection(collection_id, fetch, limit=1000):
     records = {}
     skipped = 0
     matched = 0
+    unsupported_formats = Counter()
     for item in items:
         if not isinstance(item, dict):
             raise TypeError("EMA inventory data item is not an object")
@@ -139,8 +159,12 @@ def enumerate_collection(collection_id, fetch, limit=1000):
                 continue
             language = language or urlsplit(url).path.split("/")[1]
             native_id = str(item.get("id") or hashlib.sha256(url.encode()).hexdigest()[:24])
-            suffix = urlsplit(url).path.rsplit(".", 1)[-1].lower()
-            fmt = suffix if suffix in {"pdf", "txt", "xml", "doc", "docx", "html"} else "html"
+            fmt = _supported_format(url)
+            if fmt is None:
+                filename = urlsplit(url).path.rsplit("/", 1)[-1]
+                suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else "unknown"
+                unsupported_formats[suffix] += 1
+                continue
             records.setdefault(
                 url,
                 {
@@ -184,6 +208,11 @@ def enumerate_collection(collection_id, fetch, limit=1000):
         )
     if skipped:
         limitations.append(f"Skipped {skipped} missing or unsupported document URLs.")
+    if unsupported_formats:
+        limitations.append(
+            f"Excluded unsupported document formats without downloading: {dict(unsupported_formats)}. "
+            "These are coverage gaps, not completed or exhausted documents."
+        )
     return {
         "records": selected,
         "enumeration": {
@@ -202,7 +231,9 @@ def enumerate_collection(collection_id, fetch, limit=1000):
             "document_type_filter": COLLECTIONS[collection_id].get("document_types"),
             "overlaps_collections": COLLECTIONS[collection_id].get("overlaps_collections", []),
             "skipped_urls": skipped,
-            "complete": len(selected) == len(ordered) and skipped == 0,
+            "skipped_unsupported_formats": dict(unsupported_formats),
+            "skipped_unsupported_format_count": sum(unsupported_formats.values()),
+            "complete": len(selected) == len(ordered) and skipped == 0 and not unsupported_formats,
             "limitations": limitations,
         },
     }
