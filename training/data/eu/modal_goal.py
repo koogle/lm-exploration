@@ -105,7 +105,10 @@ def inspect_call(call_id):
     return {"status": "failed", "child_tree_terminated": True}
 
 
-def source_snapshots(mapping, goal):
+def source_snapshots(mapping, goal, audit_store=None, audit_revision=None):
+    from huggingface_hub.errors import EntryNotFoundError
+
+    from goal_controller import cached_token_lower_bound
     from hf_store import HFStore
     from pipeline import inventory_expansion_needed
 
@@ -114,6 +117,17 @@ def source_snapshots(mapping, goal):
     for source in goal["config"]["sources"]:
         config = mapping["sources"][source]
         state, revision = HFStore(config["repo_id"]).load()
+        token_cache = None
+        if audit_store is not None and goal["config"].get("target_tokens") is not None:
+            if not audit_revision:
+                raise ValueError("Pinned control revision required for token cache reads")
+            try:
+                token_cache = json.loads(
+                    audit_store._download_bytes(f"tokens/{source}.json", audit_revision)
+                )
+            except EntryNotFoundError:
+                pass
+        tokens = cached_token_lower_bound(state, token_cache, config["repo_id"])
         collections = state["collections"]
         global_limit = mapping.get("limits", {}).get("inventory_limit_per_collection", 100000)
         desired_limit = min(
@@ -138,6 +152,7 @@ def source_snapshots(mapping, goal):
             )
         result[source] = {
             "metrics": state["metrics"],
+            "exact_tokens_lower_bound": tokens,
             "revision": revision,
             "remaining_supported_candidates": remaining,
             "discovery_pending": discovery_pending,
@@ -175,7 +190,7 @@ def tick():
     config = json.loads(GOAL_CONFIG.read_text())
     mapping = json.loads(GOAL_MAPPING.read_text())
     store = HFStore(config.pop("control_repo"))
-    state, _ = store.load()
+    state, control_revision = store.load()
     goal = state.get("collection_goal")
     if not goal:
         raise RuntimeError("Initialize durable control state with all active/queued calls first")
@@ -183,7 +198,7 @@ def tick():
         return {"status": goal["status"], "stored_rows": goal.get("stored_rows")}
     result = run_tick(
         store,
-        source_snapshots(mapping, goal),
+        source_snapshots(mapping, goal, store, control_revision),
         inspect_call,
         lambda **kwargs: campaign.spawn(**kwargs),
         config,
@@ -193,6 +208,7 @@ def tick():
         for key in (
             "status",
             "stored_rows",
+            "exact_tokens_lower_bound",
             "reserved_documents",
             "available_document_budget",
             "sources",

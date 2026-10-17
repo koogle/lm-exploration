@@ -27,6 +27,11 @@ def _config(config):
         "work_seconds": config.get("work_seconds", 3000),
         "max_campaigns": config.get("max_campaigns", 150),
     }
+    if "target_tokens" in config:
+        target = config["target_tokens"]
+        if type(target) is not int or target < 1:
+            raise ValueError("target_tokens must be positive")
+        result["target_tokens"] = target
     if not result["sources"] or any(not isinstance(x, str) or not x for x in result["sources"]):
         raise ValueError("Goal sources must be a nonempty list of source IDs")
     for key, maximum in (("rounds", 3), ("max_documents", 1000), ("work_seconds", 3000)):
@@ -39,6 +44,35 @@ def _config(config):
     return result
 
 
+def cached_token_lower_bound(state, cache, repo_id):
+    """Only current immutable shards contribute; partial audits are lower bounds."""
+    if cache is None:
+        return 0
+    if (
+        cache.get("schema_version") != 1
+        or cache.get("encoding") != "o200k_base"
+        or cache.get("repo_id") != repo_id
+        or not isinstance(cache.get("shards"), dict)
+    ):
+        raise ValueError("Incompatible token audit cache")
+    total = 0
+    seen = set()
+    for shard in state["shards"]:
+        if shard["path"] in seen:
+            raise ValueError("Duplicate source shard path")
+        seen.add(shard["path"])
+        entry = cache["shards"].get(shard["sha256"])
+        if entry is None:
+            continue
+        if entry.get("path") != shard["path"] or entry.get("rows") != shard["rows"]:
+            continue  # A stale/nonmatching cache entry contributes nothing.
+        tokens = entry.get("tokens")
+        if type(tokens) is not int or tokens < 0:
+            raise ValueError("Invalid exact token count")
+        total += tokens
+    return total
+
+
 def _source_summary(source_states, sources):
     summaries = {}
     for source in sources:
@@ -48,11 +82,15 @@ def _source_summary(source_states, sources):
         rows = snapshot.get("metrics", {}).get("rows")
         if type(rows) is not int or rows < 0:
             raise ValueError(f"Missing/invalid stored row metric: {source}")
+        tokens = snapshot.get("exact_tokens_lower_bound", 0)
+        if type(tokens) is not int or tokens < 0:
+            raise ValueError(f"Invalid exact token lower bound: {source}")
         remaining = snapshot.get("remaining_supported_candidates")
         if remaining is not None and (type(remaining) is not int or remaining < 0):
             raise ValueError(f"Invalid remaining candidate count: {source}")
         summaries[source] = {
             "metrics": copy.deepcopy(snapshot["metrics"]),
+            "exact_tokens_lower_bound": tokens,
             "remaining_supported_candidates": remaining,
             "inventory_complete": snapshot.get("inventory_complete") is True,
             "discovery_complete": snapshot.get("discovery_complete") is True,
@@ -79,6 +117,8 @@ def _summary(goal, summaries):
     selected = set(goal["config"]["sources"])
     jobs = [job for job in goal["jobs"] if job["source_id"] in selected]
     rows = sum(source["metrics"]["rows"] for source in summaries.values())
+    tokens = sum(source["exact_tokens_lower_bound"] for source in summaries.values())
+    token_target = goal["config"].get("target_tokens")
     reserved = sum(_reservation(job) for job in jobs)
     busy = {job["source_id"] for job in jobs if job.get("status") not in TERMINAL}
     failures = dict.fromkeys(selected, 0)
@@ -108,7 +148,9 @@ def _summary(goal, summaries):
         else:
             source_status[source] = "ready"
     available = max(0, goal["config"]["target_documents"] - rows - reserved)
-    if rows >= goal["config"]["target_documents"]:
+    if token_target is not None and tokens >= token_target:
+        status = "token_target_reached"
+    elif rows >= goal["config"]["target_documents"]:
         status = "target_reached"
     elif all(value == "scope_exhausted" for value in source_status.values()):
         status = "selected_scope_exhausted"
@@ -125,6 +167,7 @@ def _summary(goal, summaries):
     return {
         "status": status,
         "stored_rows": rows,
+        "exact_tokens_lower_bound": tokens,
         "reserved_documents": reserved,
         "available_document_budget": available,
         "sources": source_status,
@@ -228,6 +271,7 @@ def run_tick(store, source_states, inspect_call, spawn_campaign, goal_config, cl
         {
             "observed_at_epoch": now,
             "stored_rows": goal["stored_rows"],
+            "exact_tokens_lower_bound": goal["exact_tokens_lower_bound"],
             "reserved_documents": goal["reserved_documents"],
             "status": goal["status"],
             "source_metrics": {key: value["metrics"] for key, value in summaries.items()},
@@ -246,7 +290,11 @@ def run_tick(store, source_states, inspect_call, spawn_campaign, goal_config, cl
             # this invocation's older snapshot after another reconciliation.
             break
         summary = _summary(goal, summaries)
-        if summary["status"] in {"target_reached", "blocked_campaign_limit"}:
+        if summary["status"] in {
+            "target_reached",
+            "token_target_reached",
+            "blocked_campaign_limit",
+        }:
             break
         if summary["sources"][source] != "ready" or not summary["available_document_budget"]:
             continue

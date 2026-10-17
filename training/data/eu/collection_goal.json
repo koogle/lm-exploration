@@ -5,6 +5,7 @@
     "ema"
   ],
   "target_documents": 100000,
+  "target_tokens": 1000000000,
   "rounds": 3,
   "max_documents": 1000,
   "work_seconds": 3000,

@@ -670,3 +670,17 @@ a result, never estimates derived from characters.
 uv run python modal_cli.py deploy modal_token_audit.py
 uv run python modal_cli.py run --detach modal_token_audit.py --source ecb --max-shards 3000
 ```
+
+The collection goal also has an explicit `target_tokens: 1000000000`. Each
+controller tick sums only cached `o200k_base` counts matching the current corpus
+shards by content hash, path and row count. Partial audits provide a conservative
+lower bound; missing caches contribute zero and incompatible caches fail the
+tick. Once this lower bound reaches the target, no new campaigns are dispatched.
+Active campaigns remain tracked and may finish. The existing 100,000-document
+operational cap and 150-campaign limit remain unchanged. Audits must be resumed
+separately as the corpus grows; they are not yet scheduled automatically.
+
+HF may report stale-parent conflicts as either HTTP 409 or 412. Audit checkpoint
+retries re-read the destination at the new revision and proceed only if that
+source's token-cache bytes have not changed, preserving concurrent controller
+updates and rejecting competing audit writes.

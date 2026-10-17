@@ -124,3 +124,46 @@ def test_recovery_identity_and_schedule_survive_remote_import():
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_token_cache_read_is_pinned_and_missing_cache_counts_zero(monkeypatch):
+    import json
+
+    from huggingface_hub.errors import EntryNotFoundError
+
+    import hf_store
+
+    state = {
+        "metrics": {"rows": 1},
+        "completed": {},
+        "collections": {},
+        "runs": [],
+        "shards": [{"path": "current", "sha256": "digest", "rows": 1}],
+    }
+    monkeypatch.setattr(
+        hf_store, "HFStore", lambda _: SimpleNamespace(load=lambda: (state, "source-revision"))
+    )
+    mapping = {"sources": {"ecb": {"repo_id": "owner/repo", "collections": []}}}
+    goal = {"config": {"sources": ["ecb"], "target_tokens": 1000}, "jobs": []}
+    cache = {
+        "schema_version": 1,
+        "encoding": "o200k_base",
+        "repo_id": "owner/repo",
+        "shards": {"digest": {"path": "current", "rows": 1, "tokens": 42}},
+    }
+
+    def read(path, revision):
+        assert path == "tokens/ecb.json"
+        assert revision == "control-revision"
+        return json.dumps(cache).encode()
+
+    control = SimpleNamespace(_download_bytes=read)
+    result = modal_goal.source_snapshots(mapping, goal, control, "control-revision")
+    assert result["ecb"]["exact_tokens_lower_bound"] == 42
+
+    def missing(path, revision):
+        raise EntryNotFoundError("no audit yet")
+
+    control._download_bytes = missing
+    result = modal_goal.source_snapshots(mapping, goal, control, "control-revision")
+    assert result["ecb"]["exact_tokens_lower_bound"] == 0
