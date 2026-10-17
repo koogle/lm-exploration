@@ -41,14 +41,22 @@ def atomic_json(path, value):
 
 
 def backward_batch(ddp, x, y, count, microbatch, world, *, bf16=True):
-    """Accumulate the gradient of the global mean over nonpadding loss tokens."""
+    """Return local summed loss with globally averaged token gradients ready.
+
+    DDP's autograd hooks perform NCCL gradient reduction during the final
+    backward pass; no separate gradient all_reduce is needed at the call site.
+    """
     import torch
     from torch.nn import functional as F
 
     total_loss = torch.zeros((), device=x.device)
     parts = list(zip(x.split(microbatch), y.split(microbatch)))
     for index, (mx, my) in enumerate(parts):
-        with ddp.no_sync() if index < len(parts) - 1 else nullcontext():
+        is_last_microbatch = index == len(parts) - 1
+        # Earlier microbatches accumulate local gradients without communication.
+        # The final backward reduces the accumulated gradients across all ranks.
+        # no_sync must cover the forward pass as well as backward.
+        with nullcontext() if is_last_microbatch else ddp.no_sync():
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=bf16):
                 loss = F.cross_entropy(
                     ddp(mx).flatten(0, 1),
@@ -57,7 +65,11 @@ def backward_batch(ddp, x, y, count, microbatch, world, *, bf16=True):
                     ignore_index=LOSS_IGNORE_INDEX,
                 )
             total_loss += loss.detach()
-            # DDP averages gradients: compensate before global token normalization.
+            # DDP averages across ranks, while count covers valid tokens globally:
+            # (1 / world) * sum_r grad(loss_r * world / count)
+            #     = grad(sum_r loss_r / count).
+            # On the final microbatch, DDP hooks reduce gradient buckets via NCCL
+            # as backward runs. After backward returns, gradients are synchronized.
             (loss * world / count).backward()
     return total_loss
 
@@ -331,11 +343,16 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 group["lr"] = lr
             optimizer.zero_grad(set_to_none=True)
             total_loss = backward_batch(ddp, x, y, count, config.microbatch, world)
+            # backward_batch has synchronized gradients; every replica now clips
+            # the same gradient and applies the same optimizer update.
             norm = torch.nn.utils.clip_grad_norm_(
                 model.parameters(), 1.0, error_if_nonfinite=True, foreach=True
             )
             optimizer.step()
+            # This separate reduction sums detached losses for logging only.
+            # It does not synchronize gradients (DDP already did that above).
             dist.all_reduce(total_loss)
+            # Wait for this GPU's queued work to finish for accurate timing.
             torch.cuda.synchronize()
             step += 1
             tokens += count
