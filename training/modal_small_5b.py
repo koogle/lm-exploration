@@ -123,8 +123,9 @@ def continue_training(run_id, snapshot, settings, provenance, previous=None, fir
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
 )
-def prepare_and_launch(run_id, version, settings, provenance):
+def prepare_and_launch(run_id, version, settings, provenance, resume_preparation=False):
     from training_data.export_raw import export_raw
+    from training_data.persistent_stream import PersistentStream
     from training_data.prepared_snapshot import find_prepared_snapshot
     from training_data.raw_corpus import RawCorpus
     from training_data.scholarly import load_recipe
@@ -135,9 +136,15 @@ def prepare_and_launch(run_id, version, settings, provenance):
     DistributedConfig(**settings)
     folder = Path("/data/scholarly-code") / version
     corpus = None
+    stream = PersistentStream()
+    status_path = Path("/runs") / run_id / "workflow.json"
+    if status_path.exists():
+        prior = json.loads(status_path.read_text())
+        if not resume_preparation or prior.get("stage") != "preparing":
+            raise ValueError("Only stopped preparation can reuse its workflow run ID")
+    elif resume_preparation:
+        raise ValueError("No preparation exists to resume")
     try:
-        if (Path("/runs") / run_id / "workflow.json").exists():
-            raise ValueError("Workflow run ID already exists")
         record(run_id, "preparing", target_tokens=settings["target_tokens"], provenance=provenance)
         recipe = load_recipe("/project/tokenizer/recipe-v1.json")
         target = settings["target_tokens"]
@@ -172,7 +179,7 @@ def prepare_and_launch(run_id, version, settings, provenance):
                                 f"{name} exhausted before reaching its required share: {status}"
                             )
                         break
-                    corpus.prepare(name)
+                    corpus.prepare(name, reader=stream)
                     report = corpus.report(target)
                     (folder / "capacity.json").write_text(json.dumps(report, indent=2) + "\n")
                     data_volume.commit()
@@ -221,6 +228,7 @@ def prepare_and_launch(run_id, version, settings, provenance):
         record(run_id, "failed", error=f"{type(exc).__name__}: {exc}")
         raise
     finally:
+        stream.close()
         if corpus is not None:
             corpus.close()
         data_volume.commit()
