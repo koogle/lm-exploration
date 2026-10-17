@@ -14,9 +14,8 @@ and a resumable token-mixture loader. Its snapshots remain pending corpus audits
 has now completed 600 updates / 4.08M tokens on Modal; substantial pretraining
 has not been launched. The [measured GPU comparison](results/scholarly-124m-gpu-comparison-20261017.md)
 compares one, two and three A10, L40S and H100 GPUs with matched global batches.
-Those measurements used SDPA, which is split into a separate PR; the current
-model retains explicit attention. The three-H100 recommendation and timing
-estimates therefore depend on the separately reviewed SDPA implementation.
+Those measurements used the SDPA implementation now used by the modern model.
+Three H100s are the recommended configuration when elapsed time is the priority.
 
 The [tokenizer learning-curve experiment](tokenizer/research/README.md) compares
 64 MiB through 2 GiB at 16K, 32K and 50K vocabularies on Modal, with a shared

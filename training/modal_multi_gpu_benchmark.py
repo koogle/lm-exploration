@@ -98,7 +98,7 @@ def worker(gpu, world, run_id, provenance, sustained_steps):
             "world_size": world,
             "torch_version": str(torch.__version__),
             "precision": "BF16 autocast / FP32 parameters",
-            "attention": "Explicit causal MHA",
+            "attention": "PyTorch causal SDPA",
             "optimizer": "fused AdamW",
             "context": 2048,
             "effective_windows": 48,

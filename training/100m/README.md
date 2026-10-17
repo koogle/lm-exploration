@@ -15,7 +15,7 @@ model and its individual ablation PRs are unchanged.
 | Positions | RoPE on Q/K in every layer, theta 10,000 |
 | Feedforward | SwiGLU, hidden width 2,048 |
 | Projection biases | Present |
-| Attention kernel | Original explicit causal MHA |
+| Attention kernel | PyTorch causal scaled-dot-product attention (SDPA) |
 | Initialization | Normal std 0.02 |
 | Input/output weights | One shared Parameter |
 
@@ -82,10 +82,8 @@ The general recipe trainer and generation CLI remain character-only. The separat
 The [GPU comparison](../results/scholarly-124m-gpu-comparison-20261017.md) measures
 SDPA and fused AdamW on the full model, including two- and three-H100 DDP.
 The historical pilot used explicit attention; its original source is archived
-with its run. The SDPA implementation and its regression test are split into a
-separate PR; this branch retains explicit attention. The recorded GPU throughput
-is historical evidence from the SDPA source snapshots, not a measurement of
-the current explicit-attention implementation.
+with its run. SDPA preserves the model shape and checkpoint keys, with output
+and gradient agreement checked against the explicit implementation.
 
 ## Verification
 

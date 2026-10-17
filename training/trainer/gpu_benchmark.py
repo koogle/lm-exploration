@@ -160,7 +160,7 @@ def benchmark(
         "model_config": asdict(config),
         "effective_windows": effective_windows,
         "precision": "BF16 autocast / FP32 parameters",
-        "attention": "Explicit causal MHA",
+        "attention": "PyTorch causal SDPA",
         "optimizer": "fused AdamW",
         "cpu": 4,
         "host_memory_mib": 24576,
