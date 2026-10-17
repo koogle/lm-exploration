@@ -6,5 +6,6 @@
   "tokens": 121777,
   "parameters": 124389632,
   "weights_sha256": "bdf5bd84d8acb8643e473210d977b04bccda0de9485deffaed2bda7b3ae321d5",
-  "strict_load_verified": true
+  "strict_load_verified": true,
+  "anonymous_metadata_verified": true
 }

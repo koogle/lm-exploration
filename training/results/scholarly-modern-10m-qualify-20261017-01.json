@@ -1,0 +1,98 @@
+{
+  "format": "scholarly-ddp-v1",
+  "config": {
+    "world_size": 3,
+    "global_windows": 48,
+    "microbatch": 8,
+    "context": 2048,
+    "target_tokens": 5000000,
+    "warmup_tokens": 100000,
+    "peak_lr": 0.0003,
+    "min_lr_ratio": 0.1,
+    "weight_decay": 0.1,
+    "seed": 42,
+    "checkpoint_every": 500,
+    "evaluate_every": 500,
+    "pilot": true,
+    "n_layer": 8,
+    "n_head": 3,
+    "n_embd": 192
+  },
+  "data_identity": {
+    "manifest_sha256": "cc4b2a44cc1f69de8c4abb12138d67f4ac96e925f81bb36fa22fe62532be5b55",
+    "context": 2048,
+    "split": "train",
+    "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9"
+  },
+  "source_sha256": {
+    "trainer": "bff830b939ecf47849716fd6e6c3f3fb93061009d77b61a6142fe6261555807e",
+    "config": "cf9500c543bee85aba112d640b847591b1408420e03b6e8ee0c59ef948fce3f4",
+    "model": "96bd95eb51ff5b2aa3d4cd9fc07073a6d21dc9003b36bbe9461fa5780a76882d",
+    "loader": "7821e13e765a9f2c0e0a94744bc7f2df8eea647f26d7aa0069f62556618a0ef2",
+    "tokenizer": "00e32adc13dab74f5a029c63304b4591bd48f7cd6b086b22d4624d244667b4da"
+  },
+  "torch_version": "2.6.0+cu124",
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "parameters": 9849536,
+  "resume_from": null,
+  "steps": 20,
+  "session_steps": 20,
+  "total_loss_tokens": 1309624,
+  "session_loss_tokens": 1309624,
+  "stop_reason": "step_limit",
+  "elapsed_seconds": 10.296718589000001,
+  "final_checkpoint": "/runs/scholarly-modern-10m-qualify-20261017-01/step-000000020.pt",
+  "initial_validation": {
+    "step": 0,
+    "tokens": 0,
+    "per_source": {
+      "fineweb_edu": 10.442322630761264,
+      "code_python": 10.425048828125,
+      "finemath_4plus": 10.42626953125,
+      "pes2o": 10.433746337890625,
+      "pubmed": 10.434844970703125,
+      "arxiv": 10.437774658203125,
+      "pressbooks": 10.478409090909091,
+      "libretexts": 10.438568115234375,
+      "doab": 10.44623253493014,
+      "gutenberg": 10.4898681640625,
+      "pre_1929_books": 10.47186279296875,
+      "library_of_congress": 10.453521728515625
+    },
+    "weighted_loss": 10.438664366985762
+  },
+  "final_validation": {
+    "step": 20,
+    "tokens": 1309624,
+    "per_source": {
+      "fineweb_edu": 9.05748316934231,
+      "code_python": 9.356674194335938,
+      "finemath_4plus": 9.155120849609375,
+      "pes2o": 9.134445190429688,
+      "pubmed": 9.145660400390625,
+      "arxiv": 9.17059326171875,
+      "pressbooks": 9.250340909090909,
+      "libretexts": 9.043167114257812,
+      "doab": 9.20434131736527,
+      "gutenberg": 9.108718872070312,
+      "pre_1929_books": 9.007034301757812,
+      "library_of_congress": 9.090301513671875
+    },
+    "weighted_loss": 9.190617224977741
+  },
+  "loss_token_exposures": {
+    "fineweb_edu": 130270,
+    "code_python": 389745,
+    "finemath_4plus": 261421,
+    "pes2o": 131523,
+    "pubmed": 40593,
+    "arxiv": 26624,
+    "pressbooks": 39700,
+    "libretexts": 39317,
+    "doab": 52953,
+    "gutenberg": 65801,
+    "pre_1929_books": 92160,
+    "library_of_congress": 39517
+  },
+  "validation_note": "One fixed window/source; diagnostic only"
+}

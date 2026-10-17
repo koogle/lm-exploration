@@ -7,6 +7,8 @@ import modal
 
 from modal_prepare_scholarly import image
 
+image = image.add_local_file("modal_prepare_scholarly.py", "/project/modal_prepare_scholarly.py")
+
 app = modal.App("lm-exploration-small-5b-preparation")
 volume = modal.Volume.from_name("lm-exploration-mixture-data")
 
