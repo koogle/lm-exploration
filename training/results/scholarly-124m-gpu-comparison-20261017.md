@@ -1,9 +1,9 @@
 # Measured GPU comparison for 20B-token pretraining
 
-> The measurements below used the recorded SDPA source snapshots. The SDPA
-> implementation is split into a separate PR; the merged model retains explicit
-> attention until that PR lands. These throughput estimates do not apply to the
-> current explicit-attention implementation. Raw results and provenance are unchanged.
+> The measurements below used the recorded SDPA source snapshots. The modern
+> model now uses the same causal SDPA implementation, introduced separately from
+> the pilot and benchmark tooling in PR #10. Raw results and provenance are unchanged;
+> these throughput estimates do not apply to the historical explicit-attention implementation.
 
 Measured on Modal on 2026-10-17. The user requested hardware research before the
 full run and prioritized elapsed time over GPU cost. **Three H100s are the

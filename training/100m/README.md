@@ -15,9 +15,25 @@ model and its individual ablation PRs are unchanged.
 | Positions | RoPE on Q/K in every layer, theta 10,000 |
 | Feedforward | SwiGLU, hidden width 2,048 |
 | Projection biases | Present |
-| Attention kernel | Original explicit causal MHA |
+| Attention kernel | PyTorch causal scaled-dot-product attention (SDPA) |
 | Initialization | Normal std 0.02 |
 | Input/output weights | One shared Parameter |
+
+## Attention, scaling and FlashAttention
+
+![Attention pipeline: query–key scores are scaled and causally masked before softmax; the resulting weights combine values. FlashAttention computes the same operation in tiles with less memory traffic.](images/attention-sdpa-flashattention.png)
+
+The scale applies to `QKᵀ` scores before softmax, not directly to `V`. Each head
+has 64 dimensions, so scores are divided by `sqrt(64) = 8`. The causal mask
+forbids query–key pairs involving future tokens; masking a key at projection time
+would incorrectly hide it from every query. Optimized kernels can skip fully
+masked tiles instead of computing scores that will be discarded.
+
+PyTorch SDPA selects an attention backend, including FlashAttention when
+supported. FlashAttention uses tiled computation and incremental softmax to avoid
+materializing the full score/probability matrices in GPU global memory. It computes
+the same attention operation, with small floating-point differences possible.
+The diagram is explanatory, not a measured GPU memory trace.
 
 ## Mechanisms and references
 
@@ -82,10 +98,8 @@ The general recipe trainer and generation CLI remain character-only. The separat
 The [GPU comparison](../results/scholarly-124m-gpu-comparison-20261017.md) measures
 SDPA and fused AdamW on the full model, including two- and three-H100 DDP.
 The historical pilot used explicit attention; its original source is archived
-with its run. The SDPA implementation and its regression test are split into a
-separate PR; this branch retains explicit attention. The recorded GPU throughput
-is historical evidence from the SDPA source snapshots, not a measurement of
-the current explicit-attention implementation.
+with its run. SDPA preserves the model shape and checkpoint keys, with output
+and gradient agreement checked against the explicit implementation.
 
 ## Verification
 

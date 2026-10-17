@@ -45,8 +45,8 @@ and up to 64 new tokens. PAD/BOS/UNK are excluded from sampled outputs.
 The full corpus still needs split reconciliation, global near deduplication,
 provenance/eligibility and contamination audits, and capacity evidence. Measure
 throughput before selecting the substantial-run hardware and budget. The current
-model retains explicit attention; a supported SDPA kernel is a possible separately
-verified optimization.
+model uses causal SDPA, introduced separately from the pilot. The historical
+pilot used explicit attention, with its source preserved alongside the run.
 
 In the managed cloud environment, Modal's client needs the system CA trust:
 install `modal[api-proxy-support]==1.6.2` and `truststore`, call
