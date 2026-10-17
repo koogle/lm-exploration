@@ -19,6 +19,7 @@ def measure():
     os.environ["RAYON_NUM_THREADS"] = "8"
     from trainer.benchmark_preparation import benchmark
 
+    print("Starting controlled CPU benchmarks", flush=True)
     result = {
         "cpu_request": 16,
         "tokenizer_threads": 8,
@@ -39,7 +40,10 @@ def measure():
     for source in sources:
         source["weight_percent"] = 50
 
+    print("Fetching pinned real-source samples", flush=True)
+
     def collect(source):
+        print(f"Sampling {source['name']}", flush=True)
         rows = CachedShards()(source, source["files"][5 if source["name"] == "code_python" else 0])
         try:
             return [next(rows)[1] for _ in range(256)]
@@ -50,6 +54,7 @@ def measure():
     with ThreadPoolExecutor(max_workers=2) as pool:
         samples = list(pool.map(collect, sources))
     result["live_sample_fetch_seconds"] = time.perf_counter() - started
+    print("Real-source samples downloaded; benchmarking", flush=True)
     for source in sources:
         source["files"] = [source["files"][5 if source["name"] == "code_python" else 0]]
     result["live_sample"] = benchmark(

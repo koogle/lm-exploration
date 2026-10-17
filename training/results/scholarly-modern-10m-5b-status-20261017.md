@@ -1,6 +1,21 @@
 # Modern 9.85M / 5B-token experiment
 
-## Preparation speedup deployed
+## Latest: all preparation optimizations deployed
+
+The pipeline now uses batched tokenization on eight tokenizer threads, atomic
+64-row writes and three concurrent source workers on 16 requested CPUs. Live
+progress confirms Python, FineMath and peS2o are all being collected concurrently.
+Code: `4d24240`. Active call: `fc-01M55MH646C21S71HM79JNKNY7`.
+The previous call failed on an interrupted upstream gzip response. The replacement
+adds cached compressed downloads and bounded retries, preserving committed data.
+
+Controlled Modal CPU benchmarks: 4.27–4.64x faster on synthetic text and 3.57x on
+pinned Python/FineMath samples, with identical stored-output fingerprints. These
+exclude upstream downloads and volume commits. Live processing handled 8,832
+records in a 20.10-second window. See `preparation-speedup-20261017.md` and its
+JSON report. This section supersedes the earlier call IDs below.
+
+## Earlier: preparation stream fix deployed
 
 At roughly 651M unique Python training tokens, the preparation worker was stopped
 and resumed from its committed corpus using persistent upstream streams. Code

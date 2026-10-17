@@ -166,3 +166,31 @@ documents, counts and cursors, and verify reopening at a saved cursor after roll
 Future improvements include bounded parallel fetching and batched tokenization;
 these require coordinating a single database writer and deduplication decisions.
 No measured end-to-end speedup is claimed until live progress supports it.
+
+### Batched, parallel preparation
+
+The preparation worker now requests 16 CPUs / 16 GiB RAM. Up to three source
+workers fetch and tokenize concurrently; the tokenizer uses eight Rust threads.
+Each worker emits at most 64 documents or roughly 4 MiB of text per batch. A
+single SQLite writer commits the documents, filtering decisions, repetition
+counts and source cursor atomically. It commits source batches in deterministic
+round-robin order, so network timing cannot decide duplicate ownership. Existing
+stored documents retain their source assignment. New-source ownership can differ
+from the former whole-source-at-a-time schedule when content overlaps.
+
+Trigger-maintained token totals replace repeated full-corpus scans. Existing
+staging is migrated with one initial count scan; its identity and document format
+are preserved. Trigger changes roll back with a failed write transaction.
+
+Compressed JSON shards are cached locally, retaining one shard per active source.
+Download interruptions retry a batch up to four attempts from its committed
+cursor. Partial prefetched batches are never recorded as trained/prepared data.
+Volume snapshots and workflow status update after approximately 20 seconds of
+processing; initial downloads can take longer. Discarded prefetch may be fetched
+again on restart; committed accepted records are reused.
+
+Controlled Modal CPU benchmarks measured 4.3–4.6x faster processing with identical
+stored outputs on two synthetic trials. Those figures exclude upstream downloads,
+volume commits and the one-time count migration. See the retained benchmark JSON
+for exact timing and matched-output fingerprints. They do not establish the
+end-to-end preparation speedup on the live corpus.

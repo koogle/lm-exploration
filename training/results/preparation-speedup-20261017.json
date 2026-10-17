@@ -5,39 +5,62 @@
   "trials": [
     {
       "serial": {
-        "seconds": 3.1029657960000003,
-        "rows_per_second": 660.0137206281986,
-        "tokens_per_second": 489562.9213696946,
+        "seconds": 3.894055049,
+        "rows_per_second": 525.9299044901612,
+        "tokens_per_second": 390106.70904359885,
         "counted_tokens": 1519097,
         "fingerprint": "a361d1bd248f9c095d4a01712f4a93768f1f43ce90c99f737de015fa60717ed2"
       },
       "batched_parallel": {
-        "seconds": 0.7141560279999997,
-        "rows_per_second": 2867.720665658235,
-        "tokens_per_second": 2127122.001972377,
+        "seconds": 0.8392080709999998,
+        "rows_per_second": 2440.3959766016123,
+        "tokens_per_second": 1810155.3744470605,
         "counted_tokens": 1519097,
         "fingerprint": "a361d1bd248f9c095d4a01712f4a93768f1f43ce90c99f737de015fa60717ed2"
       },
-      "speedup": 4.344940985361258,
-      "scope": "Synthetic CPU tokenizer/SQLite benchmark; excludes upstream download and Modal Volume commit"
+      "speedup": 4.640154430783591,
+      "scope": "Controlled CPU tokenizer/SQLite benchmark; excludes upstream download and Modal Volume commit"
     },
     {
       "serial": {
-        "seconds": 3.123641353000001,
-        "rows_per_second": 655.6450528589219,
-        "tokens_per_second": 486322.47698380356,
+        "seconds": 3.9125545859999997,
+        "rows_per_second": 523.4431763145758,
+        "tokens_per_second": 388262.1869189176,
         "counted_tokens": 1519097,
         "fingerprint": "a361d1bd248f9c095d4a01712f4a93768f1f43ce90c99f737de015fa60717ed2"
       },
       "batched_parallel": {
-        "seconds": 0.6761790510000001,
-        "rows_per_second": 3028.7835699305033,
-        "tokens_per_second": 2246589.860708358,
+        "seconds": 0.9160296340000009,
+        "rows_per_second": 2235.735530800522,
+        "tokens_per_second": 1658349.1882971097,
         "counted_tokens": 1519097,
         "fingerprint": "a361d1bd248f9c095d4a01712f4a93768f1f43ce90c99f737de015fa60717ed2"
       },
-      "speedup": 4.6195476603134225,
-      "scope": "Synthetic CPU tokenizer/SQLite benchmark; excludes upstream download and Modal Volume commit"
+      "speedup": 4.271209621150745,
+      "scope": "Controlled CPU tokenizer/SQLite benchmark; excludes upstream download and Modal Volume commit"
     }
-  ]
+  ],
+  "live_sample_fetch_seconds": 70.861902684,
+  "live_sample": {
+    "serial": {
+      "seconds": 1.8470972530000012,
+      "rows_per_second": 277.1916850444256,
+      "tokens_per_second": 416150.25887323945,
+      "counted_tokens": 768670,
+      "fingerprint": "43becf280c2f812d858743e90912919f2d32a9c10a2dfeb903b7094457532420"
+    },
+    "batched_parallel": {
+      "seconds": 0.5169796729999945,
+      "rows_per_second": 990.3677586178625,
+      "tokens_per_second": 1486847.6269859225,
+      "counted_tokens": 768670,
+      "fingerprint": "43becf280c2f812d858743e90912919f2d32a9c10a2dfeb903b7094457532420"
+    },
+    "speedup": 3.5728624343805118,
+    "scope": "Controlled CPU tokenizer/SQLite benchmark; excludes upstream download and Modal Volume commit",
+    "source_names": [
+      "code_python",
+      "finemath_4plus"
+    ]
+  }
 }
