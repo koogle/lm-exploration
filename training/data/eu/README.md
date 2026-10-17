@@ -506,9 +506,10 @@ filtering, strict fallback validation and transient HF commit recovery.
 ### Automatic continuation toward 100,000 documents
 
 The explicit collection goal is configured in `collection_goal.json`. The current
-scope counts stored documents across ECB, EMA, EUR-Lex and Commission Press
-Corner; “EMR” is interpreted as EMA. This scope is an assumption pending the
-owner's clarification, not a claim that 100,000 ECB/EMA documents exist.
+scope counts stored documents from ECB and EMA only, following the owner's
+request to focus on these organizations; “EMR” is interpreted as EMA. Existing
+EUR-Lex/Commission batches may finish, but the controller allocates no successors
+to them. This is not a claim that 100,000 ECB/EMA documents exist.
 
 `modal_goal.py` deploys `lm-exploration-eu-100k`: a single scheduled controller
 checks fresh source metrics every 15 minutes. It launches bounded three-round

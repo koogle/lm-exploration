@@ -2,9 +2,7 @@
   "control_repo": "jfrick/eu-corpus-control",
   "sources": [
     "ecb",
-    "ema",
-    "eurlex",
-    "commission-press"
+    "ema"
   ],
   "target_documents": 100000,
   "rounds": 3,
