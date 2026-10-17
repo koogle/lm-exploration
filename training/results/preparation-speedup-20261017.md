@@ -60,3 +60,10 @@ injected download failure retries without advancing the durable cursor twice.
 Migration from the existing raw database preserves data identity and token counts.
 A cached-shard test checks exact resume row indices, upstream revision pinning and
 old-shard eviction. These tests passed before the resumed live run.
+
+
+A subsequent pair of committed live progress updates was 36.72 seconds apart
+and added 28,028,859 unique training tokens across Python, FineMath and peS2o:
+approximately 763K tokens/second, including the elapsed time between volume
+progress commits. This is a short preparation interval, not training throughput
+or a promised full-run rate. See `preparation-live-throughput-20261017.json`.
