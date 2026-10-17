@@ -613,3 +613,9 @@ checksum. It then downloads the pinned uploaded archive and verifies its hash.
 Only these code paths are written; collection checkpoints and corpus Parquet are
 not replaced. Ignored artifacts and uncommitted edits are excluded. This provides
 a second code/research backup alongside GitHub, but is not a full Git-history backup.
+
+For an immediate backup attempt followed by retries every ten minutes until a
+verified upload succeeds, run `uv run retry_backup.py --interval 600`. The loop
+records attempts and the next retry time in ignored
+`artifacts/hf-code-backup-retries.jsonl`, then saves the verified upload receipt.
+It stops on success or a non-transient error requiring code/configuration repair.
