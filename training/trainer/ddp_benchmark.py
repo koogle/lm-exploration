@@ -2,6 +2,7 @@
 
 import argparse
 import copy
+import hashlib
 import json
 import os
 import statistics
@@ -11,7 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 
 
-def trial(manifest, microbatch, timed_steps, output):
+def trial(manifest, microbatch, timed_steps, output, benchmark_replay=False):
     import torch
     import torch.distributed as dist
     from model_100m.model import GPT, ModelConfig
@@ -78,6 +79,9 @@ def trial(manifest, microbatch, timed_steps, output):
             model.parameters(), lr=3e-4, betas=(0.9, 0.95), weight_decay=0.1, fused=True
         )
         measurements = []
+        initial_data = data.state_dict() if rank == 0 else None
+        replays = 0
+        trajectory = hashlib.sha256()
         torch.cuda.reset_peak_memory_stats()
         for step in range(timed_steps + 2):
             torch.cuda.synchronize()
@@ -85,7 +89,15 @@ def trial(manifest, microbatch, timed_steps, output):
             start = time.perf_counter()
             # One loader constructs the identical global token-weighted batch used on one GPU.
             if rank == 0:
-                full_x, full_y = data.next_batch(global_windows, "cuda")
+                try:
+                    full_x, full_y = data.next_batch(global_windows, "cuda")
+                except StopIteration:
+                    if not benchmark_replay:
+                        raise
+                    data.load_state_dict(initial_data)
+                    replays += 1
+                    full_x, full_y = data.next_batch(global_windows, "cuda")
+                trajectory.update(json.dumps(data.state_dict(), sort_keys=True).encode())
                 xs, ys = list(full_x.chunk(world)), list(full_y.chunk(world))
                 global_count = (full_y != -100).sum()
             else:
@@ -146,6 +158,8 @@ def trial(manifest, microbatch, timed_steps, output):
                 "peak_allocated_gib_per_gpu": float(peak),
                 "measurements": measurements,
                 "data_end": data.state_dict(),
+                "benchmark_buffer_replays": replays,
+                "data_trajectory_sha256": trajectory.hexdigest(),
                 "masked_ddp_gradient_and_update_check": "passed",
                 "device": torch.cuda.get_device_name(),
                 "parameters": sum(p.numel() for p in model.parameters()),
@@ -162,5 +176,6 @@ if __name__ == "__main__":
     parser.add_argument("--microbatch", type=int, required=True)
     parser.add_argument("--steps", type=int, required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--benchmark-replay", action="store_true")
     args = parser.parse_args()
-    trial(args.manifest, args.microbatch, args.steps, args.output)
+    trial(args.manifest, args.microbatch, args.steps, args.output, args.benchmark_replay)

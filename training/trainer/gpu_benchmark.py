@@ -1,13 +1,21 @@
 """Matched measured training throughput; no full pretraining is launched."""
 
 import gc
+import hashlib
 import json
 import statistics
 import time
 from dataclasses import asdict
 
 
-def benchmark(manifest, requested_gpu, provenance):
+def benchmark(
+    manifest,
+    requested_gpu,
+    provenance,
+    microbatches=(2, 4, 8, 16, 24, 48),
+    sustained_steps=30,
+    benchmark_replay=False,
+):
     import torch
     from model_10m import model as reference
     from model_100m import model as modern
@@ -49,11 +57,21 @@ def benchmark(manifest, requested_gpu, provenance):
         torch.cuda.reset_peak_memory_stats()
         measurements = []
         initial_data = data.state_dict()
+        replays = 0
+        trajectory = hashlib.sha256()
         for step in range(timed_steps + 2):
             torch.cuda.synchronize()
             start = time.perf_counter()
             # Identical 48 windows per update on every device/microbatch size.
-            full_x, full_y = data.next_batch(effective_windows, "cuda")
+            try:
+                full_x, full_y = data.next_batch(effective_windows, "cuda")
+            except StopIteration:
+                if not benchmark_replay:
+                    raise
+                data.load_state_dict(initial_data)
+                replays += 1
+                full_x, full_y = data.next_batch(effective_windows, "cuda")
+            trajectory.update(json.dumps(data.state_dict(), sort_keys=True).encode())
             batches = list(zip(full_x.split(microbatch), full_y.split(microbatch)))
             count = sum(int((y != -100).sum()) for _, y in batches)
             optimizer.zero_grad(set_to_none=True)
@@ -96,11 +114,13 @@ def benchmark(manifest, requested_gpu, provenance):
             "data_start": initial_data,
             "data_end": data.state_dict(),
             "parameters": sum(p.numel() for p in model.parameters()),
+            "benchmark_buffer_replays": replays,
+            "data_trajectory_sha256": trajectory.hexdigest(),
         }
         report["loss_tokens_per_second"] = report["total_loss_tokens"] / report["total_seconds"]
         return report
 
-    for microbatch in (2, 4, 8, 16, 24, 48):
+    for microbatch in microbatches:
         try:
             row = {"status": "ok", **run(microbatch, 6)}
         except torch.cuda.OutOfMemoryError:
@@ -130,7 +150,7 @@ def benchmark(manifest, requested_gpu, provenance):
     selected = max(successful, key=lambda row: row["loss_tokens_per_second"])
     gc.collect()
     torch.cuda.empty_cache()
-    sustained = run(selected["microbatch"], 30)
+    sustained = run(selected["microbatch"], sustained_steps)
     report = {
         "requested_gpu": requested_gpu,
         "device": torch.cuda.get_device_name(),
@@ -149,7 +169,9 @@ def benchmark(manifest, requested_gpu, provenance):
         "sweep": rows,
         "sustained": sustained,
         "elapsed_seconds": time.monotonic() - total_start,
+        "benchmark_replay": benchmark_replay,
         "notes": [
+            "Optional bounded benchmark-buffer replay measures speed only; no weights are retained.",
             "Uses actual frozen-tokenizer pilot mixture batches, not synthetic tokens.",
             "Timings include loader, H2D, forward, backward, clipping and optimizer.",
             "Checkpoint/evaluation/preparation and cold startup are outside step timing.",

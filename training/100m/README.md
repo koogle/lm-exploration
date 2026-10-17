@@ -15,7 +15,7 @@ model and its individual ablation PRs are unchanged.
 | Positions | RoPE on Q/K in every layer, theta 10,000 |
 | Feedforward | SwiGLU, hidden width 2,048 |
 | Projection biases | Present |
-| Attention kernel | Original explicit causal MHA |
+| Attention kernel | PyTorch causal scaled-dot-product attention (SDPA) |
 | Initialization | Normal std 0.02 |
 | Input/output weights | One shared Parameter |
 
@@ -77,10 +77,13 @@ their original untied weights and exact logits. Missing version metadata means
 legacy; the loader does not silently tie or modernize old weights. Resume across
 architecture versions is rejected. This is not a second modern model variant.
 
-The general recipe trainer and generation CLI remain character-only; the frozen
-BPE preparation pipeline still needs model-training integration. Tests run real
-frozen-tokenizer IDs through tiny modern models, not a completed subword
-pretraining or text-generation workflow. No GPU run is part of this update.
+The general recipe trainer and generation CLI remain character-only. The separate
+[subword pilot](PILOT.md) integrates the frozen BPE tokenizer and mixture loader.
+The [GPU comparison](../results/scholarly-124m-gpu-comparison-20261017.md) measures
+SDPA and fused AdamW on the full model, including two- and three-H100 DDP.
+The historical pilot used explicit attention; its original source is archived
+with its run. SDPA preserves the model shape and checkpoint keys, with output
+and gradient agreement checked against the explicit implementation.
 
 ## Verification
 

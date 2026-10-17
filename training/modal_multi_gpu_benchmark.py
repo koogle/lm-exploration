@@ -1,4 +1,4 @@
-"""Bounded two/three H100 data-parallel benchmarks; never starts full pretraining."""
+"""Bounded two/three GPU data-parallel benchmarks; never starts full pretraining."""
 
 import hashlib
 import json
@@ -22,15 +22,15 @@ results_volume = modal.Volume.from_name("lm-exploration-training")
     gpu="H100:2",
     cpu=8,
     memory=32768,
-    timeout=1200,
+    timeout=1800,
     retries=0,
-    max_containers=2,
+    max_containers=4,
     volumes={"/data": data_volume, "/runs": results_volume},
 )
-def worker(world, run_id, provenance):
+def worker(gpu, world, run_id, provenance, sustained_steps):
     import torch
 
-    output = Path("/runs") / run_id / f"H100x{world}"
+    output = Path("/runs") / run_id / f"{gpu}x{world}"
     output.mkdir(parents=True, exist_ok=False)
     manifest = "/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001/manifest.json"
     rows = []
@@ -59,7 +59,7 @@ def worker(world, run_id, provenance):
             check=False,
             capture_output=True,
             text=True,
-            timeout=240,
+            timeout=600,
         )
         (output / f"{name}.log").write_text(result.stdout + result.stderr)
         if result.returncode:
@@ -77,6 +77,7 @@ def worker(world, run_id, provenance):
             print(
                 json.dumps(
                     {
+                        "gpu": gpu,
                         "gpus": world,
                         **{k: v for k, v in row.items() if k not in ("measurements", "data_end")},
                     }
@@ -89,11 +90,11 @@ def worker(world, run_id, provenance):
         selected = max(
             (r for r in rows if r["status"] == "ok"), key=lambda r: r["loss_tokens_per_second"]
         )
-        sustained = run(selected["microbatch_per_gpu"], 30, "sustained")
+        sustained = run(selected["microbatch_per_gpu"], sustained_steps, "sustained")
         if sustained["status"] != "ok":
             raise RuntimeError("Selected batch did not pass sustained validation")
         report = {
-            "requested_gpu": f"H100:{world}",
+            "requested_gpu": f"{gpu}:{world}",
             "world_size": world,
             "torch_version": str(torch.__version__),
             "precision": "BF16 autocast / FP32 parameters",
@@ -122,11 +123,21 @@ def worker(world, run_id, provenance):
 
 
 @app.local_entrypoint()
-def main(run_id: str = "scholarly-124m-gpu-comparison-20261017-01"):
+def main(
+    run_id: str = "scholarly-124m-gpu-comparison-20261017-01",
+    gpus: str = "H100",
+    sustained_steps: int = 30,
+):
     import re
 
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
         raise ValueError("Invalid run ID")
+    gpu_types = gpus.split(",")
+    if not gpu_types or any(gpu not in {"H100", "L40S", "A10G"} for gpu in gpu_types):
+        raise ValueError("GPUs must be a comma-separated subset of H100,L40S,A10G")
+    if not 1 <= sustained_steps <= 100:
+        raise ValueError("Sustained steps must be in 1..100 for the bounded pilot buffer")
+    Path("results").mkdir(exist_ok=True)
     files = [
         Path("modal_multi_gpu_benchmark.py"),
         Path("modal_scholarly_pilot.py"),
@@ -140,18 +151,19 @@ def main(run_id: str = "scholarly-124m-gpu-comparison-20261017-01"):
         "source_sha256": {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
     }
     calls = {}
-    for world in (2, 3):
-        calls[world] = worker.with_options(gpu=f"H100:{world}", cpu=world * 4).spawn(
-            world, run_id, provenance
-        )
+    for gpu in gpu_types:
+        for world in (2, 3):
+            calls[gpu, world] = worker.with_options(gpu=f"{gpu}:{world}", cpu=world * 4).spawn(
+                gpu, world, run_id, provenance, sustained_steps
+            )
     errors = []
-    for world, call in calls.items():
+    for (gpu, world), call in calls.items():
         try:
             result = call.get()
-            Path(f"results/{run_id}-H100x{world}.json").write_text(
+            Path(f"results/{run_id}-{gpu}x{world}.json").write_text(
                 json.dumps(result, indent=2) + "\n"
             )
         except Exception as exc:  # noqa: BLE001 -- retain results from independent remote trials
-            errors.append(f"{world} GPUs: {exc}")
+            errors.append(f"{gpu} x {world}: {exc}")
     if errors:
         raise RuntimeError("; ".join(errors))
