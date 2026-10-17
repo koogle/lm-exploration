@@ -1,0 +1,10 @@
+{
+  "run_id": "scholarly-modern-10m-5b-20261017",
+  "function_call_id": "fc-01M54Q6P2R6P7YH626XRGFVEE5",
+  "app_url": "https://modal.com/apps/radiantai/main/deployed/lm-exploration-modern-10m-5b",
+  "target_tokens": 5000000000,
+  "git_commit": "dff9c8621d667dfaeb2d35598854317f16e527b5",
+  "gpu_count": 3,
+  "parameters": 9849536,
+  "automatic_training_after_preparation": true
+}

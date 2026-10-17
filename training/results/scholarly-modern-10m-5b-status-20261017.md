@@ -1,5 +1,46 @@
 # Modern 9.85M / 5B-token experiment
 
+## Latest: automatic 5B workflow launched
+
+The user reiterated the instruction to run the full 5B experiment. It is now
+launched as a durable deployed workflow:
+https://modal.com/apps/radiantai/main/deployed/lm-exploration-modern-10m-5b .
+Run ID: `scholarly-modern-10m-5b-20261017`. Preparation call:
+`fc-01M54Q6P2R6P7YH626XRGFVEE5`. Executed code commit: `dff9c86`.
+
+The old preparation app was stopped and its committed corpus/cursors reused.
+The deployed workflow automatically finishes capacity preparation, freezes the
+raw snapshot, starts the model from scratch under the final 5B schedule, checks
+a two-step training + two-step fresh-job resume, and continues on three H100s.
+Those real-corpus qualification updates count toward the final target. It
+continues through six-hour GPU sessions with atomic checkpoints every 500 updates
+and checks each resumed validation boundary. Continuation controllers hand off
+automatically, bounded to 20 GPU sessions; no-progress, nonfinite validation,
+insufficient source capacity, source exhaustion or unexpected stops are failures.
+Completion may fall short of 5B by less than one global batch (98,304 positions),
+so the token ceiling is never exceeded. Status is persisted at
+`lm-exploration-training/scholarly-modern-10m-5b-20261017/workflow.json`.
+
+`experimental_data: true` is explicitly restricted to the modern 9.85M model
+and at most 5B tokens. It permits the authorized experiment with recorded
+pending data audits, while preserving the two-pass capacity check, tokenizer/hash
+checks, split filtering and exact-duplicate safeguards. It does not change the
+manifest to claim completed audits. Pending audits are tokenizer split
+reconciliation, global near deduplication, cross-source parent reconciliation,
+and eligibility/contamination review. Results remain exploratory.
+
+The new raw loader and deployed GPU worker were qualified on a separate synthetic
+fixture: two updates, then two more in a fresh job, totaling 384,270 tokens.
+The resumed validation exactly matched the prior final validation. These fixture
+tokens are excluded from the 5B experiment. Reports: `raw-10m-gpu-qualify-20261017-01.json`
+and `raw-10m-gpu-resume-20261017-01.json`. Config/workflow/raw-loader CPU tests pass.
+
+The workflow was verified running in the **preparing** stage. The full-data GPU
+stage has not begun at this status update; it will start automatically. Do not
+redeploy changed training source over this active workflow: strict source hashes
+protect checkpoint continuation. The sections below retain the earlier handoff
+state for context; this section supersedes their manual-launch status.
+
 The user authorized a fresh 5B-token experiment using the smallest modern model
 and explicitly retained the planned scholarly/code mixture. The target model has
 **9,849,536 parameters**: eight layers, width 192, three heads (64 dimensions per
