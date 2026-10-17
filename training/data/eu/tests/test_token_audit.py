@@ -13,6 +13,11 @@ from hf_store import RECORD_SCHEMA, json_bytes
 from token_audit import AuditCache, measure_shard, run_audit
 
 
+@pytest.fixture(autouse=True)
+def no_real_audit_sleeps(monkeypatch):
+    monkeypatch.setattr("token_audit.time.sleep", lambda _: None)
+
+
 class Encoding:
     name = "o200k_base"
 
@@ -166,3 +171,20 @@ def test_lost_commit_response_accepts_only_exact_persisted_bytes(monkeypatch):
     assert cache.revision == control.sha
     assert len(control.writes) == 1
     assert json.loads(control.files["tokens/ecb.json"]) == {"exact": 42}
+
+
+def test_shard_pacing_cannot_exceed_remaining_budget(monkeypatch):
+    times = iter([0, 0, 0])
+    monkeypatch.setattr("token_audit.time.monotonic", lambda: next(times))
+    corpus, control = Corpus(), Control()
+    result = run_audit("ecb", corpus, control, Encoding(), work_seconds=1)
+    assert result["counted_rows"] == 0
+    assert not corpus.downloads
+
+
+def test_each_new_shard_is_paced(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr("token_audit.time.sleep", sleeps.append)
+    corpus, control = Corpus(), Control()
+    run_audit("ecb", corpus, control, Encoding())
+    assert sleeps == [2, 2]

@@ -694,3 +694,11 @@ again: `jfrick/eu-ecb`, `jfrick/eu-ema`, `jfrick/eu-eurlex` and
 Earlier public-visibility records document historical state, not the current
 setting. The control repository remains private. Collection and authenticated
 resume continue without changing document identities or checkpoints.
+
+Token-audit requests are paced with a two-second pause before each uncached shard,
+and checkpoint writes occur every 50 shards plus the final partial checkpoint.
+This reduces Hub request and commit bursts. A bounded `resume_after` Modal helper
+can defer one ECB/EMA audit pair until a server-requested cooldown expires; its
+call ID is recorded before returning. It is not a recurring schedule. HTTP429
+responses on 17 October requested approximately one hour, so those retries were
+deferred until 15:27 UTC rather than retried immediately.

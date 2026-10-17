@@ -26,6 +26,8 @@ from hf_store import (
 )
 
 ENCODING = "o200k_base"
+SHARD_DELAY_SECONDS = 2
+CHECKPOINT_SHARDS = 50
 
 
 class AuditCache:
@@ -153,10 +155,14 @@ def run_audit(source_id, corpus, cache_store, encoding, max_shards=100, work_sec
             continue
         if processed >= max_shards or time.monotonic() >= deadline:
             break
+        # Bound Hub request bursts independently from website collector pacing.
+        if time.monotonic() + SHARD_DELAY_SECONDS >= deadline:
+            break
+        time.sleep(SHARD_DELAY_SECONDS)
         body = corpus._download_bytes(shard["path"], revision)
         value["shards"][shard["sha256"]] = measure_shard(body, shard, encoding)
         processed += 1
-        if processed % 10 == 0:
+        if processed % CHECKPOINT_SHARDS == 0:
             checkpoint()
     return checkpoint()
 

@@ -41,6 +41,22 @@ def audit(source_id: str, max_shards: int = 1000, work_seconds: int = 1500):
     return audit_source(source_id, max_shards=max_shards, work_seconds=work_seconds)
 
 
+@app.function(image=image, cpu=0.125, memory=256, timeout=4000, max_containers=1, retries=0)
+def resume_after(not_before_epoch: float):
+    """Honor a bounded Hub cooldown without keeping a local session open."""
+    import time
+
+    if not 0 <= not_before_epoch - time.time() <= 3600:
+        raise ValueError("Resume must be scheduled within the next hour")
+    while time.time() < not_before_epoch:
+        time.sleep(max(0, min(60, not_before_epoch - time.time())))
+    # Each audit retains its own hard runtime bound and existing durable cache.
+    return [
+        {"source_id": source, "call_id": audit.spawn(source, 3000, 1500).object_id}
+        for source in ("ecb", "ema")
+    ]
+
+
 @app.local_entrypoint()
 def main(source: str = "ecb", max_shards: int = 1000, work_seconds: int = 1500):
     print(json.dumps(audit.remote(source, max_shards, work_seconds), indent=2))
