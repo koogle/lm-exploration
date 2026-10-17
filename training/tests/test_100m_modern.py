@@ -99,6 +99,20 @@ class Modern100MTests(unittest.TestCase):
         for a, b in zip(actual_grad, expected_grad):
             torch.testing.assert_close(a, b)
 
+    def test_sdpa_matches_explicit_attention_outputs_and_gradients(self):
+        torch.manual_seed(123)
+        q, k, v = [
+            torch.randn(2, 3, 17, 8, dtype=torch.float64, requires_grad=True) for _ in range(3)
+        ]
+        actual = model.causal_attention(q, k, v)
+        expected = vanilla.causal_attention(q, k, v)
+        torch.testing.assert_close(actual, expected, rtol=1e-10, atol=1e-10)
+        upstream = torch.randn_like(actual)
+        actual_grad = torch.autograd.grad(actual, (q, k, v), upstream)
+        expected_grad = torch.autograd.grad(expected, (q, k, v), upstream)
+        for a, b in zip(actual_grad, expected_grad):
+            torch.testing.assert_close(a, b, rtol=1e-10, atol=1e-10)
+
     def test_swiglu_output_and_parameter_gradients(self):
         layer = model.SwiGLU(24).double()
         x = torch.randn(2, 3, 24, dtype=torch.float64, requires_grad=True)
