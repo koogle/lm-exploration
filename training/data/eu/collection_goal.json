@@ -1,0 +1,12 @@
+{
+  "control_repo": "jfrick/eu-corpus-control",
+  "sources": [
+    "ecb",
+    "ema"
+  ],
+  "target_documents": 100000,
+  "rounds": 3,
+  "max_documents": 1000,
+  "work_seconds": 3000,
+  "max_campaigns": 150
+}

@@ -1,5 +1,9 @@
 # Training datasets
 
+[EU institutional corpus exploration](eu/README.md) is a separate discovery and
+extraction project with ten source candidates, bounded crawlers, agent research
+notes and Parquet export. Its artifacts are not registered training inputs.
+
 For the new frozen-tokenizer corpus, use the separate
 [scholarly/code streaming pipeline](SCHOLARLY_STREAMING.md).
 
