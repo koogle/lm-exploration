@@ -116,18 +116,20 @@ def continue_training(run_id, snapshot, settings, provenance, previous=None, fir
 
 @app.function(
     image=cpu_image,
-    cpu=4,
-    memory=8192,
+    cpu=16,
+    memory=16384,
     timeout=86400,
     retries=0,
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def prepare_and_launch(run_id, version, settings, provenance, resume_preparation=False):
+    import os
+
+    from training_data.cached_shards import CachedShards
     from training_data.export_raw import export_raw
-    from training_data.persistent_stream import PersistentStream
+    from training_data.fast_raw_corpus import FastRawCorpus
     from training_data.prepared_snapshot import find_prepared_snapshot
-    from training_data.raw_corpus import RawCorpus
     from training_data.scholarly import load_recipe
 
     from trainer.distributed_config import DistributedConfig
@@ -136,11 +138,16 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
     DistributedConfig(**settings)
     folder = Path("/data/scholarly-code") / version
     corpus = None
-    stream = PersistentStream()
+    os.environ["RAYON_NUM_THREADS"] = "8"
     status_path = Path("/runs") / run_id / "workflow.json"
     if status_path.exists():
         prior = json.loads(status_path.read_text())
-        if not resume_preparation or prior.get("stage") != "preparing":
+        preparation_failed = (
+            prior.get("stage") == "failed"
+            and not (folder / "snapshots" / run_id / "manifest.json").exists()
+            and not (Path("/runs") / f"{run_id}-s00").exists()
+        )
+        if not resume_preparation or not (prior.get("stage") == "preparing" or preparation_failed):
             raise ValueError("Only stopped preparation can reuse its workflow run ID")
     elif resume_preparation:
         raise ValueError("No preparation exists to resume")
@@ -161,42 +168,25 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
             )
             call = continue_training.spawn(run_id, snapshot, settings, provenance)
             return {"training_call_id": call.object_id, "snapshot": snapshot, "data_reused": True}
-        corpus = RawCorpus(folder, recipe)
-        for _ in range(3):  # Recheck earlier sources after cross-source conflicts.
-            for source in sorted(recipe["sources"], key=lambda s: len(s["files"])):
-                name = source["name"]
-                while True:
-                    report = corpus.report(target)
-                    status = report["sources"][name]
-                    if (
-                        status["train_loss_tokens"] >= status["minimum_unique_train_tokens"] * 1.05
-                        and status["validation_loss_tokens"] > 0
-                    ):
-                        break
-                    if status["upstream_exhausted"]:
-                        if not status["capacity_sufficient"]:
-                            raise RuntimeError(
-                                f"{name} exhausted before reaching its required share: {status}"
-                            )
-                        break
-                    corpus.prepare(name, reader=stream)
-                    report = corpus.report(target)
-                    (folder / "capacity.json").write_text(json.dumps(report, indent=2) + "\n")
-                    data_volume.commit()
-                    record(
-                        run_id,
-                        "preparing",
-                        source=name,
-                        source_status=report["sources"][name],
-                        supported_mixture_exposures=report["supported_mixture_exposures"],
-                        target_tokens=target,
-                    )
+        corpus = FastRawCorpus(folder, recipe, workers=3, batch_size=64, reader=CachedShards())
+        while True:
+            progress = corpus.prepare_parallel(target, max_seconds=20)
             report = corpus.report(target)
-            try:
-                check_capacity(report, target)
+            (folder / "capacity.json").write_text(json.dumps(report, indent=2) + "\n")
+            data_volume.commit()
+            record(
+                run_id,
+                "preparing",
+                target_tokens=target,
+                sources=report["sources"],
+                supported_mixture_exposures=report["supported_mixture_exposures"],
+                preparation_progress=progress,
+                source_workers=3,
+                tokenizer_threads=8,
+                database_batch_size=64,
+            )
+            if progress["ready"]:
                 break
-            except ValueError:
-                pass
         check_capacity(report, target)
         corpus.close()
         corpus = None
@@ -228,7 +218,6 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
         record(run_id, "failed", error=f"{type(exc).__name__}: {exc}")
         raise
     finally:
-        stream.close()
         if corpus is not None:
             corpus.close()
         data_volume.commit()
