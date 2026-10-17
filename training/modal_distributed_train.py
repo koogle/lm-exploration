@@ -35,7 +35,7 @@ def validate_paths(run_id, snapshot, resume):
     gpu="H100:3",
     cpu=12,
     memory=32768,
-    timeout=3600,
+    timeout=86400,
     retries=0,
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
@@ -45,7 +45,7 @@ def worker(run_id, snapshot, settings, provenance, resume="", max_seconds=3000, 
 
     validate_paths(run_id, snapshot, resume)
     config = DistributedConfig(**settings)
-    if not 1 <= max_seconds <= 3000 or (max_steps is not None and max_steps < 1):
+    if not 1 <= max_seconds <= 82800 or (max_steps is not None and max_steps < 1):
         raise ValueError("Invalid session limits")
     output = Path("/runs") / run_id
     output.mkdir(parents=True, exist_ok=False)
@@ -129,7 +129,7 @@ def main(
     settings = DistributedConfig(**json.loads(Path(config).read_text()))
     if gpu not in {"H100", "L40S", "A10G"}:
         raise ValueError("Supported GPU families: H100, L40S, A10G")
-    if not 1 <= max_seconds <= 3000 or max_steps < 0:
+    if not 1 <= max_seconds <= 82800 or max_steps < 0:
         raise ValueError("Invalid session limits")
     files = [
         Path(__file__),

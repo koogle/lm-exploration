@@ -20,6 +20,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--data-manifest", required=True)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     out = Path(args.output)
@@ -71,6 +72,10 @@ def main():
     )
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
     (out / "requirements.txt").write_text("torch==2.6.0\nsafetensors>=0.4\ntokenizers==0.22.2\n")
+    shutil.copyfile(root / "publication/scholarly-124m-step2-card.md", out / "README.md")
+    shutil.copyfile(root / "publication/generate_smoke.py", out / "generate.py")
+    shutil.copyfile(args.data_manifest, out / "data-manifest.json")
+    assert digest(out / "data-manifest.json") == saved["data_identity"]["manifest_sha256"]
     print(
         json.dumps(
             {

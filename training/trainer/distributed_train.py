@@ -18,6 +18,7 @@ from trainer.distributed_config import DistributedConfig, validate_resume
 
 def source_hashes():
     import model_100m.model
+    import training_data.raw_token_stream
     import training_data.subword
     import training_data.token_stream
 
@@ -28,6 +29,7 @@ def source_hashes():
         "config": Path(trainer.distributed_config.__file__),
         "model": Path(model_100m.model.__file__),
         "loader": Path(training_data.token_stream.__file__),
+        "raw_loader": Path(training_data.raw_token_stream.__file__),
         "tokenizer": Path(training_data.subword.__file__),
     }
     return {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in paths.items()}
@@ -71,8 +73,8 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
     from torch.nn.parallel import DistributedDataParallel as DDP
     from training_data.token_stream import TokenMixture
 
-    if not 1 <= max_seconds <= 3000 or (max_steps is not None and max_steps < 1):
-        raise ValueError("Session limits must be positive; maximum session length is 3000 seconds")
+    if not 1 <= max_seconds <= 82800 or (max_steps is not None and max_steps < 1):
+        raise ValueError("Session limits must be positive; maximum session length is 82800 seconds")
     rank, world = int(os.environ["LOCAL_RANK"]), int(os.environ["WORLD_SIZE"])
     if world != config.world_size:
         raise ValueError("torchrun world size differs from configuration")
@@ -80,6 +82,10 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
     torch.set_num_threads(4)
     dist.init_process_group("nccl", timeout=timedelta(seconds=300))
     output, manifest = Path(output), Path(manifest)
+    if json.loads(manifest.read_text()).get("format") == "scholarly-raw-v1":
+        from training_data.raw_token_stream import RawTokenMixture
+
+        TokenMixture = RawTokenMixture
     commit = commit or (lambda: None)
     stopped = False
     old_handlers = {}
