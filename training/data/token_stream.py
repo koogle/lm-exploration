@@ -5,7 +5,16 @@ import itertools
 import json
 from pathlib import Path
 
-from .subword import TOKENIZER_SHA256, VOCAB_SIZE, digest
+from .subword import (
+    BOS_TOKEN_ID,
+    EOS_TOKEN_ID,
+    FIRST_CONTENT_TOKEN_ID,
+    LOSS_IGNORE_INDEX,
+    PAD_TOKEN_ID,
+    TOKENIZER_SHA256,
+    VOCAB_SIZE,
+    digest,
+)
 
 
 class TokenMixture:
@@ -62,10 +71,11 @@ class TokenMixture:
                     for line in handle:
                         row = json.loads(line)
                         if not row["ids"] or any(
-                            type(t) is not int or t < 4 or t >= VOCAB_SIZE for t in row["ids"]
+                            type(t) is not int or t < FIRST_CONTENT_TOKEN_ID or t >= VOCAB_SIZE
+                            for t in row["ids"]
                         ):
                             raise ValueError("Invalid content token IDs")
-                        tokens = [1, *row["ids"], 2]
+                        tokens = [BOS_TOKEN_ID, *row["ids"], EOS_TOKEN_ID]
                         for offset in range(0, len(tokens) - 1, self.context):
                             x = tokens[offset : offset + self.context]
                             y = tokens[offset + 1 : offset + self.context + 1]
@@ -73,8 +83,8 @@ class TokenMixture:
                             # At the end, x can include EOS without a next target.
                             x = x[:count]
                             yield {
-                                "input_ids": x + [0] * (self.context - count),
-                                "labels": y + [-100] * (self.context - count),
+                                "input_ids": x + [PAD_TOKEN_ID] * (self.context - count),
+                                "labels": y + [LOSS_IGNORE_INDEX] * (self.context - count),
                                 "loss_tokens": count,
                                 "source": name,
                                 "pass": pass_index + 1,

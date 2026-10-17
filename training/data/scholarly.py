@@ -14,7 +14,7 @@ import struct
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from .subword import TOKENIZER_SHA256, digest, load_frozen
+from .subword import FIRST_CONTENT_TOKEN_ID, TOKENIZER_SHA256, digest, load_frozen
 
 SPLIT_VERSION = "scholarly-parent-v2"
 MAX_CHARS = 4_000_000
@@ -232,7 +232,7 @@ class Stager:
                                     ).ids
                                 )
                                 # Literal spellings of special tokens must not become control IDs.
-                                if any(t < 4 for t in ids):
+                                if any(t < FIRST_CONTENT_TOKEN_ID for t in ids):
                                     reason = "special_token_in_content"
                                 provenance = {
                                     "document_id": document["document"],

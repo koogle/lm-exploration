@@ -11,6 +11,8 @@ from contextlib import nullcontext
 from datetime import timedelta
 from pathlib import Path
 
+from training_data.subword import LOSS_IGNORE_INDEX
+
 from trainer.distributed_config import DistributedConfig, validate_resume
 
 
@@ -49,7 +51,10 @@ def backward_batch(ddp, x, y, count, microbatch, world, *, bf16=True):
         with ddp.no_sync() if index < len(parts) - 1 else nullcontext():
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=bf16):
                 loss = F.cross_entropy(
-                    ddp(mx).flatten(0, 1), my.flatten(), reduction="sum", ignore_index=-100
+                    ddp(mx).flatten(0, 1),
+                    my.flatten(),
+                    reduction="sum",
+                    ignore_index=LOSS_IGNORE_INDEX,
                 )
             total_loss += loss.detach()
             # DDP averages gradients: compensate before global token normalization.
@@ -210,7 +215,10 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                     y = torch.tensor([block["labels"]], device="cuda")
                     with torch.autocast("cuda", dtype=torch.bfloat16):
                         loss = F.cross_entropy(
-                            model(x).flatten(0, 1), y.flatten(), reduction="sum", ignore_index=-100
+                            model(x).flatten(0, 1),
+                            y.flatten(),
+                            reduction="sum",
+                            ignore_index=LOSS_IGNORE_INDEX,
                         )
                     losses[name] = float(loss) / block["loss_tokens"]
             finally:
@@ -300,7 +308,7 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                     full_x, full_y = data.next_batch(config.global_windows, "cuda")
                 except StopIteration:
                     return {"stop": "source_two_pass_limit"}
-                count = int((full_y != -100).sum())
+                count = int((full_y != LOSS_IGNORE_INDEX).sum())
                 if tokens + count > config.target_tokens:
                     # Do not consume untrained data or exceed the token ceiling.
                     data.load_state_dict(cursor)

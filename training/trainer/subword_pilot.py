@@ -11,7 +11,15 @@ def train_pilot(manifest, output, provenance, commit):
     import torch
     from model_100m.model import GPT, ModelConfig
     from torch.nn import functional as F
-    from training_data.subword import TOKENIZER_SHA256, load_frozen
+    from training_data.subword import (
+        BOS_TOKEN_ID,
+        EOS_TOKEN_ID,
+        LOSS_IGNORE_INDEX,
+        PAD_TOKEN_ID,
+        TOKENIZER_SHA256,
+        UNK_TOKEN_ID,
+        load_frozen,
+    )
     from training_data.token_stream import TokenMixture
 
     if output.exists():
@@ -48,9 +56,9 @@ def train_pilot(manifest, output, provenance, commit):
     tiny = GPT(ModelConfig(vocab_size=32768, block_size=32, n_layer=1, n_head=2, n_embd=64)).cuda()
     tiny_optimizer = torch.optim.AdamW(tiny.parameters(), lr=0.01)
     tiny_x = torch.tensor(
-        [[1] + tokenizer.encode("def add(a, b): return a + b").ids], device="cuda"
+        [[BOS_TOKEN_ID] + tokenizer.encode("def add(a, b): return a + b").ids], device="cuda"
     )
-    tiny_y = torch.cat([tiny_x[:, 1:], torch.tensor([[2]], device="cuda")], dim=1)
+    tiny_y = torch.cat([tiny_x[:, 1:], torch.tensor([[EOS_TOKEN_ID]], device="cuda")], dim=1)
     tiny_losses = []
     for _ in range(30):
         tiny_optimizer.zero_grad(set_to_none=True)
@@ -98,7 +106,7 @@ def train_pilot(manifest, output, provenance, commit):
     def loss_sum(x, y):
         with torch.autocast("cuda", dtype=torch.bfloat16):
             return F.cross_entropy(
-                model(x).flatten(0, 1), y.flatten(), ignore_index=-100, reduction="sum"
+                model(x).flatten(0, 1), y.flatten(), ignore_index=LOSS_IGNORE_INDEX, reduction="sum"
             )
 
     @torch.no_grad()
@@ -169,7 +177,7 @@ def train_pilot(manifest, output, provenance, commit):
             data.load_state_dict(cursor)
             reason = "source_two_pass_limit"
             break
-        count = sum(int((y != -100).sum()) for _, y in batches)
+        count = sum(int((y != LOSS_IGNORE_INDEX).sum()) for _, y in batches)
         lr = settings["peak_lr"] * min((step + 1) / settings["warmup_steps"], 1.0)
         for group in optimizer.param_groups:
             group["lr"] = lr
@@ -239,15 +247,15 @@ def train_pilot(manifest, output, provenance, commit):
             "2 + 2 =",
         ]:
             torch.manual_seed(42)
-            ids = [1] + tokenizer.encode(prompt).ids
+            ids = [BOS_TOKEN_ID] + tokenizer.encode(prompt).ids
             x = torch.tensor([ids], device="cuda")
             for _ in range(64):
                 with torch.autocast("cuda", dtype=torch.bfloat16):
                     logits = model(x[:, -config.block_size :])[:, -1].float()
-                logits[:, [0, 1, 3]] = -float("inf")
+                logits[:, [PAD_TOKEN_ID, BOS_TOKEN_ID, UNK_TOKEN_ID]] = -float("inf")
                 token = torch.multinomial(logits.softmax(-1), 1)
                 x = torch.cat([x, token], dim=1)
-                if token.item() == 2:
+                if token.item() == EOS_TOKEN_ID:
                     break
             samples[prompt] = tokenizer.decode(x[0].tolist())
     tokens = sum(data.exposures.values())

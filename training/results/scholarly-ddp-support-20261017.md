@@ -48,7 +48,7 @@ ran on **two H100s** through the user-facing launcher:
 The resumed initial per-source validation exactly matches the first job's final
 validation; token counters continue without reset. Both jobs and the final
 integration test record identical hashes for the trainer/config/model/loader/
-tokenizer source, checked against the PR files. Both full-model jobs stopped
+tokenizer source, checked against verification commit `c69c38c`. Both full-model jobs stopped
 at the requested two additional updates and committed their checkpoints.
 These short timings include validation/save overhead and are not throughput
 estimates. Full-model uninterrupted/resumed tensor equivalence is not asserted
@@ -85,3 +85,13 @@ quality result. The diagnostic validation set remains one window/source.
 Full-corpus capacity/audits, fast large-corpus cursor recovery, checkpoint storage
 retention policy and unattended job orchestration remain outside this change.
 See [usage and resume instructions](../trainer/DISTRIBUTED.md).
+
+## Special-token naming follow-up
+
+A subsequent behavior-preserving refactor centralizes PAD/BOS/EOS/UNK IDs, the
+first content-token ID, and the separate loss-ignore sentinel in `data/subword.py`.
+The corpus and distributed-configuration tests pass after this refactor; the GPU
+results above describe commit `c69c38c`, before the naming change. Frozen tokenizer
+assets and token IDs are unchanged. Strict source-hash checks still reject resuming
+an old checkpoint with changed trainer/loader source; use its original code when
+resuming the recorded smoke checkpoints.
