@@ -660,8 +660,8 @@ repository. Subsequent runs reuse verified shard counts. The summary distinguish
 counted rows/shards from total rows/shards and reports completeness only for the
 pinned revision; newly ingested documents require another pass.
 
-`modal_token_audit.py` provides a separate bounded CPU audit worker. No audit
-schedule is installed. It does not modify collector progress or corpus data.
+`modal_token_audit.py` provides a separate bounded CPU audit worker. An hourly coordinator resumes bounded audit pairs. It does not modify collector
+progress or corpus data.
 The tokenizer loaded successfully on Modal on 17 October; local download remained
 unavailable. Counts are actual tokenizer measurements only when the audit produces
 a result, never estimates derived from characters.
@@ -677,8 +677,7 @@ shards by content hash, path and row count. Partial audits provide a conservativ
 lower bound; missing caches contribute zero and incompatible caches fail the
 tick. Once this lower bound reaches the target, no new campaigns are dispatched.
 Active campaigns remain tracked and may finish. The existing 100,000-document
-operational cap and 150-campaign limit remain unchanged. Audits must be resumed
-separately as the corpus grows; they are not yet scheduled automatically.
+operational cap and 150-campaign limit remain unchanged. The hourly audit coordinator resumes counting as the corpus grows.
 
 HF may report stale-parent conflicts as either HTTP 409 or 412. Audit checkpoint
 retries re-read the destination at the new revision and proceed only if that
@@ -702,3 +701,19 @@ can defer one ECB/EMA audit pair until a server-requested cooldown expires; its
 call ID is recorded before returning. It is not a recurring schedule. HTTP429
 responses on 17 October requested approximately one hour, so those retries were
 deferred until 15:27 UTC rather than retried immediately.
+
+
+### Automatic audit continuation
+
+`modal_token_audit.scheduled_tick` runs hourly and reserves at most 48 ECB/EMA
+audit pairs, including the pair adopted at deployment. Each worker retains its
+1,500-second work budget, 1,800-second hard timeout and shared single-container
+limit. Durable reservations and call IDs live in private control state at
+`tokens/schedule.json`; active or unresolved calls prevent another pair. A claim
+without an attached call ID requires reconciliation instead of replay.
+
+The coordinator respects HTTP429 cooldowns and stops new audit pairs when the
+collection controller reports its token/document target or verified exhaustion.
+It also stops dispatching at the audit-pair budget. Reaching that budget is an
+operational review point, not a claim that the corpus is complete. Both document
+collection and audit continuation now run remotely without a local shell session.
