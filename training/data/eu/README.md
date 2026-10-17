@@ -603,3 +603,13 @@ with the expanded mappings. Prior outage records remain historical evidence;
 see [successful recovery](research/modal-recovery-success-20261017.json).
 The recovery packaging fix passes app settings through function environments,
 without adding image build steps after mounted files.
+
+### Hugging Face code backups
+
+Run `uv run backup_code.py` after committing changes. It uploads the committed
+`training/data/eu` subtree to the private control repository under
+`code/<git-commit>.tar.gz`, with a JSON manifest listing files and the SHA-256
+checksum. It then downloads the pinned uploaded archive and verifies its hash.
+Only these code paths are written; collection checkpoints and corpus Parquet are
+not replaced. Ignored artifacts and uncommitted edits are excluded. This provides
+a second code/research backup alongside GitHub, but is not a full Git-history backup.
