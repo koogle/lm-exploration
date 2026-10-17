@@ -125,6 +125,7 @@ def continue_training(run_id, snapshot, settings, provenance, previous=None, fir
 )
 def prepare_and_launch(run_id, version, settings, provenance):
     from training_data.export_raw import export_raw
+    from training_data.prepared_snapshot import find_prepared_snapshot
     from training_data.raw_corpus import RawCorpus
     from training_data.scholarly import load_recipe
 
@@ -139,8 +140,21 @@ def prepare_and_launch(run_id, version, settings, provenance):
             raise ValueError("Workflow run ID already exists")
         record(run_id, "preparing", target_tokens=settings["target_tokens"], provenance=provenance)
         recipe = load_recipe("/project/tokenizer/recipe-v1.json")
-        corpus = RawCorpus(folder, recipe)
         target = settings["target_tokens"]
+        cached = find_prepared_snapshot(folder, recipe, target)
+        if cached is not None:
+            snapshot = str(cached.parent.relative_to("/data/scholarly-code"))
+            manifest = json.loads(cached.read_text())
+            record(
+                run_id,
+                "data_reused",
+                snapshot=snapshot,
+                target_tokens=target,
+                pending_data_audits=manifest.get("pending", []),
+            )
+            call = continue_training.spawn(run_id, snapshot, settings, provenance)
+            return {"training_call_id": call.object_id, "snapshot": snapshot, "data_reused": True}
+        corpus = RawCorpus(folder, recipe)
         for _ in range(3):  # Recheck earlier sources after cross-source conflicts.
             for source in sorted(recipe["sources"], key=lambda s: len(s["files"])):
                 name = source["name"]

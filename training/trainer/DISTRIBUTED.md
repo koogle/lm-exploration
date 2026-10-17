@@ -128,3 +128,23 @@ reduction order can change low bits across fresh jobs.
 
 Measured run evidence is recorded in
 [`results/scholarly-ddp-support-20261017.md`](../results/scholarly-ddp-support-20261017.md).
+
+## Prepare once, reuse across runs
+
+The `modal_small_5b.py` launcher checks `<version>/snapshots/*/manifest.json`
+before opening staging or fetching upstream data. Use the same data `version`
+and a fresh training `run_id` to reuse a prepared corpus. A matching snapshot
+must have the same pinned source recipe, tokenizer, split/filter implementation,
+source weights and two-pass policy, enough tokens for the new target, and
+validation data for each source. Its database checksum is verified before reuse.
+
+When a match is found, the workflow records `data_reused` and starts training
+against that exact immutable snapshot. It does not redownload, refilter, recount
+or copy the corpus. Pending audit flags are preserved. A larger target or changed
+data definition requires additional preparation (changed staging identity requires
+a new version). Corrupt compatible snapshots fail explicitly rather than silently
+being reused. Raw documents are still tokenized as batches need them.
+
+This reuse change is in PR #13 for future deployments. The active 5B workflow
+continues on its original deployed source to preserve checkpoint compatibility;
+its eventual snapshot is compatible with this reuse lookup.
