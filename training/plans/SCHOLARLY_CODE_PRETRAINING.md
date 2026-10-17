@@ -25,8 +25,10 @@ As of 2026-10-17, the merged modern architecture has 124,389,632 parameters,
 the [subword pilot](../100m/PILOT.md) has completed 4.08M exposures, and
 [matched GPU profiling](../results/scholarly-124m-gpu-comparison-20261017.md)
 covers one/two/three A10, L40S and H100 GPUs. Full corpus preparation, corpus audits
-and substantial pretraining remain pending. The production launcher still needs
-resumable multi-GPU training; the DDP benchmark does not save training checkpoints.
+and substantial pretraining remain pending. The [distributed launcher](../trainer/DISTRIBUTED.md) now supports explicit
+multi-GPU checkpoint/resume across Modal jobs. It remains separate from the
+throughput-only benchmark; full-corpus restart costs and long-run operations are
+not yet measured.
 Instruction tuning and optional later reasoning training are separate experiments.
 
 ## Dataset mixture

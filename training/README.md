@@ -15,6 +15,9 @@ has now completed 600 updates / 4.08M tokens on Modal; substantial pretraining
 has not been launched. The [measured GPU comparison](results/scholarly-124m-gpu-comparison-20261017.md)
 compares one, two and three A10, L40S and H100 GPUs with matched global batches.
 Three H100s are the recommended configuration when elapsed time is the priority.
+[Distributed subword training](trainer/DISTRIBUTED.md) now exposes one/two/three-GPU
+training and explicit checkpoint/resume across Modal jobs. Full corpus readiness
+and substantial pretraining remain separate.
 
 The [tokenizer learning-curve experiment](tokenizer/research/README.md) compares
 64 MiB through 2 GiB at 16K, 32K and 50K vocabularies on Modal, with a shared

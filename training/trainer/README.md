@@ -28,3 +28,10 @@ Checkpoint format version 1 is preserved. The loop still supports resume
 optimizer/batch/seed/device settings, but no launcher exposes it yet. Only load
 trusted checkpoints: RNG restoration requires Python objects, so checkpoint
 loading is not safe for untrusted files.
+
+## Distributed subword training
+
+[`DISTRIBUTED.md`](DISTRIBUTED.md) documents the separate one/two/three-GPU
+NCCL trainer, token-budget stopping, durable checkpoints and explicit cross-job
+resume through `../modal_distributed_train.py`. It uses the frozen 32K tokenizer
+and prepared mixture snapshots. The character trainer above is unchanged.
