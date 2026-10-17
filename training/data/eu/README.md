@@ -502,3 +502,50 @@ records call IDs, pinned repository revisions and 7,592 stored rows across all
 sources as collection resumed. This is a timestamped snapshot, not a final
 campaign result. New campaigns use weighted scheduling, supported-format
 filtering, strict fallback validation and transient HF commit recovery.
+
+### Automatic continuation toward 100,000 documents
+
+The explicit collection goal is configured in `collection_goal.json`. The current
+scope counts stored documents across ECB, EMA, EUR-Lex and Commission Press
+Corner; “EMR” is interpreted as EMA. This scope is an assumption pending the
+owner's clarification, not a claim that 100,000 ECB/EMA documents exist.
+
+`modal_goal.py` deploys `lm-exploration-eu-100k`: a single scheduled controller
+checks fresh source metrics every 15 minutes. It launches bounded three-round
+campaigns, with at most 1,000 attempts and 3,000 work seconds per round, and
+one active campaign per source. The eight existing running/queued campaigns were
+registered before activation. `goal_pipeline_sources.json` adds five further
+CELLAR year inventories for subsequent workers; existing worker images retain
+their original configuration. Existing incomplete inventories also expand when
+the configured selection limit increases; prior candidates and immutable inventory
+artifacts are retained. The attempted limit is saved to avoid repeating an adapter
+scan that cannot grow further.
+
+The private dataset [jfrick/eu-corpus-control](https://huggingface.co/datasets/jfrick/eu-corpus-control)
+stores claims, Modal call IDs, reservations, observations and source totals in
+`state/progress.json`. Corpus Parquet remains in the separate organization repos.
+CAS claims prevent two ticks dispatching the same work. An uncertain dispatch
+blocks its source for reconciliation. Failed supervisors cannot release their
+reservation while a child is still active. Finished reservations settle for one
+extra tick so final uploads are included before allocating more work.
+
+No new work is allocated after reaching 100,000 stored rows. There is also a
+150-campaign ceiling (including registered campaigns); reaching it is a blocked
+budget state, not success. Incomplete discovery, unsupported formats and failed
+URLs remain coverage gaps: finishing a saved inventory never means an entire
+institution's website has been exhausted. Automatic adapter repair is not
+implemented. The first successful live checks observed 8,975 then 8,995 stored
+documents; see [activation evidence](research/100k-goal-2026-10-17.json).
+
+```sh
+# Inspect current corpus totals; this does not download all Parquet.
+uv run status.py all
+# Deploy the scheduled controller (requires initialized control state).
+uv run python modal_cli.py deploy modal_goal.py
+```
+
+To halt future dispatch, stop the `lm-exploration-eu-100k` deployed app in Modal.
+Existing campaigns in other apps must be stopped separately if collection must
+cease immediately. Reconcile their terminal call trees before resuming; never
+clear unresolved claims just to force another launch. All raw artifacts and
+local compute reservations remain excluded from Git.

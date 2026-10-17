@@ -497,3 +497,94 @@ def test_json_html_adapter_preserves_original_raw_hash(harness):
     assert "Institution report" in row["text"]
     provenance = json.loads(row["provenance_json"])["fetch"]
     assert provenance["adapter_transform"] == {"field": "html"}
+
+
+@pytest.mark.parametrize(
+    ("entry", "limit", "expected"),
+    [
+        (
+            {"candidate_count": 5000, "enumeration": {"complete": False, "selection_limit": 5000}},
+            10000,
+            True,
+        ),
+        (
+            {"candidate_count": 5000, "enumeration": {"complete": False, "selection_limit": 10000}},
+            10000,
+            False,
+        ),
+        (
+            {
+                "candidate_count": 55000,
+                "enumeration": {"complete": False, "selection_limit": 100000},
+            },
+            100000,
+            False,
+        ),
+        ({"candidate_count": 5, "enumeration": {"complete": True}}, 10000, False),
+        ({"candidate_count": 5, "enumeration": {"complete": False}}, 10, True),
+        ({"candidate_count": 5, "enumeration": {}}, 10, False),
+        (
+            {
+                "candidate_count": 5,
+                "enumeration_requested_limit": 10,
+                "enumeration": {"complete": False},
+            },
+            10,
+            False,
+        ),
+        (
+            {
+                "candidate_count": 15,
+                "enumeration_requested_limit": 10,
+                "enumeration": {"complete": False},
+            },
+            12,
+            False,
+        ),
+    ],
+)
+def test_inventory_expansion_requires_larger_unattempted_limit(entry, limit, expected):
+    assert pipeline.inventory_expansion_needed(entry, limit) is expected
+
+
+def test_expansion_preserves_missing_candidates_provenance_and_dedup(harness):
+    h = harness
+    old_first, old_missing = h.candidate("first"), h.candidate("missing")
+    h.inventories.update(a=[old_first, old_missing], b=[])
+    store = DurableStore()
+    h.run(store, maximum=1)
+    previous_path = store.state["collections"]["a"]["inventory_path"]
+    # Simulate an existing legacy inventory selected under a lower bound.
+    entry = store.state["collections"]["a"]
+    entry.pop("enumeration_requested_limit")
+    entry["enumeration"] = {"complete": False, "selection_limit": 2}
+    new = h.candidate("new")
+    seen_limits = []
+
+    def expanded(collection, fetch, limit):
+        assert collection == "a"
+        seen_limits.append(limit)
+        return {
+            "records": [{**old_first, "title": "Updated metadata"}, new],
+            "enumeration": {"complete": False, "selection_limit": limit},
+        }
+
+    h.adapter.enumerate_collection = expanded
+    result = h.run(store, run_id="expansion")
+    assert result["extracted"] == 2
+    assert seen_limits == [1000]
+    assert len(store.rows) == 3
+    assert h.fetched.count(old_first["url"]) == 1
+    assert old_missing["url"] in h.fetched
+    current = store.state["collections"]["a"]
+    assert current["enumeration_requested_limit"] == 1000
+    assert current["candidate_count"] == 3
+    saved = store.read_json(current["inventory_path"])
+    assert saved["expansion"]["previous_inventory_path"] == previous_path
+    assert saved["expansion"]["added_candidates"] == 1
+    assert previous_path in store.files
+    assert saved["records"][0]["title"] == "Updated metadata"
+    assert saved["enumeration"]["complete"] is False
+    # Incomplete scan with fewer rows than requested is not useful to repeat.
+    h.run(store, run_id="after-expansion")
+    assert seen_limits == [1000]

@@ -137,6 +137,27 @@ def aggregate_metrics(state):
 
 
 def dataset_card(state):
+    if "collection_goal" in state:
+        goal = state["collection_goal"]
+        config = goal.get("config", {})
+        lines = [
+            "---",
+            "pretty_name: EU collection control",
+            "---",
+            "",
+            "# EU collection control",
+            "",
+            "Private orchestration state; corpus documents live in organization repositories.",
+            "Durable jobs, reservations, source metrics and history are in state/progress.json.",
+            "",
+            f"Target documents: {config.get('target_documents', 'not set')}",
+            f"Status: {goal.get('status', 'initializing')}",
+            f"Observed stored documents: {goal.get('stored_rows', 'not yet measured')}",
+            f"Reserved document capacity: {goal.get('reserved_documents', 'not yet measured')}",
+            "",
+            "Sources: " + ", ".join(config.get("sources", [])),
+        ]
+        return "\n".join(lines).encode()
     collections = sorted({shard["collection_id"] for shard in state["shards"]})
     lines = ["---", "pretty_name: EU institutional corpus pilot"]
     if collections:

@@ -43,6 +43,21 @@ def item_key(record):
     )
 
 
+def inventory_expansion_needed(entry, desired_limit):
+    """Revisit a truncated inventory only when its bounded selection can grow.
+
+    Incomplete can also mean unsupported formats or a fixed adapter scan ceiling.
+    Remember the requested limit, not just the resulting row count, to avoid
+    retrying such scans on every worker. Legacy adapter selection limits suffice.
+    """
+    enumeration = entry.get("enumeration", {})
+    if enumeration.get("complete") is not False:
+        return False
+    count = entry.get("candidate_count", 0)
+    requested = entry.get("enumeration_requested_limit", enumeration.get("selection_limit", count))
+    return desired_limit > max(count, requested)
+
+
 def round_robin(collections, weights=None):
     """Weighted fair iteration; every nonempty collection gets at least one slot."""
     weights = list(weights) if weights is not None else [1] * len(collections)
@@ -289,29 +304,45 @@ def run_source(
     records, raw_files = [], {}
     collection_records = []
     try:
+        inventory_limit = min(
+            config.get("inventory_limit_per_collection", bounds["inventory_limit_per_collection"]),
+            bounds["inventory_limit_per_collection"],
+        )
         for collection in config["collections"]:
-            if collection in state["collections"] and not refresh:
-                saved = store.read_json(
-                    state["collections"][collection]["inventory_path"], revision
-                )
+            previous_inventory = state["collections"].get(collection)
+            expand = previous_inventory is not None and inventory_expansion_needed(
+                previous_inventory, inventory_limit
+            )
+            if previous_inventory is not None and not refresh and not expand:
+                saved = store.read_json(previous_inventory["inventory_path"], revision)
             else:
                 saved = adapter.enumerate_collection(
-                    collection,
-                    fetch_inventory,
-                    limit=min(
-                        config.get(
-                            "inventory_limit_per_collection",
-                            bounds["inventory_limit_per_collection"],
-                        ),
-                        bounds["inventory_limit_per_collection"],
-                    ),
+                    collection, fetch_inventory, limit=inventory_limit
                 )
                 saved["observed_at"] = now()
+                saved["enumeration_requested_limit"] = inventory_limit
+                if expand:
+                    previous_saved = store.read_json(previous_inventory["inventory_path"], revision)
+                    # A newer live snapshot can omit earlier rows. Keep every known
+                    # revision, while accepting current metadata for identical keys.
+                    merged = {item_key(record): record for record in previous_saved["records"]}
+                    old_keys = set(merged)
+                    latest_count = len(saved["records"])
+                    merged.update((item_key(record), record) for record in saved["records"])
+                    saved["records"] = list(merged.values())
+                    saved["expansion"] = {
+                        "previous_inventory_path": previous_inventory["inventory_path"],
+                        "previous_candidate_count": len(previous_saved["records"]),
+                        "latest_enumerated_count": latest_count,
+                        "added_candidates": len(set(merged) - old_keys),
+                        "retained_candidate_count": len(merged),
+                    }
                 inventory_body = json_bytes(saved)
                 path = f"inventories/{collection}/{digest(inventory_body)}.json"
                 state["collections"][collection] = {
                     "inventory_path": path,
                     "enumeration": saved["enumeration"],
+                    "enumeration_requested_limit": inventory_limit,
                     "definition": adapter.COLLECTIONS[collection],
                     "updated_at": now(),
                     "candidate_count": len(saved["records"]),
