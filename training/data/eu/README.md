@@ -649,3 +649,24 @@ match against its verified PDF SHA-256. The original inventory identity remains
 unchanged. See the [retrieval evidence](research/ecb-convergence-links-20261017.md).
 These additions passed the full 195-test suite before deployment; neither implies
 complete historical or multilingual coverage.
+
+### Resumable OpenAI token measurement
+
+`token_audit.py` counts `o200k_base` tokens in each stored document's text field,
+without adding separators or EOS tokens. It reads a pinned corpus revision,
+checks each shard's row count and normalized-record digest, and checkpoints
+per-shard results separately under `tokens/<source>.json` in the private control
+repository. Subsequent runs reuse verified shard counts. The summary distinguishes
+counted rows/shards from total rows/shards and reports completeness only for the
+pinned revision; newly ingested documents require another pass.
+
+`modal_token_audit.py` provides a separate bounded CPU audit worker. No audit
+schedule is installed. It does not modify collector progress or corpus data.
+The tokenizer loaded successfully on Modal on 17 October; local download remained
+unavailable. Counts are actual tokenizer measurements only when the audit produces
+a result, never estimates derived from characters.
+
+```sh
+uv run python modal_cli.py deploy modal_token_audit.py
+uv run python modal_cli.py run --detach modal_token_audit.py --source ecb --max-shards 3000
+```
