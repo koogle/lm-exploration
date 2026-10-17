@@ -595,3 +595,11 @@ EU_MODAL_APP_NAME=lm-exploration-eu-recovery-20261017 EU_GOAL_SCHEDULE=0 \
 The app identity and schedule setting are carried into each function environment so
 remote module hydration uses the same settings. The default app and 15-minute
 schedule remain unchanged when these variables are absent.
+
+Recovery succeeded at 09:37 UTC on 17 October: the fresh app completed a real
+controller tick and confirmed 6,889 stored ECB/EMA documents, with both sources
+already active. Both the fresh manual app and original scheduled app were deployed
+with the expanded mappings. Prior outage records remain historical evidence;
+see [successful recovery](research/modal-recovery-success-20261017.json).
+The recovery packaging fix passes app settings through function environments,
+without adding image build steps after mounted files.
