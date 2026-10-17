@@ -1,0 +1,12 @@
+{
+  "id": "structured-code-bpe-v1",
+  "status": "frozen",
+  "vocab_size": 32768,
+  "files": {
+    "recipe.json": "a4328e99a51bee64daaee66efe25e80ce01a263d568a69a130b94f687edef407",
+    "config.json": "2a4fa59b0a93ebd0995f3ea308c01484647e9ede935e128b4dba163b384224aa",
+    "tokenizer.json": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+    "evaluation.json": "922b0fc33a0c38f06eaedbf3497a50723f4c66ac4dd8f96267038ad64764d80f"
+  },
+  "contract": "Immutable. Record tokenizer SHA256 in shards and checkpoints. Prior tokenizer data must be retokenized in a new version."
+}

@@ -87,43 +87,35 @@ Before a substantial GPU run:
 5. Mix by actual trained token counts, mask padding, and document EOS/packing
    policy. Do not reuse the small pilot/tokenizer cache to reach billions.
 
-## Tokenizer: completed and frozen
+## Tokenizer: code-focused 32K default
 
-The exact [16,384-token artifact](../tokenizer/scholarly-code-v1/tokenizer.json)
-and its [freeze manifest](../tokenizer/scholarly-code-v1/freeze-manifest.json)
-are committed with this plan. Full per-source measurements are in
-[evaluation.json](../tokenizer/scholarly-code-v1/evaluation.json).
+The repository default is [`structured-code-v1`](../tokenizer/structured-code-v1/),
+a 32,768-entry byte-level BPE trained on approximately 64 MiB on Modal.
+The user selected this tokenizer for the model's code and tool-calling focus.
 
-- Byte-level BPE, complete 256-byte alphabet, `tokenizers==0.22.2`.
-- No Unicode normalization, prefix insertion, automatic BOS/EOS, padding or
-  truncation; preserves indentation, tabs, CRLF and math symbols. Digits are
-  pretokenized in groups of at most three.
-- Special IDs: PAD 0, BOS 1, EOS 2, UNK 3. Add boundaries explicitly in data packing.
-- Fitted locally on 64 MiB of training text; evaluated on a separate 8 MiB.
-  Both use the 12 sources above. Sampling weights are UTF-8 bytes because the
-  tokenizer did not exist yet; these are not exact model-training token shares.
-- Parent-hash split: `mixture-split-v1`, buckets 2–9 training, 0 validation,
-  1 excluded test. Fitting never consumes validation/test text.
-- 16K: 2,251,077 held-out tokens, 3.7265 UTF-8 bytes/token.
-- 32K: 2,105,512 held-out tokens, 3.9841 UTF-8 bytes/token.
-- Predeclared selection preferred 16K unless 32K saved at least 10% of total
-  held-out tokens with no source regressing by more than 2%. The measured saving
-  was 6.4665%, so 16K was selected.
-- Both candidates passed 109 constructed round-trip cases, byte coverage,
-  digit-group and zero-UNK checks. All held-out chunks also round-tripped.
-  Frozen-loader hash/tamper guards and explicit BOS/EOS checks passed locally.
+- Fitting mixture: 40% Python, 20% JSON, 20% Git diffs, 20% tool-call formats by bytes.
+- Same complete byte alphabet and pretokenization rules as the original tokenizer;
+  no normalization, automatic boundaries, padding or truncation.
+- Special IDs: PAD 0, BOS 1, EOS 2, UNK 3. Model vocabulary size must be 32,768.
+- Exact artifact SHA256: `add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9`.
+- Published at [jfrick/scholarly-code-tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).
+  The adjacent `publication.json` pins the immutable Hub revision.
+- Compared with the earlier 2 GiB / 32K default: 13.97% fewer tokens on tool-format
+  fixtures, 11.83% fewer on diffs, 8.21% fewer on JSON and 2.81% fewer on Python;
+  13.99% more tokens on the scholarly mixture. This trade-off was accepted explicitly.
+- JSON/diff/tool examples are controlled generated fixtures, not production traces.
+  See the [full comparison](../results/tokenizer-structured/structured-code-v1/REPORT.md).
 
-Tokenizer SHA-256:
-`2a6bd2343ab29e3955dd7a5e17330e706afc8c650618b1339ceedab5e77fde04`.
-Never modify this version. Every encoded shard and model checkpoint must record
-and verify that SHA. A changed tokenizer requires a new version and retokenization.
-The sample is bounded and exact-deduplicated; global near-deduplication, full
-source capacity and a multilingual quality study remain outstanding.
+The old `scholarly-code-v1` 16K assets and all prior measured candidates remain
+immutable historical versions. Existing encoded shards/checkpoints are not compatible
+with the new token IDs. Use new staging/snapshot versions and retokenize before model
+training; the loaders reject mismatched tokenizer identities. Do not change an old
+checkpoint's vocabulary metadata to pretend it uses this tokenizer.
 
 ## Training and evaluation sequence
 
 1. **Restore context.** Read this plan and AGENTS.md; verify the frozen assets.
-   Restore the training project's existing budget ledger before paid jobs.
+   Set explicit resource requests, concurrency limits and runtime bounds.
 2. **Prepare corpus.** Implement or recover the streaming adapters and resumable
    packing pipeline, audit splits/provenance, then produce a measured capacity
    table and actual token-weighted sampling manifest.

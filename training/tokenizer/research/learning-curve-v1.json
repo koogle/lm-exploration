@@ -1,0 +1,20 @@
+{
+  "id": "scholarly-tokenizer-learning-curve-v1",
+  "seed": 20261016,
+  "sizes_mib": [64, 128, 256, 512, 1024, 2048],
+  "vocab_sizes": [16384, 32768, 50000],
+  "evaluation_mib": 32,
+  "source_recipe": "tokenizer/recipe-v1.json",
+  "split_policy": "scholarly-parent-v2; bucket 0 evaluation, bucket 1 excluded, buckets 2-9 fitting",
+  "sampling": "Seeded permutation of every pinned shard per source; source-weighted UTF-8 byte quotas; nested per-source prefixes",
+  "max_document_bytes": 65536,
+  "max_parent_bytes": 262144,
+  "chunk_bytes": 8192,
+  "min_frequency": 2,
+  "max_token_length": 32,
+  "library": "tokenizers==0.22.2",
+  "cpu": 8,
+  "memory_mib": 65536,
+  "timeout_seconds": 7200,
+  "max_parallel_candidates": 3
+}

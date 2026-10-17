@@ -1,0 +1,59 @@
+{
+  "name": "focused-64mib-32768",
+  "vocab": 32768,
+  "execution": "modal-cpu",
+  "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+  "evaluation_sha256": "a9a82723c1e78b46ec52b33b81551a61a5498e46ac73a6f09e4c0da9e27775a0",
+  "metrics": {
+    "python": {
+      "bytes": 2513044,
+      "tokens": 615688,
+      "examples": 512,
+      "roundtrip_failures": 0,
+      "unk_tokens": 0,
+      "bytes_per_token": 4.08168422967477,
+      "mean_tokens_per_example": 1202.515625,
+      "p95_tokens_per_example": 2184
+    },
+    "json": {
+      "bytes": 2782302,
+      "tokens": 722785,
+      "examples": 512,
+      "roundtrip_failures": 0,
+      "unk_tokens": 0,
+      "bytes_per_token": 3.849418568453966,
+      "mean_tokens_per_example": 1411.689453125,
+      "p95_tokens_per_example": 2514
+    },
+    "git_diff": {
+      "bytes": 187152,
+      "tokens": 52862,
+      "examples": 512,
+      "roundtrip_failures": 0,
+      "unk_tokens": 0,
+      "bytes_per_token": 3.5403881805455715,
+      "mean_tokens_per_example": 103.24609375,
+      "p95_tokens_per_example": 249
+    },
+    "tool_call": {
+      "bytes": 965682,
+      "tokens": 251703,
+      "examples": 512,
+      "roundtrip_failures": 0,
+      "unk_tokens": 0,
+      "bytes_per_token": 3.8365931276146887,
+      "mean_tokens_per_example": 491.607421875,
+      "p95_tokens_per_example": 2304
+    }
+  },
+  "fragmentation": {
+    "{\"name\":\"read_file\",\"arguments\":{\"path\":\"src/main.py\"}}": 14,
+    "diff --git a/main.py b/main.py\n@@ -1,2 +1,2 @@\n-old\n+new\n": 25,
+    "get_user_configuration": 3,
+    "\"additionalProperties\":false": 4,
+    "\"tool_call_id\":\"call_0123456789\"": 12
+  },
+  "correctness_passed": true,
+  "family": "focused",
+  "size_mib": 64
+}

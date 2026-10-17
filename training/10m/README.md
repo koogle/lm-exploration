@@ -3,8 +3,9 @@
 The complete, readable architecture is in [model.py](model.py): six pre-LayerNorm
 causal decoder blocks, width 384, six attention heads, learned positions, GELU
 MLPs, and a separate output projection. With 65 characters and context 256 it has
-**10,795,776 parameters**. [`100m/model.py`](../100m/model.py) imports this definition unchanged and only
-scales its dimensions.
+**10,795,776 parameters**. The [100M architecture](../100m/README.md) now defaults
+to RMSNorm, RoPE and SwiGLU; its explicit version-1 mode preserves this vanilla
+block design at larger dimensions. This published 10M definition is unchanged.
 
 The model starts from random weights and learns next-character prediction from
 Tiny Shakespeare. This is a learning benchmark, not an instruction-following
