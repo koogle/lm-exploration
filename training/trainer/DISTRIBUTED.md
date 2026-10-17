@@ -5,6 +5,47 @@ GPUs on one host**, using PyTorch NCCL DistributedDataParallel. It trains a shar
 model with synchronized gradients. It is separate from the historical character
 trainer and from the throughput-only benchmarks.
 
+## How the GPUs work together
+
+![Single-host data-parallel training: rank zero scatters a global batch to three full model replicas, DDP synchronizes gradients, and a durable checkpoint enables explicit resume.](images/distributed-training.png)
+
+The diagram shows the three-H100 configuration. One and two GPUs use the same
+flow. This is **data parallelism**: every GPU holds the entire model and its own
+AdamW optimizer state. Adding GPUs divides the batch computation; it does not
+split the model across devices or increase the configured global batch.
+
+1. The [Modal launcher](../modal_distributed_train.py) allocates one host and
+   starts one process per GPU with `torchrun`. Each process is a *rank*, and NCCL
+   carries the communication between ranks.
+2. Rank zero alone reads the deterministic token mixture and constructs the
+   global input/target batch. For the illustrated configuration, 48 windows of
+   context 2,048 are scattered as 16 windows per GPU. Rank zero also counts all
+   valid loss targets; padding is excluded.
+3. Each rank runs forward and backward passes on its slice. If that slice needs
+   multiple microbatches, `no_sync()` accumulates local gradients until the last
+   microbatch triggers DDP synchronization. Computation uses BF16 autocast while
+   model parameters remain FP32.
+4. **Before backward**, each microbatch's summed loss is multiplied by
+   `world_size / global_valid_tokens`. DDP then averages gradients across ranks.
+   For `W` ranks, `N` valid targets and local summed losses `S_r`, the resulting
+   gradient is `(1/W) * sum_r grad(W * S_r / N) = grad(sum_r S_r / N)`.
+   This is the global mean token-loss gradient even when ranks have different
+   amounts of padding. The formula strip in the diagram describes this scaling,
+   not an additional operation after the optimizer update.
+5. All ranks clip the synchronized gradient and apply the same AdamW update,
+   keeping their model replicas aligned. Learning rate and cumulative progress
+   use actual valid-token counts. The cycle repeats with the next global batch.
+
+The production implementation is
+[`backward_batch()` and `train()` in distributed_train.py](distributed_train.py).
+Rank zero also owns logging and diagnostic validation. At checkpoint boundaries,
+all ranks contribute their RNG state; rank zero saves the shared model/optimizer,
+data cursor and counters alongside those states, atomically renames the file,
+and commits the Modal Volume. An explicitly launched fresh job restores them
+with the same world size and compatible configuration, data and source identity.
+There is no automatic job chain; hard termination can lose updates after the last
+committed checkpoint.
+
 ## Start a job
 
 Run from `training/`, with Modal credentials and prepared data on
