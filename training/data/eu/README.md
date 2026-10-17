@@ -592,6 +592,6 @@ EU_MODAL_APP_NAME=lm-exploration-eu-recovery-20261017 EU_GOAL_SCHEDULE=0 \
   uv run python modal_cli.py run --detach modal_goal.py
 ```
 
-The app identity and schedule setting are carried into its image environment so
+The app identity and schedule setting are carried into each function environment so
 remote module hydration uses the same settings. The default app and 15-minute
 schedule remain unchanged when these variables are absent.

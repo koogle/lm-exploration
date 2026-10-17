@@ -11,6 +11,7 @@ GOAL_MAPPING = Path("/root/eu/goal_pipeline_sources.json")
 GOAL_CONFIG = Path("/root/eu/collection_goal.json")
 APP_NAME = os.environ.get("EU_MODAL_APP_NAME", "lm-exploration-eu-100k")
 SCHEDULE_ENABLED = os.environ.get("EU_GOAL_SCHEDULE", "1") == "1"
+REMOTE_ENV = {"EU_MODAL_APP_NAME": APP_NAME, "EU_GOAL_SCHEDULE": "1" if SCHEDULE_ENABLED else "0"}
 app = modal.App(APP_NAME)
 secret = modal.Secret.from_name("eu-corpus-huggingface", required_keys=["HF_TOKEN"])
 image = None
@@ -19,15 +20,20 @@ if modal.is_local():
     # build-time entrypoint or read local requirements/CA paths during hydration.
     from modal_pipeline import image as base_image
 
-    image = base_image.env(
-        {"EU_MODAL_APP_NAME": APP_NAME, "EU_GOAL_SCHEDULE": "1" if SCHEDULE_ENABLED else "0"}
-    )
+    image = base_image
     for name in ("goal_controller.py", "goal_pipeline_sources.json", "collection_goal.json"):
         image = image.add_local_file(ROOT / name, f"/root/eu/{name}")
 
 
 @app.function(
-    image=image, secrets=[secret], cpu=1, memory=2048, timeout=3600, max_containers=4, retries=0
+    image=image,
+    env=REMOTE_ENV,
+    secrets=[secret],
+    cpu=1,
+    memory=2048,
+    timeout=3600,
+    max_containers=4,
+    retries=0,
 )
 def collect(source_id: str, run_id: str, max_documents: int, work_seconds: int):
     from campaign import wait_for_dispatch
@@ -38,7 +44,14 @@ def collect(source_id: str, run_id: str, max_documents: int, work_seconds: int):
 
 
 @app.function(
-    image=image, secrets=[secret], cpu=0.125, memory=512, timeout=14400, max_containers=4, retries=0
+    image=image,
+    env=REMOTE_ENV,
+    secrets=[secret],
+    cpu=0.125,
+    memory=512,
+    timeout=14400,
+    max_containers=4,
+    retries=0,
 )
 def campaign(source_id: str, campaign_id: str, rounds: int, max_documents: int, work_seconds: int):
     from campaign import run_campaign
@@ -146,6 +159,7 @@ def source_snapshots(mapping, goal):
 
 @app.function(
     image=image,
+    env=REMOTE_ENV,
     secrets=[secret],
     cpu=0.125,
     memory=1024,
