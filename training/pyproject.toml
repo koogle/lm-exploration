@@ -32,7 +32,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["model_10m", "model_100m", "model_10m_rmsnorm", "model_10m_rope", "training_data", "training_data.fetching", "trainer"]
+packages = ["model_10m", "model_100m", "model_10m_rmsnorm", "model_10m_rope", "model_10m_swiglu", "training_data", "training_data.fetching", "trainer"]
 py-modules = ["generate", "prepare_scholarly", "tokenizer_research", "tokenizer_report", "tokenizer_evaluation"]
 
 [tool.setuptools.package-dir]
@@ -40,6 +40,7 @@ model_10m = "10m"
 model_100m = "100m"
 model_10m_rmsnorm = "10m_rmsnorm"
 model_10m_rope = "10m_rope"
+model_10m_swiglu = "10m_swiglu"
 training_data = "data"
 
 [dependency-groups]
@@ -62,3 +63,5 @@ ignore = ["TRY004"]
 "10m_rmsnorm/__init__.py" = ["N999"]
 
 "10m_rope/__init__.py" = ["N999"]
+
+"10m_swiglu/__init__.py" = ["N999"]
