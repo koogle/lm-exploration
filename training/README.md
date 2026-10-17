@@ -4,9 +4,18 @@
 
 Start with the [scholarly/code pretraining plan](plans/SCHOLARLY_CODE_PRETRAINING.md).
 It records the latest agreed dataset proportions, approximately 150M-parameter
-goal, 20B-token target with a conditional 50B extension, frozen 16K tokenizer,
+goal, 20B-token target with a conditional 50B extension, frozen code-focused 32K tokenizer,
 and next-agent checklist. It supersedes older undecided mixture/tokenizer
 notes and illustrative token budgets below for this experiment.
+
+The [streaming preparation guide](data/SCHOLARLY_STREAMING.md) now provides
+bounded upstream ingestion, immutable token snapshots, a Modal CPU entrypoint,
+and a resumable token-mixture loader. Its snapshots remain pending corpus audits;
+the new model and substantial training have not been launched.
+
+The [tokenizer learning-curve experiment](tokenizer/research/README.md) compares
+64 MiB through 2 GiB at 16K, 32K and 50K vocabularies on Modal, with a shared
+held-out corpus and a generated research report.
 
 A personal learning project: train small language models from random initialization,
 understand how architecture and data affect them, then add instruction tuning,
@@ -57,11 +66,11 @@ Local commands validate recipes and sample from downloaded checkpoints only.
 For a minimal NumPy example of forward passes, handwritten backpropagation and
 gradient descent, start with [the XOR example](examples/README.md).
 
-- [`100m/model.py`](100m/model.py): **architecture only**. It imports every module
-  unchanged from [`10m/model.py`](10m/model.py), which keeps the explanatory
-  comments, and only scales the defaults: 14 layers, width 768, 12 attention heads
-  and the same context of 256, approximately 100M parameters. The exact count depends on
-  vocabulary/context. Run provenance hashes both files.
+- [`100m/model.py`](100m/model.py): **architecture only**. The [updated model](100m/README.md)
+  uses RMSNorm, RoPE and SwiGLU at 14 layers, width 768, 12 attention heads and
+  context 256. Version 1 preserves the historical vanilla blocks for old
+  checkpoints. New 100M models tie input/output embeddings by default and have
+  124,389,632 parameters with the frozen 32K tokenizer. The original 10M is unchanged.
 - [`modal_train.py`](modal_train.py) and [`recipes/`](recipes/README.md): the only way
   to start training. Validates a recipe locally, reserves budget, then trains on Modal.
 - [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a

@@ -110,6 +110,7 @@ def train(args, data, run_dir, *, architecture_module, model_config, resume=None
                     "BASE_MODEL_SOURCE",
                     sys.modules[model_class.__module__].__file__,
                 ),
+                model_dependencies=getattr(selected_architecture, "MODEL_DEPENDENCIES", None),
             ),
         }
         checkpoint = load_checkpoint(resume) if resume else None

@@ -1,33 +1,19 @@
-# Frozen scholarly/code tokenizer
+# Default tokenizer
 
-Version `scholarly-code-v1` is a 16,384-token byte-level BPE trained from scratch.
-Read the [current training plan](../plans/SCHOLARLY_CODE_PRETRAINING.md) for the
-mixture, measured comparison and remaining work. Files in this version are immutable.
+The repository default is `structured-code-v1`: the code-focused 32,768-entry BPE
+trained on approximately 64 MiB on Modal. It was selected for code and tool calling.
 
-From `training/`, verify all artifact hashes and load the tokenizer:
+```python
+from training_data.subword import load_frozen, VOCAB_SIZE, TOKENIZER_SHA256
 
-```sh
-uv run --with tokenizers==0.22.2 python - <<'PY'
-from pathlib import Path
-import hashlib
-import json
-from tokenizers import Tokenizer
-
-folder = Path('tokenizer/scholarly-code-v1')
-manifest = json.loads((folder / 'freeze-manifest.json').read_text())
-for name, expected in manifest['files'].items():
-    assert hashlib.sha256((folder / name).read_bytes()).hexdigest() == expected, name
-assert manifest['files']['tokenizer.json'] == '2a6bd2343ab29e3955dd7a5e17330e706afc8c650618b1339ceedab5e77fde04'
-tokenizer = Tokenizer.from_file(str(folder / 'tokenizer.json'))
-assert tokenizer.get_vocab_size() == 16384
-text = 'def square(x):\r\n\treturn x ** 2\r\n'
-ids = tokenizer.encode(text, add_special_tokens=False).ids
-assert tokenizer.decode(ids, skip_special_tokens=False) == text
-assert 3 not in ids
-print('PASS: hashes, vocabulary and exact code round trip')
-PY
+tokenizer = load_frozen()  # verifies the frozen artifact hashes
+assert VOCAB_SIZE == tokenizer.get_vocab_size() == 32768
 ```
 
-PAD/BOS/EOS/UNK IDs are 0/1/2/3. The tokenizer adds no boundaries automatically.
-Future training code must verify this hash when loading shards and checkpoints.
-No model weights, raw corpus, credentials or budget ledger are stored here.
+The [training plan](../plans/SCHOLARLY_CODE_PRETRAINING.md) records the selection,
+trade-offs, special IDs and retokenization requirements. The frozen version's
+`publication.json` pins its Hub revision. Original scholarly-code-v1 assets remain
+available as an immutable historical version; existing tokenized snapshots cannot
+be reused with the new tokenizer.
+
+Published resource: [jfrick/scholarly-code-tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).

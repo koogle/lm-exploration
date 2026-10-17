@@ -1,11 +1,15 @@
 # Training datasets
 
+For the new frozen-tokenizer corpus, use the separate
+[scholarly/code streaming pipeline](SCHOLARLY_STREAMING.md).
+
 `datasets.json` records each dataset's source, license review and eligibility;
 [`registry.py`](registry.py) validates it with pydantic.
 Paths in it are relative to this `data/` directory. [Recipes](../recipes/README.md)
 select a dataset by `id` from the `DATASETS` table in `trainer/recipe.py`, which maps
 it to its fetch module. Raw text is never baked into the Modal image: each worker
 runs that module, which downloads and verifies the file.
+
 
 ## Registered datasets
 
