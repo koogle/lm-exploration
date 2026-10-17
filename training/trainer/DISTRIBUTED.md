@@ -145,6 +145,24 @@ data definition requires additional preparation (changed staging identity requir
 a new version). Corrupt compatible snapshots fail explicitly rather than silently
 being reused. Raw documents are still tokenized as batches need them.
 
-This reuse change is in PR #13 for future deployments. The active 5B workflow
-continues on its original deployed source to preserve checkpoint compatibility;
-its eventual snapshot is compatible with this reuse lookup.
+The reuse lookup and persistent-stream preparation fix are deployed in PR #13.
+The active 5B preparation was resumed from committed cursors with the updated
+launcher before GPU training began. Its eventual snapshot is reusable by later
+runs. No model-training or raw-corpus identity code changed in this update.
+
+
+## Preparation throughput
+
+`PersistentStream` keeps the current upstream connection and decompressor open
+between 1,000-record durable chunks. Previously each chunk reopened gzip and
+reread every earlier row to reach the cursor, multiplying download/decompression
+work inside each shard. Now that replay happens only after a restart, rollback,
+source/shard change or stream failure. Database transactions and volume checkpoints
+retain their existing behavior. The staging identity and accepted records are
+unchanged; the helper is recorded in run source provenance.
+
+Tests compare the original reader and the persistent reader for identical stored
+documents, counts and cursors, and verify reopening at a saved cursor after rollback.
+Future improvements include bounded parallel fetching and batched tokenization;
+these require coordinating a single database writer and deduplication decisions.
+No measured end-to-end speedup is claimed until live progress supports it.

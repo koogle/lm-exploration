@@ -1,6 +1,17 @@
 # Modern 9.85M / 5B-token experiment
 
-## Latest: automatic 5B workflow launched
+## Preparation speedup deployed
+
+At roughly 651M unique Python training tokens, the preparation worker was stopped
+and resumed from its committed corpus using persistent upstream streams. Code
+commit: `98dee0b`. New call: `fc-01M55HE3MATB1X0JQPGSBZPNE9`; it replaces
+`fc-01M54Q6P2R6P7YH626XRGFVEE5`. Training source hashes and raw-corpus identity
+remain unchanged. The launcher now also supports reusing compatible snapshots.
+The previous repeated gzip replay at every 1,000 records is eliminated; durable
+checkpoints and tokenization policy are preserved. Tests verify identical stored
+data and safe cursor reopening. See launch JSON for the current call ID.
+
+## Earlier: automatic 5B workflow launched
 
 The user reiterated the instruction to run the full 5B experiment. It is now
 launched as a durable deployed workflow:
