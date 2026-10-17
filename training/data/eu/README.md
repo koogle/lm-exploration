@@ -550,3 +550,32 @@ Existing campaigns in other apps must be stopped separately if collection must
 cease immediately. Reconcile their terminal call trees before resuming; never
 clear unresolved claims just to force another launch. All raw artifacts and
 local compute reservations remain excluded from Git.
+
+### ECB/EMA expansion and token-goal checks
+
+Future goal workers include EMA's `non_epar_documents` collection with scheduling
+weight 2. The [verified inventory and extraction samples](research/ema-extra-collections-20261017.md)
+identify 104,799 supported language-level candidates outside the existing document
+partitions. The worker selects at most 100,000 of these; candidates and extraction
+samples are not counted as stored corpus documents.
+
+Use `uv run status.py both --mapping goal_pipeline_sources.json` to include the
+expanded collection breakdown. The separate billion-token research objective is
+not a completed milestone: exact `o200k_base` counts require its vocabulary download,
+which the environment proxy still denied on 17 October. Character/byte/word totals
+continue to be recorded; estimates must not be used to declare the token goal met.
+The owner's subsequent 100,000-document operational limit remains in force.
+
+The future mapping also adds verified ECB annual reports (36 eligible URLs) and
+convergence reports (20), each with weight 3. See the
+[ECB sample evidence](research/ecb-extra-collections-2026-10-17.md). Annual Report
+2025 links 24 language versions not represented by its English inventory; those
+links are discovery evidence, not additional downloaded documents.
+
+Deployment of these additions was blocked on 17 October by a Modal API upstream
+connection failure, alongside Hugging Face HTTP 503 failures. The last confirmed
+stored count was 6,370 ECB/EMA documents at 08:58 UTC. Existing remote workers
+were not stopped, but their later state could not be verified. The expanded
+mapping is ready locally and must be deployed after connectivity recovers.
+The new full-Parquet audit was interrupted during a stalled Xet download and is
+not a passed audit. See the [continuation record](research/ecb-ema-expansion-blocked-20261017.json).

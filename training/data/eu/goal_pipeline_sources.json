@@ -15,7 +15,9 @@
         "press_releases",
         "interviews",
         "meeting_accounts",
-        "decisions"
+        "decisions",
+        "annual_reports",
+        "convergence_reports"
       ],
       "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text.",
       "collection_weights": {
@@ -27,7 +29,9 @@
         "press_releases": 1,
         "interviews": 1,
         "meeting_accounts": 1,
-        "decisions": 1
+        "decisions": 1,
+        "annual_reports": 3,
+        "convergence_reports": 3
       }
     },
     "ema": {
@@ -39,7 +43,8 @@
         "epar_assessment_reports",
         "news",
         "scientific_guidelines",
-        "committee_documents"
+        "committee_documents",
+        "non_epar_documents"
       ],
       "description": "European Medicines Agency news, scientific guidelines and committee documents, enumerated from official JSON inventories.",
       "collection_weights": {
@@ -48,7 +53,8 @@
         "epar_overviews": 1,
         "news": 1,
         "scientific_guidelines": 1,
-        "committee_documents": 1
+        "committee_documents": 1,
+        "non_epar_documents": 2
       }
     },
     "eurlex": {

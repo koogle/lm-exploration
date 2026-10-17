@@ -22,6 +22,8 @@ COLLECTIONS = {
     "interviews": {"name": "ECB interviews", "type_ids": ["27"]},
     "meeting_accounts": {"name": "ECB monetary policy meeting accounts", "type_ids": ["20"]},
     "decisions": {"name": "ECB other Governing Council decisions", "type_ids": ["55"]},
+    "annual_reports": {"name": "ECB Annual Report", "type_ids": ["132"]},
+    "convergence_reports": {"name": "ECB Convergence Report", "type_ids": ["22"]},
     "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
     "occasional_papers": {"name": "ECB Occasional Paper Series", "type_ids": ["3"]},
     "economic_bulletin_articles": {"name": "ECB Economic Bulletin articles", "type_ids": ["24"]},

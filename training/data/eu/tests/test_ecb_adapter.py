@@ -14,7 +14,7 @@ from adapters.ecb import (
 )
 
 
-def fixture_fetch(rows):
+def fixture_fetch(rows, type_id="19"):
     header = ["id", "pub_timestamp", "type", "documentTypes", "publicationProperties"]
     snapshot = DATABASE + "v/h/"
     payloads = {
@@ -26,7 +26,7 @@ def fixture_fetch(rows):
             "chunk_group_size": 1,
         },
         snapshot + "indexes/type/index.json": [
-            {"value": "19", "total_records": len(rows), "first_sort_id_per_chunk": [0]}
+            {"value": type_id, "total_records": len(rows), "first_sort_id_per_chunk": [0]}
         ],
         snapshot + "indexes/type/0/chunk_0.json": list(range(len(rows))),
     }
@@ -225,3 +225,39 @@ def test_inferred_pdf_requires_title_in_first_two_pages(monkeypatch):
         ecb.validate_alternate({**candidate, "title": "Credit"}, b"%PDF-1.4")
     # Exact mappings use already recorded evidence, not this inferred-body check.
     ecb.validate_alternate({**candidate, "url": next(iter(ecb.VERIFIED_HISTORICAL_ARTICLES))}, b"")
+
+
+@pytest.mark.parametrize(
+    ("collection_id", "type_id"),
+    [
+        ("annual_reports", "132"),
+        ("convergence_reports", "22"),
+    ],
+)
+def test_full_report_types_keep_native_text_and_distinct_translations(collection_id, type_id):
+    fetch, _ = fixture_fetch(
+        [
+            [
+                42,
+                1700000000,
+                int(type_id),
+                [
+                    "/pub/annual/html/ecb.ar2024.en.html",
+                    "/pub/pdf/annrep/ecb.ar2024.en.pdf",
+                    "/pub/pdf/annrep/ecb.ar2024.fr.pdf",
+                ],
+                {"Title": "Report 2024"},
+            ]
+        ],
+        type_id=type_id,
+    )
+    result = enumerate_collection(collection_id, fetch)
+    assert result["enumeration"]["complete"]
+    assert result["enumeration"]["reported_total"] == 1
+    assert [(r["format"], r["language"]) for r in result["records"]] == [
+        ("html", "en"),
+        ("pdf", "fr"),
+    ]
+    assert all(r["document_type"] == collection_id for r in result["records"])
+    assert all(r["source_document_id"] == "42" for r in result["records"])
+    assert COLLECTIONS[collection_id]["type_ids"] == [type_id]
