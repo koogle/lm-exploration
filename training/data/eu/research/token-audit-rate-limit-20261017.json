@@ -17,5 +17,16 @@
   "observed_at": "2026-10-17T14:41:39.853316+00:00",
   "validation_tests_passed": 212,
   "shard_delay_seconds": 2,
-  "checkpoint_every_shards": 50
+  "checkpoint_every_shards": 50,
+  "deferred_resume": {
+    "call_id": "fc-01M5553ZYEJPQVQSSN1DYERRR8",
+    "not_before_utc": "2026-10-17T15:43:10.122760+00:00",
+    "sources": [
+      "ecb",
+      "ema"
+    ],
+    "reason": "Later code-backup commit also returned HF429 hourly repository commit limit; honor renewed cooldown conservatively",
+    "previous_call_id": "fc-01M55527YXSS0V3D6W3WPG8D01"
+  },
+  "code_backup": "Latest upload hit128/hour repository commit limit; delayed retry scheduled separately."
 }
