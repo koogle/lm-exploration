@@ -28,6 +28,20 @@ class DistributedConfigTests(unittest.TestCase):
         config = DistributedConfig(n_layer=8, n_head=3, n_embd=192, target_tokens=5_000_000_000)
         self.assertFalse(config.pilot)
 
+    def test_experimental_data_is_scoped(self):
+        config = DistributedConfig(
+            n_layer=8, n_head=3, n_embd=192, target_tokens=5_000_000_000, experimental_data=True
+        )
+        self.assertTrue(config.experimental_data)
+        for change in (
+            {"target_tokens": 5_000_000_001},
+            {"n_layer": 14},
+            {"pilot": True},
+            {"experimental_data": "yes"},
+        ):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                DistributedConfig(**{**config.as_dict(), **change})
+
     def test_schedule_uses_tokens(self):
         config = DistributedConfig()
         self.assertAlmostEqual(config.learning_rate(config.warmup_tokens), config.peak_lr)

@@ -19,6 +19,7 @@ class DistributedConfig:
     checkpoint_every: int = 100
     evaluate_every: int = 100
     pilot: bool = False
+    experimental_data: bool = False
     n_layer: int = 14
     n_head: int = 12
     n_embd: int = 768
@@ -43,6 +44,14 @@ class DistributedConfig:
             raise ValueError("seed must be a 32-bit unsigned integer")
         if type(self.pilot) is not bool:
             raise ValueError("pilot must be boolean")
+        if type(self.experimental_data) is not bool:
+            raise ValueError("experimental_data must be boolean")
+        if self.experimental_data and (
+            self.pilot
+            or (self.n_layer, self.n_head, self.n_embd) != (8, 3, 192)
+            or self.target_tokens > 5_000_000_000
+        ):
+            raise ValueError("Experimental data is scoped to the authorized modern 9.85M / 5B run")
         if self.world_size not in (1, 2, 3):
             raise ValueError("Supported GPU counts: 1, 2, 3")
         if self.global_windows % (self.world_size * self.microbatch):

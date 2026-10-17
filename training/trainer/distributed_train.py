@@ -123,7 +123,11 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
             if (output / "config.json").exists():
                 raise ValueError("Use a fresh run ID, including for resume")
             output.mkdir(parents=True, exist_ok=True)
-            data = TokenMixture(manifest, context=config.context, allow_unreviewed=config.pilot)
+            data = TokenMixture(
+                manifest,
+                context=config.context,
+                allow_unreviewed=(config.pilot or config.experimental_data),
+            )
             if not config.pilot:
                 capacity = min(
                     2 * s["splits"]["train"]["loss_tokens"] * 100 / s["weight_percent"]
@@ -132,7 +136,10 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 if config.target_tokens > capacity:
                     raise ValueError("Snapshot cannot support target mixture within two passes")
             validation = TokenMixture(
-                manifest, context=config.context, split="validation", allow_unreviewed=config.pilot
+                manifest,
+                context=config.context,
+                split="validation",
+                allow_unreviewed=(config.pilot or config.experimental_data),
             )
             return data.identity
 

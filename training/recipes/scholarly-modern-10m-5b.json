@@ -14,5 +14,6 @@
   "pilot": false,
   "n_layer": 8,
   "n_head": 3,
-  "n_embd": 192
+  "n_embd": 192,
+  "experimental_data": true
 }
