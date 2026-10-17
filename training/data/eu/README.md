@@ -490,3 +490,15 @@ retry-exhausted candidates. Runs therefore report both `pending_candidates`
 (coverage gaps) and `remaining_supported_candidates` (future runnable work).
 Campaign completion uses the latter where available, without claiming website
 exhaustion.
+
+### Recovery and four active sources
+
+On 17 October, connectivity recovered and all four sources started new
+three-round campaigns. CELLAR's preceding campaign completed with 2,997 stored
+documents and 133,282,988 characters. Old ECB/EMA worker termination was checked
+on Modal and stale HF campaign markers were reconciled before replacements
+launched. The [recovery snapshot](research/resumed-four-sources-2026-10-17.json)
+records call IDs, pinned repository revisions and 7,592 stored rows across all
+sources as collection resumed. This is a timestamped snapshot, not a final
+campaign result. New campaigns use weighted scheduling, supported-format
+filtering, strict fallback validation and transient HF commit recovery.
