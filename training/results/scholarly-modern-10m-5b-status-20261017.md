@@ -1,5 +1,19 @@
 # Modern 9.85M / 5B-token experiment
 
+## Completed, validated and published — 2026-10-18
+
+The run completed 4,999,934,057 tokens / 72,805 updates. The final checkpoint,
+metric continuity, finite optimizer/parameter state, source-exposure accounting
+and both resume boundaries passed validation. The broader evaluation covers
+1,798,432 targets from 384 held-out parents: loss 2.6926 versus a matched random
+baseline of 10.4369. Samples still show repetition and factual/code errors.
+
+Published: https://huggingface.co/jfrick/scholarly-code-modern-gpt-10m-5b .
+See `scholarly-modern-10m-5b-completed-20261018.md` and the retained reports.
+The sections below preserve earlier preparation/launch history and are superseded
+by this completion status. PR #15 adds future preparation/training overlap; it
+was not used for this completed checkpoint.
+
 ## Latest: all preparation optimizations deployed
 
 The pipeline now uses batched tokenization on eight tokenizer threads, atomic

@@ -1,0 +1,404 @@
+{
+  "checkpoint": "/tmp/modern-10m-5b-final.pt",
+  "checkpoint_sha256": "8d644692f5a9db334ca0dfe2130ae48bd3a1e0202a88f67b83bb789252365d86",
+  "step": 72805,
+  "trained_tokens": 4999934057,
+  "parameters": 9849536,
+  "strict_load": true,
+  "finite_parameters": true,
+  "token_accounting_verified": true,
+  "per_source_two_pass_limit_verified": true,
+  "source_exposures": {
+    "fineweb_edu": {
+      "trained_tokens": 499993029,
+      "unique_train_tokens": 262917173,
+      "passes": 1.901713088174731
+    },
+    "code_python": {
+      "trained_tokens": 1499977487,
+      "unique_train_tokens": 787568652,
+      "passes": 1.9045672820913648
+    },
+    "finemath_4plus": {
+      "trained_tokens": 999985512,
+      "unique_train_tokens": 525035597,
+      "passes": 1.9046051690853258
+    },
+    "pes2o": {
+      "trained_tokens": 499992975,
+      "unique_train_tokens": 262944657,
+      "passes": 1.9015141083471416
+    },
+    "pubmed": {
+      "trained_tokens": 149998117,
+      "unique_train_tokens": 84737320,
+      "passes": 1.7701541304350905
+    },
+    "arxiv": {
+      "trained_tokens": 99998700,
+      "unique_train_tokens": 54893620,
+      "passes": 1.8216816453351046
+    },
+    "pressbooks": {
+      "trained_tokens": 149997890,
+      "unique_train_tokens": 79929169,
+      "passes": 1.876635174325408
+    },
+    "libretexts": {
+      "trained_tokens": 149999260,
+      "unique_train_tokens": 79665640,
+      "passes": 1.8828601640556706
+    },
+    "doab": {
+      "trained_tokens": 199998186,
+      "unique_train_tokens": 105400565,
+      "passes": 1.8975058245655514
+    },
+    "gutenberg": {
+      "trained_tokens": 249997586,
+      "unique_train_tokens": 162036799,
+      "passes": 1.5428445115112401
+    },
+    "pre_1929_books": {
+      "trained_tokens": 349996021,
+      "unique_train_tokens": 209850533,
+      "passes": 1.6678347964929876
+    },
+    "library_of_congress": {
+      "trained_tokens": 149999294,
+      "unique_train_tokens": 130351831,
+      "passes": 1.150726405983511
+    }
+  },
+  "evaluation": "First 32 distinct validation parents per source by content hash; at most four 2048-token windows per parent. Fixed, non-random exploratory validation; not a sealed benchmark.",
+  "trained": {
+    "per_source": {
+      "fineweb_edu": {
+        "loss": 3.40053451478535,
+        "perplexity": 29.980120583127228,
+        "tokens": 33310,
+        "parents": 32,
+        "windows": 36
+      },
+      "code_python": {
+        "loss": 2.1359837304371405,
+        "perplexity": 8.46537005431091,
+        "tokens": 58082,
+        "parents": 32,
+        "windows": 47
+      },
+      "finemath_4plus": {
+        "loss": 2.3665492630175358,
+        "perplexity": 10.660542013802099,
+        "tokens": 53704,
+        "parents": 32,
+        "windows": 44
+      },
+      "pes2o": {
+        "loss": 2.8098604270387684,
+        "perplexity": 16.607600085093242,
+        "tokens": 197043,
+        "parents": 32,
+        "windows": 103
+      },
+      "pubmed": {
+        "loss": 2.70796234428868,
+        "perplexity": 14.998682205686501,
+        "tokens": 228568,
+        "parents": 32,
+        "windows": 119
+      },
+      "arxiv": {
+        "loss": 2.5062660147381686,
+        "perplexity": 12.259069307988613,
+        "tokens": 233891,
+        "parents": 32,
+        "windows": 118
+      },
+      "pressbooks": {
+        "loss": 3.3013823205709714,
+        "perplexity": 27.150143194663997,
+        "tokens": 46850,
+        "parents": 32,
+        "windows": 44
+      },
+      "libretexts": {
+        "loss": 2.883908301739174,
+        "perplexity": 17.884032966813677,
+        "tokens": 65755,
+        "parents": 32,
+        "windows": 50
+      },
+      "doab": {
+        "loss": 2.918560170891075,
+        "perplexity": 18.51461038416906,
+        "tokens": 139270,
+        "parents": 32,
+        "windows": 80
+      },
+      "gutenberg": {
+        "loss": 3.451885167889329,
+        "perplexity": 31.55983184597982,
+        "tokens": 251773,
+        "parents": 32,
+        "windows": 124
+      },
+      "pre_1929_books": {
+        "loss": 3.525130856459207,
+        "perplexity": 33.958216977554606,
+        "tokens": 252531,
+        "parents": 32,
+        "windows": 124
+      },
+      "library_of_congress": {
+        "loss": 3.480702889956029,
+        "perplexity": 32.48254570879791,
+        "tokens": 237655,
+        "parents": 32,
+        "windows": 118
+      }
+    },
+    "mixture_weighted_loss": 2.692584287090724
+  },
+  "random_initialization_seed42": {
+    "per_source": {
+      "fineweb_edu": {
+        "loss": 10.439940849219454,
+        "perplexity": 34198.62950243223,
+        "tokens": 33310,
+        "parents": 32,
+        "windows": 36
+      },
+      "code_python": {
+        "loss": 10.430904529372267,
+        "perplexity": 33890.99179760724,
+        "tokens": 58082,
+        "parents": 32,
+        "windows": 47
+      },
+      "finemath_4plus": {
+        "loss": 10.443153239283852,
+        "perplexity": 34308.66548468405,
+        "tokens": 53704,
+        "parents": 32,
+        "windows": 44
+      },
+      "pes2o": {
+        "loss": 10.431052486005592,
+        "perplexity": 33896.006565628624,
+        "tokens": 197043,
+        "parents": 32,
+        "windows": 103
+      },
+      "pubmed": {
+        "loss": 10.434299912936194,
+        "perplexity": 34006.26029376002,
+        "tokens": 228568,
+        "parents": 32,
+        "windows": 119
+      },
+      "arxiv": {
+        "loss": 10.44198395967566,
+        "perplexity": 34268.572506267556,
+        "tokens": 233891,
+        "parents": 32,
+        "windows": 118
+      },
+      "pressbooks": {
+        "loss": 10.432111959711847,
+        "perplexity": 33931.93752392372,
+        "tokens": 46850,
+        "parents": 32,
+        "windows": 44
+      },
+      "libretexts": {
+        "loss": 10.438886791522508,
+        "perplexity": 34162.60116508907,
+        "tokens": 65755,
+        "parents": 32,
+        "windows": 50
+      },
+      "doab": {
+        "loss": 10.433288531270195,
+        "perplexity": 33971.88437208845,
+        "tokens": 139270,
+        "parents": 32,
+        "windows": 80
+      },
+      "gutenberg": {
+        "loss": 10.439997940853468,
+        "perplexity": 34200.58201380707,
+        "tokens": 251773,
+        "parents": 32,
+        "windows": 124
+      },
+      "pre_1929_books": {
+        "loss": 10.446519437217608,
+        "perplexity": 34424.349842533986,
+        "tokens": 252531,
+        "parents": 32,
+        "windows": 124
+      },
+      "library_of_congress": {
+        "loss": 10.445282026466938,
+        "perplexity": 34381.77912611704,
+        "tokens": 237655,
+        "parents": 32,
+        "windows": 118
+      }
+    },
+    "mixture_weighted_loss": 10.436946239002307
+  },
+  "samples": [
+    {
+      "prompt": "The solar system consists of",
+      "mode": "greedy",
+      "seed": 1000,
+      "completion": " a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a 2D system with a ",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "The solar system consists of",
+      "mode": "sampled",
+      "seed": 1000,
+      "completion": " relatively poor plastic muscles and humans. In addition, muscles are used as prominent vascular plastic muscles to avoid the muscles and muscles. Very few humans can have a number of bundles. The most common venous vessels, such as cyanobenzoans, are small amounts of muscles used to induce the britis. For example, muscles can be used in the dietary environment. Consumers in Emontan",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "In mathematics, a prime number is",
+      "mode": "greedy",
+      "seed": 1001,
+      "completion": " a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is a number that is",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "In mathematics, a prime number is",
+      "mode": "sampled",
+      "seed": 1001,
+      "completion": " a number which has 1000 digits, and its sum is 3 and its sum is 4, and its sum is 9, and its sum is 3. The numbers in mathematics are a lot of mathematical expressions like the symbol for the symbol $\\frac{\\text{foral}}{r } \\times\\left(\\frac{\\text{foral}}{r} \\right)^{\\text{foral}} \\times\\left(\\frac{\\text{foral}}{r} \\right)^{\\text{foral}} \\times\\left(\\frac{\\text",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "The purpose of an experiment is to",
+      "mode": "greedy",
+      "seed": 1002,
+      "completion": " determine the amount of the material in the experiment. The experiment is to determine the amount of the material in the experiment. The experiment is to determine the amount of the material in the experiment. The experiment is to determine the amount of the material in the experiment. The experiment is to determine the amount of the material in the experiment. The experiment is to determine the amount of the material in the experiment. The experiment is to determine the amount of the material in the experiment. The experiment is to determine the amount of the material in the experiment. The experiment is to determine the amount of the material in the experiment. The experiment is to determine the",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "The purpose of an experiment is to",
+      "mode": "sampled",
+      "seed": 1002,
+      "completion": " identify its localized house and to place the north southward on the south side of the East and its westward on the south side of the eastward on the north side of the East and its westward on the south side of the East. The house is located within the village of the East.\nThe elevation of the south side of the East and its westward on the north side of the eastward is measured by the maximum displacement of the westward on the south side of the eastward. The elevation of",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "Once upon a time,",
+      "mode": "greedy",
+      "seed": 1003,
+      "completion": " the students will be able to\n- \u201creally\u201d the students will be able to\n- \u201creally\u201d the students will be able to\n- \u201creally\u201d the students will be able to\n- \u201creally\u201d the students will be able to\n- \u201creally\u201d the students will be able to\n- \u201creally\u201d the students will be able to\n- \u201creally\u201d the students will be able to\n- \u201creally\u201d",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "Once upon a time,",
+      "mode": "sampled",
+      "seed": 1003,
+      "completion": " the time was completed will be completed. The time had been made by the U.S. and other people during the second period. The time to find out, the time that was finished by the U.S. was completed, and the time that was finished by the U.S. was completed. The time that was finished by the U.S. was completed was repeated by the Tendency Century.\nAt the end of the 19th century, after the time of the first year, during the second and a few years, they were also included in New Britain and New York City. The time",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "def add(a, b):\n    ",
+      "mode": "greedy",
+      "seed": 1004,
+      "completion": " return a\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n     return b\n\ndef add(b):\n    ",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "def add(a, b):\n    ",
+      "mode": "sampled",
+      "seed": 1004,
+      "completion": " from python import __name__ as __name__ as __name__\n     print __name__\n    return __name__\n\nclass Dominicum(object):\n    def __new__(self, obj):\n        if not obj != 'Dominicum':\n            return\n        obj = obj(obj)\n        self.assertPublished(obj, obj)\n        self.assertPublished(obj, obj)\n\n    def set(self, value):\n        self.assertPublished(value)\n\n    def set(self, value):\n        self.assertPublished(value)\n",
+      "generated_tokens": 109
+    },
+    {
+      "prompt": "def factorial(n):\n    ",
+      "mode": "greedy",
+      "seed": 1005,
+      "completion": " return factorial(n)\n\ndef factorial(n):\n    return factorial(n)\n\ndef factorial(n):\n    return factorial(n)\n\ndef factorial(n):\n    return factorial(n)\n\ndef factorial(n):\n    return factorial(n)\n\ndef factorial(n):\n    return factorial(n)\n\ndef factorial(n):\n    return factorial(n)\n\ndef factorial(n):\n    return factorial(n)\n\ndef factorial(n):\n    return factorial(n)\n\ndef factorial(n):\n    return factorial(n)\n\ndef factorial(n):\n    return factorial(n)\n\ndef factorial(n):\n    return factorial(n)\n\ndef factor",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "def factorial(n):\n    ",
+      "mode": "sampled",
+      "seed": 1005,
+      "completion": " a = int(n)\n           # if a = a = b = a = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b = b =",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "import json\n\ndef read_config(path):\n    ",
+      "mode": "greedy",
+      "seed": 1006,
+      "completion": " return json.dumps(path)\n\ndef read_config(path):\n     return json.dumps(path)\n\ndef read_config(path):\n     return json.dumps(path)\n\ndef read_config(path):\n     return json.dumps(path)\n\ndef read_config(path):\n     return json.dumps(path)\n\ndef read_config(path):\n     return json.dumps(path)\n\ndef read_config(path):\n     return json.dumps(path)\n\ndef read_config(path):\n     return json.dumps(path)\n\ndef read_config(path):\n     return json.dumps(path)\n\ndef read_config(path):\n     return json.dumps(path)\n\ndef read_config(path):\n     return json.dumps(path)\n\ndef read_config(path):\n     return json.dumps(path)\n\ndef read",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "import json\n\ndef read_config(path):\n    ",
+      "mode": "sampled",
+      "seed": 1006,
+      "completion": " import requests\n     requests = requests.load()\n     if not os.path.exists(path):\n     print(\"read config file and download files\")\n\ndef read_config(path):\n     import requests\n     requests = requests.load()\n\nclass Request(object):\n      def __init__(self, config = None):\n         self.config = config\n         self._config = config\n         self._app = config\n         self._config.update()\n         self._path = path\n         self._app.update()\n      self._config.update()\n      self._op = config\n      self._update()\n      self._update()\n      self._load()\n     self._load",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "The capital of France is",
+      "mode": "greedy",
+      "seed": 1007,
+      "completion": " a fundamental part of the world's life. It is a fundamental part of the world's life. It is a fundamental part of the world's life. It is a fundamental part of the world's life. It is a fundamental part of the world's life. It is a fundamental part of the world's life. It is a fundamental part of the world's life. It is a fundamental part of the world's life. It is a fundamental part of the world's life. It is a fundamental part of the world's life.",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "The capital of France is",
+      "mode": "sampled",
+      "seed": 1007,
+      "completion": " in the early century, most of the world\u2019s most famous muscular parchaeology. U.S. France\u2019s most familiar experience has developed to protect the city from the protective impact of the country, because of its driving industry. It\u2019s an important aspect of the country\u2019s muscular system, and it has many common disappointments in economic development. In fact, the world\u2019s largest pioneering, industry, is the",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "2 + 2 =",
+      "mode": "greedy",
+      "seed": 1008,
+      "completion": " 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 = 2\n2 + 2 =",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "2 + 2 =",
+      "mode": "sampled",
+      "seed": 1008,
+      "completion": " 2\n1 + 2 = 2\n2 = 5\n4 = 2\nLet\u2019s say we are to make a sailing man in your home for the purpose of a large military cabin. This man couldn\u2019t wait to come in with a happy cab in. We\u2019ve taken care of the rest of the military cabin, but we have only to have them as an unusual object. We take a man out of use for happiness to stay in the family. We\u2019ve had",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "A language model predicts",
+      "mode": "greedy",
+      "seed": 1009,
+      "completion": " the number of people in a country. The number of people in a country is the number of people in a country. The number of people in a country is the number of people in a country. The number of people in a country is the number of people in a country. The number of people in a country is the number of people in a country. The number of people in a country is the number of people in a country. The number of people in a country is the number of people in a country. The number of people in a country is the number of people in a country. The number of people in a country is",
+      "generated_tokens": 128
+    },
+    {
+      "prompt": "A language model predicts",
+      "mode": "sampled",
+      "seed": 1009,
+      "completion": " that is in the world of biochemical interactions with the biochemical system. In 1998 it was observed that among the various compounds that have a common role in biochemical interactions, we expected to have the biochemical interactions identified in the context of Biosystem composition, that has been used as a way to develop biochemical interactions to bio-dependent biochemical interactions. In 2008 it was observed that Biosystem composition is a role of biochemical interactions in biochemical interactions.",
+      "generated_tokens": 128
+    }
+  ],
+  "data_manifest_sha256": "7ecc680b9ca742ca67eae14c072dd0f7a28a3a0a24f885ec7dfd022ffc180778",
+  "pending_data_audits": [
+    "tokenizer split reconciliation",
+    "global near deduplication",
+    "cross-source parent reconciliation",
+    "eligibility and contamination review"
+  ],
+  "torch_version": "2.6.0+cpu",
+  "gpu": "CPU",
+  "evaluation_device": "cpu"
+}
