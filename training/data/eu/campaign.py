@@ -38,7 +38,7 @@ def run_campaign(
     clock=time.time,
     sleep=time.sleep,
 ):
-    """Run at most three remote rounds, preserving claims/results in source HF state.
+    """Run a configured bounded number of remote rounds, preserving claims/results in source HF state.
 
     ``collect_callable(run_id, max_documents, work_seconds)`` is synchronous and
     should call a separate Modal worker's ``.remote`` method. Alternatively supply
@@ -54,8 +54,11 @@ def run_campaign(
     limits = mapping["limits"]
     if not COMPONENT.fullmatch(campaign_id):
         raise ValueError("Invalid campaign ID")
-    if not 1 <= rounds <= 3:
-        raise ValueError("Campaigns allow one to three rounds")
+    max_rounds = config.get("max_campaign_rounds", 3)
+    if type(max_rounds) is not int or not 1 <= max_rounds <= 6:
+        raise ValueError("Configured campaign round limit must be one through six")
+    if type(rounds) is not int or not 1 <= rounds <= max_rounds:
+        raise ValueError("Campaign rounds exceed the source bound")
     if not 1 <= max_documents <= limits["max_documents_per_source"]:
         raise ValueError("Document limit exceeds configured bound")
     if not 1 <= work_seconds <= limits["work_seconds"]:
@@ -141,7 +144,7 @@ def run_campaign(
             "status": "planned",
             "started_at_epoch": clock(),
             "deadline_epoch": invocation_started
-            + 4 * 3600
+            + max(4, rounds + 1) * 3600
             + (predecessor_wait_seconds if after_campaign else 0),
             "rounds": [
                 {"run_id": f"{campaign_id}-round-{i + 1}", "status": "planned"}

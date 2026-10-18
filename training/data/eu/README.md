@@ -523,7 +523,7 @@ EUR-Lex/Commission batches may finish, but the controller allocates no successor
 to them. This is not a claim that 100,000 ECB/EMA documents exist.
 
 `modal_goal.py` deploys `lm-exploration-eu-100k`: a single scheduled controller
-checks fresh source metrics every 15 minutes. It launches bounded three-round
+checks fresh source metrics every minute. It launches bounded source-specific
 campaigns, with at most 1,000 attempts and 3,000 work seconds per round, and
 one active campaign per source. The eight existing running/queued campaigns were
 registered before activation. `goal_pipeline_sources.json` adds five further
@@ -604,7 +604,7 @@ EU_MODAL_APP_NAME=lm-exploration-eu-recovery-20261017 EU_GOAL_SCHEDULE=0 \
 ```
 
 The app identity and schedule setting are carried into each function environment so
-remote module hydration uses the same settings. The default app and 15-minute
+remote module hydration uses the same settings. The default app and one-minute
 schedule remain unchanged when these variables are absent.
 
 Recovery succeeded at 09:37 UTC on 17 October: the fresh app completed a real
@@ -830,3 +830,27 @@ source pacing or budgets. The owner subsequently superseded this milestone with
 collection until documented exhaustion; this command remains historical tracking.
 The request is also stored
 and verified in the private control repository under its recorded milestone path.
+
+
+### Prompt EMA continuation and larger batches
+
+The owner requested immediate EMA continuation and larger batches on 18 October.
+The existing controller was invoked directly; it reconciled the completed child
+tree and started `goal-ema-1792321151-0818560e06` without waiting for the next
+scheduled tick. That already running campaign retains its original three rounds.
+Future EMA campaigns use `source_rounds: {"ema": 6}` and reserve up to 6,000
+attempts. Six sequential 3,000-second rounds provide roughly five hours of work;
+ECB retains three rounds. Each worker still allows at most 1,000 attempts and
+3,000 work seconds. EMA request spacing remains ten seconds. Increasing the
+attempt ceiling alone would not increase throughput: recent EMA rounds reached
+the time limit after about 300 attempts.
+
+The controller now runs every minute. When it observes a terminal campaign, it
+loads a second fresh source snapshot and reconciles again in the same invocation,
+retaining the existing reservation until that fresh read. This removes the
+previous extra scheduled settlement interval. Campaign supervisors allow eight
+hours; the six-round durable deadline is seven hours, including worker-timeout
+headroom. The source mapping explicitly allows six EMA rounds; other mappings
+retain a three-round default. Existing jobs and reservations survive the control
+configuration migration unchanged. The 100,000-document, 150-campaign and
+48-audit-pair limits remain unchanged. The recovery schedule remains disabled.

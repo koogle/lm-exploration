@@ -419,3 +419,29 @@ Budget exhaustion still requires review and does not prove website exhaustion.
 The change passes 331 tests, including continued dispatch above the token milestone,
 strict boolean validation, genuine exhaustion and unchanged document-budget stops.
 No notification automation was created.
+
+
+## Immediate EMA restart and larger future batches
+
+The owner requested a next batch immediately, larger batches and less controller
+waiting. Direct controller calls reconciled the terminal EMA tree and launched
+`goal-ema-1792321151-0818560e06`, supervisor `fc-01M57AMV6ZCA3XTRM7YEQ0WG36`.
+The live graph confirmed its worker running. Existing campaign settings remain
+unchanged; future EMA batches use six rounds, twice the previous three.
+
+The controller schedule is now one minute. Terminal settlement still requires a
+second fresh source read, but both reconciliation passes can happen in the same
+invocation. Full-tree checks, reservations, CAS claims and no-replay behavior
+remain. The goal app was deployed compatibly before a CAS-protected control
+config migration to `source_rounds: {"ema": 6}` and redeployed with matching
+config. The verified migration is control revision
+`8b676ce2b30d1e7136c53937ee58cde2973ac6a3`; all jobs were preserved.
+
+The six-round source allowance is explicit in the goal mapping. Reservations
+cover up to 6,000 EMA attempts; available global budget still limits allocations.
+The supervisor now has an eight-hour timeout and a seven-hour six-round durable
+deadline. Individual workers remain bounded at 1,000 attempts/3,000 work seconds.
+Recent EMA rounds completed roughly 300 attempts before the time limit, so a
+larger per-round attempt count alone would not accelerate collection. Ten-second
+pacing and all global document/campaign/audit limits remain. No duplicate source
+writer was launched. Validation: 340 tests, Ruff lint/format and whitespace checks.

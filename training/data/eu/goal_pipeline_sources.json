@@ -91,7 +91,8 @@
         "epar_variation_reports": 3,
         "epar_scientific_discussions": 3,
         "epar_scientific_discussion_variations": 3
-      }
+      },
+      "max_campaign_rounds": 6
     },
     "eurlex": {
       "repo_id": "jfrick/eu-eurlex",

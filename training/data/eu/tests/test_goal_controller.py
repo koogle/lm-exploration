@@ -356,3 +356,44 @@ def test_exhaustion_mode_preserves_coverage_requirements_and_document_budget(
         config={"sources": ["ecb"], "target_tokens": 1000, "stop_at_token_target": False},
     )
     assert result["status"] == expected
+
+
+def test_larger_source_campaign_reserves_full_budget_and_leaves_other_source_unchanged():
+    calls = []
+    result = tick(
+        Store(),
+        snapshots={"ecb": snapshot(), "ema": snapshot()},
+        config={"sources": ["ecb", "ema"], "source_rounds": {"ema": 6}},
+        spawn=lambda **kwargs: calls.append(kwargs) or kwargs["source_id"],
+    )
+    assert [(c["source_id"], c["rounds"], c["max_documents"]) for c in calls] == [
+        ("ecb", 3, 1000),
+        ("ema", 6, 1000),
+    ]
+    assert result["reserved_documents"] == 9000
+    result = tick(
+        Store(result["jobs"]),
+        snapshots={"ecb": snapshot(), "ema": snapshot()},
+        config={"sources": ["ecb", "ema"], "source_rounds": {"ema": 6}},
+        spawn=lambda **_: pytest.fail("Duplicate writer"),
+    )
+    assert result["reserved_documents"] == 9000
+
+
+def test_larger_campaign_obeys_remaining_global_budget():
+    calls = []
+    result = tick(
+        Store(),
+        snapshots={"ema": snapshot(97500)},
+        config={"sources": ["ema"], "source_rounds": {"ema": 6}},
+        spawn=lambda **kwargs: calls.append(kwargs) or "call",
+    )
+    assert calls[0]["rounds"] == 6
+    assert result["reserved_documents"] == 2496
+    assert result["available_document_budget"] == 4
+
+
+@pytest.mark.parametrize("override", [{"ema": 7}, {"ema": True}, {"ecb": 6}, [], {"ema": 0}])
+def test_invalid_source_round_override_rejected(override):
+    with pytest.raises(ValueError, match="source_rounds"):
+        tick(Store(), config={"sources": ["ema"], "source_rounds": override})

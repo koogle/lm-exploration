@@ -223,3 +223,31 @@ def test_token_cache_read_is_pinned_and_missing_cache_counts_zero(monkeypatch):
     control._download_bytes = missing
     result = modal_goal.source_snapshots(mapping, goal, control, "control-revision")
     assert result["ecb"]["exact_tokens_lower_bound"] == 0
+
+
+def test_terminal_reconciliation_loads_fresh_sources_before_second_pass(monkeypatch):
+    import goal_controller
+
+    loads, snapshots, ticks = [], [], []
+
+    def load():
+        loads.append(len(loads) + 1)
+        return {"collection_goal": {"config": {"sources": ["ema"]}}}, loads[-1]
+
+    def source_snapshots(mapping, goal, store, revision):
+        snapshots.append(revision)
+        return {"revision": revision}
+
+    def run_tick(store, source, inspect, spawn, config):
+        ticks.append(source["revision"])
+        return {
+            "jobs": [{"source_id": "ema", "status": "settling" if len(ticks) == 1 else "running"}]
+        }
+
+    monkeypatch.setattr(modal_goal, "source_snapshots", source_snapshots)
+    monkeypatch.setattr(goal_controller, "run_tick", run_tick)
+    result = modal_goal.reconcile_tick(
+        SimpleNamespace(load=load), {}, {"sources": ["ema"]}, None, None
+    )
+    assert snapshots == ticks == [1, 2]
+    assert result["jobs"][0]["status"] == "running"

@@ -10,5 +10,8 @@
   "max_documents": 1000,
   "work_seconds": 3000,
   "max_campaigns": 150,
-  "stop_at_token_target": false
+  "stop_at_token_target": false,
+  "source_rounds": {
+    "ema": 6
+  }
 }

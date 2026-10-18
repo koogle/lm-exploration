@@ -16,6 +16,13 @@ collection and parsing run independently of this chat in Modal. No recurring
 chat notification has been created (the available automation minimum is hourly,
 while the owner had asked for half-hour updates).
 
+The owner then requested immediate EMA continuation and larger batches. EMA
+was restarted through the existing controller. Its already running campaign
+keeps three rounds; future campaigns use six sequential rounds (up to 6,000
+reserved attempts, roughly five work hours). The controller now checks every
+minute and performs terminal settlement with two fresh reads in one invocation.
+Per-round caps, one writer per source and ten-second EMA pacing remain unchanged.
+
 Paste the following into a new agent/goal:
 
 ---
@@ -40,9 +47,9 @@ At the handoff snapshot, we had **17,858 stored documents and at least 405,514,6
 - `jfrick/eu-corpus-control`: collection goal, exact token caches, audit reservations and code backups.
 - `jfrick/eu-eurlex` and `jfrick/eu-commission-press`: private historical datasets outside the present ECB/EMA scope.
 
-Use the existing apps: `lm-exploration-eu-100k` for the fifteen-minute collection controller and `lm-exploration-eu-token-audit` for hourly audits. The recovery app's schedule must remain disabled. Source mappings, durable claims and resume logic are already implemented; extend shared tooling rather than inventing separate crawlers. Use subagents for independent source investigations when useful, while preserving source pacing.
+Use the existing apps: `lm-exploration-eu-100k` for the one-minute collection controller and `lm-exploration-eu-token-audit` for hourly audits. The recovery app's schedule must remain disabled. Source mappings, durable claims and resume logic are already implemented; extend shared tooling rather than inventing separate crawlers. Use subagents for independent source investigations when useful, while preserving source pacing.
 
-Preserve the existing operational envelope: **100,000-document cap, 150 collection campaigns, three rounds per campaign, at most 1,000 attempts and 3,000 work seconds per round; 48 reserved audit pairs total.** Do not silently raise those caps. Review them before they are exhausted; an exhausted operational budget is not an exhausted website. Preserve the ignored local budget ledger if present. Never overwrite a newer durable ledger with a stale snapshot.
+Preserve the existing operational envelope: **100,000-document cap, 150 collection campaigns, three rounds per ECB campaign and six per future EMA campaign, at most 1,000 attempts and 3,000 work seconds per round; 48 reserved audit pairs total.** Do not silently raise those caps. Review them before they are exhausted; an exhausted operational budget is not an exhausted website. Preserve the ignored local budget ledger if present. Never overwrite a newer durable ledger with a stale snapshot.
 
 Critical recent fix: ECB reached HF's 10,000-files-per-directory limit. New originals must use **`raw-v2/<hash-prefix>/<hash>.gz`**; preserve existing `raw/<hash>.gz` files and resolve through `raw_blob_metrics` / shared helpers. The live fix passed 252 tests, exceeded 10,000 ECB documents and verified a downloaded original's decompressed SHA-256. Do not flatten new files or move/delete the legacy directory. For a verified repaired source, use explicit recovery acknowledgement only after all its existing campaigns and child workers are confirmed terminal; keep failure history intact.
 

@@ -36,6 +36,14 @@ def _config(config):
         if type(config["stop_at_token_target"]) is not bool:
             raise ValueError("stop_at_token_target must be a boolean")
         result["stop_at_token_target"] = config["stop_at_token_target"]
+    if "source_rounds" in config:
+        overrides = config["source_rounds"]
+        if not isinstance(overrides, dict) or any(
+            source not in result["sources"] or type(rounds) is not int or not 1 <= rounds <= 6
+            for source, rounds in overrides.items()
+        ):
+            raise ValueError("source_rounds must map configured sources to one through six rounds")
+        result["source_rounds"] = dict(overrides)
     if not result["sources"] or any(not isinstance(x, str) or not x for x in result["sources"]):
         raise ValueError("Goal sources must be a nonempty list of source IDs")
     for key, maximum in (("rounds", 3), ("max_documents", 1000), ("work_seconds", 3000)):
@@ -112,8 +120,8 @@ def _reservation(job):
     # External queued/running campaigns must conservatively reserve the maximum
     # unless their parent supplies the actual, smaller bounded settings.
     reservation = job.get("reserved_documents", 3000)
-    if type(reservation) is not int or not 1 <= reservation <= 3000:
-        raise ValueError("Job reservations must be integers in [1, 3000]")
+    if type(reservation) is not int or not 1 <= reservation <= 6000:
+        raise ValueError("Job reservations must be integers in [1, 6000]")
     return reservation
 
 
@@ -325,14 +333,16 @@ def run_tick(store, source_states, inspect_call, spawn_campaign, goal_config, cl
             break
         if summary["sources"][source] != "ready" or not summary["available_document_budget"]:
             continue
+        source_rounds = config.get("source_rounds", {}).get(source, config["rounds"])
+        campaign_budget = source_rounds * config["max_documents"]
         budget = min(
-            3000,
+            campaign_budget,
             summary["available_document_budget"],
-            3000
+            campaign_budget
             if summaries[source]["discovery_pending"]
             else summaries[source]["remaining_supported_candidates"],
         )
-        rounds = min(config["rounds"], budget)
+        rounds = min(source_rounds, budget)
         maximum = min(config["max_documents"], budget // rounds)
         job_id = f"goal-{source}-{int(now)}-{uuid.uuid4().hex[:10]}"
         job = {

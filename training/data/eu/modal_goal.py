@@ -50,7 +50,7 @@ def collect(source_id: str, run_id: str, max_documents: int, work_seconds: int):
     secrets=[secret],
     cpu=0.125,
     memory=512,
-    timeout=14400,
+    timeout=28800,
     max_containers=4,
     retries=0,
 )
@@ -187,27 +187,16 @@ def source_snapshots(mapping, goal, audit_store=None, audit_revision=None):
     timeout=600,
     max_containers=1,
     retries=0,
-    schedule=modal.Period(minutes=15) if SCHEDULE_ENABLED else None,
+    schedule=modal.Period(minutes=1) if SCHEDULE_ENABLED else None,
 )
 def tick():
-    from goal_controller import run_tick
     from hf_store import HFStore
 
     config = json.loads(GOAL_CONFIG.read_text())
     mapping = json.loads(GOAL_MAPPING.read_text())
     store = HFStore(config.pop("control_repo"))
-    state, control_revision = store.load()
-    goal = state.get("collection_goal")
-    if not goal:
-        raise RuntimeError("Initialize durable control state with all active/queued calls first")
-    if goal.get("status") in {"target_reached", "selected_scope_exhausted"}:
-        return {"status": goal["status"], "stored_rows": goal.get("stored_rows")}
-    result = run_tick(
-        store,
-        source_snapshots(mapping, goal, store, control_revision),
-        inspect_call,
-        lambda **kwargs: campaign.spawn(**kwargs),
-        config,
+    result = reconcile_tick(
+        store, mapping, config, inspect_call, lambda **kwargs: campaign.spawn(**kwargs)
     )
     return {
         key: result.get(key)
@@ -220,6 +209,28 @@ def tick():
             "sources",
         )
     }
+
+
+def reconcile_tick(store, mapping, config, inspect, spawn):
+    """Settle terminal calls using a second fresh snapshot in the same invocation."""
+    from goal_controller import run_tick
+
+    for _ in range(2):
+        state, revision = store.load()
+        goal = state.get("collection_goal")
+        if not goal:
+            raise RuntimeError(
+                "Initialize durable control state with all active/queued calls first"
+            )
+        result = run_tick(
+            store, source_snapshots(mapping, goal, store, revision), inspect, spawn, config
+        )
+        if not any(
+            job.get("status") == "settling" and job["source_id"] in config["sources"]
+            for job in result["jobs"]
+        ):
+            break
+    return result
 
 
 @app.local_entrypoint()
