@@ -1,0 +1,14 @@
+{
+  "prefix": "opt100m-m4compile-20261018-a",
+  "call_id": "fc-01M57VS8G2K4SACS646RWZAKP6",
+  "provenance": {
+    "git_commit": "ea6fd28c2de6135edb1962add437a6b54de2076b",
+    "purpose": "Compare cropped cached-RoPE microbatch 4 with and without torch.compile; 100M nonpadding tokens each, global batch 32"
+  },
+  "gpu": "H100:1",
+  "variants": [
+    "rope-m4",
+    "compile-m4"
+  ],
+  "status": "submitted"
+}
