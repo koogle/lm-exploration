@@ -1,0 +1,110 @@
+{
+  "format": "scholarly-ddp-v1",
+  "config": {
+    "world_size": 8,
+    "global_windows": 32,
+    "microbatch": 1,
+    "context": 8192,
+    "target_tokens": 5000000000,
+    "warmup_tokens": 20000000,
+    "peak_lr": 0.0003,
+    "min_lr_ratio": 0.1,
+    "weight_decay": 0.1,
+    "seed": 42,
+    "checkpoint_every": 1000,
+    "evaluate_every": 500,
+    "pilot": false,
+    "experimental_data": true,
+    "prefetch_batches": 4,
+    "n_layer": 14,
+    "n_head": 12,
+    "n_embd": 768
+  },
+  "data_identity": {
+    "manifest_sha256": "7ecc680b9ca742ca67eae14c072dd0f7a28a3a0a24f885ec7dfd022ffc180778",
+    "context": 8192,
+    "split": "train",
+    "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9"
+  },
+  "source_sha256": {
+    "trainer": "51e57355cb0a58a826c61b8d293647f15f9bea94a8fe312ed3751e17b5ec0f8f",
+    "config": "96e64243a30c5c4379d8493ce085f92338d0522daddfbd1916358aaafa21408b",
+    "model": "96bd95eb51ff5b2aa3d4cd9fc07073a6d21dc9003b36bbe9461fa5780a76882d",
+    "loader": "7821e13e765a9f2c0e0a94744bc7f2df8eea647f26d7aa0069f62556618a0ef2",
+    "raw_loader": "b5cc8623d84b3916c610faf15d248824423085f2d4070b095df33ac8e80c749c",
+    "prefetch": "1786b1423f5881b23223ff0db47284a522020237d77e3d7fa28d542deea5c218",
+    "live_loader": "64457d0e60f1f1b664d3b174183c6e6f3d0c618973fe56712f9e72cd2a118a75",
+    "tokenizer": "00e32adc13dab74f5a029c63304b4591bd48f7cd6b086b22d4624d244667b4da"
+  },
+  "torch_version": "2.6.0+cu124",
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "parameters": 124389632,
+  "resume_from": "/runs/simple-llm-124m-8k-5b-20261018-s02/step-000050403.pt",
+  "steps": 64227,
+  "session_steps": 13824,
+  "total_loss_tokens": 4999981176,
+  "session_loss_tokens": 1076335427,
+  "stop_reason": "token_limit",
+  "data_error": null,
+  "elapsed_seconds": 5938.742010529997,
+  "final_checkpoint": "/runs/simple-llm-124m-8k-5b-20261018-s03/step-000064227.pt",
+  "initial_validation": {
+    "step": 50403,
+    "tokens": 3923645749,
+    "per_source": {
+      "fineweb_edu": 2.949349796070772,
+      "code_python": 1.5737558226555506,
+      "finemath_4plus": 0.9995966315044487,
+      "pes2o": 2.027310371398926,
+      "pubmed": 2.0710272789001465,
+      "arxiv": 2.0190863609313965,
+      "pressbooks": 3.1382837295532227,
+      "libretexts": 2.230359494898243,
+      "doab": 1.2815076448835065,
+      "gutenberg": 2.69559907913208,
+      "pre_1929_books": 2.8595340251922607,
+      "library_of_congress": 2.6590516567230225
+    },
+    "weighted_loss": 1.8992631233807942
+  },
+  "final_validation": {
+    "step": 64227,
+    "tokens": 4999981176,
+    "per_source": {
+      "fineweb_edu": 2.9148877568605567,
+      "code_python": 1.551377941053044,
+      "finemath_4plus": 0.9781413506420195,
+      "pes2o": 1.9863625764846802,
+      "pubmed": 2.0357589721679688,
+      "arxiv": 1.984279990196228,
+      "pressbooks": 3.1151490211486816,
+      "libretexts": 2.2148055215747333,
+      "doab": 1.2587231780872863,
+      "gutenberg": 2.655519723892212,
+      "pre_1929_books": 2.815484046936035,
+      "library_of_congress": 2.6251580715179443
+    },
+    "weighted_loss": 1.8707872297786696
+  },
+  "loss_token_exposures": {
+    "fineweb_edu": 499996053,
+    "code_python": 1499987929,
+    "finemath_4plus": 999996499,
+    "pes2o": 499996230,
+    "pubmed": 150000165,
+    "arxiv": 100002796,
+    "pressbooks": 149999067,
+    "libretexts": 150001308,
+    "doab": 200000234,
+    "gutenberg": 249999634,
+    "pre_1929_books": 350000117,
+    "library_of_congress": 150001144
+  },
+  "validation_note": "One fixed window/source; diagnostic only",
+  "prefetch": {
+    "data_wait_seconds": 0.0,
+    "consumed_batches": 0,
+    "ready_batches": 4,
+    "buffer_capacity": 4
+  }
+}
