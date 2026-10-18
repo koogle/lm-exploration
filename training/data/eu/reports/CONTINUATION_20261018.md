@@ -90,3 +90,23 @@ Next: check newly enumerated series on subsequent ECB workers and refresh audit
 coverage after its next hourly pass. Preserve the remaining 34-pair audit and
 126-campaign envelopes; review them before exhaustion. Collection continues,
 and neither completion criterion has been met.
+
+## Follow-up at 05:53 UTC
+
+Both source call trees remain active. ECB's second round persisted all six new
+type inventories, totaling 1,057 candidate URLs with no exact URL overlap against
+prior collections or each other; saved rows from these series were still zero at
+that snapshot. Discovery is complete only for those bounded type inventories.
+
+The latest status read at 05:52 UTC showed 18,526 stored documents and the same
+412,205,746-token matched lower bound, awaiting the next hourly audit. Campaign
+records remain 24 and audit-pair reservations remain 14; no extra audit was started.
+
+Ten remaining primary-404 convergence reports have individually verified full-PDF
+replacements, including EMI reports from 1996 and 1998. The existing exact URL
+and SHA-256 map now covers thirteen assets. [Recovery evidence](../research/ecb-convergence-recovery-20261018.md)
+records titles, dates, issuer checks, hashes and bounded retrievals. It does not
+count probe text as uploaded corpus or loosen validation to a generic rewrite.
+The repair passed 269 tests and lint/format/whitespace checks, and deployment
+receipts confirmed all three collector apps with the recovery schedule disabled.
+Verify saved output in subsequent workers; preserve active writers and reservations.

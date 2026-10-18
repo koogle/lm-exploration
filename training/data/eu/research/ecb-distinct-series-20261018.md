@@ -40,3 +40,10 @@ Deployment receipts confirmed updates to the existing collection, manual and
 recovery apps; the recovery schedule remained disabled. No source reservations
 were reset. The existing controller reconciled EMA’s terminal call tree and
 allocated one successor campaign, raising campaign records from 23 to 24.
+
+At 05:53 UTC, all six complete bounded type inventories were persisted in ECB
+revision `87c3ca84de19a746c52ac707028511a83f1847ac`. Their 1,057 candidate URLs
+had zero exact overlap with prior configured collections or with each other.
+No rows from these six collections had been saved at that snapshot. See
+[the inventory comparison](ecb-series-inventory-overlap-20261018.json).
+Exact URL separation does not remove the passage-overlap caveat for proceedings.

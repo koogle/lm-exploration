@@ -283,7 +283,8 @@ def enumerate_report_translations(fetch, limit=1000, seed_limit=100):
 
 # Exact standalone assets verified on 2026-10-16 and 2026-10-17. No blanket prefix rewrite:
 # inventory errors in other historical files need their own verification.
-# Exact PDF identities verified in research/ecb-convergence-links-20261017.json.
+# Exact PDF identities verified in research/ecb-convergence-links-20261017.json
+# and research/ecb-convergence-recovery-20261018.json.
 VERIFIED_CONVERGENCE_REPORTS = {
     "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2006en.pdf": {
         "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2006en.pdf",
@@ -296,6 +297,46 @@ VERIFIED_CONVERGENCE_REPORTS = {
     "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200705en.pdf": {
         "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200705en.pdf",
         "sha256": "22076668ff99886ef0f7d15656fea2dc2bf17471a3242a4e6af53ffdcf646cdb",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201406en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201406en.pdf",
+        "sha256": "835e6e7a2b6be752cd30edf203a2e491d30186d0077b3765a48ca8203e9118bb",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201306en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201306en.pdf",
+        "sha256": "0a6661e268e9c3ef13c0385a889fd2f14203464c993dc650d23212559f9a09df",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201205en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201205en.pdf",
+        "sha256": "e404dd7cd3a74d8293f57dc9d6cac8a21eae26777c58312026086ed935c85c60",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201005en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201005en.pdf",
+        "sha256": "0efc3e444cdb3df81aa4f453ddfdc21a3baae53109a0aaf2cba167aa74fc1fe0",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200805en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200805en.pdf",
+        "sha256": "9dbef8fa49e4d83b288a3abd058c70b2495072d447c97ad45839e8dc61ad625b",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200612en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200612en.pdf",
+        "sha256": "e21450a2e02ebcdb9ffe973183199c6b38e21b93b3adf2fbf8c308f52092fea0",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2004en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2004en.pdf",
+        "sha256": "c119426c76f9c91c32eaee1e60ed6b4eaafc56eddcb26999b64436ae37d904cb",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2002en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2002en.pdf",
+        "sha256": "58e4ca92b1a005a04283bab6f63b94f7bdeb98c0c1da805b6ae0bec94359a155",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr1998en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr1998en.pdf",
+        "sha256": "b5f2cf6cf0f7cd8b6242d1e2e72528ff2b46b65622a989b321204bf6397e54dc",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr1996en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr1996en.pdf",
+        "sha256": "d1128bc796dfad2dfd35662a265801ab149ff67b3450f38d2ca3f645a22cae5f",
     },
 }
 
@@ -417,7 +458,7 @@ def _normalize_title(text):
 def validate_alternate(record, data):
     """Reject inferred PDF replacements unless their opening pages contain the title.
 
-    Three convergence replacements must match verified PDF SHA-256 hashes.
+    Historical convergence replacements must match verified PDF SHA-256 hashes.
     Thirteen article mappings have recorded identity evidence; other article URLs
     must pass strict historical filename rules and conservative title checks.
     Inferred standalone boxes are restricted to 2012–2018 and at most 20 pages;
