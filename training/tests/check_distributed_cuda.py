@@ -1,6 +1,5 @@
 """Bounded integration checks executed on a three-GPU Modal worker, not CPU training."""
 
-import gzip
 import hashlib
 import json
 import subprocess
@@ -9,6 +8,7 @@ from pathlib import Path
 
 import torch
 from training_data.subword import TOKENIZER_SHA256
+from training_data.token_shards import FORMAT, file_entry, write_shard
 
 from trainer.distributed_config import DistributedConfig
 
@@ -21,32 +21,33 @@ def fixture(root, documents=60):
     for name, weight in (("short", 40), ("long", 60)):
         splits = {}
         for split in ("train", "validation"):
-            path = root / f"{name}-{split}.jsonl.gz"
+            path = root / f"{name}-{split}.tokens"
             count = 0
-            with gzip.open(path, "wt") as handle:
+
+            def rows(split=split, name=name):
+                nonlocal count
                 for i in range(documents if split == "train" else 2):
                     ids = list(range(4, 4 + (7 + i % 13 if name == "short" else 45 + i % 19)))
                     count += len(ids) + 1
-                    handle.write(json.dumps({"ids": ids, "hash": f"{name}-{i}"}) + "\n")
+                    yield {"ids": ids, "hash": hashlib.sha256(f"{name}-{i}".encode()).hexdigest()}
+
+            shard = write_shard(path, rows())
             splits[split] = {
                 "loss_tokens": count,
-                "shards": [
-                    {"path": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
-                ],
+                "shards": [shard],
             }
         sources[name] = {"weight_percent": weight, "splits": splits}
     manifest = root / "manifest.json"
     manifest.write_text(
         json.dumps(
             {
+                "schema": 2,
+                "token_format": FORMAT,
                 "tokenizer_sha256": TOKENIZER_SHA256,
                 "training_ready": False,
                 "max_passes": 2,
                 "sources": sources,
-                "audit": {
-                    "path": audit.name,
-                    "sha256": hashlib.sha256(audit.read_bytes()).hexdigest(),
-                },
+                "audit": file_entry(audit),
             }
         )
     )

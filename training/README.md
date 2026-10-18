@@ -61,6 +61,16 @@ See the owning guide and `results/shakespeare-10m-*.json` for executed results.
 
 ## Training runs on Modal
 
+![One Modal worker launches one process per GPU with torchrun. Rank zero reads shared input files and scatters the batch; DDP synchronizes gradients before each replica updates its weights.](trainer/images/distributed-training.png)
+
+The diagram shows the three-GPU subword trainer. The Modal API starts the worker;
+inside it, a supervised `torchrun` subprocess launches one Python process per GPU.
+Rank zero reads the shared corpus on `/data`; corpus files are not copied per run
+or per GPU. Each GPU holds a full model and optimizer replica. At checkpoint
+boundaries, rank zero saves to `/runs`; resuming requires an explicit new job.
+See the [distributed training guide](trainer/DISTRIBUTED.md) for launch commands,
+microbatch accumulation and checkpoint details.
+
 The [bounded scholarly/code pilot](100m/PILOT.md) connects the modern 124.4M
 model to the frozen 32K tokenizer and token-mixture loader. Its launcher is
 `modal_scholarly_pilot.py`; the older recipes below remain character-only.

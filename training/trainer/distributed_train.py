@@ -19,6 +19,7 @@ from trainer.distributed_config import DistributedConfig, validate_resume
 def source_hashes():
     import model_100m.model
     import training_data.subword
+    import training_data.token_shards
     import training_data.token_stream
 
     import trainer.distributed_config
@@ -28,6 +29,7 @@ def source_hashes():
         "config": Path(trainer.distributed_config.__file__),
         "model": Path(model_100m.model.__file__),
         "loader": Path(training_data.token_stream.__file__),
+        "token_shards": Path(training_data.token_shards.__file__),
         "tokenizer": Path(training_data.subword.__file__),
     }
     return {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in paths.items()}

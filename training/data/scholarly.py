@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from .subword import FIRST_CONTENT_TOKEN_ID, TOKENIZER_SHA256, digest, load_frozen
+from .token_shards import FORMAT, file_entry, write_shard
 
 SPLIT_VERSION = "scholarly-parent-v2"
 MAX_CHARS = 4_000_000
@@ -174,6 +175,7 @@ class Stager:
                 "max_chars": MAX_CHARS,
                 "implementation_sha256": digest(__file__),
                 "tokenizer_loader_sha256": digest(Path(__file__).with_name("subword.py")),
+                "token_shards_sha256": digest(Path(__file__).with_name("token_shards.py")),
             }
         )
         existing = self.db.execute("SELECT value FROM settings WHERE id=1").fetchone()
@@ -291,7 +293,8 @@ class Stager:
         destination = Path(destination)
         destination.mkdir(parents=True, exist_ok=False)
         manifest = {
-            "schema": 1,
+            "schema": 2,
+            "token_format": FORMAT,
             "implementation_sha256": self.identity["implementation_sha256"],
             "tokenizer_sha256": TOKENIZER_SHA256,
             "recipe_sha256": hashlib.sha256(canonical(self.recipe).encode()).hexdigest(),
@@ -325,33 +328,24 @@ class Stager:
                 )
                 shards, tokens, docs = [], 0, 0
                 while first := next(rows, None):
-                    path = destination / f"{name}-{split}-{len(shards):06d}.jsonl.gz"
-                    # Fixed gzip timestamp and no filename make exports reproducible.
-                    with (
-                        path.open("wb") as raw,
-                        gzip.GzipFile(fileobj=raw, mode="wb", mtime=0, filename="") as output,
-                    ):
-                        batch = itertools.chain(
-                            [first], itertools.islice(rows, documents_per_shard - 1)
-                        )
+                    path = destination / f"{name}-{split}-{len(shards):06d}.tokens"
+                    batch = itertools.chain(
+                        [first], itertools.islice(rows, documents_per_shard - 1)
+                    )
+
+                    def records(batch=batch):
+                        nonlocal tokens, docs
                         for content_hash, parent, provenance, data, count in batch:
-                            ids = list(struct.unpack(f"<{count}H", data))
-                            output.write(
-                                (
-                                    canonical(
-                                        {
-                                            "hash": content_hash,
-                                            "parent": parent,
-                                            "provenance": json.loads(provenance),
-                                            "ids": ids,
-                                        }
-                                    )
-                                    + "\n"
-                                ).encode()
-                            )
                             tokens += count + 1  # EOS bears loss; BOS is input only.
                             docs += 1
-                    shards.append({"path": path.name, "sha256": digest(path)})
+                            yield {
+                                "hash": content_hash,
+                                "parent": parent,
+                                "provenance": json.loads(provenance),
+                                "ids": list(struct.unpack(f"<{count}H", data)),
+                            }
+
+                    shards.append(write_shard(path, records()))
                 target = 20_000_000_000 * source["weight_percent"] // 100
                 entry["splits"][split] = {
                     "documents": docs,
@@ -393,6 +387,6 @@ class Stager:
                         + "\n"
                     ).encode()
                 )
-        manifest["audit"] = {"path": audit_path.name, "sha256": digest(audit_path)}
+        manifest["audit"] = file_entry(audit_path)
         (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
         return manifest

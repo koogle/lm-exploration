@@ -32,6 +32,7 @@ def check(run_id):
             "test_100m_modern.py",
             "test_tied_embeddings.py",
             "test_scholarly.py",
+            "test_token_shards.py",
         ):
             subprocess.run(
                 [

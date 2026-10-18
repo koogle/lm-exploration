@@ -15,8 +15,11 @@ AdamW optimizer state. Adding GPUs divides the batch computation; it does not
 split the model across devices or increase the configured global batch.
 
 1. The [Modal launcher](../modal_distributed_train.py) allocates one host and
-   starts one process per GPU with `torchrun`. Each process is a *rank*, and NCCL
-   carries the communication between ranks.
+   calls the remote worker through the Modal Python API. The worker supervises a
+   `torchrun` subprocess, which starts one Python process per GPU. Each process
+   calls `train()` and is a *rank*; NCCL carries communication between ranks.
+   The worker captures logs and enforces a process timeout, terminating the
+   process group if needed.
 2. Rank zero alone reads the deterministic token mixture and constructs the
    global input/target batch. For the illustrated configuration, 48 windows of
    context 2,048 are scattered as 16 windows per GPU. Rank zero also counts all
@@ -30,14 +33,22 @@ split the model across devices or increase the configured global batch.
    For `W` ranks, `N` valid targets and local summed losses `S_r`, the resulting
    gradient is `(1/W) * sum_r grad(W * S_r / N) = grad(sum_r S_r / N)`.
    This is the global mean token-loss gradient even when ranks have different
-   amounts of padding. The formula strip in the diagram describes this scaling,
-   not an additional operation after the optimizer update.
+   amounts of padding. Step 2 in the diagram places this scaling before backward;
+   its factor of 3 is the illustrated three-GPU world size.
 5. All ranks clip the synchronized gradient and apply the same AdamW update,
    keeping their model replicas aligned. Learning rate and cumulative progress
    use actual valid-token counts. The cycle repeats with the next global batch.
 
 The production implementation is
 [`backward_batch()` and `train()` in distributed_train.py](distributed_train.py).
+Input shards remain on the shared `/data` volume and are read only by rank zero
+within a job. Independent jobs can read the same immutable snapshot; each keeps
+its own cursor and output directory. The launcher copies source, tokenizer assets
+and the manifest for provenance, not the corpus. Training checks file sizes and
+manifest identity at startup, then seeks directly into binary token shards using
+the saved pass/shard/document/token cursor. Full-file checksum verification is an
+explicit preparation/transfer operation; see [snapshot conversion and verification](../data/SCHOLARLY_STREAMING.md#seekable-snapshots-and-verification).
+
 Rank zero also owns logging and diagnostic validation. At checkpoint boundaries,
 all ranks contribute their RNG state; rank zero saves the shared model/optimizer,
 data cursor and counters alongside those states, atomically renames the file,
@@ -53,11 +64,12 @@ Run from `training/`, with Modal credentials and prepared data on
 not the character trainer's `Recipe` format.
 
 ```sh
-# Bounded smoke run against the existing pilot snapshot; creates a checkpoint.
+# First convert the existing gzip pilot using the linked conversion instructions.
+# Bounded smoke run against that converted snapshot; creates a checkpoint.
 modal run --detach modal_distributed_train.py \
   --config recipes/distributed/h100x2-pilot.json \
   --run-id my-ddp-pilot-01 \
-  --snapshot scholarly-124m-20261016/snapshots/pilot-001 \
+  --snapshot scholarly-124m-20261016/snapshots/pilot-001-seekable \
   --gpu H100 --max-steps 2 --max-seconds 300
 
 # Substantial-run settings: requires a training-ready snapshot with capacity.
@@ -106,7 +118,7 @@ continues. Every graceful stop saves an optimizer-boundary checkpoint.
 modal run --detach modal_distributed_train.py \
   --config recipes/distributed/h100x2-pilot.json \
   --run-id my-ddp-pilot-02 \
-  --snapshot scholarly-124m-20261016/snapshots/pilot-001 \
+  --snapshot scholarly-124m-20261016/snapshots/pilot-001-seekable \
   --resume my-ddp-pilot-01/step-000000002.pt \
   --gpu H100 --max-steps 2 --max-seconds 300
 ```
@@ -148,9 +160,10 @@ every 1,000 steps. Each full-model optimizer checkpoint is roughly 1.5 GB.
 Validation reports one fixed window per source and its mixture-weighted loss at
 startup, configured intervals and the end. This is a diagnostic, not production
 capability evaluation or automatic best-checkpoint selection. Full-scale corpus
-preparation/audits remain separate work. The existing gzip loader replays to saved
-cursor offsets during resume; full-corpus restart latency and multi-day reliability
-have not been measured.
+preparation/audits remain separate work. Seekable token shards remove compressed
+cursor replay; full-corpus restart latency, throughput and multi-day reliability
+have not been measured. Old gzip snapshots need one-time conversion for new runs;
+old checkpoints require their original code and snapshot.
 
 ## Verification
 
@@ -169,3 +182,5 @@ reduction order can change low bits across fresh jobs.
 
 Measured run evidence is recorded in
 [`results/scholarly-ddp-support-20261017.md`](../results/scholarly-ddp-support-20261017.md).
+Those GPU measurements predate the seekable snapshot format. The format change
+has local loader/conversion/resume checks; a new CUDA qualification has not been run.

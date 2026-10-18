@@ -46,7 +46,9 @@ def worker(gpu, run_id, provenance):
     output.mkdir(parents=True)
     try:
         result = benchmark(
-            Path("/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001/manifest.json"),
+            Path(
+                "/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001-seekable/manifest.json"
+            ),
             gpu,
             provenance,
         )

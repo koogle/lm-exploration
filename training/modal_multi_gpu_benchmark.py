@@ -32,7 +32,9 @@ def worker(gpu, world, run_id, provenance, sustained_steps):
 
     output = Path("/runs") / run_id / f"{gpu}x{world}"
     output.mkdir(parents=True, exist_ok=False)
-    manifest = "/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001/manifest.json"
+    manifest = (
+        "/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001-seekable/manifest.json"
+    )
     rows = []
     start = time.monotonic()
 

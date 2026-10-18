@@ -33,7 +33,9 @@ results = modal.Volume.from_name("lm-exploration-training")
 def worker(world, run_id, provenance):
     output = Path("/runs") / run_id / f"H100x{world}"
     output.mkdir(parents=True, exist_ok=False)
-    manifest = "/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001/manifest.json"
+    manifest = (
+        "/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001-seekable/manifest.json"
+    )
     started = time.monotonic()
     try:
         if world == 1:

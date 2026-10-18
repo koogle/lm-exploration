@@ -188,7 +188,7 @@ class CorpusTests(unittest.TestCase):
         state["tokenizer_sha256"] = "wrong"
         with self.assertRaises(ValueError):
             restored.load_state_dict(state)
-        shard = next((self.root / "export").glob("*.gz"))
+        shard = next((self.root / "export").glob("*.tokens"))
         with shard.open("ab") as handle:
             handle.write(b"corrupt")
         with self.assertRaises(ValueError):

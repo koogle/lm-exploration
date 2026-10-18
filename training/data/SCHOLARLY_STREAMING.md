@@ -95,8 +95,57 @@ Training stops when the next required source exhausts two passes; validation
 permits only one pass. It never silently substitutes another source. Immutable
 content-hash ordering is deterministic; there is **no random shuffle** in v1 and
 thus no hidden shuffle RNG. Checkpoints store manifest/tokenizer identity,
-context, split, per-source block cursors and loss-token exposures. Resume replays
-to those cursors; a production indexed/shuffled reader is future work.
+context, split, per-source block counts and loss-token exposures. Schema-2
+snapshots also store a seek cursor: pass, shard, document byte offset and token
+offset within the document. Resume seeks directly to the next window, without
+reading earlier documents or decompressing earlier shards. Failed partial batches
+restore these cursors as well as the exposure counts.
+
+## Seekable snapshots and verification
+
+New exports use `uint16-documents-v1`: each `.tokens` shard begins with the eight
+bytes `LMTOK01\n`. Each document has a little-endian uint32 content-token count,
+32 raw SHA-256 bytes, then that many little-endian uint16 token IDs. The loader
+reads at most one window plus its next-token target at a time. BOS/EOS are virtual;
+document boundaries, content-hash order, padding and mixture weights are unchanged.
+Compressed provenance sidecars retain parent IDs and original metadata without
+duplicating the token arrays. The audit remains compressed and outside training's
+read path. This trades gzip token compression for bounded, directly seekable reads.
+
+Preparation records checksums and byte sizes once. Training startup hashes only
+the manifest and checks shard/audit paths and sizes; it does **not** hash all corpus
+or audit bytes. This assumes published snapshots remain immutable. Same-size edits
+are not detected at startup. Use explicit verification after transferring a
+snapshot or when checking its integrity:
+
+```sh
+python -m training_data.token_shards verify /path/to/snapshot/manifest.json
+```
+
+Existing gzip snapshots must be converted once into a **new** directory:
+
+```sh
+python -m training_data.token_shards convert \
+  /path/to/pilot-001/manifest.json /path/to/pilot-001-seekable
+
+# On the existing Modal data volume, without downloading the corpus:
+modal run modal_prepare_scholarly.py \
+  --version scholarly-124m-20261016 --snapshot pilot-001-seekable \
+  --convert-from pilot-001
+```
+
+Conversion verifies the old checksums, preserves audit status and provenance,
+writes the new manifest last, and leaves the original snapshot untouched. It
+performs no upstream ingestion or training. The Modal conversion uses the existing
+bounded CPU resources and a 30-minute timeout; retain partial outputs for inspection
+and choose a new destination if retrying a failed conversion.
+
+Use the converted snapshot for new runs. Existing checkpoints retain their original
+manifest/source identities and must resume with their original code and snapshot;
+they cannot be resumed against the converted snapshot. No live snapshot conversion
+or GPU qualification of this format is implied by the local tests.
+The GPU comparison/confirmation launchers now expect `pilot-001-seekable` on the
+data volume; run the conversion above before using them with this code.
 
 ## Gates before substantial training
 
