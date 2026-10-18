@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "owner": "jfrick",
-  "private": false,
+  "private": true,
   "sources": {
     "ecb": {
       "repo_id": "jfrick/eu-ecb",
@@ -15,7 +15,18 @@
         "press_releases",
         "interviews",
         "meeting_accounts",
-        "decisions"
+        "decisions",
+        "legal_working_papers",
+        "discussion_papers",
+        "central_banking_proceedings",
+        "legal_conference_proceedings",
+        "letters_to_meps",
+        "ecb_blog",
+        "macroprudential_bulletin_articles",
+        "financial_integration_reports",
+        "international_role_euro",
+        "target_annual_reports",
+        "other_publications"
       ],
       "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text.",
       "collection_weights": {
@@ -27,7 +38,18 @@
         "press_releases": 1,
         "interviews": 1,
         "meeting_accounts": 1,
-        "decisions": 1
+        "decisions": 1,
+        "legal_working_papers": 3,
+        "discussion_papers": 3,
+        "central_banking_proceedings": 3,
+        "legal_conference_proceedings": 3,
+        "letters_to_meps": 1,
+        "ecb_blog": 1,
+        "macroprudential_bulletin_articles": 3,
+        "financial_integration_reports": 3,
+        "international_role_euro": 3,
+        "target_annual_reports": 3,
+        "other_publications": 3
       }
     },
     "ema": {
@@ -44,7 +66,7 @@
       "description": "European Medicines Agency news, scientific guidelines and committee documents, enumerated from official JSON inventories.",
       "collection_weights": {
         "epar_assessment_reports": 6,
-        "epar_product_information": 6,
+        "epar_product_information": 20,
         "epar_overviews": 1,
         "news": 1,
         "scientific_guidelines": 1,

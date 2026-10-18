@@ -12,6 +12,14 @@ adapters. Existing EUR-Lex/OPUS corpora are overlap baselines, not evidence that
 institutional long tail has been collected. No claim of novelty or overall token
 volume is established by this pilot.
 
+## Current status and agent handoff
+
+See the [detailed status report](reports/STATUS_AND_HANDOFF_20261018.md) and
+[ready-to-paste continuation goal](reports/NEW_AGENT_GOAL.md). Those are pinned
+handoff snapshots; refresh private HF state for live totals. See also the
+[18 October continuation](reports/CONTINUATION_20261018.md) for subsequent repairs
+and a newer pinned checkpoint.
+
 ## Implemented now
 
 - Ten collection candidates in [sources.json](sources.json), ordered by priority.
@@ -106,8 +114,8 @@ adapters and durable resume; its behavior differs from these original commands.
 ## ECB/EMA durable collection pipeline
 
 [pipeline_sources.json](pipeline_sources.json) is the authoritative organization →
-HF repository → adapter → collection mapping. Document repositories are created public following the owner's publication request;
-existing repository visibility is preserved. Current destinations and configs:
+HF repository → adapter → collection mapping. Document repositories are created private following the owner's current instruction;
+existing repository visibility is preserved. Initial destinations and configs:
 
 | Source | Hugging Face repository | Collection configs |
 | --- | --- | --- |
@@ -173,7 +181,7 @@ to one container each, and HF compare-and-swap protects against overlapping writ
 | `data/<collection>/<format>/part-<hash>.parquet` | Extracted text, stable schema, document/revision IDs and provenance |
 | `state/progress.json` | Completed items, failures, retry times, dedup index, collection inventory paths, source mapping and run summaries |
 | `inventories/<collection>/<hash>.json` | Enumerated document-language candidates and coverage evidence |
-| `raw/<sha256>.gz` | Compressed original bodies for successfully retained documents |
+| `raw-v2/<prefix>/<sha256>.gz` | New compressed original bodies; existing `raw/<sha256>.gz` files are retained |
 | `README.md` | Collection configs, stored row counts and unreviewed/mixed source-term status |
 
 Collection configs use `data/<collection>/**/*.parquet` as their `train` split;
@@ -515,7 +523,7 @@ EUR-Lex/Commission batches may finish, but the controller allocates no successor
 to them. This is not a claim that 100,000 ECB/EMA documents exist.
 
 `modal_goal.py` deploys `lm-exploration-eu-100k`: a single scheduled controller
-checks fresh source metrics every 15 minutes. It launches bounded three-round
+checks fresh source metrics every minute. It launches bounded source-specific
 campaigns, with at most 1,000 attempts and 3,000 work seconds per round, and
 one active campaign per source. The eight existing running/queued campaigns were
 registered before activation. `goal_pipeline_sources.json` adds five further
@@ -562,7 +570,7 @@ identify 104,799 supported language-level candidates outside the existing docume
 partitions. The worker selects at most 100,000 of these; candidates and extraction
 samples are not counted as stored corpus documents.
 
-Use `uv run status.py both --mapping goal_pipeline_sources.json` to include the
+Use `uv run status.py both --mapping goal_pipeline_sources.json --cached-tokens` to include the
 expanded collection breakdown. The separate billion-token research objective is
 not a completed milestone: exact `o200k_base` counts require its vocabulary download,
 which the environment proxy still denied on 17 October. Character/byte/word totals
@@ -596,7 +604,7 @@ EU_MODAL_APP_NAME=lm-exploration-eu-recovery-20261017 EU_GOAL_SCHEDULE=0 \
 ```
 
 The app identity and schedule setting are carried into each function environment so
-remote module hydration uses the same settings. The default app and 15-minute
+remote module hydration uses the same settings. The default app and one-minute
 schedule remain unchanged when these variables are absent.
 
 Recovery succeeded at 09:37 UTC on 17 October: the fresh app completed a real
@@ -649,3 +657,200 @@ match against its verified PDF SHA-256. The original inventory identity remains
 unchanged. See the [retrieval evidence](research/ecb-convergence-links-20261017.md).
 These additions passed the full 195-test suite before deployment; neither implies
 complete historical or multilingual coverage.
+
+### Resumable OpenAI token measurement
+
+`token_audit.py` counts `o200k_base` tokens in each stored document's text field,
+without adding separators or EOS tokens. It reads a pinned corpus revision,
+checks each shard's row count and normalized-record digest, and checkpoints
+per-shard results separately under `tokens/<source>.json` in the private control
+repository. Subsequent runs reuse verified shard counts. The summary distinguishes
+counted rows/shards from total rows/shards and reports completeness only for the
+pinned revision; newly ingested documents require another pass.
+
+`modal_token_audit.py` provides a separate bounded CPU audit worker. An hourly coordinator resumes bounded audit pairs. It does not modify collector
+progress or corpus data.
+The tokenizer loaded successfully on Modal on 17 October; local download remained
+unavailable. Counts are actual tokenizer measurements only when the audit produces
+a result, never estimates derived from characters.
+
+```sh
+uv run python modal_cli.py deploy modal_token_audit.py
+uv run python modal_cli.py run --detach modal_token_audit.py --source ecb --max-shards 3000
+```
+
+The collection goal also has an explicit `target_tokens: 1000000000`. Each
+controller tick sums only cached `o200k_base` counts matching the current corpus
+shards by content hash, path and row count. Partial audits provide a conservative
+lower bound; missing caches contribute zero and incompatible caches fail the
+tick. The latest owner instruction sets `stop_at_token_target: false`, so this
+value is a reporting milestone and reaching it does not stop dispatch. Older
+configurations default to stopping at the token target. The existing 100,000-document
+operational cap and 150-campaign limit remain unchanged. The hourly audit coordinator resumes counting as the corpus grows.
+
+HF may report stale-parent conflicts as either HTTP 409 or 412. Audit checkpoint
+retries re-read the destination at the new revision and proceed only if that
+source's token-cache bytes have not changed, preserving concurrent controller
+updates and rejecting competing audit writes.
+
+
+### Private visibility restored
+
+The owner subsequently requested that all four document repositories be private
+again: `jfrick/eu-ecb`, `jfrick/eu-ema`, `jfrick/eu-eurlex` and
+`jfrick/eu-commission-press`. Both source mappings now create private repositories.
+Earlier public-visibility records document historical state, not the current
+setting. The control repository remains private. Collection and authenticated
+resume continue without changing document identities or checkpoints.
+
+Token-audit requests are paced with a two-second pause before each uncached shard,
+and checkpoint writes occur every 50 shards plus the final partial checkpoint.
+This reduces Hub request and commit bursts. A bounded `resume_after` Modal helper
+can defer one ECB/EMA audit pair until a server-requested cooldown expires; its
+call ID is recorded before returning. It is not a recurring schedule. HTTP429
+responses on 17 October requested approximately one hour, so those retries were
+deferred until 15:27 UTC rather than retried immediately.
+
+
+### Automatic audit continuation
+
+`modal_token_audit.scheduled_tick` runs hourly and reserves at most 48 ECB/EMA
+audit pairs, including the pair adopted at deployment. Each worker retains its
+1,500-second work budget, 1,800-second hard timeout and shared single-container
+limit. Durable reservations and call IDs live in private control state at
+`tokens/schedule.json`; active or unresolved calls prevent another pair. A claim
+without an attached call ID requires reconciliation instead of replay.
+
+The coordinator respects HTTP429 cooldowns and stops new audit pairs when the
+collection controller reports its token/document target or verified exhaustion.
+It also stops dispatching at the audit-pair budget. Reaching that budget is an
+operational review point, not a claim that the corpus is complete. Both document
+collection and audit continuation now run remotely without a local shell session.
+
+### ECB collection expansion after paper inventories
+
+The scheduled mapping adds Financial Stability Reviews (FOEDB type 137), Statistics
+Papers (type 5) and Research Bulletins (type 61). Current catalog observations total
+224 publication records; these are candidates, not newly stored documents.
+English full-text samples from all three series were verified. See
+[expansion evidence](research/ecb-next-expansion-20261017.md).
+FSR language-picker links are not enumerated: the tested German route contains
+the English report plus an unavailable-language notice.
+
+Historical Economic Bulletin boxes from 2014–2018 may try one same-basename
+`/pub/pdf/other/` replacement after a primary 404. Only the observed `mb…_focus`,
+`eb…_focus`, `eb…_box`, `ebbox…_` and `ecb.ebbox…_` filename forms qualify;
+issue year/month or number must match the original path. Every response must be
+a PDF of at most 20 pages and contain the full normalized catalog title in its
+first two pages. Original inventory identity and both retrieval URLs are retained.
+Eight live PDFs passed the integrated rules; this does not validate all remaining
+candidates. See [recovery evidence](research/ecb-box-recovery-20261017.md).
+
+### Targeted EMA scientific-history expansion
+
+The scheduled EMA mapping now includes exact EPAR types `variation-report`,
+`scientific-discussion` and `scientific-discussion-variation`, each as its own
+collection partition. Offline enumeration of the cached official inventory found
+4,121 supported document-language URLs: 3,401 variation reports, 529 scientific
+discussions and 191 scientific-discussion variations. URL overlap with the prior
+configured collections and between these types was zero; organization-wide text
+hash deduplication still applies.
+
+The existing extraction pipeline will fetch and validate these documents during
+subsequent workers. No new full-text sample or uploaded-row total is claimed by
+this inventory-only investigation. Unsupported formats remain explicit gaps.
+The broad `epar_documents` umbrella remains excluded to avoid overlapping types
+and package-listing-heavy discovery. See [inventory evidence](research/ema-targeted-expansion-20261017.md).
+
+### Raw-storage directory limit and verified recovery
+
+ECB reached Hugging Face's 10,000-files-per-directory limit in the legacy `raw/`
+folder. New source blobs now use `raw-v2/<first-two-hash-characters>/<hash>.gz`.
+Existing flat originals remain unchanged. Raw hashes resolve through the durable
+`raw_blob_metrics` mapping; known originals are reused rather than uploaded under
+a second path. Pinned metric backfills support both layouts.
+
+The controller supports an explicit `acknowledge_recovery` operation after a fix
+is verified and every source campaign is confirmed terminal. It records the
+reason and evidence on the last failed job, preserves all failed statuses, and
+resets the prior failure streak. Subsequent failures still trigger the existing
+three-failure safeguard. No token, document or campaign limits are increased.
+
+### Read-only matched token status
+
+`status.py --cached-tokens` pins the control revision once and matches cached
+`o200k_base` counts against each source checkpoint by shard hash, path and rows.
+It reports matched coverage and reservations without downloading Parquet or
+starting an audit. An older complete audit summary cannot make a growing source
+complete; missing caches are explicit and failed reads do not become zero counts.
+
+### Additional ECB series
+
+The mappings now include Legal Working Papers, Discussion Papers, central-banking
+and legal conference proceedings, letters to MEPs and the ECB Blog. See the
+[full-text sample evidence](research/ecb-distinct-series-20261018.md). These use
+the existing FOEDB adapter and writer reservations; catalog counts are not stored
+rows, and proceedings may contain passages also published as speeches.
+
+Historical Monthly Bulletin box proposals now cover 1999–2011 as well as the
+previous 2012–2018 range. Thirteen additional live samples passed the unchanged
+opening-title and standalone-length checks. The prior 2011 title mismatch remains
+rejected by a regression test. See the [year-by-year evidence](research/ecb-box-history-1999-2011-20261018.md).
+
+Four more exact FOEDB types cover Macroprudential Bulletin articles, financial
+integration and structure reports, the international role of the euro, and
+TARGET annual reports. Each passed a native full-text sample. Their 150 catalog
+publication records are discovery opportunities, not saved rows or token counts.
+See [sample evidence](research/ecb-report-series-20261018.md).
+
+The exact ECB “Other publication” type (23) adds technical manuals, agreements
+and proceedings through `other_publications`. Three selected PDFs passed native
+extraction; the inspected catalog contains 772 publication records. See the
+[evidence and limitations](research/ecb-other-publications-20261018.md).
+
+Historical article proposals also recognize dotted 1999 Monthly Bulletin page
+ranges and guarded 2015–2018 Economic Bulletin article filenames. Six live PDFs
+passed the unchanged complete-title validator; 62 remaining article 404s match
+the new rules. The unmatched focus-style article is exact text already saved as
+a box. See [recovery evidence](research/ecb-article-filename-recovery-20261018.md).
+
+### Additional-document milestone
+
+The owner's earlier 18 October request for another 10,000 documents used the pinned
+20,703-row baseline and a **30,703-row target**. Track additional saved rows with:
+
+```bash
+HF_HUB_DISABLE_XET=1 uv run status.py both --mapping goal_pipeline_sources.json \
+  --cached-tokens --document-target research/additional-10000-documents-20261018.json
+```
+
+This read-only option reports growth after the baseline and rejects partial,
+wrong-repository or regressed source reads. It does not change collector dispatch,
+source pacing or budgets. The owner subsequently superseded this milestone with
+collection until documented exhaustion; this command remains historical tracking.
+The request is also stored
+and verified in the private control repository under its recorded milestone path.
+
+
+### Prompt EMA continuation and larger batches
+
+The owner requested immediate EMA continuation and larger batches on 18 October.
+The existing controller was invoked directly; it reconciled the completed child
+tree and started `goal-ema-1792321151-0818560e06` without waiting for the next
+scheduled tick. That already running campaign retains its original three rounds.
+Future EMA campaigns use `source_rounds: {"ema": 6}` and reserve up to 6,000
+attempts. Six sequential 3,000-second rounds provide roughly five hours of work;
+ECB retains three rounds. Each worker still allows at most 1,000 attempts and
+3,000 work seconds. EMA request spacing remains ten seconds. Increasing the
+attempt ceiling alone would not increase throughput: recent EMA rounds reached
+the time limit after about 300 attempts.
+
+The controller now runs every minute. When it observes a terminal campaign, it
+loads a second fresh source snapshot and reconciles again in the same invocation,
+retaining the existing reservation until that fresh read. This removes the
+previous extra scheduled settlement interval. Campaign supervisors allow eight
+hours; the six-round durable deadline is seven hours, including worker-timeout
+headroom. The source mapping explicitly allows six EMA rounds; other mappings
+retain a three-round default. Existing jobs and reservations survive the control
+configuration migration unchanged. The 100,000-document, 150-campaign and
+48-audit-pair limits remain unchanged. The recovery schedule remains disabled.

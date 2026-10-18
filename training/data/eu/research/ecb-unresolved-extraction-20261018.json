@@ -1,0 +1,218 @@
+{
+  "observed_at": "2026-10-18T06:22:36.752346+00:00",
+  "samples": [
+    {
+      "failure": {
+        "attempted_alternates": [],
+        "attempts": 3,
+        "collection_id": "working_papers",
+        "error": "pypdf PdfReadError: more than one embedded FontFile stream",
+        "failed_at": "2026-10-17T17:21:17.810361+00:00",
+        "retry_after_epoch": 1792258577.8103805,
+        "url": "https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp204.pdf"
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp204.pdf",
+        "retrieved_at": "2026-10-18T06:22:36.752371+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp204.pdf",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 989798,
+        "raw_sha256": "4daaa4072cdea3d34dde2ae9d411129feca2d47c5cbe32117081e092f20bf6a8",
+        "content_type": "application/pdf",
+        "etag": null,
+        "last_modified": "Fri, 28 Nov 2003 15:20:06 GMT"
+      },
+      "error": "pypdf PdfReadError: more than one embedded FontFile stream",
+      "independent_extractor_probe": {
+        "program": "pdftotext",
+        "returncode": 0,
+        "characters": 118111,
+        "text_sha256": "7576bb05451b108dc590c8a8dd462406300250b4d15857097368f9ab7fea1cb9",
+        "text_prefix": "EUROPEAN\n\nCENTRAL\n\nBANK\n\nWO R K I N G PA P E R S E R I E S\n\nWORKING PAPER NO. 204\nASYMMETRIC DYNAMICS IN\nTHE CORRELATIONS OF\nGLOBAL EQUITY AND\nBOND RETURNS\nBY LORENZO CAPPIELLO,\nROBERT F. ENGLE AND\nKEVIN SHEPPARD\nJanuary 2003\n\n\fEUROPEAN\n\nCENTRAL\n\nBANK\n\nWO R K I N G PA P E R S E R I E S\n\nWORKING PAPER NO. 204\nASYMMETRIC DYNAMICS IN\nTHE CORRELATIONS OF\nGLOBAL EQUITY AND\nBOND RETURNS1\nBY LORENZO CAPPIELLO2,\nROBERT F. ENGLE3 AND\nKEVIN SHEPPARD4\nJanuary 2003\n1 Software used in the estimation of this paper can be found at http://weber.ucsd.edu/~ksheppar in the research section. Kevin Sheppard\nwould ",
+        "assessment": "Readable opening text; production fallback and bounded retry not implemented"
+      }
+    },
+    {
+      "failure": {
+        "attempted_alternates": [],
+        "attempts": 1,
+        "collection_id": "central_banking_proceedings",
+        "error": "No usable full text: kind=html, characters=177",
+        "failed_at": "2026-10-18T05:57:21.555156+00:00",
+        "retry_after_epoch": 1792303341.5551803,
+        "url": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank201808.en.html"
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank201808.en.html",
+        "retrieved_at": "2026-10-18T06:22:43.375473+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank201808.en.html",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 102052,
+        "raw_sha256": "c48c8c45713ba935da4f2e8172e248587b515f10f842c1339881845415296d43",
+        "content_type": "text/html; charset=UTF-8",
+        "etag": "\"myra-4711e19d\"",
+        "last_modified": null
+      },
+      "characters": 177,
+      "title": "Price and wage-setting in advanced Economies: takeaways from the ECB\u2019s 2018 Sintra Forum",
+      "kind": "html",
+      "text_prefix": "Price and wage-setting in advanced Economies: takeaways from the ECB\u2019s 2018 Sintra Forum\nPrice and wage-setting in advanced Economies: takeaways from the ECB\u2019s 2018 Sintra Forum",
+      "text_sha256": "eda9e14d9583bd12b0c0ab97ca81385134c9db17392499af30a94fda4de81b32"
+    },
+    {
+      "failure": {
+        "attempted_alternates": [],
+        "attempts": 3,
+        "collection_id": "annual_reports",
+        "error": "pypdf PdfReadError: more than one embedded FontFile stream",
+        "failed_at": "2026-10-17T11:42:04.785103+00:00",
+        "retry_after_epoch": 1792238224.7851186,
+        "url": "https://www.ecb.europa.eu/pub/pdf/annrep/ar1997en.pdf"
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/pub/pdf/annrep/ar1997en.pdf",
+        "retrieved_at": "2026-10-18T06:22:47.059221+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/pub/pdf/annrep/ar1997en.pdf",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 1347092,
+        "raw_sha256": "53c131a2a44499d1e4e0568435dd1e0f3fd58d6aef40ba9868f13cd3aa7b20e0",
+        "content_type": "application/pdf",
+        "etag": null,
+        "last_modified": "Wed, 31 Jan 2018 09:09:43 GMT"
+      },
+      "error": "pypdf PdfReadError: more than one embedded FontFile stream",
+      "independent_extractor_probe": {
+        "program": "pdftotext",
+        "returncode": 0,
+        "characters": 340375,
+        "text_sha256": "6fd1192616771cedb6852e8df9067e55385fc42bc6d083a18d30c7d1d533a923",
+        "text_prefix": "E U RO P E A N M O N E TA RY I N S T I T U T E\n\nA N N U A L\n\nR E P O RT\n\n1 9 9 7\n\nMa y 1 9 9 8\n\n\f\u00a9 European Monetary Institute, 1998\nPostfach 16 03 19, D-60066 Frankfurt am Main\nAll rights reserved. Photocopying for educational and non-commercial purposes permitted provided that the\nsource is acknowledged.\nISSN 1024-560X\nPrinted by Kern & Birner GmbH + Co., D-60486 Frankfurt am Main\n\nII\n\n\fContents\nForeword\n\nExecutive Summary\n\n1\n\nChapter I\nEconomic, monetary and financial conditions\nin the European Union\n1\n\n2\n\n3\n\nEconomic and financial background in 1997\n1.1 Major developments outside the EU\n1.",
+        "assessment": "Readable opening text; production fallback and bounded retry not implemented"
+      }
+    },
+    {
+      "failure": {
+        "attempted_alternates": [],
+        "attempts": 3,
+        "collection_id": "working_papers",
+        "error": "pypdf PdfReadError: more than one embedded FontFile stream",
+        "failed_at": "2026-10-17T17:21:22.118989+00:00",
+        "retry_after_epoch": 1792258582.1190085,
+        "url": "https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp010.pdf"
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp010.pdf",
+        "retrieved_at": "2026-10-18T06:22:52.310354+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp010.pdf",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 514716,
+        "raw_sha256": "96a273b3161d4ceefcd4a059db54b9af5657508ceb60f7b28e961baacd58f9eb",
+        "content_type": "application/pdf",
+        "etag": null,
+        "last_modified": "Fri, 28 Nov 2003 15:19:51 GMT"
+      },
+      "error": "pypdf PdfReadError: more than one embedded FontFile stream",
+      "independent_extractor_probe": {
+        "program": "pdftotext",
+        "returncode": 0,
+        "characters": 100811,
+        "text_sha256": "f3c6421aefaf1678730762a33236360e340cafe325a17586208ed9852fb867cc",
+        "text_prefix": "(8523($1\u0003&(175$/\u0003%$1.\n\n:25.,1*\u00033$3(5\u00036(5,(6\n\n:25.,1*\u00033$3(5\u000312\u0011\u0003\u0014\u0013\n21\u00037+(\u0003())(&7,9(1(66\n2)\u000367(5,/,=('\n)25(,*1\u0003(;&+$1*(\n,17(59(17,21\n%<\u00035$6086\u0003)$780\n)HEUXDU\\\u0003\u0015\u0013\u0013\u0013\n\n\f\f\u0003 :25.,1*\u00033$3(5\u000312\u0011\u0003\u0014\u0013\n21\u00037+(\u0003())(&7,9(1(66\n2)\u000367(5,/,=('\n)25(,*1\u0003(;&+$1*(\n,17(59(17,21\n%<\u00035$6086\u0003)$780\n)HEUXDU\\\u0003\u0015\u0013\u0013\u0013\n,\u0003WKDQN\u0003WKH\u0003%XQGHVEDQN\u0003DQG\u0003WKH\u0003%RDUG\u0003RI\u0003*RYHUQRUV\u0003RI\u0003WKH\u0003)HGHUDO\u00035HVHUYH\u00036\\VWHP\u0003IRU\u0003SURYLGLQJ\u0003GDWD\u000f\u00033KLOLSS\u0003+DUWPDQQ\u000f\u0003 0LFKHO\u0003 +XWFKLVRQ\u000f\u0003 2UHVWH\u0003 7ULVWDQL\u000f\u0003 DQG\u0003 SDUWLFLSDQWV\u0003 DW\u0003 D\u0003 VHPLQDU\u0003 DW\u0003 WKH\u0003 (XURSHDQ\u0003 &HQWUDO\n%DQN\u0003IRU\u0003GHWDLOHG\u0003FRPPHQWV\u0011\u0003,\u0003DOVR\u0003WKDQN\u00039LWRU\u0003*DVSDU\u0003DQG\u0003WKH\u0003(GLWRULDO\u0003%RDUG\u0003RI\u0003WKH\u0003(&%\u0003:RUNLQJ\u00033",
+        "assessment": "Garbled opening text; rejected as a usable recovery"
+      }
+    },
+    {
+      "failure": {
+        "attempted_alternates": [],
+        "attempts": 1,
+        "collection_id": "central_banking_proceedings",
+        "error": "No usable full text: kind=html, characters=177",
+        "failed_at": "2026-10-18T05:54:24.361855+00:00",
+        "retry_after_epoch": 1792303164.3618815,
+        "url": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank.Takeaways.202105~940bc7c44e.en.html"
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank.Takeaways.202105~940bc7c44e.en.html",
+        "retrieved_at": "2026-10-18T06:22:57.160809+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank.Takeaways.202105~940bc7c44e.en.html",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 101696,
+        "raw_sha256": "5f69e17e8887000ab31fef40bee764edfacd1dd091288ca52e491117009c4893",
+        "content_type": "text/html; charset=UTF-8",
+        "etag": "\"myra-7c374c1f\"",
+        "last_modified": null
+      },
+      "characters": 177,
+      "title": "Central banks in a shifting world: Selected takeaways from the ECB\u2019s online Sintra Forum",
+      "kind": "html",
+      "text_prefix": "Central banks in a shifting world: Selected takeaways from the ECB\u2019s online Sintra Forum\nCentral banks in a shifting world: Selected takeaways from the ECB\u2019s online Sintra Forum",
+      "text_sha256": "987683d2795089c2b07f6a4dbe4fa057fbe2ddcd6efe787b57c3cb584226cf9c"
+    }
+  ],
+  "fragment_probes": [
+    {
+      "original": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank201808.en.html",
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank201808_content.en.html",
+        "retrieved_at": "2026-10-18T06:25:45.635055+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank201808_content.en.html",
+        "http_status": 404,
+        "retry_after": null,
+        "status": "failed",
+        "error": "http_404"
+      }
+    },
+    {
+      "original": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank.Takeaways.202105~940bc7c44e.en.html",
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank.Takeaways.202105~940bc7c44e_content.en.html",
+        "retrieved_at": "2026-10-18T06:25:50.858301+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/press/sintra/html/ecb.forumcentbank.Takeaways.202105~940bc7c44e_content.en.html",
+        "http_status": 404,
+        "retry_after": null,
+        "status": "failed",
+        "error": "http_404"
+      }
+    }
+  ],
+  "viewer_script_probe": {
+    "source_id": "ecb",
+    "url": "https://www.ecb.europa.eu/shared/dist/plugins/publications/publications.min.js?v=5581938",
+    "retrieved_at": "2026-10-18T06:24:17.307640+00:00",
+    "robots_request": false,
+    "final_url": "https://www.ecb.europa.eu/shared/dist/plugins/publications/publications.min.js?v=5581938",
+    "http_status": 200,
+    "retry_after": null,
+    "status": "fetched",
+    "bytes": 4569,
+    "raw_sha256": "cf0ad52f3b8d12f995c159658bd20170a3f506fc9ce66f6006856e29b539dda6",
+    "content_type": "application/javascript",
+    "etag": null,
+    "last_modified": "Wed, 16 Sep 2026 12:34:18 GMT"
+  },
+  "conclusion": "All five source gaps remain unresolved in production. No parser mutation, failure reset, extra retry permission or corpus upload was performed by this investigation."
+}

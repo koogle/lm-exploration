@@ -96,7 +96,8 @@ def test_epar_series_exact_filter_preserves_identity(collection, kind):
         ema_product_number="EMEA/H/C/000001",
         translations={"fr": f"https://www.ema.europa.eu/fr/documents/{kind}/example_fr.pdf"},
     )
-    items = [selected, document("variation-report", "813")]
+    excluded_kind = "overview" if kind != "overview" else "assessment-report"
+    items = [selected, document(excluded_kind, "813")]
     result = ema.enumerate_collection(collection, inventory(items), limit=100000)
     records = result["records"]
     assert len(records) == 2

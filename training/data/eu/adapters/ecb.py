@@ -26,6 +26,29 @@ COLLECTIONS = {
     "annual_report_translations": {"name": "ECB Annual Report translations", "type_ids": ["132"]},
     "annual_reports": {"name": "ECB Annual Report", "type_ids": ["132"]},
     "convergence_reports": {"name": "ECB Convergence Report", "type_ids": ["22"]},
+    "financial_stability_reviews": {"name": "ECB Financial Stability Review", "type_ids": ["137"]},
+    "statistics_papers": {"name": "ECB Statistics Paper Series", "type_ids": ["5"]},
+    "research_bulletins": {"name": "ECB Research Bulletin", "type_ids": ["61"]},
+    "legal_working_papers": {"name": "ECB Legal Working Paper Series", "type_ids": ["4"]},
+    "discussion_papers": {"name": "ECB Discussion Paper Series", "type_ids": ["377"]},
+    "central_banking_proceedings": {
+        "name": "ECB Forum on Central Banking - Conference proceedings",
+        "type_ids": ["155"],
+    },
+    "legal_conference_proceedings": {"name": "Legal conference proceedings", "type_ids": ["450"]},
+    "letters_to_meps": {"name": "ECB Letters to MEPs", "type_ids": ["18"]},
+    "ecb_blog": {"name": "The ECB Blog", "type_ids": ["226"]},
+    "macroprudential_bulletin_articles": {
+        "name": "ECB Macroprudential Bulletin articles",
+        "type_ids": ["96"],
+    },
+    "financial_integration_reports": {
+        "name": "Financial integration and structure in the euro area",
+        "type_ids": ["140"],
+    },
+    "international_role_euro": {"name": "The international role of the euro", "type_ids": ["143"]},
+    "target_annual_reports": {"name": "TARGET Annual Report", "type_ids": ["142"]},
+    "other_publications": {"name": "ECB Other publication", "type_ids": ["23"]},
     "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
     "occasional_papers": {"name": "ECB Occasional Paper Series", "type_ids": ["3"]},
     "economic_bulletin_articles": {"name": "ECB Economic Bulletin articles", "type_ids": ["24"]},
@@ -271,7 +294,8 @@ def enumerate_report_translations(fetch, limit=1000, seed_limit=100):
 
 # Exact standalone assets verified on 2026-10-16 and 2026-10-17. No blanket prefix rewrite:
 # inventory errors in other historical files need their own verification.
-# Exact PDF identities verified in research/ecb-convergence-links-20261017.json.
+# Exact PDF identities verified in research/ecb-convergence-links-20261017.json
+# and research/ecb-convergence-recovery-20261018.json.
 VERIFIED_CONVERGENCE_REPORTS = {
     "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2006en.pdf": {
         "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2006en.pdf",
@@ -284,6 +308,46 @@ VERIFIED_CONVERGENCE_REPORTS = {
     "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200705en.pdf": {
         "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200705en.pdf",
         "sha256": "22076668ff99886ef0f7d15656fea2dc2bf17471a3242a4e6af53ffdcf646cdb",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201406en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201406en.pdf",
+        "sha256": "835e6e7a2b6be752cd30edf203a2e491d30186d0077b3765a48ca8203e9118bb",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201306en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201306en.pdf",
+        "sha256": "0a6661e268e9c3ef13c0385a889fd2f14203464c993dc650d23212559f9a09df",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201205en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201205en.pdf",
+        "sha256": "e404dd7cd3a74d8293f57dc9d6cac8a21eae26777c58312026086ed935c85c60",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201005en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201005en.pdf",
+        "sha256": "0efc3e444cdb3df81aa4f453ddfdc21a3baae53109a0aaf2cba167aa74fc1fe0",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200805en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200805en.pdf",
+        "sha256": "9dbef8fa49e4d83b288a3abd058c70b2495072d447c97ad45839e8dc61ad625b",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200612en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200612en.pdf",
+        "sha256": "e21450a2e02ebcdb9ffe973183199c6b38e21b93b3adf2fbf8c308f52092fea0",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2004en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2004en.pdf",
+        "sha256": "c119426c76f9c91c32eaee1e60ed6b4eaafc56eddcb26999b64436ae37d904cb",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2002en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2002en.pdf",
+        "sha256": "58e4ca92b1a005a04283bab6f63b94f7bdeb98c0c1da805b6ae0bec94359a155",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr1998en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr1998en.pdf",
+        "sha256": "b5f2cf6cf0f7cd8b6242d1e2e72528ff2b46b65622a989b321204bf6397e54dc",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr1996en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr1996en.pdf",
+        "sha256": "d1128bc796dfad2dfd35662a265801ab149ff67b3450f38d2ca3f645a22cae5f",
     },
 }
 
@@ -317,6 +381,7 @@ MONTHLY_ARTICLE_FILENAMES = [
         ),
         r"art[1-9]\d*_mb(?P<issue>\d{6})\.en\.pdf",
         r"p{1,2}(?P<start>\d{1,3})[-_](?P<end>\d{1,3})_?mb(?P<issue>\d{6})en\.pdf",
+        r"p\.(?P<start>\d{1,3})_(?P<end>\d{1,3})_mb(?P<issue>1999\d{2})en\.pdf",
         (
             r"mb(?P<issue>\d{6})(?:en)?_(?:pp)?(?P<start>\d{1,3})-"
             r"(?P<end>\d{1,3})en\.pdf"
@@ -347,6 +412,64 @@ def _inferred_monthly_article_url(record):
     return None
 
 
+def _inferred_bulletin_article_url(record):
+    """Propose a same-basename standalone article; response title checks still apply."""
+    if record.get("collection_id") != "economic_bulletin_articles":
+        return None
+    path = re.fullmatch(
+        r"https://www\.ecb\.europa\.eu/press/economic-bulletin/articles/"
+        r"(?P<year>\d{4})/pdf/(?P<name>[^/]+)",
+        record["url"],
+    )
+    if not path or not 2015 <= int(path["year"]) <= 2018:
+        return None
+    for pattern in (
+        r"eb(?P<issue>\d{6})_article(?P<article>\d{2})\.en\.pdf",
+        r"art(?P<article>\d{2})_eb(?P<issue>\d{6})\.en\.pdf",
+        r"(?:ecb\.)?ebart(?P<issue>\d{6})_(?P<article>\d{2})\.en\.pdf",
+    ):
+        match = re.fullmatch(pattern, path["name"])
+        if (
+            match
+            and match["issue"][:4] == path["year"]
+            and 1 <= int(match["issue"][4:]) <= 8
+            and int(match["article"]) > 0
+        ):
+            return BASE + "/pub/pdf/other/" + path["name"]
+    return None
+
+
+def _inferred_bulletin_box_url(record):
+    """Propose one historical asset; filename matching alone never validates it."""
+    if record.get("collection_id") != "economic_bulletin_boxes":
+        return None
+    path = re.fullmatch(
+        r"https://www\.ecb\.europa\.eu/press/economic-bulletin/focus/"
+        r"(?P<year>\d{4})/pdf/(?P<name>[^/]+)",
+        record["url"],
+    )
+    if not path or not 1999 <= int(path["year"]) <= 2018:
+        return None
+    match = re.fullmatch(
+        r"(?P<family>mb|eb|ebbox|ecb\.ebbox)(?P<issue>\d{6})_"
+        r"(?P<kind>focus|box)?(?P<box>\d{2})\.en\.pdf",
+        path["name"],
+    )
+    if not match or match["issue"][:4] != path["year"] or int(match["box"]) < 1:
+        return None
+    # Samples from every year 1999–2011 passed the same opening-title check.
+    # Earlier negative samples remain rejected by that check, not by year alone.
+    if int(path["year"]) < 2014 and match["family"] != "mb":
+        return None
+    allowed = {"mb": {"focus"}, "eb": {"focus", "box"}, "ebbox": {""}, "ecb.ebbox": {""}}
+    if (match["kind"] or "") not in allowed[match["family"]]:
+        return None
+    maximum = 12 if match["family"] == "mb" else 8
+    if not 1 <= int(match["issue"][4:]) <= maximum:
+        return None
+    return BASE + "/pub/pdf/other/" + path["name"]
+
+
 def alternate_document_urls(record):
     """Return one bounded candidate after primary 404; validate inferred PDF bodies.
 
@@ -356,10 +479,15 @@ def alternate_document_urls(record):
     if record.get("collection_id") == "convergence_reports":
         verified = VERIFIED_CONVERGENCE_REPORTS.get(record["url"])
         return [verified["url"]] if verified else []
+    if record.get("collection_id") == "economic_bulletin_boxes":
+        target = _inferred_bulletin_box_url(record)
+        return [target] if target else []
     if record.get("collection_id") != "economic_bulletin_articles":
         return []
-    target = VERIFIED_HISTORICAL_ARTICLES.get(record["url"]) or _inferred_monthly_article_url(
-        record
+    target = (
+        VERIFIED_HISTORICAL_ARTICLES.get(record["url"])
+        or _inferred_monthly_article_url(record)
+        or _inferred_bulletin_article_url(record)
     )
     return [target] if target else []
 
@@ -371,9 +499,11 @@ def _normalize_title(text):
 def validate_alternate(record, data):
     """Reject inferred PDF replacements unless their opening pages contain the title.
 
-    Three convergence replacements must match verified PDF SHA-256 hashes.
+    Historical convergence replacements must match verified PDF SHA-256 hashes.
     Thirteen article mappings have recorded identity evidence; other article URLs
-    must pass the strict Monthly Bulletin rule and conservative title check.
+    must pass strict historical filename rules and conservative title checks.
+    Inferred standalone boxes are restricted to 1999–2018 and at most 20 pages;
+    before 2014 only Monthly Bulletin filenames qualify.
     This check does not turn PDF metadata or a full issue into an article.
     """
     if record.get("collection_id") == "convergence_reports":
@@ -386,8 +516,12 @@ def validate_alternate(record, data):
         and record["url"] in VERIFIED_HISTORICAL_ARTICLES
     ):
         return
-    if not _inferred_monthly_article_url(record):
-        raise ValueError("ECB alternate is outside the supported historical article rule")
+    if not (
+        _inferred_monthly_article_url(record)
+        or _inferred_bulletin_article_url(record)
+        or _inferred_bulletin_box_url(record)
+    ):
+        raise ValueError("ECB alternate is outside the supported historical article or box rule")
     title = record.get("title") or ""
     normalized = _normalize_title(title)
     if len(normalized) < 12 or len(re.findall(r"[a-zA-Z]+", title)) < 3:
@@ -396,6 +530,8 @@ def validate_alternate(record, data):
         raise ValueError("ECB alternate response is not a PDF")
     try:
         reader = PdfReader(io.BytesIO(data))
+        if record.get("collection_id") == "economic_bulletin_boxes" and len(reader.pages) > 20:
+            raise ValueError("ECB box alternate is too long for the supported standalone-box rule")
         opening = "\n".join(page.extract_text() or "" for page in reader.pages[:2])
     except Exception as error:
         raise ValueError("ECB alternate PDF opening pages could not be extracted") from error
