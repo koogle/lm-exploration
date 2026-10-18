@@ -1,0 +1,2 @@
+# Preserve verbatim model-generated tabs, trailing spaces and carriage returns.
+all-completions.md -whitespace
