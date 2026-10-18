@@ -183,3 +183,29 @@ concurrency, document, campaign and audit limits remain unchanged. The three
 collector apps were deployed with the recovery schedule disabled. Validation:
 279 tests and lint/format/whitespace checks passed. Review later pinned yield and
 remaining budgets as collection proceeds; the target is still unmet.
+
+## Adapter repair resumption and budget review
+
+The [06:15 pinned budget review](../research/operational-budget-review-20261018.json)
+records 18,862 documents and the same 425,356,977 verified-token lower bound.
+There are 126 campaign records and 33 audit pairs left within the existing caps.
+Closing the 574,643,023-token gap across those pairs would require an average
+17,413,425 additional verified tokens per pair. This is gap arithmetic, not a
+forecast. Neither budget nor audit cadence was increased.
+
+A controller resumption edge case could preserve a saved zero runnable-candidate
+count after deploying an adapter repair. Source snapshots now reuse that count
+only when its recorded adapter SHA-256 matches the deployed adapter and its
+collection set matches the current mapping. Otherwise the existing inventory
+minus completed-items upper bound provides a scheduling hint; the bounded worker
+still decides actual eligibility using support checks, retry limits and verified
+alternates. No source checkpoint, completion or failure history is reset.
+An unchanged adapter's measured zero remains authoritative. Active-writer and
+reservation guards are unchanged. Four regression cases cover changed, missing
+and matching fingerprints, fully completed inventories and read-only snapshots.
+Validation: 283 tests passed; Ruff lint/format and whitespace checks passed.
+
+The scheduled controller and disabled-schedule recovery app both deployed
+successfully. The [06:19 checkpoint](../research/goal-checkpoint-20261018-0619.json)
+contains 18,942 documents; verified tokens remain 425,356,977 pending the next
+scheduled audit. Existing source runs continue; no extra campaign was dispatched.

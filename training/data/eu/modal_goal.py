@@ -1,5 +1,6 @@
 """Scheduled, count-bounded continuation using a separate durable HF control repo."""
 
+import importlib
 import json
 import os
 from pathlib import Path
@@ -108,6 +109,7 @@ def inspect_call(call_id):
 def source_snapshots(mapping, goal, audit_store=None, audit_revision=None):
     from huggingface_hub.errors import EntryNotFoundError
 
+    from eu_corpus import digest
     from goal_controller import cached_token_lower_bound
     from hf_store import HFStore
     from pipeline import inventory_expansion_needed
@@ -137,12 +139,16 @@ def source_snapshots(mapping, goal, audit_store=None, audit_revision=None):
             name not in collections or inventory_expansion_needed(collections[name], desired_limit)
             for name in config["collections"]
         )
-        # Older terminal metrics can precede a later inventory expansion. Only
-        # the latest run may provide an exact remaining count; otherwise use a hint.
+        # Saved eligibility is valid only for the adapter and collections that
+        # measured it. Repairs can make previously exhausted URLs runnable again.
         last = state["runs"][-1] if state["runs"] else {}
         remaining = last.get("remaining_supported_candidates")
-        if remaining is None or set(last.get("collection_weights", {})) != set(
-            config["collections"]
+        adapter = importlib.import_module(config["adapter"])
+        adapter_sha256 = digest(Path(adapter.__file__).read_bytes())
+        if (
+            remaining is None
+            or last.get("adapter_sha256") != adapter_sha256
+            or set(last.get("collection_weights", {})) != set(config["collections"])
         ):
             # Conservative upper bound, only a runnable hint until a worker measures it.
             remaining = max(

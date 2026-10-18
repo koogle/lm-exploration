@@ -1,6 +1,51 @@
 from types import SimpleNamespace
 
+import pytest
+
 import modal_goal
+
+
+@pytest.mark.parametrize(
+    "saved_adapter,completed,expected",
+    [("older-adapter", 4, 6), (None, 4, 6), ("current", 4, 0), ("older-adapter", 10, 0)],
+)
+def test_saved_zero_requires_current_adapter(monkeypatch, saved_adapter, completed, expected):
+    import copy
+    from pathlib import Path
+
+    import adapters.ecb
+    import hf_store
+    from eu_corpus import digest
+
+    current_hash = digest(Path(adapters.ecb.__file__).read_bytes())
+    state = {
+        "metrics": {"rows": completed},
+        "completed": {str(n): {} for n in range(completed)},
+        "collections": {"old": {"candidate_count": 10, "enumeration": {"complete": True}}},
+        "runs": [
+            {
+                "remaining_supported_candidates": 0,
+                "collection_weights": {"old": 1},
+                "adapter_sha256": current_hash if saved_adapter == "current" else saved_adapter,
+            }
+        ],
+        "campaigns": {"existing-writer": {"status": "running"}},
+    }
+    original = copy.deepcopy(state)
+    monkeypatch.setattr(hf_store, "HFStore", lambda _: SimpleNamespace(load=lambda: (state, "rev")))
+    mapping = {
+        "sources": {
+            "ecb": {
+                "repo_id": "owner/repo",
+                "adapter": "adapters.ecb",
+                "collections": ["old"],
+            }
+        }
+    }
+    result = modal_goal.source_snapshots(mapping, {"config": {"sources": ["ecb"]}})["ecb"]
+    assert result["remaining_supported_candidates"] == expected
+    assert result["untracked_active_campaigns"] == ["existing-writer"]
+    assert state == original
 
 
 def node(status, children=()):
@@ -38,7 +83,15 @@ def test_new_collections_are_discovery_work_not_exhaustion(monkeypatch):
         hf_store, "HFStore", lambda _: SimpleNamespace(load=lambda: (state, "revision"))
     )
     snapshots = modal_goal.source_snapshots(
-        {"sources": {"ecb": {"repo_id": "owner/repo", "collections": ["old", "new"]}}},
+        {
+            "sources": {
+                "ecb": {
+                    "repo_id": "owner/repo",
+                    "adapter": "adapters.ecb",
+                    "collections": ["old", "new"],
+                }
+            }
+        },
         {"config": {"sources": ["ecb"]}, "jobs": []},
     )
     result = snapshots["ecb"]
@@ -89,6 +142,7 @@ def test_existing_capped_inventory_is_pending_expansion(monkeypatch):
         "sources": {
             "ecb": {
                 "repo_id": "owner/repo",
+                "adapter": "adapters.ecb",
                 "collections": ["old"],
                 "inventory_limit_per_collection": 10,
             }
@@ -143,7 +197,9 @@ def test_token_cache_read_is_pinned_and_missing_cache_counts_zero(monkeypatch):
     monkeypatch.setattr(
         hf_store, "HFStore", lambda _: SimpleNamespace(load=lambda: (state, "source-revision"))
     )
-    mapping = {"sources": {"ecb": {"repo_id": "owner/repo", "collections": []}}}
+    mapping = {
+        "sources": {"ecb": {"repo_id": "owner/repo", "adapter": "adapters.ecb", "collections": []}}
+    }
     goal = {"config": {"sources": ["ecb"], "target_tokens": 1000}, "jobs": []}
     cache = {
         "schema_version": 1,
