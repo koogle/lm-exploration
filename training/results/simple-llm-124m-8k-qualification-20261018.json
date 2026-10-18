@@ -1,0 +1,20 @@
+{
+  "run_id": "simple-llm-124m-8k-5b-20261018",
+  "stage": "training",
+  "world_size": 8,
+  "context": 8192,
+  "parameters": 124389632,
+  "qualified_steps": 4,
+  "qualified_tokens": 257384,
+  "exact_resume_validation": true,
+  "publisher": {
+    "step": 4,
+    "tokens": 257384,
+    "checkpoint": "/runs/simple-llm-124m-8k-5b-20261018-s01/step-000000004.pt",
+    "repo_id": "jfrick/scholarly-code-modern-gpt-124m-step2",
+    "revision": "b4bfd10b04da5eafdaaa5c736f752619b374ff24",
+    "updated_unix": 1792311010.7395203
+  },
+  "publisher_error": null,
+  "hub_revision_verified": true
+}
