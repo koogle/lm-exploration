@@ -66,6 +66,23 @@ def rotary(x, offset=0):
 
 
 class Attention(vanilla.Attention):
+    def cache_rotary(self, length):
+        width = self.qkv.in_features // self.n_head
+        frequencies = 10000.0 ** (
+            -torch.arange(0, width, 2, device=self.qkv.weight.device).float() / width
+        )
+        angles = torch.outer(torch.arange(length, device=frequencies.device).float(), frequencies)
+        self.register_buffer("rope_cos", angles.cos(), persistent=False)
+        self.register_buffer("rope_sin", angles.sin(), persistent=False)
+
+    def rotate(self, x):
+        if not hasattr(self, "rope_cos"):
+            return rotary(x)
+        cos = self.rope_cos[: x.size(-2)].to(x.dtype)
+        sin = self.rope_sin[: x.size(-2)].to(x.dtype)
+        even, odd = x[..., ::2], x[..., 1::2]
+        return torch.stack((even * cos - odd * sin, even * sin + odd * cos), -1).flatten(-2)
+
     def forward(self, x):
         batch, length, width = x.shape
         query, key, value = self.qkv(x).chunk(3, -1)
@@ -73,7 +90,7 @@ class Attention(vanilla.Attention):
             tensor.view(batch, length, self.n_head, width // self.n_head).transpose(1, 2)
             for tensor in (query, key, value)
         ]
-        attended = causal_attention(rotary(query), rotary(key), value)
+        attended = causal_attention(self.rotate(query), self.rotate(key), value)
         return self.projection(attended.transpose(1, 2).contiguous().view(batch, length, width))
 
 
@@ -112,9 +129,32 @@ class GPT(vanilla.GPT):
         self.apply(self.initialize)
         self.lm_head.weight = self.token_embedding.weight
 
-    def forward(self, tokens):
+    def forward(self, tokens, labels=None, loss_chunk_size=0):
         if self.config.architecture_version == 1:
             return super().forward(tokens)
         if not 0 < tokens.size(1) <= self.config.block_size:
             raise ValueError("sequence length must be within the model's block_size")
-        return self.lm_head(self.final_norm(self.blocks(self.token_embedding(tokens))))
+        hidden = self.final_norm(self.blocks(self.token_embedding(tokens)))
+        if labels is None:
+            return self.lm_head(hidden)
+        if not loss_chunk_size:
+            return F.cross_entropy(
+                self.lm_head(hidden).flatten(0, 1),
+                labels.flatten(),
+                ignore_index=-100,
+                reduction="sum",
+            )
+        # Recompute each projection during backward, bounding vocabulary-logit memory.
+        from torch.utils.checkpoint import checkpoint
+
+        def chunk_loss(features, targets):
+            return F.cross_entropy(
+                self.lm_head(features), targets, ignore_index=-100, reduction="sum"
+            )
+
+        return sum(
+            checkpoint(chunk_loss, features, targets, use_reentrant=False)
+            for features, targets in zip(
+                hidden.flatten(0, 1).split(loss_chunk_size), labels.flatten().split(loss_chunk_size)
+            )
+        )

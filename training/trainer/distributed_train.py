@@ -46,7 +46,17 @@ def atomic_json(path, value):
     os.replace(temporary, path)
 
 
-def backward_batch(ddp, x, y, count, microbatch, world, *, bf16=True):
+def crop_trailing_padding(x, y):
+    """Keep every supervised position, including interior masks and its causal prefix."""
+    valid_columns = (y != LOSS_IGNORE_INDEX).any(dim=0).nonzero()
+    # An empty rank must still participate in DDP backward with zero loss.
+    length = int(valid_columns[-1]) + 1 if valid_columns.numel() else 1
+    return x[:, :length].contiguous(), y[:, :length].contiguous()
+
+
+def backward_batch(
+    ddp, x, y, count, microbatch, world, *, bf16=True, crop_padding=False, loss_chunk_size=0
+):
     """Accumulate the gradient of the global mean over nonpadding loss tokens."""
     import torch
     from torch.nn import functional as F
@@ -54,14 +64,19 @@ def backward_batch(ddp, x, y, count, microbatch, world, *, bf16=True):
     total_loss = torch.zeros((), device=x.device)
     parts = list(zip(x.split(microbatch), y.split(microbatch)))
     for index, (mx, my) in enumerate(parts):
+        if crop_padding:
+            mx, my = crop_trailing_padding(mx, my)
         with ddp.no_sync() if index < len(parts) - 1 else nullcontext():
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=bf16):
-                loss = F.cross_entropy(
-                    ddp(mx).flatten(0, 1),
-                    my.flatten(),
-                    reduction="sum",
-                    ignore_index=LOSS_IGNORE_INDEX,
-                )
+                if loss_chunk_size:
+                    loss = ddp(mx, labels=my, loss_chunk_size=loss_chunk_size)
+                else:
+                    loss = F.cross_entropy(
+                        ddp(mx).flatten(0, 1),
+                        my.flatten(),
+                        reduction="sum",
+                        ignore_index=LOSS_IGNORE_INDEX,
+                    )
             total_loss += loss.detach()
             # DDP averages gradients: compensate before global token normalization.
             (loss * world / count).backward()
@@ -181,7 +196,13 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
             n_embd=config.n_embd,
         )
         model = GPT(model_config).cuda()
-        ddp = DDP(model, device_ids=[rank], gradient_as_bucket_view=True)
+        if config.cache_rope:
+            for block in model.blocks:
+                block.attention.cache_rotary(config.context)
+        # Compile in place so state-dict keys and optimizer parameter identity stay stable.
+        if config.compile_model:
+            model.compile(dynamic=True)
+        ddp = DDP(model, device_ids=[rank], gradient_as_bucket_view=True, broadcast_buffers=False)
         optimizer = torch.optim.AdamW(
             model.parameters(),
             lr=config.peak_lr,
@@ -386,11 +407,33 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
             for group in optimizer.param_groups:
                 group["lr"] = lr
             optimizer.zero_grad(set_to_none=True)
-            total_loss = backward_batch(ddp, x, y, count, config.microbatch, world)
+            torch.cuda.synchronize()
+            compute_tick = time.monotonic()
+            total_loss = backward_batch(
+                ddp,
+                x,
+                y,
+                count,
+                config.microbatch,
+                world,
+                crop_padding=config.crop_padding,
+                loss_chunk_size=config.loss_chunk_size,
+            )
             norm = torch.nn.utils.clip_grad_norm_(
                 model.parameters(), 1.0, error_if_nonfinite=True, foreach=True
             )
             optimizer.step()
+            torch.cuda.synchronize()
+            rank_stats = [None] * world
+            dist.all_gather_object(
+                rank_stats,
+                {
+                    "compute_seconds": time.monotonic() - compute_tick,
+                    "nonpadding_tokens": int((y != LOSS_IGNORE_INDEX).sum()),
+                    "peak_allocated_bytes": torch.cuda.max_memory_allocated(),
+                    "peak_reserved_bytes": torch.cuda.max_memory_reserved(),
+                },
+            )
             dist.all_reduce(total_loss)
             torch.cuda.synchronize()
             if config.prefetch_batches and rank == 0:
@@ -407,6 +450,8 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 "lr": lr,
                 "gradient_norm": float(norm),
                 "seconds": duration,
+                "nonpadding_tokens_per_second": count / duration,
+                "ranks": rank_stats,
                 "data_fetch_seconds": data_fetch_seconds,
                 "prefetch": data.stats() if rank == 0 and config.prefetch_batches else None,
             }
