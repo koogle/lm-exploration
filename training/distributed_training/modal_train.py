@@ -11,9 +11,9 @@ from pathlib import Path
 
 import modal
 
-from modal_scholarly_pilot import image
+from distributed_training.config import DistributedConfig
+from distributed_training.image import image
 
-image = image.add_local_file("modal_scholarly_pilot.py", "/project/modal_scholarly_pilot.py")
 app = modal.App("lm-exploration-distributed-training")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
 run_volume = modal.Volume.from_name("lm-exploration-training")
@@ -41,8 +41,6 @@ def validate_paths(run_id, snapshot, resume):
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def worker(run_id, snapshot, settings, provenance, resume="", max_seconds=3000, max_steps=None):
-    from trainer.distributed_config import DistributedConfig
-
     validate_paths(run_id, snapshot, resume)
     config = DistributedConfig(**settings)
     if not 1 <= max_seconds <= 3000 or (max_steps is not None and max_steps < 1):
@@ -51,7 +49,13 @@ def worker(run_id, snapshot, settings, provenance, resume="", max_seconds=3000, 
     output.mkdir(parents=True, exist_ok=False)
     manifest = Path("/data/scholarly-code") / snapshot / "manifest.json"
     try:
-        for folder in ("model_100m", "model_10m", "trainer", "training_data"):
+        for folder in (
+            "model_100m",
+            "model_10m",
+            "trainer",
+            "distributed_training",
+            "training_data",
+        ):
             shutil.copytree(
                 Path("/project") / folder,
                 output / "source" / folder,
@@ -69,7 +73,7 @@ def worker(run_id, snapshot, settings, provenance, resume="", max_seconds=3000, 
             "--standalone",
             f"--nproc_per_node={config.world_size}",
             "-m",
-            "trainer.distributed_train",
+            "distributed_training.train",
             "--config",
             str(request),
             "--manifest",
@@ -123,8 +127,6 @@ def main(
     max_seconds: int = 3000,
     max_steps: int = 0,
 ):
-    from trainer.distributed_config import DistributedConfig
-
     validate_paths(run_id, snapshot, resume)
     settings = DistributedConfig(**json.loads(Path(config).read_text()))
     if gpu not in {"H100", "L40S", "A10G"}:
@@ -134,6 +136,7 @@ def main(
     files = [
         Path(__file__),
         *Path("trainer").glob("*.py"),
+        *Path("distributed_training").glob("*.py"),
         *Path("data").glob("*.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),

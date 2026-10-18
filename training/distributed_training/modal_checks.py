@@ -6,9 +6,8 @@ from pathlib import Path
 
 import modal
 
-from modal_scholarly_pilot import image
+from distributed_training.image import image
 
-image = image.add_local_file("modal_scholarly_pilot.py", "/project/modal_scholarly_pilot.py")
 app = modal.App("lm-exploration-distributed-checks")
 volume = modal.Volume.from_name("lm-exploration-training")
 
@@ -29,6 +28,7 @@ def check(run_id):
     try:
         for filename in (
             "test_distributed_config.py",
+            "test_distributed_single_gpu.py",
             "test_100m_modern.py",
             "test_tied_embeddings.py",
             "test_scholarly.py",

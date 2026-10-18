@@ -1,4 +1,10 @@
-# Scholarly/code subword pilot
+# Scholarly/code subword pilot (historical)
+
+The duplicate pilot launcher and loop described below have been removed. Use
+[`../distributed_training/`](../distributed_training/README.md) for new runs,
+including one GPU. The commands/settings below document the measured historical
+experiment, not an available entrypoint or settings identical to the current
+trainer. Its code remains in Git history; its checkpoints require that code.
 
 `modal_scholarly_pilot.py` connects the merged modern 100M-family model to the
 frozen 32K tokenizer and `TokenMixture`. It preserves the merged 14×768 shape

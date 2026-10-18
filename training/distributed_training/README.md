@@ -1,9 +1,34 @@
 # Resumable subword training on multiple Modal GPUs
 
-`modal_distributed_train.py` runs the modern 124.4M model on **one, two or three
+`distributed_training/modal_train.py` runs the modern 124.4M model on **one, two or three
 GPUs on one host**, using PyTorch NCCL DistributedDataParallel. It trains a shared
 model with synchronized gradients. It is separate from the historical character
 trainer and from the throughput-only benchmarks.
+
+## One implementation, including one GPU
+
+All subword training code, Modal launchers, the shared image and recipes live in
+this package. The duplicate `modal_scholarly_pilot.py` / `trainer/subword_pilot.py`
+path has been removed; historical pilot results remain in `results/` and its
+implementation remains in Git history. Character training and throughput-only
+benchmarks are separate experiments, not alternate subword training paths.
+
+For one GPU, set `world_size` to 1: the very same `train()` and `backward_batch()`
+run under one-rank DDP, with the same model, loader, global batch, valid-token loss
+normalization, optimizer, LR schedule and checkpoint format. There is no special
+single-GPU loop. With matched settings, multiple GPUs divide that same global
+batch, subject to floating-point reduction differences. This is not a claim of
+bitwise equality across GPU counts or reproduction of the removed pilot's
+step-based warmup/constant learning-rate schedule.
+
+```sh
+# One-GPU bounded pilot, using the same implementation as the two-GPU recipe.
+modal run --detach -m distributed_training.modal_train \
+  --config distributed_training/recipes/h100x1-pilot.json \
+  --run-id my-single-gpu-pilot-01 \
+  --snapshot scholarly-124m-20261016/snapshots/pilot-001-seekable \
+  --gpu H100 --max-steps 2 --max-seconds 300
+```
 
 ## How the GPUs work together
 
@@ -14,7 +39,7 @@ flow. This is **data parallelism**: every GPU holds the entire model and its own
 AdamW optimizer state. Adding GPUs divides the batch computation; it does not
 split the model across devices or increase the configured global batch.
 
-1. The [Modal launcher](../modal_distributed_train.py) allocates one host and
+1. The [Modal launcher](modal_train.py) allocates one host and
    calls the remote worker through the Modal Python API. The worker supervises a
    `torchrun` subprocess, which starts one Python process per GPU. Each process
    calls `train()` and is a *rank*; NCCL carries communication between ranks.
@@ -47,7 +72,7 @@ split the model across devices or increase the configured global batch.
    use actual valid-token counts. The cycle repeats with the next global batch.
 
 The production implementation is
-[`backward_batch()` and `train()` in distributed_train.py](distributed_train.py).
+[`backward_batch()` and `train()` in train.py](train.py).
 Input shards remain on the shared `/data` volume and are read only by rank zero
 within a job. Independent jobs can read the same immutable snapshot; each keeps
 its own cursor and output directory. The launcher copies source, tokenizer assets
@@ -73,15 +98,15 @@ not the character trainer's `Recipe` format.
 ```sh
 # First convert the existing gzip pilot using the linked conversion instructions.
 # Bounded smoke run against that converted snapshot; creates a checkpoint.
-modal run --detach modal_distributed_train.py \
-  --config recipes/distributed/h100x2-pilot.json \
+modal run --detach -m distributed_training.modal_train \
+  --config distributed_training/recipes/h100x2-pilot.json \
   --run-id my-ddp-pilot-01 \
   --snapshot scholarly-124m-20261016/snapshots/pilot-001-seekable \
   --gpu H100 --max-steps 2 --max-seconds 300
 
 # Substantial-run settings: requires a training-ready snapshot with capacity.
-modal run --detach modal_distributed_train.py \
-  --config recipes/distributed/h100x3-20b.json \
+modal run --detach -m distributed_training.modal_train \
+  --config distributed_training/recipes/h100x3-20b.json \
   --run-id my-pretraining-segment-01 \
   --snapshot APPROVED_VERSION/snapshots/APPROVED_SNAPSHOT \
   --gpu H100 --max-seconds 3000
@@ -122,8 +147,8 @@ to a temporary file, renamed, then committed to the Modal Volume before training
 continues. Every graceful stop saves an optimizer-boundary checkpoint.
 
 ```sh
-modal run --detach modal_distributed_train.py \
-  --config recipes/distributed/h100x2-pilot.json \
+modal run --detach -m distributed_training.modal_train \
+  --config distributed_training/recipes/h100x2-pilot.json \
   --run-id my-ddp-pilot-02 \
   --snapshot scholarly-124m-20261016/snapshots/pilot-001-seekable \
   --resume my-ddp-pilot-01/step-000000002.pt \
@@ -170,14 +195,22 @@ capability evaluation or automatic best-checkpoint selection. Full-scale corpus
 preparation/audits remain separate work. Seekable token shards remove compressed
 cursor replay; full-corpus restart latency, throughput and multi-day reliability
 have not been measured. Old gzip snapshots need one-time conversion for new runs;
-old checkpoints require their original code and snapshot.
+old checkpoints require their original code and snapshot. Moving the trainer
+into this package changes source hashes, so checkpoints from before the move
+also require their original code for resume.
 
 ## Verification
 
 ```sh
-python -m unittest discover -s tests -p test_distributed_config.py -v
-modal run --detach modal_distributed_checks.py --run-id UNIQUE_CHECK_RUN_ID
+uv run python -m unittest discover -s tests -p 'test_distributed_*.py' -v
+modal run --detach -m distributed_training.modal_checks --run-id UNIQUE_CHECK_RUN_ID
 ```
+
+The local checks compare the production one-rank accumulation loss, gradients
+and AdamW update with a plain full-batch model, including fully masked
+microbatches. They also assert the one- and two-GPU pilot recipes differ only in
+GPU count. These mathematical checks use Gloo/FP32 locally, not CUDA/BF16
+performance qualification.
 
 The bounded CUDA integration suite exercises 1/2/3 GPUs, the production gradient
 accumulation path against a single-model reference with unequal padding (including

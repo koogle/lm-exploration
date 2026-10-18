@@ -13,7 +13,7 @@ from pathlib import Path
 
 from training_data.subword import LOSS_IGNORE_INDEX
 
-from trainer.distributed_config import DistributedConfig, DistributedRuntime, validate_resume
+from distributed_training.config import DistributedConfig, DistributedRuntime, validate_resume
 
 
 def source_hashes():
@@ -22,11 +22,11 @@ def source_hashes():
     import training_data.token_shards
     import training_data.token_stream
 
-    import trainer.distributed_config
+    import distributed_training.config
 
     paths = {
         "trainer": Path(__file__),
-        "config": Path(trainer.distributed_config.__file__),
+        "config": Path(distributed_training.config.__file__),
         "model": Path(model_100m.model.__file__),
         "loader": Path(training_data.token_stream.__file__),
         "token_shards": Path(training_data.token_shards.__file__),

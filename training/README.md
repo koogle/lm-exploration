@@ -15,7 +15,7 @@ has now completed 600 updates / 4.08M tokens on Modal; substantial pretraining
 has not been launched. The [measured GPU comparison](results/scholarly-124m-gpu-comparison-20261017.md)
 compares one, two and three A10, L40S and H100 GPUs with matched global batches.
 Three H100s are the recommended configuration when elapsed time is the priority.
-[Distributed subword training](trainer/DISTRIBUTED.md) now exposes one/two/three-GPU
+[Distributed subword training](distributed_training/README.md) now exposes one/two/three-GPU
 training and explicit checkpoint/resume across Modal jobs. Full corpus readiness
 and substantial pretraining remain separate.
 
@@ -61,19 +61,21 @@ See the owning guide and `results/shakespeare-10m-*.json` for executed results.
 
 ## Training runs on Modal
 
-![One Modal worker launches one process per GPU with torchrun. Rank zero reads shared input files and scatters the batch; DDP synchronizes gradients before each replica updates its weights.](trainer/images/distributed-training.png)
+![One Modal worker launches one process per GPU with torchrun. Rank zero reads shared input files and scatters the batch; DDP synchronizes gradients before each replica updates its weights.](distributed_training/images/distributed-training.png)
 
 The diagram shows the three-GPU subword trainer. The Modal API starts the worker;
 inside it, a supervised `torchrun` subprocess launches one Python process per GPU.
 Rank zero reads the shared corpus on `/data`; corpus files are not copied per run
 or per GPU. Each GPU holds a full model and optimizer replica. At checkpoint
 boundaries, rank zero saves to `/runs`; resuming requires an explicit new job.
-See the [distributed training guide](trainer/DISTRIBUTED.md) for launch commands,
+See the [distributed training guide](distributed_training/README.md) for launch commands,
 microbatch accumulation and checkpoint details.
 
-The [bounded scholarly/code pilot](100m/PILOT.md) connects the modern 124.4M
-model to the frozen 32K tokenizer and token-mixture loader. Its launcher is
-`modal_scholarly_pilot.py`; the older recipes below remain character-only.
+The [historical bounded scholarly/code pilot](100m/PILOT.md) connected the modern
+124.4M model to the frozen 32K tokenizer and token-mixture loader. Its duplicate
+single-GPU implementation has been removed. All current subword training uses
+[`distributed_training/`](distributed_training/README.md), including one GPU;
+the older recipes below remain character-only.
 
 All training runs on Modal GPU workers; there is no CPU or MPS training path.
 A JSON [recipe](recipes/README.md) names the architecture, registered dataset,

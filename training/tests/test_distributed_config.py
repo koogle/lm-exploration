@@ -1,6 +1,6 @@
 import unittest
 
-from trainer.distributed_config import DistributedConfig, DistributedRuntime, validate_resume
+from distributed_training.config import DistributedConfig, DistributedRuntime, validate_resume
 
 
 class DistributedConfigTests(unittest.TestCase):

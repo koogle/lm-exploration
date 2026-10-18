@@ -7,9 +7,7 @@ from pathlib import Path
 
 import modal
 
-from modal_scholarly_pilot import image
-
-image = image.add_local_file("modal_scholarly_pilot.py", "/project/modal_scholarly_pilot.py")
+from distributed_training.image import image
 
 app = modal.App("lm-exploration-gpu-comparison")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -71,7 +69,7 @@ def main(run_id: str = "scholarly-124m-gpu-comparison-20261017-01"):
         raise ValueError("Invalid run ID")
     files = [
         Path("modal_gpu_benchmark.py"),
-        Path("modal_scholarly_pilot.py"),
+        *Path("distributed_training").glob("*.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
         Path("trainer/gpu_benchmark.py"),

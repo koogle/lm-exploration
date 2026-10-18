@@ -84,7 +84,7 @@ smoke is a mechanics check with the existing pending-audit pilot corpus, not a
 quality result. The diagnostic validation set remains one window/source.
 Full-corpus capacity/audits, fast large-corpus cursor recovery, checkpoint storage
 retention policy and unattended job orchestration remain outside this change.
-See [usage and resume instructions](../trainer/DISTRIBUTED.md).
+See [usage and resume instructions](../distributed_training/README.md).
 
 ## Special-token naming follow-up
 
