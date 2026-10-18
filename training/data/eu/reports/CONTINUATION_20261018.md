@@ -406,3 +406,16 @@ new adapter, confirming initial ingestion through the expanded article rules.
 The latest owner request and command are included at the top of the continuation
 instructions so subsequent work retains the same baseline. Neither this
 10,000-document milestone nor the overall token goal has yet been reached.
+
+
+## Owner supersedes the additional-document milestone
+
+The owner now requests collection until documents run out, independently in
+Modal. The earlier 10,000-additional-document record is retained as history.
+`stop_at_token_target: false` makes one billion verified tokens a progress
+milestone rather than a dispatch stop. All existing operating budgets, pacing,
+private storage, source reservations and exhaustion evidence requirements remain.
+Budget exhaustion still requires review and does not prove website exhaustion.
+The change passes 331 tests, including continued dispatch above the token milestone,
+strict boolean validation, genuine exhaustion and unchanged document-budget stops.
+No notification automation was created.

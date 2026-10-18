@@ -1,37 +1,26 @@
 # New-agent continuation goal
 
 
-## Latest owner request: another 10,000 documents
+## Latest owner request: continue until documented exhaustion
 
-On 18 October 2026, the owner requested another **10,000 saved documents**.
-The fresh 08:38:59 UTC baseline is **20,703** (ECB 11,671; EMA 9,032), so the
-milestone is **30,703 total saved documents**. Track growth after that baseline;
-existing rows, catalog entries, attempts and within-source exact duplicates do
-not satisfy the additional count. This milestone does not replace the existing
-one-billion-verified-token objective or increase any operational limit.
+The owner superseded the additional-10,000-document request on 18 October 2026:
+keep collecting in Modal until documents run out. Neither 30,703 documents nor
+one billion verified tokens is a completion condition. Token counts remain an
+audited progress metric; `stop_at_token_target: false` disables the token stop.
+The earlier immutable milestone remains historical evidence, not an active goal.
+See [owner directive](../research/exhaustion-directive-20261018.json).
 
-The immutable request and pinned source revisions are in
-[additional-10000-documents-20261018.json](../research/additional-10000-documents-20261018.json)
-and private control path
-`milestones/additional-10000-20261018T083859Z.json`. Its upload was read back and
-verified. Refresh progress with:
-
-```bash
-HF_HUB_DISABLE_XET=1 uv run status.py both --mapping goal_pipeline_sources.json \
-  --cached-tokens --document-target research/additional-10000-documents-20261018.json
-```
-
-The `document_target` object reports `added_rows`, `remaining_rows` and pinned
-source revisions. Do not claim this request is fulfilled until `status` is
-`reached` and fresh source counts are at least 30,703. Keep the already running
-collectors and reservations; do not dispatch independent source writers.
-
+Preserve every operating budget below. A budget block requires review and is
+not evidence that either website is exhausted. Keep existing tracked workers;
+collection and parsing run independently of this chat in Modal. No recurring
+chat notification has been created (the available automation minimum is hourly,
+while the owner had asked for half-hour updates).
 
 Paste the following into a new agent/goal:
 
 ---
 
-Continue the ECB and EMA document collection in `koogle/lm-exploration` until we have **at least 1,000,000,000 verified OpenAI `o200k_base` tokens**, or have documented genuine exhaustion of both websites. Keep collecting and fixing real failures autonomously; do not stop at a status update or treat a transient service error as website exhaustion.
+Continue the ECB and EMA document collection in `koogle/lm-exploration` until we have documented genuine exhaustion of both websites. Continue measuring verified OpenAI `o200k_base` tokens as progress. Keep collecting and fixing real failures autonomously; do not stop at a status update or treat a transient service error as website exhaustion.
 
 Start by reading:
 
@@ -65,6 +54,6 @@ Useful first command: `uv run status.py both --mapping goal_pipeline_sources.jso
 
 Fix and validate issues, commit and push code/research to PR #14 while it is open, or a new PR after it merges. Keep raw data, credentials, Parquet and budget ledgers out of Git. After committing, run `uv run python backup_code.py` and confirm a verified receipt for the committed snapshot in the private control repo. Do not claim a pending backup succeeded. Give concise updates with documents, verified tokens, actual blockers and next actions.
 
-When the current-shard exact token lower bound reaches one billion, stop new campaigns, reconcile tracked active work, verify a final pinned token count and produce a private dataset inventory. Otherwise, claiming website exhaustion requires documented discovery coverage and resolution of supported inventories and retrieval failures. Report unsupported formats and missing histories as gaps. Do not mark the overall goal complete just because the harness is deployed or a bounded batch finishes.
+Reaching one billion tokens does not stop collection. Claiming website exhaustion requires documented discovery coverage and resolution of supported inventories and retrieval failures. Report unsupported formats and missing histories as gaps. Do not mark the overall goal complete just because the harness is deployed or a bounded batch finishes.
 
 ---

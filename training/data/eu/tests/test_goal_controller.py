@@ -310,3 +310,49 @@ def test_recovery_rejects_unresolved_calls_and_missing_evidence():
     goal["jobs"][0]["status"] = "failed"
     with pytest.raises(ValueError, match="evidence"):
         acknowledge_recovery(goal, "ecb", "fix", "")
+
+
+def test_exhaustion_mode_keeps_collecting_after_token_milestone():
+    calls = []
+    result = tick(
+        Store(),
+        snapshots={"ecb": snapshot(100, exact_tokens_lower_bound=1001)},
+        config={"sources": ["ecb"], "target_tokens": 1000, "stop_at_token_target": False},
+        spawn=lambda **kwargs: calls.append(kwargs) or "new-call",
+    )
+    assert len(calls) == 1
+    assert result["status"] == "collecting"
+    assert result["exact_tokens_lower_bound"] == 1001
+
+
+@pytest.mark.parametrize("value", [0, 1, "false", None])
+def test_invalid_token_stop_mode_rejected(value):
+    with pytest.raises(ValueError, match="stop_at_token_target"):
+        tick(Store(), config={"sources": ["ecb"], "stop_at_token_target": value})
+
+
+@pytest.mark.parametrize(
+    "exhausted,rows,expected",
+    [
+        (True, 100, "selected_scope_exhausted"),
+        (False, 100, "coverage_gap"),
+        (False, 100000, "target_reached"),
+    ],
+)
+def test_exhaustion_mode_preserves_coverage_requirements_and_document_budget(
+    exhausted, rows, expected
+):
+    result = tick(
+        Store(),
+        snapshots={
+            "ecb": snapshot(
+                rows,
+                remaining=0,
+                inventory_complete=True,
+                discovery_complete=exhausted,
+                exact_tokens_lower_bound=1001,
+            )
+        },
+        config={"sources": ["ecb"], "target_tokens": 1000, "stop_at_token_target": False},
+    )
+    assert result["status"] == expected

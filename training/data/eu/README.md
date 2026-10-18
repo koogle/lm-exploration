@@ -683,8 +683,9 @@ The collection goal also has an explicit `target_tokens: 1000000000`. Each
 controller tick sums only cached `o200k_base` counts matching the current corpus
 shards by content hash, path and row count. Partial audits provide a conservative
 lower bound; missing caches contribute zero and incompatible caches fail the
-tick. Once this lower bound reaches the target, no new campaigns are dispatched.
-Active campaigns remain tracked and may finish. The existing 100,000-document
+tick. The latest owner instruction sets `stop_at_token_target: false`, so this
+value is a reporting milestone and reaching it does not stop dispatch. Older
+configurations default to stopping at the token target. The existing 100,000-document
 operational cap and 150-campaign limit remain unchanged. The hourly audit coordinator resumes counting as the corpus grows.
 
 HF may report stale-parent conflicts as either HTTP 409 or 412. Audit checkpoint
@@ -815,7 +816,7 @@ a box. See [recovery evidence](research/ecb-article-filename-recovery-20261018.m
 
 ### Additional-document milestone
 
-The owner's 18 October request for another 10,000 documents uses the pinned
+The owner's earlier 18 October request for another 10,000 documents used the pinned
 20,703-row baseline and a **30,703-row target**. Track additional saved rows with:
 
 ```bash
@@ -825,5 +826,7 @@ HF_HUB_DISABLE_XET=1 uv run status.py both --mapping goal_pipeline_sources.json 
 
 This read-only option reports growth after the baseline and rejects partial,
 wrong-repository or regressed source reads. It does not change collector dispatch,
-source pacing, budgets or the one-billion-token guard. The request is also stored
+source pacing or budgets. The owner subsequently superseded this milestone with
+collection until documented exhaustion; this command remains historical tracking.
+The request is also stored
 and verified in the private control repository under its recorded milestone path.

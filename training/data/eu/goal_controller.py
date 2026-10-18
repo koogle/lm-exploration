@@ -32,6 +32,10 @@ def _config(config):
         if type(target) is not int or target < 1:
             raise ValueError("target_tokens must be positive")
         result["target_tokens"] = target
+    if "stop_at_token_target" in config:
+        if type(config["stop_at_token_target"]) is not bool:
+            raise ValueError("stop_at_token_target must be a boolean")
+        result["stop_at_token_target"] = config["stop_at_token_target"]
     if not result["sources"] or any(not isinstance(x, str) or not x for x in result["sources"]):
         raise ValueError("Goal sources must be a nonempty list of source IDs")
     for key, maximum in (("rounds", 3), ("max_documents", 1000), ("work_seconds", 3000)):
@@ -167,7 +171,11 @@ def _summary(goal, summaries):
         else:
             source_status[source] = "ready"
     available = max(0, goal["config"]["target_documents"] - rows - reserved)
-    if token_target is not None and tokens >= token_target:
+    if (
+        goal["config"].get("stop_at_token_target", True)
+        and token_target is not None
+        and tokens >= token_target
+    ):
         status = "token_target_reached"
     elif rows >= goal["config"]["target_documents"]:
         status = "target_reached"
