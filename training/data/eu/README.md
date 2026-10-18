@@ -795,3 +795,9 @@ Historical Monthly Bulletin box proposals now cover 1999–2011 as well as the
 previous 2012–2018 range. Thirteen additional live samples passed the unchanged
 opening-title and standalone-length checks. The prior 2011 title mismatch remains
 rejected by a regression test. See the [year-by-year evidence](research/ecb-box-history-1999-2011-20261018.md).
+
+Four more exact FOEDB types cover Macroprudential Bulletin articles, financial
+integration and structure reports, the international role of the euro, and
+TARGET annual reports. Each passed a native full-text sample. Their 150 catalog
+publication records are discovery opportunities, not saved rows or token counts.
+See [sample evidence](research/ecb-report-series-20261018.md).

@@ -241,6 +241,10 @@ def test_inferred_pdf_requires_title_in_first_two_pages(monkeypatch):
         ("legal_conference_proceedings", "450"),
         ("letters_to_meps", "18"),
         ("ecb_blog", "226"),
+        ("macroprudential_bulletin_articles", "96"),
+        ("financial_integration_reports", "140"),
+        ("international_role_euro", "143"),
+        ("target_annual_reports", "142"),
     ],
 )
 def test_full_report_types_keep_native_text_and_distinct_translations(collection_id, type_id):

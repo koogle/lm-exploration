@@ -27,7 +27,11 @@
         "central_banking_proceedings",
         "legal_conference_proceedings",
         "letters_to_meps",
-        "ecb_blog"
+        "ecb_blog",
+        "macroprudential_bulletin_articles",
+        "financial_integration_reports",
+        "international_role_euro",
+        "target_annual_reports"
       ],
       "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text.",
       "collection_weights": {
@@ -51,7 +55,11 @@
         "central_banking_proceedings": 3,
         "legal_conference_proceedings": 3,
         "letters_to_meps": 1,
-        "ecb_blog": 1
+        "ecb_blog": 1,
+        "macroprudential_bulletin_articles": 3,
+        "financial_integration_reports": 3,
+        "international_role_euro": 3,
+        "target_annual_reports": 3
       }
     },
     "ema": {

@@ -38,6 +38,16 @@ COLLECTIONS = {
     "legal_conference_proceedings": {"name": "Legal conference proceedings", "type_ids": ["450"]},
     "letters_to_meps": {"name": "ECB Letters to MEPs", "type_ids": ["18"]},
     "ecb_blog": {"name": "The ECB Blog", "type_ids": ["226"]},
+    "macroprudential_bulletin_articles": {
+        "name": "ECB Macroprudential Bulletin articles",
+        "type_ids": ["96"],
+    },
+    "financial_integration_reports": {
+        "name": "Financial integration and structure in the euro area",
+        "type_ids": ["140"],
+    },
+    "international_role_euro": {"name": "The international role of the euro", "type_ids": ["143"]},
+    "target_annual_reports": {"name": "TARGET Annual Report", "type_ids": ["142"]},
     "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
     "occasional_papers": {"name": "ECB Occasional Paper Series", "type_ids": ["3"]},
     "economic_bulletin_articles": {"name": "ECB Economic Bulletin articles", "type_ids": ["24"]},

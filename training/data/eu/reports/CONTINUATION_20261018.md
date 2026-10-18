@@ -209,3 +209,38 @@ The scheduled controller and disabled-schedule recovery app both deployed
 successfully. The [06:19 checkpoint](../research/goal-checkpoint-20261018-0619.json)
 contains 18,942 documents; verified tokens remain 425,356,977 pending the next
 scheduled audit. Existing source runs continue; no extra campaign was dispatched.
+
+## Additional ECB reports and unresolved source gaps
+
+The [06:27 checkpoint](../research/goal-checkpoint-20261018-0627.json) contains
+19,039 stored documents (ECB 10,713; EMA 8,326). The exact current-shard lower
+bound remains 425,356,977 tokens. ECB round two and EMA's newly started round two
+remain assigned to their existing campaign supervisors. A separate pinned EMA
+read subsequently confirmed the new round's source mapping has product-information
+weight 20; document selection had not yet begun at that observation.
+
+[Four additional exact ECB types](../research/ecb-report-series-20261018.md)
+passed native full-text samples: Macroprudential Bulletin articles (type 96),
+financial integration and structure reports (140), international-role-of-the-euro
+reports (143), and TARGET annual reports (142). Their catalog totals sum to 150
+publication records. Both mappings add these collections with weight 3. They use
+the same writer, pacing, private repositories and operational limits. The scheduled,
+manual and disabled-schedule recovery apps all deployed successfully. A current
+worker can retain its previous mapping until a subsequent round.
+
+Validation: 287 tests passed, including four added type/representation cases;
+Ruff lint/format and whitespace checks passed. Catalog and sample counts are
+not uploaded documents or new verified tokens.
+
+[Five failed ECB retrievals were investigated](../research/ecb-unresolved-extraction-20261018.md).
+Two Sintra takeaways pages still supply only title shells; their tested content
+fragments return 404. Three PDF failures reproduce an embedded-font error.
+Independent extraction gives readable openings for two, but garbled output for
+the third, making an unconditional fallback unsuitable. All five remain explicit
+production coverage gaps; retry and failure history was preserved.
+
+EMA round two subsequently checkpointed 20 attempted/saved documents with
+product-information weight 20 in its actual scheduling weights. The pinned source
+revision is `3abd78f0d5a1f43d4b56457c7fa942437da36118`; heartbeat
+`2026-10-18T06:28:37.309455+00:00`. This confirms worker adoption, rather than only
+a deployment or mapping-file change. Verified-token yield awaits the next audit.
