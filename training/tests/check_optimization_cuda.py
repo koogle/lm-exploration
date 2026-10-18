@@ -36,6 +36,7 @@ try:
             (4, 0, False),
             (2, 7, False),
             (2, 0, True),
+            (4, 0, True),
         ):
             model = copy.deepcopy(initial)
             for block in model.blocks:
