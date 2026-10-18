@@ -1,4 +1,33 @@
-# Default tokenizer
+# Tokenizer tools and frozen assets
+
+Run from `training/`. Python tools live alongside the assets in this folder and
+are imported as `tokenizer.<module>`; `tokenizers` (plural) remains the external
+BPE library. Modal entrypoints live separately in
+[`../modal_scripts/`](../modal_scripts/README.md).
+
+| Module | Responsibility |
+| --- | --- |
+| `tokenizer_research.py` | Corpus collection, candidate fitting and evaluation |
+| `tokenizer_evaluation.py` | Broader held-out evaluation without refitting |
+| `tokenizer_report.py` | Learning-curve plots and reports |
+| `structured_tokenizer.py` | Code/JSON/diff/tool-call workloads and focused fitting |
+| `structured_tokenizer_report.py` | Structured-output comparison report |
+| `package_tokenizer_research.py` | Hash-verified publication packaging |
+| `verify_tokenizer_publication.py` | Standalone local/Hub publication verification |
+
+For example:
+
+```sh
+uv run --extra corpus --extra research python -m tokenizer.tokenizer_report \
+  results/tokenizer-learning-curve/<run-id>
+```
+
+See the [research guide](research/README.md) for fitting, reporting and publication
+commands. Frozen version directories and historical results are unchanged by
+this source reorganization. Data-token staging and preparation remain in
+[`../data/`](../data/README.md), not in tokenizer tooling.
+
+## Default tokenizer
 
 The repository default is `structured-code-v1`: the code-focused 32,768-entry BPE
 trained on approximately 64 MiB on Modal. It was selected for code and tool calling.

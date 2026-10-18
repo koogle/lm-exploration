@@ -25,15 +25,15 @@ research = [
 
 [project.scripts]
 lm-generate = "generate:main"
-lm-prepare-scholarly = "prepare_scholarly:main"
+lm-prepare-scholarly = "training_data.prepare_scholarly:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["model_10m", "model_100m", "training_data", "training_data.fetching", "trainer", "distributed_training"]
-py-modules = ["generate", "prepare_scholarly", "tokenizer_research", "tokenizer_report", "tokenizer_evaluation"]
+packages = ["model_10m", "model_100m", "training_data", "training_data.fetching", "trainer", "tokenizer", "modal_scripts", "distributed_training"]
+py-modules = ["generate"]
 
 [tool.setuptools.package-dir]
 model_10m = "10m"

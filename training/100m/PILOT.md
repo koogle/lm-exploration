@@ -6,16 +6,16 @@ including one GPU. The commands/settings below document the measured historical
 experiment, not an available entrypoint or settings identical to the current
 trainer. Its code remains in Git history; its checkpoints require that code.
 
-`modal_scholarly_pilot.py` connects the merged modern 100M-family model to the
+`modal_scripts/modal_scholarly_pilot.py` connects the merged modern 100M-family model to the
 frozen 32K tokenizer and `TokenMixture`. It preserves the merged 14×768 shape
 (124,389,632 unique parameters), with context increased to 1,024. This is a
 bounded execution/learning pilot, not the planned 20B-token run.
 
-From `training/`, first prepare a fresh snapshot with `modal_prepare_scholarly.py`.
+From `training/`, first prepare a fresh snapshot with `modal_scripts/modal_prepare_scholarly.py`.
 Then:
 
 ```sh
-modal run --detach modal_scholarly_pilot.py \
+modal run --detach modal_scripts/modal_scholarly_pilot.py \
   --run-id scholarly-124m-pilot-20261016-01 \
   --snapshot scholarly-124m-20261016/snapshots/pilot-001
 ```
@@ -51,8 +51,8 @@ and up to 64 new tokens. PAD/BOS/UNK are excluded from sampled outputs.
 The full corpus still needs split reconciliation, global near deduplication,
 provenance/eligibility and contamination audits, and capacity evidence. Measure
 throughput before selecting the substantial-run hardware and budget. The current
-model retains explicit attention; a supported SDPA kernel is a possible separately
-verified optimization.
+model uses causal SDPA, introduced separately from the pilot. The historical
+pilot used explicit attention, with its source preserved alongside the run.
 
 In the managed cloud environment, Modal's client needs the system CA trust:
 install `modal[api-proxy-support]==1.6.2` and `truststore`, call

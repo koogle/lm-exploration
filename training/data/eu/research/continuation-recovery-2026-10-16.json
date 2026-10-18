@@ -1,0 +1,156 @@
+{
+  "observed_at": "2026-10-16T18:52:14.615569+00:00",
+  "status": "campaigns_running",
+  "previous_blocker": "Environment recovered; GitHub push and remote Modal authentication/source checks succeeded.",
+  "baseline_audit": {
+    "observed_at": "2026-10-16T18:50:47.005278+00:00",
+    "combined_metrics": {
+      "characters": 16940394,
+      "parquet_bytes": 9712532,
+      "rows": 903,
+      "stored_raw_gzip_bytes": 104038873,
+      "text_utf8_bytes": 17019084,
+      "words": 2572438
+    },
+    "sources": [
+      {
+        "source_id": "ecb",
+        "revision": "6ed6a8b7f1ccc2a7c2e64cdb4833c9501ed62d19",
+        "metrics": {
+          "characters": 12624635,
+          "parquet_bytes": 7860540,
+          "rows": 764,
+          "stored_raw_gzip_bytes": 66574160,
+          "text_utf8_bytes": 12687638,
+          "words": 1967092
+        },
+        "audit_passed": true,
+        "audit_checks": {
+          "duplicate_row_ids": 0,
+          "text_hash_mismatches": 0,
+          "text_size_mismatches": 0,
+          "partition_mismatches": 0,
+          "completed_references_missing": 0,
+          "text_index_references_missing": 0,
+          "shard_issues": [],
+          "metric_mismatches": {}
+        }
+      },
+      {
+        "source_id": "ema",
+        "revision": "2fefd8730775b3ed528557c787497dc08edf2478",
+        "metrics": {
+          "characters": 4315759,
+          "parquet_bytes": 1851992,
+          "rows": 139,
+          "stored_raw_gzip_bytes": 37464713,
+          "text_utf8_bytes": 4331446,
+          "words": 605346
+        },
+        "audit_passed": true,
+        "audit_checks": {
+          "duplicate_row_ids": 0,
+          "text_hash_mismatches": 0,
+          "text_size_mismatches": 0,
+          "partition_mismatches": 0,
+          "completed_references_missing": 0,
+          "text_index_references_missing": 0,
+          "shard_issues": [],
+          "metric_mismatches": {}
+        }
+      }
+    ]
+  },
+  "campaigns": {
+    "ecb": {
+      "ecb-expand-20261016": {
+        "deadline_epoch": 1792191058.6899838,
+        "repo_id": "jfrick/eu-ecb",
+        "rounds": [
+          {
+            "run_id": "ecb-expand-20261016-round-1",
+            "started_at_epoch": 1792176659.5392976,
+            "status": "running"
+          },
+          {
+            "run_id": "ecb-expand-20261016-round-2",
+            "status": "planned"
+          },
+          {
+            "run_id": "ecb-expand-20261016-round-3",
+            "status": "planned"
+          }
+        ],
+        "settings": {
+          "max_documents": 1000,
+          "rounds": 3,
+          "work_seconds": 3000
+        },
+        "source_id": "ecb",
+        "started_at_epoch": 1792176658.6899836,
+        "status": "running",
+        "updated_at_epoch": 1792176659.5392962
+      }
+    },
+    "ema": {
+      "ema-expand-20261016": {
+        "deadline_epoch": 1792190996.860235,
+        "repo_id": "jfrick/eu-ema",
+        "rounds": [
+          {
+            "run_id": "ema-expand-20261016-round-1",
+            "started_at_epoch": 1792176599.4375174,
+            "status": "running"
+          },
+          {
+            "run_id": "ema-expand-20261016-round-2",
+            "status": "planned"
+          },
+          {
+            "run_id": "ema-expand-20261016-round-3",
+            "status": "planned"
+          }
+        ],
+        "settings": {
+          "max_documents": 1000,
+          "rounds": 3,
+          "work_seconds": 3000
+        },
+        "source_id": "ema",
+        "started_at_epoch": 1792176596.8602347,
+        "status": "running",
+        "updated_at_epoch": 1792176599.4375153
+      }
+    }
+  },
+  "launches": [
+    {
+      "run_id": "ecb-expand-20261016",
+      "rounds": 3,
+      "calls": {
+        "ecb": "fc-01M530V2K8WF8SDZJRJ4RQX86E"
+      },
+      "datasets": {
+        "ecb": "jfrick/eu-ecb"
+      }
+    },
+    {
+      "run_id": "ema-expand-20261016",
+      "rounds": 3,
+      "calls": {
+        "ema": "fc-01M530S38CZ5F4TPPRFDK0XTT4"
+      },
+      "datasets": {
+        "ema": "jfrick/eu-ema"
+      }
+    }
+  ],
+  "limits": {
+    "rounds_per_source": 3,
+    "max_documents_per_round": 1000,
+    "work_seconds_per_round": 3000,
+    "worker_timeout_seconds": 3600,
+    "campaign_deadline_seconds": 14400
+  },
+  "verification": "Both durable campaign claims and round-one worker records read back from HF; new EMA inventories persisted. Collection counts are in-progress, not final."
+}

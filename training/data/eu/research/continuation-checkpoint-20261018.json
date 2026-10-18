@@ -1,0 +1,122 @@
+{
+  "observed_at": "2026-10-18T05:22:27.032579+00:00",
+  "control_revision": "789c64bd0fb1ab8b384ba2447bde48473f897436",
+  "goal_status": "collecting",
+  "campaign_records": 23,
+  "reserved_documents": 6000,
+  "audit_schedule": {
+    "cooldown_until_epoch": 0,
+    "max_pairs": 48,
+    "observed_at_epoch": 1792299370.9244611,
+    "pairs_reserved": 14,
+    "status": "waiting_for_calls",
+    "unresolved_calls": 2
+  },
+  "active_selected_jobs": [
+    {
+      "source_id": "ema",
+      "job_id": "goal-ema-1792292355-491f2ce013",
+      "status": "running",
+      "call_id": "fc-01M56F6187673QTXVSBP9BMK6Q"
+    },
+    {
+      "source_id": "ecb",
+      "job_id": "goal-ecb-1792299182-bd9cb0969b",
+      "status": "running",
+      "call_id": "fc-01M56NPBCA8234P7HPEH5YB2C0"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "ecb",
+      "repo_id": "jfrick/eu-ecb",
+      "revision": "c1d77a12db33036fd8eed63dbe1b7a44c50a092a",
+      "private": true,
+      "metrics": {
+        "characters": 627581954,
+        "parquet_bytes": 253082009,
+        "rows": 10223,
+        "stored_raw_gzip_bytes": 5754256818,
+        "text_utf8_bytes": 643382476,
+        "words": 94895443
+      },
+      "exact_tokens_lower_bound": 172913672,
+      "audit_summary": {
+        "complete_for_revision": true,
+        "counted_characters": 625224571,
+        "counted_rows": 10010,
+        "counted_shards": 2715,
+        "counting_rule": "Sum of independently encoded text fields; no separators or EOS",
+        "encoding": "o200k_base",
+        "exact_tokens_counted": 172913672,
+        "new_shards_this_run": 2,
+        "observed_at": "2026-10-18T04:56:22.366430+00:00",
+        "repo_id": "jfrick/eu-ecb",
+        "source_id": "ecb",
+        "source_revision": "795ef00f84e11ccf397826989c6683aeaa59a7bb",
+        "total_rows": 10010,
+        "total_shards": 2715
+      },
+      "raw_v2_objects": 226,
+      "latest_run": {
+        "run_id": "goal-ecb-1792299182-bd9cb0969b-round-1",
+        "status": "running",
+        "attempted": 340,
+        "failed": 114,
+        "heartbeat_at": "2026-10-18T05:21:47.659490+00:00",
+        "remaining_supported_candidates": null
+      },
+      "raw_sample": {
+        "path": "raw-v2/ff/ff7dbf17a29a3a23656a4e853a359f0c7c1c61559bafa67a961211e706020435.gz",
+        "decompressed_sha256_matches": true
+      }
+    },
+    {
+      "source_id": "ema",
+      "repo_id": "jfrick/eu-ema",
+      "revision": "c1bcf4c1acd6c41927103cac15abe756538b95a9",
+      "private": true,
+      "metrics": {
+        "characters": 867290791,
+        "parquet_bytes": 290529204,
+        "rows": 7983,
+        "stored_raw_gzip_bytes": 9261578121,
+        "text_utf8_bytes": 903986634,
+        "words": 127071157
+      },
+      "exact_tokens_lower_bound": 239292074,
+      "audit_summary": {
+        "complete_for_revision": true,
+        "counted_characters": 844864079,
+        "counted_rows": 7848,
+        "counted_shards": 2843,
+        "counting_rule": "Sum of independently encoded text fields; no separators or EOS",
+        "encoding": "o200k_base",
+        "exact_tokens_counted": 239292074,
+        "new_shards_this_run": 130,
+        "observed_at": "2026-10-18T05:01:27.767731+00:00",
+        "repo_id": "jfrick/eu-ema",
+        "source_id": "ema",
+        "source_revision": "fecb36ebbddd182c4e3e056615aa91481c3c570c",
+        "total_rows": 7848,
+        "total_shards": 2843
+      },
+      "raw_v2_objects": 0,
+      "latest_run": {
+        "run_id": "goal-ema-1792292355-491f2ce013-round-3",
+        "status": "running",
+        "attempted": 220,
+        "failed": 3,
+        "heartbeat_at": "2026-10-18T05:20:06.078761+00:00",
+        "remaining_supported_candidates": null
+      }
+    }
+  ],
+  "other_private_repositories": {
+    "jfrick/eu-corpus-control": true,
+    "jfrick/eu-eurlex": true,
+    "jfrick/eu-commission-press": true
+  },
+  "total_documents": 18206,
+  "exact_tokens_lower_bound": 412205746
+}

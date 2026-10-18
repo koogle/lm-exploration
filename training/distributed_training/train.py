@@ -28,6 +28,7 @@ def source_hashes():
         "trainer": Path(__file__),
         "config": Path(distributed_training.config.__file__),
         "model": Path(model_100m.model.__file__),
+        **{name: Path(path) for name, path in model_100m.model.MODEL_DEPENDENCIES.items()},
         "loader": Path(training_data.token_stream.__file__),
         "token_shards": Path(training_data.token_shards.__file__),
         "tokenizer": Path(training_data.subword.__file__),

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from training_data.scholarly import adapt, load_recipe
 
-from tokenizer_research import CorpusBuilder, load_spec, records, train_candidate
+from tokenizer.tokenizer_research import CorpusBuilder, load_spec, records, train_candidate
 
 ROOT = Path(__file__).resolve().parents[1]
 

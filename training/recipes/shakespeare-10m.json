@@ -1,5 +1,5 @@
 {
-  "description": "Vanilla 10M character GPT on Tiny Shakespeare; the settings of the published shakespeare-10m-train-01 run.",
+  "description": "Modern 10M character GPT on Tiny Shakespeare; training settings from the historical vanilla shakespeare-10m-train-01 run.",
   "model": "10m",
   "dataset": "tiny-shakespeare",
   "training": {

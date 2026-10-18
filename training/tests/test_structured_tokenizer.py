@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from structured_tokenizer import build, examples, fit, score
+from tokenizer.structured_tokenizer import build, examples, fit, score
 
 
 class StructuredTests(unittest.TestCase):

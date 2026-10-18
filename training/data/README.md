@@ -1,7 +1,16 @@
 # Training datasets
 
+[EU institutional corpus exploration](eu/README.md) is a separate discovery and
+extraction project with ten source candidates, bounded crawlers, agent research
+notes and Parquet export. Its artifacts are not registered training inputs.
+
 For the new frozen-tokenizer corpus, use the separate
-[scholarly/code streaming pipeline](SCHOLARLY_STREAMING.md).
+[scholarly/code streaming pipeline](SCHOLARLY_STREAMING.md). Its local preparation
+CLI lives in [`prepare_scholarly.py`](prepare_scholarly.py); run
+`uv run lm-prepare-scholarly --help` (or
+`uv run python -m training_data.prepare_scholarly --help`) from `training/`.
+The corresponding CPU Modal launcher lives in
+[`../modal_scripts/modal_prepare_scholarly.py`](../modal_scripts/modal_prepare_scholarly.py).
 
 `datasets.json` records each dataset's source, license review and eligibility;
 [`registry.py`](registry.py) validates it with pydantic.

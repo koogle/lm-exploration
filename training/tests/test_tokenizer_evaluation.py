@@ -7,8 +7,8 @@ from test_tokenizer_research import ROOT, fixture
 from training_data.scholarly import adapt
 from training_data.subword import digest
 
-from tokenizer_evaluation import EvaluationBuilder, rescore
-from tokenizer_research import records, train_candidate
+from tokenizer.tokenizer_evaluation import EvaluationBuilder, rescore
+from tokenizer.tokenizer_research import records, train_candidate
 
 
 class EvaluationTests(unittest.TestCase):

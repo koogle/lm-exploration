@@ -140,6 +140,7 @@ def main(
         *Path("data").glob("*.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
+        Path("10m/legacy.py"),
     ]
     provenance = {
         "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),

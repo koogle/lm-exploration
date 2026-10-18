@@ -6,8 +6,9 @@ the architecture-merge verification described below remains separate.
 
 `model.py` uses **RMSNorm, RoPE, SwiGLU and tied input/output embeddings** by
 default. There is one `100m` model choice, keeping 14 layers, width 768, 12 ordinary
-attention heads (head dimension 64) and context 256. The original vanilla 10M
-model and its individual ablation PRs are unchanged.
+attention heads (head dimension 64) and context 256. The implementation is shared
+with the consolidated [10M model](../10m/README.md); only the default dimensions differ.
+Historical vanilla checkpoints retain a version-1 compatibility implementation.
 
 | Component | Current default |
 | --- | --- |
@@ -18,6 +19,22 @@ model and its individual ablation PRs are unchanged.
 | Attention kernel | PyTorch causal scaled-dot-product attention (SDPA) |
 | Initialization | Normal std 0.02 |
 | Input/output weights | One shared Parameter |
+
+## Attention, scaling and FlashAttention
+
+![Attention pipeline: query–key scores are scaled and causally masked before softmax; the resulting weights combine values. FlashAttention computes the same operation in tiles with less memory traffic.](images/attention-sdpa-flashattention.png)
+
+The scale applies to `QKᵀ` scores before softmax, not directly to `V`. Each head
+has 64 dimensions, so scores are divided by `sqrt(64) = 8`. The causal mask
+forbids query–key pairs involving future tokens; masking a key at projection time
+would incorrectly hide it from every query. Optimized kernels can skip fully
+masked tiles instead of computing scores that will be discarded.
+
+PyTorch SDPA selects an attention backend, including FlashAttention when
+supported. FlashAttention uses tiled computation and incremental softmax to avoid
+materializing the full score/probability matrices in GPU global memory. It computes
+the same attention operation, with small floating-point differences possible.
+The diagram is explanatory, not a measured GPU memory trace.
 
 ## Mechanisms and references
 
@@ -43,7 +60,8 @@ model and its individual ablation PRs are unchanged.
 
 [LLaMA §2.2](https://arxiv.org/abs/2302.13971) adopts RMSNorm, RoPE and SwiGLU.
 This update combines the requested choices; it cannot establish each component's
-quality contribution. The individual 10M ablations serve that purpose. No quality
+quality contribution. The former single-factor 10M ablations are retained in Git
+history, not maintained model choices; they were not trained. No quality
 gain has been measured for this combined model.
 
 ## Frozen tokenizer and parameter count

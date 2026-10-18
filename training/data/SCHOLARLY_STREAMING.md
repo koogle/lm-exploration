@@ -51,7 +51,7 @@ The local entrypoint uses the existing conservative reservation function; it
 does not initialize a budget or borrow the latent-workspace ledger.
 
 ```sh
-modal run modal_prepare_scholarly.py \
+modal run modal_scripts/modal_prepare_scholarly.py \
   --version scholarly-stream-v1 --snapshot pilot-001 --max-records 100
 ```
 

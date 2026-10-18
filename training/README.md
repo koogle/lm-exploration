@@ -14,6 +14,7 @@ and a resumable token-mixture loader. Its snapshots remain pending corpus audits
 has now completed 600 updates / 4.08M tokens on Modal; substantial pretraining
 has not been launched. The [measured GPU comparison](results/scholarly-124m-gpu-comparison-20261017.md)
 compares one, two and three A10, L40S and H100 GPUs with matched global batches.
+Those measurements used the SDPA implementation now used by the modern model.
 Three H100s are the recommended configuration when elapsed time is the priority.
 [Distributed subword training](distributed_training/README.md) now exposes one/two/three-GPU
 training and explicit checkpoint/resume across Modal jobs. Full corpus readiness
@@ -52,8 +53,8 @@ research effort, with its own resources and budget.
 
 ## Shakespeare 10M publication
 
-A separate [vanilla 10M definition and bounded Modal workflow](10m/README.md)
-now has a [trained public model](https://huggingface.co/jfrick/shakespeare-vanilla-gpt-10m) with its complete definition and tokenizer.
+The [10M model and bounded Modal workflow](10m/README.md) now default to RMSNorm,
+RoPE, SwiGLU and tied embeddings. Its historical vanilla architecture has a [trained public model](https://huggingface.co/jfrick/shakespeare-vanilla-gpt-10m) with its complete definition and tokenizer.
 The selected update is 1,800 (validation loss 1.54483 nats/character); the later
 4,000-update head overfit and was not published.
 Its L4 jobs, dedicated volume and bounded allocation are separate from latent-workspace.
@@ -80,7 +81,7 @@ the older recipes below remain character-only.
 All training runs on Modal GPU workers; there is no CPU or MPS training path.
 A JSON [recipe](recipes/README.md) names the architecture, registered dataset,
 training settings and GPU limits:
-`modal run modal_train.py --recipe recipes/<name>.json --run-id <id> [--smoke]`.
+`modal run modal_scripts/modal_train.py --recipe recipes/<name>.json --run-id <id> [--smoke]`.
 Local commands validate recipes and sample from downloaded checkpoints only.
 
 ## Current state
@@ -92,16 +93,23 @@ gradient descent, start with [the XOR example](examples/README.md).
   uses RMSNorm, RoPE and SwiGLU at 14 layers, width 768, 12 attention heads and
   context 256. Version 1 preserves the historical vanilla blocks for old
   checkpoints. New 100M models tie input/output embeddings by default and have
-  124,389,632 parameters with the frozen 32K tokenizer. The original 10M is unchanged.
-- [`modal_train.py`](modal_train.py) and [`recipes/`](recipes/README.md): the character-level
-  recipe launcher. The [subword pilot](100m/PILOT.md) has its own bounded Modal launcher.
+  124,389,632 parameters with the frozen 32K tokenizer. The consolidated
+  [`10m/model.py`](10m/model.py) owns the shared implementation at 6 layers,
+  width 384 and 6 heads; historical vanilla checkpoints use a legacy-only path.
+- [`modal_scripts/`](modal_scripts/README.md), including [`modal_train.py`](modal_scripts/modal_train.py) and [`recipes/`](recipes/README.md): the character-level
+  recipe launcher. Current subword training lives in
+  [`distributed_training/`](distributed_training/README.md).
 - [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a
   prompt, and reads the architecture, configuration and tokenizer from the checkpoint.
 - [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,
   checkpoint loading/saving, run provenance, recipes and shared sampling.
 - [`data/loading.py`](data/loading.py): character tokenization, text loading,
   deterministic splits and batching.
-- [`data/`](data/README.md): curated dataset definitions and fetching scripts.
+- [`data/`](data/README.md): curated dataset definitions, fetching and preparation
+  scripts; `lm-prepare-scholarly` runs `training_data.prepare_scholarly`.
+- [`tokenizer/`](tokenizer/README.md): frozen tokenizer assets plus research,
+  evaluation, reporting and publication tools. Invoke tools as
+  `uv run python -m tokenizer.<module>` from `training/`.
   Tiny Shakespeare is a learning benchmark, not a selected research corpus.
 - Run artifacts live on the `lm-exploration-training` Modal volume under `<run-id>/`.
   Each save writes a new `checkpoints/step-NNNNNN.pt`; nothing is overwritten.
