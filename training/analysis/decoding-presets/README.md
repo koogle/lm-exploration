@@ -123,3 +123,47 @@ table, baseline comparisons, and unfiltered completion document from raw JSON.
 [Raw results](decoding-presets-20261018.json) · [Summary](summary.json) ·
 [All completions](all-completions.md) · [Qualitative review](quality-review.md) ·
 [Baseline reproducibility](baseline-reproducibility.json)
+
+## Full-FP32 precision sensitivity
+
+The independent external-baseline study found substantial BF16 sensitivity in
+Pythia. That motivated an additional controlled check on **our** model, preserving
+our original BOS prefix and matching prompts, seeds, and decode settings. It uses
+full-FP32 weights and forward execution, CUDA/cuDNN TF32 disabled, and highest
+float32 matmul precision. Original BF16 artifacts remain unchanged.
+
+| Setting | Matched completions | BF16 repeat token4 | FP32 repeat token4 | Token-identical completions |
+|---|---:|---:|---:|---:|
+| Greedy | 10 | 77.12% | 77.20% | 9 |
+| T=.1, top-k=50 | 20 | 75.72% | 74.92% | 14 |
+| T=.8, top-k=50 | 20 | 21.36% | 22.88% | 1 |
+| T=1, top-p=.95 | 10 | 6.32% | 4.32% | 0 |
+| T=.85, top-p=.95, penalty1.1 | 20 | 3.48% | 4.68% | 0 |
+
+**Full FP32 did not fix our repetition.** Nine of ten greedy completions are
+token-identical. The remaining France completion switches from repeating
+“the capital of the French Empire” to repeating “the capital of the United
+States.” Both are wrong and highly repetitive. Sampled paths are more sensitive
+to small numerical differences, but the broad repetition pattern persists.
+This result is specific to our model; do not infer that other models are
+insensitive to inference precision.
+
+The T=1 comparison uses only the ten matching original seeds, explaining its
+6.32% BF16 baseline versus the twenty-completion sweep's 6.24% mean.
+
+The additional job completed 80 samples in 99.215 seconds of remote execution
+(approximately $0.11 GPU time plus CPU/RAM, excluding any unbilled queue time;
+not an invoice):
+[ap-D4K27UYN5JP4NSmEMulsi7](https://modal.com/apps/radiantai/main/ap-D4K27UYN5JP4NSmEMulsi7).
+The raw artifact preserves an original copied descriptive note and explicitly
+records its correction; actual per-mode top-k/nucleus fields and all generated
+sample data are unchanged.
+
+```sh
+modal run --detach modal_precision.py
+python build_precision_report.py
+```
+
+[Raw FP32 results and token IDs](own-precision-fp32-20261018.json) ·
+[Matched precision comparisons and text](precision-comparison.json) ·
+[Generated comparison table](precision-results.md)
