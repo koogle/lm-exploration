@@ -62,6 +62,40 @@ class OptimizationTests(unittest.TestCase):
                     restored.load_state_dict(current.state_dict(), strict=True)
                     torch.testing.assert_close(restored(x), current(x))
 
+    def test_optimizer_resume(self):
+        torch.manual_seed(7)
+        config = ModelConfig(vocab_size=32, block_size=8, n_layer=1, n_head=2, n_embd=16)
+        model = GPT(config)
+        for block in model.blocks:
+            block.attention.cache_rotary(8)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
+        x = torch.randint(0, 32, (4, 8))
+        y = x.clone()
+        y[:, 5:] = -100
+
+        def update(current, optim):
+            optim.zero_grad(set_to_none=True)
+            backward_batch(
+                LocalDDP(current), x, y, 20, 2, 1, bf16=False, crop_padding=True, loss_chunk_size=3
+            )
+            optim.step()
+
+        update(model, optimizer)
+        payload = copy.deepcopy({"model": model.state_dict(), "optimizer": optimizer.state_dict()})
+        restored = GPT(config)
+        restored.load_state_dict(payload["model"], strict=True)
+        for block in restored.blocks:
+            block.attention.cache_rotary(8)
+        restored_optimizer = torch.optim.AdamW(restored.parameters(), lr=3e-4)
+        restored_optimizer.load_state_dict(payload["optimizer"])
+        update(model, optimizer)
+        update(restored, restored_optimizer)
+        for a, b in zip(model.parameters(), restored.parameters()):
+            torch.testing.assert_close(a, b, atol=0, rtol=0)
+        for a, b in zip(optimizer.state.values(), restored_optimizer.state.values()):
+            for key in a:
+                torch.testing.assert_close(a[key], b[key], atol=0, rtol=0)
+
     def test_empty_and_interior_masks(self):
         x = torch.ones(2, 9, dtype=torch.long)
         y = torch.full_like(x, -100)
