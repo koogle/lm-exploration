@@ -8,6 +8,7 @@ size cap prevents unbounded memory; large-scale indexed ledgers are future work.
 import copy
 import hashlib
 import json
+import tempfile
 import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -15,7 +16,7 @@ from pathlib import Path
 
 from .cached_shards import CachedShards
 from .persistent_stream import PersistentStream
-from .scholarly import SPLIT_VERSION, adapt
+from .scholarly import SPLIT_VERSION, adapt, load_recipe
 from .subword import FIRST_CONTENT_TOKEN_ID, TOKENIZER_SHA256, digest, load_frozen
 from .token_stream import TokenMixture
 
@@ -45,20 +46,13 @@ class LiveTokenMixture(TokenMixture):
         if self.manifest.get("split_policy") != SPLIT_VERSION:
             raise ValueError("Split policy changed")
         self.context, self.split = context, split
-        self.recipe = self.manifest["recipe"]
-        # Validate inline recipe using the same source-pin/weight contract.
-        if sum(s["weight_percent"] for s in self.recipe["sources"]) != 100:
-            raise ValueError("Source weights must sum to 100")
+        if type(context) is not int or context < 1:
+            raise ValueError("Context must be a positive integer")
+        with tempfile.TemporaryDirectory() as temporary:
+            recipe_path = Path(temporary) / "recipe.json"
+            recipe_path.write_text(json.dumps(self.manifest["recipe"]))
+            self.recipe = load_recipe(recipe_path)
         self.sources = {s["name"]: s for s in self.recipe["sources"]}
-        if len(self.sources) != len(self.recipe["sources"]):
-            raise ValueError("Duplicate sources")
-        for s in self.sources.values():
-            if (
-                len(s["revision"]) != 40
-                or any(c not in "0123456789abcdef" for c in s["revision"])
-                or not s["files"]
-            ):
-                raise ValueError("Every live source must pin a revision and nonempty shard list")
         self.identity = {
             "manifest_sha256": digest(self.path),
             "context": context,
@@ -74,6 +68,8 @@ class LiveTokenMixture(TokenMixture):
         self.events = []
         self.seen = {}
         self.maximum_seen = self.manifest.get("max_seen_documents", 5_000_000)
+        if type(self.maximum_seen) is not int or self.maximum_seen < 1:
+            raise ValueError("Seen-document cap must be a positive integer")
         self.tokenizer = load_frozen()
         self.reader = reader or CachedShards()
         self.pool = ThreadPoolExecutor(max_workers=3)
@@ -97,7 +93,8 @@ class LiveTokenMixture(TokenMixture):
                         end = True
                         break
                     result.append((index, row))
-                    size += len(row.get("content", row.get("text", "")) or "")
+                    text = row.get("content", row.get("text", ""))
+                    size += len(text) if isinstance(text, str) else 0
                 return result, end
             except Exception as exc:
                 retry = isinstance(exc, (OSError, EOFError)) or type(exc).__module__.startswith(
