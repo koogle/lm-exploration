@@ -3,6 +3,8 @@
 import importlib
 import json
 import os
+import time
+from datetime import datetime
 from pathlib import Path
 
 import modal
@@ -106,6 +108,30 @@ def inspect_call(call_id):
     return {"status": "failed", "child_tree_terminated": True}
 
 
+def retry_deferred(state, timestamp=None):
+    """Avoid empty campaigns while all remaining work is waiting to retry."""
+    timestamp = time.time() if timestamp is None else timestamp
+    if state.get("source_retry_after_epoch", 0) > timestamp:
+        return True
+    last = state.get("runs", [])[-1] if state.get("runs") else {}
+    if (
+        last.get("status") != "bounded_complete"
+        or last.get("attempted") != 0
+        or not last.get("remaining_supported_candidates")
+        or not last.get("finished_at")
+    ):
+        return False
+    # A zero-attempt round cannot justify another immediate campaign. Wait for
+    # the earliest persisted retry, with a ten-minute floor to bound write churn.
+    finished = datetime.fromisoformat(last["finished_at"]).timestamp()
+    future = [
+        entry["retry_after_epoch"]
+        for entry in state.get("failures", {}).values()
+        if entry.get("attempts", 0) < 3 and entry.get("retry_after_epoch", 0) > timestamp
+    ]
+    return timestamp < max(finished + 600, min(future) if future else 0)
+
+
 def source_snapshots(mapping, goal, audit_store=None, audit_revision=None):
     from huggingface_hub.errors import EntryNotFoundError
 
@@ -162,6 +188,7 @@ def source_snapshots(mapping, goal, audit_store=None, audit_revision=None):
             "revision": revision,
             "remaining_supported_candidates": remaining,
             "discovery_pending": discovery_pending,
+            "retry_deferred": not discovery_pending and retry_deferred(state),
             "inventory_complete": not discovery_pending
             and all(
                 collections[name].get("enumeration", {}).get("complete") is True

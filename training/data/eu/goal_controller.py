@@ -107,6 +107,7 @@ def _source_summary(source_states, sources):
             "inventory_complete": snapshot.get("inventory_complete") is True,
             "discovery_complete": snapshot.get("discovery_complete") is True,
             "discovery_pending": snapshot.get("discovery_pending") is True,
+            "retry_deferred": snapshot.get("retry_deferred") is True,
             "untracked_active_campaigns": copy.deepcopy(
                 snapshot.get("untracked_active_campaigns", [])
             ),
@@ -166,6 +167,8 @@ def _summary(goal, summaries):
             source_status[source] = "active_or_unresolved"
         elif failures[source] >= 3:
             source_status[source] = "blocked_repeated_failures"
+        elif snapshot["retry_deferred"]:
+            source_status[source] = "waiting_retry"
         elif snapshot["discovery_pending"]:
             source_status[source] = "ready"
         elif snapshot["remaining_supported_candidates"] == 0:
@@ -197,6 +200,8 @@ def _summary(goal, summaries):
         status = "ready" if available else "budget_reserved"
     elif any(value.startswith("blocked_") for value in source_status.values()):
         status = "blocked"
+    elif "waiting_retry" in source_status.values():
+        status = "waiting_retry"
     else:
         status = "coverage_gap"
     return {

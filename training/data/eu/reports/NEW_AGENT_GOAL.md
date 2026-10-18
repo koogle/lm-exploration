@@ -23,6 +23,14 @@ reserved attempts, roughly five work hours). The controller now checks every
 minute and performs terminal settlement with two fresh reads in one invocation.
 Per-round caps, one writer per source and ten-second EMA pacing remain unchanged.
 
+ECB hit the HF 128-commits/hour repository limit after empty campaigns repeatedly
+polled one deferred retry. The controller now backs off empty rounds for at least
+ten minutes and honors persisted source cooldowns (`waiting_retry`). The recovery
+checks terminal trees and a successful source write before acknowledging repair;
+never replay old failed dispatches. Only one configured ECB retry remained then.
+Do not confuse configured inventory depletion with whole-website exhaustion;
+unconfigured catalog types and unresolved extraction gaps remain.
+
 Paste the following into a new agent/goal:
 
 ---

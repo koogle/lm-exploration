@@ -397,3 +397,14 @@ def test_larger_campaign_obeys_remaining_global_budget():
 def test_invalid_source_round_override_rejected(override):
     with pytest.raises(ValueError, match="source_rounds"):
         tick(Store(), config={"sources": ["ema"], "source_rounds": override})
+
+
+def test_waiting_retry_does_not_dispatch_or_claim_exhaustion():
+    result = tick(
+        Store(),
+        snapshots={"ecb": snapshot(remaining=1, retry_deferred=True)},
+        spawn=lambda **_: pytest.fail("Must not dispatch waiting work"),
+    )
+    assert result["status"] == "waiting_retry"
+    assert result["sources"]["ecb"] == "waiting_retry"
+    assert result["jobs"] == []
