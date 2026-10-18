@@ -72,7 +72,7 @@
       "description": "European Medicines Agency news, scientific guidelines and committee documents, enumerated from official JSON inventories.",
       "collection_weights": {
         "epar_assessment_reports": 6,
-        "epar_product_information": 6,
+        "epar_product_information": 20,
         "epar_overviews": 1,
         "news": 1,
         "scientific_guidelines": 1,

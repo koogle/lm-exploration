@@ -155,3 +155,31 @@ Modal workers or their reservations. Current runtime logs contained historical
 17 October rate-limit errors, not evidence of a new audit failure. The scheduled
 pair was preserved and is now advancing the exact token caches. No extra pair,
 source writer, budget increase or schedule change was introduced.
+
+## Exact yield and scheduling review at 06:07 UTC
+
+[The refreshed checkpoint](../research/goal-checkpoint-20261018-0607.json) contains
+18,743 documents and **425,356,977 verified tokens** (42.54%). Both calls in audit
+pair 15 were subsequently confirmed complete. Their audit coverage is still pinned
+to older source revisions, so newer documents remain outside the lower bound.
+Both source campaign trees remain running; no replacement writer was launched.
+
+The six new ECB collections have saved 100 documents in total. Legal papers,
+discussion papers and legal proceedings have no failures in their current type
+inventories. Central-banking proceedings have 11 saved documents and two short
+HTML landing-page extraction failures; those remain unresolved coverage gaps.
+The newly deployed convergence and pre-2012 box rules await subsequent workers.
+
+[Exact EMA token-yield analysis](../research/ema-exact-token-yield-20261018.md)
+shows assessment reports nearly drained (1,888 completions from 1,891 candidates),
+while product information has 2,606 completions from 55,216 candidates and one
+completed exact duplicate. Its matching audited tokens divided by all completed
+candidates give a conservative historical yield of 44,494 tokens per candidate.
+This is evidence for prioritization, not a forecast or additional verified tokens.
+
+Both mappings increase product-information weight from 6 to 20, within the
+existing scheduler maximum. All other weights and all pacing, attempt/time,
+concurrency, document, campaign and audit limits remain unchanged. The three
+collector apps were deployed with the recovery schedule disabled. Validation:
+279 tests and lint/format/whitespace checks passed. Review later pinned yield and
+remaining budgets as collection proceeds; the target is still unmet.
