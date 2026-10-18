@@ -10,6 +10,10 @@ class DistributedConfig:
     world_size: int = 3
     global_windows: int = 48
     microbatch: int = 16
+    crop_padding: bool = False
+    loss_chunk_size: int = 0
+    compile_model: bool = False
+    cache_rope: bool = False
     context: int = 2048
     target_tokens: int = 20_000_000_000
     warmup_tokens: int = 20_000_000
@@ -50,6 +54,11 @@ class DistributedConfig:
         ):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"{name} must be a positive integer")
+        for name in ("crop_padding", "compile_model", "cache_rope"):
+            if type(getattr(self, name)) is not bool:
+                raise ValueError(f"{name} must be boolean")
+        if type(self.loss_chunk_size) is not int or self.loss_chunk_size < 0:
+            raise ValueError("loss_chunk_size must be a nonnegative integer")
         if type(self.seed) is not int or not 0 <= self.seed < 2**32:
             raise ValueError("seed must be a 32-bit unsigned integer")
         if type(self.pilot) is not bool:
