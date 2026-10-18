@@ -71,6 +71,22 @@ class ContinuationTests(unittest.TestCase):
             self.assertTrue((actual[1][-1] == -100).all())
             a.close()
             b.close()
+            from training_data.prefetch import PrefetchedBatches
+
+            def factory():
+                return RawTokenMixture(root / "manifest.json", context=8, allow_unreviewed=True)
+
+            prefetched = PrefetchedBatches(factory, 64, depth=2)
+            try:
+                _x, y = prefetched.next_batch(64)
+                self.assertEqual(int((y != -100).sum()), total)
+                self.assertEqual(prefetched.state_dict()["loss_token_exposures"]["eu"], 0)
+                prefetched.acknowledge()
+                self.assertEqual(prefetched.state_dict()["loss_token_exposures"]["eu"], total)
+                with self.assertRaises(StopIteration):
+                    prefetched.next_batch(64)
+            finally:
+                prefetched.close()
 
     def test_language_and_format_families(self):
         row = {
