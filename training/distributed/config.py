@@ -60,8 +60,8 @@ class DistributedConfig:
             raise ValueError("prefetch_batches must be an integer from 0 to 64")
         if self.data_loader not in ("token_shards", "raw", "live"):
             raise ValueError("data_loader must be token_shards, raw or live")
-        if self.world_size not in (1, 2, 3):
-            raise ValueError("Supported GPU counts: 1, 2, 3")
+        if self.world_size not in (1, 2, 3, 8):
+            raise ValueError("Supported GPU counts: 1, 2, 3, 8")
         if self.global_windows % (self.world_size * self.microbatch):
             raise ValueError("Global windows must divide into whole per-GPU microbatches")
         if self.n_embd % self.n_head or (self.n_embd // self.n_head) % 2:

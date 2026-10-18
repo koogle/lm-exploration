@@ -1,4 +1,4 @@
-"""Train or explicitly resume the simple LLM model on one/two/three Modal GPUs."""
+"""Train or explicitly resume the Simple LLM model on one/two/three/eight Modal GPUs."""
 
 import json
 import os

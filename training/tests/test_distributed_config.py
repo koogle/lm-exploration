@@ -53,6 +53,19 @@ class DistributedConfigTests(unittest.TestCase):
                 DistributedConfig(allow_unreviewed_data=value)
         self.assertTrue(DistributedConfig(allow_unreviewed_data=True).allow_unreviewed_data)
 
+    def test_authorized_eight_gpu_124m_run(self):
+        config = DistributedConfig(
+            world_size=8,
+            global_windows=32,
+            microbatch=1,
+            context=8192,
+            target_tokens=5_000_000_000,
+            allow_unreviewed_data=True,
+            prefetch_batches=4,
+        )
+        self.assertEqual(config.global_windows // config.world_size, 4)
+        self.assertEqual(config.context, 8192)
+
     def test_schedule_uses_tokens(self):
         config = DistributedConfig()
         self.assertAlmostEqual(config.learning_rate(config.warmup_tokens), config.peak_lr)
