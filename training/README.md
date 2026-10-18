@@ -13,6 +13,9 @@ and **Simple LLM 124M (two-step smoke checkpoint)**. Historical `scholarly-*` ru
 checkpoint formats, data paths and Hugging Face URLs remain stable for reproducibility;
 “scholarly/code” describes the data mixture, not the model name.
 
+The [long-context and eight-H100 plan](plans/SIMPLE_LLM_LONG_CONTEXT.md) records
+the proposed 8K/16K progression, benchmark requirements and unverified timing ranges.
+
 ## Current handoff — 2026-10-16
 
 Start with the [scholarly/code pretraining plan](plans/SCHOLARLY_CODE_PRETRAINING.md).
