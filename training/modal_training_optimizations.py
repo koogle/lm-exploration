@@ -9,6 +9,8 @@ import modal
 from modal_distributed_train import worker
 from modal_simple_llm_8k import SNAPSHOT, data_volume, image, run_volume
 
+image = image.add_local_file("modal_simple_llm_8k.py", "/project/modal_simple_llm_8k.py")
+
 app = modal.App("simple-llm-optimization-benchmarks")
 
 
