@@ -1,4 +1,4 @@
-"""Isolated, bounded eight-H100 optimization experiments; never deploys the 5B app."""
+"""Isolated one/eight-H100 optimization experiments; never deploys the 5B app."""
 
 import json
 import subprocess
@@ -32,7 +32,7 @@ def benchmark(run_id, settings, provenance, qualify=False):
                 "-m",
                 "torch.distributed.run",
                 "--standalone",
-                "--nproc_per_node=8",
+                f"--nproc_per_node={settings['world_size']}",
                 "/project/tests/check_optimization_cuda.py",
             ],
             check=False,
@@ -79,10 +79,12 @@ def benchmark(run_id, settings, provenance, qualify=False):
         "peak_allocated_bytes": max(v["peak_allocated_bytes"] for r in rows for v in r["ranks"]),
         "peak_reserved_bytes": max(v["peak_reserved_bytes"] for r in rows for v in r["ranks"]),
         "rank_compute_seconds": [
-            sum(r["ranks"][i]["compute_seconds"] for r in steady) for i in range(8)
+            sum(r["ranks"][i]["compute_seconds"] for r in steady)
+            for i in range(settings["world_size"])
         ],
         "rank_nonpadding_tokens": [
-            sum(r["ranks"][i]["nonpadding_tokens"] for r in steady) for i in range(8)
+            sum(r["ranks"][i]["nonpadding_tokens"] for r in steady)
+            for i in range(settings["world_size"])
         ],
     }
     (Path("/runs") / run_id / "benchmark.json").write_text(json.dumps(summary, indent=2))
@@ -91,11 +93,30 @@ def benchmark(run_id, settings, provenance, qualify=False):
 
 
 @app.function(
+    image=image,
+    gpu="H100",
+    cpu=8,
+    memory=32768,
+    timeout=7200,
+    retries=0,
+    max_containers=1,
+    volumes={"/data": data_volume, "/runs": run_volume},
+)
+def single_gpu_benchmark(run_id, settings, provenance, qualify=False):
+    if settings["world_size"] != 1:
+        raise ValueError("Single-GPU benchmark requires world_size=1")
+    return benchmark.local(run_id, settings, provenance, qualify)
+
+
+@app.function(
     image=image, cpu=1, memory=2048, timeout=43200, retries=0, volumes={"/runs": run_volume}
 )
-def suite(prefix, provenance):
+def suite(prefix, provenance, single_gpu=False):
     settings = json.loads(Path("/project/settings.json").read_text())
     settings.update(target_tokens=100_000_000, checkpoint_every=10000, evaluate_every=10000)
+    if single_gpu:
+        settings["world_size"] = 1
+    runner = single_gpu_benchmark if single_gpu else benchmark
     variants = [
         ("baseline-m1", {}),
         ("crop-m1", {"crop_padding": True}),
@@ -113,7 +134,7 @@ def suite(prefix, provenance):
     results = []
     for index, (name, changes) in enumerate(variants):
         try:
-            result = benchmark.remote(
+            result = runner.remote(
                 prefix + "-" + name, {**settings, **changes}, provenance, qualify=index == 0
             )
         except Exception as exc:  # noqa: BLE001 -- retain failed variants in the experiment record

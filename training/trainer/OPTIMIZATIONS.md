@@ -63,3 +63,14 @@ but records whole-session wall time and peak memory including startup/evaluation
 Compilation may recompile beyond warmup; its costs remain in those measurements.
 Results and failed variants are retained in the dedicated volume prefix. Raw
 metrics, source snapshots, checkpoints, provenance and logs accompany each run.
+
+## Single-GPU path
+
+Pass `single_gpu=True` when spawning `suite` to use one H100 per variant.
+The same seven variants retain global batch 32, real snapshot order, 8K context,
+and 100M nonpadding-token ceilings. Accumulation becomes 32/16/8 rounds for
+microbatches 1/2/4. The correctness gate runs on one CUDA rank and each variant
+still restores its two-step checkpoint in a fresh process. These results measure
+single-GPU performance; they do not establish eight-GPU scaling, communication
+cost, or inter-rank imbalance. Those require the separate eight-GPU suite.
+Only one single-GPU experiment runs at a time; the active 5B app is untouched.

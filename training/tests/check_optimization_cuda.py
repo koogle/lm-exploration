@@ -1,4 +1,4 @@
-"""Eight-rank correctness gate, including empty ranks and BF16 production execution."""
+"""One/eight-rank correctness gate, including empty ranks and BF16 production execution."""
 
 import copy
 import json
