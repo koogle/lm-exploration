@@ -1,6 +1,7 @@
 """Matched eight-H100 comparison of the three selected optimization configurations."""
 
 import json
+import os
 from pathlib import Path
 
 import modal
@@ -10,7 +11,6 @@ from modal_training_optimizations import benchmark, data_volume, image, run_volu
 image = image.add_local_file(
     "modal_training_optimizations.py", "/project/modal_training_optimizations.py"
 )
-image = image.env({"TORCHINDUCTOR_COMPILE_THREADS": "1"})
 app = modal.App("simple-llm-eight-gpu-finalists")
 
 
@@ -25,6 +25,7 @@ app = modal.App("simple-llm-eight-gpu-finalists")
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def trial(run_id, settings, provenance, qualify=False):
+    os.environ["TORCHINDUCTOR_COMPILE_THREADS"] = "1"
     if settings["world_size"] != 8:
         raise ValueError("Expected eight GPUs")
     return benchmark.local(run_id, settings, provenance, qualify)
