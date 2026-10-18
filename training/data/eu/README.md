@@ -16,7 +16,9 @@ volume is established by this pilot.
 
 See the [detailed status report](reports/STATUS_AND_HANDOFF_20261018.md) and
 [ready-to-paste continuation goal](reports/NEW_AGENT_GOAL.md). Those are pinned
-handoff snapshots; refresh private HF state for live totals.
+handoff snapshots; refresh private HF state for live totals. See also the
+[18 October continuation](reports/CONTINUATION_20261018.md) for subsequent repairs
+and a newer pinned checkpoint.
 
 ## Implemented now
 
@@ -112,8 +114,8 @@ adapters and durable resume; its behavior differs from these original commands.
 ## ECB/EMA durable collection pipeline
 
 [pipeline_sources.json](pipeline_sources.json) is the authoritative organization →
-HF repository → adapter → collection mapping. Document repositories are created public following the owner's publication request;
-existing repository visibility is preserved. Current destinations and configs:
+HF repository → adapter → collection mapping. Document repositories are created private following the owner's current instruction;
+existing repository visibility is preserved. Initial destinations and configs:
 
 | Source | Hugging Face repository | Collection configs |
 | --- | --- | --- |
@@ -179,7 +181,7 @@ to one container each, and HF compare-and-swap protects against overlapping writ
 | `data/<collection>/<format>/part-<hash>.parquet` | Extracted text, stable schema, document/revision IDs and provenance |
 | `state/progress.json` | Completed items, failures, retry times, dedup index, collection inventory paths, source mapping and run summaries |
 | `inventories/<collection>/<hash>.json` | Enumerated document-language candidates and coverage evidence |
-| `raw/<sha256>.gz` | Compressed original bodies for successfully retained documents |
+| `raw-v2/<prefix>/<sha256>.gz` | New compressed original bodies; existing `raw/<sha256>.gz` files are retained |
 | `README.md` | Collection configs, stored row counts and unreviewed/mixed source-term status |
 
 Collection configs use `data/<collection>/**/*.parquet` as their `train` split;

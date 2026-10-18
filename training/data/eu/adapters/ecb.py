@@ -356,7 +356,7 @@ def _inferred_bulletin_box_url(record):
         return None
     path = re.fullmatch(
         r"https://www\.ecb\.europa\.eu/press/economic-bulletin/focus/"
-        r"(?P<year>201[4-8])/pdf/(?P<name>[^/]+)",
+        r"(?P<year>201[2-8])/pdf/(?P<name>[^/]+)",
         record["url"],
     )
     if not path:
@@ -367,6 +367,10 @@ def _inferred_bulletin_box_url(record):
         path["name"],
     )
     if not match or match["issue"][:4] != path["year"] or int(match["box"]) < 1:
+        return None
+    # Older verified samples use Monthly Bulletin filenames only. Retain the
+    # opening-title check: even a plausible 2011 replacement failed that check.
+    if int(path["year"]) < 2014 and match["family"] != "mb":
         return None
     allowed = {"mb": {"focus"}, "eb": {"focus", "box"}, "ebbox": {""}, "ecb.ebbox": {""}}
     if (match["kind"] or "") not in allowed[match["family"]]:
@@ -407,7 +411,8 @@ def validate_alternate(record, data):
     Three convergence replacements must match verified PDF SHA-256 hashes.
     Thirteen article mappings have recorded identity evidence; other article URLs
     must pass strict historical filename rules and conservative title checks.
-    Inferred standalone boxes are restricted to 2014–2018 and at most 20 pages.
+    Inferred standalone boxes are restricted to 2012–2018 and at most 20 pages;
+    before 2014 only Monthly Bulletin filenames qualify.
     This check does not turn PDF metadata or a full issue into an article.
     """
     if record.get("collection_id") == "convergence_reports":

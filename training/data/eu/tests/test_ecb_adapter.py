@@ -382,6 +382,8 @@ def test_convergence_alternates_are_exact_and_hash_pinned(monkeypatch):
 @pytest.mark.parametrize(
     "name",
     [
+        "mb201212_focus08.en.pdf",
+        "mb201312_focus07.en.pdf",
         "mb201404_focus03.en.pdf",
         "eb201505_focus04.en.pdf",
         "eb201607_box02.en.pdf",
@@ -405,6 +407,10 @@ def test_box_recovery_preserves_recognized_basename(name):
 @pytest.mark.parametrize(
     "path",
     [
+        "2011/pdf/mb201112_focus13.en.pdf",
+        "2012/pdf/eb201202_box02.en.pdf",
+        "2013/pdf/ebbox201302_01.en.pdf",
+        "2012/pdf/mb201312_focus07.en.pdf",
         "2015/pdf/mb201404_focus03.en.pdf",
         "2014/pdf/mb201413_focus03.en.pdf",
         "2015/pdf/eb201509_box02.en.pdf",
@@ -423,7 +429,8 @@ def test_box_recovery_rejects_out_of_scope_names(path):
     assert alternate_document_urls(record) == []
 
 
-def test_box_recovery_requires_title_and_rejects_full_issue(monkeypatch):
+@pytest.mark.parametrize("year", [2012, 2013, 2014])
+def test_box_recovery_requires_title_and_rejects_full_issue(monkeypatch, year):
     from types import SimpleNamespace
 
     import adapters.ecb as adapter
@@ -431,7 +438,7 @@ def test_box_recovery_requires_title_and_rejects_full_issue(monkeypatch):
     record = {
         "collection_id": "economic_bulletin_boxes",
         "title": "A verified historical box title",
-        "url": "https://www.ecb.europa.eu/press/economic-bulletin/focus/2014/pdf/mb201404_focus03.en.pdf",
+        "url": f"https://www.ecb.europa.eu/press/economic-bulletin/focus/{year}/pdf/mb{year}04_focus03.en.pdf",
     }
     page = SimpleNamespace(extract_text=lambda: record["title"])
     monkeypatch.setattr(adapter, "PdfReader", lambda _: SimpleNamespace(pages=[page]))
