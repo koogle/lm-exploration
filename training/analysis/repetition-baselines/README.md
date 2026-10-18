@@ -17,7 +17,7 @@ Our early looping is not an outlier relative to a published model at a similar t
 
 Longer outputs still expose loops. Over entire capped completions, normalized **word** four-gram repetition for greedy is 71.8% in ours, 66.7% in early Pythia, 55.9% in final Pythia and 36.9% in SmolLM. Word/character metrics and length-controlled prefixes measure different aspects; neither is an accuracy score. Raw native-token four-gram rates are retained but should not be compared directly between tokenizers.
 
-**Precision is not the fix for our model:** full FP32 gives 77.20% native-token greedy repetition versus 77.12% in the earlier BF16 run. Sampled values change with precision and seed, but the severe greedy problem persists. This negative result prevents transferring the Pythia-specific precision finding to our model without evidence.
+**Precision is not the fix for our model:** full FP32 gives 77.20% native-token greedy repetition versus 77.12% in the earlier BF16 run, with nine of ten greedy completions token-identical. Sampled values change with precision and seed, but the severe greedy problem persists. This negative result prevents transferring the Pythia-specific precision finding to our model without evidence.
 
 All 180 FP32 external completions and sixty matched own FP32 completions are included. The own raw artifact retains twenty additional preset completions for provenance. The [paired-prefix summary](paired-prefix-summary.json) lists every included prompt/seed; [full metrics](metrics-table.md) expose lengths, EOS and coverage. The primary comparison uses native tokenizer prefixes for external models and the trained BOS token for ours.
 
@@ -36,7 +36,7 @@ These initial BF16-autocast measurements are retained as a negative result, not 
 
 The initial BF16 metrics and eligible subsets are retained separately in [initial metrics](metrics-table-bf16.md) and [initial paired prefixes](paired-prefix-summary-bf16.json). They should not be substituted for the corrected primary comparison.
 
-Manual review illustrates why repetition and competence need separate checks: SmolLM greedily starts the France answer with Paris but then repeats the answer. It starts addition with `return a + b`, gives a correct recursive factorial base case and describes the Sun/planets/moons. Our earlier continuations were weaker on these beginnings. Conversely, varied sampled text can still be wrong. This is qualitative review, not an independently scored factual/programming benchmark.
+Manual review of the initial BF16 outputs illustrates why repetition and competence need separate checks: SmolLM greedily starts the France answer with Paris but then repeats the answer. It starts addition with `return a + b`, gives a correct recursive factorial base case and describes the Sun/planets/moons. Our earlier continuations were weaker on these beginnings. Conversely, varied sampled text can still be wrong. This is qualitative review, not an independently scored factual/programming benchmark.
 
 ## Comparison protocol
 

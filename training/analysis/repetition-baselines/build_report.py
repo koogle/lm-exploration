@@ -64,6 +64,12 @@ def main():
     if not args.bf16:
         own_raw = json.loads((HERE / "simple-llm-fp32.json").read_text())
         checkpoint = own_raw["checkpoints"][0]
+        assert own_raw["prompts"] == data["prompts"]
+        assert checkpoint["revision"] == previous["revision"]
+        assert checkpoint["trained_tokens"] == previous["trained_tokens"]
+        assert own_raw["cuda_matmul_allow_tf32"] is False
+        assert own_raw["cudnn_allow_tf32"] is False
+        assert own_raw["dtype"] == "FP32 weights and forward, TF32 disabled"
         ours = []
         for original in checkpoint["samples"]:
             row = dict(original)
