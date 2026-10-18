@@ -22,5 +22,9 @@
       "reason": "HF Xet read-token API 1000 requests per 5 minute quota"
     }
   ],
-  "retry_started_unix": 1792347203.913833
+  "retry_started_unix": 1792347203.913833,
+  "run_id": "simple-llm-124m-eu-onepass-20261018",
+  "workflow_wait_call_id": "fc-01M583JS71HWV0QMFYP9E7BRKY",
+  "code_commit": "87f7a474e549cb00e037540a06da52a41f272d99",
+  "queued_unix": 1792347301.1525002
 }
