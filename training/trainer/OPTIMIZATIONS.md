@@ -74,3 +74,10 @@ still restores its two-step checkpoint in a fresh process. These results measure
 single-GPU performance; they do not establish eight-GPU scaling, communication
 cost, or inter-rank imbalance. Those require the separate eight-GPU suite.
 Only one single-GPU experiment runs at a time; the active 5B app is untouched.
+
+For the independent single-GPU deployment, deploy
+`modal_single_gpu_optimizations.py`, then spawn
+`modal.Function.from_name("simple-llm-single-gpu-optimizations", "run_suite").spawn(prefix, provenance)`.
+This is the current launch route: `opt100m-1gpu-20261018-b`. It avoids the older
+eight-GPU controller's deployed signature. The initial single-GPU submission
+failed before GPU allocation with an unexpected-keyword error and has no results.
