@@ -21,7 +21,13 @@
         "annual_report_translations",
         "financial_stability_reviews",
         "statistics_papers",
-        "research_bulletins"
+        "research_bulletins",
+        "legal_working_papers",
+        "discussion_papers",
+        "central_banking_proceedings",
+        "legal_conference_proceedings",
+        "letters_to_meps",
+        "ecb_blog"
       ],
       "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text.",
       "collection_weights": {
@@ -39,7 +45,13 @@
         "annual_report_translations": 2,
         "financial_stability_reviews": 3,
         "statistics_papers": 3,
-        "research_bulletins": 2
+        "research_bulletins": 2,
+        "legal_working_papers": 3,
+        "discussion_papers": 3,
+        "central_banking_proceedings": 3,
+        "legal_conference_proceedings": 3,
+        "letters_to_meps": 1,
+        "ecb_blog": 1
       }
     },
     "ema": {

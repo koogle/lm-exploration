@@ -235,6 +235,12 @@ def test_inferred_pdf_requires_title_in_first_two_pages(monkeypatch):
         ("financial_stability_reviews", "137"),
         ("statistics_papers", "5"),
         ("research_bulletins", "61"),
+        ("legal_working_papers", "4"),
+        ("discussion_papers", "377"),
+        ("central_banking_proceedings", "155"),
+        ("legal_conference_proceedings", "450"),
+        ("letters_to_meps", "18"),
+        ("ecb_blog", "226"),
     ],
 )
 def test_full_report_types_keep_native_text_and_distinct_translations(collection_id, type_id):

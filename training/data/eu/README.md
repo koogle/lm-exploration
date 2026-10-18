@@ -570,7 +570,7 @@ identify 104,799 supported language-level candidates outside the existing docume
 partitions. The worker selects at most 100,000 of these; candidates and extraction
 samples are not counted as stored corpus documents.
 
-Use `uv run status.py both --mapping goal_pipeline_sources.json` to include the
+Use `uv run status.py both --mapping goal_pipeline_sources.json --cached-tokens` to include the
 expanded collection breakdown. The separate billion-token research objective is
 not a completed milestone: exact `o200k_base` counts require its vocabulary download,
 which the environment proxy still denied on 17 October. Character/byte/word totals
@@ -774,3 +774,19 @@ is verified and every source campaign is confirmed terminal. It records the
 reason and evidence on the last failed job, preserves all failed statuses, and
 resets the prior failure streak. Subsequent failures still trigger the existing
 three-failure safeguard. No token, document or campaign limits are increased.
+
+### Read-only matched token status
+
+`status.py --cached-tokens` pins the control revision once and matches cached
+`o200k_base` counts against each source checkpoint by shard hash, path and rows.
+It reports matched coverage and reservations without downloading Parquet or
+starting an audit. An older complete audit summary cannot make a growing source
+complete; missing caches are explicit and failed reads do not become zero counts.
+
+### Additional ECB series
+
+The mappings now include Legal Working Papers, Discussion Papers, central-banking
+and legal conference proceedings, letters to MEPs and the ECB Blog. See the
+[full-text sample evidence](research/ecb-distinct-series-20261018.md). These use
+the existing FOEDB adapter and writer reservations; catalog counts are not stored
+rows, and proceedings may contain passages also published as speeches.
