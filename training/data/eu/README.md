@@ -790,3 +790,8 @@ and legal conference proceedings, letters to MEPs and the ECB Blog. See the
 [full-text sample evidence](research/ecb-distinct-series-20261018.md). These use
 the existing FOEDB adapter and writer reservations; catalog counts are not stored
 rows, and proceedings may contain passages also published as speeches.
+
+Historical Monthly Bulletin box proposals now cover 1999–2011 as well as the
+previous 2012–2018 range. Thirteen additional live samples passed the unchanged
+opening-title and standalone-length checks. The prior 2011 title mismatch remains
+rejected by a regression test. See the [year-by-year evidence](research/ecb-box-history-1999-2011-20261018.md).

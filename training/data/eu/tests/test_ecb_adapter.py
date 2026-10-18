@@ -388,6 +388,10 @@ def test_convergence_alternates_are_exact_and_hash_pinned(monkeypatch):
 @pytest.mark.parametrize(
     "name",
     [
+        "mb199912_focus09.en.pdf",
+        "mb200512_focus09.en.pdf",
+        "mb201012_focus07.en.pdf",
+        "mb201112_focus13.en.pdf",
         "mb201212_focus08.en.pdf",
         "mb201312_focus07.en.pdf",
         "mb201404_focus03.en.pdf",
@@ -402,7 +406,7 @@ def test_box_recovery_preserves_recognized_basename(name):
 
     from adapters.ecb import alternate_document_urls
 
-    year = re.search(r"20\d{2}", name)[0]
+    year = re.search(r"(?:19|20)\d{2}", name)[0]
     record = {
         "collection_id": "economic_bulletin_boxes",
         "url": f"https://www.ecb.europa.eu/press/economic-bulletin/focus/{year}/pdf/{name}",
@@ -413,7 +417,9 @@ def test_box_recovery_preserves_recognized_basename(name):
 @pytest.mark.parametrize(
     "path",
     [
-        "2011/pdf/mb201112_focus13.en.pdf",
+        "1998/pdf/mb199812_focus13.en.pdf",
+        "2000/pdf/eb200002_box02.en.pdf",
+        "2005/pdf/mb200413_focus03.en.pdf",
         "2012/pdf/eb201202_box02.en.pdf",
         "2013/pdf/ebbox201302_01.en.pdf",
         "2012/pdf/mb201312_focus07.en.pdf",
@@ -435,7 +441,7 @@ def test_box_recovery_rejects_out_of_scope_names(path):
     assert alternate_document_urls(record) == []
 
 
-@pytest.mark.parametrize("year", [2012, 2013, 2014])
+@pytest.mark.parametrize("year", [1999, 2005, 2011, 2012, 2013, 2014])
 def test_box_recovery_requires_title_and_rejects_full_issue(monkeypatch, year):
     from types import SimpleNamespace
 
@@ -458,3 +464,26 @@ def test_box_recovery_requires_title_and_rejects_full_issue(monkeypatch, year):
     monkeypatch.setattr(adapter, "PdfReader", lambda _: SimpleNamespace(pages=[page] * 21))
     with pytest.raises(ValueError):
         adapter.validate_alternate(record, b"%PDF-fixture")
+
+
+def test_older_box_expansion_keeps_observed_2011_title_mismatch_rejected(monkeypatch):
+    from types import SimpleNamespace
+
+    from adapters import ecb
+
+    record = {
+        "collection_id": "economic_bulletin_boxes",
+        "url": "https://www.ecb.europa.eu/press/economic-bulletin/focus/2011/pdf/mb201112_focus13.en.pdf",
+        "title": "Eurosystem staff macroeconomic projections for the euro area: technical assumptions "
+        "about interest rates, exchange rates, commodity prices and fiscal policies",
+    }
+    page = SimpleNamespace(
+        extract_text=lambda: (
+            "Technical assumptions about interest rates, "
+            "exchange rates, commodity prices and fiscal policies"
+        )
+    )
+    monkeypatch.setattr(ecb, "PdfReader", lambda _: SimpleNamespace(pages=[page]))
+    assert ecb.alternate_document_urls(record)
+    with pytest.raises(ValueError, match="title mismatch"):
+        ecb.validate_alternate(record, b"%PDF-fixture")

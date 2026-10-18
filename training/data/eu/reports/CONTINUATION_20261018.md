@@ -110,3 +110,22 @@ count probe text as uploaded corpus or loosen validation to a generic rewrite.
 The repair passed 269 tests and lint/format/whitespace checks, and deployment
 receipts confirmed all three collector apps with the recovery schedule disabled.
 Verify saved output in subsequent workers; preserve active writers and reservations.
+
+## Follow-up at 05:58 UTC
+
+The source checkpoints contain 18,605 documents. The six added ECB types have
+begun producing stored rows: their first checkpoint contained 14 documents. The
+fifteenth scheduled audit pair is active; 33 pairs remain in the unchanged
+48-pair envelope. Existing source reservations remain intact (24 campaigns).
+
+Thirteen additional Monthly Bulletin box samples, one selected non-generic title
+per year from 1999–2011, passed full opening-title and standalone-length checks.
+The guarded fallback now permits proposals in that year range, encompassing 967
+catalog candidates. The earlier 2011 title-mismatch sample still fails validation,
+with a regression test preserving that behavior. This is an opportunity count,
+not stored yield. [Probe evidence](../research/ecb-box-history-1999-2011-20261018.md)
+records selection bias and per-response validation requirements.
+
+All 279 tests and lint/format/whitespace checks passed. Existing collector apps
+were deployed; the recovery schedule remains disabled. The active audit pair is
+allowed to finish rather than consuming another reservation for a manual audit.
