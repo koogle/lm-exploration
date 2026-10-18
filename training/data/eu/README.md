@@ -806,3 +806,9 @@ The exact ECB “Other publication” type (23) adds technical manuals, agreemen
 and proceedings through `other_publications`. Three selected PDFs passed native
 extraction; the inspected catalog contains 772 publication records. See the
 [evidence and limitations](research/ecb-other-publications-20261018.md).
+
+Historical article proposals also recognize dotted 1999 Monthly Bulletin page
+ranges and guarded 2015–2018 Economic Bulletin article filenames. Six live PDFs
+passed the unchanged complete-title validator; 62 remaining article 404s match
+the new rules. The unmatched focus-style article is exact text already saved as
+a box. See [recovery evidence](research/ecb-article-filename-recovery-20261018.md).

@@ -381,6 +381,7 @@ MONTHLY_ARTICLE_FILENAMES = [
         ),
         r"art[1-9]\d*_mb(?P<issue>\d{6})\.en\.pdf",
         r"p{1,2}(?P<start>\d{1,3})[-_](?P<end>\d{1,3})_?mb(?P<issue>\d{6})en\.pdf",
+        r"p\.(?P<start>\d{1,3})_(?P<end>\d{1,3})_mb(?P<issue>1999\d{2})en\.pdf",
         (
             r"mb(?P<issue>\d{6})(?:en)?_(?:pp)?(?P<start>\d{1,3})-"
             r"(?P<end>\d{1,3})en\.pdf"
@@ -408,6 +409,33 @@ def _inferred_monthly_article_url(record):
         if "start" in match.groupdict() and not 0 < int(match["start"]) <= int(match["end"]) <= 999:
             continue
         return BASE + "/pub/pdf/other/" + path["name"]
+    return None
+
+
+def _inferred_bulletin_article_url(record):
+    """Propose a same-basename standalone article; response title checks still apply."""
+    if record.get("collection_id") != "economic_bulletin_articles":
+        return None
+    path = re.fullmatch(
+        r"https://www\.ecb\.europa\.eu/press/economic-bulletin/articles/"
+        r"(?P<year>\d{4})/pdf/(?P<name>[^/]+)",
+        record["url"],
+    )
+    if not path or not 2015 <= int(path["year"]) <= 2018:
+        return None
+    for pattern in (
+        r"eb(?P<issue>\d{6})_article(?P<article>\d{2})\.en\.pdf",
+        r"art(?P<article>\d{2})_eb(?P<issue>\d{6})\.en\.pdf",
+        r"(?:ecb\.)?ebart(?P<issue>\d{6})_(?P<article>\d{2})\.en\.pdf",
+    ):
+        match = re.fullmatch(pattern, path["name"])
+        if (
+            match
+            and match["issue"][:4] == path["year"]
+            and 1 <= int(match["issue"][4:]) <= 8
+            and int(match["article"]) > 0
+        ):
+            return BASE + "/pub/pdf/other/" + path["name"]
     return None
 
 
@@ -456,8 +484,10 @@ def alternate_document_urls(record):
         return [target] if target else []
     if record.get("collection_id") != "economic_bulletin_articles":
         return []
-    target = VERIFIED_HISTORICAL_ARTICLES.get(record["url"]) or _inferred_monthly_article_url(
-        record
+    target = (
+        VERIFIED_HISTORICAL_ARTICLES.get(record["url"])
+        or _inferred_monthly_article_url(record)
+        or _inferred_bulletin_article_url(record)
     )
     return [target] if target else []
 
@@ -486,7 +516,11 @@ def validate_alternate(record, data):
         and record["url"] in VERIFIED_HISTORICAL_ARTICLES
     ):
         return
-    if not (_inferred_monthly_article_url(record) or _inferred_bulletin_box_url(record)):
+    if not (
+        _inferred_monthly_article_url(record)
+        or _inferred_bulletin_article_url(record)
+        or _inferred_bulletin_box_url(record)
+    ):
         raise ValueError("ECB alternate is outside the supported historical article or box rule")
     title = record.get("title") or ""
     normalized = _normalize_title(title)

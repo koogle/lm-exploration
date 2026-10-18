@@ -315,3 +315,43 @@ remains **425,356,977 verified tokens (42.54%)**, with 24 campaign records and
 15 reserved audit pairs. Source repositories remain private, the existing
 campaigns are active, and the hourly audit coordinator retains its reservations.
 The one-billion-token target and website-exhaustion condition remain unmet.
+
+## 07:58–08:05 continuation: live yield and article recovery
+
+The 07:58 checkpoint contained **20,152 stored documents** and **446,538,735
+verified tokens**. All 150 candidates across the four additional ECB report
+series are now saved with zero recorded failures. All 20 convergence reports
+are completed with zero remaining failures, confirming all ten newly mapped
+replacements were ingested. The next ECB campaign automatically adopted
+`other_publications`; 21 unique documents were already saved from that type.
+
+Current ECB campaign: `goal-ecb-1792309455-2c93965844`, supervisor
+`fc-01M56ZFW59E04PCZQAJ33HS7VZ`, round one running. EMA remained in round three of
+`goal-ema-1792301652-8336f3de89`, supervisor `fc-01M56R1QMKAM6PDEJKE3GH0VY2`.
+Both call trees were inspected and running; no duplicate source writer or manual
+replacement campaign was launched. There are 25 campaign records and 17 reserved
+audit pairs. Pair 17 is `71185d0a3d39474fa7afe16a559ed1f6`, with ECB call
+`fc-01M5705N60YWKGWB7ERB1JWAT2` and EMA call `fc-01M5705NKXEXME0VRGA6X60FP9`.
+Its unresolved claims were preserved while the caches advanced.
+
+The [08:05 pinned checkpoint](../research/goal-checkpoint-20261018-0805.json)
+contains **20,232 documents** (ECB 11,358; EMA 8,874) and **456,519,243 verified
+tokens**, or 45.65% of the target. The ECB audit completed for an older source
+revision, while EMA's current audit had counted 8,750 of 8,874 pinned rows. These
+are matched cache lower bounds, not a claim of complete current-source coverage.
+All limits, private visibility, source pacing and raw-v2 behavior are preserved.
+
+[Six new historical article probes](../research/ecb-article-filename-recovery-20261018.md)
+passed both independent identity checks and the production PDF/title validator.
+The adapter now recognizes dotted 1999 Monthly Bulletin page-range filenames and
+three guarded 2015–2018 Economic Bulletin article styles. Sixty-two remaining
+article 404s match the added rules and pass the existing pending/cooldown guard
+without failure resets. This is a bounded retry opportunity, not saved yield.
+The unmatched focus-style article's exact text is already stored as a box; its
+incomplete title match remains rejected rather than counting the same text again.
+
+Validation: **314 tests passed**, plus Ruff lint/format and whitespace checks.
+Collector, manual and disabled-schedule recovery apps all deployed successfully.
+The running ECB worker can retain its earlier adapter until its next round; no
+new-rule ingestion is claimed yet. Neither the one-billion-token objective nor
+whole-website exhaustion has been reached.

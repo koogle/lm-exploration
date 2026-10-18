@@ -197,13 +197,24 @@ def test_inferred_rule_exclusions(path):
     )
 
 
-def test_inferred_pdf_requires_title_in_first_two_pages(monkeypatch):
+@pytest.mark.parametrize(
+    "path",
+    [
+        "2012/pdf/art2_mb201201en_pp75-86en.pdf",
+        "1999/pdf/p.11_16_mb199901en.pdf",
+        "2015/pdf/eb201506_article01.en.pdf",
+        "2015/pdf/art01_eb201502.en.pdf",
+        "2017/pdf/ebart201705_01.en.pdf",
+        "2018/pdf/ecb.ebart201803_01.en.pdf",
+    ],
+)
+def test_inferred_pdf_requires_title_in_first_two_pages(monkeypatch, path):
     from types import SimpleNamespace
 
     from adapters import ecb
 
     candidate = {
-        "url": "https://www.ecb.europa.eu/press/economic-bulletin/articles/2012/pdf/art2_mb201201en_pp75-86en.pdf",
+        "url": "https://www.ecb.europa.eu/press/economic-bulletin/articles/" + path,
         "collection_id": "economic_bulletin_articles",
         "title": "The euro-area credit market",
     }
@@ -492,3 +503,60 @@ def test_older_box_expansion_keeps_observed_2011_title_mismatch_rejected(monkeyp
     assert ecb.alternate_document_urls(record)
     with pytest.raises(ValueError, match="title mismatch"):
         ecb.validate_alternate(record, b"%PDF-fixture")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "1999/pdf/p.11_16_mb199901en.pdf",
+        "1999/pdf/p.29_43_mb199905en.pdf",
+        "2015/pdf/eb201506_article01.en.pdf",
+        "2015/pdf/art01_eb201502.en.pdf",
+        "2016/pdf/eb201608_article02.en.pdf",
+        "2017/pdf/ebart201705_01.en.pdf",
+        "2018/pdf/ecb.ebart201803_01.en.pdf",
+    ],
+)
+def test_additional_standalone_article_filenames_keep_candidate_identity(path):
+    from adapters.ecb import alternate_document_urls
+
+    candidate = {
+        "url": "https://www.ecb.europa.eu/press/economic-bulletin/articles/" + path,
+        "collection_id": "economic_bulletin_articles",
+        "document_id": "original-id",
+    }
+    original = dict(candidate)
+    assert alternate_document_urls(candidate) == [
+        "https://www.ecb.europa.eu/pub/pdf/other/" + path.rsplit("/", 1)[1]
+    ]
+    assert candidate == original
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "2000/pdf/p.11_16_mb200001en.pdf",  # dotted family verified only for 1999
+        "1999/pdf/p.16_11_mb199901en.pdf",  # reversed page range
+        "1999/pdf/p.0_16_mb199901en.pdf",  # zero page
+        "2014/pdf/eb201406_article01.en.pdf",  # before Economic Bulletin
+        "2019/pdf/ecb.ebart201903_01.en.pdf",  # outside verified historical range
+        "2015/pdf/eb201606_article01.en.pdf",  # year mismatch
+        "2015/pdf/eb201509_article01.en.pdf",  # invalid issue
+        "2015/pdf/art00_eb201502.en.pdf",  # zero article
+        "2017/pdf/ebart201705_00.en.pdf",  # zero article
+        "2017/pdf/ebart201700_01.en.pdf",  # zero issue
+        "2015/pdf/eb201506.en.pdf",  # whole issue
+        "2015/pdf/eb201501_focus04.en.pdf",  # a box, not an article filename
+        "2015/pdf/eb201506_article01.en.pdf?download=1",
+        "2015/pdf/../eb201506_article01.en.pdf",
+    ],
+)
+def test_additional_article_rules_reject_ambiguous_or_malformed_names(path):
+    from adapters.ecb import alternate_document_urls
+
+    assert not alternate_document_urls(
+        {
+            "url": "https://www.ecb.europa.eu/press/economic-bulletin/articles/" + path,
+            "collection_id": "economic_bulletin_articles",
+        }
+    )
