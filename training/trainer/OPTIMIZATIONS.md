@@ -19,15 +19,22 @@ these changes: the active 5B-token application retains its original source image
 - `compile_model`: compile the model in place with dynamic sequence dimensions.
   Keep the original module and optimizer parameters for checkpoint serialization.
 
-Run from `training/`, using a fresh prefix:
+Run from `training/`, using a fresh prefix. For unattended execution, deploy only
+the isolated benchmark app and spawn its controller:
 
 ```sh
 uv run python -c 'import truststore; truststore.inject_into_ssl(); import runpy; runpy.run_module("modal", run_name="__main__")' \
-  run --detach modal_training_optimizations.py --prefix opt100m-YYYYMMDD-ID
+  deploy modal_training_optimizations.py
 ```
 
+Then use the authenticated SDK to call
+`modal.Function.from_name("simple-llm-optimization-benchmarks", "suite").spawn(prefix, provenance)`.
+Record its function-call ID. The earlier detached local entrypoint was canceled
+while waiting for GPUs; it produced no GPU verification or benchmark measurements.
+A deployed, spawned controller does not depend on that local CLI session.
+
 The isolated app runs one eight-H100 worker at a time, with 32 CPUs and 64 GiB
-host RAM. It does not publish weights, modify the active run, or deploy an app.
+host RAM. It does not publish weights or modify the active 5B app.
 Each variant has a 100M nonpadding-token ceiling, a one-hour continuation limit,
 and no retry. A ceiling can end slightly early to avoid consuming an incomplete
 optimizer batch. Time-limited results must not be reported as completed 100M runs.
