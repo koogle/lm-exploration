@@ -62,7 +62,11 @@ modal run --detach modal_streaming_train.py \
 The CPU initialization function only freezes an inline source recipe/manifest;
 it does not prepare a full corpus. GPU startup builds a small fixed validation
 prefix and the first training batch. Raw fetches and batch preparation continue
-while subsequent optimizer steps run. The launcher copies source/config/tokenizer
+while subsequent optimizer steps run. Compressed gzip sources currently cache
+one full pinned shard before their first rows; Parquet sources use range reads.
+This can add cold-start download latency, but never waits for the full corpus.
+The small validation prefix is released once its fixed tensors are built.
+The launcher copies source/config/tokenizer
 provenance to the training volume just like the existing DDP worker.
 
 To resume, supply a fresh run ID, the original `--snapshot` path and `--resume`
@@ -83,3 +87,17 @@ exhaustion and split-conflict stops. A separate three-GPU qualification compares
 synchronous vs prefetched updates and uninterrupted vs interrupted/resumed
 training on the same frozen synthetic dataset. CUDA qualification results are retained separately when available; CPU and
 upstream-prefix checks do not establish CUDA throughput.
+
+
+### Retained checks
+
+- CPU: the same 24 AdamW updates using synchronous data, prefetch, and a
+  12+12 interrupted/resumed sequence produced bitwise-identical weights and
+  exactly equal consumed cursors/ledgers on a tiny modern decoder.
+- Live prefix: pinned Python source, three acknowledged batches / 1,335 targets;
+  the unacknowledged next batch restored exactly. Cold-start elapsed time was
+  41.5 seconds, including the initial compressed-shard download. This was a
+  data-only test, not additional model training.
+- CUDA jobs: single-L4 and three-L40S checks are queued separately. Their results
+  are required before claiming CUDA equivalence or GPU throughput. They are
+  bounded synthetic qualifications, not new full pretraining jobs.

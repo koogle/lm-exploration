@@ -247,6 +247,10 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
         else:
             primary(lambda: None)
 
+        if rank == 0 and validation is not None and hasattr(validation, "close"):
+            validation.close()
+            validation = None
+
         @torch.no_grad()
         def evaluate():
             model.eval()
