@@ -13,7 +13,7 @@ from pathlib import Path
 
 from training_data.subword import LOSS_IGNORE_INDEX
 
-from trainer.distributed_config import DistributedConfig, validate_resume
+from trainer.distributed_config import DistributedConfig, DistributedRuntime, validate_resume
 
 
 def source_hashes():
@@ -76,7 +76,17 @@ def backward_batch(ddp, x, y, count, microbatch, world, *, bf16=True):
     return total_loss
 
 
-def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=None, commit=None):
+def train(
+    config,
+    manifest,
+    output,
+    *,
+    runtime: DistributedRuntime,
+    resume=None,
+    max_seconds=3000,
+    max_steps=None,
+    commit=None,
+):
     import numpy as np
     import torch
     import torch.distributed as dist
@@ -87,12 +97,18 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
 
     if not 1 <= max_seconds <= 3000 or (max_steps is not None and max_steps < 1):
         raise ValueError("Session limits must be positive; maximum session length is 3000 seconds")
-    rank, world = int(os.environ["LOCAL_RANK"]), int(os.environ["WORLD_SIZE"])
+    rank, world = runtime.rank, runtime.world_size
     if world != config.world_size:
         raise ValueError("torchrun world size differs from configuration")
-    torch.cuda.set_device(rank)
+    torch.cuda.set_device(runtime.local_rank)
     torch.set_num_threads(4)
-    dist.init_process_group("nccl", timeout=timedelta(seconds=300))
+    dist.init_process_group(
+        "nccl",
+        init_method=runtime.init_method,
+        rank=rank,
+        world_size=world,
+        timeout=timedelta(seconds=300),
+    )
     output, manifest = Path(output), Path(manifest)
     commit = commit or (lambda: None)
     stopped = False
@@ -153,7 +169,7 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
             n_embd=config.n_embd,
         )
         model = GPT(model_config).cuda()
-        ddp = DDP(model, device_ids=[rank], gradient_as_bucket_view=True)
+        ddp = DDP(model, device_ids=[runtime.local_rank], gradient_as_bucket_view=True)
         optimizer = torch.optim.AdamW(
             model.parameters(),
             lr=config.peak_lr,
@@ -421,6 +437,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-steps", type=int)
     parser.add_argument("--volume-name")
     args = parser.parse_args()
+    runtime = DistributedRuntime.from_torchrun(os.environ)
     commit = None
     if args.volume_name:
         import modal
@@ -430,6 +447,7 @@ if __name__ == "__main__":
         DistributedConfig(**json.loads(Path(args.config).read_text())),
         args.manifest,
         args.output,
+        runtime=runtime,
         resume=args.resume,
         max_seconds=args.max_seconds,
         max_steps=args.max_steps,

@@ -1,6 +1,7 @@
 """Validated, framework-independent settings for subword DDP training."""
 
 import math
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 
 
@@ -76,6 +77,57 @@ class DistributedConfig:
         return self.peak_lr * (
             self.min_lr_ratio + (1 - self.min_lr_ratio) * (1 + math.cos(math.pi * progress)) / 2
         )
+
+
+@dataclass(frozen=True)
+class DistributedRuntime:
+    """Per-process launch details, separate from the shared training recipe."""
+
+    rank: int
+    local_rank: int
+    world_size: int
+    master_addr: str
+    master_port: int
+
+    def __post_init__(self):
+        if type(self.world_size) is not int or self.world_size < 1:
+            raise ValueError("Runtime world_size must be a positive integer")
+        for name in ("rank", "local_rank"):
+            value = getattr(self, name)
+            if type(value) is not int or not 0 <= value < self.world_size:
+                raise ValueError(f"Runtime {name} must be within world_size")
+        if self.rank != self.local_rank:
+            raise ValueError("This trainer supports one host; rank must equal local_rank")
+        if (
+            not isinstance(self.master_addr, str)
+            or not self.master_addr
+            or any(c.isspace() or c in "/?#@" for c in self.master_addr)
+        ):
+            raise ValueError("Runtime master_addr must be a hostname or IP address")
+        if type(self.master_port) is not int or not 1 <= self.master_port <= 65535:
+            raise ValueError("Runtime master_port must be between 1 and 65535")
+
+    @classmethod
+    def from_torchrun(cls, environment: Mapping[str, str]):
+        """Resolve torchrun's environment once at the command-line boundary."""
+        try:
+            return cls(
+                rank=int(environment["RANK"]),
+                local_rank=int(environment["LOCAL_RANK"]),
+                world_size=int(environment["WORLD_SIZE"]),
+                master_addr=environment["MASTER_ADDR"],
+                master_port=int(environment["MASTER_PORT"]),
+            )
+        except KeyError as exc:
+            raise ValueError(f"Missing torchrun launch variable: {exc.args[0]}") from exc
+
+    @property
+    def init_method(self):
+        # Brackets distinguish an IPv6 address from the port separator.
+        host = self.master_addr
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        return f"tcp://{host}:{self.master_port}"
 
 
 def validate_resume(saved, config, identity, source_hashes, torch_version):

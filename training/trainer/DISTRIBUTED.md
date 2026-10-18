@@ -20,6 +20,13 @@ split the model across devices or increase the configured global batch.
    calls `train()` and is a *rank*; NCCL carries communication between ranks.
    The worker captures logs and enforces a process timeout, terminating the
    process group if needed.
+   The training entrypoint resolves `RANK`, `LOCAL_RANK`, `WORLD_SIZE`,
+   `MASTER_ADDR` and `MASTER_PORT` once into a typed `DistributedRuntime` and
+   passes it explicitly to `train(..., runtime=runtime)`. Training uses its
+   explicit rank, GPU index, world size and TCP rendezvous endpoint. The shared
+   JSON config supplies the requested GPU count; the runtime count must match it.
+   Per-process ranks and rendezvous addresses belong to the launch context and
+   are not saved as shared training settings.
 2. Rank zero alone reads the deterministic token mixture and constructs the
    global input/target batch. For the illustrated configuration, 48 windows of
    context 2,048 are scattered as 16 windows per GPU. Rank zero also counts all
