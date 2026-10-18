@@ -801,3 +801,8 @@ integration and structure reports, the international role of the euro, and
 TARGET annual reports. Each passed a native full-text sample. Their 150 catalog
 publication records are discovery opportunities, not saved rows or token counts.
 See [sample evidence](research/ecb-report-series-20261018.md).
+
+The exact ECB “Other publication” type (23) adds technical manuals, agreements
+and proceedings through `other_publications`. Three selected PDFs passed native
+extraction; the inspected catalog contains 772 publication records. See the
+[evidence and limitations](research/ecb-other-publications-20261018.md).

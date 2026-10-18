@@ -32,3 +32,11 @@ same-language format preference and distinct French PDF retention. Validation:
 receipts and actual subsequent worker coverage are recorded in the continuation
 report. Newly deployed code does not establish that an already running worker
 has adopted the new mapping.
+
+All four full type inventories were subsequently enumerated from that pinned
+FOEDB snapshot. They contain 85, 16, 25 and 24 candidate URLs respectively, with
+zero exact URL overlap against all 21 prior collections at source revision
+`f31e2c76ba8ba339d2bd012b3164cddf71a8771a`, and zero overlap between the additions.
+[Overlap evidence](ecb-report-inventory-overlap-20261018.json) records complete
+per-type enumeration receipts, candidate counts and sorted-URL fingerprints.
+The comparison concerns URLs; exact content deduplication happens during ingestion.

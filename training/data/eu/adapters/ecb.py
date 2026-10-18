@@ -48,6 +48,7 @@ COLLECTIONS = {
     },
     "international_role_euro": {"name": "The international role of the euro", "type_ids": ["143"]},
     "target_annual_reports": {"name": "TARGET Annual Report", "type_ids": ["142"]},
+    "other_publications": {"name": "ECB Other publication", "type_ids": ["23"]},
     "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
     "occasional_papers": {"name": "ECB Occasional Paper Series", "type_ids": ["3"]},
     "economic_bulletin_articles": {"name": "ECB Economic Bulletin articles", "type_ids": ["24"]},

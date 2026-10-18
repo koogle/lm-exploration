@@ -25,7 +25,8 @@
         "macroprudential_bulletin_articles",
         "financial_integration_reports",
         "international_role_euro",
-        "target_annual_reports"
+        "target_annual_reports",
+        "other_publications"
       ],
       "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text.",
       "collection_weights": {
@@ -47,7 +48,8 @@
         "macroprudential_bulletin_articles": 3,
         "financial_integration_reports": 3,
         "international_role_euro": 3,
-        "target_annual_reports": 3
+        "target_annual_reports": 3,
+        "other_publications": 3
       }
     },
     "ema": {

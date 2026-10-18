@@ -244,3 +244,45 @@ product-information weight 20 in its actual scheduling weights. The pinned sourc
 revision is `3abd78f0d5a1f43d4b56457c7fa942437da36118`; heartbeat
 `2026-10-18T06:28:37.309455+00:00`. This confirms worker adoption, rather than only
 a deployment or mapping-file change. Verified-token yield awaits the next audit.
+
+The [full four-series inventory comparison](../research/ecb-report-inventory-overlap-20261018.json)
+found exactly 150 candidate URLs and zero exact URL overlap with the 21 prior
+collections or each other. All four selected type inventories are complete for
+the pinned FOEDB snapshot. This establishes inventory separation, not text novelty.
+
+[ECB round-three adoption](../research/ecb-report-worker-adoption-20261018.json)
+is confirmed at source revision `3cbee474994c00a9e4a80d9aa1f109ca904e444b`:
+round three started at 06:34:01 UTC with all four new report series in its source
+mapping. Its adapter SHA-256 matches committed revision `589de406d87d2ac0fb13d34abb9058116b8998b5`,
+which also contains the guarded historical-box and convergence-retrieval repairs.
+At this observation discovery was still in progress and no new-series saved
+rows were claimed. The source has 10,795 documents. Existing supervisor
+`fc-01M56NPBCA8234P7HPEH5YB2C0` owns this final round of its current campaign.
+
+[ECB Other publication, exact FOEDB type 23](../research/ecb-other-publications-20261018.md),
+adds a separate opportunity: 772 catalog publication records, including technical
+manuals, agreements and proceedings. Three selected PDFs passed native extraction
+with 34,804, 182,361 and 352,419 characters. Both mappings add `other_publications`
+with weight 3. The updated collector, manual and disabled-schedule recovery apps
+all deployed successfully. This later addition is absent from the round-three
+snapshot above and awaits a subsequent worker; it does not launch another writer.
+Validation: 288 tests and lint/format/whitespace checks passed. Sample counts and
+catalog totals are not saved corpus rows or new verified tokens.
+
+The [complete type-23 inventory comparison](../research/ecb-other-inventory-overlap-20261018.json)
+contains 771 supported candidate URLs from 772 catalog records, with zero exact
+URL overlap against either the prior 21 collections or the four new report
+series. Together the five additions provide 921 distinct candidate URLs. Two
+catalog records share the same `whypricestabilityen.pdf` URL; all 772 have a
+supported representation. No corpus rows or token
+yield are inferred from those inventory counts.
+
+An [offline English FOEDB scope review](../research/ecb-english-catalog-scope-20261018.md)
+reconstructed all 20,162 unique publication records from 81 cached data chunks.
+The currently configured types cover 14,888 catalog records; 5,274 remain in
+87 unconfigured types, with 5,326 additional syntactically supported URLs. This
+excludes linked annual-report translations from the top-level URL count. It is
+catalog discovery evidence only, not full-text or novelty evidence. Survey and
+annual-account types offer future bounded investigations, while podcast landing
+pages and whole-report/article containment need care. No additional types were
+enabled by this offline review, and whole-site exhaustion remains unproven.
