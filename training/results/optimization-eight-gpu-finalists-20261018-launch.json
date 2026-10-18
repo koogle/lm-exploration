@@ -1,0 +1,15 @@
+{
+  "prefix": "opt100m-8gpu-finalists-20261018-a",
+  "call_id": "fc-01M580YT6R2BXWHT61TF4KFQ5X",
+  "provenance": {
+    "git_commit": "6bb5829efe23e94a23c59a3e2bf330533e0b61ff",
+    "purpose": "Three selected configs on 8 H100s, 100M nonpadding tokens each, global batch32; eight-rank qualification and per-variant fresh-process resume"
+  },
+  "app": "simple-llm-eight-gpu-finalists",
+  "gpu": "H100:8",
+  "variants": [
+    "rope-m4",
+    "compile-m4",
+    "compile-m2"
+  ]
+}

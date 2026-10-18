@@ -81,3 +81,14 @@ For the independent single-GPU deployment, deploy
 This is the current launch route: `opt100m-1gpu-20261018-b`. It avoids the older
 eight-GPU controller's deployed signature. The initial single-GPU submission
 failed before GPU allocation with an unexpected-keyword error and has no results.
+
+## Eight-GPU finalist comparison
+
+`modal_eight_gpu_finalists.py` runs exactly three variants: cropped/cached-RoPE
+microbatch 4 eager, microbatch 4 compiled, and microbatch 2 compiled. Each uses
+eight H100s, global batch 32 and a 100M nonpadding-token ceiling. It runs the
+12-case CUDA qualification on all eight ranks, including an empty rank, before
+training. Compiler worker count is limited to one per rank to bound host memory.
+The run prefix is `opt100m-8gpu-finalists-20261018-a`; each variant retains full
+per-rank token load, synchronized compute times and memory metrics. No production
+training or checkpoint is modified.
