@@ -12,6 +12,12 @@ adapters. Existing EUR-Lex/OPUS corpora are overlap baselines, not evidence that
 institutional long tail has been collected. No claim of novelty or overall token
 volume is established by this pilot.
 
+## Current status and agent handoff
+
+See the [detailed status report](reports/STATUS_AND_HANDOFF_20261018.md) and
+[ready-to-paste continuation goal](reports/NEW_AGENT_GOAL.md). Those are pinned
+handoff snapshots; refresh private HF state for live totals.
+
 ## Implemented now
 
 - Ten collection candidates in [sources.json](sources.json), ordered by priority.
