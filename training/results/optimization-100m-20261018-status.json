@@ -1,5 +1,5 @@
 {
-  "status": "submitted_waiting_for_eight_gpu_allocation",
+  "status": "controller_cancelled_before_gpu_verification",
   "app_url": "https://modal.com/apps/radiantai/main/ap-wx73A5oaSAsCxAMNaVNzSg",
   "app_id": "ap-wx73A5oaSAsCxAMNaVNzSg",
   "prefix": "opt100m-20261018-b",
@@ -7,8 +7,21 @@
   "pull_request": "https://github.com/koogle/lm-exploration/pull/17",
   "tokens_per_variant": 100000000,
   "gpu_per_variant": "H100:8",
-  "variants": ["baseline-m1", "crop-m1", "crop-m2", "crop-m4", "chunk-m2", "rope-m2", "compile-m2"],
-  "local_validation": {"optimization_tests": 3, "config_tests": 7, "architecture_tests": 8, "tied_embedding_tests": 6},
+  "variants": [
+    "baseline-m1",
+    "crop-m1",
+    "crop-m2",
+    "crop-m4",
+    "chunk-m2",
+    "rope-m2",
+    "compile-m2"
+  ],
+  "local_validation": {
+    "optimization_tests": 3,
+    "config_tests": 7,
+    "architecture_tests": 8,
+    "tied_embedding_tests": 6
+  },
   "gpu_correctness": "pending_allocation",
   "speedups": null,
   "results_path": "lm-exploration-training/opt100m-20261018-b/results.json",
@@ -17,5 +30,7 @@
   "initial_failed_attempt": {
     "app_id": "ap-L4mtOrVU11LSESw5Aelv9n",
     "reason": "Remote image missing modal_simple_llm_8k import; fixed before GPU training"
-  }
+  },
+  "cancelled_utc": "2026-10-18T09:31:44Z",
+  "superseded_by": "opt100m-20261018-c"
 }
