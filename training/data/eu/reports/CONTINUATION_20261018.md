@@ -380,3 +380,29 @@ Its live child tree is running. ECB's existing supervisor is still running.
 There are now 26 campaign records, with 6,000 reserved attempts across both sources;
 the successor retains three rounds, 1,000 attempts and 3,000 work seconds per round.
 No source pacing, schedule, cap or audit reservation was changed.
+
+## Owner request: collect another 10,000 documents
+
+The owner's new request is anchored to a fresh **20,703-document baseline** at
+08:38:59 UTC (ECB 11,671; EMA 9,032), making the target **30,703 saved documents**.
+[The immutable request](../research/additional-10000-documents-20261018.json)
+records both pinned source revisions. It was uploaded to private control path
+`milestones/additional-10000-20261018T083859Z.json` and downloaded again to verify
+its exact bytes. Only that milestone file was touched; source/control progress,
+reservations, schedules, source pacing, caps and raw-v2 storage remain unchanged.
+
+`status.py --document-target <request.json>` now reports additional saved rows,
+remaining rows and the actual pinned source revisions. It requires the matching
+baseline sources and rejects incomplete, wrong-repository or regressed reads.
+A request is reached only at the full additional count. Validation: **323 tests
+passed**, with lint/format/whitespace checks passing. This is a read-only local
+status change; no collector redeployment or independent writer was needed.
+
+[The first progress check](../research/additional-10000-progress-20261018-0842.json)
+contains **20,763 saved documents**: **60 added**, **9,940 still required** for this
+request. Exact-token lower bound remains 459,981,239. Both existing collectors
+are advancing. ECB's article collection has reached 439 saved rows under the
+new adapter, confirming initial ingestion through the expanded article rules.
+The latest owner request and command are included at the top of the continuation
+instructions so subsequent work retains the same baseline. Neither this
+10,000-document milestone nor the overall token goal has yet been reached.

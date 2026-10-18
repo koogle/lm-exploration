@@ -1,5 +1,32 @@
 # New-agent continuation goal
 
+
+## Latest owner request: another 10,000 documents
+
+On 18 October 2026, the owner requested another **10,000 saved documents**.
+The fresh 08:38:59 UTC baseline is **20,703** (ECB 11,671; EMA 9,032), so the
+milestone is **30,703 total saved documents**. Track growth after that baseline;
+existing rows, catalog entries, attempts and within-source exact duplicates do
+not satisfy the additional count. This milestone does not replace the existing
+one-billion-verified-token objective or increase any operational limit.
+
+The immutable request and pinned source revisions are in
+[additional-10000-documents-20261018.json](../research/additional-10000-documents-20261018.json)
+and private control path
+`milestones/additional-10000-20261018T083859Z.json`. Its upload was read back and
+verified. Refresh progress with:
+
+```bash
+HF_HUB_DISABLE_XET=1 uv run status.py both --mapping goal_pipeline_sources.json \
+  --cached-tokens --document-target research/additional-10000-documents-20261018.json
+```
+
+The `document_target` object reports `added_rows`, `remaining_rows` and pinned
+source revisions. Do not claim this request is fulfilled until `status` is
+`reached` and fresh source counts are at least 30,703. Keep the already running
+collectors and reservations; do not dispatch independent source writers.
+
+
 Paste the following into a new agent/goal:
 
 ---

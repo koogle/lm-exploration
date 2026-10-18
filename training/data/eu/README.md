@@ -812,3 +812,18 @@ ranges and guarded 2015–2018 Economic Bulletin article filenames. Six live PDF
 passed the unchanged complete-title validator; 62 remaining article 404s match
 the new rules. The unmatched focus-style article is exact text already saved as
 a box. See [recovery evidence](research/ecb-article-filename-recovery-20261018.md).
+
+### Additional-document milestone
+
+The owner's 18 October request for another 10,000 documents uses the pinned
+20,703-row baseline and a **30,703-row target**. Track additional saved rows with:
+
+```bash
+HF_HUB_DISABLE_XET=1 uv run status.py both --mapping goal_pipeline_sources.json \
+  --cached-tokens --document-target research/additional-10000-documents-20261018.json
+```
+
+This read-only option reports growth after the baseline and rejects partial,
+wrong-repository or regressed source reads. It does not change collector dispatch,
+source pacing, budgets or the one-billion-token guard. The request is also stored
+and verified in the private control repository under its recorded milestone path.

@@ -23,6 +23,63 @@ from hf_store import RECORD_SCHEMA, HFStore, json_bytes
 ROOT = Path(__file__).resolve().parent
 
 
+def document_target_status(target, sources):
+    """Track saved rows after an immutable baseline; never treat missing reads as zero."""
+    if target.get("schema_version") != 1:
+        raise ValueError("Incompatible document target")
+    baseline = target.get("baseline_total_rows")
+    additional = target.get("additional_documents")
+    total = target.get("target_total_rows")
+    if (
+        type(baseline) is not int
+        or baseline < 0
+        or type(additional) is not int
+        or additional < 1
+        or type(total) is not int
+        or total != baseline + additional
+    ):
+        raise ValueError("Invalid document target counts")
+    expected = {entry["source_id"]: entry for entry in target["sources"]}
+    observed = {entry["source_id"]: entry for entry in sources}
+    if (
+        not expected
+        or len(expected) != len(target["sources"])
+        or len(observed) != len(sources)
+        or set(expected) != set(observed)
+    ):
+        raise ValueError("Document target requires exactly its baseline sources")
+    current = 0
+    baseline_sum = 0
+    for source, entry in expected.items():
+        result = observed[source]
+        rows, original = result.get("rows"), entry.get("baseline_rows")
+        if (
+            result.get("error_type")
+            or result.get("repo_id") != entry["repo_id"]
+            or not result.get("revision")
+            or type(rows) is not int
+            or type(original) is not int
+            or original < 0
+            or rows < original
+        ):
+            raise ValueError("Missing, incompatible or regressed document source")
+        current += rows
+        baseline_sum += original
+    if baseline_sum != baseline:
+        raise ValueError("Document baseline total does not match its sources")
+    return {
+        "request_id": target["request_id"],
+        "baseline_rows": baseline,
+        "additional_requested": additional,
+        "target_rows": total,
+        "current_rows": current,
+        "added_rows": current - baseline,
+        "remaining_rows": max(0, total - current),
+        "status": "reached" if current >= total else "collecting",
+        "source_revisions": {key: value["revision"] for key, value in observed.items()},
+    }
+
+
 def audit_shards(store, state, revision, encoder=None):
     """Audit precisely the shards named by progress at its loaded commit."""
     seen = set()
@@ -210,6 +267,9 @@ def main():
     )
     parser.add_argument("--mapping", type=Path, default=ROOT / "pipeline_sources.json")
     parser.add_argument(
+        "--document-target", type=Path, help="Track additional saved rows against a baseline JSON"
+    )
+    parser.add_argument(
         "--audit", action="store_true", help="Download and verify all stored shards"
     )
     parser.add_argument(
@@ -280,6 +340,17 @@ def main():
         output["exact_tokens_lower_bound"] = sum(
             source["cached_tokens"]["exact_tokens_lower_bound"] for source in output["sources"]
         )
+    if args.document_target:
+        try:
+            output["document_target"] = document_target_status(
+                json.loads(args.document_target.read_text()), output["sources"]
+            )
+        except Exception as error:  # noqa: BLE001 - partial reads must not claim target completion
+            output["document_target"] = {
+                "status": "unavailable",
+                "error_type": type(error).__name__,
+            }
+            failed = True
     print(json.dumps(output, indent=2, ensure_ascii=False))
     return 1 if failed else 0
 
