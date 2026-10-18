@@ -470,3 +470,30 @@ the verified repair in the control repository. Tracked jobs and document failure
 remain intact. Only one retryable configured ECB item remained at recovery; wider
 English catalog types and extraction failures remain coverage gaps. Validation:
 345 tests, Ruff lint/format and whitespace checks.
+
+
+## ECB survey and T2S expansion
+
+After the owner requested continuation, offline reconstruction of the same pinned
+81-chunk English FOEDB snapshot identified four exact series for integration:
+bank-lending surveys (99; 94 URLs), professional-forecaster surveys (158; 52),
+enterprise-finance surveys (157; 39), and T2S annual reports (159; 13). Their 198
+candidate URLs have zero exact overlap with prior configured collections or one
+another. This is metadata coverage, not 198 saved documents. Native representations
+and exact-content deduplication retain the existing behavior.
+
+One paced local Collector fetched three selected newest/middle/oldest samples per
+series; eleven of twelve parsed native full text. The 2014Q3 bank-lending PDF
+returned HTTP 503 and remains a documented retrieval failure. No retry history
+was reset, and no endpoint was guessed. The samples are selected, not random
+yield estimates. Three annual-account samples were additionally tested; older
+openings explicitly identify Annual Report pages, so that series was excluded to
+avoid known section overlap. Passage overlap for the enabled series is unmeasured.
+
+Both pipeline mappings add the four collections at weight 3; other weights are
+unchanged. The goal/manual apps are redeployed. The existing controller starts
+one tracked ECB writer and handles discovery; no independent writer or replay
+was launched. Existing pacing, backoff, budgets and recovery schedule remain.
+Validation: 349 tests, Ruff lint/format and whitespace checks. Sample URLs, hashes,
+openings, extraction sizes and the deferred annual-account evidence are retained
+in `research/ecb-survey-expansion-20261018.json`; bodies remain ignored artifacts.

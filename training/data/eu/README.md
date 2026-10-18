@@ -864,3 +864,22 @@ items imposes a ten-minute dispatch backoff, extended when the earliest future
 item retry is later. This prevents minute-level empty campaigns from consuming
 HF repository commit quotas. Fresh discovery work bypasses the empty-round guard.
 Waiting for a retry does not prove scope or website exhaustion.
+
+
+### Survey and T2S expansion after configured ECB depletion
+
+Four exact English FOEDB types add bank-lending surveys (99; 94 URLs), surveys
+of professional forecasters (158; 52), enterprise-finance surveys (157; 39), and
+T2S annual reports (159; 13). The pinned snapshot contains **198 distinct URLs**,
+with zero exact URL overlap against prior configured types or one another. These
+are catalog candidates, not newly saved documents. Both pipeline mappings give
+each series weight 3. All source pacing, bounded rounds and private storage remain.
+
+Eleven of twelve selected full-text samples extracted successfully with the
+existing native HTML/PDF parser; the remaining bank-lending PDF returned HTTP 503.
+It is preserved as a retrieval failure, with no guessed replacement or reset.
+Native HTML remains preferred per language, and historical PDFs retain their
+existing language metadata rules. Three annual-account samples were also tested;
+historical openings identify sections of already collected Annual Reports, so
+that series is deferred. Exact deduplication remains active; passage overlap is
+not measured. See [sample evidence](research/ecb-survey-expansion-20261018.json).

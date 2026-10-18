@@ -1,0 +1,307 @@
+{
+  "observed_at": "2026-10-18T18:04:00.527755+00:00",
+  "snapshot": "1792213219/2sP68GoB",
+  "collections": {
+    "bank_lending_surveys": {
+      "type_id": "99",
+      "records": 94,
+      "unique_urls": 94,
+      "overlap_previous_urls": 0,
+      "formats": {
+        "html": 32,
+        "pdf": 62
+      }
+    },
+    "professional_forecaster_surveys": {
+      "type_id": "158",
+      "records": 52,
+      "unique_urls": 52,
+      "overlap_previous_urls": 0,
+      "formats": {
+        "html": 36,
+        "pdf": 16
+      }
+    },
+    "enterprise_finance_surveys": {
+      "type_id": "157",
+      "records": 39,
+      "unique_urls": 39,
+      "overlap_previous_urls": 0,
+      "formats": {
+        "html": 21,
+        "pdf": 18
+      }
+    },
+    "t2s_annual_reports": {
+      "type_id": "159",
+      "records": 13,
+      "unique_urls": 13,
+      "overlap_previous_urls": 0,
+      "formats": {
+        "html": 13,
+        "pdf": 0
+      }
+    },
+    "annual_accounts": {
+      "type_id": "133",
+      "records": 27,
+      "unique_urls": 27,
+      "overlap_previous_urls": 0,
+      "formats": {
+        "html": 7,
+        "pdf": 20
+      }
+    }
+  },
+  "samples": [
+    {
+      "collection": "bank_lending_surveys",
+      "url": "https://www.ecb.europa.eu/stats/ecb_surveys/bank_lending_survey/html/ecb.blssurvey2026q2~baa6b60429.en.html",
+      "catalog_title": "The euro area bank lending survey - Second quarter of 2026",
+      "retrieved_at": "2026-10-18T18:04:00.527863+00:00",
+      "raw_sha256": "eccfe3ab4026afe62d5dc90f91686290d800aac8d4d5853823bde780532775c7",
+      "status": "fetched",
+      "characters": 96110,
+      "title": "The euro area bank lending survey - Second quarter of 2026",
+      "language": "en",
+      "format": "html",
+      "text_sha256": "73cd7e6eb68eebe46db2d8233915593f2bc614ad6e0e92104ca56359b79fd37e",
+      "opening": "The euro area bank lending survey - Second quarter of 2026 1 Overview of results In the bank lending survey (BLS) for the second quarter of 2026, euro area banks reported a moderate net tightening of credit standards for loans or credit lines to firms (net percentage of banks of 7%; see Overview tab",
+      "passed": true
+    },
+    {
+      "collection": "bank_lending_surveys",
+      "url": "https://www.ecb.europa.eu/stats/ecb_surveys/bank_lending_survey/pdf/ecb.blssurvey2014q3.en.pdf",
+      "catalog_title": "The euro area bank lending survey",
+      "retrieved_at": "2026-10-18T18:04:06.514088+00:00",
+      "raw_sha256": null,
+      "status": "failed",
+      "error": "http_503",
+      "passed": false
+    },
+    {
+      "collection": "bank_lending_surveys",
+      "url": "https://www.ecb.europa.eu/stats/ecb_surveys/bank_lending_survey/pdf/ecb.blssurvey2003q1.en.pdf",
+      "catalog_title": "The euro area bank lending survey",
+      "retrieved_at": "2026-10-18T18:04:10.916800+00:00",
+      "raw_sha256": "5d97da0a5033e3b312c1fac2b9c671fe608afe6618ceabe20f9aca7a46943dfc",
+      "status": "fetched",
+      "characters": 46212,
+      "title": "",
+      "language": "",
+      "format": "pdf",
+      "text_sha256": "202cc819ddfebd50abe893bb399cbe4f28babbfdd75776049436808d1d9a5c5b",
+      "opening": "15 May 2003 THE EURO AREA BANK LENDING SURVEY \u2013 APRIL 2003 \u2013 1. INTRODUCTION The European Central Bank (ECB) is for the first time publishing the results from its bank lending survey for the euro area which are presented below. The main purpose of the survey, as stated in a press release dated 21 No",
+      "passed": true
+    },
+    {
+      "collection": "professional_forecaster_surveys",
+      "url": "https://www.ecb.europa.eu/stats/ecb_surveys/survey_of_professional_forecasters/html/ecb.spf2026q3.en.html",
+      "catalog_title": "The ECB Survey of Professional Forecasters - Third quarter of 2026",
+      "retrieved_at": "2026-10-18T18:04:16.952772+00:00",
+      "raw_sha256": "85aecbe6ed50d1a9ef4440d520138fdbdda551b6f456f3110bce5e7b9176e37d",
+      "status": "fetched",
+      "characters": 31645,
+      "title": "The ECB Survey of Professional Forecasters - Third quarter of 2026",
+      "language": "en",
+      "format": "html",
+      "text_sha256": "7a4d36de3886ae6f20f1c4833de7895286987275a6cbdbc4bc1fc69dc2530d6b",
+      "opening": "The ECB Survey of Professional Forecasters - Third quarter of 2026 Summary In the ECB\u2019s Survey of Professional Forecasters (SPF) for the third quarter of 2026, headline HICP inflation expectations were broadly unchanged from the previous round, while expectations for core inflation, as measured by t",
+      "passed": true
+    },
+    {
+      "collection": "professional_forecaster_surveys",
+      "url": "https://www.ecb.europa.eu/stats/ecb_surveys/survey_of_professional_forecasters/html/ecb.spf2020q3~671db06790.en.html",
+      "catalog_title": "The ECB Survey of Professional Forecasters - Third quarter of 2020",
+      "retrieved_at": "2026-10-18T18:04:20.996596+00:00",
+      "raw_sha256": "2c4ff74d2c5feda94137d6e8c1b3c97e7a9b9bf7d3868960146652e141978f0c",
+      "status": "fetched",
+      "characters": 21620,
+      "title": "The ECB Survey of Professional Forecasters - Third quarter of 2020",
+      "language": "en",
+      "format": "html",
+      "text_sha256": "3fd91880456b22e0841c8c498b5c3d991b8b53bdc0110810653826a956219b35",
+      "opening": "The ECB Survey of Professional Forecasters - Third quarter of 2020 Summary Reflecting the ongoing impact of the coronavirus (COVID-19) pandemic, mitigation measures and continuing uncertainties, expectations for euro area inflation, growth and unemployment were all revised further in the latest (Q3 ",
+      "passed": true
+    },
+    {
+      "collection": "professional_forecaster_surveys",
+      "url": "https://www.ecb.europa.eu/stats/ecb_surveys/survey_of_professional_forecasters/pdf/ecb.spf200904_specialsurvey~4a34107a07.en.pdf",
+      "catalog_title": "Results of a special questionnaire for participants in the ECB Survey of Professional Forecasters",
+      "retrieved_at": "2026-10-18T18:04:25.949248+00:00",
+      "raw_sha256": "9a86cd6f1e91ad8d27c70843ddc4c5120e57fee908400f1f52fedcd09b1b2e97",
+      "status": "fetched",
+      "characters": 27638,
+      "title": "",
+      "language": "",
+      "format": "pdf",
+      "text_sha256": "eb1eb379da91a7e63eadf4679509eb41c9ccddc3759acb3c9b6658bb2ba5512e",
+      "opening": "1 ECB Results of a special SPF questionnaire April 2009 This document provides a summary of the aggregate results of a special questionnaire which was sent to the participants in the ECB Survey of Professional Forecasters (SPF) in autumn 2008, in the context of the ten-year anniversary of the SPF\u2019s ",
+      "passed": true
+    },
+    {
+      "collection": "enterprise_finance_surveys",
+      "url": "https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202607.en.html",
+      "catalog_title": "Survey on the Access to Finance of Enterprises in the euro area - Second quarter of 2026",
+      "retrieved_at": "2026-10-18T18:04:31.384620+00:00",
+      "raw_sha256": "b8f3dae334d6b43f238fe828c519c14d64eb68ee24fda8e2d831cba716eecca9",
+      "status": "fetched",
+      "characters": 61362,
+      "title": "Survey on the Access to Finance of Enterprises in the euro area - Second quarter of 2026",
+      "language": "en",
+      "format": "html",
+      "text_sha256": "ad6b6b353993fda87fd0641ee37c736ca8dcc2b787d59903f19dd52eace34524",
+      "opening": "Survey on the Access to Finance of Enterprises in the euro area - Second quarter of 2026 1 Overview of the results This report presents the main results of the 39th round of the Survey on the Access to Finance of Enterprises (SAFE) in the euro area, which was conducted between 21 May and 26 June 202",
+      "passed": true
+    },
+    {
+      "collection": "enterprise_finance_surveys",
+      "url": "https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe201905~082335a4d1.en.html",
+      "catalog_title": "Survey on the Access to Finance of Enterprises in the euro area \u2212 October 2018 to March 2019",
+      "retrieved_at": "2026-10-18T18:04:36.154946+00:00",
+      "raw_sha256": "0124917a29d0adb68a6663f2ddc71c634d21ebf95b216cf0b8c600dca7fc385f",
+      "status": "fetched",
+      "characters": 82066,
+      "title": "Survey on the Access to Finance of Enterprises in the euro area \u2212 October 2018 to March 2019",
+      "language": "en",
+      "format": "html",
+      "text_sha256": "be07e83f7f780ad505db854db7f519b299b35551b7c3bdcfd1def7941d14be11",
+      "opening": "Survey on the Access to Finance of Enterprises in the euro area \u2212 October 2018 to March 2019 Introduction This report presents the main results of the 20th round of the Survey on the Access to Finance of Enterprises (SAFE), which was conducted between 11 March and 16 April 2019. The survey covers th",
+      "passed": true
+    },
+    {
+      "collection": "enterprise_finance_surveys",
+      "url": "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/accesstofinancesmallmediumsizedenterprises200909en.pdf",
+      "catalog_title": "ECB survey on access to finance for small and medium-sized enterprises in the euro area \u2013 first half 2009",
+      "retrieved_at": "2026-10-18T18:04:41.127830+00:00",
+      "raw_sha256": "0003c68da9fc3678893b10ed4149ff40826be2487b91e0df43dd8277b13a40a7",
+      "status": "fetched",
+      "characters": 76747,
+      "title": "",
+      "language": "",
+      "format": "pdf",
+      "text_sha256": "ad3f3730001dc154bc8d1ae6ad56c3fd5696a6809a617d766f6ceef769fa09a6",
+      "opening": "SURVEY ON THE ACCESS TO FINANCE OF SMALL AND MEDIUM-SIZED ENTERPRISES IN THE EURO AREA SEPTEMbER 2009 SURVEY ON THE ACCESS TO FINANCE OF SMALL AND MEDIUM-SIZED ENTERPRISES IN THE EURO AREA SEPTEMBER 2009 In 2009 all ECB publications feature a motif taken from the \u20ac200 banknote. \u00a9 European Central Ba",
+      "passed": true
+    },
+    {
+      "collection": "t2s_annual_reports",
+      "url": "https://www.ecb.europa.eu/press/payments-news/ecb.t2sar2023.en.html",
+      "catalog_title": "TARGET2-Securities Annual Report 2023",
+      "retrieved_at": "2026-10-18T18:04:46.432127+00:00",
+      "raw_sha256": "62fc87e4f10867a5983f8c11d163850f168e9addfe844d11269dce37f368ada2",
+      "status": "fetched",
+      "characters": 76699,
+      "title": "TARGET2-Securities Annual Report 2023",
+      "language": "en",
+      "format": "html",
+      "text_sha256": "58384953e1c0f9a3a019a4d5d99c17a080dda62ac378f12e75752cfc71587785",
+      "opening": "TARGET2-Securities Annual Report 2023 Introduction Financial market infrastructures (FMIs) are the backbone of the financial system. They provide the networks through which financial institutions and financial markets connect with each other and through which financial transactions are cleared and s",
+      "passed": true
+    },
+    {
+      "collection": "t2s_annual_reports",
+      "url": "https://www.ecb.europa.eu/press/payments-news/t2s2017.en.html",
+      "catalog_title": "T2S Annual Report 2017",
+      "retrieved_at": "2026-10-18T18:04:51.137624+00:00",
+      "raw_sha256": "20d2b44d54750d262caa6307441476b10246f067572a2a19941c96ff3110054d",
+      "status": "fetched",
+      "characters": 17441,
+      "title": "T2S Annual Report 2017",
+      "language": "en",
+      "format": "html",
+      "text_sha256": "ed4556bae64bdb79314edb2cda57e75cef9c95c19fe75104070bb919427a9a55",
+      "opening": "T2S in 2017 The year in review In 2017, one of the largest infrastructure projects ever launched by the Eurosystem came full circle with the conclusion of the TARGET2-Securities (T2S) migration phase. The final migration wave was rolled out on 18 September 2017 with Estonia, Latvia, Lithuania, Polan",
+      "passed": true
+    },
+    {
+      "collection": "t2s_annual_reports",
+      "url": "https://www.ecb.europa.eu/press/payments-news/t2s2011.en.html",
+      "catalog_title": "T2S Annual Report 2011",
+      "retrieved_at": "2026-10-18T18:05:00.965636+00:00",
+      "raw_sha256": "59cdf059c691b3d8ba3eafb4bc5d0ae2a0c05ad26d37f6850e36762f7e3f6b65",
+      "status": "fetched",
+      "characters": 37969,
+      "title": "T2S Annual Report 2011",
+      "language": "en",
+      "format": "html",
+      "text_sha256": "14eb8883bf39d486b1531e391ca70e7748dd65d930ee45d026c09be4d96f0d49",
+      "opening": "T2S in 2011 The ultimate goal of the T2S project is to play a decisive part in making Europe a better place to invest. To achieve this goal, the project sets a series of general objectives and targets, which describe how T2S aims to improve the European post-trade landscape, by making it more secure",
+      "passed": true
+    },
+    {
+      "collection": "annual_accounts",
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/annual-accounts/html/ecb.annualaccounts2025~ba3b593c99.en.html",
+      "catalog_title": "Annual Accounts 2025",
+      "retrieved_at": "2026-10-18T18:05:11.034886+00:00",
+      "raw_sha256": "9444d233a1cf900864743b67cec520cb6f033499fd106fdf709e9817691a3aee",
+      "status": "fetched",
+      "characters": 168455,
+      "title": "Annual Accounts 2025",
+      "language": "en",
+      "format": "html",
+      "text_sha256": "7d2075238e3d404f36dc34fdedec8f075fdb0e301298e8197c381f872686d2f0",
+      "opening": "Annual Accounts 2025 Key figures Balance sheet Loss for the year The ECB\u2019s balance sheet contracted by \u20ac37.3 billion in 2025, mainly owing to the decline in monetary policy securities, as the Eurosystem no longer reinvested principal payments from maturing securities under the APP and the PEPP. The ",
+      "passed": true
+    },
+    {
+      "collection": "annual_accounts",
+      "url": "https://www.ecb.europa.eu/pub/pdf/annrep/ecb.annualaccounts2012.en.pdf",
+      "catalog_title": "Annual Accounts 2012",
+      "retrieved_at": "2026-10-18T18:05:16.293769+00:00",
+      "raw_sha256": "2b78f5876515d2fdd630db7fe68f58b16308197b0505d811e87951b7b6d03413",
+      "status": "fetched",
+      "characters": 94758,
+      "title": "",
+      "language": "",
+      "format": "pdf",
+      "text_sha256": "ec72d0258a48f40ba2f9ff58f3eaf3aecf2a21035b34b53a18cbd129a001cec4",
+      "opening": "173 ECB Annual Report 2012 annual aCCountS manaGement report For the year endinG 31 deCember 2012 1 nature oF the buSineSS The ECB\u2019s activities in 2012 are described in detail in the relevant chapters of the Annual Report. 2 obJeCtiveS and taSKS The ECB\u2019s objectives and tasks are described in the St",
+      "passed": true
+    },
+    {
+      "collection": "annual_accounts",
+      "url": "https://www.ecb.europa.eu/pub/pdf/annrep/ecb.annualaccounts1999.en.pdf",
+      "catalog_title": "Annual Accounts 1999",
+      "retrieved_at": "2026-10-18T18:05:21.878185+00:00",
+      "raw_sha256": "695af0cd2daad80427f0c19db9760b031a5712850811a0df84ee04ba1a034154",
+      "status": "fetched",
+      "characters": 27691,
+      "title": "",
+      "language": "",
+      "format": "pdf",
+      "text_sha256": "83cf413fc5c3c2212e5ccedd34add72731658216eb568265157d5a4d811eac06",
+      "opening": "ECB Annual Report \u2022 1999146 Balance Sheet as at 31 December 1999 Assets Note 1999 1998 number \u20ac\u20ac 1 Gold and gold receivables 1 6,956,995,273 0 2 Claims on non-euro area residents denominated in foreign currency 2 Balances with banks and security investments, external loans and other external assets ",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Three selected samples per collection; not a random yield estimate. Catalog metadata is not corpus text. Exact URL overlap checked; passage overlap is unmeasured."
+  ],
+  "enabled_collections": [
+    "bank_lending_surveys",
+    "professional_forecaster_surveys",
+    "enterprise_finance_surveys",
+    "t2s_annual_reports"
+  ],
+  "enabled_unique_urls": 198,
+  "enabled_pairwise_url_overlap": 0,
+  "enabled_samples_passed": 11,
+  "enabled_sample_count": 12,
+  "deferred_collections": {
+    "annual_accounts": "Historical sample openings explicitly identify Annual Report pages 173 (2012) and 146 (1999); avoid adding known sections of already-collected whole reports."
+  },
+  "modal_campaign": {
+    "campaign_id": "goal-ecb-1792346810-7e9f75ad5d",
+    "call_id": "fc-01M5833VV7K0MTH8AVFMDNJRAX",
+    "settings": {
+      "max_documents": 1000,
+      "rounds": 3,
+      "work_seconds": 3000
+    }
+  },
+  "validation": {
+    "tests_passed": 349,
+    "lint_format_whitespace_passed": true
+  }
+}

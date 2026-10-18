@@ -48,6 +48,16 @@ COLLECTIONS = {
     },
     "international_role_euro": {"name": "The international role of the euro", "type_ids": ["143"]},
     "target_annual_reports": {"name": "TARGET Annual Report", "type_ids": ["142"]},
+    "bank_lending_surveys": {"name": "Euro area bank lending survey", "type_ids": ["99"]},
+    "professional_forecaster_surveys": {
+        "name": "ECB Survey of Professional Forecasters",
+        "type_ids": ["158"],
+    },
+    "enterprise_finance_surveys": {
+        "name": "Survey on the Access to Finance of Enterprises in the euro area",
+        "type_ids": ["157"],
+    },
+    "t2s_annual_reports": {"name": "T2S Annual Report", "type_ids": ["159"]},
     "other_publications": {"name": "ECB Other publication", "type_ids": ["23"]},
     "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
     "occasional_papers": {"name": "ECB Occasional Paper Series", "type_ids": ["3"]},

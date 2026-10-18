@@ -257,6 +257,10 @@ def test_inferred_pdf_requires_title_in_first_two_pages(monkeypatch, path):
         ("international_role_euro", "143"),
         ("target_annual_reports", "142"),
         ("other_publications", "23"),
+        ("bank_lending_surveys", "99"),
+        ("professional_forecaster_surveys", "158"),
+        ("enterprise_finance_surveys", "157"),
+        ("t2s_annual_reports", "159"),
     ],
 )
 def test_full_report_types_keep_native_text_and_distinct_translations(collection_id, type_id):
