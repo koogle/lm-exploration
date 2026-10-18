@@ -1,0 +1,10 @@
+{
+  "prefix": "opt100m-1gpu-20261018-b",
+  "call_id": "fc-01M57AYDN2DJDTRJ80KK1R88JJ",
+  "provenance": {
+    "git_commit": "b46e8b011d91c305fe78314ac27eb7ddb3c670f8",
+    "purpose": "Single-H100 100M nonpadding-token comparisons with fixed global batch 32"
+  },
+  "deployment": "simple-llm-single-gpu-optimizations",
+  "gpu": "H100:1"
+}
