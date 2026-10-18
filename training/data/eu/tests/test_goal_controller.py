@@ -282,3 +282,31 @@ def test_cached_tokens_are_current_shard_lower_bound():
 def test_invalid_token_target_rejected(target):
     with pytest.raises(ValueError, match="target_tokens"):
         tick(Store(), config={"sources": ["ecb"], "target_tokens": target})
+
+
+def test_verified_recovery_preserves_failures_and_resets_only_prior_streak():
+    from goal_controller import acknowledge_recovery
+
+    jobs = [external(call=f"failed-{i}", status="failed") for i in range(3)]
+    store = Store(jobs)
+    assert tick(store)["sources"]["ecb"] == "blocked_repeated_failures"
+    acknowledge_recovery(store.state["collection_goal"], "ecb", "Storage layout fixed", "commit-id")
+    assert all(job["status"] == "failed" for job in store.state["collection_goal"]["jobs"])
+    result = tick(store)
+    assert result["jobs"][-1]["call_id"] == "call-new"
+    # New failures retain the original repeated-failure safeguard.
+    result["jobs"][-1]["status"] = "failed"
+    result["jobs"].extend([external(call=f"new-{i}", status="failed") for i in range(2)])
+    store.state["collection_goal"] = result
+    assert tick(store)["sources"]["ecb"] == "blocked_repeated_failures"
+
+
+def test_recovery_rejects_unresolved_calls_and_missing_evidence():
+    from goal_controller import acknowledge_recovery
+
+    goal = {"config": {"sources": ["ecb"]}, "jobs": [external(status="running")]}
+    with pytest.raises(ValueError, match="terminal"):
+        acknowledge_recovery(goal, "ecb", "fix", "evidence")
+    goal["jobs"][0]["status"] = "failed"
+    with pytest.raises(ValueError, match="evidence"):
+        acknowledge_recovery(goal, "ecb", "fix", "")

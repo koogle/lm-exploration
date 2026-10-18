@@ -752,3 +752,17 @@ subsequent workers. No new full-text sample or uploaded-row total is claimed by
 this inventory-only investigation. Unsupported formats remain explicit gaps.
 The broad `epar_documents` umbrella remains excluded to avoid overlapping types
 and package-listing-heavy discovery. See [inventory evidence](research/ema-targeted-expansion-20261017.md).
+
+### Raw-storage directory limit and verified recovery
+
+ECB reached Hugging Face's 10,000-files-per-directory limit in the legacy `raw/`
+folder. New source blobs now use `raw-v2/<first-two-hash-characters>/<hash>.gz`.
+Existing flat originals remain unchanged. Raw hashes resolve through the durable
+`raw_blob_metrics` mapping; known originals are reused rather than uploaded under
+a second path. Pinned metric backfills support both layouts.
+
+The controller supports an explicit `acknowledge_recovery` operation after a fix
+is verified and every source campaign is confirmed terminal. It records the
+reason and evidence on the last failed job, preserves all failed statuses, and
+resets the prior failure streak. Subsequent failures still trigger the existing
+three-failure safeguard. No token, document or campaign limits are increased.

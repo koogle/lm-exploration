@@ -21,7 +21,7 @@ from eu_corpus import (
     normalize_text,
     parse_content,
 )
-from hf_store import HFStore, json_bytes
+from hf_store import HFStore, json_bytes, resolve_raw_blob_path
 
 ROOT = Path(__file__).resolve().parent
 
@@ -438,7 +438,9 @@ def run_source(
                     active_run()["duplicates"] += 1
                 else:
                     records.append(record)
-                    raw_files[f"raw/{record['raw_sha256']}.gz"] = gzip.compress(data, mtime=0)
+                    raw_files[resolve_raw_blob_path(state, record["raw_sha256"])] = gzip.compress(
+                        data, mtime=0
+                    )
                     state["text_index"][text_hash] = record["id"]
                     active_run()["extracted"] += 1
                 state["completed"][key] = {

@@ -113,6 +113,22 @@ def _reservation(job):
     return reservation
 
 
+def acknowledge_recovery(goal, source, reason, evidence, clock=time.time):
+    """Record an operator-verified fix without changing failed job history."""
+    if source not in goal["config"]["sources"] or not reason.strip() or not evidence.strip():
+        raise ValueError("Recovery requires a configured source, reason and evidence")
+    jobs = [job for job in goal["jobs"] if job["source_id"] == source]
+    if not jobs or any(job.get("status") not in TERMINAL for job in jobs):
+        raise ValueError("Every source campaign must be confirmed terminal before recovery")
+    if jobs[-1].get("status") != "failed":
+        raise ValueError("Recovery requires the latest source campaign to have failed")
+    jobs[-1]["recovery"] = {
+        "acknowledged_at_epoch": clock(),
+        "reason": reason,
+        "evidence": evidence,
+    }
+
+
 def _summary(goal, summaries):
     selected = set(goal["config"]["sources"])
     jobs = [job for job in goal["jobs"] if job["source_id"] in selected]
@@ -126,7 +142,10 @@ def _summary(goal, summaries):
         if job.get("status") == "complete":
             failures[job["source_id"]] = 0
         elif job.get("status") == "failed":
-            failures[job["source_id"]] += 1
+            if job.get("recovery"):
+                failures[job["source_id"]] = 0
+            else:
+                failures[job["source_id"]] += 1
     source_status = {}
     for source, snapshot in summaries.items():
         if snapshot["untracked_active_campaigns"]:

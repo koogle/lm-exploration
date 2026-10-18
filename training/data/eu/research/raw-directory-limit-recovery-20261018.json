@@ -1,0 +1,15 @@
+{
+  "observed_at": "2026-10-18T04:52:45.632888+00:00",
+  "source": "ecb",
+  "baseline_rows": 9997,
+  "root_cause": {
+    "http_status": 400,
+    "directory": "/raw/",
+    "file_limit": 10000
+  },
+  "fix": "Write new originals only under raw-v2/<hash-prefix>/<hash>.gz; retain legacy raw unchanged",
+  "tests_passed": 252,
+  "deployment_app": "lm-exploration-eu-100k",
+  "deployment_exit_code": 0,
+  "recovery_status": "Awaiting live recovery and new document checkpoints"
+}
