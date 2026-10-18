@@ -1,4 +1,4 @@
-"""Generate text with the standalone custom PyTorch base model."""
+"""Generate text with the standalone Simple LLM 10M base model."""
 
 import argparse
 import json
@@ -9,7 +9,7 @@ from model_100m.model import GPT, ModelConfig
 from safetensors.torch import load_file
 from tokenizers import Tokenizer
 
-p = argparse.ArgumentParser()
+p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("--prompt", default="The solar system consists of")
 p.add_argument("--tokens", type=int, default=128)
 p.add_argument("--seed", type=int, default=42)

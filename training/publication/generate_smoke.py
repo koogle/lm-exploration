@@ -1,4 +1,4 @@
-"""Load the custom smoke model; output is expected to be incoherent."""
+"""Load the Simple LLM 124M smoke checkpoint; output is expected to be incoherent."""
 
 import argparse
 import json
@@ -9,7 +9,7 @@ from model_100m.model import GPT, ModelConfig
 from safetensors.torch import load_file
 from tokenizers import Tokenizer
 
-p = argparse.ArgumentParser()
+p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("--prompt", default="Hello")
 p.add_argument("--tokens", type=int, default=32)
 p.add_argument("--seed", type=int, default=42)

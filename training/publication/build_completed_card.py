@@ -30,6 +30,7 @@ def main():
     card = f"""---
 language: en
 library_name: pytorch
+model_name: Simple LLM 10M
 tags:
 - causal-lm
 - from-scratch
@@ -37,7 +38,7 @@ tags:
 - experimental
 - base-model
 ---
-# Scholarly/code modern GPT — 9.85M parameters, 5B-token experiment
+# Simple LLM 10M — 9.85M parameters, 5B-token experiment
 
 A **base language model trained from random initialization**, with **9,849,536 parameters**, **4,999,934,057 next-token training exposures** and **72,805 optimizer updates**. It is not instruction-tuned. Generated samples contain repetition, invented terminology and factual errors; the model is a small research artifact rather than a reliable assistant.
 
@@ -99,7 +100,7 @@ Optional `--device cuda` or `--device mps` uses supported local hardware. Weight
 Files include the exact model code/dependency, configuration, frozen tokenizer, measured validation and all samples, training audit/curve, and SHA256 provenance. Export verified strict loading, finite parameters, exact safetensors round-trip weights and CPU logits, and tied-embedding storage. Source: https://github.com/koogle/lm-exploration . Run: `scholarly-modern-10m-5b-20261017`; final checkpoint: `scholarly-modern-10m-5b-20261017-s02/step-000072805.pt`.
 """
     (output / "README.md").write_text(card)
-    (root / "publication/scholarly-modern-10m-5b-card.md").write_text(card)
+    (root / "publication/simple-llm-10m-5b-card.md").write_text(card)
     shutil.copyfile(
         root / "results/scholarly-modern-10m-5b-validation-20261018.json",
         output / "validation.json",

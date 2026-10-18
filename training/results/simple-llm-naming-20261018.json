@@ -1,0 +1,16 @@
+[
+  {
+    "repo_id": "jfrick/scholarly-code-modern-gpt-10m-5b",
+    "revision": "6db2da924f022514f3eb222a2a79105c5a3d11fa",
+    "display_name": "Simple LLM 10M",
+    "card_verified": true,
+    "weights_unchanged": true
+  },
+  {
+    "repo_id": "jfrick/scholarly-code-modern-gpt-124m-step2",
+    "revision": "c2d2e03a60b9000bfadd05e40933891c5aa53915",
+    "display_name": "Simple LLM 124M",
+    "card_verified": true,
+    "weights_unchanged": true
+  }
+]

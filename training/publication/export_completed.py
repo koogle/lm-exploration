@@ -1,4 +1,4 @@
-"""Export the trusted completed 9.85M model; never publish optimizer/RNG state."""
+"""Export the trusted completed Simple LLM 10M model; never publish optimizer/RNG state."""
 
 import argparse
 import json

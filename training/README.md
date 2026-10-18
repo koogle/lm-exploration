@@ -1,12 +1,17 @@
-# Training from scratch
+# Simple LLM — training from scratch
 
-The [modern 9.85M / 5B-token experiment](results/scholarly-modern-10m-5b-completed-20261018.md)
+The [Simple LLM 9.85M / 5B-token experiment](results/scholarly-modern-10m-5b-completed-20261018.md)
 is complete and [published on Hugging Face](https://huggingface.co/jfrick/scholarly-code-modern-gpt-10m-5b).
 It processed 4,999,934,057 targets over 72,805 updates. Broader exploratory
 validation loss is 2.6926 nats/token; generated samples remain repetitive and
 factually weak. The model card includes all examples, per-source evaluation,
 training curve, code/tokenizer and provenance. The remaining sections retain
 historical plans and earlier experiment state.
+
+The model family is named **Simple LLM**. Published variants are **Simple LLM 10M (5B tokens)**
+and **Simple LLM 124M (two-step smoke checkpoint)**. Historical `scholarly-*` run IDs,
+checkpoint formats, data paths and Hugging Face URLs remain stable for reproducibility;
+“scholarly/code” describes the data mixture, not the model name.
 
 ## Current handoff — 2026-10-16
 

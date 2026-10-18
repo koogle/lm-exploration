@@ -1,6 +1,7 @@
 ---
 language: en
 library_name: pytorch
+model_name: Simple LLM 124M
 tags:
 - causal-lm
 - from-scratch
@@ -8,7 +9,7 @@ tags:
 - distributed-training
 - custom-code
 ---
-# Scholarly/code modern GPT — 124M, two-step smoke checkpoint
+# Simple LLM 124M — two-step smoke checkpoint
 
 This is an **infrastructure smoke-test artifact**, not a useful pretrained or instruction-tuned model. It contains exactly the checkpoint after **two optimizer updates / 121,777 nonpadding next-token training targets**. The later four-step resumed checkpoint is not this upload.
 
