@@ -4,6 +4,7 @@ import copy
 import unittest
 from dataclasses import asdict
 from pathlib import Path
+from unittest.mock import patch
 
 import test_100m_modern as shared_tests
 import torch
@@ -33,6 +34,34 @@ class Modern10MTests(unittest.TestCase):
     test_combined_model_causality_gradients_and_context_bounds = (
         shared_tests.Modern100MTests.test_combined_model_causality_gradients_and_context_bounds
     )
+
+    def test_modern_model_does_not_use_legacy_building_blocks(self):
+        self.assertEqual(model.ModelConfig.__bases__, (object,))
+        for cls in (model.Attention, model.Block, model.GPT):
+            self.assertEqual(cls.__bases__, (torch.nn.Module,))
+        with (
+            patch.object(legacy.ModelConfig, "__post_init__", side_effect=AssertionError),
+            patch.object(legacy, "Attention", side_effect=AssertionError),
+            patch.object(legacy, "Block", side_effect=AssertionError),
+            patch.object(legacy.GPT, "initialize", side_effect=AssertionError),
+        ):
+            config = model.ModelConfig(11, 8, 1, 3, 24)
+            instance = model.GPT(config)
+            logits = instance(torch.randint(11, (2, 8)))
+            self.assertEqual(logits.shape, (2, 8, 11))
+            logits.sum().backward()
+            self.assertTrue(all(p.grad is not None for p in instance.parameters()))
+
+    def test_legacy_seeded_initialization_remains_exact(self):
+        settings = asdict(self.config)
+        settings.pop("architecture_version")
+        torch.manual_seed(123)
+        original = legacy.GPT(legacy.ModelConfig(**settings))
+        torch.manual_seed(123)
+        restored = model.GPT(model.ModelConfig(**settings, architecture_version=1))
+        self.assertEqual(original.state_dict().keys(), restored.state_dict().keys())
+        for name, value in original.state_dict().items():
+            torch.testing.assert_close(value, restored.state_dict()[name], rtol=0, atol=0)
 
     def test_defaults_count_tying_and_checkpoint_roundtrip(self):
         config = model.ModelConfig(65)

@@ -1,8 +1,8 @@
-"""Architecture only: a roughly 10M-parameter, decoder-only character GPT.
+"""Historical version-1 character GPT, retained for checkpoint compatibility only.
 
-6 layers, width 384, 6 heads, learned positions, pre-LayerNorm and GELU MLPs.
-The exact count depends on context length and vocabulary; trainer/loop.py records it.
-Training, data loading, checkpoints and CLI code deliberately live elsewhere.
+This is the old LayerNorm/learned-position/GELU implementation, not a source of
+building blocks for the current architecture. The complete modern implementation
+and configuration live in model.py. Preserve this code's historical behavior.
 """
 
 import math

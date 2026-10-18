@@ -10,12 +10,16 @@ There are no separate RMSNorm/RoPE/SwiGLU model folders or recipe choices.
 Their untrained single-factor experiments remain in Git history.
 
 New recipes select `model="10m"` and default to `architecture_version=2`.
-The minimal [legacy implementation](legacy.py) exists only for historical
-checkpoint compatibility: version 1 uses LayerNorm, learned positions, GELU and
+All active configuration, projection, block, initialization and forward code lives
+in `model.py`; modern classes do not inherit from the old architecture.
+The [legacy implementation](legacy.py) is explicitly the old code, retained only
+for historical checkpoint compatibility: version 1 uses LayerNorm, learned positions, GELU and
 untied embeddings (**10,795,776 parameters**). Checkpoints without version
 metadata load as version 1; resuming across versions is rejected. The public
 vanilla bundle and historical results below have not been changed. No training
 or quality comparison has been run for the consolidated modern 10M architecture.
+Removing inherited legacy construction changes fresh seeded initializations, but
+not the initialization distribution, checkpoint keys or loaded-weight computation.
 
 From `training/`, verify with:
 

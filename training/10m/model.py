@@ -5,25 +5,33 @@ vanilla weight initialization. architecture_version=1 reproduces the historical
 LayerNorm/learned-position/GELU model only for legacy checkpoint compatibility.
 """
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 import torch
-from model_10m import legacy as vanilla
+from model_10m import legacy
 from torch import nn
 from torch.nn import functional as F
 
 __all__ = ["GPT", "Attention", "Block", "ModelConfig", "RMSNorm", "SwiGLU", "causal_attention"]
-MODEL_DEPENDENCIES = {"legacy_definition": vanilla.__file__}
+MODEL_DEPENDENCIES = {"legacy_definition": legacy.__file__}
 
 
 @dataclass(frozen=True)
-class ModelConfig(vanilla.ModelConfig):
+class ModelConfig:
+    vocab_size: int
+    block_size: int = 256
+    n_layer: int = 6
+    n_head: int = 6
+    n_embd: int = 384
     architecture_version: int = 2
 
     def __post_init__(self):
         if type(self.architecture_version) is not int or self.architecture_version not in (1, 2):
             raise ValueError("architecture_version must be 1 (legacy) or 2 (RMSNorm/RoPE/SwiGLU)")
-        super().__post_init__()
+        if any(value <= 0 for value in asdict(self).values()):
+            raise ValueError("all model dimensions must be positive")
+        if self.n_embd % self.n_head:
+            raise ValueError("n_embd must be divisible by n_head")
         if self.architecture_version == 2 and (self.n_embd // self.n_head) % 2:
             raise ValueError("RoPE requires an even head dimension")
 
@@ -62,7 +70,13 @@ def rotary(x, offset=0):
     return torch.stack((even * cos - odd * sin, even * sin + odd * cos), -1).flatten(-2)
 
 
-class Attention(vanilla.Attention):
+class Attention(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.n_head = config.n_head
+        self.qkv = nn.Linear(config.n_embd, 3 * config.n_embd)
+        self.projection = nn.Linear(config.n_embd, config.n_embd)
+
     def forward(self, x):
         batch, length, width = x.shape
         query, key, value = self.qkv(x).chunk(3, -1)
@@ -86,32 +100,49 @@ class SwiGLU(nn.Module):
         return self.down(F.silu(self.gate(x)) * self.up(x))
 
 
-class Block(vanilla.Block):
+class Block(nn.Module):
     def __init__(self, config):
-        super().__init__(config)
+        super().__init__()
         self.attention_norm = RMSNorm(config.n_embd)
         self.attention = Attention(config)
         self.mlp_norm = RMSNorm(config.n_embd)
         self.mlp = SwiGLU(config.n_embd)
 
+    def forward(self, x):
+        x = x + self.attention(self.attention_norm(x))
+        return x + self.mlp(self.mlp_norm(x))
 
-class GPT(vanilla.GPT):
+
+class GPT(nn.Module):
     def __init__(self, config):
-        if config.architecture_version == 1:
-            super().__init__(config)
-            return
-        nn.Module.__init__(self)
+        super().__init__()
         self.config = config
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embd)
-        self.blocks = nn.Sequential(*(Block(config) for _ in range(config.n_layer)))
-        self.final_norm = RMSNorm(config.n_embd)
+        if config.architecture_version == 1:
+            # Historical blocks only: the modern architecture never inherits them.
+            self.position_embedding = nn.Embedding(config.block_size, config.n_embd)
+            block_type, norm_type = legacy.Block, nn.LayerNorm
+        else:
+            block_type, norm_type = Block, RMSNorm
+        self.blocks = nn.Sequential(*(block_type(config) for _ in range(config.n_layer)))
+        self.final_norm = norm_type(config.n_embd)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.apply(self.initialize)
-        self.lm_head.weight = self.token_embedding.weight
+        if config.architecture_version == 2:
+            self.lm_head.weight = self.token_embedding.weight
+
+    @staticmethod
+    def initialize(module):
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            nn.init.normal_(module.weight, std=0.02)
+            if isinstance(module, nn.Linear) and module.bias is not None:
+                nn.init.zeros_(module.bias)
 
     def forward(self, tokens):
-        if self.config.architecture_version == 1:
-            return super().forward(tokens)
         if not 0 < tokens.size(1) <= self.config.block_size:
             raise ValueError("sequence length must be within the model's block_size")
-        return self.lm_head(self.final_norm(self.blocks(self.token_embedding(tokens))))
+        x = self.token_embedding(tokens)
+        if self.config.architecture_version == 1:
+            positions = torch.arange(tokens.size(1), device=tokens.device)
+            x = x + self.position_embedding(positions)
+        return self.lm_head(self.final_norm(self.blocks(x)))
