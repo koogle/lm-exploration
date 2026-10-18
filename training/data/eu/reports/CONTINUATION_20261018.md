@@ -286,3 +286,32 @@ catalog discovery evidence only, not full-text or novelty evidence. Survey and
 annual-account types offer future bounded investigations, while podcast landing
 pages and whole-report/article containment need care. No additional types were
 enabled by this offline review, and whole-site exhaustion remains unproven.
+
+## First persisted yield from the new ECB worker
+
+The [06:41:58 pinned source checkpoint](../research/ecb-new-series-first-yield-20261018.json)
+contains **10,813 ECB documents**. The new series have saved 10 documents:
+three Macroprudential Bulletin articles, three financial-integration reports,
+three international-role reports and one TARGET annual report. None of these
+series has a recorded extraction failure at this checkpoint.
+
+Convergence reports have increased from 10 to 13 saved rows, confirming three
+additional verified replacements were actually ingested. Seven original
+convergence failures still await their pending verified alternate attempts.
+Economic Bulletin boxes increased from 739 to 740. These are persisted document
+counts; their additional tokenizer contribution awaits the scheduled audit.
+The existing ECB supervisor remains responsible for round three.
+
+The [saved box's Parquet provenance](../research/ecb-first-box-recovery-20261018.json)
+identifies the April 2013 box “Update of the index and weight reference year to
+2010 for short-term business statistics”. Its original inventory URL returned
+404, and the same-named `/pub/pdf/other/mb201304_focus04.en.pdf` supplied the saved
+PDF. This confirms a 2013 recovery; it does not establish saved yield for the
+newer 1999–2011 proposal range.
+
+The [06:43 checkpoint](../research/goal-checkpoint-20261018-0643.json) contains
+**19,237 documents**: ECB 10,813 and EMA 8,424. The matching-cache lower bound
+remains **425,356,977 verified tokens (42.54%)**, with 24 campaign records and
+15 reserved audit pairs. Source repositories remain private, the existing
+campaigns are active, and the hourly audit coordinator retains its reservations.
+The one-billion-token target and website-exhaustion condition remain unmet.
