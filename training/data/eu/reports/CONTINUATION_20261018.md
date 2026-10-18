@@ -445,3 +445,28 @@ Recent EMA rounds completed roughly 300 attempts before the time limit, so a
 larger per-round attempt count alone would not accelerate collection. Ten-second
 pacing and all global document/campaign/audit limits remain. No duplicate source
 writer was launched. Validation: 340 tests, Ruff lint/format and whitespace checks.
+
+
+## ECB write-quota recovery and empty-round backoff
+
+ECB stopped after three confirmed-terminal supervisors encountered Hugging Face's
+128 repository commits/hour limit. Before those failures, the final retryable
+item was cooling down: successive minute-level campaigns attempted zero items,
+while the saved remaining count included that future retry. Do not replay those
+failed dispatches or reset document failure histories.
+
+The controller now defers dispatch during persisted source cooldowns. A completed
+zero-attempt round with remaining work causes a minimum ten-minute backoff, extended
+to the earliest future retry among items still below the attempt cap. Discovery
+expansion is not suppressed by an old empty-round backoff. The waiting state is
+explicit and is not classified as website exhaustion. This bounds empty campaign
+write churn while preserving one-minute checks for useful work. Tests cover backoff
+expiry, longer server/item delays and absence of dispatch while waiting.
+
+The recovery procedure verifies full termination of each of the last three failed
+call trees, waits at least one hour after the latest observed failure, writes
+terminal source-campaign metadata to prove the write quota cleared, and acknowledges
+the verified repair in the control repository. Tracked jobs and document failures
+remain intact. Only one retryable configured ECB item remained at recovery; wider
+English catalog types and extraction failures remain coverage gaps. Validation:
+345 tests, Ruff lint/format and whitespace checks.

@@ -854,3 +854,13 @@ headroom. The source mapping explicitly allows six EMA rounds; other mappings
 retain a three-round default. Existing jobs and reservations survive the control
 configuration migration unchanged. The 100,000-document, 150-campaign and
 48-audit-pair limits remain unchanged. The recovery schedule remains disabled.
+
+
+### Avoid empty retry campaigns
+
+The one-minute controller now exposes `waiting_retry` and respects source-wide
+cooldowns before allocating work. A completed zero-attempt round with remaining
+items imposes a ten-minute dispatch backoff, extended when the earliest future
+item retry is later. This prevents minute-level empty campaigns from consuming
+HF repository commit quotas. Fresh discovery work bypasses the empty-round guard.
+Waiting for a retry does not prove scope or website exhaustion.

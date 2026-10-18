@@ -251,3 +251,35 @@ def test_terminal_reconciliation_loads_fresh_sources_before_second_pass(monkeypa
     )
     assert snapshots == ticks == [1, 2]
     assert result["jobs"][0]["status"] == "running"
+
+
+@pytest.mark.parametrize("timestamp,expected", [(1001, True), (1599, True), (1600, False)])
+def test_empty_round_backoff_expires(timestamp, expected):
+    state = {
+        "runs": [
+            {
+                "status": "bounded_complete",
+                "attempted": 0,
+                "remaining_supported_candidates": 1,
+                "finished_at": "1970-01-01T00:16:40+00:00",
+            }
+        ]
+    }
+    assert modal_goal.retry_deferred(state, timestamp) is expected
+
+
+def test_server_and_item_cooldowns_are_not_shortened():
+    assert modal_goal.retry_deferred({"source_retry_after_epoch": 3000}, 2000)
+    state = {
+        "runs": [
+            {
+                "status": "bounded_complete",
+                "attempted": 0,
+                "remaining_supported_candidates": 1,
+                "finished_at": "1970-01-01T00:16:40+00:00",
+            }
+        ],
+        "failures": {"item": {"attempts": 2, "retry_after_epoch": 3000}},
+    }
+    assert modal_goal.retry_deferred(state, 2000)
+    assert not modal_goal.retry_deferred(state, 3000)
