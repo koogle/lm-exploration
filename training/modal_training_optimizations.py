@@ -57,7 +57,17 @@ def benchmark(run_id, settings, provenance, qualify=False):
         for line in (Path("/runs") / run_id / "metrics.jsonl").read_text().splitlines()
     ]
     steady = rows[10:]
+    complete = (
+        report["stop_reason"] == "token_limit"
+        and 0
+        <= settings["target_tokens"] - report["total_loss_tokens"]
+        < settings["global_windows"] * settings["context"]
+    )
     summary = {
+        "status": "completed" if complete else "incomplete",
+        "whole_session_nonpadding_tokens_per_second": (
+            report["session_loss_tokens"] / report["elapsed_seconds"]
+        ),
         "run_id": run_id,
         "settings": settings,
         "report": report,
