@@ -33,10 +33,6 @@ def trial(run_id, settings, provenance, qualify=False):
     image=image, cpu=1, memory=2048, timeout=43200, retries=0, volumes={"/runs": run_volume}
 )
 def run_suite(prefix, provenance):
-    settings = json.loads(Path("/project/settings.json").read_text())
-    settings.update(
-        world_size=1, target_tokens=100_000_000, checkpoint_every=10000, evaluate_every=10000
-    )
     variants = [
         ("baseline-m1", {}),
         ("crop-m1", {"crop_padding": True}),
@@ -49,6 +45,29 @@ def run_suite(prefix, provenance):
             {"crop_padding": True, "microbatch": 2, "cache_rope": True, "compile_model": True},
         ),
     ]
+    return run_variants(prefix, provenance, variants)
+
+
+@app.function(
+    image=image, cpu=1, memory=2048, timeout=18000, retries=0, volumes={"/runs": run_volume}
+)
+def run_m4_fusion_suite(prefix, provenance):
+    common = {"crop_padding": True, "microbatch": 4, "cache_rope": True}
+    return run_variants(
+        prefix,
+        provenance,
+        [
+            ("rope-m4", common),
+            ("compile-m4", {**common, "compile_model": True}),
+        ],
+    )
+
+
+def run_variants(prefix, provenance, variants):
+    settings = json.loads(Path("/project/settings.json").read_text())
+    settings.update(
+        world_size=1, target_tokens=100_000_000, checkpoint_every=10000, evaluate_every=10000
+    )
     folder = Path("/runs") / prefix
     folder.mkdir(exist_ok=False)
     results = []
