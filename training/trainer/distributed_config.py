@@ -20,6 +20,7 @@ class DistributedConfig:
     evaluate_every: int = 100
     pilot: bool = False
     experimental_data: bool = False
+    prefetch_batches: int = 0
     n_layer: int = 14
     n_head: int = 12
     n_embd: int = 768
@@ -52,6 +53,8 @@ class DistributedConfig:
             or self.target_tokens > 5_000_000_000
         ):
             raise ValueError("Experimental data is scoped to the authorized modern 9.85M / 5B run")
+        if type(self.prefetch_batches) is not int or not 0 <= self.prefetch_batches <= 64:
+            raise ValueError("prefetch_batches must be an integer from 0 to 64")
         if self.world_size not in (1, 2, 3):
             raise ValueError("Supported GPU counts: 1, 2, 3")
         if self.global_windows % (self.world_size * self.microbatch):

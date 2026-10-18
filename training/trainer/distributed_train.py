@@ -18,6 +18,8 @@ from trainer.distributed_config import DistributedConfig, validate_resume
 
 def source_hashes():
     import model_100m.model
+    import training_data.live_stream
+    import training_data.prefetch
     import training_data.raw_token_stream
     import training_data.subword
     import training_data.token_stream
@@ -30,6 +32,8 @@ def source_hashes():
         "model": Path(model_100m.model.__file__),
         "loader": Path(training_data.token_stream.__file__),
         "raw_loader": Path(training_data.raw_token_stream.__file__),
+        "prefetch": Path(training_data.prefetch.__file__),
+        "live_loader": Path(training_data.live_stream.__file__),
         "tokenizer": Path(training_data.subword.__file__),
     }
     return {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in paths.items()}
@@ -82,7 +86,14 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
     torch.set_num_threads(4)
     dist.init_process_group("nccl", timeout=timedelta(seconds=300))
     output, manifest = Path(output), Path(manifest)
-    if json.loads(manifest.read_text()).get("format") == "scholarly-raw-v1":
+    data_format = json.loads(manifest.read_text()).get("format")
+    if data_format == "scholarly-live-v1":
+        from training_data.live_stream import LiveTokenMixture
+
+        if not config.prefetch_batches or not config.experimental_data:
+            raise ValueError("Live upstream data requires prefetch and experimental_data")
+        TokenMixture = LiveTokenMixture
+    elif data_format == "scholarly-raw-v1":
         from training_data.raw_token_stream import RawTokenMixture
 
         TokenMixture = RawTokenMixture
@@ -123,12 +134,30 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
             if (output / "config.json").exists():
                 raise ValueError("Use a fresh run ID, including for resume")
             output.mkdir(parents=True, exist_ok=True)
-            data = TokenMixture(
-                manifest,
-                context=config.context,
-                allow_unreviewed=(config.pilot or config.experimental_data),
-            )
-            if not config.pilot:
+
+            def make_data():
+                return TokenMixture(
+                    manifest,
+                    context=config.context,
+                    allow_unreviewed=(config.pilot or config.experimental_data),
+                )
+
+            if config.prefetch_batches:
+                from training_data.prefetch import PrefetchedBatches
+
+                initial = None
+                if resume:
+                    initial = torch.load(resume, map_location="cpu", weights_only=False)["data"]
+                data = PrefetchedBatches(
+                    make_data,
+                    config.global_windows,
+                    depth=config.prefetch_batches,
+                    state=initial,
+                    device=torch.device("cuda", rank),
+                )
+            else:
+                data = make_data()
+            if not config.pilot and data_format != "scholarly-live-v1":
                 capacity = min(
                     2 * s["splits"]["train"]["loss_tokens"] * 100 / s["weight_percent"]
                     for s in data.sources.values()
@@ -196,7 +225,7 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 np.random.set_state(state["numpy"])
                 torch.set_rng_state(state["torch"])
                 torch.cuda.set_rng_state(state["cuda"])
-                if rank == 0:
+                if rank == 0 and not config.prefetch_batches:
                     data.load_state_dict(saved["data"])
             except Exception as exc:  # noqa: BLE001 -- every rank must fail together
                 error = f"{type(exc).__name__}: {exc}"
@@ -217,6 +246,10 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
             )
         else:
             primary(lambda: None)
+
+        if rank == 0 and validation is not None and hasattr(validation, "close"):
+            validation.close()
+            validation = None
 
         @torch.no_grad()
         def evaluate():
@@ -291,6 +324,7 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
         initial_validation = primary(evaluate_and_record)
         local_windows = config.global_windows // world
         reason = "token_limit"
+        data_error = None
         while tokens < config.target_tokens:
             flag = torch.tensor(int(stopped), device="cuda")
             dist.all_reduce(flag, op=dist.ReduceOp.MAX)
@@ -330,7 +364,16 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
 
             torch.cuda.synchronize()
             tick = time.monotonic()
-            batch = primary(fetch)
+            fetch_tick = time.monotonic()
+            try:
+                batch = primary(fetch)
+            except RuntimeError as exc:
+                # All ranks received the same producer failure. Save the last
+                # completed optimizer boundary, without acknowledging bad data.
+                reason = "data_error"
+                data_error = str(exc)
+                break
+            data_fetch_seconds = time.monotonic() - fetch_tick
             if "stop" in batch:
                 reason = batch["stop"]
                 break
@@ -350,6 +393,8 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
             optimizer.step()
             dist.all_reduce(total_loss)
             torch.cuda.synchronize()
+            if config.prefetch_batches and rank == 0:
+                data.acknowledge()
             step += 1
             tokens += count
             duration = time.monotonic() - tick
@@ -362,6 +407,8 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 "lr": lr,
                 "gradient_norm": float(norm),
                 "seconds": duration,
+                "data_fetch_seconds": data_fetch_seconds,
+                "prefetch": data.stats() if rank == 0 and config.prefetch_batches else None,
             }
 
             def record(row=row):
@@ -387,12 +434,14 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 total_loss_tokens=tokens,
                 session_loss_tokens=tokens - start_tokens,
                 stop_reason=reason,
+                data_error=data_error,
                 elapsed_seconds=time.monotonic() - started,
                 final_checkpoint=final_checkpoint,
                 initial_validation=initial_validation,
                 final_validation=final_validation,
                 loss_token_exposures=data.exposures,
                 validation_note="One fixed window/source; diagnostic only",
+                prefetch=data.stats() if config.prefetch_batches else None,
             )
             atomic_json(output / "report.json", report)
             commit()
@@ -400,6 +449,10 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
 
         return primary(finish)
     finally:
+        if rank == 0:
+            for loader in (locals().get("data"), locals().get("validation")):
+                if loader is not None and hasattr(loader, "close"):
+                    loader.close()
         for sig, handler in old_handlers.items():
             signal.signal(sig, handler)
         dist.destroy_process_group()
