@@ -129,3 +129,29 @@ records selection bias and per-response validation requirements.
 All 279 tests and lint/format/whitespace checks passed. Existing collector apps
 were deployed; the recovery schedule remains disabled. The active audit pair is
 allowed to finish rather than consuming another reservation for a manual audit.
+
+## Exact-token refresh at 06:03 UTC
+
+[The pinned checkpoint](../research/audit-progress-20261018-0603.json) contains
+18,663 documents and a matched-shard lower bound of **421,344,921 o200k_base
+tokens** (42.13%). ECB contributes 175,182,377 tokens over 10,416 audited rows;
+EMA contributes 246,162,544 over 7,973 rows. EMA's audit was still partial at this
+read, and collection continued beyond both audited row counts. These numbers
+come from matching immutable shard hashes, paths and rows, not character estimates.
+
+A local read-only status process stalled for over two minutes in the hf-xet
+native downloader while downloading ECB progress. Its open file descriptors and
+threads identified the Xet path; no source checkpoint had been changed. Only
+that local process was terminated. Retrying with the supported HTTP fallback
+succeeded and produced the pinned snapshot above:
+
+```sh
+HF_HUB_DISABLE_XET=1 uv run status.py both \
+  --mapping goal_pipeline_sources.json --cached-tokens
+```
+
+This retains the inherited proxy, credentials and TLS trust; it does not alter
+Modal workers or their reservations. Current runtime logs contained historical
+17 October rate-limit errors, not evidence of a new audit failure. The scheduled
+pair was preserved and is now advancing the exact token caches. No extra pair,
+source writer, budget increase or schedule change was introduced.
