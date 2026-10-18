@@ -1,0 +1,1874 @@
+[
+  {
+    "model": "simple-llm-124m-5b",
+    "mode": "greedy",
+    "characters": 128,
+    "n": 10,
+    "normalized_char_rep16": 0.32831858407079645,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-4b",
+    "mode": "greedy",
+    "characters": 128,
+    "n": 10,
+    "normalized_char_rep16": 0.43628318584070797,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-300b",
+    "mode": "greedy",
+    "characters": 128,
+    "n": 10,
+    "normalized_char_rep16": 0.13628318584070798,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "smollm-135m-600b",
+    "mode": "greedy",
+    "characters": 128,
+    "n": 10,
+    "normalized_char_rep16": 0.1256637168141593,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "simple-llm-124m-5b",
+    "mode": "topk50_t0.1",
+    "characters": 128,
+    "n": 20,
+    "normalized_char_rep16": 0.3048672566371681,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "2 + 2 =",
+        "seed": 2008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 2004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 2005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-4b",
+    "mode": "topk50_t0.1",
+    "characters": 128,
+    "n": 20,
+    "normalized_char_rep16": 0.38672566371681416,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "2 + 2 =",
+        "seed": 2008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 2004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 2005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-300b",
+    "mode": "topk50_t0.1",
+    "characters": 128,
+    "n": 20,
+    "normalized_char_rep16": 0.1668141592920354,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "2 + 2 =",
+        "seed": 2008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 2004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 2005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "smollm-135m-600b",
+    "mode": "topk50_t0.1",
+    "characters": 128,
+    "n": 20,
+    "normalized_char_rep16": 0.11150442477876107,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "2 + 2 =",
+        "seed": 2008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 2004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 2005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "simple-llm-124m-5b",
+    "mode": "sampled_08",
+    "characters": 128,
+    "n": 19,
+    "normalized_char_rep16": 0.047042384722869125,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "2 + 2 =",
+        "seed": 2008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 2004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-4b",
+    "mode": "sampled_08",
+    "characters": 128,
+    "n": 19,
+    "normalized_char_rep16": 0.09827666511411272,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "2 + 2 =",
+        "seed": 2008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 2004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-300b",
+    "mode": "sampled_08",
+    "characters": 128,
+    "n": 19,
+    "normalized_char_rep16": 0.024685607824871912,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "2 + 2 =",
+        "seed": 2008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 2004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "smollm-135m-600b",
+    "mode": "sampled_08",
+    "characters": 128,
+    "n": 19,
+    "normalized_char_rep16": 0.013972985561248258,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "2 + 2 =",
+        "seed": 2008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 2004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "simple-llm-124m-5b",
+    "mode": "sampled_10_topp95",
+    "characters": 128,
+    "n": 10,
+    "normalized_char_rep16": 0.023008849557522127,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-4b",
+    "mode": "sampled_10_topp95",
+    "characters": 128,
+    "n": 10,
+    "normalized_char_rep16": 0.0,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-300b",
+    "mode": "sampled_10_topp95",
+    "characters": 128,
+    "n": 10,
+    "normalized_char_rep16": 0.01238938053097346,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "smollm-135m-600b",
+    "mode": "sampled_10_topp95",
+    "characters": 128,
+    "n": 10,
+    "normalized_char_rep16": 0.0168141592920354,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "2 + 2 =",
+        "seed": 1008
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "def add(a, b):\n    ",
+        "seed": 1004
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 1005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "simple-llm-124m-5b",
+    "mode": "greedy",
+    "characters": 256,
+    "n": 7,
+    "normalized_char_rep16": 0.5773562537048015,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-4b",
+    "mode": "greedy",
+    "characters": 256,
+    "n": 7,
+    "normalized_char_rep16": 0.7071724955542383,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-300b",
+    "mode": "greedy",
+    "characters": 256,
+    "n": 7,
+    "normalized_char_rep16": 0.35743924125666865,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "smollm-135m-600b",
+    "mode": "greedy",
+    "characters": 256,
+    "n": 7,
+    "normalized_char_rep16": 0.2981624184943687,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      }
+    ]
+  },
+  {
+    "model": "simple-llm-124m-5b",
+    "mode": "topk50_t0.1",
+    "characters": 256,
+    "n": 15,
+    "normalized_char_rep16": 0.5200553250345782,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 2005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-4b",
+    "mode": "topk50_t0.1",
+    "characters": 256,
+    "n": 15,
+    "normalized_char_rep16": 0.6763485477178424,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 2005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-300b",
+    "mode": "topk50_t0.1",
+    "characters": 256,
+    "n": 15,
+    "normalized_char_rep16": 0.42378976486860304,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 2005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "smollm-135m-600b",
+    "mode": "topk50_t0.1",
+    "characters": 256,
+    "n": 15,
+    "normalized_char_rep16": 0.28575380359612723,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "def factorial(n):\n    ",
+        "seed": 2005
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "simple-llm-124m-5b",
+    "mode": "sampled_08",
+    "characters": 256,
+    "n": 13,
+    "normalized_char_rep16": 0.06575167571018194,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-4b",
+    "mode": "sampled_08",
+    "characters": 256,
+    "n": 13,
+    "normalized_char_rep16": 0.12607724225981487,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-300b",
+    "mode": "sampled_08",
+    "characters": 256,
+    "n": 13,
+    "normalized_char_rep16": 0.047558250877752964,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "smollm-135m-600b",
+    "mode": "sampled_08",
+    "characters": 256,
+    "n": 13,
+    "normalized_char_rep16": 0.07660389403127991,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "A language model predicts",
+        "seed": 1009
+      },
+      {
+        "prompt": "A language model predicts",
+        "seed": 2009
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 2001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 2003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 2007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 2002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 2000
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 1006
+      },
+      {
+        "prompt": "import json\n\ndef read_config(path):\n    ",
+        "seed": 2006
+      }
+    ]
+  },
+  {
+    "model": "simple-llm-124m-5b",
+    "mode": "sampled_10_topp95",
+    "characters": 256,
+    "n": 5,
+    "normalized_char_rep16": 0.014937759336099577,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-4b",
+    "mode": "sampled_10_topp95",
+    "characters": 256,
+    "n": 5,
+    "normalized_char_rep16": 0.0,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      }
+    ]
+  },
+  {
+    "model": "pythia-160m-300b",
+    "mode": "sampled_10_topp95",
+    "characters": 256,
+    "n": 5,
+    "normalized_char_rep16": 0.019087136929460603,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      }
+    ]
+  },
+  {
+    "model": "smollm-135m-600b",
+    "mode": "sampled_10_topp95",
+    "characters": 256,
+    "n": 5,
+    "normalized_char_rep16": 0.028215767634854762,
+    "matched_prompt_seeds": [
+      {
+        "prompt": "In mathematics, a prime number is",
+        "seed": 1001
+      },
+      {
+        "prompt": "Once upon a time,",
+        "seed": 1003
+      },
+      {
+        "prompt": "The capital of France is",
+        "seed": 1007
+      },
+      {
+        "prompt": "The purpose of an experiment is to",
+        "seed": 1002
+      },
+      {
+        "prompt": "The solar system consists of",
+        "seed": 1000
+      }
+    ]
+  }
+]

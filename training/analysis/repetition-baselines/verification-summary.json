@@ -1,0 +1,29 @@
+{
+  "checks": [
+    {
+      "prompt": "The solar system consists of",
+      "precision": "fp32",
+      "prefix_bos": false,
+      "manual_vs_generate_token_identical": true
+    },
+    {
+      "prompt": "The solar system consists of",
+      "precision": "bf16",
+      "prefix_bos": true,
+      "manual_vs_generate_token_identical": true
+    },
+    {
+      "prompt": "The capital of France is",
+      "precision": "fp32",
+      "prefix_bos": false,
+      "manual_vs_generate_token_identical": true
+    },
+    {
+      "prompt": "The capital of France is",
+      "precision": "bf16",
+      "prefix_bos": true,
+      "manual_vs_generate_token_identical": true
+    }
+  ],
+  "note": "Two prompts only. BF16/EOS and FP32/native prefix manual loops each reproduce independentHF generate outputs exactly; FP32/BF16 and prefix sensitivity is qualitative, not an attribution to a specific layer."
+}

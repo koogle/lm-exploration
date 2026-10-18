@@ -1,0 +1,7 @@
+{
+  "source_pr": "https://github.com/koogle/lm-exploration/pull/20",
+  "source_path": "training/analysis/decoding-presets/modal_precision.py",
+  "source_sha256": "650f3e02635d37a0ff62bf38d8c47e85e6c577ef6ece5f86c3e80ae407aa9fa3",
+  "changes": "Rename documentedCLIfile and local outputfilename; sampling/model/source-verification logic unchanged",
+  "note": "Full80sample ownFP32results retained; externalcomparison uses60matching samples."
+}

@@ -1,0 +1,53 @@
+{
+  "selection": "First two highest-repetition documents in existing64/source bounded sample; inspected initial500 characters of local frozen rawsqlite text",
+  "observations": [
+    {
+      "source": "code_python",
+      "hash": "00043ff088c0a1578eb78bb5227d3ae28eef8902e02292afe3cf1e39af56adef",
+      "observation": "Repeated unit-test scaffolding; legitimate code structure, not automatically disposable"
+    },
+    {
+      "source": "code_python",
+      "hash": "00038d0559b3c2b0a4b9b7bf6fb9c54c9150057fde889de2a40c800626308840",
+      "observation": "Shared license header visible; preserve licensing provenance even if excluding header from training text"
+    },
+    {
+      "source": "finemath_4plus",
+      "hash": "0002f3d5f52a8f317206a3d140fa71406547fd9da638e5614abb3a6085f0c5c4",
+      "observation": "Navigation and browser-compatibility boilerplate before educational content"
+    },
+    {
+      "source": "finemath_4plus",
+      "hash": "00009f088e8ba0d8e1aa65ed1b9fb0f11916a215902d10f2e70d5e46fe0fa310",
+      "observation": "Forum reply quotes repeat the earlier question and equations"
+    },
+    {
+      "source": "arxiv",
+      "hash": "056709751d71c8667ee0a52a532bd8078371587c95b17aac0e33179cf349e8d0",
+      "observation": "Academic author/affiliation and mathematical structure; high document repetition alone does not establish poor extraction"
+    },
+    {
+      "source": "arxiv",
+      "hash": "0011047288cbce24833e327bb016d25449701d645a6066a33cea3fcae4833325",
+      "observation": "Academic formula/citation structure; requires document review rather than blind repetition filtering"
+    }
+  ],
+  "limitations": "Purposive inspection, not a prevalence estimate or causal test. Descriptions only; no raw document text published.",
+  "cross_document_line_inspection": [
+    {
+      "line_sha256": "2e2ec7b95900ec6a096aad4edeae2284ede8adcb8a396635b236c9bc13838f8c",
+      "documents": 29,
+      "observation": "Pandoc-style table-wrap opening marker T1"
+    },
+    {
+      "line_sha256": "575bb7e9d670f678c3685c18ed9363b45a748c9551f7d4202c81ddfd1f6d110d",
+      "documents": 19,
+      "observation": "Pandoc-style table-wrap opening marker T2"
+    },
+    {
+      "line_sha256": "7501e139b3088342caa1f041670d1b1eb3a6f658e20057b182f5fa78e82e67d5",
+      "documents": 14,
+      "observation": "Competing-interests declaration boilerplate"
+    }
+  ]
+}
