@@ -23,15 +23,15 @@ run_volume = modal.Volume.from_name("lm-exploration-training")
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
 )
-def check():
+def check(world_size=3, tag="three01"):
     import torch
 
     from modal_distributed_train import worker
     from trainer.distributed_config import DistributedConfig
 
     base = DistributedConfig(
-        world_size=3,
-        global_windows=6,
+        world_size=world_size,
+        global_windows=2 * world_size,
         microbatch=2,
         pilot=True,
         target_tokens=5_000_000,
@@ -46,6 +46,7 @@ def check():
     provenance = {"qualification": "frozen synthetic raw data; no completed-run weights modified"}
 
     def run(name, settings, steps, resume=""):
+        name = name.replace("20261018-01", f"20261018-{tag}")
         return worker.local(name, snapshot, settings, provenance, resume, 900, steps)
 
     sync = run("overlap-sync-20261018-01", base, 128)
@@ -74,7 +75,7 @@ def check():
     assert states[0]["data"] == states[1]["data"] == states[2]["data"]
     assert first["final_validation"] == resumed["initial_validation"]
     result = {
-        "world_size": 3,
+        "world_size": world_size,
         "gpu": torch.cuda.get_device_name(),
         "sync_vs_prefetch_max_weight_delta": delta_sync,
         "uninterrupted_vs_resume_max_weight_delta": delta_resume,
@@ -82,13 +83,32 @@ def check():
         "resume_validation_exact": True,
         "reports": {"sync": sync, "prefetch": uninterrupted, "resumed": resumed},
     }
-    (Path("/runs") / "overlap-checks-20261018.json").write_text(json.dumps(result, indent=2) + "\n")
+    (Path("/runs") / f"overlap-checks-20261018-{tag}.json").write_text(
+        json.dumps(result, indent=2) + "\n"
+    )
     run_volume.commit()
     return result
 
 
+@app.function(
+    image=image,
+    gpu="L4",
+    cpu=2,
+    memory=8192,
+    timeout=1200,
+    retries=0,
+    max_containers=1,
+    volumes={"/data": data_volume, "/runs": run_volume},
+)
+def check_one_gpu():
+    return check.local(world_size=1, tag="one01")
+
+
 @app.local_entrypoint()
-def main():
-    report = check.remote()
-    Path("results/overlap-checks-20261018.json").write_text(json.dumps(report, indent=2) + "\n")
+def main(single: bool = False):
+    report = check_one_gpu.remote() if single else check.remote()
+    suffix = "one01" if single else "three01"
+    Path(f"results/overlap-checks-20261018-{suffix}.json").write_text(
+        json.dumps(report, indent=2) + "\n"
+    )
     print(json.dumps({k: v for k, v in report.items() if k != "reports"}))

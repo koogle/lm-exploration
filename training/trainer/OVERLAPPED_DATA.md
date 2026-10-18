@@ -72,9 +72,14 @@ The completed 5B checkpoint is unaffected.
 
 ## Validation
 
+The opt-in real-upstream prefix test passed on the pinned Python source: it
+started from a prefix (without full corpus preparation), then reproduced an
+unacknowledged batch exactly after restart. See
+`results/live-prefix-check-20261018.json`.
+
 CPU tests cover queue bounds, explicit acknowledgement, discarded speculative
 batches, producer errors, upstream document-offset resume, mixture order, two-pass
 exhaustion and split-conflict stops. A separate three-GPU qualification compares
 synchronous vs prefetched updates and uninterrupted vs interrupted/resumed
-training on the same frozen synthetic dataset. Live upstream prefixes require
-an additional end-to-end smoke test; retained results describe exactly what ran.
+training on the same frozen synthetic dataset. CUDA qualification results are retained separately when available; CPU and
+upstream-prefix checks do not establish CUDA throughput.

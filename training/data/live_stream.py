@@ -17,7 +17,16 @@ from pathlib import Path
 from .cached_shards import CachedShards
 from .persistent_stream import PersistentStream
 from .scholarly import SPLIT_VERSION, adapt, load_recipe
-from .subword import FIRST_CONTENT_TOKEN_ID, TOKENIZER_SHA256, digest, load_frozen
+from .subword import (
+    BOS_TOKEN_ID,
+    EOS_TOKEN_ID,
+    FIRST_CONTENT_TOKEN_ID,
+    LOSS_IGNORE_INDEX,
+    PAD_TOKEN_ID,
+    TOKENIZER_SHA256,
+    digest,
+    load_frozen,
+)
 from .token_stream import TokenMixture
 
 
@@ -176,7 +185,7 @@ class LiveTokenMixture(TokenMixture):
             ids = tuple(self.tokenizer.encode(document["text"], add_special_tokens=False).ids)
             if not ids or any(t < FIRST_CONTENT_TOKEN_ID for t in ids):
                 continue
-            return (1, *ids, 2)
+            return (BOS_TOKEN_ID, *ids, EOS_TOKEN_ID)
 
     def blocks(self, name):
         c = self.cursors[name]
@@ -197,8 +206,8 @@ class LiveTokenMixture(TokenMixture):
                 c["tokens"] = None
                 c["offset"] = 0
             yield {
-                "input_ids": x + [0] * (self.context - count),
-                "labels": y + [-100] * (self.context - count),
+                "input_ids": x + [PAD_TOKEN_ID] * (self.context - count),
+                "labels": y + [LOSS_IGNORE_INDEX] * (self.context - count),
                 "loss_tokens": count,
                 "source": name,
                 "pass": c["pass"] + 1,
