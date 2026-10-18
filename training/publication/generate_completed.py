@@ -1,4 +1,4 @@
-"""Generate text with the standalone Simple LLM 10M base model."""
+"""Generate text with the standalone Simple LLM base model."""
 
 import argparse
 import json

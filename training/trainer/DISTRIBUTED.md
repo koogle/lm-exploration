@@ -1,9 +1,12 @@
 # Resumable subword training on multiple Modal GPUs
 
-`modal_distributed_train.py` runs the modern 124.4M model on **one, two or three
+`modal_distributed_train.py` runs the modern 124.4M model on **one, two, three or eight
 GPUs on one host**, using PyTorch NCCL DistributedDataParallel. It trains a shared
 model with synchronized gradients. It is separate from the historical character
 trainer and from the throughput-only benchmarks.
+
+For the authorized eight-H100 / 8K / 5B workflow and periodic Hub publication, see
+[Simple LLM 8K](SIMPLE_LLM_8K.md). Eight-GPU performance requires its own qualification.
 
 ## Start a job
 

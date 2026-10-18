@@ -13,6 +13,10 @@ and **Simple LLM 124M (two-step smoke checkpoint)**. Historical `scholarly-*` ru
 checkpoint formats, data paths and Hugging Face URLs remain stable for reproducibility;
 “scholarly/code” describes the data mixture, not the model name.
 
+The [eight-H100 / 8K / 5B workflow](trainer/SIMPLE_LLM_8K.md) implements the authorized
+124M experiment with periodic Hugging Face inference checkpoints and automatic
+optimizer-boundary continuation. See its run record for actual launch/qualification state.
+
 The [long-context and eight-H100 plan](plans/SIMPLE_LLM_LONG_CONTEXT.md) records
 the proposed 8K/16K progression, benchmark requirements and unverified timing ranges.
 

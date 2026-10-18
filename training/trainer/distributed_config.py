@@ -49,14 +49,16 @@ class DistributedConfig:
             raise ValueError("experimental_data must be boolean")
         if self.experimental_data and (
             self.pilot
-            or (self.n_layer, self.n_head, self.n_embd) != (8, 3, 192)
+            or (self.n_layer, self.n_head, self.n_embd) not in ((8, 3, 192), (14, 12, 768))
             or self.target_tokens > 5_000_000_000
         ):
-            raise ValueError("Experimental data is scoped to the authorized modern 9.85M / 5B run")
+            raise ValueError(
+                "Experimental data is scoped to the authorized modern 9.85M or 124M / 5B runs"
+            )
         if type(self.prefetch_batches) is not int or not 0 <= self.prefetch_batches <= 64:
             raise ValueError("prefetch_batches must be an integer from 0 to 64")
-        if self.world_size not in (1, 2, 3):
-            raise ValueError("Supported GPU counts: 1, 2, 3")
+        if self.world_size not in (1, 2, 3, 8):
+            raise ValueError("Supported GPU counts: 1, 2, 3, 8")
         if self.global_windows % (self.world_size * self.microbatch):
             raise ValueError("Global windows must divide into whole per-GPU microbatches")
         if self.n_embd % self.n_head or (self.n_embd // self.n_head) % 2:
