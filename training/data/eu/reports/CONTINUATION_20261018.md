@@ -54,3 +54,39 @@ and that subsequent ECB workers use the older-box recovery. Keep the current
 one-billion-token endpoint and operational bounds. Unsupported spreadsheet/XML
 misclassification failures, oversized documents, historical links and incomplete
 catalog coverage remain gaps; none establish institutional exhaustion.
+
+## Follow-up at 05:39 UTC
+
+[Fresh pinned status](../research/series-checkpoint-20261018.json) now records
+18,414 documents (10,357 ECB; 8,057 EMA). The exact matched-shard lower bound is
+still 412,205,746 tokens: the hourly audit has not yet covered 556 newer rows.
+The read-only `status.py both --mapping goal_pipeline_sources.json --cached-tokens`
+command now reports that distinction directly, together with durable reservations.
+It does not launch audits or download corpus Parquet.
+
+EMA's terminal campaign tree was inspected and reconciled through two calls to
+the existing controller. It allocated exactly one successor:
+`goal-ema-1792301652-8336f3de89`, supervisor `fc-01M56R1QMKAM6PDEJKE3GH0VY2`.
+Both selected source call trees remained running at the subsequent check. There
+are now 24 campaign records, 6,000 reserved attempts and 14 reserved audit pairs.
+No caps or schedule intervals changed.
+
+The successor has written 16 partitioned originals. One was downloaded at pinned
+EMA revision `1ca963cf775762a4179710a01e252f5eb8b0d7f6`; decompressed SHA-256
+matched its filename. [Verification evidence](../research/ema-raw-v2-confirmation-20261018.json)
+closes the previously outstanding EMA raw-v2 propagation check.
+
+Six additional exact ECB types passed live full-text sample extraction and were
+added to both mappings: legal papers, discussion papers, central-banking and legal
+conference proceedings, MEP letters and blog posts. Their 1,057 catalog records
+are not yet counted as uploaded documents. [Evidence and limitations](../research/ecb-distinct-series-20261018.md)
+include passage overlap in proceedings and incomplete historical validation.
+All 269 tests and lint/format/whitespace checks passed. Existing collection,
+manual and schedule-disabled recovery apps were deployed successfully. Commit
+`d1dab5d4ad55e2f364c06c0626811411fab812bd` was pushed to PR #14 and its private
+HF code archive was downloaded and checksum-verified.
+
+Next: check newly enumerated series on subsequent ECB workers and refresh audit
+coverage after its next hourly pass. Preserve the remaining 34-pair audit and
+126-campaign envelopes; review them before exhaustion. Collection continues,
+and neither completion criterion has been met.
