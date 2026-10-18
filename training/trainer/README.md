@@ -35,3 +35,6 @@ loading is not safe for untrusted files.
 NCCL trainer, token-budget stopping, durable checkpoints and explicit cross-job
 resume through `../modal_distributed_train.py`. It uses the frozen 32K tokenizer
 and prepared mixture snapshots. The character trainer above is unchanged.
+
+The [fresh Muon/AdamW comparison](MUON_COMPARISON.md) adds a matrix-only Muon
+optimizer with an AdamW companion and a matched, bounded eight-H100 launcher.
