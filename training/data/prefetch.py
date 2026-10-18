@@ -35,11 +35,12 @@ class PrefetchedBatches:
             raise self.error
 
     def _cursor(self):
-        return (
-            self.source.cursor_state()
-            if hasattr(self.source, "cursor_state")
-            else self.source.state_dict()
-        )
+        # Live cursor_state returns fresh dictionaries containing immutable
+        # document-token tuples. Recopying million-token tuples per batch would
+        # defeat prefetch; full ledgers are serialized only at checkpoints.
+        if hasattr(self.source, "cursor_state"):
+            return self.source.cursor_state()
+        return copy.deepcopy(self.source.state_dict())
 
     def _produce(self):
         stream = None
@@ -47,7 +48,7 @@ class PrefetchedBatches:
             self.source = self.factory()
             if self.initial is not None:
                 self.source.load_state_dict(self.initial)
-            self.committed = copy.deepcopy(self._cursor())
+            self.committed = self._cursor()
             self.identity = self.source.identity
             self.sources = self.source.sources
             self.manifest = self.source.manifest
@@ -68,7 +69,7 @@ class PrefetchedBatches:
                 except StopIteration:
                     self._put(("end", None))
                     return
-                cursor = copy.deepcopy(self._cursor())
+                cursor = self._cursor()
                 packet = {"x": x, "y": y, "cursor": cursor, "event": None}
                 if stream is not None:
                     import torch
