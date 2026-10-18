@@ -32,6 +32,9 @@ flowchart LR
 - GPU availability is not guaranteed. The queue absorbs short download stalls;
   a sustained CPU/network bottleneck can drain it. Metrics include cumulative
   `data_wait_seconds`, queue depth and per-update `data_fetch_seconds`.
+- Producer failures are broadcast to all ranks. Training stops with `data_error`
+  and saves the last completed optimizer boundary before returning the error
+  report; periodic checkpoints remain the fallback for abrupt process failures.
 - Checkpoints save the **acknowledged optimizer cursor**, rather than the
   producer's speculative position. Restart discards unconsumed prefetched rows,
   tokens and batches, then reconstructs them. Document token offsets and source

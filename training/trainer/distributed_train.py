@@ -324,6 +324,7 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
         initial_validation = primary(evaluate_and_record)
         local_windows = config.global_windows // world
         reason = "token_limit"
+        data_error = None
         while tokens < config.target_tokens:
             flag = torch.tensor(int(stopped), device="cuda")
             dist.all_reduce(flag, op=dist.ReduceOp.MAX)
@@ -364,7 +365,14 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
             torch.cuda.synchronize()
             tick = time.monotonic()
             fetch_tick = time.monotonic()
-            batch = primary(fetch)
+            try:
+                batch = primary(fetch)
+            except RuntimeError as exc:
+                # All ranks received the same producer failure. Save the last
+                # completed optimizer boundary, without acknowledging bad data.
+                reason = "data_error"
+                data_error = str(exc)
+                break
             data_fetch_seconds = time.monotonic() - fetch_tick
             if "stop" in batch:
                 reason = batch["stop"]
@@ -426,6 +434,7 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 total_loss_tokens=tokens,
                 session_loss_tokens=tokens - start_tokens,
                 stop_reason=reason,
+                data_error=data_error,
                 elapsed_seconds=time.monotonic() - started,
                 final_checkpoint=final_checkpoint,
                 initial_validation=initial_validation,
