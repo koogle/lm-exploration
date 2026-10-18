@@ -1,0 +1,10 @@
+{
+  "prefix": "opt100m-1gpu-20261018-a",
+  "call_id": "fc-01M57AW8YY6P6D257CYHXA8EWS",
+  "provenance": {
+    "git_commit": "a9b6429d703c4564de4081b3a02aaf379e0eb267",
+    "purpose": "Single-H100 100M-token optimization comparisons, global batch 32; no distributed scaling claim"
+  },
+  "gpu": "H100:1",
+  "replaced_queued_eight_gpu_call": "fc-01M577JN08C7TND0EEC7R76R29"
+}
