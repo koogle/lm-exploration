@@ -57,10 +57,11 @@ class RawTokenMixture(TokenMixture):
         self.iterators = {}
         self.cursors = {name: {"pass": 0, "hash": "", "offset": 0} for name in self.sources}
         self.tokenizer = load_frozen()
+        self.single_pass = self.manifest.get("continuation_passes") == 1
 
     def blocks(self, name):
         saved = dict(self.cursors[name])
-        passes = 2 if self.split == "train" else 1
+        passes = 2 if self.split == "train" and not self.single_pass else 1
         for pass_index in range(saved["pass"], passes):
             start_hash = saved["hash"] if pass_index == saved["pass"] else ""
             rows = self.db.execute(
@@ -105,6 +106,39 @@ class RawTokenMixture(TokenMixture):
         self.positions[name] += 1
         self.exposures[name] += block["loss_tokens"]
         return block
+
+    def next_batch(self, batch_size, device="cpu"):
+        if not self.single_pass:
+            return super().next_batch(batch_size, device)
+        import torch
+
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        state = self.state_dict()
+        blocks = []
+        try:
+            for _ in range(batch_size):
+                try:
+                    blocks.append(self.next_block())
+                except StopIteration:
+                    break
+            if not blocks:
+                raise StopIteration("Completed the single continuation pass")
+            # Train every final target exactly once; empty windows still join DDP.
+            blocks.extend(
+                {
+                    "input_ids": [PAD_TOKEN_ID] * self.context,
+                    "labels": [LOSS_IGNORE_INDEX] * self.context,
+                }
+                for _ in range(batch_size - len(blocks))
+            )
+            return (
+                torch.tensor([b["input_ids"] for b in blocks], dtype=torch.long, device=device),
+                torch.tensor([b["labels"] for b in blocks], dtype=torch.long, device=device),
+            )
+        except Exception:
+            self.load_state_dict(state)
+            raise
 
     def state_dict(self):
         return {

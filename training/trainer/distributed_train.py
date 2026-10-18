@@ -230,6 +230,8 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 validate_resume(
                     saved, config, identity, metadata["source_sha256"], str(torch.__version__)
                 )
+                if "lineage" in saved:
+                    metadata["lineage"] = saved["lineage"]
                 model.load_state_dict(saved["model"])
                 optimizer.load_state_dict(saved["optimizer"])
                 step, tokens = saved["step"], saved["tokens"]
@@ -477,6 +479,7 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 steps=step,
                 session_steps=step - start_step,
                 total_loss_tokens=tokens,
+                lifetime_loss_tokens=metadata.get("lineage", {}).get("parent_tokens", 0) + tokens,
                 session_loss_tokens=tokens - start_tokens,
                 stop_reason=reason,
                 data_error=data_error,
