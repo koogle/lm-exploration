@@ -355,3 +355,28 @@ Collector, manual and disabled-schedule recovery apps all deployed successfully.
 The running ECB worker can retain its earlier adapter until its next round; no
 new-rule ingestion is claimed yet. Neither the one-billion-token objective nor
 whole-website exhaustion has been reached.
+
+At 08:10 UTC, [both calls in audit pair 17 were confirmed complete](../research/audit-pair-17-observations-20261018.json).
+The [08:08 matching-cache checkpoint](../research/goal-checkpoint-20261018-0808.json)
+contains **20,292 documents** and **459,981,239 verified tokens (46.00%)**.
+ECB contributed 186,633,399 counted tokens; EMA contributed 273,347,840. Both
+summaries complete their pinned audit revisions, while newer collection rows
+remain unaudited. The coordinator may retain unresolved bookkeeping until its
+next scheduled reconciliation; no extra audit pair was started.
+
+ECB's current campaign remains running. EMA's prior supervisor is now complete
+with its full child tree terminated. The existing collection controller can
+therefore reconcile and reserve its next bounded campaign; no independent source
+worker is introduced. Technical-publication saved rows have reached 58 at the
+08:08 checkpoint. All 150 new report-series candidates and all 20 convergence
+reports remain completed, with no failures in those five collections.
+
+The [08:13 controller confirmation](../research/continuation-controller-resume-20261018.json)
+records **20,332 stored documents** and the same 459,981,239 verified-token lower
+bound. The existing controller completed its two-phase terminal reconciliation
+using fresh source snapshots, then allocated exactly one EMA successor:
+`goal-ema-1792311174-e0a016a7ea`, supervisor `fc-01M5714D7CKZSJ5740VZWY5SWS`.
+Its live child tree is running. ECB's existing supervisor is still running.
+There are now 26 campaign records, with 6,000 reserved attempts across both sources;
+the successor retains three rounds, 1,000 attempts and 3,000 work seconds per round.
+No source pacing, schedule, cap or audit reservation was changed.
