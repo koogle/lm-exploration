@@ -155,10 +155,10 @@ def prepare_original():
     secrets=[modal.Secret.from_name("simple-llm-hf")],
     volumes={"/data": data_volume},
 )
-def audit_augmented():
+def audit_augmented(audit_round=0):
     from training_data.readiness_audit import audit, benchmark_index
 
-    folder = BASE / "combined-refresh-audit"
+    folder = BASE / f"combined-refresh-audit-r{audit_round}"
     index, pins = benchmark_index(folder)
     return audit(
         [
@@ -176,6 +176,31 @@ def audit_augmented():
 
 @app.function(
     image=image,
+    cpu=16,
+    memory=32768,
+    timeout=86400,
+    retries=0,
+    max_containers=1,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes={"/data": data_volume},
+)
+def collect_more_code(audit_round):
+    from training_data.overnight_corpus import prepare_code
+
+    return {
+        "collection": prepare_code(
+            BASE / "multilingual",
+            PRIOR,
+            EU,
+            target=6_500_000_000 + 2_000_000_000 * audit_round,
+            seconds=80000,
+            commit=data_volume.commit,
+        )
+    }
+
+
+@app.function(
+    image=image,
     cpu=8,
     memory=32768,
     timeout=21600,
@@ -183,11 +208,11 @@ def audit_augmented():
     max_containers=1,
     volumes={"/data": data_volume},
 )
-def freeze_snapshot():
+def freeze_snapshot(audit_round=0):
     from training_data.overnight_snapshot import freeze
 
     result = freeze(
-        BASE / "combined-refresh-audit",
+        BASE / f"combined-refresh-audit-r{audit_round}",
         Path("/data/scholarly-code") / SNAPSHOT,
         OLD_MANIFEST,
         {
@@ -329,7 +354,7 @@ def train(run_id, provenance):
 @app.function(
     image=image, cpu=1, memory=2048, timeout=3600, retries=0, volumes={"/runs": run_volume}
 )
-def wait_for_data(run_id, code_call, original_call, provenance, audit_call=None):
+def wait_for_data(run_id, code_call, original_call, provenance, audit_call=None, audit_round=0):
     """Chain bounded CPU waiters; no GPU is allocated while preparation runs."""
     validate_paths(run_id, SNAPSHOT, PARENT)
     stop = time.monotonic() + 2700
@@ -344,11 +369,12 @@ def wait_for_data(run_id, code_call, original_call, provenance, audit_call=None)
                         target_new_code_tokens=6_000_000_000,
                     )
                     collection = modal.FunctionCall.from_id(code_call).get(timeout=30)
-                    modal.FunctionCall.from_id(collection["audit_call_id"]).cancel(
-                        terminate_containers=True
-                    )
+                    if collection.get("audit_call_id"):
+                        modal.FunctionCall.from_id(collection["audit_call_id"]).cancel(
+                            terminate_containers=True
+                        )
                     modal.FunctionCall.from_id(original_call).get(timeout=30)
-                    audit_call = audit_augmented.spawn().object_id
+                    audit_call = audit_augmented.spawn(audit_round).object_id
                 mark(
                     run_id,
                     "auditing_fresh_code",
@@ -359,7 +385,9 @@ def wait_for_data(run_id, code_call, original_call, provenance, audit_call=None)
                 if assessment["stage"] != "audited_not_training_ready":
                     raise ValueError("Unexpected audit result")
                 mark(run_id, "checking_capacity_and_freezing")
-                preparation = freeze_and_schedule.spawn(run_id, provenance)
+                preparation = freeze_and_schedule.spawn(
+                    run_id, original_call, provenance, audit_round
+                )
                 mark(
                     run_id,
                     "freezing_snapshot",
@@ -370,7 +398,9 @@ def wait_for_data(run_id, code_call, original_call, provenance, audit_call=None)
                 return {"preparation_call_id": preparation.object_id}
             except TimeoutError:
                 continue
-        next_call = wait_for_data.spawn(run_id, code_call, original_call, provenance, audit_call)
+        next_call = wait_for_data.spawn(
+            run_id, code_call, original_call, provenance, audit_call, audit_round
+        )
         mark(
             run_id,
             "preparation_pending",
@@ -392,15 +422,43 @@ def wait_for_data(run_id, code_call, original_call, provenance, audit_call=None)
     retries=0,
     volumes={"/data": data_volume, "/runs": run_volume},
 )
-def freeze_and_schedule(run_id, provenance):
+def freeze_and_schedule(run_id, original_call, provenance, audit_round=0):
     try:
-        prepared = freeze_snapshot.local()
+        prepared = freeze_snapshot.local(audit_round)
         folder = Path("/runs") / run_id
         (folder / "data-readiness.json").write_text(json.dumps(prepared, indent=2) + "\n")
         run_volume.commit()
         training = train.spawn(run_id, provenance)
         mark(run_id, "training_scheduled", training_call_id=training.object_id, snapshot=SNAPSHOT)
         return {"training_call_id": training.object_id, "prepared": prepared}
+    except ValueError as exc:
+        snapshot_path = Path("/data/scholarly-code") / SNAPSHOT
+        capacity_failure = any(
+            message in str(exc)
+            for message in [
+                "new eligible code",
+                "eight languages",
+                "path-task families",
+                "retain 6.1B",
+                "held-out parents",
+            ]
+        )
+        if audit_round < 2 and capacity_failure and not (snapshot_path / "raw.sqlite").exists():
+            collection = collect_more_code.spawn(audit_round + 1)
+            continuation = wait_for_data.spawn(
+                run_id, collection.object_id, original_call, provenance, None, audit_round + 1
+            )
+            mark(
+                run_id,
+                "collecting_more_after_filtering",
+                reason=str(exc),
+                audit_round=audit_round + 1,
+                collection_call_id=collection.object_id,
+                continuation_call_id=continuation.object_id,
+            )
+            return {"continuation_call_id": continuation.object_id, "capacity_retry": True}
+        mark(run_id, "data_gate_failed", error=f"{type(exc).__name__}: {str(exc)[:1500]}")
+        raise
     except Exception as exc:
         mark(run_id, "data_gate_failed", error=f"{type(exc).__name__}: {str(exc)[:1500]}")
         raise

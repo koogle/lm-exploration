@@ -144,3 +144,9 @@ Collection is followed by a combined audit including fresh original records;
 only new records from the original fork are counted as fresh. The collector's
 intermediate code-only audit is superseded/cancelled by the controller before
 scheduling the combined refresh audit. No GPU allocation is needed for these steps.
+
+If the post-filter code capacity/variety gate is short before snapshot construction,
+the controller may resume the same pinned collection cursor for up to two additional
+rounds (8.5B then 10.5B pre-audit targets), with a new combined audit per round.
+It never fills code shortages by repeating old code or relaxing the pass limit.
+Other failures, or exhausted retry bounds, remain explicit stopped states.
