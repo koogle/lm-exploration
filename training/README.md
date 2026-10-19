@@ -1,21 +1,41 @@
-# Training from scratch
+# Simple LLM — training from scratch
+
+## Naming and artifact compatibility
+
+The project uses **Simple LLM** in source filenames, module names, commands and
+documentation. Corpus preparation is `lm-prepare-simple-llm`, implemented in
+`training_data.prepare_simple_llm`; the data pipeline is `training_data.simple_llm`.
+See the [streaming guide](data/SIMPLE_LLM_STREAMING.md) and
+[pretraining plan](plans/SIMPLE_LLM_PRETRAINING.md).
+
+Historical result files and the original tokenizer asset directory have been
+renamed locally, but their machine-readable contents, frozen bytes, hashes,
+recorded run IDs, split-policy IDs and checkpoint-format IDs are unchanged.
+Published resource URLs and existing Modal data paths retain their actual
+identifiers: a source rename does not rename remote artifacts or authorize new
+jobs. Human-readable reports use the new labels; consult their accompanying JSON
+for exact original artifact locations and provenance. Example version/run labels
+are illustrative; use the actual prepared snapshot version when launching a job.
 
 ## Current handoff — 2026-10-16
 
-Start with the [scholarly/code pretraining plan](plans/SCHOLARLY_CODE_PRETRAINING.md).
+Start with the [Simple LLM pretraining plan](plans/SIMPLE_LLM_PRETRAINING.md).
 It records the latest agreed dataset proportions, approximately 150M-parameter
 goal, 20B-token target with a conditional 50B extension, frozen code-focused 32K tokenizer,
 and next-agent checklist. It supersedes older undecided mixture/tokenizer
 notes and illustrative token budgets below for this experiment.
 
-The [streaming preparation guide](data/SCHOLARLY_STREAMING.md) now provides
+The [streaming preparation guide](data/SIMPLE_LLM_STREAMING.md) now provides
 bounded upstream ingestion, immutable token snapshots, a Modal CPU entrypoint,
-and a resumable token-mixture loader. Its snapshots remain pending corpus audits. A [bounded 124.4M subword pilot](results/scholarly-124m-pilot-20261016-01.md)
+and a resumable token-mixture loader. Its snapshots remain pending corpus audits. A [bounded 124.4M subword pilot](results/simple-llm-124m-pilot-20261016-01.md)
 has now completed 600 updates / 4.08M tokens on Modal; substantial pretraining
-has not been launched. The [measured GPU comparison](results/scholarly-124m-gpu-comparison-20261017.md)
+has not been launched. The [measured GPU comparison](results/simple-llm-124m-gpu-comparison-20261017.md)
 compares one, two and three A10, L40S and H100 GPUs with matched global batches.
 Those measurements used the SDPA implementation now used by the modern model.
 Three H100s are the recommended configuration when elapsed time is the priority.
+[Distributed subword training](distributed_training/README.md) now exposes one/two/three-GPU
+training and explicit checkpoint/resume across Modal jobs. Full corpus readiness
+and substantial pretraining remain separate.
 
 The [tokenizer learning-curve experiment](tokenizer/research/README.md) compares
 64 MiB through 2 GiB at 16K, 32K and 50K vocabularies on Modal, with a shared
@@ -59,9 +79,21 @@ See the owning guide and `results/shakespeare-10m-*.json` for executed results.
 
 ## Training runs on Modal
 
-The [bounded scholarly/code pilot](100m/PILOT.md) connects the modern 124.4M
-model to the frozen 32K tokenizer and token-mixture loader. Its launcher is
-`modal_scripts/modal_scholarly_pilot.py`; the older recipes below remain character-only.
+![One Modal worker launches one process per GPU with torchrun. Rank zero reads shared input files and scatters the batch; DDP synchronizes gradients before each replica updates its weights.](distributed_training/images/distributed-training.png)
+
+The diagram shows the three-GPU subword trainer. The Modal API starts the worker;
+inside it, a supervised `torchrun` subprocess launches one Python process per GPU.
+Rank zero reads the shared corpus on `/data`; corpus files are not copied per run
+or per GPU. Each GPU holds a full model and optimizer replica. At checkpoint
+boundaries, rank zero saves to `/runs`; resuming requires an explicit new job.
+See the [distributed training guide](distributed_training/README.md) for launch commands,
+microbatch accumulation and checkpoint details.
+
+The [historical bounded Simple LLM pilot](100m/PILOT.md) connected the modern
+124.4M model to the frozen 32K tokenizer and token-mixture loader. Its duplicate
+single-GPU implementation has been removed. All current subword training uses
+[`distributed_training/`](distributed_training/README.md), including one GPU;
+the older recipes below remain character-only.
 
 All training runs on Modal GPU workers; there is no CPU or MPS training path.
 A JSON [recipe](recipes/README.md) names the architecture, registered dataset,
@@ -82,7 +114,8 @@ gradient descent, start with [the XOR example](examples/README.md).
   [`10m/model.py`](10m/model.py) owns the shared implementation at 6 layers,
   width 384 and 6 heads; historical vanilla checkpoints use a legacy-only path.
 - [`modal_scripts/`](modal_scripts/README.md), including [`modal_train.py`](modal_scripts/modal_train.py) and [`recipes/`](recipes/README.md): the character-level
-  recipe launcher. The [subword pilot](100m/PILOT.md) has its own bounded Modal launcher.
+  recipe launcher. Current subword training lives in
+  [`distributed_training/`](distributed_training/README.md).
 - [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a
   prompt, and reads the architecture, configuration and tokenizer from the checkpoint.
 - [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,
@@ -90,7 +123,7 @@ gradient descent, start with [the XOR example](examples/README.md).
 - [`data/loading.py`](data/loading.py): character tokenization, text loading,
   deterministic splits and batching.
 - [`data/`](data/README.md): curated dataset definitions, fetching and preparation
-  scripts; `lm-prepare-scholarly` runs `training_data.prepare_scholarly`.
+  scripts; `lm-prepare-simple-llm` runs `training_data.prepare_simple_llm`.
 - [`tokenizer/`](tokenizer/README.md): frozen tokenizer assets plus research,
   evaluation, reporting and publication tools. Invoke tools as
   `uv run python -m tokenizer.<module>` from `training/`.

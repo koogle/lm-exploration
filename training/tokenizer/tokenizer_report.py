@@ -331,7 +331,7 @@ def generate(folder):
         "## Experimental design",
         "",
         (
-            "- All 12 pinned source inventories from the scholarly/code plan are eligible; "
+            "- All 12 pinned source inventories from the Simple LLM plan are eligible; "
             "the experiment samples them rather than claiming to process every upstream record."
         ),
         (
@@ -511,7 +511,7 @@ def generate(folder):
         "",
         "## Reproduction and evidence",
         "",
-        "- Published tokenizer variants: [jfrick/scholarly-code-tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer)."
+        "- Published tokenizer variants: [Simple LLM tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer)."
         if complete
         else "- Publication awaits the complete measured matrix.",
         (
@@ -534,7 +534,7 @@ def generate(folder):
     with PdfPages(folder / "research-report.pdf") as pdf:
         cover = plt.figure(figsize=(8.27, 11.69))
         cover.text(0.09, 0.92, "Tokenizer learning curve", fontsize=22, weight="bold")
-        cover.text(0.09, 0.87, "Scholarly/code pretraining • 2026-10-16", fontsize=13)
+        cover.text(0.09, 0.87, "Simple LLM pretraining • 2026-10-16", fontsize=13)
         paragraphs = [
             overview.split(" The strongest observed compression")[0],
             (

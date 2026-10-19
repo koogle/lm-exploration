@@ -1,4 +1,4 @@
-# Scholarly/code 124.4M pilot — 2026-10-16
+# Simple LLM 124.4M pilot — 2026-10-16
 
 Completed GPU training: **600 updates, 4,078,340 loss-bearing tokens**.
 The planned 20B-token run has not started. This pilot establishes functioning
@@ -6,8 +6,8 @@ subword training and learning, not a useful or coherent pretrained model.
 
 - [Modal training app](https://modal.com/apps/radiantai/main/ap-kNTO2wU7UHUfRXuvo7cQJm)
 - [Preparation app](https://modal.com/apps/radiantai/main/ap-zqBbbmPj2YH3x0rD8lZO2F)
-- [Full worker report](scholarly-124m-pilot-20261016-01.json), [metrics](scholarly-124m-pilot-20261016-01-metrics.jsonl),
-  [selected runtime dependencies](scholarly-124m-pilot-20261016-01-environment.json)
+- [Full worker report](simple-llm-124m-pilot-20261016-01.json), [metrics](simple-llm-124m-pilot-20261016-01-metrics.jsonl),
+  [selected runtime dependencies](simple-llm-124m-pilot-20261016-01-environment.json)
 - [Configuration and launch guide](../100m/PILOT.md)
 
 ## Measured results
@@ -28,7 +28,7 @@ subword training and learning, not a useful or coherent pretrained model.
 | Actual checkpoint/data reload | Identical next-batch inputs, labels and logits |
 | Stop reason | Configured 600-update limit |
 
-![Learning curve](scholarly-124m-pilot-20261016-01-curve.png)
+![Learning curve](simple-llm-124m-pilot-20261016-01-curve.png)
 
 Validation is only one fixed window per source under the provisional split.
 All twelve losses improved, but no uncertainty estimate, audited benchmark result
@@ -64,7 +64,7 @@ remove that bottleneck. Do not cycle this snapshot to billions of tokens.
 
 ## Artifacts and provenance
 
-Volume: `lm-exploration-training`, directory: `scholarly-124m-pilot-20261016-01/`.
+Volume: `lm-exploration-training`, directory: `simple-llm-124m-pilot-20261016-01/`.
 Final checkpoint: `step-000600.pt`; intermediate immutable checkpoints:
 10, 100, 200, 300, 400 and 500. Each checkpoint contains model, optimizer,
 CPU/CUDA RNG and data cursor state. The directory also retains the tokenizer,

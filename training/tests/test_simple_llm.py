@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from training_data.scholarly import Stager, adapt, load_recipe
+from training_data.simple_llm import Stager, adapt, load_recipe
 from training_data.subword import DEFAULT_FOLDER, VOCAB_SIZE, load_frozen
 from training_data.token_stream import TokenMixture
 
@@ -188,7 +188,7 @@ class CorpusTests(unittest.TestCase):
         state["tokenizer_sha256"] = "wrong"
         with self.assertRaises(ValueError):
             restored.load_state_dict(state)
-        shard = next((self.root / "export").glob("*.gz"))
+        shard = next((self.root / "export").glob("*.tokens"))
         with shard.open("ab") as handle:
             handle.write(b"corrupt")
         with self.assertRaises(ValueError):

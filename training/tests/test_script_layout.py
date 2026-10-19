@@ -12,12 +12,15 @@ ROOT = Path(__file__).resolve().parents[1]
 class ScriptLayoutTests(unittest.TestCase):
     def test_training_root_keeps_only_generation_entrypoint(self):
         self.assertEqual({p.name for p in ROOT.glob("*.py")}, {"generate.py"})
-        self.assertEqual(len(list((ROOT / "modal_scripts").glob("modal_*.py"))), 9)
-        self.assertTrue((ROOT / "data/prepare_scholarly.py").is_file())
+        self.assertEqual(len(list((ROOT / "modal_scripts").glob("modal_*.py"))), 8)
+        self.assertFalse((ROOT / "trainer/subword_pilot.py").exists())
+        self.assertTrue((ROOT / "data/prepare_simple_llm.py").is_file())
 
     def test_installed_module_locations(self):
         expected = {
-            "training_data.prepare_scholarly": "data/prepare_scholarly.py",
+            "training_data.prepare_simple_llm": "data/prepare_simple_llm.py",
+            "training_data.simple_llm": "data/simple_llm.py",
+            "modal_scripts.modal_prepare_simple_llm": "modal_scripts/modal_prepare_simple_llm.py",
             "tokenizer.tokenizer_research": "tokenizer/tokenizer_research.py",
             "tokenizer.tokenizer_evaluation": "tokenizer/tokenizer_evaluation.py",
             "tokenizer.tokenizer_report": "tokenizer/tokenizer_report.py",
@@ -26,6 +29,10 @@ class ScriptLayoutTests(unittest.TestCase):
             "tokenizer.package_tokenizer_research": "tokenizer/package_tokenizer_research.py",
             "tokenizer.verify_tokenizer_publication": "tokenizer/verify_tokenizer_publication.py",
             "modal_scripts.modal_train": "modal_scripts/modal_train.py",
+            "distributed_training.train": "distributed_training/train.py",
+            "distributed_training.config": "distributed_training/config.py",
+            "distributed_training.modal_train": "distributed_training/modal_train.py",
+            "distributed_training.modal_checks": "distributed_training/modal_checks.py",
         }
         for name, relative in expected.items():
             with self.subTest(module=name):
@@ -34,12 +41,16 @@ class ScriptLayoutTests(unittest.TestCase):
                 self.assertEqual(Path(spec.origin).resolve(), ROOT / relative)
         config = tomllib.loads((ROOT / "pyproject.toml").read_text())
         self.assertEqual(
-            config["project"]["scripts"]["lm-prepare-scholarly"],
-            "training_data.prepare_scholarly:main",
+            config["project"]["scripts"]["lm-prepare-simple-llm"],
+            "training_data.prepare_simple_llm:main",
         )
 
     def test_modal_image_local_sources_exist(self):
-        for path in (ROOT / "modal_scripts").glob("modal_*.py"):
+        paths = [
+            *(ROOT / "modal_scripts").glob("modal_*.py"),
+            *(ROOT / "distributed_training").glob("*.py"),
+        ]
+        for path in paths:
             tree = ast.parse(path.read_text())
             for node in ast.walk(tree):
                 if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
@@ -63,10 +74,10 @@ class ScriptLayoutTests(unittest.TestCase):
             "structured_tokenizer",
             "structured_tokenizer_report",
             "package_tokenizer_research",
-            "prepare_scholarly",
-            "modal_scholarly_pilot",
+            "prepare_simple_llm",
+            "modal_simple_llm_pilot",
         }
-        for folder in ("modal_scripts", "tokenizer", "tests"):
+        for folder in ("modal_scripts", "distributed_training", "tokenizer", "tests"):
             for path in (ROOT / folder).glob("*.py"):
                 for node in ast.walk(ast.parse(path.read_text())):
                     if isinstance(node, ast.ImportFrom):

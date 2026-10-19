@@ -49,7 +49,7 @@ class StructuredTests(unittest.TestCase):
             )
             self.assertEqual(manifest["evaluation_parents_per_category"], 8)
             self.assertGreaterEqual(sum(manifest["actual_bytes"].values()), 8192)
-            config = Path(__file__).resolve().parents[1] / "tokenizer/scholarly-code-v1/config.json"
+            config = Path(__file__).resolve().parents[1] / "tokenizer/simple-llm-v1/config.json"
             fit(root / "corpus", root / "candidate", 512, config)
             result = score(
                 root / "candidate/tokenizer.json", root / "corpus/evaluation.jsonl", "test"

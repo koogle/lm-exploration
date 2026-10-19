@@ -1,8 +1,8 @@
-# Scholarly/code pretraining plan and agent handoff
+# Simple LLM pretraining plan and agent handoff
 
 Updated 2026-10-16. This is the current plan for the next from-scratch model.
 It supersedes earlier 100M proposals and undecided mixture notes for this experiment.
-The [machine-readable plan](scholarly-code-150m.json) records token budgets;
+The [machine-readable plan](simple-llm-150m.json) records token budgets;
 the [tokenizer recipe](../tokenizer/recipe-v1.json) pins all 12 source revisions
 and shard lists used for the tokenizer sample.
 
@@ -23,10 +23,12 @@ The earlier references to 100 billion parameters were not the selected scale.
 
 As of 2026-10-17, the merged modern architecture has 124,389,632 parameters,
 the [subword pilot](../100m/PILOT.md) has completed 4.08M exposures, and
-[matched GPU profiling](../results/scholarly-124m-gpu-comparison-20261017.md)
+[matched GPU profiling](../results/simple-llm-124m-gpu-comparison-20261017.md)
 covers one/two/three A10, L40S and H100 GPUs. Full corpus preparation, corpus audits
-and substantial pretraining remain pending. The production launcher still needs
-resumable multi-GPU training; the DDP benchmark does not save training checkpoints.
+and substantial pretraining remain pending. The [distributed launcher](../distributed_training/README.md) now supports explicit
+multi-GPU checkpoint/resume across Modal jobs. It remains separate from the
+throughput-only benchmark; full-corpus restart costs and long-run operations are
+not yet measured.
 Instruction tuning and optional later reasoning training are separate experiments.
 
 ## Dataset mixture
@@ -61,7 +63,7 @@ provenance. Evaluate additional openly licensed code collections if capacity or
 language diversity requires it; do not silently change this policy.
 
 Use FineWeb-Edu, not Cosmopedia. Prefer FineMath and peS2o within the technical
-allocation. Dataset filtering scores and scholarly provenance are quality signals,
+allocation. Dataset filtering scores and simple LLM provenance are quality signals,
 not proof that every claim or solution is correct. FineMath-4plus is a subset of
 3plus; do not count them as disjoint corpora.
 
@@ -102,15 +104,15 @@ The user selected this tokenizer for the model's code and tool-calling focus.
   no normalization, automatic boundaries, padding or truncation.
 - Special IDs: PAD 0, BOS 1, EOS 2, UNK 3. Model vocabulary size must be 32,768.
 - Exact artifact SHA256: `add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9`.
-- Published at [jfrick/scholarly-code-tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).
+- Published at [Simple LLM tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).
   The adjacent `publication.json` pins the immutable Hub revision.
 - Compared with the earlier 2 GiB / 32K default: 13.97% fewer tokens on tool-format
   fixtures, 11.83% fewer on diffs, 8.21% fewer on JSON and 2.81% fewer on Python;
-  13.99% more tokens on the scholarly mixture. This trade-off was accepted explicitly.
+  13.99% more tokens on the simple LLM mixture. This trade-off was accepted explicitly.
 - JSON/diff/tool examples are controlled generated fixtures, not production traces.
   See the [full comparison](../results/tokenizer-structured/structured-code-v1/REPORT.md).
 
-The old `scholarly-code-v1` 16K assets and all prior measured candidates remain
+The old `simple-llm-v1` 16K assets and all prior measured candidates remain
 immutable historical versions. Existing encoded shards/checkpoints are not compatible
 with the new token IDs. Use new staging/snapshot versions and retokenize before model
 training; the loaders reject mismatched tokenizer identities. Do not change an old
@@ -173,7 +175,7 @@ by this handoff. The recipe and evaluation retain source pins and provenance,
 but exact corpus reproduction also requires preserving the original collector.
 
 The published earlier character model is
-[jfrick/fineweb-edu-scholarly-gpt-10m](https://huggingface.co/jfrick/fineweb-edu-scholarly-gpt-10m),
+[published 10M Simple LLM model](https://huggingface.co/jfrick/fineweb-edu-scholarly-gpt-10m),
 revision `320d1fe54c611756317ad0a7bbeeb87c686325c3`.
 It is a historical experiment, not the initialization for this from-scratch model.
 No new 150M model training was launched. The next implementation milestone is
