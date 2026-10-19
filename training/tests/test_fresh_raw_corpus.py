@@ -7,6 +7,7 @@ from pathlib import Path
 from training_data.export_raw import export_raw
 from training_data.fresh_raw_corpus import FreshRawCorpus, initialize_fresh
 from training_data.raw_corpus import RawCorpus
+from training_data.raw_token_stream import RawTokenMixture
 from training_data.subword import digest
 
 from tests.test_fast_raw_corpus import fixture
@@ -62,6 +63,20 @@ class FreshCorpusTests(unittest.TestCase):
                     ).fetchone()[0]
                     self.assertEqual(count, data["splits"]["train"]["loss_tokens"])
                     self.assertGreaterEqual(count * 2, targets[name])
+            loader = RawTokenMixture(
+                root / "new-snapshot/manifest.json", context=8, allow_unreviewed=True
+            )
+            loader.next_batch(2)
+            state = loader.state_dict()
+            expected = loader.next_batch(2)
+            restored = RawTokenMixture(
+                root / "new-snapshot/manifest.json", context=8, allow_unreviewed=True
+            )
+            restored.load_state_dict(state)
+            actual = restored.next_batch(2)
+            self.assertEqual([a.tolist() for a in actual], [a.tolist() for a in expected])
+            loader.close()
+            restored.close()
             self.assertEqual(digest(root / "snapshot/raw.sqlite"), old_hash)
             fresh.close()
 
