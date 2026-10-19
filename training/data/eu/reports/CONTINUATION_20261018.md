@@ -564,3 +564,32 @@ and 18,927 of 20,162 records in the pinned English metadata snapshot. This is
 configuration coverage, not saved-document coverage or whole-website exhaustion.
 Validation: 389 tests plus lint/format/whitespace checks. Collection caps, backoff,
 private storage and the separately authorized 96-pair audit budget are retained.
+
+
+## 19 October: private storage upgrade and verified recovery
+
+The owner reported updating Hugging Face storage limits and requested continued
+collection. Both ECB and EMA had stopped after three terminal campaign failures
+with `BadRequestError`: “Private storage limit reached for user jfrick”. This was
+a private-storage quota block, distinct from repository commit-rate limits.
+The confirmed snapshot had 38,814 saved documents (ECB 17,700; EMA 21,114) and
+**1,001,931,446 verified o200k_base tokens**. The billion-token value is a milestone;
+the owner's exhaustion directive and `stop_at_token_target: false` remain in force.
+
+Full termination of the last three failed supervisor trees per source was checked
+before recovery. Source campaign metadata for those confirmed-terminal calls was
+reconciled without resetting rounds, runs, document failures or completed items.
+A source write then succeeded in each private dataset and was read back, with row
+counts and immutable shard lists unchanged. The control recovery acknowledgements
+were committed with CAS; the existing controller allocated one successor per source.
+ECB campaign `goal-ecb-1792450658-9755390c25` uses three rounds of up to 571 attempts;
+EMA campaign `goal-ema-1792450658-4c81e2add9` retains six rounds of up to 1,000. Both
+live call trees were running and both sources recorded new running worker IDs.
+
+The audit coordinator was also invoked and resumed at pair 55 of the authorized
+96. Original claims and caches remain. No code deployment, visibility change,
+source pacing change, budget increase or data deletion was needed for the owner's
+external storage upgrade. Recovery revisions, six terminal-tree proofs, call IDs
+and preserved row counts are in `research/hf-storage-recovery-20261019.json`.
+Checks are live write/read-back and call-tree verification; code is unchanged
+from the preceding 389-test snapshot. Further source coverage gaps remain.

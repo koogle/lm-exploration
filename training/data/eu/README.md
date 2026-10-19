@@ -930,3 +930,18 @@ mappings give enabled series weight 1, retaining existing weights, pacing,
 backoff and budgets. Short original agendas are retained at existing extraction
 thresholds. Candidate counts are not saved-document counts, and passage overlap
 is unmeasured. See [coverage and samples](research/ecb-policy-project-expansion-20261019.md).
+
+
+### Recovery after the owner increased private HF storage
+
+Both sources encountered an account-level private storage limit on 19 October.
+After the owner's external upgrade, write/read-back checks succeeded in both
+private datasets. Confirmed-terminal source campaign metadata was reconciled,
+recovery acknowledgements preserved job history, and the existing controller
+started one successor per source. Audit measurement resumed within the 96-pair
+budget. No datasets, originals or failure history were deleted or reset.
+
+The recovery snapshot passed **1,001,931,446 verified tokens** across 38,814 saved
+documents. One billion remains a reporting milestone; collection continues toward
+documented source exhaustion. Source pacing and operational collection limits
+are unchanged. See [recovery evidence](research/hf-storage-recovery-20261019.json).

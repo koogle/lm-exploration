@@ -71,6 +71,16 @@ rows before this new work. Preserve the 96-pair audit budget and all collection
 limits. Further discovery must continue after this configured backlog drains;
 64 configured types in one English metadata snapshot are not website exhaustion.
 
+The owner increased HF private storage after both sources hit an account-level
+storage limit. Source writes were verified after the upgrade, terminal failed
+campaign metadata was reconciled, and the controller restarted both sources.
+New campaigns: ECB `goal-ecb-1792450658-9755390c25` and EMA
+`goal-ema-1792450658-4c81e2add9`. Audit measurement resumed at pair 55 of 96.
+See `research/hf-storage-recovery-20261019.json`. The pinned pre-restart lower bound
+passed one billion at 1,001,931,446 verified tokens; **continue collecting** under
+the owner's exhaustion directive. All collection limits and source pacing remain.
+Never replay old failed calls or reset completed/failure history after a quota fix.
+
 Paste the following into a new agent/goal:
 
 ---
