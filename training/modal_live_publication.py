@@ -18,7 +18,7 @@ REPO = "jfrick/124M-10.879B"
 def checked_checkpoint(run_id, checkpoint):
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,60}", run_id):
         raise ValueError("Invalid run ID")
-    if not re.fullmatch(re.escape(run_id) + r"-s[0-9]{2}/step-[0-9]{9}\.pt", checkpoint):
+    if not re.fullmatch(re.escape(run_id) + r"(?:-s[0-9]{2}|-seed)/step-[0-9]{9}\.pt", checkpoint):
         raise ValueError("Expected a trusted checkpoint from this run")
     return Path("/runs") / checkpoint
 
@@ -48,7 +48,10 @@ def publish_checkpoint(run_id, checkpoint):
         raise ValueError("Refusing public publication")
     with tempfile.TemporaryDirectory() as temporary:
         output = Path(temporary)
-        export_checkpoint(path, output, path.parent, run_id)
+        source = (
+            Path("/runs") / (run_id + "-s00") if path.parent.name.endswith("-seed") else path.parent
+        )
+        export_checkpoint(path, output, source, run_id)
         provenance = json.loads((output / "provenance.json").read_text())
         lifetime = provenance.get("lineage", {}).get("parent_tokens", 0) + provenance["tokens"]
         title = f"124M - {lifetime / 1e9:.3f}B"
@@ -187,6 +190,14 @@ def watch(run_id):
         candidates = sorted(
             Path("/runs").glob(run_id + "-s[0-9][0-9]/step-*.pt"), key=lambda p: p.name
         )
+        seed = Path("/runs") / (run_id + "-seed/step-000000000.pt")
+        source = Path("/runs") / (run_id + "-s00")
+        if (
+            seed.exists()
+            and (source / "source/model_100m/model.py").exists()
+            and (source / "data-manifest.json").exists()
+        ):
+            candidates.insert(0, seed)
         remaining = [p for p in candidates if p.stem not in state["checkpoints"]]
         if not state.get("pending") and remaining:
             path = remaining[0]
