@@ -1,0 +1,23 @@
+{
+  "run_id": "simple-llm-code60-fresh-5b-20261019-r02",
+  "controller_call_id": "fc-01M59RRHT9BM5RPA4T80PFEMWG",
+  "launched_utc": "2026-10-19T09:44:24.731145+00:00",
+  "provenance": {
+    "repository": "https://github.com/koogle/lm-exploration",
+    "branch": "training/code-heavy-5b",
+    "commit": "654e98052a027000e5ce95dca49aa7916cf17253",
+    "pull_request": 26,
+    "request": "User authorized fixing fresh-data shortage and continuing 5B targets; coding 60%, overall books budget unchanged; redistribute exhausted book collections within original books pool",
+    "optimization_pr": 17,
+    "fresh_only": true,
+    "book_allocation_policy": "fresh-book-pool-v1",
+    "previous_failed_run": "simple-llm-code60-fresh-5b-20261019"
+  },
+  "status": "Replacement controller running CPU preparation; GPU training awaits fresh-data gates",
+  "snapshot": "code-heavy-fresh-20261019/snapshots/code60-5b-books-v2",
+  "target_phase_tokens": 5000000000,
+  "coding_target_tokens": 3000000000,
+  "parent_checkpoint": "simple-llm-124m-eu-onepass-20261018-s02/step-000003838.pt",
+  "allocation_policy": "Keep each non-book source budget and total books budget; cap exhausted book sources at 2*floor(fresh_unique/1.05), redistribute within six original book collections proportionally; retain two-pass limit",
+  "verified_tests": 12
+}
