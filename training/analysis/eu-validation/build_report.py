@@ -131,15 +131,12 @@ def build(source, output):
     left.set_xlabel("Validation loss (nats/token; lower is better)")
     left.legend(loc="lower right", fontsize=8)
     for i, name in enumerate(names):
-        color = "#218464" if categories[name]["direction"] == "better" else "#b14d49"
-        right.errorbar(
-            delta[i],
-            y[i],
-            xerr=[[delta[i] - ci[i, 0]], [ci[i, 1] - delta[i]]],
-            fmt="o",
-            color=color,
-            capsize=3,
-        )
+        color = {"better": "#218464", "worse": "#b14d49", "uncertain": "#777777"}[
+            categories[name]["direction"]
+        ]
+        right.hlines(y[i], ci[i, 0], ci[i, 1], color=color)
+        right.plot(ci[i], [y[i], y[i]], "|", color=color, markersize=7)
+        right.plot(delta[i], y[i], "o", color=color)
     right.axvline(0, color="#666666", linewidth=1)
     right.set_xlabel("After − before loss (95% paired family-bootstrap CI)")
     for ax in (left, right):

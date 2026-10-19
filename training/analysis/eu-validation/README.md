@@ -1,5 +1,11 @@
 # Expanded EU continuation validation
 
+Completed: **7,620,187 matched targets**, 4,615 windows and 2,782 source-family
+selections per checkpoint. All 12 original categories worsened, with category-wise
+95% paired intervals above zero; ECB and EMA improved. Python loss rose from
+1.559 to 3.994. See the [full results and intervals](report.md),
+[plot](expanded-validation.png), and [aggregate JSON](comparison-20261019.json).
+
 Compare the original 124M/5B checkpoint and the completed 878,610,362-token
 ECB/EMA continuation on identical held-out windows. The small original diagnostic
 used four windows per original source and 32 EU prefixes per institution. This
@@ -12,7 +18,7 @@ Document and family coverage, tokens and nonprefix-window counts are reported.
 No test split is used, no model is trained and no HF repository is modified.
 Existing prepared raw databases are reused and checksum-verified.
 
-Two H100 workers score the checkpoints independently on the same checksummed
+Two H100 jobs score the checkpoints independently on the same checksummed
 sample. Both use full FP32, TF32 disabled, evaluation mode and exact next-token
 labels including EOS. Trailing padding is ignored. Token NLL sums accumulate in
 FP64. Window identities, parent identities and target counts must match before

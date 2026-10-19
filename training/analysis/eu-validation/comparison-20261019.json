@@ -1,0 +1,379 @@
+{
+  "categories": {
+    "ecb": {
+      "before_loss": 2.5478364897389945,
+      "after_loss": 2.0649489631876783,
+      "delta_loss": -0.48288752655131617,
+      "delta_ci95": [
+        -0.5168718513877396,
+        -0.4531102537544947
+      ],
+      "perplexity_ratio_after_before": 0.6169992155006909,
+      "tokens": 712043,
+      "families": 256,
+      "direction": "better"
+    },
+    "ema": {
+      "before_loss": 2.474508373573441,
+      "after_loss": 1.7661885360415588,
+      "delta_loss": -0.708319837531882,
+      "delta_ci95": [
+        -0.7964971873355371,
+        -0.6306930410035915
+      ],
+      "perplexity_ratio_after_before": 0.49247093392050617,
+      "tokens": 361602,
+      "families": 112,
+      "direction": "better"
+    },
+    "original/arxiv": {
+      "before_loss": 1.9497882117902077,
+      "after_loss": 2.8091927217655503,
+      "delta_loss": 0.8594045099753429,
+      "delta_ci95": [
+        0.8228583554214692,
+        0.8988351717440071
+      ],
+      "perplexity_ratio_after_before": 2.3617538740011543,
+      "tokens": 955479,
+      "families": 256,
+      "direction": "worse"
+    },
+    "original/code_python": {
+      "before_loss": 1.5591427360983965,
+      "after_loss": 3.9942717673282786,
+      "delta_loss": 2.435129031229882,
+      "delta_ci95": [
+        2.3398625760205616,
+        2.5411057607477634
+      ],
+      "perplexity_ratio_after_before": 11.41729180553104,
+      "tokens": 346847,
+      "families": 256,
+      "direction": "worse"
+    },
+    "original/doab": {
+      "before_loss": 2.362370064841509,
+      "after_loss": 2.837422036187953,
+      "delta_loss": 0.47505197134644417,
+      "delta_ci95": [
+        0.4366682389825957,
+        0.5159940845107787
+      ],
+      "perplexity_ratio_after_before": 1.6080977703204051,
+      "tokens": 207612,
+      "families": 71,
+      "direction": "worse"
+    },
+    "original/finemath_4plus": {
+      "before_loss": 1.799093179155612,
+      "after_loss": 2.518498037605622,
+      "delta_loss": 0.7194048584500097,
+      "delta_ci95": [
+        0.6464350668003892,
+        0.796083182722242
+      ],
+      "perplexity_ratio_after_before": 2.053210895839795,
+      "tokens": 324946,
+      "families": 256,
+      "direction": "worse"
+    },
+    "original/fineweb_edu": {
+      "before_loss": 2.675224465840467,
+      "after_loss": 2.9112838428345946,
+      "delta_loss": 0.2360593769941274,
+      "delta_ci95": [
+        0.2240235291807987,
+        0.24920554015188437
+      ],
+      "perplexity_ratio_after_before": 1.2662494940235325,
+      "tokens": 308280,
+      "families": 256,
+      "direction": "worse"
+    },
+    "original/gutenberg": {
+      "before_loss": 2.8188761140753904,
+      "after_loss": 3.4374800509441092,
+      "delta_loss": 0.6186039368687186,
+      "delta_ci95": [
+        0.5950893020402094,
+        0.6438337308927643
+      ],
+      "perplexity_ratio_after_before": 1.8563346716189002,
+      "tokens": 829715,
+      "families": 211,
+      "direction": "worse"
+    },
+    "original/library_of_congress": {
+      "before_loss": 2.880806793568109,
+      "after_loss": 3.2692679650982717,
+      "delta_loss": 0.3884611715301622,
+      "delta_ci95": [
+        0.3794500490326748,
+        0.39768822788857733
+      ],
+      "perplexity_ratio_after_before": 1.474709721631088,
+      "tokens": 620382,
+      "families": 162,
+      "direction": "worse"
+    },
+    "original/libretexts": {
+      "before_loss": 2.2442110126607084,
+      "after_loss": 2.5554314526110096,
+      "delta_loss": 0.3112204399503012,
+      "delta_ci95": [
+        0.2875539508740268,
+        0.33709567348645864
+      ],
+      "perplexity_ratio_after_before": 1.3650901084168159,
+      "tokens": 145786,
+      "families": 84,
+      "direction": "worse"
+    },
+    "original/pes2o": {
+      "before_loss": 2.312943282481791,
+      "after_loss": 2.5647577556418253,
+      "delta_loss": 0.2518144731600344,
+      "delta_ci95": [
+        0.2430811907648463,
+        0.26092248222125414
+      ],
+      "perplexity_ratio_after_before": 1.2863573613288135,
+      "tokens": 905439,
+      "families": 256,
+      "direction": "worse"
+    },
+    "original/pre_1929_books": {
+      "before_loss": 2.8731941185621293,
+      "after_loss": 3.2404382420261166,
+      "delta_loss": 0.3672441234639874,
+      "delta_ci95": [
+        0.3574186500296133,
+        0.37684270145659954
+      ],
+      "perplexity_ratio_after_before": 1.4437503294291676,
+      "tokens": 817106,
+      "families": 208,
+      "direction": "worse"
+    },
+    "original/pressbooks": {
+      "before_loss": 2.5052328276563767,
+      "after_loss": 2.751147606064535,
+      "delta_loss": 0.2459147784081582,
+      "delta_ci95": [
+        0.23227162699772927,
+        0.26108535941487626
+      ],
+      "perplexity_ratio_after_before": 1.278790588328288,
+      "tokens": 256223,
+      "families": 142,
+      "direction": "worse"
+    },
+    "original/pubmed": {
+      "before_loss": 2.1153214027610927,
+      "after_loss": 2.4947581148259883,
+      "delta_loss": 0.37943671206489576,
+      "delta_ci95": [
+        0.35732957104134433,
+        0.4033029512770193
+      ],
+      "perplexity_ratio_after_before": 1.461461134110305,
+      "tokens": 828727,
+      "families": 256,
+      "direction": "worse"
+    }
+  },
+  "sample": {
+    "identity": {
+      "manifest_sha256": [
+        "7ecc680b9ca742ca67eae14c072dd0f7a28a3a0a24f885ec7dfd022ffc180778",
+        "50fafc41b4cce78b31922e4a9e37d1bdaa1bf49f009e9e9b4ec1c812a4a8461c"
+      ],
+      "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+      "seed": 20261019,
+      "context": 2048,
+      "parents_per_source": 256,
+      "windows_per_document": 2,
+      "implementation_sha256": "dc8a9a7342f479ae52b2f8d95e80e1ba59a46646a1acb3e9dbafbd13eb40c585"
+    },
+    "windows_sha256": "579fe4fb51b9165328c1e0be0959307245555df08d8b63f285c81456951bb1db",
+    "coverage": {
+      "original/fineweb_edu": {
+        "available_documents": 24542,
+        "available_families": 24542,
+        "selected_documents": 256,
+        "selected_families": 256,
+        "missing_parent_documents": 0,
+        "windows": 294,
+        "tokens": 308280,
+        "nonprefix_windows": 40
+      },
+      "original/code_python": {
+        "available_documents": 38635,
+        "available_families": 10395,
+        "selected_documents": 256,
+        "selected_families": 256,
+        "missing_parent_documents": 0,
+        "windows": 320,
+        "tokens": 346847,
+        "nonprefix_windows": 77
+      },
+      "original/finemath_4plus": {
+        "available_documents": 39488,
+        "available_families": 39347,
+        "selected_documents": 256,
+        "selected_families": 256,
+        "missing_parent_documents": 0,
+        "windows": 296,
+        "tokens": 324946,
+        "nonprefix_windows": 50
+      },
+      "original/pes2o": {
+        "available_documents": 3966,
+        "available_families": 3966,
+        "selected_documents": 256,
+        "selected_families": 256,
+        "missing_parent_documents": 0,
+        "windows": 508,
+        "tokens": 905439,
+        "nonprefix_windows": 371
+      },
+      "original/pubmed": {
+        "available_documents": 1308,
+        "available_families": 1308,
+        "selected_documents": 256,
+        "selected_families": 256,
+        "missing_parent_documents": 0,
+        "windows": 478,
+        "tokens": 828727,
+        "nonprefix_windows": 328
+      },
+      "original/arxiv": {
+        "available_documents": 398,
+        "available_families": 398,
+        "selected_documents": 256,
+        "selected_families": 256,
+        "missing_parent_documents": 0,
+        "windows": 508,
+        "tokens": 955479,
+        "nonprefix_windows": 404
+      },
+      "original/pressbooks": {
+        "available_documents": 3217,
+        "available_families": 142,
+        "selected_documents": 142,
+        "selected_families": 142,
+        "missing_parent_documents": 0,
+        "windows": 196,
+        "tokens": 256223,
+        "nonprefix_windows": 67
+      },
+      "original/libretexts": {
+        "available_documents": 4718,
+        "available_families": 84,
+        "selected_documents": 84,
+        "selected_families": 84,
+        "missing_parent_documents": 0,
+        "windows": 114,
+        "tokens": 145786,
+        "nonprefix_windows": 41
+      },
+      "original/doab": {
+        "available_documents": 1045,
+        "available_families": 71,
+        "selected_documents": 71,
+        "selected_families": 71,
+        "missing_parent_documents": 0,
+        "windows": 120,
+        "tokens": 207612,
+        "nonprefix_windows": 91
+      },
+      "original/gutenberg": {
+        "available_documents": 211,
+        "available_families": 211,
+        "selected_documents": 211,
+        "selected_families": 211,
+        "missing_parent_documents": 0,
+        "windows": 418,
+        "tokens": 829715,
+        "nonprefix_windows": 394
+      },
+      "original/pre_1929_books": {
+        "available_documents": 208,
+        "available_families": 208,
+        "selected_documents": 208,
+        "selected_families": 208,
+        "missing_parent_documents": 0,
+        "windows": 411,
+        "tokens": 817106,
+        "nonprefix_windows": 380
+      },
+      "original/library_of_congress": {
+        "available_documents": 162,
+        "available_families": 162,
+        "selected_documents": 162,
+        "selected_families": 162,
+        "missing_parent_documents": 0,
+        "windows": 317,
+        "tokens": 620382,
+        "nonprefix_windows": 283
+      },
+      "ecb": {
+        "available_documents": 296,
+        "available_families": 293,
+        "selected_documents": 256,
+        "selected_families": 256,
+        "missing_parent_documents": 0,
+        "windows": 437,
+        "tokens": 712043,
+        "nonprefix_windows": 268
+      },
+      "ema": {
+        "available_documents": 244,
+        "available_families": 112,
+        "selected_documents": 112,
+        "selected_families": 112,
+        "missing_parent_documents": 0,
+        "windows": 198,
+        "tokens": 361602,
+        "nonprefix_windows": 140
+      }
+    },
+    "total_tokens": 7620187,
+    "total_windows": 4615,
+    "total_families": 2782,
+    "sampling_note": "Uniform document-family sample, one document per family, up to two uniform nonoverlapping 2K blocks per document. Token-weighted loss on this sample is not a whole-corpus token-uniform estimate."
+  },
+  "before_identity": {
+    "checkpoint_sha256": "ce26b11aed843008fb89893a5e90219b1a5c96e44ef32d42eb9188e427df1876",
+    "sample_sha256": "579fe4fb51b9165328c1e0be0959307245555df08d8b63f285c81456951bb1db",
+    "implementation_sha256": "dc8a9a7342f479ae52b2f8d95e80e1ba59a46646a1acb3e9dbafbd13eb40c585",
+    "precision": "FP32; TF32 disabled"
+  },
+  "after_identity": {
+    "checkpoint_sha256": "a9b4ff39352fae4aa163433df7130dbede1437657bee7c44fc26a6eb020af565",
+    "sample_sha256": "579fe4fb51b9165328c1e0be0959307245555df08d8b63f285c81456951bb1db",
+    "implementation_sha256": "dc8a9a7342f479ae52b2f8d95e80e1ba59a46646a1acb3e9dbafbd13eb40c585",
+    "precision": "FP32; TF32 disabled"
+  },
+  "bootstrap_samples": 2000,
+  "limitations": [
+    "Validation split only; no test-set tuning or scoring.",
+    "Family-balanced sample, not corpus-token-uniform perplexity.",
+    "CIs are conditional on selected families and are not simultaneous across categories.",
+    "Source split/near-duplicate/contamination audits remain pending.",
+    "2K window loss does not establish 8K long-context quality or generation correctness."
+  ],
+  "timing": [
+    {
+      "completed": true,
+      "total_tokens": 7620187,
+      "elapsed_seconds": 158.59275252499998
+    },
+    {
+      "completed": true,
+      "total_tokens": 7620187,
+      "elapsed_seconds": 168.61118730200002
+    }
+  ]
+}
