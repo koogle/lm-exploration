@@ -38,3 +38,8 @@ and prepared mixture snapshots. The character trainer above is unchanged.
 
 The [fresh Muon/AdamW comparison](MUON_COMPARISON.md) adds a matrix-only Muon
 optimizer with an AdamW companion and a matched, bounded eight-H100 launcher.
+
+New distributed training configs default to **Muon for hidden matrices plus
+fused AdamW for embeddings, biases and norms**. Use `optimizer="adamw"` for the
+all-AdamW baseline. See [distributed training](DISTRIBUTED.md#optimizer-default)
+for the optimized eight-H100 recipe and resume behavior.

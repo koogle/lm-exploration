@@ -16,7 +16,7 @@ class DistributedConfig:
     context: int = 2048
     target_tokens: int = 20_000_000_000
     warmup_tokens: int = 20_000_000
-    optimizer: str = "adamw"
+    optimizer: str = "muon"
     muon_lr: float = 0.02
     muon_momentum: float = 0.95
     peak_lr: float = 3e-4

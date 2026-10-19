@@ -4,6 +4,16 @@ from trainer.distributed_config import DistributedConfig, validate_resume
 
 
 class DistributedConfigTests(unittest.TestCase):
+    def test_resume_rejects_optimizer_switch(self):
+        config = DistributedConfig()
+        self.assertEqual(config.optimizer, "muon")
+        saved = {
+            "format": "scholarly-ddp-v1",
+            "config": DistributedConfig(optimizer="adamw").as_dict(),
+        }
+        with self.assertRaisesRegex(ValueError, "identical training settings"):
+            validate_resume(saved, config, {}, {}, "2.6")
+
     def test_matched_batch_sizes(self):
         for world, batch in ((1, 24), (2, 24), (3, 16)):
             config = DistributedConfig(world_size=world, microbatch=batch)
