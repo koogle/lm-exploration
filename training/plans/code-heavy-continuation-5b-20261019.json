@@ -1,0 +1,155 @@
+{
+  "target_phase_tokens": 5000000000,
+  "proposed_parent": "simple-llm-124m-eu-onepass-20261018-s02/step-000003838.pt",
+  "parent_lifetime_tokens": 5878591538,
+  "proposed_lifetime_target_tokens": 10878591538,
+  "original_database_sha256": "b1969a94bd9d1bb24036f5497be9a2b77d0becfb79e617bff1e9d3ab7c335a98",
+  "original_exposures": {
+    "fineweb_edu": 499996053,
+    "code_python": 1499987929,
+    "finemath_4plus": 999996499,
+    "pes2o": 499996230,
+    "pubmed": 150000165,
+    "arxiv": 100002796,
+    "pressbooks": 149999067,
+    "libretexts": 150001308,
+    "doab": 200000234,
+    "gutenberg": 249999634,
+    "pre_1929_books": 350000117,
+    "library_of_congress": 150001144
+  },
+  "mixture": {
+    "fineweb_edu": {
+      "weight_percent_exact": "40/7",
+      "weight_percent": 5.714285714285714,
+      "phase_target_tokens": 285714286,
+      "cached_unique_train_tokens": 262917173,
+      "prior_exposures": 499996053,
+      "phase_effective_passes": 1.0867083452171455,
+      "lifetime_effective_passes_if_reused": 2.988432935112991,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 142857143
+    },
+    "code_python": {
+      "weight_percent_exact": "60",
+      "weight_percent": 60.0,
+      "phase_target_tokens": 3000000000,
+      "cached_unique_train_tokens": 787568652,
+      "prior_exposures": 1499987929,
+      "phase_effective_passes": 3.809191735071751,
+      "lifetime_effective_passes_if_reused": 5.713772275689815,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 1500000000
+    },
+    "finemath_4plus": {
+      "weight_percent_exact": "80/7",
+      "weight_percent": 11.428571428571429,
+      "phase_target_tokens": 571428571,
+      "cached_unique_train_tokens": 525035597,
+      "prior_exposures": 999996499,
+      "phase_effective_passes": 1.0883615782721872,
+      "lifetime_effective_passes_if_reused": 2.9929876735576846,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 285714286
+    },
+    "pes2o": {
+      "weight_percent_exact": "40/7",
+      "weight_percent": 5.714285714285714,
+      "phase_target_tokens": 285714286,
+      "cached_unique_train_tokens": 262944657,
+      "prior_exposures": 499996230,
+      "phase_effective_passes": 1.0865947582270135,
+      "lifetime_effective_passes_if_reused": 2.9881212456049258,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 142857143
+    },
+    "pubmed": {
+      "weight_percent_exact": "12/7",
+      "weight_percent": 1.7142857142857142,
+      "phase_target_tokens": 85714285,
+      "cached_unique_train_tokens": 84737320,
+      "prior_exposures": 150000165,
+      "phase_effective_passes": 1.0115293355985298,
+      "lifetime_effective_passes_if_reused": 2.7817076348414136,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 42857143
+    },
+    "arxiv": {
+      "weight_percent_exact": "8/7",
+      "weight_percent": 1.1428571428571428,
+      "phase_target_tokens": 57142857,
+      "cached_unique_train_tokens": 54893620,
+      "prior_exposures": 100002796,
+      "phase_effective_passes": 1.0409744702571992,
+      "lifetime_effective_passes_if_reused": 2.862730732642518,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 28571429
+    },
+    "pressbooks": {
+      "weight_percent_exact": "12/7",
+      "weight_percent": 1.7142857142857142,
+      "phase_target_tokens": 85714286,
+      "cached_unique_train_tokens": 79929169,
+      "prior_exposures": 149999067,
+      "phase_effective_passes": 1.0723780451164204,
+      "lifetime_effective_passes_if_reused": 2.9490279449796355,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 42857143
+    },
+    "libretexts": {
+      "weight_percent_exact": "12/7",
+      "weight_percent": 1.7142857142857142,
+      "phase_target_tokens": 85714286,
+      "cached_unique_train_tokens": 79665640,
+      "prior_exposures": 150001308,
+      "phase_effective_passes": 1.0759254052311638,
+      "lifetime_effective_passes_if_reused": 2.9588112767310975,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 42857143
+    },
+    "doab": {
+      "weight_percent_exact": "16/7",
+      "weight_percent": 2.2857142857142856,
+      "phase_target_tokens": 114285714,
+      "cached_unique_train_tokens": 105400565,
+      "prior_exposures": 200000234,
+      "phase_effective_passes": 1.0842988744889555,
+      "lifetime_effective_passes_if_reused": 2.9818241296903865,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 57142857
+    },
+    "gutenberg": {
+      "weight_percent_exact": "20/7",
+      "weight_percent": 2.857142857142857,
+      "phase_target_tokens": 142857143,
+      "cached_unique_train_tokens": 162036799,
+      "prior_exposures": 249999634,
+      "phase_effective_passes": 0.8816339490883179,
+      "lifetime_effective_passes_if_reused": 2.4244910997038396,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 71428572
+    },
+    "pre_1929_books": {
+      "weight_percent_exact": "4",
+      "weight_percent": 4.0,
+      "phase_target_tokens": 200000000,
+      "cached_unique_train_tokens": 209850533,
+      "prior_exposures": 350000117,
+      "phase_effective_passes": 0.9530592900614648,
+      "lifetime_effective_passes_if_reused": 2.620913605208713,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 100000000
+    },
+    "library_of_congress": {
+      "weight_percent_exact": "12/7",
+      "weight_percent": 1.7142857142857142,
+      "phase_target_tokens": 85714286,
+      "cached_unique_train_tokens": 130351831,
+      "prior_exposures": 150001144,
+      "phase_effective_passes": 0.657561043388796,
+      "lifetime_effective_passes_if_reused": 1.808301641731446,
+      "minimum_new_unique_tokens_for_fresh_two_pass_phase": 42857143
+    }
+  },
+  "corpus_policy": "pending user choice: expand with fresh data or explicitly allow additional passes",
+  "gpu": "H100:8",
+  "context": 8192,
+  "microbatch": 2,
+  "global_windows": 32,
+  "crop_padding": true,
+  "cache_rope": true,
+  "compile_model": true,
+  "peak_lr": 3e-05,
+  "warmup_tokens": 1,
+  "min_lr_ratio": 1.0,
+  "validation_sample": "simple-llm-eu-expanded-validation-20261019/windows.jsonl.gz"
+}
