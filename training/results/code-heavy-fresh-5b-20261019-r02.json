@@ -19,5 +19,14 @@
   "coding_target_tokens": 3000000000,
   "parent_checkpoint": "simple-llm-124m-eu-onepass-20261018-s02/step-000003838.pt",
   "allocation_policy": "Keep each non-book source budget and total books budget; cap exhausted book sources at 2*floor(fresh_unique/1.05), redistribute within six original book collections proportionally; retain two-pass limit",
-  "verified_tests": 12
+  "verified_tests": 12,
+  "verified_progress": {
+    "updated_unix": 1792403076.3075264,
+    "prepared_fresh_targets": 197297522,
+    "training_targets": 0,
+    "libretexts_phase_target": 11189950,
+    "libretexts_fresh_targets": 5874724,
+    "libretexts_capacity_sufficient": true,
+    "prepared_data_reused": true
+  }
 }

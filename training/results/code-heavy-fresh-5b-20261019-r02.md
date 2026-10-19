@@ -23,6 +23,12 @@ non-book budget invariance, zero-capacity source omission, fresh-process restart
 valid training-loader output, hash exclusion, conflict accounting, and checkpoint
 migration. Ruff and whitespace checks pass.
 
+The persisted new allocation was verified: LibreTexts now has an 11,189,950-target
+phase budget backed by 5,874,724 fresh unique targets plus reserve. Its capacity
+gate passes. All 197,297,522 previously prepared **fresh** targets were retained;
+these are prepared targets, not training updates. Every non-book budget remains
+unchanged and the book budgets still sum exactly to 714,285,715.
+
 The new controller is preparing data. New-data GPU qualification has not yet
 completed, and no training tokens are claimed. After fresh capacity passes, the
 workflow automatically qualifies start/restore (two updates each), then trains
