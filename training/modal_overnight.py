@@ -511,7 +511,6 @@ def finish(run_id, checkpoint):
             repo_id=repo,
             folder_path=str(output),
             path_in_repo="evaluation/" + run_id,
-            allow_patterns=["*.svg", "README.md", "provenance.json"],
             commit_message="Add overnight continuation curves and metrics",
         )
         from training_data.subword import digest
