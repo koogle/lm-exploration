@@ -1,0 +1,185 @@
+{
+  "timing": {
+    "completed": true,
+    "total_tokens": 7620187,
+    "elapsed_seconds": 94.359459165
+  },
+  "comparisons": {
+    "before": {
+      "ecb": {
+        "before_loss": 2.5478364897389945,
+        "after_loss": 2.494417235082108,
+        "delta_loss": -0.05341925465688655,
+        "direction": "better"
+      },
+      "ema": {
+        "before_loss": 2.474508373573441,
+        "after_loss": 2.3786064237293756,
+        "delta_loss": -0.09590194984406535,
+        "direction": "better"
+      },
+      "original/arxiv": {
+        "before_loss": 1.9497882117902077,
+        "after_loss": 1.9627351147577499,
+        "delta_loss": 0.012946902967542164,
+        "direction": "worse"
+      },
+      "original/code_python": {
+        "before_loss": 1.5591427360983965,
+        "after_loss": 1.4213988499193573,
+        "delta_loss": -0.1377438861790393,
+        "direction": "better"
+      },
+      "original/doab": {
+        "before_loss": 2.362370064841509,
+        "after_loss": 2.3794003204124636,
+        "delta_loss": 0.017030255570954583,
+        "direction": "worse"
+      },
+      "original/finemath_4plus": {
+        "before_loss": 1.799093179155612,
+        "after_loss": 1.816838842892399,
+        "delta_loss": 0.017745663736787015,
+        "direction": "worse"
+      },
+      "original/fineweb_edu": {
+        "before_loss": 2.675224465840467,
+        "after_loss": 2.7002269013800166,
+        "delta_loss": 0.025002435539549325,
+        "direction": "worse"
+      },
+      "original/gutenberg": {
+        "before_loss": 2.8188761140753904,
+        "after_loss": 2.8476179976099036,
+        "delta_loss": 0.028741883534513044,
+        "direction": "worse"
+      },
+      "original/library_of_congress": {
+        "before_loss": 2.880806793568109,
+        "after_loss": 2.8955215596255326,
+        "delta_loss": 0.01471476605742327,
+        "direction": "worse"
+      },
+      "original/libretexts": {
+        "before_loss": 2.2442110126607084,
+        "after_loss": 2.2929445338363856,
+        "delta_loss": 0.048733521175677315,
+        "direction": "worse"
+      },
+      "original/pes2o": {
+        "before_loss": 2.312943282481791,
+        "after_loss": 2.330488094417853,
+        "delta_loss": 0.017544811936062,
+        "direction": "worse"
+      },
+      "original/pre_1929_books": {
+        "before_loss": 2.8731941185621293,
+        "after_loss": 2.888885086531724,
+        "delta_loss": 0.01569096796959501,
+        "direction": "worse"
+      },
+      "original/pressbooks": {
+        "before_loss": 2.5052328276563767,
+        "after_loss": 2.546299820711243,
+        "delta_loss": 0.04106699305486627,
+        "direction": "worse"
+      },
+      "original/pubmed": {
+        "before_loss": 2.1153214027610927,
+        "after_loss": 2.140136179856328,
+        "delta_loss": 0.024814777095235434,
+        "direction": "worse"
+      }
+    },
+    "after": {
+      "ecb": {
+        "before_loss": 2.0649489631876783,
+        "after_loss": 2.494417235082108,
+        "delta_loss": 0.42946827189442965,
+        "direction": "worse"
+      },
+      "ema": {
+        "before_loss": 1.7661885360415588,
+        "after_loss": 2.3786064237293756,
+        "delta_loss": 0.6124178876878167,
+        "direction": "worse"
+      },
+      "original/arxiv": {
+        "before_loss": 2.8091927217655503,
+        "after_loss": 1.9627351147577499,
+        "delta_loss": -0.8464576070078007,
+        "direction": "better"
+      },
+      "original/code_python": {
+        "before_loss": 3.9942717673282786,
+        "after_loss": 1.4213988499193573,
+        "delta_loss": -2.572872917408921,
+        "direction": "better"
+      },
+      "original/doab": {
+        "before_loss": 2.837422036187953,
+        "after_loss": 2.3794003204124636,
+        "delta_loss": -0.4580217157754896,
+        "direction": "better"
+      },
+      "original/finemath_4plus": {
+        "before_loss": 2.518498037605622,
+        "after_loss": 1.816838842892399,
+        "delta_loss": -0.7016591947132227,
+        "direction": "better"
+      },
+      "original/fineweb_edu": {
+        "before_loss": 2.9112838428345946,
+        "after_loss": 2.7002269013800166,
+        "delta_loss": -0.2110569414545781,
+        "direction": "better"
+      },
+      "original/gutenberg": {
+        "before_loss": 3.4374800509441092,
+        "after_loss": 2.8476179976099036,
+        "delta_loss": -0.5898620533342056,
+        "direction": "better"
+      },
+      "original/library_of_congress": {
+        "before_loss": 3.2692679650982717,
+        "after_loss": 2.8955215596255326,
+        "delta_loss": -0.3737464054727389,
+        "direction": "better"
+      },
+      "original/libretexts": {
+        "before_loss": 2.5554314526110096,
+        "after_loss": 2.2929445338363856,
+        "delta_loss": -0.2624869187746239,
+        "direction": "better"
+      },
+      "original/pes2o": {
+        "before_loss": 2.5647577556418253,
+        "after_loss": 2.330488094417853,
+        "delta_loss": -0.23426966122397241,
+        "direction": "better"
+      },
+      "original/pre_1929_books": {
+        "before_loss": 3.2404382420261166,
+        "after_loss": 2.888885086531724,
+        "delta_loss": -0.35155315549439237,
+        "direction": "better"
+      },
+      "original/pressbooks": {
+        "before_loss": 2.751147606064535,
+        "after_loss": 2.546299820711243,
+        "delta_loss": -0.20484778535329193,
+        "direction": "better"
+      },
+      "original/pubmed": {
+        "before_loss": 2.4947581148259883,
+        "after_loss": 2.140136179856328,
+        "delta_loss": -0.3546219349696603,
+        "direction": "better"
+      }
+    }
+  },
+  "baselines": {
+    "before": "original 5B-token checkpoint",
+    "after": "EU continuation parent"
+  }
+}
