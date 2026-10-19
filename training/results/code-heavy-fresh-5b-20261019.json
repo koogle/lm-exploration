@@ -1,0 +1,20 @@
+{
+  "run_id": "simple-llm-code60-fresh-5b-20261019",
+  "controller_call_id": "fc-01M59F135B3PWWQEJN6NZF02E8",
+  "provenance": {
+    "repository": "https://github.com/koogle/lm-exploration",
+    "branch": "training/code-heavy-5b",
+    "commit": "02d2c000d7fc9c16f6c121044b857554c3c085ef",
+    "pull_request": 26,
+    "request": "Continue latest EU checkpoint for 5B targets, coding 60%, fresh-only original-source records, <=2 fresh passes",
+    "optimization_pr": 17,
+    "fresh_only": true
+  },
+  "launched_utc": "2026-10-19T06:54:22Z",
+  "status": "CPU preparation started; GPUs gated on complete fresh capacity and disjointness audit",
+  "snapshot": "code-heavy-fresh-20261019/snapshots/code60-5b-v1",
+  "target_phase_tokens": 5000000000,
+  "fresh_unique_minimum_tokens": 2500000000,
+  "capacity_reserve_percent": 5,
+  "parent_checkpoint": "simple-llm-124m-eu-onepass-20261018-s02/step-000003838.pt"
+}

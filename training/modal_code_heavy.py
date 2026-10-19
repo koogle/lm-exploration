@@ -322,6 +322,9 @@ def train(run_id, provenance):
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def inspect(run_id):
+    # Warm containers otherwise retain the first mounted volume snapshot.
+    data_volume.reload()
+    run_volume.reload()
     validate_paths(run_id, SNAPSHOT, "")
     result = {}
     folder = Path("/runs") / run_id
