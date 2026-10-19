@@ -179,3 +179,10 @@ and remote LFS hash. Full optimizer/RNG state remains on Modal. Publication does
 block or modify training; bounded retries and failures have a separate durable state
 at `/runs/<run>/hf-live-publication.json`. Finalization still publishes the completed
 model under a name based on actual parameter size and lifetime training tokens.
+
+Storage retry completed: all **70/70** saved checkpoints from the completed 5B
+code-heavy continuation are present in the private HF archive, with remote hashes
+verified. The overnight live publication watcher was launched as
+`fc-01M5B66NVTQ78BPV4SFQ78RVA2`. It includes the new phase seed once the first
+segment's export source exists, then every saved segment checkpoint. Full overnight
+PNG/PDF/SVG/CSV publication is enabled again with the increased storage allowance.
