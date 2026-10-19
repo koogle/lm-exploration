@@ -365,3 +365,7 @@ only; the 10M Shakespeare model is the only completed GPU training run.
 Ruff is a dev dependency configured in `pyproject.toml`. From `training/`, run
 `uv run ruff check --fix .` and `uv run ruff format .`. The repository pre-commit
 hook in `../.githooks/` checks staged Python files across the whole repository.
+
+The [fresh-data 5B continuation](trainer/CODE_HEAVY_CONTINUATION.md) doubles coding
+to 60%, excludes all earlier document hashes, and queues eight-H100 training after
+fresh-source capacity checks. See its run record for actual preparation status.

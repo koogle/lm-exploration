@@ -140,7 +140,7 @@
       "minimum_new_unique_tokens_for_fresh_two_pass_phase": 42857143
     }
   },
-  "corpus_policy": "pending user choice: expand with fresh data or explicitly allow additional passes",
+  "corpus_policy": "Fresh-only records from pinned original sources; exclude all original and EU document hashes; max two passes within new corpus.",
   "gpu": "H100:8",
   "context": 8192,
   "microbatch": 2,
@@ -151,5 +151,8 @@
   "peak_lr": 3e-05,
   "warmup_tokens": 1,
   "min_lr_ratio": 1.0,
-  "validation_sample": "simple-llm-eu-expanded-validation-20261019/windows.jsonl.gz"
+  "validation_sample": "simple-llm-eu-expanded-validation-20261019/windows.jsonl.gz",
+  "fresh_unique_minimum_tokens": 2500000000,
+  "fresh_capacity_reserve_percent": 5,
+  "snapshot": "code-heavy-fresh-20261019/snapshots/code60-5b-v1"
 }
