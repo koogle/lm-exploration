@@ -130,3 +130,17 @@ The first deployment missed an imported Modal module. The next audit encountered
 intentional hash-only test tombstones. Both were corrected before any GPU launch;
 stalled/failed jobs were cancelled. The active version is **readiness-20261020-v2**.
 The old v1 directories are retained as failed preparation evidence.
+
+Active overnight launch (commit `1b8dfca`):
+
+- Run: `simple-llm-code60-unique-10b-20261020-r01`.
+- Code collection: `fc-01M5B1BT8CHMRZA77RXYHPM9XR`.
+- Original-source refresh: `fc-01M5B1N6PMEA0J3XQANA2436QS`.
+- Durable data-gate controller: `fc-01M5B1N6WXAHC2XXN7KWQT3BES`.
+- Initial existing-corpus scan: `fc-01M5B1BT1CA3J0FFT8JZ34WKFD`.
+
+`/runs/<run>/workflow.json` records the current stage and chained call IDs.
+Collection is followed by a combined audit including fresh original records;
+only new records from the original fork are counted as fresh. The collector's
+intermediate code-only audit is superseded/cancelled by the controller before
+scheduling the combined refresh audit. No GPU allocation is needed for these steps.
