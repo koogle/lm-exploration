@@ -186,3 +186,22 @@ verified. The overnight live publication watcher was launched as
 `fc-01M5B66NVTQ78BPV4SFQ78RVA2`. It includes the new phase seed once the first
 segment's export source exists, then every saved segment checkpoint. Full overnight
 PNG/PDF/SVG/CSV publication is enabled again with the increased storage allowance.
+
+## Public latest completed inference release
+
+The user explicitly authorized making the latest model public. Published a separate
+allowlisted inference-only release at
+[Simple LLM124M -10.879B](https://huggingface.co/jfrick/simple-llm-124M-10.879B),
+revision `62b9c8735949798246efd5efbde27c156ae49c43`. It contains the completed root
+weights, tokenizer, generation/model code, sanitized release metadata and aggregate
+loss/optimizer plots. No raw training documents, private data manifest, historical
+checkpoint archive, optimizer/RNG state or raw generated evaluation text was copied.
+
+The weights match SHA256
+`f50314c30b42b2c871cdec6aab4796109ca5ac11e1f2e055e795ce97e1e469cc`.
+Standalone exported inference and anonymous public API access were verified.
+`jfrick/124M-10.879B` remains private, so continuous overnight checkpoint uploads
+and its archive-privacy checks continue to work. The public release represents
+10,878,562,619 lifetime targets, not the still-preparing multilingual experiment.
+The explicit publication script is `publication/publish_latest_public.py`; it stages
+privately, verifies weights, then changes visibility only for the inference bundle.
