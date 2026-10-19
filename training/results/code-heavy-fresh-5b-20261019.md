@@ -2,7 +2,18 @@
 
 Launched October 19, 2026 at 09:54 Cyprus time (06:54 UTC) on Modal app
 `simple-llm-code-heavy-5b`. Runtime source commit: `02d2c00`; stacked PR #26.
-The controller is running CPU preparation. No new training updates are claimed.
+CPU preparation stopped: the pinned LibreTexts source exhausted at 5,874,724
+fresh targets, below its required 42,857,143. No GPUs were allocated for training.
+Prepared data and cursors remain committed; no old records were substituted.
+
+The persisted Modal settings were checked directly: eight H100s, microbatch two,
+cropping, cached RoPE and compilation are enabled; chunked loss is disabled.
+Data scope must be resolved before a replacement controller is launched. Keeping
+all exact source shares would cap the phase at approximately 685.4M targets from
+LibreTexts capacity alone; retaining 5B requires expanding the textbook sources.
+The raw LibreTexts release has more records, but is not equivalent to the filtered
+release and does not establish additional eligible capacity without quality and
+deduplication checks.
 
 Requested: another 5B loss-bearing targets, coding 60% (3B), all other original
 shares multiplied by 4/7 (2B). Continue the latest EU checkpoint, preserving

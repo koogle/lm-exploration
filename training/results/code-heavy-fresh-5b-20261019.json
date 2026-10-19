@@ -11,10 +11,24 @@
     "fresh_only": true
   },
   "launched_utc": "2026-10-19T06:54:22Z",
-  "status": "CPU preparation started; GPUs gated on complete fresh capacity and disjointness audit",
+  "status": "Stopped during CPU preparation: pinned LibreTexts source exhausted; no GPU training started",
   "snapshot": "code-heavy-fresh-20261019/snapshots/code60-5b-v1",
   "target_phase_tokens": 5000000000,
   "fresh_unique_minimum_tokens": 2500000000,
   "capacity_reserve_percent": 5,
-  "parent_checkpoint": "simple-llm-124m-eu-onepass-20261018-s02/step-000003838.pt"
+  "parent_checkpoint": "simple-llm-124m-eu-onepass-20261018-s02/step-000003838.pt",
+  "failure": {
+    "source": "libretexts",
+    "fresh_tokens": 5874724,
+    "minimum_unique_train_tokens": 42857143,
+    "failed_unix": 1792394063.634726
+  },
+  "verified_config": {
+    "gpu": "H100:8",
+    "microbatch": 2,
+    "crop_padding": true,
+    "cache_rope": true,
+    "compile_model": true,
+    "loss_chunk_size": 0
+  }
 }
