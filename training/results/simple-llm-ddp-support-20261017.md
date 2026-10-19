@@ -24,7 +24,7 @@ unequal lengths/padding. For each of 1/2/3 GPUs it checks:
 
 All 28 unit tests and all CUDA integration cases passed in
 [the final check app](https://modal.com/apps/radiantai/main/ap-9DhI0yEcBZpsxVMmGKfH98).
-[Raw results](scholarly-ddp-checks-20261017-04.json) record maximum parameter
+[Raw results](simple-llm-ddp-checks-20261017-04.json) record maximum parameter
 restart differences of 0 on one/two GPUs and 3.7252903e-9 on three GPUs.
 All configurations trained the same 925 loss tokens in the four-update fixture.
 
@@ -39,11 +39,11 @@ ran on **two H100s** through the user-facing launcher:
 | Resumed in a fresh Modal app | 2 | 4 | 245,671 | 24.19 |
 
 - [Initial app](https://modal.com/apps/radiantai/main/ap-nydJ75esVp6GAmDAFoeyIi),
-  [report](scholarly-ddp-full-smoke-20261017-02.json), checkpoint
-  `scholarly-ddp-full-smoke-20261017-02/step-000000002.pt`.
+  [report](simple-llm-ddp-full-smoke-20261017-02.json), checkpoint
+  `simple-llm-ddp-full-smoke-20261017-02/step-000000002.pt`.
 - [Fresh resume app](https://modal.com/apps/radiantai/main/ap-CO0x0CU9w6gLDEdpi1GVka),
-  [report](scholarly-ddp-full-resume-20261017-01.json), checkpoint
-  `scholarly-ddp-full-resume-20261017-01/step-000000004.pt`.
+  [report](simple-llm-ddp-full-resume-20261017-01.json), checkpoint
+  `simple-llm-ddp-full-resume-20261017-01/step-000000004.pt`.
 
 The resumed initial per-source validation exactly matches the first job's final
 validation; token counters continue without reset. Both jobs and the final
@@ -68,7 +68,7 @@ passed; three-GPU resume differed by 3.7253e-9 in the first failing tensor,
 consistent with floating-point reduction order across new NCCL processes. The
 final test uses explicit FP32 tolerances and preserves exact data/RNG assertions.
 This is numerical reproducibility, not a promise of bitwise reproducibility on
-all GPU topologies. Logs remain under `scholarly-ddp-checks-20261017-01` and `-02`
+all GPU topologies. Logs remain under `simple-llm-ddp-checks-20261017-01` and `-02`
 on the training volume.
 
 A draft test run `ap-QQBZoDHm1CbMb5BpjkEk7p` was stopped after local Ruff caught an

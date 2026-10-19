@@ -124,7 +124,7 @@ def worker(gpu, world, run_id, provenance, sustained_steps):
 
 @app.local_entrypoint()
 def main(
-    run_id: str = "scholarly-124m-gpu-comparison-20261017-01",
+    run_id: str = "simple-llm-124m-gpu-comparison-20261017-01",
     gpus: str = "H100",
     sustained_steps: int = 30,
 ):

@@ -20,7 +20,7 @@ uv run modal run modal_scripts/modal_train.py \
 | Script | Purpose / owning guide |
 | --- | --- |
 | `modal_train.py` | Character-level recipe training; [recipes](../recipes/README.md) |
-| `modal_prepare_scholarly.py` | CPU corpus staging/export; [preparation](../data/SCHOLARLY_STREAMING.md) |
+| `modal_prepare_simple_llm.py` | CPU corpus staging/export; [preparation](../data/SIMPLE_LLM_STREAMING.md) |
 | `modal_gpu_benchmark.py` | Single-GPU hardware comparison |
 | `modal_multi_gpu_benchmark.py` | Two-/three-GPU DDP comparison |
 | `modal_gpu_confirmation.py` | Longer H100 throughput confirmation with explicit benchmark replay |

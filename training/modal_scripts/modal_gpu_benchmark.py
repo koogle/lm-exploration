@@ -16,7 +16,7 @@ results_volume = modal.Volume.from_name("lm-exploration-training")
 
 @app.function(image=image, cpu=2, memory=4096, timeout=300, retries=0, max_containers=1)
 def qualify():
-    for filename in ("test_100m_modern.py", "test_tied_embeddings.py", "test_scholarly.py"):
+    for filename in ("test_100m_modern.py", "test_tied_embeddings.py", "test_simple_llm.py"):
         subprocess.run(
             ["python", "-m", "unittest", "discover", "-s", "/project/tests", "-p", filename, "-v"],
             check=True,
@@ -62,7 +62,7 @@ def worker(gpu, run_id, provenance):
 
 
 @app.local_entrypoint()
-def main(run_id: str = "scholarly-124m-gpu-comparison-20261017-01"):
+def main(run_id: str = "simple-llm-124m-gpu-comparison-20261017-01"):
     import re
 
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):

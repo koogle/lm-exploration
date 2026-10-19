@@ -13,13 +13,14 @@ class ScriptLayoutTests(unittest.TestCase):
     def test_training_root_keeps_only_generation_entrypoint(self):
         self.assertEqual({p.name for p in ROOT.glob("*.py")}, {"generate.py"})
         self.assertEqual(len(list((ROOT / "modal_scripts").glob("modal_*.py"))), 8)
-        self.assertFalse((ROOT / "modal_scripts/modal_scholarly_pilot.py").exists())
         self.assertFalse((ROOT / "trainer/subword_pilot.py").exists())
-        self.assertTrue((ROOT / "data/prepare_scholarly.py").is_file())
+        self.assertTrue((ROOT / "data/prepare_simple_llm.py").is_file())
 
     def test_installed_module_locations(self):
         expected = {
-            "training_data.prepare_scholarly": "data/prepare_scholarly.py",
+            "training_data.prepare_simple_llm": "data/prepare_simple_llm.py",
+            "training_data.simple_llm": "data/simple_llm.py",
+            "modal_scripts.modal_prepare_simple_llm": "modal_scripts/modal_prepare_simple_llm.py",
             "tokenizer.tokenizer_research": "tokenizer/tokenizer_research.py",
             "tokenizer.tokenizer_evaluation": "tokenizer/tokenizer_evaluation.py",
             "tokenizer.tokenizer_report": "tokenizer/tokenizer_report.py",
@@ -40,8 +41,8 @@ class ScriptLayoutTests(unittest.TestCase):
                 self.assertEqual(Path(spec.origin).resolve(), ROOT / relative)
         config = tomllib.loads((ROOT / "pyproject.toml").read_text())
         self.assertEqual(
-            config["project"]["scripts"]["lm-prepare-scholarly"],
-            "training_data.prepare_scholarly:main",
+            config["project"]["scripts"]["lm-prepare-simple-llm"],
+            "training_data.prepare_simple_llm:main",
         )
 
     def test_modal_image_local_sources_exist(self):
@@ -73,8 +74,8 @@ class ScriptLayoutTests(unittest.TestCase):
             "structured_tokenizer",
             "structured_tokenizer_report",
             "package_tokenizer_research",
-            "prepare_scholarly",
-            "modal_scholarly_pilot",
+            "prepare_simple_llm",
+            "modal_simple_llm_pilot",
         }
         for folder in ("modal_scripts", "distributed_training", "tokenizer", "tests"):
             for path in (ROOT / folder).glob("*.py"):

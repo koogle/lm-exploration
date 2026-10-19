@@ -65,7 +65,7 @@ Even three A10s take about three and a half days of compute.
 
 
 The raw results and trial logs are on the same results volume under
-`scholarly-124m-multigpu-la-20261017-01/{L40Sx2,L40Sx3,A10Gx2,A10Gx3}`;
+`simple-llm-124m-multigpu-la-20261017-01/{L40Sx2,L40Sx3,A10Gx2,A10Gx3}`;
 [Modal app](https://modal.com/apps/radiantai/main/ap-lTq6ysbp1Q0jkzdt29RNES).
 The checked-in files use the same run ID and hardware suffix.
 
@@ -127,11 +127,11 @@ contains metrics/configuration, tokenizer/manifest identities and source hashes;
 no corpus text, credentials or model checkpoints are checked in.
 
 - [Single-GPU sweep app](https://modal.com/apps/radiantai/main/ap-FLZw0mYDpmMPkEjPcVxwVe):
-  `scholarly-124m-gpu-comparison-20261017-02/{A10G,L40S,H100}/report.json`.
+  `simple-llm-124m-gpu-comparison-20261017-02/{A10G,L40S,H100}/report.json`.
 - [DDP sweep app](https://modal.com/apps/radiantai/main/ap-ro53yiAlMrnjl22R0rhO7W):
   same run ID under `H100x2` and `H100x3`.
 - [500-update confirmation app](https://modal.com/apps/radiantai/main/ap-JVhobaWqL43D8E2TmrKqpu):
-  `scholarly-124m-h100-confirmation-20261017-01/H100x{1,2,3}/report.json`.
+  `simple-llm-124m-h100-confirmation-20261017-01/H100x{1,2,3}/report.json`.
 - Corresponding local JSON files use `<run-id>-<hardware>.json` in this directory.
   Git HEAD in provenance is the base commit; per-file hashes identify uncommitted
   source used for a run. Later documentation/launcher fixes do not rewrite results.

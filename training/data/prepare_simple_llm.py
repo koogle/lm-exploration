@@ -3,7 +3,7 @@
 import argparse
 import json
 
-from training_data.scholarly import Stager, load_recipe
+from training_data.simple_llm import Stager, load_recipe
 
 
 def main():

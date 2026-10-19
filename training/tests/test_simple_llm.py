@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from training_data.scholarly import Stager, adapt, load_recipe
+from training_data.simple_llm import Stager, adapt, load_recipe
 from training_data.subword import DEFAULT_FOLDER, VOCAB_SIZE, load_frozen
 from training_data.token_stream import TokenMixture
 

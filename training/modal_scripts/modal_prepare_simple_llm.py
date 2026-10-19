@@ -9,7 +9,7 @@ from pathlib import Path
 
 import modal
 
-app = modal.App("lm-exploration-scholarly-preparation")
+app = modal.App("lm-exploration-simple-llm-preparation")
 volume = modal.Volume.from_name("lm-exploration-mixture-data", create_if_missing=True)
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -32,7 +32,7 @@ image = (
     volumes={"/data": volume},
 )
 def prepare(version: str, snapshot: str, max_records: int):
-    from training_data.scholarly import Stager, load_recipe
+    from training_data.simple_llm import Stager, load_recipe
 
     recipe = load_recipe("/project/tokenizer/recipe-v1.json")
     stager = Stager(Path("/data/scholarly-code") / version, recipe)

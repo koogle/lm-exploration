@@ -8,7 +8,7 @@ trainer and from the throughput-only benchmarks.
 ## One implementation, including one GPU
 
 All subword training code, Modal launchers, the shared image and recipes live in
-this package. The duplicate `modal_scholarly_pilot.py` / `trainer/subword_pilot.py`
+this package. The duplicate `modal_simple-llm_pilot.py` / `trainer/subword_pilot.py`
 path has been removed; historical pilot results remain in `results/` and its
 implementation remains in Git history. Character training and throughput-only
 benchmarks are separate experiments, not alternate subword training paths.
@@ -26,7 +26,7 @@ step-based warmup/constant learning-rate schedule.
 modal run --detach -m distributed_training.modal_train \
   --config distributed_training/recipes/h100x1-pilot.json \
   --run-id my-single-gpu-pilot-01 \
-  --snapshot scholarly-124m-20261016/snapshots/pilot-001-seekable \
+  --snapshot simple-llm-124m-20261016/snapshots/pilot-001-seekable \
   --gpu H100 --max-steps 2 --max-seconds 300
 ```
 
@@ -79,7 +79,7 @@ its own cursor and output directory. The launcher copies source, tokenizer asset
 and the manifest for provenance, not the corpus. Training checks file sizes and
 manifest identity at startup, then seeks directly into binary token shards using
 the saved pass/shard/document/token cursor. Full-file checksum verification is an
-explicit preparation/transfer operation; see [snapshot conversion and verification](../data/SCHOLARLY_STREAMING.md#seekable-snapshots-and-verification).
+explicit preparation/transfer operation; see [snapshot conversion and verification](../data/SIMPLE_LLM_STREAMING.md#seekable-snapshots-and-verification).
 
 Rank zero also owns logging and diagnostic validation. At checkpoint boundaries,
 all ranks contribute their RNG state; rank zero saves the shared model/optimizer,
@@ -101,7 +101,7 @@ not the character trainer's `Recipe` format.
 modal run --detach -m distributed_training.modal_train \
   --config distributed_training/recipes/h100x2-pilot.json \
   --run-id my-ddp-pilot-01 \
-  --snapshot scholarly-124m-20261016/snapshots/pilot-001-seekable \
+  --snapshot simple-llm-124m-20261016/snapshots/pilot-001-seekable \
   --gpu H100 --max-steps 2 --max-seconds 300
 
 # Substantial-run settings: requires a training-ready snapshot with capacity.
@@ -150,7 +150,7 @@ continues. Every graceful stop saves an optimizer-boundary checkpoint.
 modal run --detach -m distributed_training.modal_train \
   --config distributed_training/recipes/h100x2-pilot.json \
   --run-id my-ddp-pilot-02 \
-  --snapshot scholarly-124m-20261016/snapshots/pilot-001-seekable \
+  --snapshot simple-llm-124m-20261016/snapshots/pilot-001-seekable \
   --resume my-ddp-pilot-01/step-000000002.pt \
   --gpu H100 --max-steps 2 --max-seconds 300
 ```
@@ -221,6 +221,6 @@ resume/audit rejection. Floating model/optimizer tensors use FP32 tolerances
 reduction order can change low bits across fresh jobs.
 
 Measured run evidence is recorded in
-[`results/scholarly-ddp-support-20261017.md`](../results/scholarly-ddp-support-20261017.md).
+[`results/simple-llm-ddp-support-20261017.md`](../results/simple-llm-ddp-support-20261017.md).
 Those GPU measurements predate the seekable snapshot format. The format change
 has local loader/conversion/resume checks; a new CUDA qualification has not been run.

@@ -5,12 +5,12 @@ extraction project with ten source candidates, bounded crawlers, agent research
 notes and Parquet export. Its artifacts are not registered training inputs.
 
 For the new frozen-tokenizer corpus, use the separate
-[scholarly/code streaming pipeline](SCHOLARLY_STREAMING.md). Its local preparation
-CLI lives in [`prepare_scholarly.py`](prepare_scholarly.py); run
-`uv run lm-prepare-scholarly --help` (or
-`uv run python -m training_data.prepare_scholarly --help`) from `training/`.
+[Simple LLM streaming pipeline](SIMPLE_LLM_STREAMING.md). Its local preparation
+CLI lives in [`prepare_simple_llm.py`](prepare_simple_llm.py); run
+`uv run lm-prepare-simple-llm --help` (or
+`uv run python -m training_data.prepare_simple_llm --help`) from `training/`.
 The corresponding CPU Modal launcher lives in
-[`../modal_scripts/modal_prepare_scholarly.py`](../modal_scripts/modal_prepare_scholarly.py).
+[`../modal_scripts/modal_prepare_simple_llm.py`](../modal_scripts/modal_prepare_simple_llm.py).
 
 `datasets.json` records each dataset's source, license review and eligibility;
 [`registry.py`](registry.py) validates it with pydantic.

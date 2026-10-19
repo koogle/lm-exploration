@@ -31,7 +31,7 @@ def check(run_id):
             "test_distributed_single_gpu.py",
             "test_100m_modern.py",
             "test_tied_embeddings.py",
-            "test_scholarly.py",
+            "test_simple_llm.py",
             "test_token_shards.py",
         ):
             subprocess.run(

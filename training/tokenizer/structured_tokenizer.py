@@ -201,7 +201,7 @@ def build(training, validation, output, target_bytes=64 * 1024**2, eval_parents=
     return manifest
 
 
-def fit(folder, output, vocab, config_path="/project/tokenizer/scholarly-code-v1/config.json"):
+def fit(folder, output, vocab, config_path="/project/tokenizer/simple-llm-v1/config.json"):
     folder, output = Path(folder), Path(output)
     manifest = json.loads((folder / "manifest.json").read_text())
     if digest(folder / "train.jsonl") != manifest["train_sha256"]:

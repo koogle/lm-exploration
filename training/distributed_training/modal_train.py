@@ -1,4 +1,4 @@
-"""Train or explicitly resume the scholarly model on one/two/three Modal GPUs."""
+"""Train or explicitly resume the simple LLM model on one/two/three Modal GPUs."""
 
 import hashlib
 import json

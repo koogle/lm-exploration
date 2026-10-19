@@ -95,7 +95,7 @@ tags:
 - from-scratch
 ---
 
-# Scholarly/code tokenizer learning curve
+# Simple LLM tokenizer learning curve
 
 18 byte-level BPE tokenizers trained from scratch on Modal: 64, 128, 256, 512,
 1,024 and 2,048 MiB of text, each at 16,384, 32,768 and 50,000 vocabulary entries.
@@ -104,7 +104,7 @@ This is a tokenizer resource, with no language-model weights.
 The default is **32,768 entries trained on 2 GiB**, a practical starting point
 balancing compression and embedding/output size. This is not a demonstrated
 model-quality optimum. All 18 variants are included for reproducible comparisons.
-The existing scholarly-code-v1 tokenizer in GitHub has not been replaced.
+The existing simple-llm-v1 tokenizer in GitHub has not been replaced.
 
 ## Usage
 

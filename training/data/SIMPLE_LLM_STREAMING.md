@@ -1,7 +1,7 @@
-# Scholarly/code streaming preparation
+# Simple LLM streaming preparation
 
 This implements the first corpus preparation milestone in the
-[pretraining plan](../plans/SCHOLARLY_CODE_PRETRAINING.md). It streams the pinned
+[pretraining plan](../plans/SIMPLE_LLM_PRETRAINING.md). It streams the pinned
 12-source recipe from Hugging Face into a persistent token staging database,
 exports immutable shards, and exposes resumable PyTorch batches. It does not
 launch model training or modify the existing character-level trainer.
@@ -13,10 +13,10 @@ Run from `training/`:
 ```sh
 uv sync --locked --extra corpus
 uv run python -m unittest discover -s tests -v
-uv run lm-prepare-scholarly \
-  --output runs/scholarly-stream-v1 \
+uv run lm-prepare-simple-llm \
+  --output runs/simple-llm-stream-v1 \
   --max-records-per-source 100 \
-  --export runs/scholarly-stream-v1/snapshots/pilot-001
+  --export runs/simple-llm-stream-v1/snapshots/pilot-001
 ```
 
 Repeat with the same output and a **new** snapshot name to continue. The record
@@ -51,13 +51,13 @@ The local entrypoint uses the existing conservative reservation function; it
 does not initialize a budget or borrow the latent-workspace ledger.
 
 ```sh
-modal run modal_scripts/modal_prepare_scholarly.py \
-  --version scholarly-stream-v1 --snapshot pilot-001 --max-records 100
+modal run modal_scripts/modal_prepare_simple_llm.py \
+  --version simple-llm-stream-v1 --snapshot pilot-001 --max-records 100
 ```
 
 The CPU-only worker uses two CPUs, 4 GiB RAM, a 30-minute timeout, no automatic
 retries, and the `lm-exploration-mixture-data` Volume. Data lives under
-`/data/scholarly-code/<version>/`; snapshots under `snapshots/<snapshot>/`.
+`/data/simple-llm/<version>/`; snapshots under `snapshots/<snapshot>/`.
 It commits the Volume after each source and on normal/error exit. A hard timeout
 may lose uncommitted Volume changes; replaying the last durable cursor is safe.
 Do not start concurrent apps against the same version. Keep failed snapshot
@@ -72,8 +72,9 @@ snapshot for a run; later preparation does not modify that snapshot.
 from training_data.token_stream import TokenMixture
 
 # Explicit override is for pipeline smoke tests only, never a substantial run.
-data = TokenMixture("/data/scholarly-code/v1/snapshots/pilot/manifest.json",
-                    context=2048, allow_unreviewed=True)
+data = TokenMixture(
+    "/data/simple-llm/v1/snapshots/pilot/manifest.json", context=2048, allow_unreviewed=True
+)
 x, targets = data.next_batch(batch_size=8, device="cuda")
 # logits = model(x), with vocab_size=32768
 # loss = F.cross_entropy(logits.flatten(0, 1), targets.flatten(), ignore_index=-100)
@@ -129,8 +130,8 @@ python -m training_data.token_shards convert \
   /path/to/pilot-001/manifest.json /path/to/pilot-001-seekable
 
 # On the existing Modal data volume, without downloading the corpus:
-modal run modal_prepare_scholarly.py \
-  --version scholarly-124m-20261016 --snapshot pilot-001-seekable \
+modal run modal_prepare_simple_llm.py \
+  --version simple-llm-124m-20261016 --snapshot pilot-001-seekable \
   --convert-from pilot-001
 ```
 
@@ -153,7 +154,7 @@ Every exported manifest is `training_ready: false`; the loader rejects it by
 default. Preparation is not a claim that these gates have passed:
 
 - The original uncommitted collector's exact `mixture-split-v1` hash construction
-  is absent. This implementation explicitly uses `scholarly-parent-v2`; recover
+  is absent. This implementation explicitly uses `simple-llm-parent-v2`; recover
   and reconcile the tokenizer fitting/held-out assignments before relying on its
   evaluation split. It does not claim compatibility with the old split.
 - Book chapters group by book identifiers and code files by repository. Paper
@@ -179,7 +180,7 @@ the next milestones; these preparation tools do not imply they are complete.
 
 ## Measured local smoke result — 2026-10-16
 
-The [retained report](../results/scholarly-streaming-smoke-2026-10-16.json)
+The [retained report](../results/simple-llm-streaming-smoke-2026-10-16.json)
 records a live run against all 12 pinned upstream sources: 32 records each, with
 LibreTexts continued to 160 records to reach a training parent. The exported
 sample contains 7,066,054 training loss tokens and 999,253 validation loss tokens.

@@ -100,7 +100,7 @@ def worker(world, run_id, provenance):
 
 
 @app.local_entrypoint()
-def main(run_id: str = "scholarly-124m-h100-confirmation-20261017-01"):
+def main(run_id: str = "simple-llm-124m-h100-confirmation-20261017-01"):
     import re
 
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
