@@ -37,9 +37,28 @@ snapshot contains only fresh training records plus held-out validation records;
 export verifies zero prior-hash training overlap and exact agreement with capacity
 counters. Immutable old snapshots and checkpoints are never rewritten.
 
-If a pinned source exhausts before its fresh quota, the workflow stops and reports
-that source. It does not recycle old data, increase pass limits, or change shares.
-Upstream capacity is a measured preparation result, not an assumption.
+The first attempt stopped when LibreTexts exhausted at 5,874,724 fresh targets
+versus its original minimum of 42,857,143. The user authorized fixing and
+continuing with the overall books share unchanged. The replacement uses a
+capacity-aware pool of the **six original book collections**: Pressbooks,
+LibreTexts, DOAB, Gutenberg, pre-1929 books, and Library of Congress. It adds
+fresh records beyond the committed cursors of the remaining collections; it does
+not add the unfiltered LibreTexts release or relax upstream filters.
+
+When a book collection exhausts, cap its exposure budget at twice its measured
+fresh unique capacity, keeping a 5% reserve. Redistribute the shortfall across
+remaining book collections in their original relative proportions. Repeat if
+another collection exhausts. The exact integer books budget, coding budget (3B),
+and every non-book source budget are invariant. The final manifest records the
+original and resulting source allocations; these source-level book weights may
+change from the original table. Empty collections are omitted from active loader
+sources. If the entire book pool, or any non-book source, cannot support its
+budget, stop rather than reuse old records or increase pass limits.
+
+The new `code60-5b-books-v2` snapshot reuses the already prepared staging database,
+exclusion ledger and upstream cursors. Prior snapshots and the failed run remain
+immutable. Allocation policy identity is checked on every preparation restart.
+Capacity and throughput are measured preparation results, not assumptions.
 
 ## Training and validation
 

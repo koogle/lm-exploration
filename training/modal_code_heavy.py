@@ -16,7 +16,7 @@ ORIGINAL = Path(
 )
 EU = Path("/data/scholarly-code/eu-continuation-20261018/snapshots/ecb-ema-one-pass-v1/raw.sqlite")
 PARENT = "simple-llm-124m-eu-onepass-20261018-s02/step-000003838.pt"
-SNAPSHOT = "code-heavy-fresh-20261019/snapshots/code60-5b-v1"
+SNAPSHOT = "code-heavy-fresh-20261019/snapshots/code60-5b-books-v2"
 VALIDATION = "simple-llm-eu-expanded-validation-20261019"
 TARGET = 5_000_000_000
 SETTINGS = {
@@ -62,7 +62,8 @@ def prepare():
     import shutil
 
     from training_data.cached_shards import CachedShards
-    from training_data.fresh_raw_corpus import FreshRawCorpus, initialize_fresh
+    from training_data.fresh_book_pool import FreshBookPoolCorpus
+    from training_data.fresh_raw_corpus import initialize_fresh
 
     from trainer.continued_pretraining import coding_double_mix, token_targets
     from trainer.distributed_train import atomic_json
@@ -72,11 +73,12 @@ def prepare():
     if (destination / "manifest.json").exists():
         return json.loads((destination / "manifest.json").read_text())
     staging = destination.parent.parent / "staging"
+    (staging / "failure.json").unlink(missing_ok=True)
     print(json.dumps({"stage": "initializing_fresh_exclusions"}), flush=True)
     recipe = initialize_fresh(staging, ORIGINAL, [EU])
     manifest = json.loads(ORIGINAL.read_text())
     weights = coding_double_mix(manifest["sources"])
-    corpus = FreshRawCorpus(
+    corpus = FreshBookPoolCorpus(
         staging,
         recipe,
         weights,
@@ -153,7 +155,12 @@ def initialize(run_id):
         folder / "step-000000000.pt",
         snapshot_path(SNAPSHOT) / "manifest.json",
         DistributedConfig(**SETTINGS),
-        {"fresh_only": True, "coding_share": 60, "target_tokens": TARGET},
+        {
+            "fresh_only": True,
+            "coding_share": 60,
+            "target_tokens": TARGET,
+            "book_allocation": "fresh-book-pool-v1",
+        },
     )
     run_volume.commit()
     return {"seed": str(folder.relative_to("/runs") / "step-000000000.pt"), "lineage": lineage}

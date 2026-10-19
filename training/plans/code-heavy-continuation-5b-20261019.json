@@ -154,5 +154,18 @@
   "validation_sample": "simple-llm-eu-expanded-validation-20261019/windows.jsonl.gz",
   "fresh_unique_minimum_tokens": 2500000000,
   "fresh_capacity_reserve_percent": 5,
-  "snapshot": "code-heavy-fresh-20261019/snapshots/code60-5b-v1"
+  "snapshot": "code-heavy-fresh-20261019/snapshots/code60-5b-books-v2",
+  "book_allocation_policy": {
+    "policy": "fresh-book-pool-v1",
+    "sources": [
+      "pressbooks",
+      "libretexts",
+      "doab",
+      "gutenberg",
+      "pre_1929_books",
+      "library_of_congress"
+    ],
+    "total_book_targets": 714285715,
+    "rule": "Cap exhausted collections at twice measured fresh capacity with 5% reserve; redistribute only within books using original relative proportions. Record final source weights in snapshot."
+  }
 }

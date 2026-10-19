@@ -137,6 +137,8 @@ class FreshRawCorpus(FastRawCorpus):
                     raise ValueError("Prior training/heldout overlap in fresh export")
                 sources = {}
                 for name, state in status["sources"].items():
+                    if not self.targets[name]:
+                        continue
                     counts = dict(
                         self.db.execute(
                             """SELECT split,SUM(loss_tokens)
