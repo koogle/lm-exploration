@@ -162,3 +162,20 @@ binary upload hit quota: `jfrick/124M-10.879B`, revision
 `8072e015339494dbb25dd17f8788488c3d230aab`. Download hashes were verified. Future
 finalization publishes small SVG/provenance artifacts independently of model blobs;
 full CSV/PDF/PNG is retained on Modal, and binary checkpoint quota remains a blocker.
+
+## Storage increase and live publication
+
+The user increased HF upload storage limits and requested continued uploads.
+Binary PNG/PDF curves and full metrics CSV were uploaded and downloaded/hash-verified
+at `jfrick/124M-10.879B` revision `cd890ff592a9c7e760235d560bd810210a8f512a`.
+The previously missing step66,000 archive upload was resumed independently.
+
+`modal_live_publication.py` is a separate CPU-only app. Its chained watcher publishes
+every committed overnight segment checkpoint under
+`continuations/<run>/checkpoints/step-NNNNNNNNN/` in the same private parent repo,
+with a live `checkpoint-index.json`. Parent root weights remain available. Each
+self-contained FP32 inference bundle is checked for exact weight/logit round-trip
+and remote LFS hash. Full optimizer/RNG state remains on Modal. Publication does not
+block or modify training; bounded retries and failures have a separate durable state
+at `/runs/<run>/hf-live-publication.json`. Finalization still publishes the completed
+model under a name based on actual parameter size and lifetime training tokens.
