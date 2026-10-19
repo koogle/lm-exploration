@@ -52,6 +52,10 @@ class RawTokenMixture(TokenMixture):
         self.sources = self.manifest["sources"]
         if any(s["splits"][split]["loss_tokens"] <= 0 for s in self.sources.values()):
             raise ValueError("Every mixture source needs data for this split")
+        for source in self.sources.values():
+            cap = source.get("max_passes", 2)
+            if type(cap) is not int or cap not in (1, 2):
+                raise ValueError("Source pass cap must be one or two")
         self.positions = dict.fromkeys(self.sources, 0)
         self.exposures = dict.fromkeys(self.sources, 0)
         self.iterators = {}
@@ -61,7 +65,11 @@ class RawTokenMixture(TokenMixture):
 
     def blocks(self, name):
         saved = dict(self.cursors[name])
-        passes = 2 if self.split == "train" and not self.single_pass else 1
+        passes = (
+            self.sources[name].get("max_passes", 2)
+            if self.split == "train" and not self.single_pass
+            else 1
+        )
         for pass_index in range(saved["pass"], passes):
             start_hash = saved["hash"] if pass_index == saved["pass"] else ""
             rows = self.db.execute(
@@ -150,10 +158,12 @@ class RawTokenMixture(TokenMixture):
         cursors = state["raw_cursors"]
         if set(cursors) != set(self.sources):
             raise ValueError("Raw source cursor mismatch")
-        for cursor in cursors.values():
+        for name, cursor in cursors.items():
             if (
                 type(cursor["pass"]) is not int
-                or cursor["pass"] not in (0, 1)
+                or not 0
+                <= cursor["pass"]
+                < (1 if self.single_pass else self.sources[name].get("max_passes", 2))
                 or type(cursor["offset"]) is not int
                 or cursor["offset"] < 0
                 or cursor["offset"] % self.context

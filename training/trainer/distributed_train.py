@@ -25,9 +25,11 @@ def source_hashes():
     import training_data.token_stream
 
     import trainer.distributed_config
+    import trainer.representative_validation
 
     paths = {
         "trainer": Path(__file__),
+        "heldout_loader": Path(trainer.representative_validation.__file__),
         "config": Path(trainer.distributed_config.__file__),
         "model": Path(model_100m.model.__file__),
         "loader": Path(training_data.token_stream.__file__),
@@ -174,11 +176,16 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 data = make_data()
             if not config.pilot and data_format != "scholarly-live-v1":
                 capacity = min(
-                    2 * s["splits"]["train"]["loss_tokens"] * 100 / s["weight_percent"]
+                    s.get("max_passes", 2)
+                    * s["splits"]["train"]["loss_tokens"]
+                    * 100
+                    / s["weight_percent"]
                     for s in data.sources.values()
                 )
                 if config.target_tokens > capacity:
-                    raise ValueError("Snapshot cannot support target mixture within two passes")
+                    raise ValueError(
+                        "Snapshot cannot support target mixture within source pass caps"
+                    )
             validation = TokenMixture(
                 manifest,
                 context=config.context,
@@ -263,10 +270,9 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
         final_checkpoint = None
         heldout = None
         if rank == 0:
-            # A fixed small validation set: diagnostics, not capability evaluation.
-            heldout = primary(
-                lambda: {name: next(validation.blocks(name)) for name in validation.sources}
-            )
+            from trainer.representative_validation import load_heldout
+
+            heldout = primary(lambda: load_heldout(manifest, validation))
         else:
             primary(lambda: None)
 
@@ -278,8 +284,11 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
         def evaluate():
             model.eval()
             losses = {}
+            counts = {}
+            stratum_sums = {}
+            stratum_counts = {}
             try:
-                for name, block in heldout.items():
+                for name, block in heldout:
                     x = torch.tensor([block["input_ids"]], device="cuda")
                     y = torch.tensor([block["labels"]], device="cuda")
                     with torch.autocast("cuda", dtype=torch.bfloat16):
@@ -289,12 +298,23 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                             reduction="sum",
                             ignore_index=LOSS_IGNORE_INDEX,
                         )
-                    losses[name] = float(loss) / block["loss_tokens"]
+                    losses[name] = losses.get(name, 0.0) + float(loss)
+                    counts[name] = counts.get(name, 0) + block["loss_tokens"]
+                    stratum = block.get("stratum", name)
+                    stratum_sums[stratum] = stratum_sums.get(stratum, 0.0) + float(loss)
+                    stratum_counts[stratum] = stratum_counts.get(stratum, 0) + block["loss_tokens"]
             finally:
                 model.train()
+            losses = {name: value / counts[name] for name, value in losses.items()}
             return {
                 "step": step,
                 "tokens": tokens,
+                "target_counts": counts,
+                "per_stratum": {
+                    name: value / stratum_counts[name] for name, value in stratum_sums.items()
+                },
+                "stratum_target_counts": stratum_counts,
+                "windows": len(heldout),
                 "per_source": losses,
                 "weighted_loss": sum(
                     losses[n] * data.sources[n]["weight_percent"] / 100 for n in losses
@@ -488,7 +508,11 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 initial_validation=initial_validation,
                 final_validation=final_validation,
                 loss_token_exposures=data.exposures,
-                validation_note="One fixed window/source; diagnostic only",
+                validation_note=(
+                    "Frozen stratified held-out windows"
+                    if json.loads(manifest.read_text()).get("heldout")
+                    else "One fixed window/source; diagnostic only"
+                ),
                 prefetch=data.stats() if config.prefetch_batches else None,
             )
             atomic_json(output / "report.json", report)

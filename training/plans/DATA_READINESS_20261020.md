@@ -83,3 +83,50 @@ Launched CPU jobs:
 - [Modal deployment](https://modal.com/apps/radiantai/main/deployed/simple-llm-data-readiness).
 
 These job IDs establish launch, not successful collection or a passed readiness gate.
+
+## Authorized overnight handoff (supersedes the manual-review pause above)
+
+The user's final overnight instruction authorizes collection, checks, then training
+without another confirmation. The continuation remains **additional 10B, 60% code**.
+The CPU-only readiness app is separate from `modal_overnight.py`, whose controller
+waits for preparation and schedules GPUs only after the following operational gates:
+
+- At least 6.1B *new* eligible code targets after the combined audit, with a 2% margin
+  required in the frozen selected corpus for every mixture source.
+- At least eight languages have 10M targets each and at least four held-out parents;
+  at least three path-task buckets have 10M each, including 50M test-code targets.
+- Selected code has at most 2.4B targets per language (40% of the intended code
+  budget); code loader enforces one pass across all eight-H100 segments/restores.
+- Frozen tokenizer diagnostic has no UNK and aggregate sampled code fragmentation
+  is at most one token per character. This screens gross mismatch, not optimality.
+- Completed HumanEval/MBPP lexical checks, normalized deduplication, parent split
+  exclusions, and frozen held-out coverage for every training source.
+- Fresh-process two-step qualification and restore validation must match before the
+  full segments proceed. Adam moments, per-rank RNG and lifetime counters are preserved.
+
+Fresh original non-code collection runs alongside code preparation, from the prior
+upstream cursors with an exclusion ledger. Remaining non-code capacity may reuse
+older data, with at most two passes **in this phase**. Code never falls back to old
+training documents. Code is 60%, EU replay 5%, remaining prior sources scaled to35%.
+There is no silent fallback to the historical 30% code plan.
+
+The conservative split/lexical checks and whitespace deduplication do not establish
+semantic decontamination or universal family/edition reconciliation. These remain
+explicit experimental limitations, rather than claims that all audits passed.
+The frozen representative evaluation replaces the one-window diagnostic in this
+new workflow; older plots keep their original diagnostic labels.
+
+Controller waits are chained in bounded CPU jobs; preparation does not reserve
+GPUs. Prepared data is frozen before training. GPU workers use eight H100s, 8K,
+compiled microbatch 2, cropping, cached RoPE, global batch32 and prefetch4.
+Periodic full optimizer checkpoints remain on the Modal run volume. Loss curves,
+CSV and provenance are saved there automatically, with final matched expanded
+validation and private HF publication attempts. HF currently rejects uploads due to
+the owner's private storage quota; no billing upgrade or public disclosure is used.
+The final model export, if upload succeeds, is named by actual lifetime tokens
+(e.g. `124M - 20.879B`); older default model weights are not overwritten.
+
+The first deployment missed an imported Modal module. The next audit encountered
+intentional hash-only test tombstones. Both were corrected before any GPU launch;
+stalled/failed jobs were cancelled. The active version is **readiness-20261020-v2**.
+The old v1 directories are retained as failed preparation evidence.

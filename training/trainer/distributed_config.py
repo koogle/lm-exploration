@@ -59,10 +59,10 @@ class DistributedConfig:
         if self.experimental_data and (
             self.pilot
             or (self.n_layer, self.n_head, self.n_embd) not in ((8, 3, 192), (14, 12, 768))
-            or self.target_tokens > 5_000_000_000
+            or self.target_tokens > (10_000_000_000 if self.n_embd == 768 else 5_000_000_000)
         ):
             raise ValueError(
-                "Experimental data is scoped to the authorized modern 9.85M or 124M / 5B runs"
+                "Experimental data is scoped to the authorized modern 9.85M / 5B or 124M / 10B runs"
             )
         if type(self.prefetch_batches) is not int or not 0 <= self.prefetch_batches <= 64:
             raise ValueError("prefetch_batches must be an integer from 0 to 64")

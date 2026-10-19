@@ -6,8 +6,9 @@ import modal
 
 from modal_eu_continuation import data_volume, image
 
+image = image.add_local_file("modal_eu_continuation.py", "/project/modal_eu_continuation.py")
 app = modal.App("simple-llm-data-readiness")
-BASE = Path("/data/scholarly-code/readiness-20261020-v1")
+BASE = Path("/data/scholarly-code/readiness-20261020-v2")
 PRIOR = Path("/data/scholarly-code/code-heavy-fresh-20261019/staging/raw.sqlite")
 EU = Path("/data/scholarly-code/eu-continuation-20261018/snapshots/ecb-ema-one-pass-v1/raw.sqlite")
 

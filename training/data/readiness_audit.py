@@ -93,9 +93,17 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
         source = sqlite3.connect(f"file:{source_path}?mode=ro", uri=True)
         handles[label] = source
         for key, category, split, parent, provenance, blob, count, conflict in source.execute(
-            "SELECT hash,source,split,parent,provenance,text,loss_tokens,conflict FROM documents"
+            "SELECT hash,source,split,parent,provenance,text,loss_tokens,conflict FROM documents d"
+            + (
+                " WHERE NOT EXISTS (SELECT 1 FROM excluded_prior e WHERE e.hash=d.hash)"
+                if label == "fresh_original"
+                else ""
+            )
         ):
-            text = zlib.decompress(blob).decode()
+            # Original test records deliberately retain only hashes/parents.
+            # They are not corrupt zlib and must still protect exact/split identity.
+            tombstone = count == 0 and not blob
+            text = "" if tombstone else zlib.decompress(blob).decode()
             metadata = json.loads(provenance)
             language = metadata.get("language", "python" if category == "code_python" else "")
             task = metadata.get("task_family", "unclassified")
@@ -114,7 +122,7 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
                     category,
                     split,
                     parent,
-                    normalized_hash(text),
+                    ("excluded:" + key if tombstone else normalized_hash(text)),
                     count,
                     fresh,
                     stratum,
@@ -123,7 +131,7 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
                 ),
             )
             values = metrics[stratum]
-            if values[0] < 128:
+            if not tombstone and values[0] < 128:
                 sample = text[:32768]
                 ids = tokenizer.encode(sample, add_special_tokens=False).ids
                 values[0] += 1
@@ -153,10 +161,12 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
       CREATE UNIQUE INDEX blocked_index ON blocked_parents(parent);
       CREATE TABLE heldout_norms AS SELECT DISTINCT norm FROM records WHERE split!='train';
       CREATE UNIQUE INDEX heldout_norm_index ON heldout_norms(norm);
+      CREATE TABLE heldout_hashes AS SELECT DISTINCT hash FROM records WHERE split!='train';
+      CREATE UNIQUE INDEX heldout_hash_index ON heldout_hashes(hash);
       CREATE TABLE eligible AS SELECT * FROM (
         SELECT r.*, ROW_NUMBER() OVER(PARTITION BY norm ORDER BY fresh,origin,hash) AS rank
         FROM records r WHERE NOT EXISTS (SELECT 1 FROM blocked_parents b WHERE b.parent=r.parent)
-          AND (split!='train' OR NOT EXISTS(SELECT 1 FROM heldout_norms h WHERE h.norm=r.norm))
+          AND tokens>0 AND (split!='train' OR (NOT EXISTS(SELECT 1 FROM heldout_norms h WHERE h.norm=r.norm) AND NOT EXISTS(SELECT 1 FROM heldout_hashes h WHERE h.hash=r.hash)))
       ) WHERE rank=1;
       CREATE INDEX eligible_split ON eligible(split,stratum,parent);
     """)
@@ -190,9 +200,10 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
                 ids = tokenizer.encode(
                     zlib.decompress(blob).decode(), add_special_tokens=False
                 ).ids + [2]
-                offsets = sorted({0, max(0, len(ids) - 2049)})
+                sequence = [1] + ids
+                offsets = sorted({0, max(0, len(sequence) - 2049)})
                 for offset in offsets:
-                    tokens = [1] + ids[offset : offset + 2048]
+                    tokens = sequence[offset : offset + 2049]
                     output.write(
                         json.dumps(
                             {

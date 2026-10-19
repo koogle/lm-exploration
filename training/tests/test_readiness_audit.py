@@ -51,6 +51,10 @@ class ReadinessTests(unittest.TestCase):
             add(benchmark, "train", "code_python:benchmark/repo", 40)
             add("a second document", "train", "code_python:benchmark/repo", 50)
             add("clean validation example", "validation", "code_python:clean/held", 60)
+            db.execute(
+                "INSERT INTO documents VALUES (?,?,?,?,?,?,?,0)",
+                ("test-only-hash", "code_python", "test", "code_python:private/test", "{}", b"", 0),
+            )
             db.commit()
             db.close()
             with patch("training_data.readiness_audit.load_frozen", return_value=Tokenizer()):

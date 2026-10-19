@@ -108,7 +108,7 @@ def prepare_code(
             from .readiness_audit import normalized_hash
 
             for (blob,) in db.execute(
-                "SELECT text FROM prior.documents WHERE source='code_python'"
+                "SELECT text FROM prior.documents WHERE source='code_python' AND loss_tokens>0 AND length(text)>0"
             ):
                 db.execute(
                     "INSERT OR IGNORE INTO normalized VALUES (?)",
