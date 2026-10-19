@@ -1,5 +1,9 @@
 # Fresh 124.4M Muon versus AdamW comparison
 
+**Completed October 19:** [measured report](../results/muon-124m-100mt-20261019.md).
+Muon diagnostic loss was 2.7204 versus AdamW 3.5525 at matched 99.99M tokens,
+with 9.8% lower steady throughput. Both GPU runs and restore checks passed.
+
 This is a stacked follow-up to PR #17 (`training/padding-optimizations`). It uses
 Simple LLM's existing scholarly/code raw snapshot, frozen 32K tokenizer, 14×768
 architecture, 8K context and global batch of 32 windows. Both arms start with seed
@@ -59,3 +63,17 @@ and training are **not verified**. The launch attempt could not connect to Modal
 `https://api.modal.com` returned HTTP 503 and a bounded client probe timed out.
 No application ID or measured training results were returned. See the retained
 [attempt record](../results/muon-124m-100mt-20261018-attempt.json).
+
+## Proxy certificate setup
+
+If the Modal client reports `CERTIFICATE_VERIFY_FAILED` behind the managed
+workspace proxy, use the installed `truststore` package to load system certificate
+authorities while keeping TLS verification enabled:
+
+```sh
+uv run python -c 'import truststore; truststore.inject_into_ssl(); from modal.__main__ import main; main()' run modal_muon_comparison.py --prefix muon-124m-100mt-<fresh-id>
+```
+
+On October 19 this resolved the client connection failure. The retry was accepted
+as Modal app `ap-Pqtzos5cN2U8xxPqAj5UKc`, prefix
+`muon-124m-100mt-20261019-b`. Both arms subsequently completed; see the measured report linked above.
