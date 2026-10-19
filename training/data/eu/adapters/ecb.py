@@ -94,6 +94,79 @@ COLLECTIONS = {
     },
     "pension_fund_statistics": {"name": "Euro area pension fund statistics", "type_ids": ["237"]},
     "money_market_statistics": {"name": "ECB Euro money market statistics", "type_ids": ["113"]},
+    "weekly_financial_commentaries": {
+        "name": "ECB Weekly financial statement - Commentary",
+        "type_ids": ["21"],
+    },
+    "monetary_policy_statements": {"name": "ECB Monetary policy statement", "type_ids": ["54"]},
+    "market_infrastructure_news": {"name": "MIP News", "type_ids": ["183"]},
+    "consumer_expectation_surveys": {
+        "name": "ECB Consumer Expectation Survey",
+        "type_ids": ["298"],
+    },
+    "macroeconomic_projections": {
+        "name": "ECB Macroeconomic projections for the euro area",
+        "type_ids": ["95"],
+    },
+    "monetary_analyst_surveys": {"name": "ECB Survey of Monetary Analysts", "type_ids": ["199"]},
+    "monetary_analyst_results": {
+        "name": "ECB Survey of Monetary Analysts - Aggregate results",
+        "type_ids": ["268"],
+    },
+    "digital_euro_investigation": {
+        "name": "ECB Digital Euro Investigation Phase document",
+        "type_ids": ["279"],
+    },
+    "digital_euro_preparation": {
+        "name": "ECB Digital Euro Preparation Phase document",
+        "type_ids": ["399"],
+    },
+    "digital_euro_rulebook_preparation": {
+        "name": "Digital Euro Preparation Phase - Scheme Rulebook Development Group documents",
+        "type_ids": ["362"],
+    },
+    "digital_euro_rulebook_investigation": {
+        "name": "Digital Euro Investigation Phase - Scheme Rulebook Development Group documents",
+        "type_ids": ["400"],
+    },
+    "digital_euro_project_documents": {
+        "name": "Digital euro project document",
+        "type_ids": ["471"],
+    },
+    "digital_euro_rulebook_project": {
+        "name": "Digital euro project - Scheme Rulebook Development Group documents",
+        "type_ids": ["472"],
+    },
+    "digital_euro_progress_investigation": {
+        "name": "ECB Digital Euro Investigation Phase - Progress Report",
+        "type_ids": ["406"],
+    },
+    "digital_euro_progress_preparation": {
+        "name": "ECB Digital Euro Preparation Phase - Progress Report",
+        "type_ids": ["408"],
+    },
+    "digital_euro_experiments": {
+        "name": "ECB Digital Euro Experimentation work",
+        "type_ids": ["280"],
+    },
+    "ami_seco_reports": {"name": "AMI-SeCo report", "type_ids": ["236"]},
+    "balance_of_payments_quality": {
+        "name": "Euro area balance of payments and international investment position statistics - Quality report",
+        "type_ids": ["149"],
+    },
+    "financial_accounts_quality": {
+        "name": "Euro area quarterly financial accounts - Quality report",
+        "type_ids": ["150"],
+    },
+    "monetary_statistics_quality": {
+        "name": "Euro area monetary and financial statistics - Quality report",
+        "type_ids": ["207"],
+    },
+    "climate_financial_disclosures": {
+        "name": "Climate-related financial disclosures",
+        "type_ids": ["392"],
+    },
+    "payment_fraud_reports": {"name": "Card fraud report", "type_ids": ["145"]},
     "other_publications": {"name": "ECB Other publication", "type_ids": ["23"]},
     "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
     "occasional_papers": {"name": "ECB Occasional Paper Series", "type_ids": ["3"]},

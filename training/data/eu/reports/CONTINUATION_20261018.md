@@ -538,3 +538,29 @@ the documents saved since the previous 919,527,738-token verified lower bound.
 Validation: 367 tests, including preserved history at the old boundary, one new
 pair, no overlap with active calls, the new finite limit and invalid values.
 Ruff lint/format and whitespace checks pass.
+
+
+## 19 October: policy, infrastructure and project expansion
+
+The owner again requested continued ECB expansion. Offline review of the same
+pinned 81-chunk English catalog tested 24 additional exact types (1,720 candidate
+URLs). Twenty-two are enabled, yielding 1,687 distinct URLs with no exact overlap
+against prior types or one another. Of 66 selected enabled-series full-text samples,
+65 fetched and parsed; none exactly matched the pinned saved-text index. The first
+digital-euro preparation progress report returned HTTP 503 and is retained as a
+bounded retrieval candidate. Agendas are original public PDFs and retain the same
+extraction thresholds. Passage overlap is not measured.
+
+T2S harmonisation reports (19 URLs) and Euro Money Market reports (14) are deferred.
+Only one of three selected samples retrieved in each; two historical URLs returned
+404. All 72 outcomes are recorded in the new policy/project research JSON, with
+raw hashes, sizes and openings for extracted samples. Bodies remain ignored.
+Do not guess filenames or reset histories to manufacture progress.
+
+Both mappings add enabled series at weight 1; old weights and five-second pacing
+are unchanged. Goal and manual apps are redeployed, and the existing controller
+starts one tracked source campaign. The selected configuration covers 64 types
+and 18,927 of 20,162 records in the pinned English metadata snapshot. This is
+configuration coverage, not saved-document coverage or whole-website exhaustion.
+Validation: 389 tests plus lint/format/whitespace checks. Collection caps, backoff,
+private storage and the separately authorized 96-pair audit budget are retained.

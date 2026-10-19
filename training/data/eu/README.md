@@ -912,3 +912,21 @@ Serialized audits, 3,000-uncached-shard and 1,500-second worker bounds, source
 cooldowns and no-replay behavior remain. Document and campaign budgets are
 unchanged. No token-cache or reservation history is reset. See
 [budget authorization](research/audit-budget-extension-20261019.json).
+
+
+### Policy, infrastructure and digital-euro backlog
+
+A further 22 exact FOEDB types provide **1,687 candidate URLs** across weekly
+financial commentaries, policy statements, market-infrastructure news, consumer
+expectations, projections, monetary-analyst surveys/results, digital-euro documents,
+AMI-SeCo reports, statistical quality reports, climate disclosures and fraud reports.
+Of 66 selected samples, 65 fetched and parsed; one progress-report page returned
+503. There is no exact URL overlap with previously configured types or one another,
+and sampled texts have no exact matches in the pinned saved-text index.
+
+T2S harmonisation and Euro Money Market reports are deferred: two of three selected
+historical URLs in each series returned 404. Negative evidence is preserved. Both
+mappings give enabled series weight 1, retaining existing weights, pacing,
+backoff and budgets. Short original agendas are retained at existing extraction
+thresholds. Candidate counts are not saved-document counts, and passage overlap
+is unmeasured. See [coverage and samples](research/ecb-policy-project-expansion-20261019.md).

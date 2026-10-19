@@ -59,6 +59,18 @@ cache history is retained. The audit app is redeployed and its coordinator is
 invoked immediately to resume counting. Keep the same serialized audit workers
 and per-call shard/runtime limits; collection budgets are unchanged.
 
+The latest owner request is to keep pushing on ECB. A further 22 policy,
+infrastructure, survey and digital-euro series now provide 1,687 candidate URLs.
+Of 66 selected enabled-series samples, 65 fetched and parsed; one returned 503.
+T2S harmonisation and Euro Money Market report types remain deferred because each
+had two historical catalog 404s among three selected samples. Do not reset those
+failures or guess replacement URLs. Read `research/ecb-policy-project-expansion-20261019.md`
+and its JSON. Both mappings/apps are updated; the existing controller owns the
+next ECB campaign. Prior survey/statistical expansions are saved; ECB was 17,620
+rows before this new work. Preserve the 96-pair audit budget and all collection
+limits. Further discovery must continue after this configured backlog drains;
+64 configured types in one English metadata snapshot are not website exhaustion.
+
 Paste the following into a new agent/goal:
 
 ---
