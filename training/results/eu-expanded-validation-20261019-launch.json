@@ -16,5 +16,11 @@
     "context": 2048,
     "precision": "FP32 TF32 disabled",
     "training": false
-  }
+  },
+  "stage": "completed",
+  "verified_unix": 1792389190.7164416,
+  "targets_per_checkpoint": 7620187,
+  "windows_per_checkpoint": 4615,
+  "source_families_per_checkpoint": 2782,
+  "aggregate_report": "analysis/eu-validation/report.md"
 }
