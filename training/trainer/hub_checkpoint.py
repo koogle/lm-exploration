@@ -8,7 +8,7 @@ from pathlib import Path
 def export_checkpoint(checkpoint, output, source, run_id):
     import torch
     from model_100m.model import GPT, ModelConfig
-    from safetensors.torch import save_file
+    from safetensors.torch import load_file, save_file
     from training_data.subword import digest
 
     checkpoint, output, source = Path(checkpoint), Path(output), Path(source)
@@ -34,6 +34,19 @@ def export_checkpoint(checkpoint, output, source, run_id):
         {k: v.contiguous().clone() for k, v in saved["model"].items()},
         str(output / "model.safetensors"),
     )
+    restored = load_file(str(output / "model.safetensors"))
+    if set(restored) != set(saved["model"]) or any(
+        not torch.equal(restored[key], value) for key, value in saved["model"].items()
+    ):
+        raise ValueError("Safetensors round-trip changed checkpoint weights")
+    probe = torch.tensor([[1, 100, 200]])
+    with torch.inference_mode():
+        expected = model(probe).clone()
+        model.load_state_dict(restored, strict=True)
+        actual = model(probe)
+    if not torch.equal(expected, actual) or not torch.isfinite(actual).all():
+        raise ValueError("Exported model logits changed")
+    del restored
     for package in ("model_100m", "model_10m"):
         shutil.copytree(
             source / "source" / package,
@@ -53,6 +66,8 @@ def export_checkpoint(checkpoint, output, source, run_id):
         run_id=run_id,
         checkpoint=str(checkpoint),
         weights_sha256=digest(output / "model.safetensors"),
+        weight_roundtrip_exact=True,
+        cpu_logits_roundtrip_exact=True,
         loss_token_exposures=saved["data"]["loss_token_exposures"],
     )
     (output / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
