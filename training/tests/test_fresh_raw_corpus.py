@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from fractions import Fraction
 from pathlib import Path
+from unittest.mock import patch
 
 from training_data.export_raw import export_raw
 from training_data.fresh_raw_corpus import FreshRawCorpus, initialize_fresh
@@ -39,7 +40,9 @@ class FreshCorpusTests(unittest.TestCase):
             fresh._write(source, fresh._fetch(source, fresh.cursor(source["name"])))
             fresh.close()
             # Restart does not turn already staged fresh records into exclusions.
-            initialize_fresh(root / "fresh", manifest)
+            with patch("training_data.fresh_raw_corpus.digest", wraps=digest) as checksums:
+                initialize_fresh(root / "fresh", manifest)
+                self.assertEqual([call.args[0] for call in checksums.call_args_list], [manifest])
             fresh = FreshRawCorpus(
                 root / "fresh", recipe, weights, targets, reader=reader, batch_size=3
             )

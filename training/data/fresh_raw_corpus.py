@@ -14,21 +14,31 @@ def initialize_fresh(folder, parent_manifest, other_databases=()):
     folder, parent_manifest = Path(folder), Path(parent_manifest)
     parent = json.loads(parent_manifest.read_text())
     databases = [parent_manifest.parent / parent["database"]["path"], *map(Path, other_databases)]
+    policy = "all prior document hashes excluded from new training, including heldouts"
+    folder.mkdir(parents=True, exist_ok=True)
+    final = folder / "raw.sqlite"
+    manifest_sha = digest(parent_manifest)
+    if final.exists():
+        # The committed ledger is self-contained. Its original checksums were
+        # verified when cloning; do not reread multi-GB immutable inputs on each
+        # preparation chunk. No old source database is used on this path.
+        with sqlite3.connect(final) as db:
+            saved = json.loads(db.execute("SELECT value FROM fresh_identity").fetchone()[0])
+        if (
+            saved["parent_manifest_sha256"] != manifest_sha
+            or saved["policy"] != policy
+            or [entry["path"] for entry in saved["excluded_databases"]] != list(map(str, databases))
+            or saved["excluded_databases"][0]["sha256"] != parent["database"]["sha256"]
+        ):
+            raise ValueError("Fresh staging exclusion identity changed")
+        return parent["staging_identity"]["recipe"]
     identity = {
-        "parent_manifest_sha256": digest(parent_manifest),
+        "parent_manifest_sha256": manifest_sha,
         "excluded_databases": [{"sha256": digest(p), "path": str(p)} for p in databases],
-        "policy": "all prior document hashes excluded from new training, including heldouts",
+        "policy": policy,
     }
     if identity["excluded_databases"][0]["sha256"] != parent["database"]["sha256"]:
         raise ValueError("Original immutable database checksum mismatch")
-    folder.mkdir(parents=True, exist_ok=True)
-    final = folder / "raw.sqlite"
-    if final.exists():
-        with sqlite3.connect(final) as db:
-            saved = json.loads(db.execute("SELECT value FROM fresh_identity").fetchone()[0])
-        if saved != identity:
-            raise ValueError("Fresh staging exclusion identity changed")
-        return parent["staging_identity"]["recipe"]
     temporary = folder / "initializing.sqlite"
     temporary.unlink(missing_ok=True)
     with sqlite3.connect(databases[0]) as source, sqlite3.connect(temporary) as target:
