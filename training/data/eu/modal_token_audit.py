@@ -103,7 +103,7 @@ def scheduled_tick():
         state["collection_goal"]["status"],
         lambda source: audit.spawn(source, 3000, 1500),
         inspect_audit,
-        max_pairs=48,
+        max_pairs=96,
     )
 
 

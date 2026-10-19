@@ -714,7 +714,7 @@ deferred until 15:27 UTC rather than retried immediately.
 
 ### Automatic audit continuation
 
-`modal_token_audit.scheduled_tick` runs hourly and reserves at most 48 ECB/EMA
+`modal_token_audit.scheduled_tick` runs hourly and reserves at most 96 ECB/EMA
 audit pairs, including the pair adopted at deployment. Each worker retains its
 1,500-second work budget, 1,800-second hard timeout and shared single-container
 limit. Durable reservations and call IDs live in private control state at
@@ -853,7 +853,7 @@ hours; the six-round durable deadline is seven hours, including worker-timeout
 headroom. The source mapping explicitly allows six EMA rounds; other mappings
 retain a three-round default. Existing jobs and reservations survive the control
 configuration migration unchanged. The 100,000-document, 150-campaign and
-48-audit-pair limits remain unchanged. The recovery schedule remains disabled.
+then-current audit-pair limit remain unchanged. The recovery schedule remains disabled.
 
 
 ### Avoid empty retry campaigns
@@ -896,3 +896,19 @@ successfully. Existing weights stay unchanged; new series receive weight 1.
 Source pacing, private storage, exact deduplication, cooldowns and all operating
 budgets remain. Candidate metadata is not a saved-document count. See
 [coverage and sample evidence](research/ecb-statistical-expansion-20261019.md).
+
+
+### Token-audit budget extended to 96 pairs
+
+On 19 October the owner authorized a budget extension after the original 48-pair
+audit allocation was exhausted. The production coordinator now allows **96 pairs total**:
+48 additional pairs, with existing history and claims retained. The standalone
+helper keeps its conservative 48-pair default but accepts an explicit limit up
+to 96; the deployed hourly coordinator explicitly uses 96. The owner grant is
+also recorded in `tokens/schedule.json` under `budget_extensions`.
+
+The existing coordinator is invoked once to resume measurement immediately.
+Serialized audits, 3,000-uncached-shard and 1,500-second worker bounds, source
+cooldowns and no-replay behavior remain. Document and campaign budgets are
+unchanged. No token-cache or reservation history is reset. See
+[budget authorization](research/audit-budget-extension-20261019.json).

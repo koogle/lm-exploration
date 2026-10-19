@@ -1,0 +1,18 @@
+{
+  "directive_id": "audit-budget-96-20261019",
+  "owner_instruction": "Budget extended",
+  "recorded_at": "2026-10-19T18:00:54.388839+00:00",
+  "previous_max_pairs": 48,
+  "additional_pairs": 48,
+  "new_max_pairs": 96,
+  "preserved": "Existing audit pair history, claims, serialized workers, 3000 uncached shards and 1500 work seconds per audit; collection budgets unchanged.",
+  "first_48_sha256": "e1054bcc8dbd937bfd3acd445b378539356400ee7430b667c467b9d5bfc72d2a",
+  "first_48_unchanged_after_restart": true,
+  "resumed_pair_number": 49,
+  "resumed_pair_id": "db6fe9fa022040cfaefe13da2766a1f7",
+  "resumed_call_ids": {
+    "ecb": "fc-01M5AN5WBJYY85JDB2AA9G4652",
+    "ema": "fc-01M5AN5X27SFNFK63PJ0HM24M1"
+  },
+  "tests_passed": 367
+}

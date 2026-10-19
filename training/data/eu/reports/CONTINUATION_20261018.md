@@ -519,3 +519,22 @@ Validation: 361 tests and Ruff lint/format/whitespace checks. Per-series counts,
 provenance, raw hashes, text sizes and openings are in the dated statistical
 expansion report and JSON. The 42/48 reserved audit-pair budget at the preceding
 status check still requires review; it is not evidence of source exhaustion.
+
+
+## 19 October: owner extends token-audit budget
+
+After the 48-pair budget was fully consumed, the owner instructed “Budget extended.”
+The extension adds another 48 pairs, bringing the production limit to 96 total.
+The conservative standalone-helper default stays 48, while its validated upper
+bound and the production coordinator's explicit limit are 96. The owner grant
+is retained in private `tokens/schedule.json` under `budget_extensions`, with a
+read-back check and a digest of the first 48 pair records. Nothing is reset.
+
+The audit app is redeployed and its existing coordinator is invoked to allocate
+the next pair. Existing ambiguous claims, cooldowns and serialized-worker rules
+remain. Each audit still allows at most 3,000 uncached shards and 1,500 work
+seconds; document/campaign budgets are unchanged. This resumes measurement of
+the documents saved since the previous 919,527,738-token verified lower bound.
+Validation: 367 tests, including preserved history at the old boundary, one new
+pair, no overlap with active calls, the new finite limit and invalid values.
+Ruff lint/format and whitespace checks pass.
