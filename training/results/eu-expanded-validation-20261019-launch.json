@@ -1,0 +1,20 @@
+{
+  "run_id": "simple-llm-eu-expanded-validation-20261019",
+  "controller_call_id": "fc-01M59AXKDMD9XY0S435APTWQDF",
+  "started_unix": 1792388550.1278124,
+  "provenance": {
+    "git_commit": "dcac9468bcff3ce7fcc4455f16bcf2a24f5b3857",
+    "source_sha256": {
+      "modal_eu_expanded_validation.py": "7da6e8b74a592c87a30bacd2a98c33af227e7567f4921648328edb47d4593f9b",
+      "trainer/eu_expanded_validation.py": "dc8a9a7342f479ae52b2f8d95e80e1ba59a46646a1acb3e9dbafbd13eb40c585",
+      "100m/model.py": "2c978432e84cad6b2f661c63e7e62bccfc393a2aeb9f0519f7ca3db6775ed326",
+      "data/subword.py": "00e32adc13dab74f5a029c63304b4591bd48f7cd6b086b22d4624d244667b4da"
+    },
+    "seed": 20261019,
+    "max_families_per_category": 256,
+    "windows_per_document": 2,
+    "context": 2048,
+    "precision": "FP32 TF32 disabled",
+    "training": false
+  }
+}
