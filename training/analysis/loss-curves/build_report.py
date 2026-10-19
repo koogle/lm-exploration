@@ -200,6 +200,7 @@ def build(root, output):
     for name, figure in [("loss-curves", fig), ("optimizer-curves", optimizer)]:
         figure.savefig(output / (name + ".png"), dpi=160)
         figure.savefig(output / (name + ".pdf"))
+        figure.savefig(output / (name + ".svg"))
         plt.close(figure)
     for name, data in [("training-metrics.csv", records), ("validation-metrics.csv", evaluations)]:
         with (output / name).open("w", newline="") as handle:
@@ -221,8 +222,8 @@ def build(root, output):
         "not the representative held-outs required for the new experiment."
     )
     (output / "README.md").write_text(
-        "# Completed training curves\n\n![Loss curves](loss-curves.png)\n\n"
-        "![Optimizer curves](optimizer-curves.png)\n\n"
+        "# Completed training curves\n\n![Loss curves](loss-curves.svg)\n\n"
+        "![Optimizer curves](optimizer-curves.svg)\n\n"
         f"Lifetime training through {summary[-1]['final_lifetime_tokens']:,} targets. "
         "Only completed training phases are shown. Data preparation has no model loss.\n\n"
         + note
@@ -233,7 +234,7 @@ def build(root, output):
         "training-step seconds and excludes checkpoint/evaluation/job overhead. "
         "CSV retains every logged update. Provenance records source-log hashes, reports "
         "and exact counts. Low loss does not establish factual accuracy, executable "
-        "code quality or absence of repetition.\n"
+        "code quality or absence of repetition. Full CSV is retained on Modal; the small vector-only HF publication may omit CSV/PDF/PNG when private binary quota is exhausted.\n"
     )
 
     print(json.dumps(summary, indent=2))

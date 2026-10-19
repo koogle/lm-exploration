@@ -477,7 +477,7 @@ def finish(run_id, checkpoint):
     """Final matched evaluation and small plot uploads, independent of storage quota."""
     import importlib.util
 
-    from huggingface_hub import HfApi
+    from huggingface_hub import HfApi, hf_hub_download
 
     from trainer.distributed_train import atomic_json
 
@@ -511,9 +511,28 @@ def finish(run_id, checkpoint):
             repo_id=repo,
             folder_path=str(output),
             path_in_repo="evaluation/" + run_id,
+            allow_patterns=["*.svg", "README.md", "provenance.json"],
             commit_message="Add overnight continuation curves and metrics",
         )
-        results["hf_curves"] = {"repo": repo, "revision": revision.oid}
+        from training_data.subword import digest
+
+        for name in ["loss-curves.svg", "optimizer-curves.svg", "provenance.json"]:
+            downloaded = Path(
+                hf_hub_download(
+                    repo,
+                    "evaluation/" + run_id + "/" + name,
+                    revision=revision.oid,
+                    force_download=True,
+                )
+            )
+            if digest(downloaded) != digest(output / name):
+                raise ValueError("Published curve hash mismatch")
+        results["hf_curves"] = {
+            "repo": repo,
+            "revision": revision.oid,
+            "verified": True,
+            "format": "SVG",
+        }
     except Exception as exc:  # noqa: BLE001 -- retain finalization errors independently
         results["curves_or_upload_error"] = f"{type(exc).__name__}: {str(exc)[:1500]}"
     try:

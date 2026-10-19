@@ -18,6 +18,8 @@ curves use frozen representative held-outs and are labeled accordingly.
 Historical completed phases end at 10,878,562,619 lifetime targets. The generated
 figures/CSV/provenance are retained privately on the workspace and attempted for
 publication under `evaluation/training-curves` in `jfrick/124M-10.879B`.
-The upload was rejected by Hugging Face's private-storage quota. No successful
-publication is claimed. Overnight finalization retains curves on Modal and retries
-private publication, recording any rejection independently of training success.
+Binary uploads were rejected by Hugging Face's private-storage quota. Vector SVG
+plots and provenance were then uploaded successfully and downloaded/hash-verified
+at revision `8072e015339494dbb25dd17f8788488c3d230aab`. The model card embeds them.
+Overnight finalization publishes small SVG/provenance artifacts separately from
+binary model uploads, which may still fail due to quota; full CSV remains on Modal.

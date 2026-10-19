@@ -150,3 +150,15 @@ the controller may resume the same pinned collection cursor for up to two additi
 rounds (8.5B then 10.5B pre-audit targets), with a new combined audit per round.
 It never fills code shortages by repeating old code or relaxing the pass limit.
 Other failures, or exhausted retry bounds, remain explicit stopped states.
+
+Final active controller: `fc-01M5B1SQR0S9GK95749CSNB0HA` (commit `c717928`).
+This replaces the initial CPU waiter with the bounded capacity-recollection workflow.
+The data workers were not restarted. Existing-corpus audit was observed past150,000
+records; code collection was observed at7,135,227 new targets across19 languages.
+Those are ingestion counts, not the post-audit 6B capacity gate.
+
+Historical loss/optimizer curves **were published successfully as SVG** after the
+binary upload hit quota: `jfrick/124M-10.879B`, revision
+`8072e015339494dbb25dd17f8788488c3d230aab`. Download hashes were verified. Future
+finalization publishes small SVG/provenance artifacts independently of model blobs;
+full CSV/PDF/PNG is retained on Modal, and binary checkpoint quota remains a blocker.
