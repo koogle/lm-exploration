@@ -1,0 +1,632 @@
+{
+  "models": {
+    "original_5b": {
+      "identity": {
+        "checkpoint": "/runs/simple-llm-124m-8k-5b-20261018-s03/step-000064227.pt",
+        "checkpoint_sha256": "ce26b11aed843008fb89893a5e90219b1a5c96e44ef32d42eb9188e427df1876",
+        "phase_tokens": 4999981176,
+        "step": 64227,
+        "lifetime_tokens": 4999981176
+      },
+      "modes": {
+        "greedy": {
+          "samples": 10,
+          "mean_repeated_token_4gram_fraction": 0.8019762845849803,
+          "median_repeated_token_4gram_fraction": 0.8715415019762845,
+          "long_loop_samples": 8,
+          "eos_samples": 0,
+          "total_generated_tokens": 2560,
+          "categories": {
+            "code": {
+              "samples": 3,
+              "mean_repeated_token_4gram_fraction": 0.7878787878787878,
+              "median_repeated_token_4gram_fraction": 0.8458498023715415,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 768
+            },
+            "ecb": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.8992094861660078,
+              "median_repeated_token_4gram_fraction": 0.8992094861660078,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "ema": {
+              "samples": 1,
+              "mean_repeated_token_4gram_fraction": 0.83399209486166,
+              "median_repeated_token_4gram_fraction": 0.83399209486166,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 256
+            },
+            "general": {
+              "samples": 1,
+              "mean_repeated_token_4gram_fraction": 0.9802371541501976,
+              "median_repeated_token_4gram_fraction": 0.9802371541501976,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 256
+            },
+            "math": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.575098814229249,
+              "median_repeated_token_4gram_fraction": 0.575098814229249,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "story": {
+              "samples": 1,
+              "mean_repeated_token_4gram_fraction": 0.8932806324110671,
+              "median_repeated_token_4gram_fraction": 0.8932806324110671,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 256
+            }
+          }
+        },
+        "low_temperature_topk": {
+          "samples": 20,
+          "mean_repeated_token_4gram_fraction": 0.7818181818181819,
+          "median_repeated_token_4gram_fraction": 0.8754940711462451,
+          "long_loop_samples": 16,
+          "eos_samples": 0,
+          "total_generated_tokens": 5120,
+          "categories": {
+            "code": {
+              "samples": 6,
+              "mean_repeated_token_4gram_fraction": 0.7536231884057971,
+              "median_repeated_token_4gram_fraction": 0.7391304347826086,
+              "long_loop_samples": 3,
+              "eos_samples": 0,
+              "total_generated_tokens": 1536
+            },
+            "ecb": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.8962450592885376,
+              "median_repeated_token_4gram_fraction": 0.9031620553359684,
+              "long_loop_samples": 4,
+              "eos_samples": 0,
+              "total_generated_tokens": 1024
+            },
+            "ema": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.7885375494071146,
+              "median_repeated_token_4gram_fraction": 0.7885375494071146,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "general": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.9209486166007905,
+              "median_repeated_token_4gram_fraction": 0.9209486166007905,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "math": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.5760869565217391,
+              "median_repeated_token_4gram_fraction": 0.6422924901185771,
+              "long_loop_samples": 3,
+              "eos_samples": 0,
+              "total_generated_tokens": 1024
+            },
+            "story": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.9031620553359684,
+              "median_repeated_token_4gram_fraction": 0.9031620553359684,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            }
+          }
+        },
+        "sampled_topk": {
+          "samples": 20,
+          "mean_repeated_token_4gram_fraction": 0.32963170336401004,
+          "median_repeated_token_4gram_fraction": 0.2571430964024921,
+          "long_loop_samples": 2,
+          "eos_samples": 3,
+          "total_generated_tokens": 5047,
+          "categories": {
+            "code": {
+              "samples": 6,
+              "mean_repeated_token_4gram_fraction": 0.5862977602108037,
+              "median_repeated_token_4gram_fraction": 0.598814229249012,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 1536
+            },
+            "ecb": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.12450592885375492,
+              "median_repeated_token_4gram_fraction": 0.12055335968379444,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 1024
+            },
+            "ema": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.1284584980237154,
+              "median_repeated_token_4gram_fraction": 0.1284584980237154,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "general": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.2964426877470356,
+              "median_repeated_token_4gram_fraction": 0.2964426877470356,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "math": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.3023087144485087,
+              "median_repeated_token_4gram_fraction": 0.25605753163046074,
+              "long_loop_samples": 1,
+              "eos_samples": 3,
+              "total_generated_tokens": 951
+            },
+            "story": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.25889328063241107,
+              "median_repeated_token_4gram_fraction": 0.25889328063241107,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            }
+          }
+        }
+      },
+      "max_new_tokens": 256,
+      "elapsed_seconds": 111.724697664
+    },
+    "eu_parent": {
+      "identity": {
+        "checkpoint": "/runs/simple-llm-124m-eu-onepass-20261018-s02/step-000003838.pt",
+        "checkpoint_sha256": "a9b4ff39352fae4aa163433df7130dbede1437657bee7c44fc26a6eb020af565",
+        "phase_tokens": 878610362,
+        "step": 3838,
+        "lifetime_tokens": 5878591538
+      },
+      "modes": {
+        "greedy": {
+          "samples": 10,
+          "mean_repeated_token_4gram_fraction": 0.8019762845849803,
+          "median_repeated_token_4gram_fraction": 0.9209486166007905,
+          "long_loop_samples": 8,
+          "eos_samples": 0,
+          "total_generated_tokens": 2560,
+          "categories": {
+            "code": {
+              "samples": 3,
+              "mean_repeated_token_4gram_fraction": 0.6389986824769434,
+              "median_repeated_token_4gram_fraction": 0.9525691699604744,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 768
+            },
+            "ecb": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.8932806324110671,
+              "median_repeated_token_4gram_fraction": 0.8932806324110671,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "ema": {
+              "samples": 1,
+              "mean_repeated_token_4gram_fraction": 0.6482213438735178,
+              "median_repeated_token_4gram_fraction": 0.6482213438735178,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 256
+            },
+            "general": {
+              "samples": 1,
+              "mean_repeated_token_4gram_fraction": 0.8893280632411067,
+              "median_repeated_token_4gram_fraction": 0.8893280632411067,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 256
+            },
+            "math": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.9090909090909092,
+              "median_repeated_token_4gram_fraction": 0.9090909090909092,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "story": {
+              "samples": 1,
+              "mean_repeated_token_4gram_fraction": 0.9604743083003953,
+              "median_repeated_token_4gram_fraction": 0.9604743083003953,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 256
+            }
+          }
+        },
+        "low_temperature_topk": {
+          "samples": 20,
+          "mean_repeated_token_4gram_fraction": 0.7492094861660079,
+          "median_repeated_token_4gram_fraction": 0.8853754940711462,
+          "long_loop_samples": 14,
+          "eos_samples": 0,
+          "total_generated_tokens": 5120,
+          "categories": {
+            "code": {
+              "samples": 6,
+              "mean_repeated_token_4gram_fraction": 0.6297760210803689,
+              "median_repeated_token_4gram_fraction": 0.9308300395256917,
+              "long_loop_samples": 4,
+              "eos_samples": 0,
+              "total_generated_tokens": 1536
+            },
+            "ecb": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.8606719367588933,
+              "median_repeated_token_4gram_fraction": 0.8616600790513834,
+              "long_loop_samples": 4,
+              "eos_samples": 0,
+              "total_generated_tokens": 1024
+            },
+            "ema": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.38537549407114624,
+              "median_repeated_token_4gram_fraction": 0.38537549407114624,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "general": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.7588932806324111,
+              "median_repeated_token_4gram_fraction": 0.7588932806324111,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "math": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.9268774703557312,
+              "median_repeated_token_4gram_fraction": 0.9288537549407114,
+              "long_loop_samples": 3,
+              "eos_samples": 0,
+              "total_generated_tokens": 1024
+            },
+            "story": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.883399209486166,
+              "median_repeated_token_4gram_fraction": 0.883399209486166,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            }
+          }
+        },
+        "sampled_topk": {
+          "samples": 20,
+          "mean_repeated_token_4gram_fraction": 0.40948616600790516,
+          "median_repeated_token_4gram_fraction": 0.3122529644268775,
+          "long_loop_samples": 6,
+          "eos_samples": 0,
+          "total_generated_tokens": 5120,
+          "categories": {
+            "code": {
+              "samples": 6,
+              "mean_repeated_token_4gram_fraction": 0.7160737812911726,
+              "median_repeated_token_4gram_fraction": 0.8339920948616601,
+              "long_loop_samples": 4,
+              "eos_samples": 0,
+              "total_generated_tokens": 1536
+            },
+            "ecb": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.15612648221343875,
+              "median_repeated_token_4gram_fraction": 0.15019762845849804,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 1024
+            },
+            "ema": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.15019762845849804,
+              "median_repeated_token_4gram_fraction": 0.15019762845849804,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "general": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.047430830039525695,
+              "median_repeated_token_4gram_fraction": 0.047430830039525695,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "math": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.6393280632411067,
+              "median_repeated_token_4gram_fraction": 0.6758893280632411,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 1024
+            },
+            "story": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.15810276679841895,
+              "median_repeated_token_4gram_fraction": 0.15810276679841895,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            }
+          }
+        }
+      },
+      "max_new_tokens": 256,
+      "elapsed_seconds": 122.309948306
+    },
+    "final_code60": {
+      "identity": {
+        "checkpoint": "/runs/simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt",
+        "checkpoint_sha256": "88b039618647c7f0ff7988165c9ae0b0075540927049b2f8e3b625272dfa8dda",
+        "phase_tokens": 4999971081,
+        "step": 66065,
+        "lifetime_tokens": 10878562619
+      },
+      "modes": {
+        "greedy": {
+          "samples": 10,
+          "mean_repeated_token_4gram_fraction": 0.8162055335968379,
+          "median_repeated_token_4gram_fraction": 0.8636363636363636,
+          "long_loop_samples": 8,
+          "eos_samples": 0,
+          "total_generated_tokens": 2560,
+          "categories": {
+            "code": {
+              "samples": 3,
+              "mean_repeated_token_4gram_fraction": 0.7061923583662714,
+              "median_repeated_token_4gram_fraction": 0.6561264822134387,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 768
+            },
+            "ecb": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.8932806324110671,
+              "median_repeated_token_4gram_fraction": 0.8932806324110671,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "ema": {
+              "samples": 1,
+              "mean_repeated_token_4gram_fraction": 0.8221343873517787,
+              "median_repeated_token_4gram_fraction": 0.8221343873517787,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 256
+            },
+            "general": {
+              "samples": 1,
+              "mean_repeated_token_4gram_fraction": 0.7865612648221344,
+              "median_repeated_token_4gram_fraction": 0.7865612648221344,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 256
+            },
+            "math": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.8794466403162056,
+              "median_repeated_token_4gram_fraction": 0.8794466403162056,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "story": {
+              "samples": 1,
+              "mean_repeated_token_4gram_fraction": 0.8893280632411067,
+              "median_repeated_token_4gram_fraction": 0.8893280632411067,
+              "long_loop_samples": 1,
+              "eos_samples": 0,
+              "total_generated_tokens": 256
+            }
+          }
+        },
+        "low_temperature_topk": {
+          "samples": 20,
+          "mean_repeated_token_4gram_fraction": 0.7701581027667984,
+          "median_repeated_token_4gram_fraction": 0.8162055335968379,
+          "long_loop_samples": 13,
+          "eos_samples": 0,
+          "total_generated_tokens": 5120,
+          "categories": {
+            "code": {
+              "samples": 6,
+              "mean_repeated_token_4gram_fraction": 0.6910408432147562,
+              "median_repeated_token_4gram_fraction": 0.733201581027668,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 1536
+            },
+            "ecb": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.8221343873517787,
+              "median_repeated_token_4gram_fraction": 0.8162055335968379,
+              "long_loop_samples": 4,
+              "eos_samples": 0,
+              "total_generated_tokens": 1024
+            },
+            "ema": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.8280632411067194,
+              "median_repeated_token_4gram_fraction": 0.8280632411067194,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "general": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.8162055335968379,
+              "median_repeated_token_4gram_fraction": 0.8162055335968379,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "math": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.7628458498023716,
+              "median_repeated_token_4gram_fraction": 0.9347826086956521,
+              "long_loop_samples": 3,
+              "eos_samples": 0,
+              "total_generated_tokens": 1024
+            },
+            "story": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.8142292490118577,
+              "median_repeated_token_4gram_fraction": 0.8142292490118577,
+              "long_loop_samples": 2,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            }
+          }
+        },
+        "sampled_topk": {
+          "samples": 20,
+          "mean_repeated_token_4gram_fraction": 0.2353841878163051,
+          "median_repeated_token_4gram_fraction": 0.17984189723320154,
+          "long_loop_samples": 0,
+          "eos_samples": 3,
+          "total_generated_tokens": 4865,
+          "categories": {
+            "code": {
+              "samples": 6,
+              "mean_repeated_token_4gram_fraction": 0.3216030406046509,
+              "median_repeated_token_4gram_fraction": 0.3181818181818182,
+              "long_loop_samples": 0,
+              "eos_samples": 1,
+              "total_generated_tokens": 1526
+            },
+            "ecb": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.31688701103993455,
+              "median_repeated_token_4gram_fraction": 0.33794466403162055,
+              "long_loop_samples": 0,
+              "eos_samples": 1,
+              "total_generated_tokens": 945
+            },
+            "ema": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.21739130434782605,
+              "median_repeated_token_4gram_fraction": 0.21739130434782605,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "general": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.08498023715415015,
+              "median_repeated_token_4gram_fraction": 0.08498023715415015,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            },
+            "math": {
+              "samples": 4,
+              "mean_repeated_token_4gram_fraction": 0.17308391258915998,
+              "median_repeated_token_4gram_fraction": 0.17620735087001954,
+              "long_loop_samples": 0,
+              "eos_samples": 1,
+              "total_generated_tokens": 858
+            },
+            "story": {
+              "samples": 2,
+              "mean_repeated_token_4gram_fraction": 0.10671936758893286,
+              "median_repeated_token_4gram_fraction": 0.10671936758893286,
+              "long_loop_samples": 0,
+              "eos_samples": 0,
+              "total_generated_tokens": 512
+            }
+          }
+        }
+      },
+      "max_new_tokens": 256,
+      "elapsed_seconds": 126.102526949
+    }
+  },
+  "modes": {
+    "greedy": {
+      "temperature": 0.0,
+      "top_k": 0,
+      "seeds": [
+        42
+      ]
+    },
+    "low_temperature_topk": {
+      "temperature": 0.2,
+      "top_k": 10,
+      "seeds": [
+        42,
+        43
+      ]
+    },
+    "sampled_topk": {
+      "temperature": 0.8,
+      "top_k": 50,
+      "seeds": [
+        42,
+        43
+      ]
+    }
+  },
+  "prompts": [
+    [
+      "general",
+      "The solar system consists of"
+    ],
+    [
+      "math",
+      "A prime number is"
+    ],
+    [
+      "story",
+      "Once upon a time, in a small village,"
+    ],
+    [
+      "math",
+      "The derivative of x squared is"
+    ],
+    [
+      "code",
+      "def add(a, b):\n    "
+    ],
+    [
+      "code",
+      "def factorial(n):\n    "
+    ],
+    [
+      "code",
+      "def is_palindrome(text):\n    "
+    ],
+    [
+      "ecb",
+      "The European Central Bank is responsible for"
+    ],
+    [
+      "ecb",
+      "Inflation means"
+    ],
+    [
+      "ema",
+      "The European Medicines Agency evaluates"
+    ]
+  ]
+}

@@ -1,0 +1,395 @@
+{
+  "timing": {
+    "completed": true,
+    "total_tokens": 7620187,
+    "elapsed_seconds": 94.359459165
+  },
+  "comparisons": {
+    "before": {
+      "categories": {
+        "ecb": {
+          "before_loss": 2.5478364897389945,
+          "after_loss": 2.494417235082108,
+          "delta_loss": -0.05341925465688655,
+          "delta_ci95": [
+            -0.06972793260970898,
+            -0.04159707502203487
+          ],
+          "perplexity_ratio_after_before": 0.9479824830844155,
+          "tokens": 712043,
+          "families": 256,
+          "direction": "better"
+        },
+        "ema": {
+          "before_loss": 2.474508373573441,
+          "after_loss": 2.3786064237293756,
+          "delta_loss": -0.09590194984406535,
+          "delta_ci95": [
+            -0.11510346025159647,
+            -0.07976488583414702
+          ],
+          "perplexity_ratio_after_before": 0.9085530954741962,
+          "tokens": 361602,
+          "families": 112,
+          "direction": "better"
+        },
+        "original/arxiv": {
+          "before_loss": 1.9497882117902077,
+          "after_loss": 1.9627351147577499,
+          "delta_loss": 0.012946902967542164,
+          "delta_ci95": [
+            0.0025936547777961195,
+            0.020426215534584412
+          ],
+          "perplexity_ratio_after_before": 1.0130310769877917,
+          "tokens": 955479,
+          "families": 256,
+          "direction": "worse"
+        },
+        "original/code_python": {
+          "before_loss": 1.5591427360983965,
+          "after_loss": 1.4213988499193573,
+          "delta_loss": -0.1377438861790393,
+          "delta_ci95": [
+            -0.16061217365644495,
+            -0.11849704440245086
+          ],
+          "perplexity_ratio_after_before": 0.8713218207321642,
+          "tokens": 346847,
+          "families": 256,
+          "direction": "better"
+        },
+        "original/doab": {
+          "before_loss": 2.362370064841509,
+          "after_loss": 2.3794003204124636,
+          "delta_loss": 0.017030255570954583,
+          "delta_ci95": [
+            0.012913304267402897,
+            0.02087139434915268
+          ],
+          "perplexity_ratio_after_before": 1.0171760971032633,
+          "tokens": 207612,
+          "families": 71,
+          "direction": "worse"
+        },
+        "original/finemath_4plus": {
+          "before_loss": 1.799093179155612,
+          "after_loss": 1.816838842892399,
+          "delta_loss": 0.017745663736787015,
+          "delta_ci95": [
+            0.013976993094340947,
+            0.021202179749114675
+          ],
+          "perplexity_ratio_after_before": 1.0179040535511663,
+          "tokens": 324946,
+          "families": 256,
+          "direction": "worse"
+        },
+        "original/fineweb_edu": {
+          "before_loss": 2.675224465840467,
+          "after_loss": 2.7002269013800166,
+          "delta_loss": 0.025002435539549325,
+          "delta_ci95": [
+            0.022486436681909267,
+            0.027483818841139318
+          ],
+          "perplexity_ratio_after_before": 1.0253176177229963,
+          "tokens": 308280,
+          "families": 256,
+          "direction": "worse"
+        },
+        "original/gutenberg": {
+          "before_loss": 2.8188761140753904,
+          "after_loss": 2.8476179976099036,
+          "delta_loss": 0.028741883534513044,
+          "delta_ci95": [
+            0.02373568672012666,
+            0.034234945455012794
+          ],
+          "perplexity_ratio_after_before": 1.0291589173266178,
+          "tokens": 829715,
+          "families": 211,
+          "direction": "worse"
+        },
+        "original/library_of_congress": {
+          "before_loss": 2.880806793568109,
+          "after_loss": 2.8955215596255326,
+          "delta_loss": 0.01471476605742327,
+          "delta_ci95": [
+            0.012569879553039051,
+            0.0168030816943064
+          ],
+          "perplexity_ratio_after_before": 1.0148235612042,
+          "tokens": 620382,
+          "families": 162,
+          "direction": "worse"
+        },
+        "original/libretexts": {
+          "before_loss": 2.2442110126607084,
+          "after_loss": 2.2929445338363856,
+          "delta_loss": 0.048733521175677315,
+          "delta_ci95": [
+            0.041682197188669175,
+            0.05636858044326998
+          ],
+          "perplexity_ratio_after_before": 1.049940526540951,
+          "tokens": 145786,
+          "families": 84,
+          "direction": "worse"
+        },
+        "original/pes2o": {
+          "before_loss": 2.312943282481791,
+          "after_loss": 2.330488094417853,
+          "delta_loss": 0.017544811936062,
+          "delta_ci95": [
+            0.01588378921244097,
+            0.019099961748945963
+          ],
+          "perplexity_ratio_after_before": 1.0176996262195315,
+          "tokens": 905439,
+          "families": 256,
+          "direction": "worse"
+        },
+        "original/pre_1929_books": {
+          "before_loss": 2.8731941185621293,
+          "after_loss": 2.888885086531724,
+          "delta_loss": 0.01569096796959501,
+          "delta_ci95": [
+            0.013513525804337942,
+            0.017965919043504367
+          ],
+          "perplexity_ratio_after_before": 1.0158147176108423,
+          "tokens": 817106,
+          "families": 208,
+          "direction": "worse"
+        },
+        "original/pressbooks": {
+          "before_loss": 2.5052328276563767,
+          "after_loss": 2.546299820711243,
+          "delta_loss": 0.04106699305486627,
+          "delta_ci95": [
+            0.03410804841715809,
+            0.04900897419272933
+          ],
+          "perplexity_ratio_after_before": 1.0419219047387533,
+          "tokens": 256223,
+          "families": 142,
+          "direction": "worse"
+        },
+        "original/pubmed": {
+          "before_loss": 2.1153214027610927,
+          "after_loss": 2.140136179856328,
+          "delta_loss": 0.024814777095235434,
+          "delta_ci95": [
+            0.022839311901323153,
+            0.026803260436568794
+          ],
+          "perplexity_ratio_after_before": 1.025125226266432,
+          "tokens": 828727,
+          "families": 256,
+          "direction": "worse"
+        }
+      },
+      "limitations": [
+        "Validation split only; no test-set tuning or scoring.",
+        "Family-balanced sample, not corpus-token-uniform perplexity.",
+        "CIs are conditional on selected families and are not simultaneous across categories.",
+        "Source split/near-duplicate/contamination audits remain pending.",
+        "2K window loss does not establish 8K long-context quality or generation correctness."
+      ]
+    },
+    "after": {
+      "categories": {
+        "ecb": {
+          "before_loss": 2.0649489631876783,
+          "after_loss": 2.494417235082108,
+          "delta_loss": 0.42946827189442965,
+          "delta_ci95": [
+            0.4070746200382845,
+            0.45517377462533415
+          ],
+          "perplexity_ratio_after_before": 1.536440337797081,
+          "tokens": 712043,
+          "families": 256,
+          "direction": "worse"
+        },
+        "ema": {
+          "before_loss": 1.7661885360415588,
+          "after_loss": 2.3786064237293756,
+          "delta_loss": 0.6124178876878167,
+          "delta_ci95": [
+            0.5505569266329057,
+            0.682683916389956
+          ],
+          "perplexity_ratio_after_before": 1.8448867392869388,
+          "tokens": 361602,
+          "families": 112,
+          "direction": "worse"
+        },
+        "original/arxiv": {
+          "before_loss": 2.8091927217655503,
+          "after_loss": 1.9627351147577499,
+          "delta_loss": -0.8464576070078007,
+          "delta_ci95": [
+            -0.8869131449000369,
+            -0.8087678207312736
+          ],
+          "perplexity_ratio_after_before": 0.4289316884962148,
+          "tokens": 955479,
+          "families": 256,
+          "direction": "better"
+        },
+        "original/code_python": {
+          "before_loss": 3.9942717673282786,
+          "after_loss": 1.4213988499193573,
+          "delta_loss": -2.572872917408921,
+          "delta_ci95": [
+            -2.6817265777019617,
+            -2.475202211644162
+          ],
+          "perplexity_ratio_after_before": 0.07631598066978175,
+          "tokens": 346847,
+          "families": 256,
+          "direction": "better"
+        },
+        "original/doab": {
+          "before_loss": 2.837422036187953,
+          "after_loss": 2.3794003204124636,
+          "delta_loss": -0.4580217157754896,
+          "delta_ci95": [
+            -0.4989884484846478,
+            -0.41974836024816753
+          ],
+          "perplexity_ratio_after_before": 0.6325337400975293,
+          "tokens": 207612,
+          "families": 71,
+          "direction": "better"
+        },
+        "original/finemath_4plus": {
+          "before_loss": 2.518498037605622,
+          "after_loss": 1.816838842892399,
+          "delta_loss": -0.7016591947132227,
+          "delta_ci95": [
+            -0.7774240937365081,
+            -0.6293870040452769
+          ],
+          "perplexity_ratio_after_before": 0.4957620552343834,
+          "tokens": 324946,
+          "families": 256,
+          "direction": "better"
+        },
+        "original/fineweb_edu": {
+          "before_loss": 2.9112838428345946,
+          "after_loss": 2.7002269013800166,
+          "delta_loss": -0.2110569414545781,
+          "delta_ci95": [
+            -0.22441697225249804,
+            -0.19922256652313894
+          ],
+          "perplexity_ratio_after_before": 0.8097279584807806,
+          "tokens": 308280,
+          "families": 256,
+          "direction": "better"
+        },
+        "original/gutenberg": {
+          "before_loss": 3.4374800509441092,
+          "after_loss": 2.8476179976099036,
+          "delta_loss": -0.5898620533342056,
+          "delta_ci95": [
+            -0.6134544118766608,
+            -0.566681093819697
+          ],
+          "perplexity_ratio_after_before": 0.5544037576096629,
+          "tokens": 829715,
+          "families": 211,
+          "direction": "better"
+        },
+        "original/library_of_congress": {
+          "before_loss": 3.2692679650982717,
+          "after_loss": 2.8955215596255326,
+          "delta_loss": -0.3737464054727389,
+          "delta_ci95": [
+            -0.3827009216357588,
+            -0.3650596476897178
+          ],
+          "perplexity_ratio_after_before": 0.6881514011325324,
+          "tokens": 620382,
+          "families": 162,
+          "direction": "better"
+        },
+        "original/libretexts": {
+          "before_loss": 2.5554314526110096,
+          "after_loss": 2.2929445338363856,
+          "delta_loss": -0.2624869187746239,
+          "delta_ci95": [
+            -0.2871515101622813,
+            -0.23976097907801563
+          ],
+          "perplexity_ratio_after_before": 0.7691364255496916,
+          "tokens": 145786,
+          "families": 84,
+          "direction": "better"
+        },
+        "original/pes2o": {
+          "before_loss": 2.5647577556418253,
+          "after_loss": 2.330488094417853,
+          "delta_loss": -0.23426966122397241,
+          "delta_ci95": [
+            -0.24308463848508355,
+            -0.2257324247828331
+          ],
+          "perplexity_ratio_after_before": 0.7911484450699164,
+          "tokens": 905439,
+          "families": 256,
+          "direction": "better"
+        },
+        "original/pre_1929_books": {
+          "before_loss": 3.2404382420261166,
+          "after_loss": 2.888885086531724,
+          "delta_loss": -0.35155315549439237,
+          "delta_ci95": [
+            -0.3608818028641581,
+            -0.3420810440792625
+          ],
+          "perplexity_ratio_after_before": 0.7035944490571835,
+          "tokens": 817106,
+          "families": 208,
+          "direction": "better"
+        },
+        "original/pressbooks": {
+          "before_loss": 2.751147606064535,
+          "after_loss": 2.546299820711243,
+          "delta_loss": -0.20484778535329193,
+          "delta_ci95": [
+            -0.21972552084407188,
+            -0.19178308128206775
+          ],
+          "perplexity_ratio_after_before": 0.8147713271027561,
+          "tokens": 256223,
+          "families": 142,
+          "direction": "better"
+        },
+        "original/pubmed": {
+          "before_loss": 2.4947581148259883,
+          "after_loss": 2.140136179856328,
+          "delta_loss": -0.3546219349696603,
+          "delta_ci95": [
+            -0.3786113121725641,
+            -0.3318440784653726
+          ],
+          "perplexity_ratio_after_before": 0.7014385824844385,
+          "tokens": 828727,
+          "families": 256,
+          "direction": "better"
+        }
+      },
+      "limitations": [
+        "Validation split only; no test-set tuning or scoring.",
+        "Family-balanced sample, not corpus-token-uniform perplexity.",
+        "CIs are conditional on selected families and are not simultaneous across categories.",
+        "Source split/near-duplicate/contamination audits remain pending.",
+        "2K window loss does not establish 8K long-context quality or generation correctness."
+      ]
+    }
+  }
+}

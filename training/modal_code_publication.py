@@ -1,6 +1,7 @@
 """Archive every saved code-heavy phase checkpoint on private Hugging Face."""
 
 import json
+import os
 import shutil
 import time
 from pathlib import Path
@@ -276,3 +277,387 @@ def publish_all():
         atomic_json(state_path, state)
         run_volume.commit()
         raise
+
+
+def verify_inventory(api, state):
+    """Compare remote LFS hashes; never infer upload success from local counters."""
+    remote = api.model_info(REPO, files_metadata=True)
+    files = {f.rfilename: f for f in remote.siblings}
+    for entry in state["checkpoints"].values():
+        item = files.get(entry["path"])
+        if item is None or item.lfs is None or item.lfs.sha256 != entry["weights_sha256"]:
+            raise ValueError("Remote checkpoint checksum mismatch: " + entry["path"])
+    root = files.get("model.safetensors")
+    if root is None or root.lfs.sha256 != state["checkpoints"]["step-000066065"]["weights_sha256"]:
+        raise ValueError("Default weights are not the final checkpoint")
+    if not remote.private:
+        raise ValueError("Archive privacy changed")
+
+
+@app.function(
+    image=image,
+    cpu=4,
+    memory=16384,
+    timeout=3600,
+    retries=0,
+    max_containers=4,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes={"/runs": run_volume},
+)
+def archive_checkpoint(relative_path):
+    import re
+
+    from huggingface_hub import HfApi
+
+    from trainer.distributed_train import atomic_json
+    from trainer.hub_checkpoint import export_checkpoint
+
+    if not re.fullmatch(RUN + r"-(?:s[0-9]{2}|seed)/step-[0-9]{9}\.pt", relative_path):
+        raise ValueError("Checkpoint outside authorized run")
+    checkpoint = Path("/runs") / relative_path
+    sidecar = Path("/runs") / RUN / "huggingface-checkpoints" / (checkpoint.stem + ".json")
+    if sidecar.exists():
+        return json.loads(sidecar.read_text())
+    output = Path("/tmp/parallel-hf-export")
+    shutil.rmtree(output, ignore_errors=True)
+    source = (
+        checkpoint.parent
+        if (checkpoint.parent / "source").exists()
+        else (Path("/runs") / FINAL).parent
+    )
+    progress = export_checkpoint(checkpoint, output, source, RUN)
+    provenance = json.loads((output / "provenance.json").read_text())
+    archive = output / "archive"
+    archive.mkdir()
+    shutil.move(output / "model.safetensors", archive / "model.safetensors")
+    shutil.move(output / "provenance.json", archive / "provenance.json")
+    api = HfApi()
+    for attempt in range(6):
+        try:
+            revision = api.upload_folder(
+                repo_id=REPO,
+                folder_path=str(archive),
+                path_in_repo=f"checkpoints/{checkpoint.stem}",
+                commit_message=f"Archive {checkpoint.stem}: {progress['tokens']:,} phase targets",
+            )
+            break
+        except Exception:
+            if attempt == 5:
+                raise
+            time.sleep(min(2**attempt, 30))
+    entry = {
+        **progress,
+        "lifetime_tokens": provenance.get("lineage", {}).get("parent_tokens", 0)
+        + progress["tokens"],
+        "weights_sha256": provenance["weights_sha256"],
+        "path": f"checkpoints/{checkpoint.stem}/model.safetensors",
+        "revision": revision.oid,
+        "weight_roundtrip_exact": True,
+        "cpu_logits_roundtrip_exact": True,
+    }
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    atomic_json(sidecar, entry)
+    run_volume.commit()
+    return entry
+
+
+@app.function(
+    image=image,
+    cpu=1,
+    memory=2048,
+    timeout=14400,
+    retries=0,
+    max_containers=1,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes={"/runs": run_volume},
+)
+def publish_remaining():
+    """Resume the serial publisher with four independent bounded upload workers."""
+    from huggingface_hub import HfApi
+
+    from trainer.distributed_train import atomic_json
+
+    api = HfApi()
+    folder = Path("/runs") / RUN
+    state_path = folder / "huggingface-publication.json"
+    state = json.loads(state_path.read_text())
+    if (
+        state["repo_id"] != REPO
+        or not state.get("root_revision")
+        or not api.model_info(REPO).private
+    ):
+        raise ValueError("Expected the verified private final-model publication")
+    inventory = sorted(Path("/runs").glob(RUN + "-s*/step-*.pt"), key=lambda p: p.name)
+    if len(inventory) != state["expected_count"]:
+        raise ValueError("Checkpoint inventory changed")
+    # Recover uploads whose transfer completed before local bookkeeping failed.
+    from huggingface_hub import hf_hub_download
+
+    remote = api.model_info(REPO, files_metadata=True)
+    remote_files = {f.rfilename: f for f in remote.siblings}
+    for checkpoint in inventory:
+        if checkpoint.stem in state["checkpoints"]:
+            continue
+        prefix = f"checkpoints/{checkpoint.stem}"
+        item = remote_files.get(prefix + "/model.safetensors")
+        if item is None or prefix + "/provenance.json" not in remote_files:
+            continue
+        provenance = json.loads(
+            Path(
+                hf_hub_download(REPO, filename=prefix + "/provenance.json", revision=remote.sha)
+            ).read_text()
+        )
+        if item.lfs is None or item.lfs.sha256 != provenance["weights_sha256"]:
+            raise ValueError("Remote recovered checkpoint hash mismatch")
+        if not provenance.get("weight_roundtrip_exact") or not provenance.get(
+            "cpu_logits_roundtrip_exact"
+        ):
+            raise ValueError("Recovered export was not verified")
+        state["checkpoints"][checkpoint.stem] = {
+            "step": provenance["step"],
+            "tokens": provenance["tokens"],
+            "checkpoint": str(checkpoint),
+            "lifetime_tokens": provenance.get("lineage", {}).get("parent_tokens", 0)
+            + provenance["tokens"],
+            "weights_sha256": provenance["weights_sha256"],
+            "path": prefix + "/model.safetensors",
+            "revision": remote.sha,
+            "weight_roundtrip_exact": True,
+            "cpu_logits_roundtrip_exact": True,
+        }
+    state["uploaded_count"] = len(state["checkpoints"])
+    calls = {
+        p.stem: archive_checkpoint.spawn(str(p.relative_to("/runs")))
+        for p in inventory
+        if p.stem not in state["checkpoints"]
+    }
+    state.update(stage="archiving", parallel_workers=4, updated_unix=time.time())
+    state.pop("error", None)
+    atomic_json(state_path, state)
+    run_volume.commit()
+    try:
+        for name, call in calls.items():
+            state["checkpoints"][name] = call.get()
+            state.update(
+                uploaded_count=len(state["checkpoints"]),
+                current_checkpoint=name,
+                updated_unix=time.time(),
+            )
+            atomic_json(state_path, state)
+            run_volume.commit()
+            print(
+                json.dumps(
+                    {"uploaded_count": len(state["checkpoints"]), "expected_count": len(inventory)}
+                ),
+                flush=True,
+            )
+        index = {
+            "expected_count": len(inventory),
+            "uploaded_count": len(state["checkpoints"]),
+            "final_step": 66065,
+            "checkpoints": state["checkpoints"],
+        }
+        index_path = Path("/tmp/checkpoint-index.json")
+        index_path.write_text(json.dumps(index, indent=2) + "\n")
+        api.upload_file(
+            repo_id=REPO,
+            path_or_fileobj=str(index_path),
+            path_in_repo="checkpoint-index.json",
+            commit_message="Complete all saved checkpoints and verify their hashes",
+        )
+        verify_inventory(api, state)
+        state.update(
+            stage="completed", completed=True, verified_remote_hashes=True, updated_unix=time.time()
+        )
+        atomic_json(state_path, state)
+        run_volume.commit()
+        return {
+            "completed": True,
+            "repo_id": REPO,
+            "private": True,
+            "uploaded_count": len(state["checkpoints"]),
+            "verified_remote_hashes": True,
+            "url": "https://huggingface.co/" + REPO,
+        }
+    except Exception as exc:
+        state.update(
+            stage="failed",
+            error=f"{type(exc).__name__}: {str(exc)[:1000]}",
+            updated_unix=time.time(),
+        )
+        atomic_json(state_path, state)
+        run_volume.commit()
+        raise
+
+
+@app.function(
+    image=image,
+    cpu=4,
+    memory=12288,
+    timeout=1800,
+    retries=0,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes={"/runs": run_volume},
+)
+def verify_download():
+    import subprocess
+
+    from huggingface_hub import HfApi, snapshot_download
+    from training_data.subword import digest
+
+    from trainer.distributed_train import atomic_json
+
+    api = HfApi()
+    info = api.model_info(REPO, files_metadata=True)
+    bundle = Path(
+        snapshot_download(
+            REPO,
+            revision=info.sha,
+            allow_patterns=[
+                "model.safetensors",
+                "config.json",
+                "model_100m/*.py",
+                "model_10m/*.py",
+                "tokenizer/*",
+                "generate.py",
+                "requirements.txt",
+            ],
+        )
+    )
+    expected = next(x.lfs.sha256 for x in info.siblings if x.rfilename == "model.safetensors")
+    if digest(bundle / "model.safetensors") != expected:
+        raise ValueError("Downloaded weights checksum mismatch")
+    result = subprocess.run(
+        [
+            "python",
+            str(bundle / "generate.py"),
+            "--prompt",
+            "def add(a, b):\n    ",
+            "--tokens",
+            "16",
+            "--temperature",
+            "0",
+            "--device",
+            "cpu",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+        cwd=bundle,
+        env={**os.environ, "PYTHONPATH": str(bundle)},
+    )
+    if result.returncode:
+        raise RuntimeError("Downloaded generation CLI failed: " + result.stderr[-2000:])
+    report = {
+        "completed": True,
+        "repo_id": REPO,
+        "revision": info.sha,
+        "weights_sha256": expected,
+        "download_hash_verified": True,
+        "standalone_cli_verified": True,
+        "smoke_generation": result.stdout.strip(),
+        "updated_unix": time.time(),
+    }
+    atomic_json(Path("/runs") / RUN / "huggingface-download-verification.json", report)
+    run_volume.commit()
+    return report
+
+
+@app.function(
+    image=image,
+    cpu=1,
+    memory=4096,
+    timeout=900,
+    retries=0,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes={"/runs": run_volume},
+)
+def publish_evaluation():
+    import statistics
+
+    from huggingface_hub import HfApi
+
+    from trainer.distributed_train import atomic_json
+
+    api = HfApi()
+    if not api.model_info(REPO).private:
+        raise ValueError("Generation artifacts require the private model repository")
+    output = Path("/tmp/evaluation-upload")
+    shutil.rmtree(output, ignore_errors=True)
+    (output / "evaluation/generation").mkdir(parents=True)
+    root = Path("/runs/simple-llm-code-heavy-generation-20261019")
+    models = {}
+    sample_report = [
+        "# All matched generated samples",
+        "",
+        "Raw, unverified model continuations, including failures. No generation is a factual claim.",
+        "",
+    ]
+    for label in ["original_5b", "eu_parent", "final_code60"]:
+        path = root / (label + ".json")
+        data = json.loads(path.read_text())
+        if not data.get("completed") or len(data["samples"]) != 50:
+            raise ValueError("Incomplete generation comparison")
+        shutil.copyfile(path, output / "evaluation/generation" / path.name)
+        models[label] = {}
+        for mode in data["modes"]:
+            samples = [r for r in data["samples"] if r["mode"] == mode]
+            models[label][mode] = {
+                "samples": len(samples),
+                "mean_repeated_token_4gram_fraction": statistics.mean(
+                    r["repeated_token_4gram_fraction"] for r in samples
+                ),
+                "long_loop_samples": sum(r["long_loop"] for r in samples),
+            }
+        for row in data["samples"]:
+            sample_report += [
+                f"## {label}: {row['mode']}, seed {row['seed']}, prompt {row['prompt_index']}",
+                "",
+                "Prompt: " + json.dumps(row["prompt"]),
+                "",
+                "````text",
+                row["text"],
+                "````",
+                "",
+            ]
+    (output / "evaluation/all-samples.md").write_text("\n".join(sample_report) + "\n")
+    (output / "evaluation/generation-summary.json").write_text(json.dumps(models, indent=2) + "\n")
+    state = json.loads((Path("/runs") / RUN / "huggingface-publication.json").read_text())
+    text = model_card(state["expected_count"]) + "\n## Matched generation and repetition\n\n"
+    text += "150 continuations: ten fixed prompts, 256-token cap; one greedy seed, two seeds for each sampled decoder. FP32, TF32 off; no repetition penalty or n-gram blocking.\n\n"
+    text += (
+        "Mean repeated generated token four-gram fraction (lower means less exact repetition):\n\n"
+    )
+    text += "| Decoder | Original 5B | EU parent | Final |\n|---|---:|---:|---:|\n"
+    for mode in ["greedy", "low_temperature_topk", "sampled_topk"]:
+        text += (
+            "| "
+            + mode
+            + " | "
+            + " | ".join(
+                f"{models[label][mode]['mean_repeated_token_4gram_fraction']:.1%}"
+                for label in models
+            )
+            + " |\n"
+        )
+    text += "\nGreedy and T=0.2/k=10 repetition remains severe. T=0.8/k=50 reduces exact repetition in this small matched set, but factual and code outputs are still unreliable. A zero exact-loop flag does not exclude semantic or near repetition. This is not a general generation-quality benchmark.\n\n"
+    text += "[All 150 samples, including failures](evaluation/all-samples.md) · [Raw samples and token IDs](evaluation/generation) · [Summary](evaluation/generation-summary.json)\n"
+    (output / "README.md").write_text(text)
+    shutil.copyfile("/project/publication/generate_checkpoint_archive.py", output / "generate.py")
+    revision = api.upload_folder(
+        repo_id=REPO,
+        folder_path=str(output),
+        commit_message="Add all matched generation samples and repetition results",
+    )
+    result = {
+        "completed": True,
+        "repo_id": REPO,
+        "revision": revision.oid,
+        "samples": 150,
+        "private": True,
+        "updated_unix": time.time(),
+    }
+    atomic_json(Path("/runs") / RUN / "huggingface-evaluation-publication.json", result)
+    run_volume.commit()
+    return result
