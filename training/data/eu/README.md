@@ -883,3 +883,16 @@ existing language metadata rules. Three annual-account samples were also tested;
 historical openings identify sections of already collected Annual Reports, so
 that series is deferred. Exact deduplication remains active; passage overlap is
 not measured. See [sample evidence](research/ecb-survey-expansion-20261018.json).
+
+
+### Larger statistical archive backlog
+
+The 19 October expansion adds twelve exact FOEDB statistical series with **2,239
+distinct candidate URLs**: weekly financial statements, monetary developments,
+MFI interest rates, securities issuance, monthly/quarterly balance of payments,
+investment funds, financial vehicles, institutional sectors, insurance corporations,
+pension funds and money markets. All 36 selected native HTML/PDF samples extracted
+successfully. Existing weights stay unchanged; new series receive weight 1.
+Source pacing, private storage, exact deduplication, cooldowns and all operating
+budgets remain. Candidate metadata is not a saved-document count. See
+[coverage and sample evidence](research/ecb-statistical-expansion-20261019.md).

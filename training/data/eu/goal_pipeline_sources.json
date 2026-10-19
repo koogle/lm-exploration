@@ -36,7 +36,19 @@
         "bank_lending_surveys",
         "professional_forecaster_surveys",
         "enterprise_finance_surveys",
-        "t2s_annual_reports"
+        "t2s_annual_reports",
+        "weekly_financial_statements",
+        "monetary_developments",
+        "mfi_interest_rate_statistics",
+        "securities_issues_statistics",
+        "balance_of_payments_monthly",
+        "investment_fund_statistics",
+        "financial_vehicle_statistics",
+        "balance_of_payments_quarterly",
+        "institutional_sector_accounts",
+        "insurance_corporation_statistics",
+        "pension_fund_statistics",
+        "money_market_statistics"
       ],
       "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text.",
       "collection_weights": {
@@ -69,7 +81,19 @@
         "bank_lending_surveys": 3,
         "professional_forecaster_surveys": 3,
         "enterprise_finance_surveys": 3,
-        "t2s_annual_reports": 3
+        "t2s_annual_reports": 3,
+        "weekly_financial_statements": 1,
+        "monetary_developments": 1,
+        "mfi_interest_rate_statistics": 1,
+        "securities_issues_statistics": 1,
+        "balance_of_payments_monthly": 1,
+        "investment_fund_statistics": 1,
+        "financial_vehicle_statistics": 1,
+        "balance_of_payments_quarterly": 1,
+        "institutional_sector_accounts": 1,
+        "insurance_corporation_statistics": 1,
+        "pension_fund_statistics": 1,
+        "money_market_statistics": 1
       }
     },
     "ema": {

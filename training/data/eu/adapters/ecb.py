@@ -58,6 +58,42 @@ COLLECTIONS = {
         "type_ids": ["157"],
     },
     "t2s_annual_reports": {"name": "T2S Annual Report", "type_ids": ["159"]},
+    "weekly_financial_statements": {"name": "ECB Weekly financial statement", "type_ids": ["101"]},
+    "monetary_developments": {
+        "name": "ECB Monetary developments in the euro area",
+        "type_ids": ["10"],
+    },
+    "mfi_interest_rate_statistics": {"name": "ECB MFI interest rate statistics", "type_ids": ["8"]},
+    "securities_issues_statistics": {
+        "name": "ECB Euro area securities issues statistics",
+        "type_ids": ["9"],
+    },
+    "balance_of_payments_monthly": {
+        "name": "ECB Balance of payments (monthly)",
+        "type_ids": ["53"],
+    },
+    "investment_fund_statistics": {
+        "name": "ECB Euro area investment fund statistics",
+        "type_ids": ["12"],
+    },
+    "financial_vehicle_statistics": {
+        "name": "ECB Euro area financial vehicle corporation statistics",
+        "type_ids": ["13"],
+    },
+    "balance_of_payments_quarterly": {
+        "name": "ECB Balance of payments (quarterly)",
+        "type_ids": ["56"],
+    },
+    "institutional_sector_accounts": {
+        "name": "ECB Euro area economic and financial developments by institutional sector (full)",
+        "type_ids": ["90"],
+    },
+    "insurance_corporation_statistics": {
+        "name": "ECB Euro area insurance corporations statistics",
+        "type_ids": ["97"],
+    },
+    "pension_fund_statistics": {"name": "Euro area pension fund statistics", "type_ids": ["237"]},
+    "money_market_statistics": {"name": "ECB Euro money market statistics", "type_ids": ["113"]},
     "other_publications": {"name": "ECB Other publication", "type_ids": ["23"]},
     "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
     "occasional_papers": {"name": "ECB Occasional Paper Series", "type_ids": ["3"]},

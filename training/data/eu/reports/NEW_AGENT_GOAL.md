@@ -41,6 +41,16 @@ mappings are updated; the goal and manual apps are redeployed. See
 `research/ecb-survey-expansion-20261018.json`. Do not count candidates as saved
 documents. Preserve discovery of further unconfigured types after this batch.
 
+The owner renewed the request to keep ECB adding new documents on 19 October.
+Twelve additional statistical types now provide 2,239 distinct candidate URLs;
+all 36 selected full-text samples passed. Both mappings add the series at weight 1
+and both Modal apps are redeployed. The existing controller owns the new discovery
+campaign; inspect current durable claims before dispatch. See
+`research/ecb-statistical-expansion-20261019.md` and its JSON. All 198 preceding
+survey/T2S candidates were saved, bringing ECB to 15,382 before this expansion.
+Audit scheduling had 42 of 48 pairs reserved at the preceding check; preserve
+that budget and distinguish token-accounting limits from collection progress.
+
 Paste the following into a new agent/goal:
 
 ---

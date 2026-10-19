@@ -497,3 +497,25 @@ was launched. Existing pacing, backoff, budgets and recovery schedule remain.
 Validation: 349 tests, Ruff lint/format and whitespace checks. Sample URLs, hashes,
 openings, extraction sizes and the deferred annual-account evidence are retained
 in `research/ecb-survey-expansion-20261018.json`; bodies remain ignored artifacts.
+
+
+## 19 October: larger ECB statistical archive expansion
+
+All 198 survey/T2S additions were saved, leaving ECB at 15,382 rows and no runnable
+configured inventory. The owner requested continued ECB collection. Twelve exact
+statistical types now add 2,239 distinct candidate URLs, with zero exact URL overlap
+against prior types or one another. All 36 selected newest/middle/oldest samples
+fetched and parsed. This is a substantially larger catalog backlog, not 2,239 saved
+rows. Existing exact-content deduplication remains authoritative.
+
+Both mappings add weekly statements, monetary developments, MFI rates, securities
+issues, monthly/quarterly balance of payments, investment funds, financial vehicles,
+institutional-sector accounts, insurance corporations, pension funds and money
+markets at weight 1. Existing weights and five-second ECB pacing are unchanged.
+The goal/manual apps are redeployed; the controller claims one new ECB campaign
+against fresh source state. No independent writer, failure reset, target increase
+or recovery schedule was introduced. Backoff and cooldown protections remain.
+Validation: 361 tests and Ruff lint/format/whitespace checks. Per-series counts,
+provenance, raw hashes, text sizes and openings are in the dated statistical
+expansion report and JSON. The 42/48 reserved audit-pair budget at the preceding
+status check still requires review; it is not evidence of source exhaustion.
