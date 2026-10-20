@@ -355,3 +355,12 @@ claim full global deduplication, language-balance or benchmark audit completion.
 The broader audit output remains partial and is not substituted for a passed audit.
 Mixture remains 60% code (including overlapping patches), 5% EU and scaled original
 noncode sources; architecture/context/eight-H100 compiled microbatch2 unchanged.
+
+Direct launch `fc-01M5C37HA1TJAWXN7J81GM91H0` completed snapshot opening and
+sample checks in about one minute. It scheduled training controller
+`fc-01M5C39K6Q62N46DNZS48TW4XA`; parent checkpoint migration succeeded and the
+workflow reached `qualifying` on segment `simple-llm-code60-unique-10b-20261020-r01-s00`.
+The sampled held-out artifact contains 192 windows. At the observed handoff Modal
+reported the eight-H100 segment queued (one backlog, no runner yet); no optimizer
+updates are claimed at this point. The audit and its old CPU waiter were cancelled.
+The deployed executable source is `4569e84`; this note only records the handoff.
