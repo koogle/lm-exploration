@@ -45,15 +45,24 @@ def partition(worker, identity, target):
     from training_data.parallel_code import prepare_partition
 
     data_volume.reload()
-    return prepare_partition(
-        FOLDER / f"worker-{worker:02d}",
-        FOLDER / "exclusions.sqlite",
-        identity,
-        worker,
-        WORKERS,
-        target,
-        commit=data_volume.commit,
-    )
+    try:
+        return prepare_partition(
+            FOLDER / f"worker-{worker:02d}",
+            FOLDER / "exclusions.sqlite",
+            identity,
+            worker,
+            WORKERS,
+            target,
+            commit=data_volume.commit,
+        )
+    except ValueError as exc:
+        if str(exc) != "Pinned shard partition exhausted before fresh target":
+            raise
+        # An exhausted partition still contributes its valid staged documents;
+        # only the global post-merge capacity gate decides whether training fits.
+        result = json.loads((FOLDER / f"worker-{worker:02d}" / "progress.json").read_text())
+        result["upstream_exhausted"] = True
+        return result
 
 
 @app.function(

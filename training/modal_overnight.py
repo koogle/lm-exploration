@@ -435,7 +435,7 @@ def freeze_and_schedule(run_id, original_call, provenance, audit_round=0):
                 "held-out parents",
             ]
         )
-        if audit_round < 2 and capacity_failure and not (snapshot_path / "raw.sqlite").exists():
+        if audit_round < 8 and capacity_failure and not (snapshot_path / "raw.sqlite").exists():
             collection = collect_more_code.spawn(audit_round + 1)
             continuation = wait_for_data.spawn(
                 run_id, collection.object_id, original_call, provenance, None, audit_round + 1

@@ -286,3 +286,10 @@ calls remain active and retain their ingestion implementation/cursors. All eight
 were observed advancing; raw collection passed2.5B targets (serial+partitions,
 before cross-worker deduplication/audit).31 relevant tests pass. No GPU work is
 claimed until the unchanged readiness gate succeeds.
+
+Capacity-only recollection can now continue for up to eight rounds if filtering
+removes more code than the initial reserve allows, while retaining the exact gate.
+An exhausted shard partition returns its valid staged capacity; it does not discard
+that data or fail a globally sufficient pool. Worker implementation identities and
+pass limits are unchanged. All source/quality failures outside these capacity cases
+remain explicit stops instead of silently training on an unsuitable corpus.
