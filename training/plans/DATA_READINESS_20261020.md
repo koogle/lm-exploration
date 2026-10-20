@@ -322,3 +322,22 @@ count as an additional programming language for the eight-language gate. The
 snapshot records selected patch targets and the overlap policy. The 6.12B code
 capacity reserve, code pass cap, noncode weights, and GPU settings are unchanged.
 The focused importer/collector/audit/gate/handoff suite passes 16 tests.
+
+## Reduced checks requested by the user
+
+The user removed benchmark contamination screening and tokenizer compatibility /
+fragmentation gating for this experiment. The active path skips HumanEval/MBPP
+index construction and matching, skips tokenizer diagnostics, and no longer rejects
+UNK diagnostics or tokens/character ratios. Frozen tokenizer identity and runtime
+count checks remain integrity checks, not content-selection thresholds.
+
+Continue to exclude held-out repository/parent identities and exact/whitespace-
+normalized held-out documents from training, then build the representative sampled
+validation windows. Capacity and mixture requirements remain. Resume committed
+records from the interrupted audit; earlier benchmark flags are retained as historical
+metadata but no longer block eligibility. Prepared code-normalization hashes avoid
+re-reading training text where available. The report explicitly records the checks
+that were skipped; benchmark scores must not be described as contamination-clean.
+The focused audit/import/merge/capacity/handoff suite passes 15 tests, including
+resuming an audit with benchmark filtering disabled while preserving validation
+exclusion, and reusing prepared hashes without reading code blobs.

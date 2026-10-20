@@ -156,12 +156,11 @@ def prepare_original():
     volumes={"/data": data_volume},
 )
 def audit_augmented(audit_round=0):
-    from training_data.readiness_audit import audit, benchmark_index
+    from training_data.readiness_audit import audit
 
     prepare_patches.remote()
     data_volume.reload()
     folder = BASE / f"combined-refresh-audit-r{audit_round}"
-    index, pins = benchmark_index(folder)
     return audit(
         [
             ("prior", PRIOR, False),
@@ -171,9 +170,12 @@ def audit_augmented(audit_round=0):
             ("fresh_patches", BASE / "patches/raw.sqlite", True),
         ],
         folder,
-        index,
-        pins,
+        set(),
+        [],
         commit=data_volume.commit,
+        benchmark_screen=False,
+        tokenizer_diagnostics=False,
+        resume=True,
     )
 
 

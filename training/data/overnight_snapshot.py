@@ -66,17 +66,12 @@ def freeze(audit_folder, destination, old_manifest, database_paths):
         or report["tokenizer_sha256"] != TOKENIZER_SHA256
     ):
         raise ValueError("Missing completed audit or tokenizer mismatch")
-    if not report["benchmarks"] or len(report["benchmarks"]) != 2:
+    if report.get("policy", {}).get("benchmark_screen", True) and (
+        not report["benchmarks"] or len(report["benchmarks"]) != 2
+    ):
         raise ValueError("Incomplete HumanEval/MBPP screen")
     audit_db = sqlite3.connect(f"file:{audit_folder / 'audit.sqlite'}?mode=ro", uri=True)
     variety = check_variety(audit_db)
-    # Tokenizer compatibility is frozen; reject obvious failures/poor coverage.
-    diagnostic = {s: v for s, v in report["tokenizer"].items() if s.startswith("code/")}
-    if not diagnostic or any(v["unknowns"] for v in diagnostic.values()):
-        raise ValueError("Code tokenizer diagnostic missing or contains UNK")
-    total_chars = sum(v["characters"] for v in diagnostic.values())
-    if not total_chars or sum(v["tokens"] for v in diagnostic.values()) / total_chars > 1:
-        raise ValueError("Code tokenizer fragmentation exceeds one token/character")
     covered = {
         s.split("/")[1]
         for s, v in report["heldout"].items()
@@ -216,6 +211,7 @@ def freeze(audit_folder, destination, old_manifest, database_paths):
         "phase_target_tokens": 10_000_000_000,
         "readiness_gate_passed": True,
         "audit_report_sha256": digest(audit_folder / "report.json"),
+        "audit_policy": report.get("policy", {}),
         "code_languages": dict(languages),
         "code_path_tasks": dict(task_counts),
         "variety_available": variety,
@@ -227,7 +223,7 @@ def freeze(audit_folder, destination, old_manifest, database_paths):
             "counts_as_programming_language": False,
         },
         "pending": [
-            "Lexical HumanEval/MBPP screening does not prove semantic contamination absent",
+            "Benchmark contamination is not checked in this experiment",
             "Whitespace dedup does not remove all near/semantic clones",
             "Non-code family identity is inherited; edition/URL aliases may remain",
             "Path-based task variety is a proxy; this is not instruction tuning",

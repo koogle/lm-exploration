@@ -65,7 +65,17 @@ def benchmark_index(folder):
     return index, pins
 
 
-def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
+def audit(
+    databases,
+    folder,
+    benchmarks,
+    pins,
+    *,
+    commit=lambda: None,
+    benchmark_screen=True,
+    tokenizer_diagnostics=True,
+    resume=False,
+):
     """Scan all documents, exclude collisions/benchmark parents, build stratified windows.
 
     databases: [(label, path, fresh_bool)]. Old and new data share one dedup ledger.
@@ -74,32 +84,47 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / "audit.sqlite"
-    if path.exists():
+    if path.exists() and not resume:
         raise ValueError("Audit destination exists; use a new versioned output")
     db = sqlite3.connect(path)
     db.execute("PRAGMA cache_size=-4194304")  # Keep corpus metadata indexes off remote random I/O.
     db.executescript("""
-        CREATE TABLE records (origin TEXT, hash TEXT, source TEXT, split TEXT, parent TEXT,
+        CREATE TABLE IF NOT EXISTS records (origin TEXT, hash TEXT, source TEXT, split TEXT, parent TEXT,
           norm TEXT, tokens INTEGER, fresh INTEGER, stratum TEXT, conflict INTEGER,
           benchmark INTEGER, PRIMARY KEY(origin,hash));
-        CREATE INDEX normalized ON records(norm);
-        CREATE INDEX parents ON records(parent,split);
-        CREATE TABLE tokenizer (stratum TEXT, documents INTEGER, tokens INTEGER,
+        CREATE INDEX IF NOT EXISTS normalized ON records(norm);
+        CREATE INDEX IF NOT EXISTS parents ON records(parent,split);
+        CREATE TABLE IF NOT EXISTS tokenizer (stratum TEXT, documents INTEGER, tokens INTEGER,
           bytes INTEGER, characters INTEGER, unknowns INTEGER);
     """)
     tokenizer = load_frozen()
-    screen = LexicalScreen(benchmarks)
+    screen = LexicalScreen(benchmarks) if benchmark_screen else None
     metrics = defaultdict(lambda: [0, 0, 0, 0, 0])
     handles = {}
-    scanned = 0
+    scanned = db.execute("SELECT COUNT(*) FROM records").fetchone()[0]
     for label, source_path, fresh in databases:
         source = sqlite3.connect(f"file:{source_path}?mode=ro", uri=True)
         source.execute("PRAGMA cache_size=-524288")
         handles[label] = source
+        # Resume committed metadata without re-reading/decompressing source blobs.
+        # A SQL predicate lets SQLite skip their overflow pages as well.
+        seen = {row[0] for row in db.execute("SELECT hash FROM records WHERE origin=?", (label,))}
+        source.create_function("already_scanned", 1, seen.__contains__)
+        cached_norms = {}
+        if (
+            not benchmark_screen
+            and not tokenizer_diagnostics
+            and source.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='code_norm_rows'"
+            ).fetchone()
+        ):
+            cached_norms = dict(source.execute("SELECT hash,normalized FROM code_norm_rows"))
+        source.create_function("has_cached_norm", 1, cached_norms.__contains__)
         for key, category, split, parent, provenance, blob, count, conflict in source.execute(
-            "SELECT hash,source,split,parent,provenance,text,loss_tokens,conflict FROM documents d"
+            "SELECT hash,source,split,parent,provenance,CASE WHEN has_cached_norm(hash) THEN NULL ELSE text END,loss_tokens,conflict FROM documents d"
+            + " WHERE NOT already_scanned(d.hash)"
             + (
-                " WHERE NOT EXISTS (SELECT 1 FROM excluded_prior e WHERE e.hash=d.hash)"
+                " AND NOT EXISTS (SELECT 1 FROM excluded_prior e WHERE e.hash=d.hash)"
                 if label == "fresh_original"
                 else ""
             )
@@ -107,7 +132,7 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
             # Original test records deliberately retain only hashes/parents.
             # They are not corrupt zlib and must still protect exact/split identity.
             tombstone = count == 0 and not blob
-            text = "" if tombstone else zlib.decompress(blob).decode()
+            text = "" if tombstone or key in cached_norms else zlib.decompress(blob).decode()
             metadata = json.loads(provenance)
             language = metadata.get("language", "python" if category == "code_python" else "")
             task = metadata.get("task_family", "unclassified")
@@ -117,7 +142,7 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
                 else f"{category}/{metadata.get('institution', 'all')}"
             )
             parent = parent_key(category, parent) if parent else "missing:" + key
-            hit = screen.matches(text)
+            hit = screen.matches(text) if screen else False
             db.execute(
                 "INSERT INTO records VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
@@ -126,7 +151,11 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
                     category,
                     split,
                     parent,
-                    ("excluded:" + key if tombstone else normalized_hash(text)),
+                    (
+                        "excluded:" + key
+                        if tombstone
+                        else cached_norms.get(key) or normalized_hash(text)
+                    ),
                     count,
                     fresh,
                     stratum,
@@ -135,7 +164,7 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
                 ),
             )
             values = metrics[stratum]
-            if not tombstone and values[0] < 128:
+            if tokenizer_diagnostics and not tombstone and values[0] < 128:
                 sample = text[:32768]
                 ids = tokenizer.encode(sample, add_special_tokens=False).ids
                 values[0] += 1
@@ -159,8 +188,15 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
                 commit()
     db.commit()
     db.executescript("""
+      DROP TABLE IF EXISTS blocked_parents;
+      DROP TABLE IF EXISTS heldout_norms;
+      DROP TABLE IF EXISTS heldout_hashes;
+      DROP TABLE IF EXISTS eligible;
+    """)
+    db.executescript(
+        """
       CREATE TABLE blocked_parents AS SELECT DISTINCT parent FROM records
-        WHERE benchmark=1 OR conflict=1 OR parent LIKE 'missing:%'
+        WHERE (benchmark=1 AND SCREEN_BENCHMARKS) OR conflict=1 OR parent LIKE 'missing:%'
         UNION SELECT parent FROM records GROUP BY parent HAVING COUNT(DISTINCT split)>1;
       CREATE UNIQUE INDEX blocked_index ON blocked_parents(parent);
       CREATE TABLE heldout_norms AS SELECT DISTINCT norm FROM records WHERE split!='train';
@@ -173,7 +209,8 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
           AND tokens>0 AND (split!='train' OR (NOT EXISTS(SELECT 1 FROM heldout_norms h WHERE h.norm=r.norm) AND NOT EXISTS(SELECT 1 FROM heldout_hashes h WHERE h.hash=r.hash)))
       ) WHERE rank=1;
       CREATE INDEX eligible_split ON eligible(split,stratum,parent);
-    """)
+    """.replace("SCREEN_BENCHMARKS", "1" if benchmark_screen else "0")
+    )
     capacities = [
         dict(zip(["source", "fresh", "documents", "unique_train_tokens"], row))
         for row in db.execute(
@@ -229,20 +266,32 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
         "stage": "audited_not_training_ready",
         "tokenizer_sha256": TOKENIZER_SHA256,
         "databases": [(n, str(p), f) for n, p, f in databases],
-        "benchmarks": pins,
+        "benchmarks": pins if benchmark_screen else [],
+        "policy": {
+            "benchmark_screen": benchmark_screen,
+            "tokenizer_diagnostics": tokenizer_diagnostics,
+            "validation_exclusion": "repository/parent and exact/whitespace-normalized document identity",
+        },
         "capacity": capacities,
         "heldout": coverage,
         "tokenizer": {
             s: dict(zip(["documents", "tokens", "utf8_bytes", "characters", "unknowns"], v))
             for s, v in metrics.items()
+            if tokenizer_diagnostics
         },
         "documents_scanned": scanned,
         "benchmark_hit_documents": db.execute(
             "SELECT COUNT(*) FROM records WHERE benchmark=1"
-        ).fetchone()[0],
+        ).fetchone()[0]
+        if benchmark_screen
+        else None,
         "blocked_parents": db.execute("SELECT COUNT(*) FROM blocked_parents").fetchone()[0],
         "pending": [
-            "HumanEval/MBPP lexical screen does not cover other benchmarks or semantic overlap",
+            (
+                "HumanEval/MBPP lexical screen does not cover other benchmarks or semantic overlap"
+                if benchmark_screen
+                else "Benchmark contamination screening skipped by user request"
+            ),
             "Review language/task balance and tokenizer efficiency before selecting the mix",
             "Run representative held-out evaluation in trainer before any substantial run",
             "Existing historical training contamination cannot be undone by future filtering",
