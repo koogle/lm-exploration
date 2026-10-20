@@ -167,7 +167,9 @@ def grade(row, code):
 
 
 @app.local_entrypoint()
-def main(dataset: str, checkpoint: str, output: str):
+def main(dataset: str, checkpoint: str, output: str, candidate_name: str = "sft"):
+    if candidate_name == "base":
+        raise ValueError("Candidate name must differ from the base comparison")
     from concurrent.futures import ThreadPoolExecutor
 
     rows = [json.loads(line) for line in Path(dataset).read_text().splitlines()]
@@ -188,7 +190,7 @@ def main(dataset: str, checkpoint: str, output: str):
         calibrated = list(pool.map(calibrate, calibration.values()))
     print(json.dumps({"calibrated_languages": calibrated}), flush=True)
     report = {"decoding": "greedy BF16, 128 new tokens, PAD/BOS/UNK suppressed", "models": {}}
-    for name, path in (("base", PARENT), ("sft", checkpoint)):
+    for name, path in (("base", PARENT), (candidate_name, checkpoint)):
         samples = generate.remote(path, rows)
         with ThreadPoolExecutor(max_workers=4) as pool:
             grades = list(
