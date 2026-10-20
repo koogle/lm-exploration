@@ -1,6 +1,6 @@
 # Simple LLM — training from scratch
 
-The [Python repair SFT pilot](sft/README.md) branches from the completed PR #26
+The [Multi-language code repair SFT pilot](sft/README.md) branches from the completed PR #26
 checkpoint and provides an explicit, bounded Modal post-training loop. See its
 data contract and evaluation limitations before launching.
 

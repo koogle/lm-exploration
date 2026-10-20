@@ -17,6 +17,7 @@ class Tokenizer:
 def example(name="one", split="train"):
     return {
         "id": name,
+        "language": "python",
         "group": name,
         "split": split,
         "instruction": f"Return {name}.",
@@ -47,6 +48,47 @@ class RepairTests(unittest.TestCase):
         labels = [v for v in encoded["y"] if v != -100]
         self.assertEqual(labels[-1], 2)
         self.assertEqual(tokenizer.decode(labels[:-1]), row["fixed"])
+
+    def test_multiple_languages(self):
+        from training_data.subword import load_frozen
+
+        tokenizer = load_frozen()
+        snippets = {
+            "javascript": "function add(a,b) { return a + b; }",
+            "typescript": "const add = (a: number, b: number): number => a + b;",
+            "go": "func add(a, b int) int { return a + b }",
+            "rust": "fn add(a: i32, b: i32) -> i32 { a + b }",
+            "c": "int add(int a, int b) { return a + b; }",
+            "cpp": "int add(int a, int b) { return a + b; }",
+            "java": "static int add(int a, int b) { return a + b; }",
+            "bash": 'printf "%s\\n" "$((a + b))"',
+        }
+        rows = []
+        for lang, code in snippets.items():
+            for split in ("train", "validation"):
+                row = example(f"{lang}-{split}", split)
+                comment = f" # {lang}-{split}" if lang == "bash" else f" /* {lang}-{split} */"
+                row.update(
+                    language=lang, fixed=code + comment, broken=code.replace("+", "-") + comment
+                )
+                encoded = encode(row, tokenizer, 1024)
+                labels = [v for v in encoded["y"] if v != -100]
+                self.assertEqual(tokenizer.decode(labels[:-1]), row["fixed"])
+                self.assertIn(f"Repair the {lang} code", prompt(row))
+                self.assertEqual(encoded["language"], lang)
+                rows.append(row)
+        splits, _ = self.prepare_rows(rows)
+        self.assertEqual(len(splits["train"]), len(snippets))
+
+    def test_missing_language_and_validation_coverage(self):
+        row = example()
+        del row["language"]
+        with self.assertRaisesRegex(ValueError, "language"):
+            encode(row, Tokenizer(), 1024)
+        a, b = example(), example("two", "validation")
+        a["language"] = "rust"
+        with self.assertRaisesRegex(ValueError, "Missing validation languages"):
+            self.prepare_rows([a, b])
 
     def test_no_truncation(self):
         with self.assertRaisesRegex(ValueError, "exceeds context"):

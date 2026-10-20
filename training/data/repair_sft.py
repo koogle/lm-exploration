@@ -1,17 +1,26 @@
-"""Strict JSONL repair examples; no supplied Python is executed during preparation."""
+"""Strict JSONL repair examples; no supplied code is executed during preparation."""
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, LOSS_IGNORE_INDEX
 
-FORMAT = "repair-sft-v1"
+FORMAT = "repair-sft-v2"
+
+
+def language(row):
+    value = row.get("language", "")
+    if not isinstance(value, str) or not re.fullmatch(r"[a-z][a-z0-9_+#.-]{0,39}", value):
+        raise ValueError("language must be an explicit lowercase language identifier")
+    return value
 
 
 def prompt(row):
     return (
-        "Repair the Python code to satisfy the task. Return only the complete corrected code.\n"
+        f"Repair the {language(row)} code to satisfy the task. "
+        "Return only the complete corrected code.\n"
         f"Task: {row['instruction']}\nBroken code:\n{row['broken']}\nCorrected code:\n"
     )
 
@@ -23,7 +32,7 @@ def encode(row, tokenizer, context):
         raise ValueError(f"Example {row['id']} exceeds context; refusing to truncate repair/EOS")
     tokens = prefix + answer
     labels = [LOSS_IGNORE_INDEX] * len(prefix) + answer
-    return {"id": row["id"], "x": tokens[:-1], "y": labels[1:]}
+    return {"id": row["id"], "language": language(row), "x": tokens[:-1], "y": labels[1:]}
 
 
 def prepare(path, tokenizer, context):
@@ -54,4 +63,9 @@ def prepare(path, tokenizer, context):
         splits[split].append(encode(row, tokenizer, context))
     if not all(splits.values()):
         raise ValueError("Both train and validation examples are required")
+    missing = {r["language"] for r in splits["train"]} - {
+        r["language"] for r in splits["validation"]
+    }
+    if missing:
+        raise ValueError(f"Missing validation languages: {sorted(missing)}")
     return splits, hashlib.sha256(raw).hexdigest()

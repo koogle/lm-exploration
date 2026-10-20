@@ -1,4 +1,4 @@
-# Python repair SFT pilot
+# Multi-language code repair SFT pilot
 
 Stacked on PR #26, initialized from its completed 124M / 10.879B checkpoint:
 `simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt`.
@@ -11,8 +11,17 @@ frozen tokenizer are inherited. Nothing is launched automatically.
 Supply a UTF-8 JSONL file, one repair per line:
 
 ```json
-{"id":"repo-a-fix-1","group":"repo-a","split":"train","instruction":"Return the sum of a and b.","broken":"def add(a, b):\n    return a - b\n","fixed":"def add(a, b):\n    return a + b\n","source":"repository URL + base/fix commit IDs","license":"MIT"}
+{"id":"repo-a-fix-1","group":"repo-a","split":"train","language":"python","instruction":"Return the sum of a and b.","broken":"def add(a, b):\n    return a - b\n","fixed":"def add(a, b):\n    return a + b\n","source":"repository URL + base/fix commit IDs","license":"MIT"}
 ```
+
+Set `language` explicitly: for example `python`, `javascript`, `typescript`, `go`,
+`rust`, `c`, `cpp`, `java`, or `bash`. Other lowercase language identifiers are
+accepted; preparation and the training objective are language-independent. Use one
+consistent identifier per language. The prompt names that language, and each
+training language must have validation examples. Mixed-language batches work
+without changing the model or tokenizer. Existing rows need a language field;
+there is no implicit Python default. Version 1 SFT checkpoints are not resumable
+under this changed prompt/data contract; start from the PR #26 parent instead.
 
 Include separate `validation` records with different groups and code. Use repository
 or related-change family as `group`; assign splits before generating variants.
@@ -22,10 +31,15 @@ ignored. Overlength examples fail rather than silently truncating solutions.
 Source and license are provenance declarations, not automated eligibility checks.
 
 For PR-derived data, separate implementation edits from test edits. Select short,
-single-file Python repairs whose relevant test fails at the base commit and passes
+single-file repairs whose relevant test fails at the base commit and passes
 with the reference repair. Record this verification alongside the source dataset.
 The importer does not execute arbitrary supplied code or certify correctness;
-only feed it independently verified repairs. No external corpus is bundled.
+only feed it independently verified repairs. Use language-appropriate verification:
+pytest for Python, Node/TypeScript tests, `go test`, `cargo test`, C/C++ build and
+test commands, Java tests, and shell behavior fixtures. These commands describe
+corpus verification requirements, not implemented execution backends. No external
+corpus is bundled. Set mixture proportions through input example counts; sampling
+is uniform over examples, not balanced automatically across languages.
 
 ## Validate and launch
 
@@ -48,7 +62,7 @@ Use `--steps 2 --batch-size 1` for GPU qualification before a substantive pilot.
 Inputs are capped at 20 MiB for this initial in-memory workflow. No publication or
 hub upload occurs. Private run-volume outputs contain the exact examples, source
 snapshots, dataset/parent/tokenizer/source hashes, settings, per-step answer-token
-loss, full validation answer-token loss before and after training, and periodic
+loss, aggregate and per-language validation answer-token loss before and after training, and periodic
 full checkpoints. Unique run IDs prevent overwriting existing runs.
 
 Resume a time-bounded run in a **new** output run ID using `--resume
@@ -65,6 +79,6 @@ success. Before selecting a useful model, run generated repairs in isolated
 sandboxes against fixed hidden tests and compare base/SFT/Qwen on identical tasks.
 Track syntax validity, EOS termination, test pass rate, and edit size. Never run
 untrusted generated code in the training container or let it edit grading tests.
-The SFT checkpoint format is `repair-sft-v1`; the existing pretraining publication
+The SFT checkpoint format is `repair-sft-v2`; the existing pretraining publication
 scripts do not yet accept it. Distributed SFT, generation evaluation, sandbox test
 execution, and automated PR mining are follow-on work, not implemented features.

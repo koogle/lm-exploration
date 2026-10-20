@@ -138,14 +138,22 @@ def train(parent, dataset, output, settings, commit=lambda: None, resume=None):
 
     def evaluate():
         model.eval()
-        total, count = 0.0, 0
+        totals = {}
         with torch.inference_mode():
             for row in splits["validation"]:
                 value, n = loss([row])
-                total += value.item()
-                count += n.item()
+                bucket = totals.setdefault(row["language"], [0.0, 0])
+                bucket[0] += value.item()
+                bucket[1] += n.item()
         model.train()
-        return total / count
+        return {
+            "validation_loss": sum(v[0] for v in totals.values())
+            / sum(v[1] for v in totals.values()),
+            "validation_by_language": {
+                name: {"loss": total / count, "answer_tokens": count}
+                for name, (total, count) in sorted(totals.items())
+            },
+        }
 
     def record(**values):
         with (output / "metrics.jsonl").open("a") as handle:
@@ -176,7 +184,7 @@ def train(parent, dataset, output, settings, commit=lambda: None, resume=None):
         return str(target)
 
     started = time.monotonic()
-    record(validation_loss=evaluate(), phase="baseline")
+    record(**evaluate(), phase="baseline")
     last_saved = -1
     while step < settings.steps and time.monotonic() - started < settings.max_seconds:
         rows = [rng.choice(splits["train"]) for _ in range(settings.batch_size)]
@@ -192,11 +200,11 @@ def train(parent, dataset, output, settings, commit=lambda: None, resume=None):
         answer_tokens += count.item()
         record(train_loss=objective.item())
         if step % settings.evaluate_every == 0:
-            record(validation_loss=evaluate())
+            record(**evaluate())
         if step % settings.save_every == 0:
             save()
             last_saved = step
-    record(validation_loss=evaluate(), phase="final")
+    record(**evaluate(), phase="final")
     path = str(output / f"step-{step:09d}.pt") if last_saved == step else save()
     commit()
     return {"checkpoint": path, "step": step, "answer_tokens": answer_tokens}
