@@ -98,6 +98,22 @@ def supplement(database: str):
         data_volume.commit()
 
 
+@app.function(image=image, cpu=1, memory=1024, timeout=43200, retries=0, max_containers=1)
+def supplement_all():
+    """Durable bounded continuation of preparation, with no GPU allocation."""
+    for database in [
+        "readiness-20261020-v2/original-refresh/raw.sqlite",
+        "readiness-20261020-v2/multilingual/raw.sqlite",
+    ]:
+        for attempt in range(4):
+            result = supplement.remote(database)
+            if result["stage"] == "supplement_complete":
+                break
+        else:
+            raise RuntimeError("Bounded supplemental preparation limit reached; inspect capacity")
+    return result
+
+
 @app.local_entrypoint()
 def main(action: str = "prepare", database: str = "readiness-20261020-v2/multilingual/raw.sqlite"):
     if action == "inventory":
@@ -108,5 +124,7 @@ def main(action: str = "prepare", database: str = "readiness-20261020-v2/multili
         print(json.dumps(prepare.remote(), indent=2))
     elif action == "supplement":
         print(json.dumps(supplement.remote(database), indent=2))
+    elif action == "supplements":
+        print(json.dumps(supplement_all.remote(), indent=2))
     else:
         raise ValueError("Expected prepare, supplement or inventory")

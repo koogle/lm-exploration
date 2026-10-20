@@ -315,9 +315,12 @@ class Corpus:
         for root in roots:
             for p in sorted(Path(root).iterdir()):
                 try:
-                    sha = git(p, "rev-parse", "HEAD").decode().strip()
-                    date = int(git(p, "show", "-s", "--format=%ct", sha))
                     parent = p.name.removesuffix("-10k").replace("--", "/", 1).lower()
+                    pinned = self.db.execute(
+                        "SELECT revision FROM repositories WHERE parent=?", (parent,)
+                    ).fetchone()
+                    sha = pinned[0] if pinned else git(p, "rev-parse", "HEAD").decode().strip()
+                    date = int(git(p, "show", "-s", "--format=%ct", sha))
                     repos.append((date, parent, sha, p))
                 except (subprocess.SubprocessError, ValueError):
                     self.reject("invalid_git_snapshot")
