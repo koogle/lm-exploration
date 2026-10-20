@@ -1,0 +1,171 @@
+{
+  "status": "completed",
+  "baseline": {
+    "step": 0,
+    "answer_tokens": 0,
+    "validation_loss": 0.8344942541662541,
+    "validation_by_language": {
+      "bash": {
+        "loss": 0.6283426253747397,
+        "answer_tokens": 17204
+      },
+      "c": {
+        "loss": 0.6110041689200854,
+        "answer_tokens": 39814
+      },
+      "cpp": {
+        "loss": 0.5038941187073642,
+        "answer_tokens": 44650
+      },
+      "go": {
+        "loss": 0.8476087672144372,
+        "answer_tokens": 48042
+      },
+      "java": {
+        "loss": 0.7638030438350719,
+        "answer_tokens": 28635
+      },
+      "javascript": {
+        "loss": 0.7292007738345626,
+        "answer_tokens": 32706
+      },
+      "python": {
+        "loss": 0.8528205774874464,
+        "answer_tokens": 49031
+      },
+      "ruby": {
+        "loss": 0.8238826344963702,
+        "answer_tokens": 7184
+      },
+      "rust": {
+        "loss": 1.100873084940931,
+        "answer_tokens": 44529
+      },
+      "swift": {
+        "loss": 1.754225144384709,
+        "answer_tokens": 6026
+      },
+      "typescript": {
+        "loss": 0.9116778424523372,
+        "answer_tokens": 53498
+      },
+      "zig": {
+        "loss": 1.1403958036249773,
+        "answer_tokens": 31672
+      }
+    },
+    "phase": "baseline"
+  },
+  "final": {
+    "step": 20000,
+    "answer_tokens": 41579095,
+    "validation_loss": 0.5674121072862292,
+    "validation_by_language": {
+      "bash": {
+        "loss": 0.509732090991698,
+        "answer_tokens": 17204
+      },
+      "c": {
+        "loss": 0.42309726306780954,
+        "answer_tokens": 39814
+      },
+      "cpp": {
+        "loss": 0.37074889790170806,
+        "answer_tokens": 44650
+      },
+      "go": {
+        "loss": 0.5360478482364115,
+        "answer_tokens": 48042
+      },
+      "java": {
+        "loss": 0.5444497713935257,
+        "answer_tokens": 28635
+      },
+      "javascript": {
+        "loss": 0.5337999434614884,
+        "answer_tokens": 32706
+      },
+      "python": {
+        "loss": 0.645663123082075,
+        "answer_tokens": 49031
+      },
+      "ruby": {
+        "loss": 0.3886940914365921,
+        "answer_tokens": 7184
+      },
+      "rust": {
+        "loss": 0.6444698964597219,
+        "answer_tokens": 44529
+      },
+      "swift": {
+        "loss": 1.4778323168775152,
+        "answer_tokens": 6026
+      },
+      "typescript": {
+        "loss": 0.5946165552704913,
+        "answer_tokens": 53498
+      },
+      "zig": {
+        "loss": 0.7523401444700216,
+        "answer_tokens": 31672
+      }
+    },
+    "phase": "final"
+  },
+  "best_observed_validation": {
+    "step": 18500,
+    "answer_tokens": 38439494,
+    "validation_loss": 0.5641664231719027,
+    "validation_by_language": {
+      "bash": {
+        "loss": 0.5086139597204834,
+        "answer_tokens": 17204
+      },
+      "c": {
+        "loss": 0.41888059600615074,
+        "answer_tokens": 39814
+      },
+      "cpp": {
+        "loss": 0.36671913806962275,
+        "answer_tokens": 44650
+      },
+      "go": {
+        "loss": 0.5325141455091846,
+        "answer_tokens": 48042
+      },
+      "java": {
+        "loss": 0.5447097133295437,
+        "answer_tokens": 28635
+      },
+      "javascript": {
+        "loss": 0.5310695260582747,
+        "answer_tokens": 32706
+      },
+      "python": {
+        "loss": 0.6381079504801155,
+        "answer_tokens": 49031
+      },
+      "ruby": {
+        "loss": 0.3969300646160652,
+        "answer_tokens": 7184
+      },
+      "rust": {
+        "loss": 0.6432078160791797,
+        "answer_tokens": 44529
+      },
+      "swift": {
+        "loss": 1.471868799724256,
+        "answer_tokens": 6026
+      },
+      "typescript": {
+        "loss": 0.5935863268910633,
+        "answer_tokens": 53498
+      },
+      "zig": {
+        "loss": 0.7450532875945696,
+        "answer_tokens": 31672
+      }
+    }
+  },
+  "note": "Answer-token loss only. Executable repair correctness has not been evaluated."
+}
