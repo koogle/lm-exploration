@@ -1,0 +1,27 @@
+{
+  "observed_date": "2026-10-20",
+  "authenticated": true,
+  "probes": [
+    {
+      "dataset": "bigcode/the-stack",
+      "revision": "153f6301d232928d7f90d09b37fceb4fadc2c950",
+      "file": "data/python/train-00000-of-00206.parquet",
+      "accessible": false,
+      "error": "GatedRepoError: account is not in the authorized list"
+    },
+    {
+      "dataset": "bigcode/the-stack-dedup",
+      "revision": "17cad72c886a2858e08d4c349a00d6466f54df63",
+      "file": "data/python/data-00000-of-00144.parquet",
+      "accessible": false,
+      "error": "GatedRepoError: account is not in the authorized list"
+    },
+    {
+      "dataset": "bigcode/starcoderdata",
+      "revision": "9fc30b578cedaec69e47302df72cf00feed7c8c4",
+      "file": "python/train-00000-of-00059.parquet",
+      "accessible": false,
+      "error": "GatedRepoError: account is not in the authorized list"
+    }
+  ]
+}
