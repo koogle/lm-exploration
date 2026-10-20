@@ -281,9 +281,9 @@ bottleneck. They do not change filtering, counts or split assignments.
 
 Final active binding after deployment checks: collector/coordinator
 `fc-01M5BCZKTQAHWKNKYRNXEMG5MD`; training handoff controller
-`fc-01M5BD5HH2H6GFGAK82N1THKTT` (source `f62842c`). The eight original partition
+`fc-01M5BDG48HZF39BX0MWN47NFHY` (source `43927af`). The eight original partition
 calls remain active and retain their ingestion implementation/cursors. All eight
-were observed advancing; raw collection passed2.5B targets (serial+partitions,
+were observed advancing; raw collection passed3.2B targets (serial+partitions,
 before cross-worker deduplication/audit).31 relevant tests pass. No GPU work is
 claimed until the unchanged readiness gate succeeds.
 
@@ -293,3 +293,9 @@ An exhausted shard partition returns its valid staged capacity; it does not disc
 that data or fail a globally sufficient pool. Worker implementation identities and
 pass limits are unchanged. All source/quality failures outside these capacity cases
 remain explicit stops instead of silently training on an unsuitable corpus.
+
+After the final deployment, collector, handoff controller, and HF watcher
+`fc-01M5BCQ76HG92RBW2MZ78J7NY5` were each confirmed running. The workflow remains
+`collecting_fresh_code`; the repaired controller will audit, freeze, qualify restore
+on eight H100s, and continue the 10B phase after the gates pass. No further user
+approval is required. The final focused handoff/collector/gate suite passed 13 tests.
