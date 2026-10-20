@@ -42,6 +42,10 @@ class RawTokenMixture(TokenMixture):
         if digest(database) != artifact["sha256"]:
             raise ValueError("Raw database checksum mismatch")
         self.db = sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro&immutable=1", uri=True)
+        if self.manifest.get("external_databases"):
+            from .prepared_snapshot import attach_prepared
+
+            attach_prepared(self.db, self.manifest)
         self.context, self.split = context, split
         self.identity = {
             "manifest_sha256": digest(self.path),

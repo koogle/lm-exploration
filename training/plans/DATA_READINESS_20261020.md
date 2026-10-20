@@ -341,3 +341,17 @@ that were skipped; benchmark scores must not be described as contamination-clean
 The focused audit/import/merge/capacity/handoff suite passes 15 tests, including
 resuming an audit with benchmark filtering disabled while preserving validation
 exclusion, and reusing prepared hashes without reading code blobs.
+
+## Direct launch authorized after audit ETA
+
+The user explicitly requested proceeding for this run instead of the remaining
+hours-long prep/audit. Stop the CPU audit/waiter and launch against completed raw
+stores directly. A small manifest pins their paths/sizes and prepared source
+capacities, with a small sampled held-out set. The loader attaches read-only
+completed databases through a temporary SQLite view; it excludes sampled parent
+and document identities, preserves the code/noncode phase pass caps and resume
+cursors, and avoids copying/re-tokenizing the whole corpus. This path does not
+claim full global deduplication, language-balance or benchmark audit completion.
+The broader audit output remains partial and is not substituted for a passed audit.
+Mixture remains 60% code (including overlapping patches), 5% EU and scaled original
+noncode sources; architecture/context/eight-H100 compiled microbatch2 unchanged.

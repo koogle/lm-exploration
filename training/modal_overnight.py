@@ -261,6 +261,51 @@ def freeze_snapshot(audit_round=0):
 
 @app.function(
     image=image,
+    cpu=8,
+    memory=16384,
+    timeout=7200,
+    retries=0,
+    volumes={"/data": data_volume, "/runs": run_volume},
+)
+def start_prepared_run(run_id, provenance):
+    """User-authorized experimental launch without the remaining corpus audit."""
+    from training_data.prepared_snapshot import build
+    from training_data.raw_token_stream import RawTokenMixture
+
+    from trainer.representative_validation import load_heldout
+
+    data_volume.reload()
+    mark(run_id, "opening_prepared_data", global_audit_bypassed=True)
+    destination = Path("/data/scholarly-code") / SNAPSHOT
+    prepared = build(
+        destination,
+        OLD_MANIFEST,
+        BASE / "original-refresh/raw.sqlite",
+        BASE / "multilingual/raw.sqlite",
+        BASE / "patches/raw.sqlite",
+        EU,
+        BASE / "multilingual/progress.json",
+        BASE / "patches/report.json",
+    )
+    data = RawTokenMixture(destination / "manifest.json", context=8192, allow_unreviewed=True)
+    validation = load_heldout(destination / "manifest.json", data)
+    for name in prepared["sources"]:
+        next(data.blocks(name))
+    data.db.close()
+    data_volume.commit()
+    training = train.spawn(run_id, provenance)
+    mark(
+        run_id,
+        "training_scheduled",
+        training_call_id=training.object_id,
+        readiness_mode=prepared["readiness_mode"],
+        validation_windows=len(validation),
+    )
+    return {"training_call_id": training.object_id, "validation_windows": len(validation)}
+
+
+@app.function(
+    image=image,
     cpu=4,
     memory=12288,
     timeout=1800,

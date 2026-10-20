@@ -20,6 +20,7 @@ def source_hashes():
     import model_100m.model
     import training_data.live_stream
     import training_data.prefetch
+    import training_data.prepared_snapshot
     import training_data.raw_token_stream
     import training_data.subword
     import training_data.token_stream
@@ -34,6 +35,7 @@ def source_hashes():
         "model": Path(model_100m.model.__file__),
         "loader": Path(training_data.token_stream.__file__),
         "raw_loader": Path(training_data.raw_token_stream.__file__),
+        "prepared_loader": Path(training_data.prepared_snapshot.__file__),
         "prefetch": Path(training_data.prefetch.__file__),
         "live_loader": Path(training_data.live_stream.__file__),
         "tokenizer": Path(training_data.subword.__file__),
