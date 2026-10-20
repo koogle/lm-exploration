@@ -21,8 +21,14 @@ class Settings:
     evaluate_every: int = 50
     save_every: int = 50
     max_seconds: int = 1200
+    objective: str = "sft"
+    cig_proximity: float = 0.3
 
     def __post_init__(self):
+        if self.objective not in ("sft", "cig"):
+            raise ValueError("Unknown SFT objective")
+        if not math.isfinite(self.cig_proximity) or self.cig_proximity < 0.01:
+            raise ValueError("Invalid CIG proximity")
         for key in (
             "steps",
             "batch_size",
@@ -83,7 +89,15 @@ def train(
     ).cuda()
     model.load_state_dict(base["model"], strict=True)
     optimizer = torch.optim.AdamW(model.parameters(), lr=settings.lr, weight_decay=0.01)
-    source_hashes = {"trainer": digest(__file__)}
+    from trainer import cig
+
+    source_hashes = {"trainer": digest(__file__), "cig": digest(cig.__file__)}
+    cache = {}
+    if settings.objective == "cig":
+        raw_rows = [
+            json.loads(line) for line in Path(dataset).read_text().splitlines() if line.strip()
+        ]
+        cache = cig.reference_cache(model, splits, raw_rows, tokenizer, settings.context)
     import model_10m.model as shared_module
     import model_100m.model as model_module
     import training_data.repair_sft as data_module
@@ -125,18 +139,38 @@ def train(
     shutil.copytree(DEFAULT_FOLDER, output / "tokenizer")
     for name, module in (
         ("trainer", __file__),
+        ("cig", cig.__file__),
         ("data", data_module.__file__),
         ("model", model_module.__file__),
         ("shared_model", shared_module.__file__),
     ):
         shutil.copyfile(module, output / f"{name}.py")
+    if cache:
+        torch.save(cache, output / "cig-reference.pt")
+        values = torch.cat([v[v > 0] for v in cache.values()])
+        (output / "cig-summary.json").write_text(
+            json.dumps(
+                {
+                    "positive_tokens": values.numel(),
+                    "answer_tokens": sum(sum(t != -100 for t in r["y"]) for r in splits["train"]),
+                    "mean_positive_information": values.mean().item() if values.numel() else 0.0,
+                },
+                indent=2,
+            )
+        )
     del base
 
-    def loss(rows):
+    def loss(rows, training=False):
         x, y = collate(rows, "cuda")
         with torch.autocast("cuda", dtype=torch.bfloat16):
+            logits = model(x)
+            if training and settings.objective == "cig":
+                information = torch.zeros_like(y, dtype=torch.float32)
+                for i, row in enumerate(rows):
+                    information[i, : len(row["y"])] = cache[row["id"]].to("cuda")
+                return cig.weighted_loss(logits, y, information, settings.cig_proximity)
             value = F.cross_entropy(
-                model(x).flatten(0, 1), y.flatten(), ignore_index=-100, reduction="sum"
+                logits.flatten(0, 1), y.flatten(), ignore_index=-100, reduction="sum"
             )
         return value, (y != -100).sum()
 
@@ -195,7 +229,7 @@ def train(
     while step < target_step and time.monotonic() - started < settings.max_seconds:
         rows = [rng.choice(splits["train"]) for _ in range(settings.batch_size)]
         optimizer.zero_grad(set_to_none=True)
-        value, count = loss(rows)
+        value, count = loss(rows, training=True)
         objective = value / count
         if not torch.isfinite(objective):
             raise RuntimeError("Non-finite SFT loss")

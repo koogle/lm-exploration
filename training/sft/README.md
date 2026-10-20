@@ -177,3 +177,38 @@ Poll `modal.FunctionCall.from_id(call_id).get(timeout=0)` for completion, and us
 `modal app logs simple-llm-repair-sft-scale` for progress. Per-step metrics,
 provenance, data, source snapshots, checkpoints and final result stay on the volume.
 Longer training is an experiment, not evidence of improved held-out repair success.
+
+## CIG-SFT experiment
+
+`Settings(objective="cig")` enables the token-weighted objective from
+[What Should SFT Learn? (October 9, 2026)](https://arxiv.org/abs/2610.12995v1).
+Ordinary SFT remains the default. See the
+[matched pilot report](../results/cig-sft-20261020/README.md).
+
+The frozen parent scores each training answer twice: with the full repair prompt,
+and with the instruction and broken code emptied while preserving language and
+prompt scaffolding. Answer tokens, including EOS, are identical. Reference scores
+are computed before any update and cached; validation is never used for weights.
+The paper's information ratio and detached projected-target weights use lambda
+0.3. Weighted losses divide by the count of supervised tokens. Evaluation always
+uses ordinary cross-entropy so the two training objectives remain comparable.
+
+From `training/` with corpus/research extras and the documented system CA setup:
+
+```sh
+modal run modal_cig_pilot.py --run-prefix cig-repair-UNIQUE --output /tmp/cig-results
+modal run modal_cig_eval.py::evaluate_cig --folder /tmp/cig-results
+```
+
+This explicitly runs two sequential one-L40S jobs, each capped at 200 updates,
+1,200 loop seconds, and the inherited 3,600-second worker timeout. The reference
+scoring pass is inside the worker timeout but outside the training-loop timer.
+Use unique run IDs. No automatic continuation or public checkpoint upload occurs.
+`--completed-sft run-id/step-000000200.pt` can recover a completed control after a
+report-collection failure; its dataset hash and settings must match.
+
+Checkpoints retain objective/settings/source identity and the usual optimizer and
+RNG state. CIG reference scores are recomputed from the original frozen parent on
+resume, before restoring saved RNG. Source changes intentionally reject old SFT
+resume identities; use their original source for those checkpoints. The current
+CIG pilot does not claim fresh-process GPU resume qualification.

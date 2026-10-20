@@ -126,6 +126,7 @@ def main(
     max_seconds: int = 1200,
     parent: str = PARENT,
     resume: str = "",
+    objective: str = "sft",
 ):
     from training_data.repair_sft import prepare
     from training_data.subword import load_frozen
@@ -133,7 +134,12 @@ def main(
     from trainer.repair_sft import Settings
 
     settings = Settings(
-        steps=steps, context=context, batch_size=batch_size, lr=lr, max_seconds=max_seconds
+        steps=steps,
+        context=context,
+        batch_size=batch_size,
+        lr=lr,
+        max_seconds=max_seconds,
+        objective=objective,
     )
     prepare(dataset, load_frozen(), context)  # Reject invalid inputs before allocating a GPU.
     checkpoint_path(parent)
