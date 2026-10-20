@@ -1,10 +1,10 @@
 # Code-focused 124M experiment with Muon
 
-Status: proposed experiment, documentation only. No optimizer implementation, new corpus, or run is claimed by this PR. Execution environment was unavailable when this plan was written. Stacked on #27 to retain its training and publication infrastructure.
+Status: implementation and CPU corpus preparation in progress. The tested Muon implementation from PR #24 is integrated, stacked on #27. Modal and Hugging Face access have been verified. No GPU optimizer step or model publication is claimed for this experiment. See the execution record for measured status.
 
 ## Objective and evidence
 
-Target useful short Python functions and completion first, with secondary JS/TS and systems-language coverage. Do not promise a general coding assistant at 124M parameters. The previous 20.879B lifetime checkpoint still produced invalid simple code and severe repetition; more aggregate training tokens are not a sufficient success criterion.
+Target useful short Python functions and completion. All code allocation is Python. Do not promise a general coding assistant at 124M parameters. The previous 20.879B lifetime checkpoint still produced invalid simple code and severe repetition; more aggregate training tokens are not a sufficient success criterion.
 
 Patch records represented only about 94.7M of 9.73B prepared code tokens (about 1% of code capacity), not the majority. Consumed proportions need measurement. Removing patches is an experiment in task alignment, not an established explanation of the previous failure.
 
@@ -23,11 +23,11 @@ Weights are fractions of nonpadding training targets, not record counts. Categor
 
 This proposes raising code from 60% to 80% for the new specialization; it is not a claim that 80% is optimal. General old books are optional support for prose, not a known cure for coding errors. Programming textbooks belong to the technical categories.
 
-Within the 80% code allocation start with Python 50%, JS/TS 25%, C/C++/Rust/Go 20%, and SQL/shell/other 5%. These are hypotheses to test against usable capacity and intended tasks. Preserve language diversity without trying to weight dozens of languages equally in a small model. Avoid repeating a tiny test/example pool just to hit its quota: report shortfall and revise the explicit recipe before launching.
+All implementation, test, and executable-example code is Python. Train from fresh initialization for **5,000,000,000 nonpadding target tokens**, preserving the six category weights above. Prefer one pass and never exceed two passes per category. Insufficient capacity blocks launch; it does not authorize changing the mixture or repeating a small corpus.
 
 ## Source shortlist
 
-Prioritize the collected repositories, with complete pinned file snapshots instead of patch strings. Verify whether the private datasets contain full files or only patches; when necessary fetch the corresponding repository revision. Do not infer a complete source file from a diff.
+Prioritize complete repositories updated recently, ordered by snapshot commit date, with complete pinned file snapshots instead of patch strings. Verify whether the private datasets contain full files or only patches; when necessary fetch the corresponding repository revision. Do not infer a complete source file from a diff.
 
 The Pile's GitHub component is a candidate supplement, not a quality label or guaranteed repository checkout. Inspect available parent/revision metadata and overlap with current collections before assigning it volume. Prefer sources with usable repository identity for validation exclusion.
 
@@ -51,17 +51,17 @@ Keep unrelated packing changes separate from the initial data experiment. Curren
 
 ## Selected optimizer: Muon
 
-The user confirms Muon has already been tested and selects it for this run. Reuse the tested implementation, parameter groups, learning rates, scaling and decay settings; locate and pin that existing experiment before execution. Do not repeat an AdamW-versus-Muon comparison or invent replacement hyperparameters. The prior test artifacts have not yet been inspected in this session.
+PR #24 (`1b9a7379e361d92f7e2ace0b15758a7e6eeed2f5`) contains the tested implementation and results. Its Muon run completed 99,988,281 targets / 1,296 updates at 248,500 steady nonpadding targets/sec and 13.993 GiB maximum allocated GPU memory. Diagnostic validation loss was 2.7204; this is a tiny validation set, not broad capability evidence.
 
-Preserve the tested treatment of hidden matrices and auxiliary parameters, including tied embedding/head identity. Check only integration changes needed for this corpus/launcher, including distributed checkpoint restore. Adam moments cannot be relabeled as Muon momentum.
+Reuse `trainer/optimizers.py`: hidden block matrices use five-step BF16 Newton–Schulz Muon with original aspect-ratio scaling, momentum 0.95, peak LR 0.02. Tied embedding/output weights, biases and norms use fused AdamW, peak LR 0.0003 and betas 0.9/0.95. Both use decay 0.1, clipping 1.0, 20M-target warmup and cosine decay to 10%. Global batch 32, microbatch 2, eight H100s, context 8192, cropping, cached RoPE and dynamic torch.compile are already measured together. Do not repeat an optimizer comparison.
 
-Proposed first stage: one 250M-target Muon run from fresh initialization, evaluated every 50M targets, focused on corpus and pipeline quality. This is a proposed bounded first stage, not a launched job or the final token budget. Keep the completed 20.879B model as a reference. Fresh initialization is a recommendation for the new experiment; record initialization explicitly. If using an existing checkpoint instead, record optimizer resets and lineage. No new optimizer comparison is planned.
+Start from fresh weights and a fresh cursor. Preserve both optimizer states, per-rank RNG and consumed data cursors across worker segments. Reuse the prior passing eight-rank Muon checks; verify new integration and restore before the substantial run.
 
 ## Evaluation and promotion
 
-Evaluate at initialization and every 50M pilot targets: held-out loss by language/task, syntax validity, executable tests for unseen functions, completion length/EOS rate, exact n-gram repetition and long loops. Freeze development prompts and separate final test tasks; use matched decoding settings and seeds, both greedy and sampled. Run generated code in an isolated, time/resource-limited environment without network access or credentials. Include the existing 50-generation suite for continuity, but expand coding evaluation beyond three Python prompts.
+Evaluate at initialization, around 50M targets, and regularly thereafter: held-out loss by language/task, syntax validity, executable tests for unseen functions, completion length/EOS rate, exact n-gram repetition and long loops. Freeze development prompts and separate final test tasks; use matched decoding settings and seeds, both greedy and sampled. Run generated code in an isolated, time/resource-limited environment without network access or credentials. Include the existing 50-generation suite for continuity, but expand coding evaluation beyond three Python prompts.
 
-Report uncertainty and raw examples, not only aggregate scores. Compare to the completed model under the same prompts. Select a longer run only after pipeline correctness and useful coding results support it. A 250M first stage cannot establish the final potential of a fresh model or support a matched-budget comparison with the 20B checkpoint.
+Report uncertainty and raw examples, not only aggregate scores. Compare to the completed model under the same prompts. Continue the authorized 5B run unless there is a concrete correctness failure or unusable data. Do not require an early fresh checkpoint to outperform the prior 20B model.
 
 A later separate fill-in-the-middle ablation (e.g. 25% of code examples) may improve editing/completion; it is not a repetition cure. It requires explicit sentinel/token handling and matching inference/evaluation. Keep the initial run causal-only. Instruction tuning on tested problem/solution pairs is a separate stage if the target becomes following coding requests.
 
