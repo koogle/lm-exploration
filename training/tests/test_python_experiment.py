@@ -29,6 +29,8 @@ class PythonCorpusTests(unittest.TestCase):
         self.assertEqual(sum(TARGETS.values()), 5_000_000_000)
 
     def test_malformed_explicit(self):
+        self.assertEqual(category(None, TEXT)[1], "malformed_record")
+        self.assertEqual(category("x.py", None)[1], "malformed_record")
         self.assertEqual(category("x.py", TEXT + "\n???")[1], "invalid_python3")
         self.assertEqual(category("x.py", "# Automatically generated\n" + TEXT)[1], "generated")
 

@@ -61,6 +61,8 @@ def split_for(parent):
 
 def category(path, text, python_repo=False):
     """Exclusive path/content classification without rewriting any source text."""
+    if not isinstance(path, str) or not isinstance(text, str):
+        return None, "malformed_record"
     p = Path(path.lower())
     if EXCLUDED.intersection(p.parts) or any(x.endswith(".egg-info") for x in p.parts):
         return None, "excluded_path"
@@ -500,8 +502,12 @@ class Corpus:
                     continue
                 try:
                     meta = json.loads(metadata)
+                    if not isinstance(meta, dict):
+                        raise ValueError("Expected record provenance object")
                     if source in code_names:
                         upstream = meta.get("upstream", {})
+                        if not isinstance(upstream, dict):
+                            raise ValueError("Expected upstream provenance object")
                         meta = {
                             **meta,
                             "path": meta.get("path", upstream.get("path")),
@@ -532,7 +538,7 @@ class Corpus:
                     text = zlib.decompress(raw).decode("utf-8")
                     if hashlib.sha256(text.encode()).hexdigest() != key:
                         raise ValueError("Content hash mismatch")
-                except (ValueError, UnicodeDecodeError, zlib.error):
+                except (ValueError, TypeError, UnicodeDecodeError, zlib.error):
                     self.reject("malformed_source_record")
                     continue
                 if source in code_names:
