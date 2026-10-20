@@ -1,0 +1,101 @@
+{
+  "dataset_sha256": "6197c4178e737172184d830ed52a3da5a3251ba642a03e20d336d05143b93702",
+  "builder_sha256": "2ee0553524f6d00871f24e336ab71a21e62db4292dd3c6065b5b9ccae583d347",
+  "context": 2048,
+  "counts": {
+    "train": {
+      "bash": 2501,
+      "c": 6012,
+      "cpp": 8718,
+      "go": 5384,
+      "java": 2481,
+      "javascript": 2485,
+      "python": 5766,
+      "ruby": 919,
+      "rust": 14521,
+      "swift": 595,
+      "typescript": 26345,
+      "zig": 3714
+    },
+    "validation": {
+      "bash": 79,
+      "c": 192,
+      "cpp": 177,
+      "go": 192,
+      "java": 98,
+      "javascript": 114,
+      "python": 192,
+      "ruby": 40,
+      "rust": 192,
+      "swift": 21,
+      "typescript": 192,
+      "zig": 128
+    }
+  },
+  "total": {
+    "validation": 1617,
+    "train": 79441
+  },
+  "private_patch_total": {
+    "validation": 1056,
+    "train": 62088
+  },
+  "replay_counts": {
+    "train": {
+      "bash": 2000,
+      "c": 2000,
+      "cpp": 2000,
+      "go": 2000,
+      "java": 2000,
+      "javascript": 2000,
+      "python": 2000,
+      "rust": 1353,
+      "typescript": 2000
+    },
+    "validation": {
+      "bash": 64,
+      "c": 64,
+      "cpp": 49,
+      "go": 64,
+      "java": 64,
+      "javascript": 64,
+      "python": 64,
+      "rust": 64,
+      "typescript": 64
+    }
+  },
+  "replay_sha256": "c251cdaa01f321ad44ef8d41c2109fcbc300b885ec2144be48bfa1fdde4dce23",
+  "input_tokens": 44774878,
+  "answer_tokens": 20641168,
+  "repositories": {
+    "train": 15,
+    "validation": 13
+  },
+  "candidate_counts": {
+    "train": 86001,
+    "validation": 4771
+  },
+  "rejections": {
+    "credential_pattern": 51,
+    "context": 1724,
+    "missing_buffer": 7575,
+    "instruction": 1278,
+    "path": 3296,
+    "large_file": 1269,
+    "missing_license_evidence": 2,
+    "duplicate_pair": 21273,
+    "heldout_overlap": 2635
+  },
+  "split_policy": "Commit-disjoint within repositories; all eligible validation excerpt hashes blocked from training. Prior CommitPack validation repositories excluded.",
+  "limits": {
+    "max_train": 180000,
+    "train_per_language": 30000,
+    "train_per_repository": 12000,
+    "validation_per_language": 128
+  },
+  "limitations": [
+    "Local excerpt edits, not complete repository repair.",
+    "Git blobs and slices verified; project tests not rerun.",
+    "Commit-disjoint, not repository-disjoint. No semantic clone audit or pretraining decontamination."
+  ]
+}
