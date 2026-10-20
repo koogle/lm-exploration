@@ -27,6 +27,26 @@ returned a chunk 404; its automatic retry succeeded without inventory injection
 or resetting failures. EMA's already-running round retains its prior image;
 queued mode is configured for subsequent workers.
 
+The following continuation completed all 69 preceding candidates through the
+queue, bringing ECB to 19,374 parsed rows with zero failures in that run. A
+further 28 exact technical/consultation/reference types now provide 139 candidate
+URLs; all 62 accepted selected samples fetched and parsed. Three podcast episode
+samples redirected to one generic landing page; podcast type 290 remains deferred
+despite its mechanical text length passing. See
+`research/ecb-remaining-expansion-20261020.{md,json}`. The accepted link inventories
+were durably queued and individually read back before deployment, after the old
+ECB writer was confirmed terminal. Source write/readback
+`5fb9a1f94106ac8fb218a3fd8409b6e1a60011f4` preserved all rows and shards.
+Keep candidate-link and parsed-document counts separate; use the existing
+controller for dispatch. Existing exclusions, budgets, weights and pacing remain.
+The goal and manual apps are deployed. New ECB campaign
+`goal-ecb-1792481512-b29f302ce6` has staged its first 20 originals; its worker
+adopted the expanded adapter. EMA round five independently adopted the queue and
+successfully staged then parsed its first 20 documents with zero failures.
+Both own supervisor subtrees were live at 07:35 UTC. See
+`research/ecb-expansion-live-20261020.json` for the pinned measurement; do not
+interpret queued links or raw documents as parsed rows.
+
 The owner superseded the additional-10,000-document request on 18 October 2026:
 keep collecting in Modal until documents run out. Neither 30,703 documents nor
 one billion verified tokens is a completion condition. Token counts remain an

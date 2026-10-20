@@ -58,6 +58,73 @@ COLLECTIONS = {
         "type_ids": ["157"],
     },
     "t2s_annual_reports": {"name": "T2S Annual Report", "type_ids": ["159"]},
+    "annual_report_ep_feedback": {
+        "name": "Feedback on the input provided by the European Parliament as part of its resolution on the ECB’s Annual Report",
+        "type_ids": ["402"],
+    },
+    "estr_methodology_reviews": {"name": "€STR Annual Methodology Review", "type_ids": ["246"]},
+    "strategy_review_documents": {"name": "ECB Strategy review", "type_ids": ["249"]},
+    "payments_market_consultations": {
+        "name": "ECB public consultation - payments and markets",
+        "type_ids": ["250"],
+    },
+    "statistics_consultations": {
+        "name": "ECB public consultation - statistics",
+        "type_ids": ["390"],
+    },
+    "consultation_responses": {"name": "Consultation response", "type_ids": ["448"]},
+    "eba_ecb_reports": {"name": "EBA/ECB report", "type_ids": ["425"]},
+    "bpm6_exchange_booklets": {
+        "name": "The exchange of balance of payments, international investment position statistics – BPM6 - booklet",
+        "type_ids": ["458"],
+    },
+    "target_pricing_guides": {"name": "Target services pricing guide", "type_ids": ["329"]},
+    "space_payment_studies": {
+        "name": "Study on the payment attitudes of consumers in the euro area (SPACE)",
+        "type_ids": ["343"],
+    },
+    "company_cash_studies": {
+        "name": "Use of cash by companies in the euro area",
+        "type_ids": ["443"],
+    },
+    "legal_acts": {"name": "ECB Legal act", "type_ids": ["368"]},
+    "governing_council_statements": {
+        "name": "ECB Governing Council statement",
+        "type_ids": ["407"],
+    },
+    "environmental_statements": {"name": "ECB Environmental Statement", "type_ids": ["211"]},
+    "target_services_annual_reports": {
+        "name": "TARGET Services Annual Report",
+        "type_ids": ["462"],
+    },
+    "letters_and_responses": {"name": "Letters and responses", "type_ids": ["456"]},
+    "accounting_conference_programmes": {
+        "name": "ECB Conference on Accounting, Financial Reporting and Corporate Governance",
+        "type_ids": ["168"],
+    },
+    "digital_euro_faqs": {"name": "Digital euro FAQ", "type_ids": ["254"]},
+    "digital_euro_pilot_faqs": {"name": "Digital euro pilot FAQs", "type_ids": ["477"]},
+    "digital_euro_governance": {"name": "ECB Digital Euro Governance", "type_ids": ["281"]},
+    "bank_treasurer_surveys": {"name": "Bank treasurer survey", "type_ids": ["488"]},
+    "estr_error_reports": {"name": "€STR Transparency on errors", "type_ids": ["223"]},
+    "eurosystem_oversight_reports": {"name": "Eurosystem oversight report", "type_ids": ["156"]},
+    "macroprudential_focus": {"name": "ECB Macroprudential Bulletin - Focus", "type_ids": ["282"]},
+    "integrated_reporting_framework_documents": {
+        "name": "Integrated Reporting Framework document",
+        "type_ids": ["447"],
+    },
+    "climate_indicator_releases": {
+        "name": "ECB Climate Change Indicators Statistical Release",
+        "type_ids": ["474"],
+    },
+    "bank_lending_questionnaires": {
+        "name": "Euro area bank lending survey - Questionnaire",
+        "type_ids": ["396"],
+    },
+    "bank_lending_glossaries": {
+        "name": "Euro area bank lending survey - Glossary",
+        "type_ids": ["397"],
+    },
     "insurance_pension_statistics": {
         "name": "ECB Euro area insurance corporations and pension funds statistics",
         "type_ids": ["11"],
