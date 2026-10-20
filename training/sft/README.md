@@ -124,3 +124,56 @@ modal run modal_repair_eval.py --dataset /tmp/repair-sft-data/repairs.jsonl \
   --checkpoint repair-pilot-UNIQUE/step-000000200.pt \
   --output /tmp/repair-sft-data/generation-evaluation.json
 ```
+
+## Larger commit-derived experiment
+
+`data/commitpack_sft.py` prepares the nine language subsets of
+[CommitPackFT](https://huggingface.co/datasets/bigcode/commitpackft) at immutable
+revision `fc56fe33c030c6daa414c2b112c932b8eed085e6`. Inputs are the commit subject and
+complete old file; the supervised answer is the complete new file. This includes
+repairs and other instruction-driven edits. Repository tests have **not** been
+rerun, so these are not executable-verified repair pairs.
+
+Preparation preserves commit URLs, file paths, per-record licenses and source
+hashes. It restricts licenses to the allowlist in the builder, filters generated
+paths and boilerplate instructions, and rejects examples exceeding 2,048 tokens
+instead of truncating answers. Repository aliases are joined across all nine
+languages before a deterministic approximately 95/5 repository split. All
+validation code is excluded from training by normalized exact hashes. The original
+synthetic validation code is also excluded. This is not semantic clone detection,
+nor evidence that the base model never saw these repositories during pretraining.
+
+The deterministic sample caps each language at 6,000 training and 64 validation
+examples. Languages with fewer eligible records retain all eligible records.
+Sampling in training remains uniform over examples, not uniform over languages.
+
+```sh
+modal run modal_commitpack_sft.py \
+  --data-id repair-commitpack-UNIQUE \
+  --old-dataset /tmp/repair-sft-data/repairs.jsonl \
+  --report-path /tmp/repair-sft-data/commitpack-report.json
+modal deploy modal_repair_scale.py
+```
+
+Deploying does not train. Explicitly submit the durable job after successful data
+preparation (use the environment's documented proxy/CA setup):
+
+```python
+import modal
+worker = modal.Function.from_name("simple-llm-repair-sft-scale", "worker")
+call = worker.spawn("repair-scale-UNIQUE", "repair-commitpack-UNIQUE")
+print(call.object_id)  # retain for status/result retrieval
+```
+
+The larger worker reads data from the private volume, verifies its report hash,
+then runs the same qualified answer-only SFT loop from the original PR #26 parent.
+It uses one H100, batch 8, context 2,048, LR 1e-5, a 5,000-update total target, and
+validation/checkpointing every 250 updates. A four-hour loop limit and five-hour
+worker timeout bound each invocation. A time-limited run can finish below the
+update target; inspect `result.json`. Full checkpoints support continuation in a
+new run ID with identical settings and `resume="old-run/step-NNNNNNNNN.pt"`.
+
+Poll `modal.FunctionCall.from_id(call_id).get(timeout=0)` for completion, and use
+`modal app logs simple-llm-repair-sft-scale` for progress. Per-step metrics,
+provenance, data, source snapshots, checkpoints and final result stay on the volume.
+Longer training is an experiment, not evidence of improved held-out repair success.

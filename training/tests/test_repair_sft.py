@@ -120,7 +120,7 @@ class RepairTests(unittest.TestCase):
     def test_invalid_data_and_settings(self):
         with self.assertRaisesRegex(ValueError, "Both train"):
             self.prepare_rows([example()])
-        for values in ({"steps": 0}, {"lr": float("nan")}, {"max_seconds": 3601}):
+        for values in ({"steps": 0}, {"lr": float("nan")}, {"max_seconds": 14401}):
             with self.assertRaises(ValueError):
                 Settings(**values)
 

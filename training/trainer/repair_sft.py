@@ -35,8 +35,8 @@ class Settings:
                 raise ValueError(f"{key} must be a positive integer")
         if not math.isfinite(self.lr) or not 0 < self.lr <= 1e-3:
             raise ValueError("Invalid learning rate")
-        if self.max_seconds > 3000:
-            raise ValueError("Pilot capped at 3000 seconds")
+        if self.max_seconds > 14400:
+            raise ValueError("SFT capped at four hours per invocation")
 
 
 def collate(rows, device):

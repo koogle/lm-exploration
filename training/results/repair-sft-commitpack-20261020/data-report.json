@@ -1,0 +1,77 @@
+{
+  "dataset": "bigcode/commitpackft",
+  "revision": "fc56fe33c030c6daa414c2b112c932b8eed085e6",
+  "context": 2048,
+  "source_sha256": "0c3f5c487c25d3c1ee17b4a95dfab4dafe4dd34c580b5ac022858c83d64c0144",
+  "dataset_sha256": "c251cdaa01f321ad44ef8d41c2109fcbc300b885ec2144be48bfa1fdde4dce23",
+  "source_files": {
+    "python": {
+      "sha256": "d167da37e1058371c48e057cd8815d03700c867dd8bcf58e61420d4dcd288d73"
+    },
+    "javascript": {
+      "sha256": "968688a1163c2dbbced0d0f9cf1dd52bc0b626c2ad9b02ff23f5700b2e277f25"
+    },
+    "typescript": {
+      "sha256": "43d32596844c62aa23b0e5a8811648f6f20fa07d9ab80499d66507136b844a76"
+    },
+    "go": {
+      "sha256": "05a65e973fcc6894a234fb382987cc25e26f053d60b032ea83540a5b36a528b8"
+    },
+    "rust": {
+      "sha256": "5611f3701026acf3c43ba64da50f4f65a078e84fba56e2bf313e8f2996b0cc68"
+    },
+    "c": {
+      "sha256": "a67d9aeac62e693fb782030ad7c4aa9e0d9f38a02bd2e06a438604a92628ca71"
+    },
+    "c++": {
+      "sha256": "ee59eb0dca07dadb74bde829134e0d3c42176e198773f125a14554a5547df4f2"
+    },
+    "java": {
+      "sha256": "c51a331320f4220d6053e3389485916c738fcaccfd583298b7738af834fa19b9"
+    },
+    "shell": {
+      "sha256": "08eef5271d29368db2af8b0ca127c8d249d056ae7f6bce9c0692ade5dcad66ca"
+    }
+  },
+  "counts": {
+    "train": {
+      "python": 6000,
+      "javascript": 6000,
+      "typescript": 3276,
+      "go": 2984,
+      "rust": 1353,
+      "c": 3676,
+      "cpp": 2099,
+      "java": 6000,
+      "bash": 6000
+    },
+    "validation": {
+      "python": 64,
+      "javascript": 64,
+      "typescript": 64,
+      "go": 64,
+      "rust": 64,
+      "c": 64,
+      "cpp": 49,
+      "java": 64,
+      "bash": 64
+    }
+  },
+  "unique_repositories": 21429,
+  "input_tokens": 18556003,
+  "answer_tokens": 9112832,
+  "rejections": {
+    "instruction": 53763,
+    "license": 16417,
+    "size_or_unchanged": 23575,
+    "generated_path": 226,
+    "duplicate": 2228,
+    "heldout_code_overlap": 8
+  },
+  "limitations": [
+    "Real commit instructions and before/after code; tests not rerun.",
+    "Includes fixes and small instruction-driven edits, not only confirmed bugs.",
+    "Repository/alias separation and normalized exact dedup; no semantic clone audit.",
+    "No claim of absence from base-model pretraining."
+  ]
+}
