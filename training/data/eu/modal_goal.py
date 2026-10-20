@@ -86,11 +86,17 @@ def inspect_call(call_id):
         for child in node.children:
             yield from flatten(child)
 
-    nodes = [node for root in roots for node in flatten(root)]
+    # Modal may return the shared ancestor and sibling campaigns too. Only the
+    # requested call and its descendants determine whether this writer stopped.
+    matches = [node for root in roots for node in flatten(root) if node.function_call_id == call_id]
+    if len(matches) != 1:
+        return {"status": "unknown", "child_tree_terminated": False}
+    target = matches[0]
+    nodes = list(flatten(target))
     terminal = all(node.status.name in {"SUCCESS", "FAILURE", "TERMINATED"} for node in nodes)
     if not terminal:
         return {"status": "running", "child_tree_terminated": False}
-    if roots[0].status.name == "SUCCESS":
+    if target.status.name == "SUCCESS":
         try:
             result = call.get(timeout=0)
         except Exception as error:  # noqa: BLE001 - preserve uncertainty after terminal graph check
