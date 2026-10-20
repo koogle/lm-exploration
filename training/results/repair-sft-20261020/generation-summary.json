@@ -1,0 +1,120 @@
+{
+  "decoding": "greedy BF16, 128 new tokens, PAD/BOS/UNK suppressed",
+  "evaluation_app": "https://modal.com/apps/radiantai/main/ap-r5QquJ9k5JWDWEjf0h7MZc",
+  "grading_calibration": "Fixed passes and broken fails verified for all nine languages before model scoring.",
+  "models": {
+    "base": {
+      "checkpoint": "simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt",
+      "passed": 0,
+      "total": 18,
+      "eos": 0,
+      "grading_stages": {
+        "run": 6,
+        "build": 12
+      },
+      "per_language": {
+        "bash": {
+          "passed": 0,
+          "total": 2,
+          "eos": 0
+        },
+        "c": {
+          "passed": 0,
+          "total": 2,
+          "eos": 0
+        },
+        "cpp": {
+          "passed": 0,
+          "total": 2,
+          "eos": 0
+        },
+        "go": {
+          "passed": 0,
+          "total": 2,
+          "eos": 0
+        },
+        "java": {
+          "passed": 0,
+          "total": 2,
+          "eos": 0
+        },
+        "javascript": {
+          "passed": 0,
+          "total": 2,
+          "eos": 0
+        },
+        "python": {
+          "passed": 0,
+          "total": 2,
+          "eos": 0
+        },
+        "rust": {
+          "passed": 0,
+          "total": 2,
+          "eos": 0
+        },
+        "typescript": {
+          "passed": 0,
+          "total": 2,
+          "eos": 0
+        }
+      }
+    },
+    "sft": {
+      "checkpoint": "repair-sft-multilang-20261020-r01/step-000000200.pt",
+      "passed": 0,
+      "total": 18,
+      "eos": 18,
+      "grading_stages": {
+        "outputs": 18
+      },
+      "per_language": {
+        "bash": {
+          "passed": 0,
+          "total": 2,
+          "eos": 2
+        },
+        "c": {
+          "passed": 0,
+          "total": 2,
+          "eos": 2
+        },
+        "cpp": {
+          "passed": 0,
+          "total": 2,
+          "eos": 2
+        },
+        "go": {
+          "passed": 0,
+          "total": 2,
+          "eos": 2
+        },
+        "java": {
+          "passed": 0,
+          "total": 2,
+          "eos": 2
+        },
+        "javascript": {
+          "passed": 0,
+          "total": 2,
+          "eos": 2
+        },
+        "python": {
+          "passed": 0,
+          "total": 2,
+          "eos": 2
+        },
+        "rust": {
+          "passed": 0,
+          "total": 2,
+          "eos": 2
+        },
+        "typescript": {
+          "passed": 0,
+          "total": 2,
+          "eos": 2
+        }
+      }
+    }
+  }
+}

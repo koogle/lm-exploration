@@ -1,5 +1,9 @@
 # Multi-language code repair SFT pilot
 
+The [first executed pilot](../results/repair-sft-20261020/README.md) completed
+200 updates after nine-language data verification and exact GPU resume qualification.
+Held-out loss worsened; this is a pipeline qualification, not an improved-model claim.
+
 Stacked on PR #26, initialized from its completed 124M / 10.879B checkpoint:
 `simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt`.
 This is a new post-training experiment: AdamW starts fresh; pretraining optimizer

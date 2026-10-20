@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "exact": {
+    "identity": true,
+    "model": true,
+    "optimizer": true,
+    "step": true,
+    "answer_tokens": true,
+    "sampling_rng": true,
+    "torch_rng": true,
+    "cuda_rng": true
+  },
+  "step": 2,
+  "full": {
+    "checkpoint": "/runs/repair-qual-20261020-r02-full/step-000000002.pt",
+    "step": 2,
+    "answer_tokens": 38
+  },
+  "partial": {
+    "checkpoint": "/runs/repair-qual-20261020-r02-part/step-000000001.pt",
+    "step": 1,
+    "answer_tokens": 22
+  },
+  "resumed": {
+    "checkpoint": "/runs/repair-qual-20261020-r02-resume/step-000000002.pt",
+    "step": 2,
+    "answer_tokens": 38
+  }
+}
