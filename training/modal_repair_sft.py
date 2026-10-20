@@ -8,6 +8,7 @@ import modal
 
 from modal_scholarly_pilot import image
 
+image = image.add_local_file("modal_scholarly_pilot.py", "/project/modal_scholarly_pilot.py")
 app = modal.App("simple-llm-repair-sft")
 run_volume = modal.Volume.from_name("lm-exploration-training")
 PARENT = "simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt"

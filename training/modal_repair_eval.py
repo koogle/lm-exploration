@@ -8,6 +8,9 @@ import modal
 from modal_repair_data import runtime_image
 from modal_repair_sft import PARENT, checkpoint_path, image, run_volume
 
+image = image.add_local_file("modal_repair_sft.py", "/project/modal_repair_sft.py").add_local_file(
+    "modal_repair_data.py", "/project/modal_repair_data.py"
+)
 app = modal.App("simple-llm-repair-eval")
 
 
