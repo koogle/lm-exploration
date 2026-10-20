@@ -10,6 +10,8 @@ from pathlib import Path
 from .overnight_corpus import SCHEMA
 from .subword import TOKENIZER_SHA256, digest
 
+CODE_REQUIRED = 6_120_008_192  # 6B code targets, 2% margin and one context window.
+
 
 def weights_from(manifest):
     previous = json.loads(Path(manifest).read_text())["sources"]
@@ -38,16 +40,16 @@ def check_variety(audit_db):
         languages[language] += tokens
         tasks[task] += tokens
     # These are declared operational thresholds, not proof of model capabilities.
-    if sum(languages.values()) < 6_100_000_000:
+    if sum(languages.values()) < CODE_REQUIRED:
         raise ValueError(
-            f"Need >=6.1B new eligible code targets including margin; got {sum(languages.values())}"
+            f"Need >=6.12B new eligible code targets including margin; got {sum(languages.values())}"
         )
     if sum(n >= 10_000_000 for n in languages.values()) < 8:
         raise ValueError("Need eight languages with at least 10M eligible targets each")
     if sum(n >= 10_000_000 for n in tasks.values()) < 3 or tasks.get("tests", 0) < 50_000_000:
         raise ValueError("Need three path-task families >=10M each and >=50M test-code targets")
-    if sum(min(n, 2_400_000_000) for n in languages.values()) < 6_100_000_000:
-        raise ValueError("Cannot retain 6.1B eligible targets with a 2.4B/language cap")
+    if sum(min(n, 2_400_000_000) for n in languages.values()) < CODE_REQUIRED:
+        raise ValueError("Cannot retain 6.12B eligible targets with a 2.4B/language cap")
     return {"languages": dict(languages), "path_tasks": dict(tasks)}
 
 
@@ -87,9 +89,11 @@ def freeze(audit_folder, destination, old_manifest, database_paths):
         raise ValueError("Eight material code languages need >=4 held-out parents each")
     weights = weights_from(old_manifest)
     quotas = token_targets(weights, 10_000_000_000)
-    path = destination / "raw.sqlite"
-    if path.exists():
-        raise ValueError("Partial snapshot exists; do not reuse as completed")
+    final_path = destination / "raw.sqlite"
+    if final_path.exists():
+        raise ValueError("Unpublished final database exists; inspect before retry")
+    path = destination / "raw.building.sqlite"
+    path.unlink(missing_ok=True)
     db = sqlite3.connect(path)
     db.executescript(SCHEMA)
     handles = {
@@ -186,6 +190,8 @@ def freeze(audit_folder, destination, old_manifest, database_paths):
     for handle in handles.values():
         handle.close()
     audit_db.close()
+    path.replace(final_path)
+    path = final_path
     manifest = {
         "format": "scholarly-raw-v1",
         "training_ready": False,

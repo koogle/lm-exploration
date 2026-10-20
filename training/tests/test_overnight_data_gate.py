@@ -31,6 +31,11 @@ class OvernightGateTests(unittest.TestCase):
         db.execute("INSERT INTO eligible VALUES ('code/lang0/tooling',10000000,1,'code','train')")
         result = check_variety(db)
         self.assertEqual(len(result["languages"]), 8)
+        # 6.11B passes a coarse 6.1B check but cannot satisfy the frozen
+        # snapshot's 2% margin. Request more data before writing a database.
+        db.execute("UPDATE eligible SET tokens=381250000 WHERE stratum NOT LIKE '%tooling'")
+        with self.assertRaisesRegex(ValueError, "new eligible"):
+            check_variety(db)
         db.execute("UPDATE eligible SET fresh=0")
         with self.assertRaisesRegex(ValueError, "new eligible"):
             check_variety(db)

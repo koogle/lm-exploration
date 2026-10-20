@@ -234,3 +234,17 @@ chains CPU waiters without scheduling GPUs, completed audits schedule freezing,
 and insufficient capacity requests more code. Additional fixture tests cover disjoint
 shard coverage, initial partial-row resume, tokenizer/cursor restart, held-out
 repository exclusion, global merge deduplication/conflicts, and merge replay.
+
+The serial collector and its waiting CPU controller were stopped after preserving
+committed data. Replacement parallel coordinator:
+`fc-01M5BBTD60E5XHKDV8SGXWVV0X`; replacement training/data-gate controller:
+`fc-01M5BBTDF5B7XDT85QAX44088H`. Source commit: `44e033d`.
+The prepared corpus path and training run ID are unchanged.
+
+A further handoff check found a reserve mismatch: a6.1B preflight could pass even
+though snapshot construction needs6.12B plus8,192 targets. The early guard now
+uses the exact same reserve, and snapshot construction stages `raw.building.sqlite`
+before atomically publishing `raw.sqlite`. A failed code-capacity/variety selection
+can therefore resume collection instead of being blocked by a partial database.
+29 relevant tests passed, including real frozen-tokenizer partition resume and the
+controller handoff fixtures. No GPU allocation is claimed before the data gate.

@@ -428,7 +428,8 @@ def freeze_and_schedule(run_id, original_call, provenance, audit_round=0):
                 "new eligible code",
                 "eight languages",
                 "path-task families",
-                "retain 6.1B",
+                "Cannot retain",
+                "Selected snapshot lost required code variety",
                 "held-out parents",
             ]
         )
