@@ -212,3 +212,20 @@ RNG state. CIG reference scores are recomputed from the original frozen parent o
 resume, before restoring saved RNG. Source changes intentionally reject old SFT
 resume identities; use their original source for those checkpoints. The current
 CIG pilot does not claim fresh-process GPU resume qualification.
+
+### Longer continuation
+
+The [5,000-update follow-up](../results/cig-sft-long-20261020/README.md) extends each
+objective's own 200-update checkpoint. `extend=True` on the worker (or `--extend`
+on `modal_repair_sft.py::main`) explicitly permits a larger total step target,
+new checkpoint/evaluation cadence and a new runtime cap. It preserves all learning
+settings and rejects data/model/tokenizer/objective changes. It supports only the
+exact reviewed pilot trainer hash or identical current source; ordinary resume
+still requires complete identity equality. Continuation lineage is written to
+`continuation.json` beside each new run's manifest.
+
+`modal_cig_long.py::qualify_extension` verifies exact uninterrupted versus restored
+CUDA state from the real CIG pilot. `modal_cig_long.py::main` requires that passing
+report and launches the bounded pair, with at most two training GPU workers.
+`modal_cig_eval.py::evaluate_cig --folder RESULT_FOLDER --step N` evaluates a saved
+step named in that folder's launch record without changing its training examples.

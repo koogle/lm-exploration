@@ -1,0 +1,36 @@
+{
+  "sft": {
+    "run_id": "cig-repair-long-20261020-r01-sft",
+    "call_id": "fc-01M5CWAE05977DRG7799ACV7HR",
+    "settings": {
+      "steps": 5000,
+      "batch_size": 4,
+      "context": 1024,
+      "lr": 1e-05,
+      "seed": 42,
+      "evaluate_every": 500,
+      "save_every": 1000,
+      "max_seconds": 3000,
+      "objective": "sft",
+      "cig_proximity": 0.3
+    },
+    "resume": "cig-repair-20261020-r01-sft/step-000000200.pt"
+  },
+  "cig": {
+    "run_id": "cig-repair-long-20261020-r01-cig",
+    "call_id": "fc-01M5CWAFA32BJPS6DP22CNGHHX",
+    "settings": {
+      "steps": 5000,
+      "batch_size": 4,
+      "context": 1024,
+      "lr": 1e-05,
+      "seed": 42,
+      "evaluate_every": 500,
+      "save_every": 1000,
+      "max_seconds": 3000,
+      "objective": "cig",
+      "cig_proximity": 0.3
+    },
+    "resume": "cig-repair-20261020-r01-cig/step-000000200.pt"
+  }
+}

@@ -45,6 +45,31 @@ class Settings:
             raise ValueError("SFT capped at four hours per invocation")
 
 
+# Reviewed predecessor used by the completed PR #29 200-update pilots.
+PILOT_TRAINER_SHA256 = "b2b8ceebde172b280fcb5ec7ddbb86e5df53c80ad9406087be9704d3e869656b"
+
+
+def validate_resume_identity(saved, current, step, extend=False):
+    """Permit explicit run-length extensions only; retain all learning/data identity."""
+    import copy
+
+    if not extend:
+        if saved != current:
+            raise ValueError("SFT resume identity mismatch")
+        return
+    if current["settings"]["steps"] <= max(step, saved["settings"]["steps"]):
+        raise ValueError("Extension must increase the total step target")
+    adjusted = copy.deepcopy(saved)
+    for key in ("steps", "save_every", "evaluate_every", "max_seconds"):
+        adjusted["settings"][key] = current["settings"][key]
+    previous = adjusted["source_sha256"]["trainer"]
+    if previous not in (PILOT_TRAINER_SHA256, current["source_sha256"]["trainer"]):
+        raise ValueError("Unreviewed trainer source migration")
+    adjusted["source_sha256"]["trainer"] = current["source_sha256"]["trainer"]
+    if adjusted != current:
+        raise ValueError("Extension changed model/data/objective/optimizer identity")
+
+
 def collate(rows, device):
     import torch
 
@@ -58,12 +83,21 @@ def collate(rows, device):
 
 
 def train(
-    parent, dataset, output, settings, commit=lambda: None, resume=None, stop_after_step=None
+    parent,
+    dataset,
+    output,
+    settings,
+    commit=lambda: None,
+    resume=None,
+    stop_after_step=None,
+    extend=False,
 ):
     import torch
     from model_100m.model import GPT, ModelConfig
     from torch.nn import functional as F
 
+    if extend and resume is None:
+        raise ValueError("Extension requires a resume checkpoint")
     if not torch.cuda.is_available():
         raise RuntimeError("Training is CUDA/Modal only")
     if stop_after_step is not None and not 1 <= stop_after_step <= settings.steps:
@@ -119,8 +153,9 @@ def train(
     step, answer_tokens = 0, 0
     if resume:
         saved = torch.load(resume, map_location="cpu", weights_only=False)
-        if saved.get("format") != FORMAT or saved["identity"] != identity:
-            raise ValueError("SFT resume identity mismatch")
+        if saved.get("format") != FORMAT:
+            raise ValueError("SFT resume format mismatch")
+        validate_resume_identity(saved["identity"], identity, saved["step"], extend=extend)
         model.load_state_dict(saved["model"])
         optimizer.load_state_dict(saved["optimizer"])
         rng.setstate(saved["sampling_rng"])
@@ -130,6 +165,21 @@ def train(
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)
     (output / "manifest.json").write_text(json.dumps(identity, indent=2))
+    if resume:
+        (output / "continuation.json").write_text(
+            json.dumps(
+                {
+                    "checkpoint": str(resume),
+                    "sha256": digest(resume),
+                    "extended": extend,
+                    "restored_step": step,
+                    "restored_answer_tokens": answer_tokens,
+                    "previous_identity": saved["identity"],
+                },
+                indent=2,
+            )
+        )
+        del saved
     # Preserve exact inputs and executable sources for reproducibility.
     import shutil
 
@@ -222,6 +272,7 @@ def train(
         return str(target)
 
     started = time.monotonic()
+    initial_step = step
     record(**evaluate(), phase="baseline")
     print(json.dumps({"stage": "training", "step": step, "target": settings.steps}), flush=True)
     last_saved = -1
@@ -249,4 +300,10 @@ def train(
     record(**evaluate(), phase="final")
     path = str(output / f"step-{step:09d}.pt") if last_saved == step else save()
     commit()
-    return {"checkpoint": path, "step": step, "answer_tokens": answer_tokens}
+    return {
+        "checkpoint": path,
+        "step": step,
+        "answer_tokens": answer_tokens,
+        "segment_updates": step - initial_step,
+        "segment_seconds": time.monotonic() - started,
+    }

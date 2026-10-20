@@ -31,7 +31,9 @@ def checkpoint_path(value):
     single_use_containers=True,
     volumes={"/runs": run_volume},
 )
-def worker(run_id, examples, settings, parent=PARENT, resume="", stop_after_step=None):
+def worker(
+    run_id, examples, settings, parent=PARENT, resume="", stop_after_step=None, extend=False
+):
     from trainer.repair_sft import Settings, train
 
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
@@ -52,6 +54,7 @@ def worker(run_id, examples, settings, parent=PARENT, resume="", stop_after_step
             run_volume.commit,
             resume=resume_path,
             stop_after_step=stop_after_step,
+            extend=extend,
         )
     finally:
         run_volume.commit()
@@ -127,6 +130,7 @@ def main(
     parent: str = PARENT,
     resume: str = "",
     objective: str = "sft",
+    extend: bool = False,
 ):
     from training_data.repair_sft import prepare
     from training_data.subword import load_frozen
@@ -147,7 +151,9 @@ def main(
         checkpoint_path(resume)
     print(
         json.dumps(
-            worker.remote(run_id, Path(dataset).read_bytes(), settings.__dict__, parent, resume),
+            worker.remote(
+                run_id, Path(dataset).read_bytes(), settings.__dict__, parent, resume, extend=extend
+            ),
             indent=2,
         )
     )

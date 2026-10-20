@@ -1,0 +1,75 @@
+{
+  "target_met": false,
+  "total_steps_per_arm": 5000,
+  "answer_tokens_per_arm": 530091,
+  "checkpoints": {
+    "1000": {
+      "sft": {
+        "passed": 0,
+        "total": 18,
+        "eos": 18,
+        "changed_from_step_200": 0,
+        "runnable": 18
+      },
+      "cig": {
+        "passed": 0,
+        "total": 18,
+        "eos": 18,
+        "changed_from_step_200": 0,
+        "runnable": 18
+      }
+    },
+    "3000": {
+      "sft": {
+        "passed": 0,
+        "total": 18,
+        "eos": 18,
+        "changed_from_step_200": 0,
+        "runnable": 18
+      },
+      "cig": {
+        "passed": 0,
+        "total": 18,
+        "eos": 18,
+        "changed_from_step_200": 0,
+        "runnable": 18
+      }
+    },
+    "5000": {
+      "sft": {
+        "passed": 0,
+        "total": 18,
+        "eos": 18,
+        "changed_from_step_200": 0,
+        "runnable": 18
+      },
+      "cig": {
+        "passed": 0,
+        "total": 18,
+        "eos": 18,
+        "changed_from_step_200": 0,
+        "runnable": 18
+      }
+    }
+  },
+  "validation": {
+    "sft": {
+      "step_200_loss": 1.3072229034819844,
+      "step_5000_loss": 1.5901708897897753,
+      "median_first_100_extension_objectives": 3.835077222902328e-05,
+      "median_last_100_extension_objectives": 2.3167745411001306e-07
+    },
+    "cig": {
+      "step_200_loss": 1.2631227396302305,
+      "step_5000_loss": 1.5128185222714634,
+      "median_first_100_extension_objectives": 3.8839285480207764e-05,
+      "median_last_100_extension_objectives": 1.7936125118467316e-07
+    }
+  },
+  "checks": {
+    "same_prompt_ids_and_grading_cases": true,
+    "exact_gpu_resume_qualification": true,
+    "matched_step_token_exposures": true,
+    "restored_validation_matches_step_200": true
+  }
+}

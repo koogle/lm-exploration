@@ -1,0 +1,823 @@
+{
+  "calibrated_languages": [
+    "python",
+    "javascript",
+    "typescript",
+    "go",
+    "rust",
+    "c",
+    "cpp",
+    "java",
+    "bash"
+  ],
+  "models": {
+    "sft": {
+      "checkpoint": "cig-repair-long-20261020-r01-sft/step-000003000.pt",
+      "samples": [
+        {
+          "id": "repair-arithmetic-v1-python-absolute_difference-11",
+          "language": "python",
+          "family": "absolute_difference",
+          "code": "def solve(a, b):\n    return a + b + 11\n",
+          "tokens": 15,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-python-maximum-11",
+          "language": "python",
+          "family": "maximum",
+          "code": "def solve(a, b):\n    return (a if a < b else b) + 11\n",
+          "tokens": 21,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-javascript-absolute_difference-11",
+          "language": "javascript",
+          "family": "absolute_difference",
+          "code": "function solve(a, b) {\n    return a + b + 11;\n}\n",
+          "tokens": 17,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-javascript-maximum-11",
+          "language": "javascript",
+          "family": "maximum",
+          "code": "function solve(a, b) {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 23,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-typescript-absolute_difference-11",
+          "language": "typescript",
+          "family": "absolute_difference",
+          "code": "function solve(a: number, b: number): number {\n    return a + b + 11;\n}\n",
+          "tokens": 22,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-typescript-maximum-11",
+          "language": "typescript",
+          "family": "maximum",
+          "code": "function solve(a: number, b: number): number {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 28,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-go-absolute_difference-11",
+          "language": "go",
+          "family": "absolute_difference",
+          "code": "func solve(a, b int) int {\n    return a + b + 11\n}\n",
+          "tokens": 19,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-go-maximum-11",
+          "language": "go",
+          "family": "maximum",
+          "code": "func choose(c bool, x, y int) int { if c { return x }; return y }\nfunc solve(a, b int) int {\n    return choose(a < b, a, b) + 11\n}\n",
+          "tokens": 47,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-rust-absolute_difference-11",
+          "language": "rust",
+          "family": "absolute_difference",
+          "code": "fn solve(a: i32, b: i32) -> i32 {\n    a + b + 11\n}\n",
+          "tokens": 25,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-rust-maximum-11",
+          "language": "rust",
+          "family": "maximum",
+          "code": "fn solve(a: i32, b: i32) -> i32 {\n    (if a < b { a } else { b }) + 11\n}\n",
+          "tokens": 35,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-c-absolute_difference-11",
+          "language": "c",
+          "family": "absolute_difference",
+          "code": "int solve(int a, int b) {\n    return a + b + 11;\n}\n",
+          "tokens": 19,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-c-maximum-11",
+          "language": "c",
+          "family": "maximum",
+          "code": "int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 25,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-cpp-absolute_difference-11",
+          "language": "cpp",
+          "family": "absolute_difference",
+          "code": "int solve(int a, int b) {\n    return a + b + 11;\n}\n",
+          "tokens": 19,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-cpp-maximum-11",
+          "language": "cpp",
+          "family": "maximum",
+          "code": "int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 25,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-java-absolute_difference-11",
+          "language": "java",
+          "family": "absolute_difference",
+          "code": "static int solve(int a, int b) {\n    return a + b + 11;\n}\n",
+          "tokens": 20,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-java-maximum-11",
+          "language": "java",
+          "family": "maximum",
+          "code": "static int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 26,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-bash-absolute_difference-11",
+          "language": "bash",
+          "family": "absolute_difference",
+          "code": "solve() {\n    local a=\"$1\" b=\"$2\"\n    printf '%s\\n' \"$((a + b + 11))\"\n}\n",
+          "tokens": 33,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-bash-maximum-11",
+          "language": "bash",
+          "family": "maximum",
+          "code": "solve() {\n    local a=\"$1\" b=\"$2\"\n    printf '%s\\n' \"$(((a < b ? a : b) + 11))\"\n}\n",
+          "tokens": 38,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        }
+      ],
+      "passed": 0,
+      "total": 18,
+      "eos": 18
+    },
+    "cig": {
+      "checkpoint": "cig-repair-long-20261020-r01-cig/step-000003000.pt",
+      "samples": [
+        {
+          "id": "repair-arithmetic-v1-python-absolute_difference-11",
+          "language": "python",
+          "family": "absolute_difference",
+          "code": "def solve(a, b):\n    return a + b + 11\n",
+          "tokens": 15,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-python-maximum-11",
+          "language": "python",
+          "family": "maximum",
+          "code": "def solve(a, b):\n    return (a if a < b else b) + 11\n",
+          "tokens": 21,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-javascript-absolute_difference-11",
+          "language": "javascript",
+          "family": "absolute_difference",
+          "code": "function solve(a, b) {\n    return a + b + 11;\n}\n",
+          "tokens": 17,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-javascript-maximum-11",
+          "language": "javascript",
+          "family": "maximum",
+          "code": "function solve(a, b) {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 23,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-typescript-absolute_difference-11",
+          "language": "typescript",
+          "family": "absolute_difference",
+          "code": "function solve(a: number, b: number): number {\n    return a + b + 11;\n}\n",
+          "tokens": 22,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-typescript-maximum-11",
+          "language": "typescript",
+          "family": "maximum",
+          "code": "function solve(a: number, b: number): number {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 28,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-go-absolute_difference-11",
+          "language": "go",
+          "family": "absolute_difference",
+          "code": "func solve(a, b int) int {\n    return a + b + 11\n}\n",
+          "tokens": 19,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-go-maximum-11",
+          "language": "go",
+          "family": "maximum",
+          "code": "func choose(c bool, x, y int) int { if c { return x }; return y }\nfunc solve(a, b int) int {\n    return choose(a < b, a, b) + 11\n}\n",
+          "tokens": 47,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-rust-absolute_difference-11",
+          "language": "rust",
+          "family": "absolute_difference",
+          "code": "fn solve(a: i32, b: i32) -> i32 {\n    a + b + 11\n}\n",
+          "tokens": 25,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-rust-maximum-11",
+          "language": "rust",
+          "family": "maximum",
+          "code": "fn solve(a: i32, b: i32) -> i32 {\n    (if a < b { a } else { b }) + 11\n}\n",
+          "tokens": 35,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-c-absolute_difference-11",
+          "language": "c",
+          "family": "absolute_difference",
+          "code": "int solve(int a, int b) {\n    return a + b + 11;\n}\n",
+          "tokens": 19,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-c-maximum-11",
+          "language": "c",
+          "family": "maximum",
+          "code": "int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 25,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-cpp-absolute_difference-11",
+          "language": "cpp",
+          "family": "absolute_difference",
+          "code": "int solve(int a, int b) {\n    return a + b + 11;\n}\n",
+          "tokens": 19,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-cpp-maximum-11",
+          "language": "cpp",
+          "family": "maximum",
+          "code": "int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 25,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-java-absolute_difference-11",
+          "language": "java",
+          "family": "absolute_difference",
+          "code": "static int solve(int a, int b) {\n    return a + b + 11;\n}\n",
+          "tokens": 20,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-java-maximum-11",
+          "language": "java",
+          "family": "maximum",
+          "code": "static int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 26,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-bash-absolute_difference-11",
+          "language": "bash",
+          "family": "absolute_difference",
+          "code": "solve() {\n    local a=\"$1\" b=\"$2\"\n    printf '%s\\n' \"$((a + b + 11))\"\n}\n",
+          "tokens": 33,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "6\n11\n10\n33\n33\n0\n28\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-bash-maximum-11",
+          "language": "bash",
+          "family": "maximum",
+          "code": "solve() {\n    local a=\"$1\" b=\"$2\"\n    printf '%s\\n' \"$(((a < b ? a : b) + 11))\"\n}\n",
+          "tokens": 38,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        }
+      ],
+      "passed": 0,
+      "total": 18,
+      "eos": 18
+    }
+  }
+}

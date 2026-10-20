@@ -26,6 +26,8 @@ def collect(run_id):
     }
     if (folder / "cig-summary.json").exists():
         result["cig"] = json.loads((folder / "cig-summary.json").read_text())
+    if (folder / "continuation.json").exists():
+        result["continuation"] = json.loads((folder / "continuation.json").read_text())
     return result
 
 
