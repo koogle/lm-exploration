@@ -3,13 +3,15 @@
 import hashlib
 import json
 import sqlite3
+import subprocess
 import tempfile
 import unittest
 import zlib
 from pathlib import Path
 
 from training_data.overnight_corpus import SCHEMA
-from training_data.python_experiment import TARGETS, Corpus, category, split_for
+from training_data.python_experiment import TARGETS, Corpus, category, split_for, tree_files
+from training_data.subword import TOKENIZER_SHA256, load_frozen
 
 TEXT = '# Keep the implementation comment and original indentation.\ndef add(a, b):\n    """Add two numbers."""\n    return a + b\n'
 
@@ -62,6 +64,11 @@ class PythonCorpusTests(unittest.TestCase):
             source = Path(folder) / "prior.sqlite"
             db = sqlite3.connect(source)
             db.executescript(SCHEMA)
+            db.execute("CREATE TABLE settings (id INTEGER PRIMARY KEY, value TEXT)")
+            db.execute(
+                "INSERT INTO settings VALUES(1,?)", (json.dumps({"tokenizer": TOKENIZER_SHA256}),)
+            )
+            tokenizer = load_frozen()
             for split, text in [
                 ("train", TEXT),
                 ("validation", TEXT.replace("return a + b", "return a - b")),
@@ -75,7 +82,7 @@ class PythonCorpusTests(unittest.TestCase):
                         "example/" + split,
                         json.dumps({"revision": "pinned"}),
                         zlib.compress(text.encode()),
-                        100,
+                        len(tokenizer.encode(text, add_special_tokens=False).ids) + 1,
                     ),
                 )
             db.commit()
@@ -96,6 +103,37 @@ class PythonCorpusTests(unittest.TestCase):
             self.assertFalse(result["capacity_sufficient"])
             self.assertEqual(c.db.execute("SELECT COUNT(*) FROM excluded_hashes").fetchone()[0], 1)
             c.db.close()
+
+    def test_batch_reader_preserves_committed_complete_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            subprocess.run(["git", "init", "--quiet", folder], check=True)
+            (root / "example.py").write_text(TEXT)
+            (root / ".gitattributes").write_text("example.py export-ignore\n")
+            subprocess.run(["git", "-C", folder, "add", "."], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    folder,
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@example.invalid",
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    "fixture",
+                ],
+                check=True,
+            )
+            blob = subprocess.check_output(
+                ["git", "-C", folder, "rev-parse", "HEAD:example.py"], text=True
+            ).strip()
+            (root / "example.py").write_text("different uncommitted content")
+            self.assertEqual(
+                list(tree_files(root / ".git", [("example.py", blob)])), [("example.py", TEXT)]
+            )
 
 
 if __name__ == "__main__":

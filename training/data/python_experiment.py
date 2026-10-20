@@ -154,6 +154,8 @@ def tree_files(folder, files):
         if process.poll() is None:
             process.kill()
         process.wait()
+        process.stdin.close()
+        process.stdout.close()
 
 
 def license_kind(text):
@@ -203,7 +205,7 @@ class Corpus:
     def reject(self, reason):
         self.stats[reason] += 1
 
-    def add(self, text, source, parent, provenance, split=None):
+    def add(self, text, source, parent, provenance, split=None, verified_count=None):
         parent = canonical_repo(parent)
         row = self.db.execute("SELECT split FROM repositories WHERE parent=?", (parent,)).fetchone()
         split = row[0] if row else (split or split_for(parent))
@@ -228,11 +230,16 @@ class Corpus:
                 self.db.execute("UPDATE documents SET conflict=1 WHERE hash=?", (key,))
             self.reject("exact_duplicate")
             return
-        ids = self.tokenizer.encode(text, add_special_tokens=False).ids
-        if not ids or any(t < FIRST_CONTENT_TOKEN_ID for t in ids):
-            self.reject("reserved_or_empty_encoding")
-            return
-        count = len(ids) + 1  # BOS predicts first token; EOS is one target.
+        if verified_count is None:
+            ids = self.tokenizer.encode(text, add_special_tokens=False).ids
+            if not ids or any(t < FIRST_CONTENT_TOKEN_ID for t in ids):
+                self.reject("reserved_or_empty_encoding")
+                return
+            count = len(ids) + 1  # BOS predicts first token; EOS is one target.
+        else:
+            if type(verified_count) is not int or verified_count < 2:
+                raise ValueError("Invalid inherited exact token count")
+            count = verified_count
         if (
             split == "train"
             and source.startswith("python_")
@@ -411,9 +418,19 @@ class Corpus:
         start = time.monotonic()
         origin = str(database)
         old = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+        identity = json.loads(old.execute("SELECT value FROM settings WHERE id=1").fetchone()[0])
+        if identity.get("tokenizer") != TOKENIZER_SHA256:
+            raise ValueError("Supplement must preserve the existing tokenizer identity")
         names = {r[0] for r in old.execute("SELECT DISTINCT source FROM documents")}
         code_names = names & {"code", "code_python"}
-        support = names & {"fineweb_edu", "finemath_4plus", "gutenberg"}
+        support = names & {
+            "fineweb_edu",
+            "finemath_4plus",
+            "gutenberg",
+            "pressbooks",
+            "libretexts",
+            "doab",
+        }
         exclusion_marker = "exclusions:" + origin
         if not self.db.execute(
             "SELECT 1 FROM completed WHERE name=?", (exclusion_marker,)
@@ -451,8 +468,9 @@ class Corpus:
             ).fetchone()
             start_hash = cursor[0] if cursor else ""
             previous_hash = start_hash
-            for key, parent, metadata, raw, previous_split in old.execute(
-                "SELECT hash,parent,provenance,text,split FROM documents WHERE source=? AND conflict=0 AND hash>? ORDER BY hash",
+            checked_counts = 0
+            for key, parent, metadata, raw, previous_split, exact_count in old.execute(
+                "SELECT hash,parent,provenance,text,split,loss_tokens FROM documents WHERE source=? AND conflict=0 AND hash>? ORDER BY hash",
                 (source, start_hash),
             ):
                 self.db.execute(
@@ -473,6 +491,9 @@ class Corpus:
                     if time.monotonic() - start > max_seconds:
                         old.close()
                         return self.report("supplement_time_bound")
+                if previous_split == "test":
+                    self.reject("reserved_test_record")
+                    continue
                 try:
                     meta = json.loads(metadata)
                     if source in code_names:
@@ -515,7 +536,7 @@ class Corpus:
                     split = split_for(parent)
                 else:
                     split = "train" if previous_split == "train" else "validation"
-                    if source == "fineweb_edu":
+                    if source in {"fineweb_edu", "pressbooks", "libretexts", "doab"}:
                         lower = text.lower()
                         is_python_doc = (
                             "python" in lower
@@ -530,6 +551,8 @@ class Corpus:
                             and any(k in lower for k in ["def ", ">>> ", "import "])
                         )
                         name = "python_documentation" if is_python_doc else "general_education"
+                        if source != "fineweb_edu" and not is_python_doc:
+                            continue
                     elif source == "finemath_4plus":
                         name = "cs_math"
                     else:
@@ -540,6 +563,15 @@ class Corpus:
                 if name is None:
                     self.reject(reason)
                     continue
+                if checked_counts < 16:
+                    if (
+                        len(self.tokenizer.encode(text, add_special_tokens=False).ids) + 1
+                        != exact_count
+                    ):
+                        raise ValueError(
+                            "Inherited exact target count disagrees with frozen tokenizer"
+                        )
+                    checked_counts += 1
                 if split == "train" and totals[name] >= TARGETS[name] * 1.02:
                     continue
                 added = self.add(
@@ -548,6 +580,7 @@ class Corpus:
                     parent,
                     {"origin": "existing_pinned_pool", "upstream": meta},
                     split=split,
+                    verified_count=exact_count,
                 )
                 if split == "train" and added:
                     totals[name] += added
