@@ -462,7 +462,8 @@ class Corpus:
                 )
             )
         )
-        for source in sorted(code_names | support):
+        # Resolve documentation/support capacity before scanning the large code pool.
+        for source in sorted(code_names | support, key=lambda name: (name in code_names, name)):
             marker = "supplement:" + origin + ":" + source
             if self.db.execute("SELECT 1 FROM completed WHERE name=?", (marker,)).fetchone():
                 continue
