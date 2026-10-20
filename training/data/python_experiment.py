@@ -4,6 +4,7 @@ import ast
 import hashlib
 import json
 import re
+import shutil
 import sqlite3
 import subprocess
 import time
@@ -43,6 +44,42 @@ EXCLUDED = {
 GENERATED = re.compile(
     r"auto.?generated|automatically generated|generated (by|from)|do not edit", re.IGNORECASE
 )
+
+
+def cache_database(source, root=Path("/tmp/python-supplement-cache")):
+    """Pin an unchanged source locally to avoid remote random-page reads."""
+    from .subword import digest
+
+    source, root = Path(source), Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    key = hashlib.sha256(str(source).encode()).hexdigest()
+    local, sidecar = root / (key + ".sqlite"), root / (key + ".json")
+    stat = source.stat()
+    identity = {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+    if local.exists() and sidecar.exists():
+        saved = json.loads(sidecar.read_text())
+        if all(saved[k] == v for k, v in identity.items()) and digest(local) == saved["sha256"]:
+            return local, saved["sha256"]
+    if shutil.disk_usage(root).free < stat.st_size + 1024**3:
+        raise ValueError("Insufficient worker-local space for the bounded source cache")
+    print(json.dumps({"stage": "caching_source_database", "bytes": stat.st_size}), flush=True)
+    temporary = local.with_suffix(".partial")
+    checksum = hashlib.sha256()
+    with source.open("rb") as reader, temporary.open("wb") as writer:
+        while block := reader.read(8 * 1024 * 1024):
+            checksum.update(block)
+            writer.write(block)
+    after = source.stat()
+    if (after.st_size, after.st_mtime_ns) != (stat.st_size, stat.st_mtime_ns):
+        temporary.unlink()
+        raise ValueError("Source database changed during snapshot copy")
+    temporary.replace(local)
+    sha = checksum.hexdigest()
+    if digest(local) != sha:
+        raise ValueError("Worker-local source copy hash mismatch")
+    sidecar.write_text(json.dumps({**identity, "sha256": sha}))
+    print(json.dumps({"stage": "source_database_cached", "bytes": stat.st_size}), flush=True)
+    return local, sha
 
 
 def canonical_repo(value):
@@ -192,6 +229,7 @@ class Corpus:
           CREATE TABLE IF NOT EXISTS excluded_hashes (hash TEXT PRIMARY KEY);
           CREATE TABLE IF NOT EXISTS excluded_repositories (parent TEXT PRIMARY KEY);
           CREATE TABLE IF NOT EXISTS supplement_cursors (name TEXT PRIMARY KEY, hash TEXT);
+          CREATE TABLE IF NOT EXISTS source_snapshots (origin TEXT PRIMARY KEY, sha256 TEXT);
           CREATE INDEX IF NOT EXISTS capacity_tokens ON documents(source,split,conflict,loss_tokens);
           CREATE INDEX IF NOT EXISTS repository_tokens ON documents(parent,source,split,conflict,loss_tokens);
         """
@@ -425,7 +463,17 @@ class Corpus:
         """Inspect a bounded existing pinned source pool, never patch buffers."""
         start = time.monotonic()
         origin = str(database)
-        old = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+        local, source_sha256 = cache_database(database)
+        pinned = self.db.execute(
+            "SELECT sha256 FROM source_snapshots WHERE origin=?", (origin,)
+        ).fetchone()
+        if pinned and pinned[0] != source_sha256:
+            raise ValueError("Supplement source snapshot changed across resumes")
+        with self.db:
+            self.db.execute(
+                "INSERT OR IGNORE INTO source_snapshots VALUES(?,?)", (origin, source_sha256)
+            )
+        old = sqlite3.connect(f"file:{local}?mode=ro&immutable=1", uri=True)
         old.execute("PRAGMA cache_size=-1048576")
         identity = json.loads(old.execute("SELECT value FROM settings WHERE id=1").fetchone()[0])
         if identity.get("tokenizer") != TOKENIZER_SHA256:

@@ -104,6 +104,10 @@ class PythonCorpusTests(unittest.TestCase):
             # A conflicting document is quarantined, not relabeled as validation.
             self.assertFalse(result["capacity_sufficient"])
             self.assertEqual(c.db.execute("SELECT COUNT(*) FROM excluded_hashes").fetchone()[0], 1)
+            with sqlite3.connect(source) as changed:
+                changed.execute("INSERT INTO settings VALUES(2,?)", ("changed snapshot",))
+            with self.assertRaisesRegex(ValueError, "source snapshot changed"):
+                c.supplement(source)
             c.db.close()
 
     def test_batch_reader_preserves_committed_complete_file(self):

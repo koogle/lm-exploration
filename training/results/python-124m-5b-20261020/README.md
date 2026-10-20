@@ -30,7 +30,7 @@ See [capacity table](repositories-capacity.md) and [machine-readable counts](rep
 
 - [Initial repository preparation](https://modal.com/apps/radiantai/main/ap-vvHeCt6S23k42AiZKcL0wt): stopped to replace inefficient file-at-a-time reads.
 - [Resumed, completed repository preparation](https://modal.com/apps/radiantai/main/ap-qCWLuFTlBWJHHHv7gP4dfY).
-- [Detached supplemental preparation](https://modal.com/apps/radiantai/main/ap-u1N6jcdYdIdeMWlMIppzIb): CPU-only, bounded continuation with persisted cursors.
+- [Detached supplemental preparation](https://modal.com/apps/radiantai/main/ap-OAkSc34WbzsamJo6rG2RFy): CPU-only, bounded continuation with persisted cursors.
 
 The Stack, The Stack Dedup and StarCoderData authenticated file probes returned
 `GatedRepoError`: the account is not authorized to retrieve their Python shards.
