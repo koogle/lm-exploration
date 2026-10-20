@@ -47,7 +47,7 @@ results, not GPU measurements from this experiment.
 
 The new preparation preserves source text, comments, indentation and docstrings;
 assigns each accepted file to one category; rejects generated/vendored/minified
-and heavily repetitive files; and excludes malformed Python 3 files explicitly.
+and heavily repetitive files; and excludes files rejected by the Python 3.12 parser explicitly. Valid syntax introduced in later Python versions may therefore be excluded.
 Path-based task classification and root-license detection are heuristics, not an
 exhaustive per-file license or semantic-quality audit. Exact deduplication does
 not remove all near clones. Larger files and some fixtures are conservatively

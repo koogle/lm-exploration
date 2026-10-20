@@ -182,6 +182,7 @@ class Corpus:
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.folder / "raw.sqlite")
+        self.db.execute("PRAGMA cache_size=-1048576")
         self.db.executescript(
             SCHEMA
             + """
@@ -191,6 +192,8 @@ class Corpus:
           CREATE TABLE IF NOT EXISTS excluded_hashes (hash TEXT PRIMARY KEY);
           CREATE TABLE IF NOT EXISTS excluded_repositories (parent TEXT PRIMARY KEY);
           CREATE TABLE IF NOT EXISTS supplement_cursors (name TEXT PRIMARY KEY, hash TEXT);
+          CREATE INDEX IF NOT EXISTS capacity_tokens ON documents(source,split,conflict,loss_tokens);
+          CREATE INDEX IF NOT EXISTS repository_tokens ON documents(parent,source,split,conflict,loss_tokens);
         """
         )
         self.tokenizer = load_frozen()
@@ -423,6 +426,7 @@ class Corpus:
         start = time.monotonic()
         origin = str(database)
         old = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+        old.execute("PRAGMA cache_size=-1048576")
         identity = json.loads(old.execute("SELECT value FROM settings WHERE id=1").fetchone()[0])
         if identity.get("tokenizer") != TOKENIZER_SHA256:
             raise ValueError("Supplement must preserve the existing tokenizer identity")
