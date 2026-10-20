@@ -278,3 +278,11 @@ Audit metadata uses a4GiB SQLite cache plus512MiB/source; snapshot assembly uses
 1GiB for its output and1GiB/source. These are lazy page-cache upper bounds within
 32GiB CPU containers, intended to avoid random-volume I/O becoming the next serial
 bottleneck. They do not change filtering, counts or split assignments.
+
+Final active binding after deployment checks: collector/coordinator
+`fc-01M5BCZKTQAHWKNKYRNXEMG5MD`; training handoff controller
+`fc-01M5BD5HH2H6GFGAK82N1THKTT` (source `f62842c`). The eight original partition
+calls remain active and retain their ingestion implementation/cursors. All eight
+were observed advancing; raw collection passed2.5B targets (serial+partitions,
+before cross-worker deduplication/audit).31 relevant tests pass. No GPU work is
+claimed until the unchanged readiness gate succeeds.
