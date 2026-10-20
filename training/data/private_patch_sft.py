@@ -125,6 +125,8 @@ def build(
     train_cap=180000,
     expected_shards=None,
     replay_path=None,
+    language_cap=30000,
+    repository_cap=12000,
 ):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)
@@ -285,9 +287,12 @@ def build(
                 if split == "train":
                     if (
                         lang not in selected_languages
-                        or counts[(split, lang)] >= 30000
-                        or repo_counts[(split, repo)] >= 12000
-                        or tasks[split] >= train_cap
+                        or (language_cap is not None and counts[(split, lang)] >= language_cap)
+                        or (
+                            repository_cap is not None
+                            and repo_counts[(split, repo)] >= repository_cap
+                        )
+                        or (train_cap is not None and tasks[split] >= train_cap)
                     ):
                         continue
                     if db.execute(
@@ -344,6 +349,11 @@ def build(
         "dataset_sha256": data_hash,
         "builder_sha256": digest(__file__),
         "context": context,
+        "selection_caps": {
+            "train": train_cap,
+            "language": language_cap,
+            "repository": repository_cap,
+        },
         "counts": {
             s: {l: n for (sp, l), n in sorted(counts.items()) if sp == s}
             for s in ("train", "validation")
@@ -366,8 +376,8 @@ def build(
         "split_policy": "Commit-disjoint within repositories; all eligible validation excerpt hashes blocked from training. Prior CommitPack validation repositories excluded.",
         "limits": {
             "max_train": train_cap,
-            "train_per_language": 30000,
-            "train_per_repository": 12000,
+            "train_per_language": language_cap,
+            "train_per_repository": repository_cap,
             "validation_per_language": 128,
         },
         "limitations": [

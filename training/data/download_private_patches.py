@@ -10,6 +10,9 @@ from pathlib import Path
 
 
 def download(sources_path, output, per_repository=24):
+    # None selects every shard in each pinned source.
+    if per_repository is not None and per_repository < 1:
+        raise ValueError("Shard cap must be positive or None")
     import httpx
     from huggingface_hub import HfApi, hf_hub_download
     from huggingface_hub.errors import HfHubHTTPError, LocalEntryNotFoundError

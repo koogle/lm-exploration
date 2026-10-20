@@ -88,3 +88,21 @@ class PrivatePatchTests(unittest.TestCase):
             }
             self.assertFalse(by_split["train"] & by_split["validation"])
             self.assertTrue(all(r["scope"] == "excerpt" for r in selected))
+
+            capped = build(manifest, root / "capped", repository_cap=5)
+            self.assertEqual(capped["total"]["train"], 5)
+            reserved_row = next(r for r in selected if r["split"] == "train")
+            reserved_row["split"] = "validation"
+            reserved = root / "previous-validation.jsonl"
+            reserved.write_text(json.dumps(reserved_row) + "\n")
+            full = build(
+                manifest,
+                root / "full",
+                reserved_paths=[reserved],
+                train_cap=None,
+                language_cap=None,
+                repository_cap=None,
+            )
+            self.assertEqual(full["total"]["train"], report["total"]["train"] - 1)
+            self.assertEqual(full["rejections"]["heldout_overlap"], 1)
+            self.assertIsNone(full["limits"]["train_per_repository"])

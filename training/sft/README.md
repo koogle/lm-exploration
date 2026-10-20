@@ -231,3 +231,36 @@ every 500 and checkpoints every 1,000. Each invocation has a four-hour training
 loop limit, so inspect its actual completion count. Raw examples, detailed source
 inventories and license evidence remain on the private Modal volume. Only
 aggregate reports belong in Git.
+
+## Full private patch snapshot
+
+`private-patch-full-sources.json` pins the expanded October 20 snapshots (1,025
+patch shards). The CPU preparation command below processes every patch shard,
+removes total/language/repository training caps, retains commit-disjoint splitting
+and blocks the earlier private validation code hashes. Validation remains capped
+at 128 excerpts per language plus CommitPack validation. Quality, provenance,
+context-length and duplicate filters still apply; raw source files are not
+silently treated as supervised repair examples. These are observed commit edits,
+not execution-verified bug fixes. The training mixture follows eligible example
+counts and is not automatically balanced across languages.
+
+From `training/`, after deploying `modal_repair_scale.py`:
+
+```sh
+modal run --detach modal_private_patch_sft.py::main \
+  --sources sft/private-patch-full-sources.json \
+  --data-id repair-private-full-20261020-v1 \
+  --report-path /tmp/private-full-report.json --full \
+  --train-run-id repair-sft-private-full-20261020-r01
+```
+
+This explicitly launches a durable preparation job and, only after successful
+strict validation and volume commit, submits one H100 training run. The run starts
+from the original PR #26 model with fresh optimizer state, targets 40,000 updates
+(batch 8, context 2,048, LR 1e-5), and has a four-hour training-loop limit. Sampling
+is with replacement; 320,000 example draws do not guarantee one pass over every
+eligible example. Checkpoints and validation occur every 1,000 updates. The
+volume dataset directory contains `report.json`, `selection.json` and
+`launch.json`; the latter records the actual training call ID. A preparation
+failure never submits training. An early training time limit saves a checkpoint;
+finishing the update budget would require an explicit matching resume.
