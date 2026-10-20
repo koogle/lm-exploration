@@ -1,5 +1,6 @@
 """Eight disjoint CPU shard workers; merge once before existing readiness gates."""
 
+import json
 import time
 
 import modal
@@ -24,6 +25,7 @@ WORKERS = 8
 def exclusions():
     from training_data.parallel_code import build_exclusions
 
+    data_volume.reload()
     result = build_exclusions(BASE / "multilingual/raw.sqlite", PRIOR, FOLDER)
     data_volume.commit()
     return result
@@ -42,6 +44,7 @@ def exclusions():
 def partition(worker, identity, target):
     from training_data.parallel_code import prepare_partition
 
+    data_volume.reload()
     return prepare_partition(
         FOLDER / f"worker-{worker:02d}",
         FOLDER / "exclusions.sqlite",
@@ -67,6 +70,7 @@ def merge():
 
     from trainer.distributed_train import atomic_json
 
+    data_volume.reload()
     result = merge_partitions(
         BASE / "multilingual/raw.sqlite",
         [FOLDER / f"worker-{i:02d}/raw.sqlite" for i in range(WORKERS)],
@@ -91,13 +95,20 @@ def collect(audit_round=0):
     from trainer.distributed_train import atomic_json
 
     identity = exclusions.remote()
+    # A child committed this directory after the coordinator mounted its volume.
+    data_volume.reload()
+    FOLDER.mkdir(parents=True, exist_ok=True)
     target = 1_100_000_000 + audit_round * 350_000_000
-    calls = [partition.spawn(i, identity, target) for i in range(WORKERS)]
+    ledger = FOLDER / f"calls-r{audit_round}.json"
+    if ledger.exists():
+        saved = json.loads(ledger.read_text())
+        if saved["per_worker_target"] != target or len(saved["workers"]) != WORKERS:
+            raise ValueError("Existing worker-call ledger does not match this round")
+        calls = [modal.FunctionCall.from_id(call_id) for call_id in saved["workers"]]
+    else:
+        calls = [partition.spawn(i, identity, target) for i in range(WORKERS)]
+        atomic_json(ledger, {"workers": [c.object_id for c in calls], "per_worker_target": target})
     results = {}
-    atomic_json(
-        FOLDER / f"calls-r{audit_round}.json",
-        {"workers": [c.object_id for c in calls], "per_worker_target": target},
-    )
     data_volume.commit()
     try:
         while len(results) < WORKERS:

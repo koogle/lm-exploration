@@ -158,6 +158,7 @@ def prepare_original():
 def audit_augmented(audit_round=0):
     from training_data.readiness_audit import audit, benchmark_index
 
+    data_volume.reload()
     folder = BASE / f"combined-refresh-audit-r{audit_round}"
     index, pins = benchmark_index(folder)
     return audit(
@@ -200,6 +201,7 @@ def collect_more_code(audit_round):
 def freeze_snapshot(audit_round=0):
     from training_data.overnight_snapshot import freeze
 
+    data_volume.reload()
     result = freeze(
         BASE / f"combined-refresh-audit-r{audit_round}",
         Path("/data/scholarly-code") / SNAPSHOT,

@@ -248,3 +248,14 @@ before atomically publishing `raw.sqlite`. A failed code-capacity/variety select
 can therefore resume collection instead of being blocked by a partial database.
 29 relevant tests passed, including real frozen-tokenizer partition resume and the
 controller handoff fixtures. No GPU allocation is claimed before the data gate.
+
+Remote startup validation caught a real coordinator failure after eight partition
+workers had launched: the parent container had not reloaded the volume directory
+created by its exclusion-snapshot child. The eight workers continued preparing data;
+no worker data was lost. The coordinator now explicitly reloads that volume and
+reconnects recorded worker call IDs instead of launching duplicate writers. Worker,
+merge, audit and freeze entrypoints also reload before reading another job's commits.
+The already-running eight calls were recovered into `calls-r0.json` and are reused.
+Two new regression tests cover the missing parent directory and recovery without
+spawning duplicate workers. The redundant slow interim audit was stopped to free
+CPU/I/O; the mandatory faster combined audit still gates training.
