@@ -51,13 +51,17 @@ def collate(rows, device):
     return x, y
 
 
-def train(parent, dataset, output, settings, commit=lambda: None, resume=None):
+def train(
+    parent, dataset, output, settings, commit=lambda: None, resume=None, stop_after_step=None
+):
     import torch
     from model_100m.model import GPT, ModelConfig
     from torch.nn import functional as F
 
     if not torch.cuda.is_available():
         raise RuntimeError("Training is CUDA/Modal only")
+    if stop_after_step is not None and not 1 <= stop_after_step <= settings.steps:
+        raise ValueError("Invalid qualification stop step")
     tokenizer = load_frozen()
     splits, data_hash = prepare(dataset, tokenizer, settings.context)
     # Only load our trusted private run-volume checkpoints, never dataset-supplied files.
@@ -185,8 +189,10 @@ def train(parent, dataset, output, settings, commit=lambda: None, resume=None):
 
     started = time.monotonic()
     record(**evaluate(), phase="baseline")
+    print(json.dumps({"stage": "training", "step": step, "target": settings.steps}), flush=True)
     last_saved = -1
-    while step < settings.steps and time.monotonic() - started < settings.max_seconds:
+    target_step = settings.steps if stop_after_step is None else stop_after_step
+    while step < target_step and time.monotonic() - started < settings.max_seconds:
         rows = [rng.choice(splits["train"]) for _ in range(settings.batch_size)]
         optimizer.zero_grad(set_to_none=True)
         value, count = loss(rows)
@@ -200,7 +206,9 @@ def train(parent, dataset, output, settings, commit=lambda: None, resume=None):
         answer_tokens += count.item()
         record(train_loss=objective.item())
         if step % settings.evaluate_every == 0:
-            record(**evaluate())
+            metrics = evaluate()
+            record(**metrics)
+            print(json.dumps({"step": step, **metrics}), flush=True)
         if step % settings.save_every == 0:
             save()
             last_saved = step

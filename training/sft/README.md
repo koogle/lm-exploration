@@ -33,12 +33,12 @@ Source and license are provenance declarations, not automated eligibility checks
 For PR-derived data, separate implementation edits from test edits. Select short,
 single-file repairs whose relevant test fails at the base commit and passes
 with the reference repair. Record this verification alongside the source dataset.
-The importer does not execute arbitrary supplied code or certify correctness;
+The JSONL importer does not execute arbitrary supplied code or certify correctness;
 only feed it independently verified repairs. Use language-appropriate verification:
 pytest for Python, Node/TypeScript tests, `go test`, `cargo test`, C/C++ build and
 test commands, Java tests, and shell behavior fixtures. These commands describe
-corpus verification requirements, not implemented execution backends. No external
-corpus is bundled. Set mixture proportions through input example counts; sampling
+corpus verification requirements, not generic execution backends for imported PRs. An original executable starter
+curriculum is described below; no external corpus is bundled. Set mixture proportions through input example counts; sampling
 is uniform over examples, not balanced automatically across languages.
 
 ## Validate and launch
@@ -74,11 +74,49 @@ unique-data count. A time limit is checked between updates, not inside validatio
 
 ## Evaluation and current limits
 
-This initial loop evaluates held-out **answer-token loss**, not executable repair
-success. Before selecting a useful model, run generated repairs in isolated
-sandboxes against fixed hidden tests and compare base/SFT/Qwen on identical tasks.
+The training loop evaluates held-out **answer-token loss**. The separate starter
+curriculum diagnostic below measures executable repair success for base/SFT.
+Broader repository evaluation and matched Qwen comparison remain follow-on work.
 Track syntax validity, EOS termination, test pass rate, and edit size. Never run
 untrusted generated code in the training container or let it edit grading tests.
 The SFT checkpoint format is `repair-sft-v2`; the existing pretraining publication
-scripts do not yet accept it. Distributed SFT, generation evaluation, sandbox test
-execution, and automated PR mining are follow-on work, not implemented features.
+scripts do not yet accept it. Distributed SFT and automated PR mining remain follow-on work. The sandbox
+evaluation below is specific to the starter curriculum, not arbitrary repositories.
+
+## Verified starter curriculum and GPU qualification
+
+`data/repair_curriculum.py` generates an original CC0 synthetic arithmetic-repair
+curriculum in nine languages. It has 576 training and 36 validation examples;
+absolute-difference and maximum task families are held out across every language.
+The 612 pairs are small and highly templated: they qualify the pipeline and teach
+short repair/termination behavior, not broad repository repair competence.
+
+From `training/`, prepare and execute-verify every broken/fixed pair on Modal CPU:
+
+```sh
+modal run modal_repair_data.py --output /tmp/repair-sft-data/repairs.jsonl
+modal run modal_repair_sft.py::qualify \
+  --dataset /tmp/repair-sft-data/repairs.jsonl --run-prefix repair-qual-UNIQUE
+modal run modal_repair_sft.py::main \
+  --dataset /tmp/repair-sft-data/repairs.jsonl --run-id repair-pilot-UNIQUE
+```
+
+Qualification compares two uninterrupted updates against one update followed by
+fresh-container restore and the second update. Model, optimizer, counters, sampler
+and CPU/CUDA RNG must match exactly. A stop-step argument permits qualification
+without changing the total target or checkpoint identity. Every worker uses a fresh
+container. Use the installed environment/extras and system CA setup described in
+`100m/PILOT.md` in the managed workspace.
+
+After training, `modal_repair_eval.py` compares the parent and selected SFT checkpoint
+on two held-out repair families per language using greedy decoding capped at 128
+new tokens. It calibrates the grader with known fixed/broken examples first. Each
+candidate runs in a separate network-blocked Modal Sandbox without volumes or
+secrets. Expected answers stay outside the sandbox; a successful exit alone does
+not earn a pass. This is an 18-task diagnostic, not a benchmark capability claim.
+
+```sh
+modal run modal_repair_eval.py --dataset /tmp/repair-sft-data/repairs.jsonl \
+  --checkpoint repair-pilot-UNIQUE/step-000000200.pt \
+  --output /tmp/repair-sft-data/generation-evaluation.json
+```

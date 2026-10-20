@@ -27,9 +27,10 @@ def checkpoint_path(value):
     timeout=3600,
     retries=0,
     max_containers=1,
+    single_use_containers=True,
     volumes={"/runs": run_volume},
 )
-def worker(run_id, examples, settings, parent=PARENT, resume=""):
+def worker(run_id, examples, settings, parent=PARENT, resume="", stop_after_step=None):
     from trainer.repair_sft import Settings, train
 
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
@@ -49,9 +50,68 @@ def worker(run_id, examples, settings, parent=PARENT, resume=""):
             Settings(**settings),
             run_volume.commit,
             resume=resume_path,
+            stop_after_step=stop_after_step,
         )
     finally:
         run_volume.commit()
+
+
+@app.function(image=image, cpu=2, memory=12288, timeout=300, volumes={"/runs": run_volume})
+def compare(left, right):
+    import torch
+
+    run_volume.reload()
+    a = torch.load(checkpoint_path(left), map_location="cpu", weights_only=False)
+    b = torch.load(checkpoint_path(right), map_location="cpu", weights_only=False)
+
+    def equal(x, y):
+        if isinstance(x, torch.Tensor):
+            return isinstance(y, torch.Tensor) and torch.equal(x, y)
+        if isinstance(x, dict):
+            return x.keys() == y.keys() and all(equal(x[k], y[k]) for k in x)
+        if isinstance(x, (tuple, list)):
+            return len(x) == len(y) and all(equal(v, w) for v, w in zip(x, y))
+        return x == y
+
+    checks = {
+        key: equal(a[key], b[key])
+        for key in (
+            "identity",
+            "model",
+            "optimizer",
+            "step",
+            "answer_tokens",
+            "sampling_rng",
+            "torch_rng",
+            "cuda_rng",
+        )
+    }
+    if not all(checks.values()):
+        raise ValueError(f"Uninterrupted/resume comparison failed: {checks}")
+    return {"passed": True, "exact": checks, "step": a["step"]}
+
+
+@app.local_entrypoint()
+def qualify(dataset: str, run_prefix: str):
+    from trainer.repair_sft import Settings
+
+    examples = Path(dataset).read_bytes()
+    settings = Settings(steps=2, batch_size=1, evaluate_every=1, save_every=1).__dict__
+    full = worker.remote(run_prefix + "-full", examples, settings)
+    partial = worker.remote(run_prefix + "-part", examples, settings, stop_after_step=1)
+    resumed = worker.remote(
+        run_prefix + "-resume",
+        examples,
+        settings,
+        resume=str(Path(partial["checkpoint"]).relative_to("/runs")),
+    )
+    report = compare.remote(
+        str(Path(full["checkpoint"]).relative_to("/runs")),
+        str(Path(resumed["checkpoint"]).relative_to("/runs")),
+    )
+    report.update(full=full, partial=partial, resumed=resumed)
+    Path(dataset).with_suffix(".qualification.json").write_text(json.dumps(report, indent=2))
+    print(json.dumps(report, indent=2))
 
 
 @app.local_entrypoint()
