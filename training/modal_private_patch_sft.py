@@ -19,8 +19,8 @@ image = (
 
 @app.function(
     image=image,
-    cpu=8,
-    memory=32768,
+    cpu=2,
+    memory=16384,
     timeout=10800,
     retries=0,
     secrets=[modal.Secret.from_name("simple-llm-hf")],
@@ -33,6 +33,7 @@ def prepare(data_id, sources):
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", data_id):
         raise ValueError("Invalid data ID")
     volume.reload()
+    print("Private patch preparation started", flush=True)
     output = Path("/runs") / data_id
     if output.exists():
         raise ValueError("Use a fresh data ID")
