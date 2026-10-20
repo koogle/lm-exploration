@@ -14,7 +14,7 @@ image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install("torch==2.6.0", "numpy", "pydantic>=2.11,<3", "tokenizers==0.22.2")
     .pip_install("huggingface_hub==0.36.0", "pyarrow==19.0.1")
-    .pip_install("matplotlib==3.10.8", "safetensors")
+    .pip_install("matplotlib==3.10.8", "safetensors", "pyahocorasick==2.1.0")
     .env(
         {
             "PYTHONPATH": "/project",
@@ -185,18 +185,7 @@ def audit_augmented(audit_round=0):
     volumes={"/data": data_volume},
 )
 def collect_more_code(audit_round):
-    from training_data.overnight_corpus import prepare_code
-
-    return {
-        "collection": prepare_code(
-            BASE / "multilingual",
-            PRIOR,
-            EU,
-            target=6_500_000_000 + 2_000_000_000 * audit_round,
-            seconds=80000,
-            commit=data_volume.commit,
-        )
-    }
+    return modal.Function.from_name("simple-llm-parallel-code", "collect").remote(audit_round)
 
 
 @app.function(

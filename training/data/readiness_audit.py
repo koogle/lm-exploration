@@ -10,6 +10,7 @@ import zlib
 from collections import defaultdict
 from pathlib import Path
 
+from .lexical_screen import LexicalScreen
 from .subword import TOKENIZER_SHA256, load_frozen
 
 
@@ -86,6 +87,7 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
           bytes INTEGER, characters INTEGER, unknowns INTEGER);
     """)
     tokenizer = load_frozen()
+    screen = LexicalScreen(benchmarks)
     metrics = defaultdict(lambda: [0, 0, 0, 0, 0])
     handles = {}
     scanned = 0
@@ -113,7 +115,7 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
                 else f"{category}/{metadata.get('institution', 'all')}"
             )
             parent = parent_key(category, parent) if parent else "missing:" + key
-            hit = any(s in benchmarks for s in shingles(text))
+            hit = screen.matches(text)
             db.execute(
                 "INSERT INTO records VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (

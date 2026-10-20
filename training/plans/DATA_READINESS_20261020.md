@@ -205,3 +205,32 @@ and its archive-privacy checks continue to work. The public release represents
 10,878,562,619 lifetime targets, not the still-preparing multilingual experiment.
 The explicit publication script is `publication/publish_latest_public.py`; it stages
 privately, verifies weights, then changes visibility only for the inference bundle.
+
+## Ensuring the run starts: remove serial CPU preparation bottlenecks
+
+The GPU handoff was still waiting at808M fresh code targets after several hours;
+the non-code refresh completed with1.103B new targets and allows cached non-code
+supplementation as already planned. No GPU work had started. The code collector
+was progressing, but serial downloads/tokenization and Python lexical scanning
+would postpone training unnecessarily.
+
+`modal_parallel_code.py` prepares disjoint pinned shard ranges on eight8-CPU workers.
+It preserves all committed serial documents/cursors and snapshots an immutable
+exact/whitespace exclusion ledger before starting those workers. Each worker caches
+the hash ledger on local SSD, persists its own cursor, and batches statistics updates.
+A single merger deduplicates across workers, excludes cross-split duplicate conflicts,
+and records idempotent merge identities. Initial workers target1.1B each, providing
+extra pre-merge capacity so global deduplication has room to remove clones. The same
+6.1B post-audit minimum, code-variety checks and one-pass training cap remain required.
+If a later audit needs more code, the same workers resume their own cursors.
+
+Benchmark screening now optionally uses a C Aho–Corasick automaton over exactly the
+same lowercase13-word fingerprints. Word-boundary/reference-equivalence tests pass;
+this is a speed change, not a relaxed contamination rule. The final combined audit
+still runs before snapshot selection or GPU allocation.
+
+Tests now exercise the actual controller locally with fake calls: incomplete data
+chains CPU waiters without scheduling GPUs, completed audits schedule freezing,
+and insufficient capacity requests more code. Additional fixture tests cover disjoint
+shard coverage, initial partial-row resume, tokenizer/cursor restart, held-out
+repository exclusion, global merge deduplication/conflicts, and merge replay.
