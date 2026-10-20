@@ -113,6 +113,49 @@ def git(folder, *args):
     )
 
 
+def tree_files(folder, files):
+    """Read complete pinned blobs in one Git process, including export-ignored tests."""
+    process = subprocess.Popen(
+        ["git", "-c", "safe.directory=*", "--git-dir", str(folder), "cat-file", "--batch"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+    )
+    try:
+        for path, blob in files:
+            if Path(path).suffix.lower() not in {".py", ".md", ".rst", ".txt"}:
+                continue
+            if EXCLUDED.intersection(Path(path.lower()).parts):
+                continue
+            process.stdin.write((blob + "\n").encode())
+            process.stdin.flush()
+            header = process.stdout.readline().decode().split()
+            if len(header) != 3 or header[0] != blob or header[1] != "blob":
+                raise ValueError("Pinned Git blob missing")
+            size = int(header[2])
+            if not 64 <= size <= 2_000_000:
+                remaining = size + 1
+                while remaining:
+                    chunk = process.stdout.read(min(remaining, 65536))
+                    if not chunk:
+                        raise ValueError("Truncated Git blob")
+                    remaining -= len(chunk)
+                continue
+            raw = process.stdout.read(size)
+            if len(raw) != size or process.stdout.read(1) != b"\n":
+                raise ValueError("Truncated Git blob")
+            try:
+                yield path, raw.decode("utf-8")
+            except UnicodeDecodeError:
+                yield path, None
+        process.stdin.close()
+        if process.wait(timeout=90):
+            raise RuntimeError("Pinned Git blob reader failed")
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+
+
 def license_kind(text):
     t = text.lower()
     if "permission is hereby granted" in t and "without restriction" in t:
@@ -165,7 +208,10 @@ class Corpus:
         row = self.db.execute("SELECT split FROM repositories WHERE parent=?", (parent,)).fetchone()
         split = row[0] if row else (split or split_for(parent))
         key = hashlib.sha256(text.encode()).hexdigest()
-        if self.db.execute("SELECT 1 FROM excluded_hashes WHERE hash=?", (key,)).fetchone():
+        if (
+            split == "train"
+            and self.db.execute("SELECT 1 FROM excluded_hashes WHERE hash=?", (key,)).fetchone()
+        ):
             self.reject("heldout_hash_exclusion")
             return
         if (
@@ -321,19 +367,10 @@ class Corpus:
                 )
                 >= 0.3
             )
-            for path, blob in files:
-                if Path(path).suffix.lower() not in {".py", ".md", ".rst", ".txt"}:
-                    continue
-                if EXCLUDED.intersection(Path(path.lower()).parts):
-                    self.reject("excluded_path")
-                    continue
-                size = int(git(p, "cat-file", "-s", blob))
-                if not 64 <= size <= 2_000_000:
-                    self.reject("size")
-                    continue
-                try:
-                    text = git(p, "cat-file", "blob", blob).decode("utf-8")
-                except UnicodeDecodeError:
+            blobs = dict(files)
+            for path, text in tree_files(p, files):
+                blob = blobs[path]
+                if text is None:
                     self.reject("non_utf8")
                     continue
                 name, reason = category(path, text, python_repo)
@@ -439,6 +476,13 @@ class Corpus:
                 try:
                     meta = json.loads(metadata)
                     if source in code_names:
+                        upstream = meta.get("upstream", {})
+                        meta = {
+                            **meta,
+                            "path": meta.get("path", upstream.get("path")),
+                            "repository": meta.get("repository", upstream.get("repo_name", parent)),
+                            "license": meta.get("license", upstream.get("license")),
+                        }
                         if (
                             meta.get("language", "python" if source == "code_python" else "")
                             != "python"

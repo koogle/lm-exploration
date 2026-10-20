@@ -1,8 +1,14 @@
 """Corpus invariants that prevent silent mixture drift and held-out leakage."""
 
+import hashlib
+import json
+import sqlite3
 import tempfile
 import unittest
+import zlib
+from pathlib import Path
 
+from training_data.overnight_corpus import SCHEMA
 from training_data.python_experiment import TARGETS, Corpus, category, split_for
 
 TEXT = '# Keep the implementation comment and original indentation.\ndef add(a, b):\n    """Add two numbers."""\n    return a + b\n'
@@ -49,6 +55,46 @@ class PythonCorpusTests(unittest.TestCase):
             )
             c.add(TEXT, "python_implementation", "org/project", {}, split="train")
             self.assertEqual(c.report("test")["rejections"]["repository_one_percent_cap"], 1)
+            c.db.close()
+
+    def test_supplement_keeps_validation_and_excludes_cross_source_hashes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "prior.sqlite"
+            db = sqlite3.connect(source)
+            db.executescript(SCHEMA)
+            for split, text in [
+                ("train", TEXT),
+                ("validation", TEXT.replace("return a + b", "return a - b")),
+            ]:
+                db.execute(
+                    "INSERT INTO documents VALUES(?,?,?,?,?,?,?,0)",
+                    (
+                        hashlib.sha256(text.encode()).hexdigest(),
+                        "fineweb_edu",
+                        split,
+                        "example/" + split,
+                        json.dumps({"revision": "pinned"}),
+                        zlib.compress(text.encode()),
+                        100,
+                    ),
+                )
+            db.commit()
+            db.close()
+            c = Corpus(Path(folder) / "result")
+            c.add(
+                TEXT.replace("return a + b", "return a - b"),
+                "python_implementation",
+                "other/train",
+                {},
+                split="train",
+            )
+            result = c.supplement(source)
+            self.assertEqual(
+                result["categories"]["python_implementation"]["unique_train_targets"], 0
+            )
+            # A conflicting document is quarantined, not relabeled as validation.
+            self.assertFalse(result["capacity_sufficient"])
+            self.assertEqual(c.db.execute("SELECT COUNT(*) FROM excluded_hashes").fetchone()[0], 1)
             c.db.close()
 
 
