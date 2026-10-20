@@ -20,6 +20,12 @@ saved; further coverage discovery remains necessary after this batch. The goal
 and manual apps are deployed; current workers may retain the preceding image
 until their next round. Verify `document_pipeline` and `document_queue_sha256`
 in a fresh run instead of assuming deployment changed an already-running worker.
+Live ECB adoption was verified at 07:11 UTC: 20 originals staged before 20 parsed
+documents were saved, with zero failures and a matching queue module digest.
+See `research/document-queue-live-20261020.json`. The latest catalogue initially
+returned a chunk 404; its automatic retry succeeded without inventory injection
+or resetting failures. EMA's already-running round retains its prior image;
+queued mode is configured for subsequent workers.
 
 The owner superseded the additional-10,000-document request on 18 October 2026:
 keep collecting in Modal until documents run out. Neither 30,703 documents nor

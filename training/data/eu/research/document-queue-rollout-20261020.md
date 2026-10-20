@@ -52,3 +52,15 @@ launched `goal-ecb-1792479829-d2116daa48`, supervisor
 successfully persisted the first two new inventories (24 and 21 candidates) by
 07:08 UTC. A cached-inventory fallback was prepared locally but not applied.
 The live retry was allowed to continue; no second source writer was introduced.
+
+The live retry subsequently saved all three inventories and exercised the queue.
+At 07:11:06 UTC the raw-byte counter increased from 7,478,149,122 to
+7,488,732,399 while parsed rows remained **19,305**. At 07:11:28 UTC parsed
+rows increased to **19,325** with the raw counter unchanged. Source revision
+`139d68a79e19de4efe2848d607cbd8370dd17a57` recorded 20 downloaded,
+20 attempted and 20 extracted documents, zero failures, and
+`document_pipeline: durable_download_queue_v1`. The queue module digest matched
+the deployed implementation, and the next batch remained in flight. This proves
+raw staging followed by parsed persistence on real documents; it is not a
+throughput benchmark. No cached-inventory fallback or failure reset was applied.
+See `document-queue-live-20261020.json` for the pinned observation and call IDs.
