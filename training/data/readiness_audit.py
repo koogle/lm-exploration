@@ -77,6 +77,7 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
     if path.exists():
         raise ValueError("Audit destination exists; use a new versioned output")
     db = sqlite3.connect(path)
+    db.execute("PRAGMA cache_size=-4194304")  # Keep corpus metadata indexes off remote random I/O.
     db.executescript("""
         CREATE TABLE records (origin TEXT, hash TEXT, source TEXT, split TEXT, parent TEXT,
           norm TEXT, tokens INTEGER, fresh INTEGER, stratum TEXT, conflict INTEGER,
@@ -93,6 +94,7 @@ def audit(databases, folder, benchmarks, pins, *, commit=lambda: None):
     scanned = 0
     for label, source_path, fresh in databases:
         source = sqlite3.connect(f"file:{source_path}?mode=ro", uri=True)
+        source.execute("PRAGMA cache_size=-524288")
         handles[label] = source
         for key, category, split, parent, provenance, blob, count, conflict in source.execute(
             "SELECT hash,source,split,parent,provenance,text,loss_tokens,conflict FROM documents d"

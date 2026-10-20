@@ -273,3 +273,8 @@ remote-volume lookups. The running partition implementation stays byte-for-byte
 unchanged, so saved ingestion identities and retry cursors remain valid. Both merge
 engines pass the same independent expected-count, cross-split conflict and replay
 fixtures. This change does not relax data eligibility or the fresh-code gate.
+
+Audit metadata uses a4GiB SQLite cache plus512MiB/source; snapshot assembly uses
+1GiB for its output and1GiB/source. These are lazy page-cache upper bounds within
+32GiB CPU containers, intended to avoid random-volume I/O becoming the next serial
+bottleneck. They do not change filtering, counts or split assignments.

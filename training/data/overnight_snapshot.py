@@ -95,10 +95,13 @@ def freeze(audit_folder, destination, old_manifest, database_paths):
     path = destination / "raw.building.sqlite"
     path.unlink(missing_ok=True)
     db = sqlite3.connect(path)
+    db.execute("PRAGMA cache_size=-1048576")
     db.executescript(SCHEMA)
     handles = {
         name: sqlite3.connect(f"file:{p}?mode=ro", uri=True) for name, p in database_paths.items()
     }
+    for handle in handles.values():
+        handle.execute("PRAGMA cache_size=-1048576")
     totals, languages, task_counts = defaultdict(int), defaultdict(int), defaultdict(int)
     with db:
         for origin, key, source, split, tokens, stratum, fresh in audit_db.execute(
