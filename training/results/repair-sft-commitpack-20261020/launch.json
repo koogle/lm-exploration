@@ -3,11 +3,12 @@
   "data_id": "repair-commitpack-20261020-v1",
   "call_id": "fc-01M5CDKX26XA7DHT7EZEGTE2E3",
   "app": "https://modal.com/apps/radiantai/main/deployed/simple-llm-repair-sft-scale",
-  "status": "submitted",
+  "status": "running",
   "steps_target": 5000,
   "batch_size": 8,
   "context": 2048,
   "lr": 1e-05,
   "gpu": "H100",
-  "max_seconds": 14400
+  "max_seconds": 14400,
+  "confirmed_step": 750
 }
