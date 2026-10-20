@@ -1,4 +1,4 @@
-# Full private patch SFT — preparation running
+# Full private patch SFT — preparation cancelled
 
 The expanded source snapshots contain 1,025 patch shards (504 collected-agent
 repository shards and 521 curated-OSS shards). All shards are selected; eligible
@@ -11,10 +11,12 @@ Implementation commit: `c2da7f1`. Source pins:
 
 Preparation started on Modal CPU (2 CPUs, 16 GiB):
 https://modal.com/apps/radiantai/main/ap-IWJ3i7V2bXuvvXSR1E0wKd
-The worker has emitted its start marker and shard-download progress. Final
-example/language counts are not available yet. This detached worker will submit
-training itself only after strict dataset validation and committing the data.
-No H100 optimizer updates have been verified for this run yet.
+The worker downloaded the shards and logged processing through shard 1,020,
+then received a cancellation signal at 2026-10-20 19:34:23 UTC. The app is
+stopped. The volume contains intermediate data but no final report or launch
+record. No training checkpoint exists for this run; GPU training did not start.
+The cancellation cause is not established from these logs. A recovery is needed
+before the planned automatic training submission can occur.
 
 - Dataset ID: `repair-private-full-20261020-v1`
 - Planned training ID: `repair-sft-private-full-20261020-r01`

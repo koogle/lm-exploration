@@ -79,3 +79,7 @@ Validation: 18 unit/integration tests passed; Ruff and diff checks passed. An
 additional local check used actual cached source shards from both private
 collections. The full prepared dataset passed the trainer's strict tokenization,
 identity, language coverage, group separation and normalized duplicate checks.
+
+Executable evaluation now completed: **0/18 held-out synthetic repairs pass**;
+six reach output comparison and twelve fail syntax/build checks. See
+[results and actual generations](executable-evaluation.md).
