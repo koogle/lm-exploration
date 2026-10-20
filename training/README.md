@@ -1,5 +1,9 @@
 # Simple LLM — training from scratch
 
+The [Python repair SFT pilot](sft/README.md) branches from the completed PR #26
+checkpoint and provides an explicit, bounded Modal post-training loop. See its
+data contract and evaluation limitations before launching.
+
 The [Simple LLM 9.85M / 5B-token experiment](results/scholarly-modern-10m-5b-completed-20261018.md)
 is complete and [published on Hugging Face](https://huggingface.co/jfrick/scholarly-code-modern-gpt-10m-5b).
 It processed 4,999,934,057 targets over 72,805 updates. Broader exploratory
