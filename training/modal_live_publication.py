@@ -23,6 +23,16 @@ def checked_checkpoint(run_id, checkpoint):
     return Path("/runs") / checkpoint
 
 
+def refresh_checkpoint(run_id, checkpoint):
+    # Upload workers are reused; commits from newer training segments are not
+    # visible on their old Volume mount until it is explicitly refreshed.
+    run_volume.reload()
+    path = checked_checkpoint(run_id, checkpoint)
+    if not path.is_file():
+        raise FileNotFoundError(f"Committed checkpoint not visible after refresh: {path}")
+    return path
+
+
 @app.function(
     image=image,
     cpu=4,
@@ -42,7 +52,7 @@ def publish_checkpoint(run_id, checkpoint):
     from trainer.distributed_train import atomic_json
     from trainer.hub_checkpoint import export_checkpoint
 
-    path = checked_checkpoint(run_id, checkpoint)
+    path = refresh_checkpoint(run_id, checkpoint)
     api = HfApi()
     if not api.model_info(REPO).private:
         raise ValueError("Refusing public publication")
@@ -62,9 +72,10 @@ def publish_checkpoint(run_id, checkpoint):
             "additional 10B continuation. The parent root model is preserved.\n\n"
             "8K context, eight H100s, compilation, cached RoPE, cropped padding and "
             "microbatch two; global batch32; constant LR3e-5 with preserved Adam moments. "
-            "Code60% (fresh files, one pass), EU5%, other sources35% (up to two phase passes). "
-            "Frozen stratified held-out evaluation; data-manifest.json records the "
-            "operational gates and remaining contamination/deduplication limitations. "
+            "Code60% (files and overlapping Git patches, one pass), EU5%, other "
+            "sources35% (up to two phase passes). Sampled held-out evaluation; "
+            "the global corpus audit was bypassed by user request. "
+            "data-manifest.json records the sampling and remaining limitations. "
             "Not instruction-tuned; output may be incorrect and repetitive.\n\n"
             "FP32 inference weights are round-trip verified. Full optimizer/RNG/cursors "
             "remain on Modal. Install requirements.txt and run "
@@ -123,6 +134,7 @@ def watch(run_id):
     from trainer.distributed_train import atomic_json
 
     checked_checkpoint(run_id, run_id + "-s00/step-000000002.pt")
+    run_volume.reload()
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=True)
     state_path = folder / "hf-live-publication.json"
