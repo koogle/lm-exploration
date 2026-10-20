@@ -4,6 +4,7 @@
   "private": true,
   "sources": {
     "ecb": {
+      "download_queue": true,
       "repo_id": "jfrick/eu-ecb",
       "adapter": "adapters.ecb",
       "collections": [
@@ -64,7 +65,10 @@
         "financial_accounts_quality",
         "monetary_statistics_quality",
         "climate_financial_disclosures",
-        "payment_fraud_reports"
+        "payment_fraud_reports",
+        "insurance_pension_statistics",
+        "payment_statistics",
+        "credit_terms_surveys"
       ],
       "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text.",
       "collection_weights": {
@@ -129,6 +133,7 @@
       }
     },
     "ema": {
+      "download_queue": true,
       "repo_id": "jfrick/eu-ema",
       "adapter": "adapters.ema",
       "collections": [

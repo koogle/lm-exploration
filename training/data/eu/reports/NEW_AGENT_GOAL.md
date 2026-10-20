@@ -3,6 +3,24 @@
 
 ## Latest owner request: continue until documented exhaustion
 
+On 20 October the owner requested queued links/documents and separate parsing.
+ECB and EMA now enable `download_queue` in both mappings: persisted inventories
+hold links, one paced downloader thread prefetches at most one checkpoint batch,
+and the sole HF writer stages original bodies before parsing. Parsed results and
+queue removal are atomic; restart and bounded parse retries reuse stored bodies.
+These lanes run inside existing bounded Modal workers, not in this chat. Keep
+all single-writer, pacing, cooldown, attempt and campaign limits. Raw queue depth
+is reported separately from parsed documents and verified tokens.
+
+ECB's previous inventory finished at 19,305 rows. Three more exact official
+series (insurance/pension statistics 11, payment statistics 14, SESFOD 454) add
+69 distinct candidate URLs with nine successful selected samples. See
+`research/ecb-queue-expansion-20261020.{md,json}`. They are candidates until
+saved; further coverage discovery remains necessary after this batch. The goal
+and manual apps are deployed; current workers may retain the preceding image
+until their next round. Verify `document_pipeline` and `document_queue_sha256`
+in a fresh run instead of assuming deployment changed an already-running worker.
+
 The owner superseded the additional-10,000-document request on 18 October 2026:
 keep collecting in Modal until documents run out. Neither 30,703 documents nor
 one billion verified tokens is a completion condition. Token counts remain an

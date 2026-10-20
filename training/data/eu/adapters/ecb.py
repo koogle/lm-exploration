@@ -58,6 +58,15 @@ COLLECTIONS = {
         "type_ids": ["157"],
     },
     "t2s_annual_reports": {"name": "T2S Annual Report", "type_ids": ["159"]},
+    "insurance_pension_statistics": {
+        "name": "ECB Euro area insurance corporations and pension funds statistics",
+        "type_ids": ["11"],
+    },
+    "payment_statistics": {"name": "ECB Payment statistics", "type_ids": ["14"]},
+    "credit_terms_surveys": {
+        "name": "ECB Credit terms and conditions survey (SESFOD)",
+        "type_ids": ["454"],
+    },
     "weekly_financial_statements": {"name": "ECB Weekly financial statement", "type_ids": ["101"]},
     "monetary_developments": {
         "name": "ECB Monetary developments in the euro area",

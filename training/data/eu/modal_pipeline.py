@@ -21,6 +21,7 @@ if ca_bundle and Path(ca_bundle).is_file():
     image = image.add_local_file(ca_bundle, "/root/eu-ca.pem")
 for name in (
     "pipeline.py",
+    "document_queue.py",
     "campaign.py",
     "hf_store.py",
     "eu_corpus.py",

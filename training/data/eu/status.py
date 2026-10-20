@@ -238,6 +238,15 @@ def source_status(
         "completed": len(state["completed"]),
         "duplicates": sum(x.get("status") == "duplicate" for x in state["completed"].values()),
         "failures": len(state["failures"]),
+        "download_queue": {
+            "stored_raw_documents": len(state.get("download_queue", {})),
+            "awaiting_first_parse": sum(
+                key not in state["failures"] for key in state.get("download_queue", {})
+            ),
+            "retained_after_parse_failure": sum(
+                key in state["failures"] for key in state.get("download_queue", {})
+            ),
+        },
         "collections": collections,
         "run_count": len(state["runs"]),
         "recent_runs": state["runs"][-5:],

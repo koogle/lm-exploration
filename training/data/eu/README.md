@@ -48,6 +48,21 @@ repair, scheduled refresh, ASR, OCR and near-deduplication remain future stages.
 The implementation below is not itself evidence of a successful cloud run; record
 measured run outcomes separately.
 
+ECB and EMA now enable `download_queue` in both pipeline mappings. Discovery
+inventories are the durable link backlog. A single paced downloader thread spools
+at most one checkpoint batch ahead while the calling thread parses the preceding
+batch. The sole HF writer commits original gzip bodies and `download_queue`
+metadata before parsing them; parsed Parquet, deduplication state and queue removal
+then commit atomically. A restart reuses saved raw bodies, and parse failures retain
+those bodies under the existing retry limits and cooldowns. Only parsed Parquet
+contributes to document and token totals. `status.py` reports raw queue depth
+separately, including entries retained after parsing failures.
+
+These are separate download and parse lanes inside each bounded Modal worker;
+they do not add source writers or independently scaled parser services. Queue
+backpressure, the existing batch reservation after interruption, request pacing,
+source-wide HTTP 429 stops and all collection/time budgets remain in force.
+
 ## Ten starting collections
 
 | Priority | ID | Content | Initial scope |
