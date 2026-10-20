@@ -8,6 +8,24 @@ trainer and from the throughput-only benchmarks.
 For the authorized eight-H100 / 8K / 5B workflow and periodic Hub publication, see
 [Simple LLM 8K](SIMPLE_LLM_8K.md). Eight-GPU performance requires its own qualification.
 
+## Optimizer default
+
+New `DistributedConfig` settings default to `optimizer="muon"`: Muon updates
+hidden matrices, while fused AdamW updates the tied embedding/output table,
+biases and norms. Set `optimizer="adamw"` to use AdamW for every parameter.
+`muon_lr=0.02` and `muon_momentum=0.95` configure Muon; `peak_lr=0.0003`
+configures the AdamW companion. Both share the token-based warmup/cosine factor.
+
+For new eight-H100 runs, use `recipes/distributed/h100x8-muon-8k-5b.json`.
+It combines Muon with microbatch 2, cropping, cached RoPE and model compilation.
+The 5B ceiling is a configuration, not an automatically launched run or a measured
+5B result. The [100M-token comparison](../results/muon-124m-100mt-20261019.md)
+supports this default; longer-run quality remains unmeasured.
+
+Historical recipes explicitly select AdamW to preserve their experiment meaning.
+Resume requires the saved optimizer/config/source; changing the default does not
+convert AdamW checkpoint state into Muon. The character trainer remains separate.
+
 ## Start a job
 
 Run from `training/`, with Modal credentials and prepared data on
@@ -52,8 +70,9 @@ Rank zero constructs one deterministic token-weighted global batch and scatters
 it. Gradients accumulate with `no_sync()` before the final microbatch. DDP's rank
 averaging is compensated by `world_size / global_nonpadding_tokens`, so padded
 windows and unequal valid-token counts across ranks do not bias the objective.
-The trainer uses BF16 autocast, FP32 parameters, causal SDPA, fused AdamW
-(betas 0.9/0.95), gradient clipping at 1 and a token-based warmup/cosine schedule.
+The trainer uses BF16 autocast, FP32 parameters, causal SDPA, the optimizer
+selected above, gradient clipping at 1 and a token-based warmup/cosine schedule.
+The AdamW component uses betas 0.9/0.95.
 The supplied schedule is a configurable starting point, not a quality-qualified
 20B recipe. Learning rate is calculated at the end-token count of each update.
 

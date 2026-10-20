@@ -1,0 +1,13 @@
+{
+  "status": "blocked_before_confirmed_submission",
+  "date": "2026-10-18",
+  "prefix": "muon-124m-100mt-20261018-a",
+  "target_tokens_per_arm": 100000000,
+  "optimizers": ["adamw", "muon"],
+  "gpu": "H100:8",
+  "api_http_status": 503,
+  "client_probe": "TimeoutError after 20 seconds",
+  "app_id": null,
+  "training_results": null,
+  "local_tests_passed": 14
+}
