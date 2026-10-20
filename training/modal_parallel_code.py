@@ -66,7 +66,7 @@ def partition(worker, identity, target):
     volumes={"/data": data_volume},
 )
 def merge():
-    from training_data.parallel_code import merge_partitions
+    from training_data.parallel_code_merge import merge_partitions
 
     from trainer.distributed_train import atomic_json
 

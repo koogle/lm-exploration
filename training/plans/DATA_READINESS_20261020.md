@@ -259,3 +259,17 @@ The already-running eight calls were recovered into `calls-r0.json` and are reus
 Two new regression tests cover the missing parent directory and recovery without
 spawning duplicate workers. The redundant slow interim audit was stopped to free
 CPU/I/O; the mandatory faster combined audit still gates training.
+
+Recovered live coordinator: `fc-01M5BCPFSA17CH19W8XKK5PMMR`; live data/training
+controller: `fc-01M5BCPFZK43HJHJNT2QCH5S0Q`. The original eight workers were
+reconnected, not duplicated. All eight were observed producing token/cursor progress;
+first measured aggregate was817M partition targets plus839M serial targets, before
+global deduplication/audit. Publication watcher was restarted after the temporary
+controller failure as `fc-01M5BCQ76HG92RBW2MZ78J7NY5`.
+
+The global merger now uses a separate implementation with RAM-resident hash indexes
+and4GiB SQLite page caches (within its32GiB allocation), avoiding millions of random
+remote-volume lookups. The running partition implementation stays byte-for-byte
+unchanged, so saved ingestion identities and retry cursors remain valid. Both merge
+engines pass the same independent expected-count, cross-split conflict and replay
+fixtures. This change does not relax data eligibility or the fresh-code gate.

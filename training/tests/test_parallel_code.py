@@ -10,6 +10,7 @@ from pathlib import Path
 from training_data.lexical_screen import LexicalScreen
 from training_data.overnight_corpus import SCHEMA
 from training_data.parallel_code import build_exclusions, merge_partitions, partition_shards
+from training_data.parallel_code_merge import merge_partitions as fast_merge
 from training_data.readiness_audit import normalized_hash, shingles
 
 
@@ -38,51 +39,54 @@ class ParallelCodeTests(unittest.TestCase):
         self.assertEqual(len({i for group in groups for i, p in group}), 22)
 
     def test_merge_global_dedup_cross_split_conflict_and_replay(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            central = root / "central.sqlite"
-            db = sqlite3.connect(central)
-            db.executescript(SCHEMA)
-            db.executescript(
-                "CREATE TABLE normalized(hash TEXT PRIMARY KEY); CREATE TABLE stats(kind TEXT,name TEXT,tokens INTEGER,documents INTEGER,PRIMARY KEY(kind,name));"
-            )
-            text = "print(100)"
-            add(db, text, "train", 5)
-            db.execute("INSERT INTO normalized VALUES (?)", (normalized_hash(text),))
-            db.commit()
-            db.close()
-            paths = []
-            for i, rows in enumerate(
-                [
-                    [("def add(a,b): return a+b", "train", 10)],
-                    [
-                        ("def add(a, b): return a + b", "validation", 10),
-                        ("def sub(a,b): return a-b", "train", 20),
-                    ],
-                ]
-            ):
-                path = root / f"worker{i}.sqlite"
-                paths.append(path)
-                source = sqlite3.connect(path)
-                source.executescript(SCHEMA)
-                source.executescript(
-                    "CREATE TABLE dedup(normalized TEXT PRIMARY KEY,hash TEXT UNIQUE,split TEXT); CREATE TABLE settings(id INTEGER,value TEXT); CREATE TABLE cursor(id INTEGER,shard INTEGER,row INTEGER);"
+        for engine in (merge_partitions, fast_merge):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                central = root / "central.sqlite"
+                db = sqlite3.connect(central)
+                db.executescript(SCHEMA)
+                db.executescript(
+                    "CREATE TABLE normalized(hash TEXT PRIMARY KEY); CREATE TABLE stats(kind TEXT,name TEXT,tokens INTEGER,documents INTEGER,PRIMARY KEY(kind,name));"
                 )
-                source.execute("INSERT INTO settings VALUES (1,?)", (json.dumps({"worker": i}),))
-                source.execute("INSERT INTO cursor VALUES (1,?,100)", (i,))
-                for text, split, count in rows:
-                    key = add(source, text, split, count, parent=f"code_python:repo/worker{i}")
-                    source.execute(
-                        "INSERT INTO dedup VALUES (?,?,?)", (normalized_hash(text), key, split)
+                text = "print(100)"
+                add(db, text, "train", 5)
+                db.execute("INSERT INTO normalized VALUES (?)", (normalized_hash(text),))
+                db.commit()
+                db.close()
+                paths = []
+                for i, rows in enumerate(
+                    [
+                        [("def add(a,b): return a+b", "train", 10)],
+                        [
+                            ("def add(a, b): return a + b", "validation", 10),
+                            ("def sub(a,b): return a-b", "train", 20),
+                        ],
+                    ]
+                ):
+                    path = root / f"worker{i}.sqlite"
+                    paths.append(path)
+                    source = sqlite3.connect(path)
+                    source.executescript(SCHEMA)
+                    source.executescript(
+                        "CREATE TABLE dedup(normalized TEXT PRIMARY KEY,hash TEXT UNIQUE,split TEXT); CREATE TABLE settings(id INTEGER,value TEXT); CREATE TABLE cursor(id INTEGER,shard INTEGER,row INTEGER);"
                     )
-                source.commit()
-                source.close()
-            result = merge_partitions(central, paths)
-            self.assertEqual(result["fresh_code_tokens"], 25)
-            self.assertEqual(result["added_unique_train_tokens"], 20)
-            again = merge_partitions(central, paths)
-            self.assertEqual(again["fresh_code_tokens"], 25)
-            self.assertEqual(again["added_unique_train_tokens"], 0)
+                    source.execute(
+                        "INSERT INTO settings VALUES (1,?)", (json.dumps({"worker": i}),)
+                    )
+                    source.execute("INSERT INTO cursor VALUES (1,?,100)", (i,))
+                    for text, split, count in rows:
+                        key = add(source, text, split, count, parent=f"code_python:repo/worker{i}")
+                        source.execute(
+                            "INSERT INTO dedup VALUES (?,?,?)", (normalized_hash(text), key, split)
+                        )
+                    source.commit()
+                    source.close()
+                result = engine(central, paths)
+                self.assertEqual(result["fresh_code_tokens"], 25)
+                self.assertEqual(result["added_unique_train_tokens"], 20)
+                again = engine(central, paths)
+                self.assertEqual(again["fresh_code_tokens"], 25)
+                self.assertEqual(again["added_unique_train_tokens"], 0)
 
     def test_snapshot_exclusions_keep_hashes_and_parent_splits(self):
         with tempfile.TemporaryDirectory() as temporary:
