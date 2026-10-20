@@ -47,22 +47,22 @@ Freeze held-out repositories before window creation, exclude their files/hashes 
 
 Check label shift, ignored padding, BOS/EOS boundaries, causal masking including cropped batches, and position handling. Compare teacher-forced training logits to generation logits for identical prefixes, with relevant numerical tolerances. Demonstrate tiny-set overfit and known-function completion. Check loss aggregation weights against the actual target counts.
 
-Keep packing changes separate from the optimizer experiment. Current cropping plus cached RoPE and torch.compile, microbatch 2 on eight H100s, is the measured starting configuration. Preserve 8K support; log actual cropped lengths, useful targets/sec and GPU time. No throughput claim transfers automatically to Muon.
+Keep unrelated packing changes separate from the initial data experiment. Current cropping plus cached RoPE and torch.compile, microbatch 2 on eight H100s, is the measured starting configuration. Preserve 8K support; log actual cropped lengths, useful targets/sec and GPU time. No throughput claim transfers automatically to Muon.
 
-## Muon experiment
+## Selected optimizer: Muon
 
-Use Muon for hidden attention/MLP matrices and AdamW for embeddings/output head, normalization parameters and biases. Deduplicate tied embedding/head parameters by identity and assert every trainable parameter is assigned exactly once. Reference implementation: https://github.com/KellerJordan/Muon (README reviewed for this plan). Pin the implementation/version before execution and record its matrix scaling and decay conventions.
+The user confirms Muon has already been tested and selects it for this run. Reuse the tested implementation, parameter groups, learning rates, scaling and decay settings; locate and pin that existing experiment before execution. Do not repeat an AdamW-versus-Muon comparison or invent replacement hyperparameters. The prior test artifacts have not yet been inspected in this session.
 
-Tune optimizer-specific learning rates; do not reuse the old continuation LR as a Muon default. Verify distributed updates, optimizer state save/restore and compiled execution on eight ranks before the pilot. Adam moments cannot be relabeled as Muon momentum.
+Preserve the tested treatment of hidden matrices and auxiliary parameters, including tied embedding/head identity. Check only integration changes needed for this corpus/launcher, including distributed checkpoint restore. Adam moments cannot be relabeled as Muon momentum.
 
-Proposed pilot: two matched 250M-target fresh-initialization runs, AdamW and Muon+auxiliary AdamW, sharing initial weights, tokenizer, new data order, batch size and evaluation. Allow a small bounded learning-rate search first. Fresh initialization avoids attributing inherited checkpoint behavior to the new corpus; the completed 20.879B model remains a reference. The pilot's 500M total targets are proposed, not launched. Compare both equal-token quality and wall-clock efficiency; repeat a promising comparison across seeds before strong optimizer claims. A subsequent continuation experiment must explicitly record optimizer resets and lineage.
+Proposed first stage: one 250M-target Muon run from fresh initialization, evaluated every 50M targets, focused on corpus and pipeline quality. This is a proposed bounded first stage, not a launched job or the final token budget. Keep the completed 20.879B model as a reference. Fresh initialization is a recommendation for the new experiment; record initialization explicitly. If using an existing checkpoint instead, record optimizer resets and lineage. No new optimizer comparison is planned.
 
 ## Evaluation and promotion
 
 Evaluate at initialization and every 50M pilot targets: held-out loss by language/task, syntax validity, executable tests for unseen functions, completion length/EOS rate, exact n-gram repetition and long loops. Freeze development prompts and separate final test tasks; use matched decoding settings and seeds, both greedy and sampled. Run generated code in an isolated, time/resource-limited environment without network access or credentials. Include the existing 50-generation suite for continuity, but expand coding evaluation beyond three Python prompts.
 
-Report uncertainty and raw examples, not only aggregate scores. Compare to the completed model under the same prompts. Select a longer run only after pipeline correctness and useful coding results support it. Do not require a from-scratch 250M pilot to beat a 20B checkpoint to establish an optimizer comparison; match training budgets between the two pilot arms.
+Report uncertainty and raw examples, not only aggregate scores. Compare to the completed model under the same prompts. Select a longer run only after pipeline correctness and useful coding results support it. A 250M first stage cannot establish the final potential of a fresh model or support a matched-budget comparison with the 20B checkpoint.
 
-A later separate fill-in-the-middle ablation (e.g. 25% of code examples) may improve editing/completion; it is not a repetition cure. It requires explicit sentinel/token handling and matching inference/evaluation. Keep the first Muon comparison causal-only. Instruction tuning on tested problem/solution pairs is a separate stage if the target becomes following coding requests.
+A later separate fill-in-the-middle ablation (e.g. 25% of code examples) may improve editing/completion; it is not a repetition cure. It requires explicit sentinel/token handling and matching inference/evaluation. Keep the initial run causal-only. Instruction tuning on tested problem/solution pairs is a separate stage if the target becomes following coding requests.
 
 Publish loss, task scores, repetition curves and sample outputs alongside checkpoints, with corpus manifest, code revision, initialization and optimizer provenance. A falling mixed loss alone is not grounds to extend training.
