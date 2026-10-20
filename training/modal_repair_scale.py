@@ -18,14 +18,14 @@ PARENT = "simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt"
     image=image,
     gpu="H100",
     cpu=8,
-    memory=32768,
+    memory=65536,
     timeout=18000,
     retries=0,
     max_containers=1,
     single_use_containers=True,
     volumes={"/runs": volume},
 )
-def worker(run_id, data_id, stop_after_step=None, resume=""):
+def worker(run_id, data_id, stop_after_step=None, resume="", run_settings=None):
     from training_data.subword import digest
 
     from trainer.repair_sft import Settings, train
@@ -40,15 +40,18 @@ def worker(run_id, data_id, stop_after_step=None, resume=""):
     report = json.loads((folder / "report.json").read_text())
     if digest(folder / "examples.jsonl") != report["dataset_sha256"]:
         raise ValueError("Dataset differs from preparation report")
-    settings = Settings(
-        steps=5000,
-        batch_size=8,
-        context=2048,
-        lr=1e-5,
-        evaluate_every=250,
-        save_every=250,
-        max_seconds=14400,
-    )
+    defaults = {
+        "steps": 5000,
+        "batch_size": 8,
+        "context": 2048,
+        "lr": 1e-5,
+        "evaluate_every": 250,
+        "save_every": 250,
+        "max_seconds": 14400,
+    }
+    if run_settings is not None:
+        defaults.update(run_settings)
+    settings = Settings(**defaults)
     try:
         result = train(
             Path("/runs") / PARENT,

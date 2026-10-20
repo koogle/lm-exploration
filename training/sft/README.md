@@ -177,3 +177,57 @@ Poll `modal.FunctionCall.from_id(call_id).get(timeout=0)` for completion, and us
 `modal app logs simple-llm-repair-sft-scale` for progress. Per-step metrics,
 provenance, data, source snapshots, checkpoints and final result stay on the volume.
 Longer training is an experiment, not evidence of improved held-out repair success.
+
+## Private patch SFT
+
+`data/private_patch_sft.py` turns exact before/after buffers from the user's two
+private HF collections into focused excerpt repair examples. Pinned revisions
+are in `private-patch-sources.json`. The downloader samples up to 24 shards per
+repository by deterministic filename hash; it does not assume the collection's
+README list means every planned repository was collected.
+
+Each buffer must match its Git blob SHA-1. Examples contain a changed region plus
+six context lines, the original commit instruction and file path, and the exact
+corrected excerpt. Binary/missing/oversized buffers, generated paths, unchanged
+pairs, common credential patterns and examples over 2,048 tokens are filtered.
+Root license evidence is retained privately and referenced by hash. These checks
+verify source integrity, **not** build or test correctness, and are not a complete
+secret/PII audit. Only the corrected answer receives training loss.
+
+Splits are by commit within repositories. All excerpts from a commit remain in
+one split. All eligible validation excerpt hashes are blocked from training,
+including validation examples beyond the sampled evaluation cap. Previous
+CommitPack validation repositories and synthetic held-out code are excluded.
+Normalized exact duplicate pairs are removed. There is no semantic clone audit
+or claim of repository-disjoint or pretraining-clean evaluation.
+
+The private sample caps training at 180,000 examples, 30,000 per language and
+12,000 per repository, with at most 128 validation examples per language. A
+bounded replay slice adds up to 2,000 previous CommitPack training examples per
+language plus its previous validation examples. Replay excludes private
+validation repositories and exact held-out code. Unsupported sparse languages
+without private validation are omitted from private training.
+
+From `training/`, after installing the documented extras and CA setup:
+
+```sh
+modal deploy modal_repair_scale.py
+modal run modal_private_patch_sft.py::main \
+  --sources sft/private-patch-sources.json \
+  --data-id repair-private-patches-UNIQUE \
+  --report-path /tmp/private-patch-report.json
+modal run modal_private_patch_sft.py::launch \
+  --data-id repair-private-patches-UNIQUE \
+  --run-id repair-private-sft-UNIQUE \
+  --report-path /tmp/private-patch-report.json
+```
+
+Preparation uses Modal CPU and the existing `simple-llm-hf` secret. A source
+download failure aborts preparation instead of silently shrinking coverage.
+The explicit launch requires at least 60,000 training examples across nine
+languages. It submits a durable job to the deployed GPU worker: original PR #26
+parent, one H100, batch 8, context 2,048, LR 1e-5, 20,000 total updates, evaluation
+every 500 and checkpoints every 1,000. Each invocation has a four-hour training
+loop limit, so inspect its actual completion count. Raw examples, detailed source
+inventories and license evidence remain on the private Modal volume. Only
+aggregate reports belong in Git.
