@@ -1,0 +1,119 @@
+{
+  "status": "running",
+  "confirmed_step": 1000,
+  "answer_tokens": 2057441,
+  "validation_observations": [
+    {
+      "step": 0,
+      "answer_tokens": 0,
+      "validation_loss": 0.8344942541662541,
+      "validation_by_language": {
+        "bash": {
+          "loss": 0.6283426253747397,
+          "answer_tokens": 17204
+        },
+        "c": {
+          "loss": 0.6110041689200854,
+          "answer_tokens": 39814
+        },
+        "cpp": {
+          "loss": 0.5038941187073642,
+          "answer_tokens": 44650
+        },
+        "go": {
+          "loss": 0.8476087672144372,
+          "answer_tokens": 48042
+        },
+        "java": {
+          "loss": 0.7638030438350719,
+          "answer_tokens": 28635
+        },
+        "javascript": {
+          "loss": 0.7292007738345626,
+          "answer_tokens": 32706
+        },
+        "python": {
+          "loss": 0.8528205774874464,
+          "answer_tokens": 49031
+        },
+        "ruby": {
+          "loss": 0.8238826344963702,
+          "answer_tokens": 7184
+        },
+        "rust": {
+          "loss": 1.100873084940931,
+          "answer_tokens": 44529
+        },
+        "swift": {
+          "loss": 1.754225144384709,
+          "answer_tokens": 6026
+        },
+        "typescript": {
+          "loss": 0.9116778424523372,
+          "answer_tokens": 53498
+        },
+        "zig": {
+          "loss": 1.1403958036249773,
+          "answer_tokens": 31672
+        }
+      },
+      "phase": "baseline"
+    },
+    {
+      "step": 500,
+      "answer_tokens": 1012510,
+      "validation_loss": 0.6901409022682196,
+      "validation_by_language": {
+        "bash": {
+          "loss": 0.5611879206956528,
+          "answer_tokens": 17204
+        },
+        "c": {
+          "loss": 0.486485341710628,
+          "answer_tokens": 39814
+        },
+        "cpp": {
+          "loss": 0.4053854186003579,
+          "answer_tokens": 44650
+        },
+        "go": {
+          "loss": 0.6933213676383397,
+          "answer_tokens": 48042
+        },
+        "java": {
+          "loss": 0.6421168326165886,
+          "answer_tokens": 28635
+        },
+        "javascript": {
+          "loss": 0.6116543253838728,
+          "answer_tokens": 32706
+        },
+        "python": {
+          "loss": 0.7368854824692544,
+          "answer_tokens": 49031
+        },
+        "ruby": {
+          "loss": 0.6761600318093077,
+          "answer_tokens": 7184
+        },
+        "rust": {
+          "loss": 0.8772661941715247,
+          "answer_tokens": 44529
+        },
+        "swift": {
+          "loss": 1.6152999003068815,
+          "answer_tokens": 6026
+        },
+        "typescript": {
+          "loss": 0.7285883814879697,
+          "answer_tokens": 53498
+        },
+        "zig": {
+          "loss": 0.9640316828449256,
+          "answer_tokens": 31672
+        }
+      }
+    }
+  ],
+  "note": "Intermediate observations; not final results or executable repair accuracy."
+}

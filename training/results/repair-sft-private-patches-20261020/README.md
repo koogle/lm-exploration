@@ -51,7 +51,7 @@ Earlier 16-CPU and 8-CPU preparation requests were stopped while awaiting capaci
 the successful run used two CPUs and 16 GiB RAM. The earlier workspace outage
 occurred before this successful preparation and did not start a private SFT run.
 
-## Training submission
+## Running training
 
 [Launch record](launch.json), run `repair-sft-private-patches-20261020-r01`:
 one H100, batch 8, context 2,048, constant LR 1e-5 and 20,000 total updates.
@@ -63,7 +63,9 @@ with identical settings and source/data identity.
 
 The durable deployed worker is at:
 https://modal.com/apps/radiantai/main/deployed/simple-llm-repair-sft-scale.
-Submission is not proof of completed training or improved repair correctness.
+The [progress snapshot](progress.json) confirms 1,000 completed updates and
+2,057,441 supervised answer tokens. Training continues toward 20,000 updates.
+This is not a completed quality result or proof of improved repair correctness.
 The previous run's final answer loss was 0.34446 on its own validation corpus;
 losses on this larger, different validation corpus should not be compared directly.
 
