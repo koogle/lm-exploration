@@ -19,8 +19,8 @@ image = (
 
 @app.function(
     image=image,
-    cpu=16,
-    memory=65536,
+    cpu=8,
+    memory=32768,
     timeout=10800,
     retries=0,
     secrets=[modal.Secret.from_name("simple-llm-hf")],
