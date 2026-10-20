@@ -8,6 +8,7 @@ import shutil
 import sqlite3
 import subprocess
 import time
+import warnings
 import zlib
 from collections import Counter
 from pathlib import Path
@@ -114,7 +115,9 @@ def category(path, text, python_repo=False):
         return None, "boilerplate"
     if p.suffix == ".py":
         try:
-            ast.parse(text)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", SyntaxWarning)
+                ast.parse(text)
         except (SyntaxError, ValueError, RecursionError):
             return None, "invalid_python3"
         test = (
