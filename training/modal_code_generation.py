@@ -12,6 +12,7 @@ CHECKPOINTS = {
     "original_5b": "simple-llm-124m-8k-5b-20261018-s03/step-000064227.pt",
     "eu_parent": "simple-llm-124m-eu-onepass-20261018-s02/step-000003838.pt",
     "final_code60": "simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt",
+    "final_20b": "simple-llm-code60-unique-10b-20261020-r01-s04/step-000153342.pt",
 }
 RUN = "simple-llm-code-heavy-generation-20261019"
 
@@ -33,7 +34,9 @@ def generate(label):
         raise ValueError("Unknown checkpoint label")
     return generate_checkpoint(
         Path("/runs") / CHECKPOINTS[label],
-        Path("/runs") / RUN / (label + ".json"),
+        Path("/runs")
+        / ("simple-llm-repetition-20261020" if label == "final_20b" else RUN)
+        / (label + ".json"),
         label,
         run_volume.commit,
     )
