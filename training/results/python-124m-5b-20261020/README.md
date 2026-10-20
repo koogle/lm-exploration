@@ -64,3 +64,37 @@ full 5B training, isolated executable evaluation, checkpoint publication, curves
 unselected generations and final Hub hash verification remain pending. No new
 GPU optimizer step, training checkpoint, model repository or training cost is
 claimed. A queued controller or preparation worker is not a training run.
+
+## Latest measured capacity and remaining blocker
+
+The [supplemental snapshot](partial-capacity.md) is **partial**, not a completed
+corpus census. The detached CPU controller continues bounded preparation with
+persisted cursors. It has no automatic GPU launch or publication stage. No
+training data has been consumed by a model; actual training reuse is zero.
+
+The available documentation pool contains **29,876,984 unique training targets**,
+versus at least **250,000,000** needed under the two-pass limit. Independently,
+all 59,316 records of `codeparrot/github-jupyter-parsed`, pinned at
+`131d18ace1c171cfe3cb2b2a889678b614783580`, were token-counted with the frozen
+tokenizer. Joining every record's cells with double newlines gives an optimistic
+**186,211,988-target upper bound**, or **130,777,521** for the inspected permissive
+license allowlist. These counts include all notebook categories and exclude no
+validation, duplicates or low-quality records, so they are NOT usable training
+capacity. Even adding the entire upper bound to current documentation yields
+only 216,088,972 targets, below the 250M minimum. No notebook content was added
+to the training corpus. See [raw aggregate measurement](notebook-upper-bound.json).
+
+The official `HuggingFaceTB/smollm-corpus` Python-Edu subset at
+`3ba9d605774198c5868892d7a8deda78031a781f` provides file IDs, repository names and
+scores, not source text. Its documented content retrieval depends on the
+Software Heritage S3 collection and refers to Stack v2 licensing. It was not
+counted as available code. These observations do not prove that no suitable
+corpus exists elsewhere; they establish that the bounded, inspected sources do
+not yet satisfy this experiment. Additional verified documentation is required.
+
+Runtime/cost: no new GPU runtime or GPU charge was incurred by this experiment.
+A current 8-core/32-GiB CPU preparation worker plus its 1-core/1-GiB controller
+costs approximately **$1.54/hour** at the retrieved public Modal CPU/memory rates,
+excluding storage and other charges. Preparation through this report is estimated
+at **$2–5**, not a measured invoice. The bounded CPU workflow may continue to
+accrue charges after this snapshot. No 5B training runtime or measured cost exists.

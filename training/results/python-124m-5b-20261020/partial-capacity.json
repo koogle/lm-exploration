@@ -1,0 +1,77 @@
+{
+  "stage": "preparing_supplement",
+  "updated_unix": 1792536232.5173063,
+  "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+  "categories": {
+    "python_implementation": {
+      "target": 3250000000,
+      "unique_train_targets": 348104811,
+      "validation_targets": 18408037,
+      "required_passes": 9.336268552749189,
+      "two_pass_shortfall": 2553790378,
+      "one_pass_shortfall": 2901895189
+    },
+    "python_tests_examples": {
+      "target": 750000000,
+      "unique_train_targets": 189563969,
+      "validation_targets": 8701444,
+      "required_passes": 3.9564480737370507,
+      "two_pass_shortfall": 370872062,
+      "one_pass_shortfall": 560436031
+    },
+    "python_documentation": {
+      "target": 500000000,
+      "unique_train_targets": 29876984,
+      "validation_targets": 478649,
+      "required_passes": 16.7352902823123,
+      "two_pass_shortfall": 440246032,
+      "one_pass_shortfall": 470123016
+    },
+    "cs_math": {
+      "target": 250000000,
+      "unique_train_targets": 255001393,
+      "validation_targets": 31729746,
+      "required_passes": 0.9803868012595524,
+      "two_pass_shortfall": 0,
+      "one_pass_shortfall": 0
+    },
+    "general_education": {
+      "target": 150000000,
+      "unique_train_targets": 153000047,
+      "validation_targets": 59391033,
+      "required_passes": 0.9803918556966195,
+      "two_pass_shortfall": 0,
+      "one_pass_shortfall": 0
+    },
+    "books": {
+      "target": 100000000,
+      "unique_train_targets": 102061503,
+      "validation_targets": 14413928,
+      "required_passes": 0.9798013654570618,
+      "two_pass_shortfall": 0,
+      "one_pass_shortfall": 0
+    }
+  },
+  "capacity_sufficient": false,
+  "rejections": {
+    "repository_license_unresolved": 5,
+    "generated": 9968,
+    "not_python_material": 15298,
+    "size": 1236,
+    "notice_or_changelog": 121,
+    "minified_or_long_line": 171,
+    "exact_duplicate": 256,
+    "malformed_or_size": 13,
+    "boilerplate": 246,
+    "excluded_path": 18588,
+    "repository_one_percent_cap": 1146,
+    "reserved_or_empty_encoding": 4,
+    "invalid_python3": 36735,
+    "non_utf8": 17,
+    "reserved_test_record": 111220,
+    "heldout_hash_exclusion": 23796,
+    "older_collected_repository_version": 71,
+    "heldout_repository_exclusion": 2
+  },
+  "repository_count": 58
+}
