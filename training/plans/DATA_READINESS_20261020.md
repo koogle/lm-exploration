@@ -299,3 +299,26 @@ After the final deployment, collector, handoff controller, and HF watcher
 `collecting_fresh_code`; the repaired controller will audit, freeze, qualify restore
 on eight H100s, and continue the 10B phase after the gates pass. No further user
 approval is required. The final focused handoff/collector/gate suite passed 13 tests.
+
+## Patch supplement authorized by the user
+
+The user explicitly permits overlapping versions in their patch datasets. Include
+Git diff text from pinned `changes/**/*.jsonl.gz` in the two private collections
+`jfrick/mit-claude-codex-code-20261019` at
+`b27f9cef49fa44643247d8a97173201fd47896c8` and
+`jfrick/curated-oss-code-20261019` at
+`1bda7edae2fac3b6d646422377817ee53893bc3c`.
+Use the patch itself, not concatenated before/after buffers or author metadata.
+Related changes may share context and code. Exact/whitespace-equivalent whole
+records still deduplicate; repository splits and benchmark checks still apply.
+Keep existing permissive-license eligibility and retain root license evidence.
+These are eligible patch-document tokens, not unique underlying code spans.
+
+A resumable CPU importer runs separately from the eight unchanged source-code
+workers. The combined audit waits for patch import completion and includes that
+SQLite database; snapshot selection includes eligible patches within the same
+60% code budget. `code/diff/patches` records are reported separately and never
+count as an additional programming language for the eight-language gate. The
+snapshot records selected patch targets and the overlap policy. The 6.12B code
+capacity reserve, code pass cap, noncode weights, and GPU settings are unchanged.
+The focused importer/collector/audit/gate/handoff suite passes 16 tests.

@@ -158,6 +158,7 @@ def prepare_original():
 def audit_augmented(audit_round=0):
     from training_data.readiness_audit import audit, benchmark_index
 
+    prepare_patches.remote()
     data_volume.reload()
     folder = BASE / f"combined-refresh-audit-r{audit_round}"
     index, pins = benchmark_index(folder)
@@ -167,10 +168,42 @@ def audit_augmented(audit_round=0):
             ("eu", EU, False),
             ("fresh_code", BASE / "multilingual/raw.sqlite", True),
             ("fresh_original", BASE / "original-refresh/raw.sqlite", True),
+            ("fresh_patches", BASE / "patches/raw.sqlite", True),
         ],
         folder,
         index,
         pins,
+        commit=data_volume.commit,
+    )
+
+
+@app.function(
+    image=image,
+    cpu=8,
+    memory=16384,
+    timeout=21600,
+    retries=2,
+    max_containers=1,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes={"/data": data_volume},
+)
+def prepare_patches():
+    from training_data.hf_patches import prepare
+
+    data_volume.reload()
+    return prepare(
+        BASE / "patches",
+        [
+            {
+                "repo": "jfrick/mit-claude-codex-code-20261019",
+                "revision": "b27f9cef49fa44643247d8a97173201fd47896c8",
+            },
+            {
+                "repo": "jfrick/curated-oss-code-20261019",
+                "revision": "1bda7edae2fac3b6d646422377817ee53893bc3c",
+            },
+        ],
+        BASE / "parallel-code/exclusions.sqlite",
         commit=data_volume.commit,
     )
 
@@ -211,6 +244,7 @@ def freeze_snapshot(audit_round=0):
             "eu": EU,
             "fresh_code": BASE / "multilingual/raw.sqlite",
             "fresh_original": BASE / "original-refresh/raw.sqlite",
+            "fresh_patches": BASE / "patches/raw.sqlite",
         },
     )
     data_volume.commit()

@@ -44,7 +44,7 @@ def check_variety(audit_db):
         raise ValueError(
             f"Need >=6.12B new eligible code targets including margin; got {sum(languages.values())}"
         )
-    if sum(n >= 10_000_000 for n in languages.values()) < 8:
+    if sum(n >= 10_000_000 for language, n in languages.items() if language != "diff") < 8:
         raise ValueError("Need eight languages with at least 10M eligible targets each")
     if sum(n >= 10_000_000 for n in tasks.values()) < 3 or tasks.get("tests", 0) < 50_000_000:
         raise ValueError("Need three path-task families >=10M each and >=50M test-code targets")
@@ -83,7 +83,11 @@ def freeze(audit_folder, destination, old_manifest, database_paths):
         if s.startswith("code/") and v["parents"] >= 4
     }
     if (
-        sum(language in covered for language, n in variety["languages"].items() if n >= 10_000_000)
+        sum(
+            language in covered
+            for language, n in variety["languages"].items()
+            if n >= 10_000_000 and language != "diff"
+        )
         < 8
     ):
         raise ValueError("Eight material code languages need >=4 held-out parents each")
@@ -185,7 +189,7 @@ def freeze(audit_folder, destination, old_manifest, database_paths):
             "splits": {s: {"loss_tokens": split_counts.get(s, 0)} for s in ["train", "validation"]},
         }
     if (
-        sum(n >= 10_000_000 for n in languages.values()) < 8
+        sum(n >= 10_000_000 for language, n in languages.items() if language != "diff") < 8
         or task_counts.get("tests", 0) < 50_000_000
     ):
         raise ValueError("Selected snapshot lost required code variety")
@@ -215,16 +219,24 @@ def freeze(audit_folder, destination, old_manifest, database_paths):
         "code_languages": dict(languages),
         "code_path_tasks": dict(task_counts),
         "variety_available": variety,
+        "patch_policy": {
+            "representation": "git_patch",
+            "related_version_overlap_allowed": True,
+            "exact_normalized_document_dedup": True,
+            "selected_train_tokens": languages.get("diff", 0),
+            "counts_as_programming_language": False,
+        },
         "pending": [
             "Lexical HumanEval/MBPP screening does not prove semantic contamination absent",
             "Whitespace dedup does not remove all near/semantic clones",
             "Non-code family identity is inherited; edition/URL aliases may remain",
             "Path-based task variety is a proxy; this is not instruction tuning",
             "Non-code may reuse earlier corpus; two passes applies to this phase, not lifetime",
+            "Patch records may overlap code versions; eligible document tokens are not unique code-span tokens",
         ],
     }
     (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    table = "| Source | Mix | Unique eligible train tokens | Pass cap | Requested targets |\n|---|---:|---:|---:|---:|\n"
+    table = "| Source | Mix | Eligible train tokens (patch versions may overlap) | Pass cap | Requested targets |\n|---|---:|---:|---:|---:|\n"
     for name, value in summary.items():
         table += f"| {name} | {value['weight_percent']:.4f}% | {value['splits']['train']['loss_tokens']:,} | {value['max_passes']} | {quotas[name]:,} |\n"
     (destination / "capacity.md").write_text("# Frozen usable-token capacity\n\n" + table)
