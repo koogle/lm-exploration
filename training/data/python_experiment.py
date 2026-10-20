@@ -461,6 +461,7 @@ class Corpus:
             self.report("prior_holdouts_excluded")
             commit()
         scanned = 0
+        last_commit = time.monotonic()
         totals = Counter(
             dict(
                 self.db.execute(
@@ -491,9 +492,13 @@ class Corpus:
                 scanned += 1
                 # Commit cursor with completed rows only; the checkpoint below runs
                 # before this row, so persist its predecessor after processing.
-                if scanned % 5000 == 0:
+                now = time.monotonic()
+                if scanned % 50_000 == 0 or (
+                    scanned % 512 == 0 and (now - last_commit >= 60 or now - start >= max_seconds)
+                ):
                     self.report("preparing_supplement")
                     commit()
+                    last_commit = time.monotonic()
                     print(
                         json.dumps({"supplement_source": source, "rows_scanned": scanned}),
                         flush=True,
@@ -598,6 +603,18 @@ class Corpus:
                 )
                 if split == "train" and added:
                     totals[name] += added
+                if (
+                    source in {"finemath_4plus", "gutenberg"}
+                    and totals[name] >= TARGETS[name] * 1.02
+                ):
+                    validation_count = self.db.execute(
+                        "SELECT COALESCE(SUM(loss_tokens),0) FROM documents WHERE source=? AND split='validation' AND conflict=0",
+                        (name,),
+                    ).fetchone()[0]
+                    if validation_count >= 1_000_000:
+                        # The complete prior held-out hash ledger was loaded first.
+                        # This bounds selection, not a claim of upstream exhaustion.
+                        break
             with self.db:
                 self.db.execute("INSERT INTO completed VALUES(?)", (marker,))
             self.report("supplement_source_complete")
