@@ -1,1 +1,1 @@
-"""Training implementation; runs launch from recipes via ../modal_train.py."""
+"""Training loop, evaluation, checkpointing and sampling utilities."""

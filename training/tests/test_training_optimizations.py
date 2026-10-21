@@ -7,7 +7,7 @@ from contextlib import nullcontext
 import torch
 from model_100m.model import GPT, ModelConfig
 
-from distributed_training.train import backward_batch, crop_trailing_padding
+from trainer.loop import backward_batch, crop_trailing_padding
 
 
 class LocalDDP(torch.nn.Module):
