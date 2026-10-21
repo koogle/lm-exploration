@@ -93,20 +93,48 @@ def configure_supply():
     max_containers=256,
     volumes={"/distill": volume},
 )
-def fresh_producer(worker, segment_tokens=10_000_000):
-    from distillation.scale_data import generate
+def fresh_producer(worker, segment_tokens=10_000_000, generation_until=None):
+    import subprocess
+    import sys
 
-    # Upper bound: consumed old data also counts toward training's 4.5B target.
-    # Producers are stopped when training completes; unused tail is not replayed.
-    return generate(
-        Path("/distill") / FRESH_CORPUS,
-        worker,
-        volume.commit,
-        target=1_125_000_000,
-        token_kind="qwen",
-        index_offset=100_000_000,
-        segment_tokens=segment_tokens,
+    if generation_until is not None and time.time() >= generation_until:
+        return {"status": "generation_deadline"}
+    # Process isolation releases the vLLM engine/KV cache between invocations.
+    script = """
+import sys, modal
+from pathlib import Path
+from distillation.scale_data import generate
+v = modal.Volume.from_name('lm-exploration-distillation')
+generate(Path(sys.argv[1]), int(sys.argv[2]), v.commit,
+         target=1_125_000_000, token_kind='qwen', index_offset=100_000_000,
+         segment_tokens=int(sys.argv[3]))
+"""
+    timeout = (
+        min(80000, max(1, generation_until - time.time()))
+        if generation_until
+        else 80000
     )
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                script,
+                str(Path("/distill") / FRESH_CORPUS),
+                str(worker),
+                str(segment_tokens),
+            ],
+            check=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        if generation_until is None or time.time() < generation_until:
+            raise
+    volume.reload()
+    path = Path("/distill") / FRESH_CORPUS / f"producer-{worker}" / "progress.json"
+    if not path.exists():
+        return {"status": "generation_deadline"}
+    return {k: v for k, v in json.loads(path.read_text()).items() if k != "chunks"}
 
 
 @app.function(
@@ -420,6 +448,9 @@ def supervise_phased():
         volume.reload()
         progress = json.loads((output / "progress.json").read_text())
         goal = phase_goal(progress["tokens"], TARGET, supply["phase_tokens"])
+        deadline = supply.get("generation_until")
+        if deadline is not None:
+            goal = TARGET
         manifest = publish_chunks(fresh, workers)
         ready = supply["initial_qwen_tokens"] + manifest["qwen_tokens"]
         for key in list(generation):
@@ -476,18 +507,38 @@ def supervise_phased():
             state["status"] = "completed"
             save()
             return state
+        if deadline is not None and (time.time() >= deadline or ready >= TARGET):
+            for producer_call in generation.values():
+                producer_call.cancel(terminate_containers=True)
+            generation.clear()
+            state["status"] = "archiving_phase"
+            state["generation_until"] = deadline
+            save()
+            volume.reload()
+            manifest = publish_chunks(fresh, workers)
+            ready = supply["initial_qwen_tokens"] + manifest["qwen_tokens"]
+            if archived.get("qwen_tokens", 0) >= ready:
+                state.update(
+                    status="generation_window_completed", ready_qwen_tokens=ready
+                )
+                save()
+                return state
+            time.sleep(30)
+            continue
         if ready < goal:
             state["status"] = "generating_phase"
             # One million accepted targets per call; reserve in-flight work to
             # bound the last wave. Existing 10M calls finish without cancellation.
             slots = min(workers, math.ceil((goal - ready) / 1_000_000))
             for worker in range(workers):
+                if deadline is not None and time.time() >= deadline:
+                    break
                 if len(generation) >= slots:
                     break
                 key = str(worker)
                 if key not in generation:
                     generation[key] = fresh_producer.spawn(
-                        worker, segment_tokens=1_000_000
+                        worker, segment_tokens=1_000_000, generation_until=deadline
                     )
                     save()
         elif generation:

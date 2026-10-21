@@ -142,3 +142,14 @@ verified against the recorded commit (first verified revision
 `31753882a98754a369cf8979523d7021df9a788b`); ongoing archive commits are tracked
 on the run volume. The HF/Xet cache is placed outside the training volume so open log
 files do not prevent the archiver from reloading newly published shards.
+
+## Superseded teacher campaign, 2026-10-22
+
+The user requested an eight-hour generation window, then paused its restart to
+qualify PR #36's Qwen3.5 megakernel. The old phased supervisor and all its tracked
+teacher calls were cancelled before starting that timed window. Existing data and
+student checkpoints remain intact. The bounded-window/subprocess-isolation code
+is retained, but this Qwen3-8B campaign is paused. The Qwen3.5 follow-up is
+[PR #39](https://github.com/koogle/lm-exploration/pull/39), gated on correctness and
+throughput versus batched vLLM. Its native tokenizer targets must remain separate
+from the old student's shared-Qwen vocabulary.
