@@ -9,7 +9,7 @@ windows, microbatch one per GPU, four accumulation rounds, 20M-token warmup, pea
 learning rate 3e-4, 5B cumulative nonpadding target ceiling. Short documents are
 padded. A full optimizer batch may finish slightly below the ceiling.
 
-`modal_simple_llm_8k.py` deploys a durable controller. Explicitly spawning `start`
+[`modal_scripts/modal_simple_llm_8k.py`](../modal_scripts/modal_simple_llm_8k.py) deploys a durable controller. Explicitly spawning `start`
 checks mixture capacity in the existing frozen raw snapshot, runs two steps, then
 resumes for two more and checks exact diagnostic validation agreement. Only then
 does it continue in six-hour segments to the 5B ceiling. It probes eight visible
@@ -37,7 +37,7 @@ Run commands from `training/`. Configure the Modal secret `simple-llm-hf` with
 `HF_TOKEN` through the authenticated SDK; never commit or print the token.
 
 ```sh
-modal deploy modal_simple_llm_8k.py
+uv run modal deploy -m modal_scripts.modal_simple_llm_8k
 ```
 
 Deploying does not start training. Use the authenticated Modal SDK to explicitly

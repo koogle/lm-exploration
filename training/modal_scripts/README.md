@@ -25,6 +25,9 @@ uv run modal run -m workflows.modal_train \
 | `modal_tokenizer_research.py` | Tokenizer fitting grid; [research](../tokenizer/research/README.md) |
 | `modal_tokenizer_evaluation.py` | Held-out parent coverage and rescoring; same research guide |
 | `modal_structured_tokenizer.py` | Structured-code/tokenizer comparison; same research guide |
+| `modal_simple_llm_8k.py` | Eight-H100 124M / 8K / 5B controller; [workflow](../distributed/SIMPLE_LLM_8K.md) |
+| `modal_infer_simple_llm.py` | Fixed-prompt samples from the final 124M / 8K checkpoint |
+| `modal_validate_repetition.py` | Four-checkpoint repetition comparison; [report](../results/simple-llm-repetition-validation-20261018.md) |
 
 The benchmark launchers retain their historical defaults, resource bounds and
 measured outputs in `../results/`; they do not start full pretraining. Inspect
