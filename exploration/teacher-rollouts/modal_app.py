@@ -45,7 +45,11 @@ kernel_image = (
     )
 )
 BACKEND = os.environ.get("ROLLOUT_BACKEND", "baseline")
-image = (kernel_image if BACKEND == "megakernel" else image).env(
+if BACKEND == "kernel-sweep":
+    kernel_image = kernel_image.run_commands(
+        "python /experiment/megakernel/build_sweep.py /experiment/megakernel/builds"
+    )
+image = (kernel_image if BACKEND in ("megakernel", "kernel-sweep") else image).env(
     {"ROLLOUT_BACKEND": BACKEND}
 )
 volume = modal.Volume.from_name(
@@ -71,9 +75,10 @@ def worker(run_id, attempt, manifest, deadline, supervisor_id):
         manifest,
         deadline,
         supervisor_id,
-        "megakernel/probe.py"
-        if manifest.get("backend") == "megakernel"
-        else "runner.py",
+        {
+            "megakernel": "megakernel/probe.py",
+            "kernel-sweep": "megakernel/sweep.py",
+        }.get(manifest.get("backend"), "runner.py"),
     )
 
 

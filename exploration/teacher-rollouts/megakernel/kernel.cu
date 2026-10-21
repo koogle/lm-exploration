@@ -15,6 +15,9 @@
 
 #include "half_type.h"
 #include "rope.h"
+#ifdef USE_THUNDERKITTENS
+#include "kittens.cuh"
+#endif
 
 // ── Pascal (sm_6x) compatibility shims ──
 // Pascal lacks the _sync suffixed warp shuffle and the fence.acq_rel.gpu
@@ -315,12 +318,32 @@ __device__ void matvec_bf16(
         if (m < row_end) {
             const half_t *w_row = weight + m * in_dim;
             float sum = 0.0f;
+#ifdef USE_THUNDERKITTENS
+            // A real TK register-vector projection variant. Keep the same
+            // vectorized weight loads and BF16 output boundary as the control.
+            // This is SIMD GEMV, not a tensor-core or whole-model TK rewrite.
+            kittens::rv_fl<256> accum, weights, inputs, products;
+            accum = 0.0f;
+            for (int k = lane_id * 8; k < in_dim; k += WARP_SIZE * 8) {
+                uint4 packed = load_128bit(reinterpret_cast<const uint4 *>(w_row + k));
+                const half_t *values = reinterpret_cast<const half_t *>(&packed);
+#pragma unroll
+                for (int i = 0; i < 8; ++i) {
+                    weights[i][0] = H2F(values[i]);
+                    inputs[i][0] = H2F(s_input[k + i]);
+                }
+                kittens::warp::mul(products, weights, inputs);
+                kittens::warp::add(accum, accum, products);
+            }
+            kittens::warp::sum(sum, accum);
+#else
 #pragma unroll 4
             for (int k = lane_id * 8; k < in_dim; k += WARP_SIZE * 8) {
                 uint4 w_u4 = load_128bit(reinterpret_cast<const uint4 *>(w_row + k));
                 sum += dot8_bf16(w_u4, s_input + k);
             }
             sum = warp_reduce_sum(sum);
+#endif
             if (lane_id == 0) output[m] = H2F(F2H(sum));
         }
     }

@@ -19,3 +19,10 @@ correctness-first prefill path; no high-throughput prefill or continuous batchin
 is claimed for this backend. Measurements and correctness gates are documented
 separately. Retained upstream comments describing 0.8B tensor shapes are historical
 and are superseded by the constants and validated tensor shapes.
+
+The optional `USE_THUNDERKITTENS` projection path calls HazyResearch
+ThunderKittens register-vector operations. `build_sweep.py` pins and verifies
+commit `67845f5fa48d05343dbbc1ba1403f11061f08d2d` and retains its MIT LICENSE
+in the downloaded source tree. This optional integration is new code here;
+the underlying transformer and other projections remain Luce-derived.
+Upstream: https://github.com/HazyResearch/ThunderKittens

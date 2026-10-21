@@ -27,7 +27,7 @@ def errors(actual, reference):
 
 
 @torch.inference_mode()
-def run(root, attempt, manifest):
+def run(root, attempt, manifest, teacher=None, library=None):
     import modal
 
     volume = modal.Volume.from_name("lm-exploration-teacher-rollouts")
@@ -59,14 +59,17 @@ def run(root, attempt, manifest):
         atomic_json(out / "report.json", report)
         volume.commit()
 
+    hooks = []
     try:
-        lib = Path("/experiment/megakernel/kernel.so")
+        lib = Path(library or "/experiment/megakernel/kernel.so")
         if not lib.exists():
+            if library is not None:
+                raise FileNotFoundError(f"Requested sweep library missing: {lib}")
             t = time.monotonic()
             lib = compile_kernel(out / "kernel.so")
             report["compilation_seconds"] = time.monotonic() - t
         t = time.monotonic()
-        model, head, tokenizer = load_teacher("/runs/teacher-hf-cache")
+        model, head, tokenizer = teacher or load_teacher("/runs/teacher-hf-cache")
         report["model_load_and_download_seconds"] = time.monotonic() - t
         print("TEACHER_LOADED", report["model_load_and_download_seconds"], flush=True)
         decoder = Decoder(model, head, lib)
@@ -177,6 +180,7 @@ def run(root, attempt, manifest):
             report["status"] = "reset_failed"
             return report
         measurements = []
+        generated_by_backend = {}
         for backend in ("megakernel", "transformers_eager"):
             rows = []
             generation_seconds = 0
@@ -257,15 +261,23 @@ def run(root, attempt, manifest):
                 rows, generation_seconds, manifest["config"]["gpu_usd_per_hour"]
             )
             summary["backend"] = backend
+            generated_by_backend[backend] = [r["output_ids"] for r in rows]
             measurements.append(summary)
             report["measurements"] = measurements
             save()
+        report["fixture_tokens_equal"] = (
+            generated_by_backend["megakernel"]
+            == generated_by_backend["transformers_eager"]
+        )
+        report["performance_eligible"] = report["fixture_tokens_equal"]
         report["status"] = "completed"
     except Exception as exc:
         report["status"] = "failed"
         report["error"] = f"{type(exc).__name__}: {exc}"
         raise
     finally:
+        for hook in hooks:
+            hook.remove()
         report["peak_torch_allocated_bytes"] = torch.cuda.max_memory_allocated()
         report["estimated_gpu_usd"] = (
             (time.monotonic() - started) * manifest["config"]["gpu_usd_per_hour"] / 3600

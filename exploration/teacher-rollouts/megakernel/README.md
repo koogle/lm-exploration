@@ -76,3 +76,49 @@ greedy fixture output sequences match, and reset reproducibility passes. Generat
 including sequential prefill was 4.58× faster than Transformers eager fallback
 (63.51 versus 13.87 output tokens/s). See the parent findings for cost, provenance
 and limits; optimized batched performance is a separate question.
+
+## Prepared launch-geometry and ThunderKittens sweep
+
+`--backend kernel-sweep` builds eight libraries: manual and ThunderKittens
+projection variants, each with 256/512 threads and 66/132 requested cooperative
+blocks. Occupancy can reduce the actual grid. Two rounds use forward and reverse
+order, with identical six synthetic prompts, greedy sampling and a 128-token
+output cap. Each trial runs the numerical/state/reset checks above before timing;
+only two complete passing trials with exact reference fixture token sequences
+enter the accepted-examples/hour ranking. All failed checks and individual trial
+measurements remain in the report. Two short trials are screening evidence, not
+statistically reliable production throughput estimates.
+
+The ThunderKittens variant uses its register-vector multiply/add/reduction
+operations in QKV and gating projections. It is a limited change to the adapted
+Luce kernel, not a tensor-core implementation or a full ThunderKittens rewrite.
+No speedup or GPU correctness result is claimed for this variant yet. Both
+variants use C++20 and the same optimization flags; dependency revision and
+archive SHA-256 are pinned in `build_sweep.py`. The downloaded MIT license is
+retained alongside the headers in the build image. See [NOTICE.md](NOTICE.md).
+
+The teacher loads once per sweep. Each trial persists outputs immediately and
+reports its own generation/verification times. The parent report includes total
+pipeline and initial teacher-loading times. Existing attempt IDs are rejected;
+an interrupted kernel sweep needs a fresh attempt and budget reservation, and
+its partial results must be retained. This does not change resumable baseline
+dataset generation. Peak allocation is PyTorch memory, not total device usage.
+
+```sh
+uv run --with-requirements requirements.lock python launch.py \
+  --backend kernel-sweep --run-id kernel-sweep-001 --attempt sweep-001 \
+  --config artifacts/authorized-sweep.json --launch
+```
+
+The configuration must explicitly authorize budget; the current $5 campaign is
+fully reserved. Proposed next campaign increment: at most $5 additional, two
+single-H100 jobs (kernel sweep and vLLM concurrency sweep), at most 1,200 seconds
+each, $2.10 reserved per job plus $0.80 held for overhead. Do not launch using
+this proposal alone. The batched baseline still needs measured results; kernel
+launch geometry is not request concurrency. No new GPU sweep has been run.
+
+CPU validation: 17 tests and Ruff pass. Local CUDA compilation is a build
+diagnostic only; the workspace uses GCC 14 and newer glibc, requiring temporary
+`noexcept` compatibility declarations in the downloaded CUDA 12.8 math headers.
+Those local compiler changes are not part of the Modal image or kernel source.
+The pinned Ubuntu 22.04 image must build the variants unmodified before GPU runs.

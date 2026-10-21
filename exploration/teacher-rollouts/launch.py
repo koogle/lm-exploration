@@ -20,7 +20,9 @@ def main():
     parser.add_argument("--attempt", required=True)
     parser.add_argument("--config", type=Path, default=HERE / "config.json")
     parser.add_argument(
-        "--backend", choices=["baseline", "megakernel"], default="baseline"
+        "--backend",
+        choices=["baseline", "megakernel", "kernel-sweep"],
+        default="baseline",
     )
     parser.add_argument("--launch", action="store_true")
     args = parser.parse_args()
