@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from .scholarly import SPLIT_VERSION
+from .simple_llm import SPLIT_VERSION
 from .subword import TOKENIZER_SHA256, digest
 
 
@@ -14,7 +14,7 @@ def find_prepared_snapshot(folder, recipe, target_tokens):
         "tokenizer": TOKENIZER_SHA256,
         "split": SPLIT_VERSION,
         "implementation_sha256": digest(Path(__file__).with_name("raw_corpus.py")),
-        "adapter_sha256": digest(Path(__file__).with_name("scholarly.py")),
+        "adapter_sha256": digest(Path(__file__).with_name("simple_llm.py")),
         "tokenizer_loader_sha256": digest(Path(__file__).with_name("subword.py")),
     }
     weights = {s["name"]: s["weight_percent"] for s in recipe["sources"]}

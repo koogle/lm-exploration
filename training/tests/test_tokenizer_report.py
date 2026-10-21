@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from tokenizer_report import bootstrap, generate
+from tokenizer.tokenizer_report import bootstrap, generate
 
 
 class ReportTests(unittest.TestCase):

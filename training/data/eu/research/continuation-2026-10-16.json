@@ -1,0 +1,68 @@
+{
+  "observed_at": "2026-10-16T13:55:32.400784+00:00",
+  "status": "blocked_environment_egress",
+  "existing_hf_data": {
+    "ecb": {
+      "repo_id": "jfrick/eu-ecb",
+      "rows": 764,
+      "metrics_backfill": "pending; historical downloads interrupted by outage"
+    },
+    "ema": {
+      "repo_id": "jfrick/eu-ema",
+      "revision": "0eb7d694dbe27ac31f4bd0c990e4d26966445aa8",
+      "metrics": {
+        "rows": 139,
+        "characters": 4315759,
+        "words": 605346,
+        "text_utf8_bytes": 4331446,
+        "parquet_bytes": 1851992,
+        "stored_raw_gzip_bytes": 37464713
+      }
+    }
+  },
+  "new_collections": {
+    "ecb": [
+      "working_papers",
+      "occasional_papers",
+      "economic_bulletin_articles",
+      "economic_bulletin_boxes"
+    ],
+    "ema": [
+      "epar_overviews",
+      "epar_product_information",
+      "epar_assessment_reports"
+    ]
+  },
+  "planned_continuation": {
+    "rounds_per_source": 3,
+    "max_attempts_per_round": 1000,
+    "work_seconds_per_round": 3000,
+    "worker_timeout_seconds": 3600,
+    "campaign_deadline_seconds": 14400,
+    "launched": false
+  },
+  "validation": {
+    "tests_passed": 65,
+    "ruff": "passed"
+  },
+  "blocker": {
+    "http_status": 503,
+    "message": "upstream connect error; envoy://cloudflare_https_tunnel/",
+    "affected": [
+      "Modal RPC",
+      "Hugging Face",
+      "ECB",
+      "EMA",
+      "GitHub push"
+    ],
+    "runtime_observations": "spec24 credentials ready, unrestricted policy enforced; transport failure, not approval rejection"
+  },
+  "implementation_commit": "f54744a",
+  "push_status": "failed HTTP503; implementation retained in local Git",
+  "recovery": [
+    "Complete historical metrics backfill before starting a writer for the same source.",
+    "Launch separate ECB and EMA Modal campaigns with --rounds 3.",
+    "Verify claims and new Parquet checkpoints.",
+    "Push branch and update PR3 with actual evidence."
+  ]
+}
