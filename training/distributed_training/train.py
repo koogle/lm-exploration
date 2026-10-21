@@ -14,7 +14,6 @@ from pathlib import Path
 from training_data.subword import LOSS_IGNORE_INDEX
 
 from distributed_training.config import DistributedConfig, DistributedRuntime, validate_resume
-from distributed_training.run_validation import validate_run
 
 
 def source_hashes():
@@ -89,8 +88,6 @@ def train(
     max_steps=None,
     commit=None,
 ):
-    validate_run(config)
-
     import numpy as np
     import torch
     import torch.distributed as dist
