@@ -1,6 +1,7 @@
 """Consolidated 10M architecture, shared formulas and historical checkpoint checks."""
 
 import copy
+import json
 import unittest
 from dataclasses import asdict
 from pathlib import Path
@@ -10,6 +11,7 @@ import test_100m_modern as shared_tests
 import torch
 from model_10m import legacy, model
 
+from distributed.config import DistributedConfig
 from generate import load_model
 from trainer.checkpoints import validate_resume
 from trainer.recipe import MODELS, load_recipe
@@ -120,9 +122,14 @@ class Modern10MTests(unittest.TestCase):
 
     def test_only_two_model_choices_and_all_recipes_validate(self):
         self.assertEqual(set(MODELS), {"10m", "100m"})
-        for path in Path("recipes").glob("*.json"):
-            recipe = load_recipe(path)
-            self.assertEqual(recipe.build_model_config(65).architecture_version, 2)
+        for path in Path("workflows/model_configs/historical").glob("*.json"):
+            with self.subTest(recipe=path.name):
+                settings = json.loads(path.read_text())
+                if "dataset" in settings:
+                    recipe = load_recipe(path)
+                    self.assertEqual(recipe.build_model_config(65).architecture_version, 2)
+                else:
+                    DistributedConfig(**settings)
 
 
 if __name__ == "__main__":

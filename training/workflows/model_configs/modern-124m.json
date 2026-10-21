@@ -1,9 +1,7 @@
 {
-  "world_size": 3,
   "global_windows": 48,
   "microbatch": 16,
   "context": 2048,
-  "target_tokens": 20000000000,
   "warmup_tokens": 20000000,
   "peak_lr": 0.0003,
   "min_lr_ratio": 0.1,
@@ -11,8 +9,12 @@
   "seed": 42,
   "checkpoint_every": 1000,
   "evaluate_every": 100,
-  "pilot": false,
   "n_layer": 14,
   "n_head": 12,
-  "n_embd": 768
+  "n_embd": 768,
+  "adam_beta1": 0.9,
+  "adam_beta2": 0.95,
+  "gradient_clip_norm": 1.0,
+  "validation_windows_per_source": 1,
+  "log_every": 10
 }

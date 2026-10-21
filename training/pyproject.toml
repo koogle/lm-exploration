@@ -18,6 +18,7 @@ corpus = [
     "huggingface-hub==1.33.0",
 ]
 research = [
+    "safetensors>=0.4,<1",
     "matplotlib==3.11.2",
     "modal[api-proxy-support]==1.6.2",
     "truststore==0.10.5",
@@ -32,13 +33,16 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["model_10m", "model_100m", "training_data", "training_data.fetching", "trainer", "tokenizer", "modal_scripts", "distributed_training"]
+packages = ["model_10m", "model_100m", "training_data", "training_data.fetching", "trainer", "tokenizer", "modal_scripts", "distributed", "workflows"]
 py-modules = ["generate"]
 
 [tool.setuptools.package-dir]
 model_10m = "10m"
 model_100m = "100m"
 training_data = "data"
+
+[tool.setuptools.package-data]
+workflows = ["*.json", "model_configs/*.json", "model_configs/historical/*.json", "datasets/*.json"]
 
 [dependency-groups]
 dev = [

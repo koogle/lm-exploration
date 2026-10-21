@@ -6,7 +6,7 @@ from pathlib import Path
 
 import modal
 
-from distributed_training.image import image
+from distributed.image import image
 
 app = modal.App("lm-exploration-distributed-checks")
 volume = modal.Volume.from_name("lm-exploration-training")

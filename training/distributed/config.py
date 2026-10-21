@@ -16,6 +16,12 @@ class DistributedConfig:
     peak_lr: float = 3e-4
     min_lr_ratio: float = 0.1
     weight_decay: float = 0.1
+    adam_beta1: float = 0.9
+    adam_beta2: float = 0.95
+    gradient_clip_norm: float = 1.0
+    data_loader: str = "token_shards"
+    validation_windows_per_source: int = 1
+    log_every: int = 10
     seed: int = 42
     checkpoint_every: int = 100
     evaluate_every: int = 100
@@ -35,6 +41,8 @@ class DistributedConfig:
             "warmup_tokens",
             "checkpoint_every",
             "evaluate_every",
+            "validation_windows_per_source",
+            "log_every",
             "n_layer",
             "n_head",
             "n_embd",
@@ -47,6 +55,8 @@ class DistributedConfig:
             raise ValueError("pilot must be boolean")
         if type(self.allow_unreviewed_data) is not bool:
             raise ValueError("allow_unreviewed_data must be boolean")
+        if self.data_loader not in ("token_shards", "raw"):
+            raise ValueError("data_loader must be token_shards or raw")
         if self.world_size not in (1, 2, 3):
             raise ValueError("Supported GPU counts: 1, 2, 3")
         if self.global_windows % (self.world_size * self.microbatch):
@@ -55,7 +65,14 @@ class DistributedConfig:
             raise ValueError("RoPE requires an even integral head dimension")
         if self.warmup_tokens >= self.target_tokens:
             raise ValueError("Warmup must end before the token target")
-        for name in ("peak_lr", "min_lr_ratio", "weight_decay"):
+        for name in (
+            "peak_lr",
+            "min_lr_ratio",
+            "weight_decay",
+            "adam_beta1",
+            "adam_beta2",
+            "gradient_clip_norm",
+        ):
             value = getattr(self, name)
             if (
                 isinstance(value, bool)
@@ -65,6 +82,10 @@ class DistributedConfig:
                 raise ValueError(f"Invalid {name}")
         if self.peak_lr <= 0 or not 0 <= self.min_lr_ratio <= 1 or self.weight_decay < 0:
             raise ValueError("Invalid optimizer settings")
+        if not 0 <= self.adam_beta1 < 1 or not 0 <= self.adam_beta2 < 1:
+            raise ValueError("Adam betas must be in [0, 1)")
+        if self.gradient_clip_norm <= 0:
+            raise ValueError("gradient_clip_norm must be positive")
 
     def as_dict(self):
         return asdict(self)
