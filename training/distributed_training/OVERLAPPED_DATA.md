@@ -58,7 +58,7 @@ From `training/`, after reviewing the code:
 
 ```sh
 modal run --detach modal_streaming_train.py \
-  --config recipes/scholarly-modern-10m-live.json \
+  --config distributed_training/recipes/scholarly-modern-10m-live.json \
   --run-id modern-live-example --gpu H100 --max-steps 100 --max-seconds 900
 ```
 
