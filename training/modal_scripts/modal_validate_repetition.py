@@ -1,4 +1,8 @@
-"""Compare four published checkpoints on fixed held-out text and generation."""
+"""Compare four published checkpoints on fixed held-out text and reference continuations.
+
+Generation from the same checkpoints is the recipe analysis/repetition/previous-comparison.json
+for sampling.modal_sample; the archived result combines both parts.
+"""
 
 import json
 from pathlib import Path
@@ -127,35 +131,15 @@ def compare():
             "targets": sum(s["tokens"] for s in scores.values()),
         }
 
-    def rep4(ids):
-        grams = [tuple(ids[i : i + 4]) for i in range(max(0, len(ids) - 3))]
-        return 1 - len(set(grams)) / len(grams) if grams else 0.0
-
-    prompts = [
-        "The solar system consists of",
-        "In mathematics, a prime number is",
-        "The purpose of an experiment is to",
-        "Once upon a time,",
-        "def add(a, b):\n    ",
-        "def factorial(n):\n    ",
-        "import json\n\ndef read_config(path):\n    ",
-        "The capital of France is",
-        "2 + 2 =",
-        "A language model predicts",
-    ]
-    modes = [
-        {"name": "greedy", "temperature": 0, "seed_offset": 1000},
-        {"name": "sampled_08_seed1", "temperature": 0.8, "top_k": 50, "seed_offset": 1000},
-        {"name": "sampled_08_seed2", "temperature": 0.8, "top_k": 50, "seed_offset": 2000},
-        {"name": "sampled_10_topp95", "temperature": 1.0, "top_p": 0.95, "seed_offset": 1000},
-        {"name": "greedy_penalty11", "temperature": 0, "penalty": 1.1, "seed_offset": 1000},
-    ]
     answers = [
-        (prompts[0], " eight planets"),
-        (prompts[1], " an integer greater than 1 with exactly two positive divisors"),
-        (prompts[7], " Paris"),
-        (prompts[8], " 4"),
-        (prompts[4], "return a + b"),
+        ("The solar system consists of", " eight planets"),
+        (
+            "In mathematics, a prime number is",
+            " an integer greater than 1 with exactly two positive divisors",
+        ),
+        ("The capital of France is", " Paris"),
+        ("2 + 2 =", " 4"),
+        ("def add(a, b):\n    ", "return a + b"),
     ]
     random_eval = evaluate()
     print(
@@ -181,7 +165,6 @@ def compare():
         model.load_state_dict(load_file(str(root / "model.safetensors")), strict=True)
         assert all(torch.isfinite(t).all() for t in model.parameters())
         heldout = evaluate()
-        samples = []
         answer_scores = []
         with torch.inference_mode():
             for prompt, answer in answers:
@@ -205,67 +188,12 @@ def compare():
                         "top5_next_tokens": [tokenizer.decode([t]) for t in top],
                     }
                 )
-            for pi, prompt in enumerate(prompts):
-                prefix = [1, *tokenizer.encode(prompt, add_special_tokens=False).ids]
-                for mode in modes:
-                    torch.manual_seed(mode["seed_offset"] + pi)
-                    tokens = torch.tensor([prefix], device="cuda")
-                    generated = []
-                    for _ in range(128):
-                        with torch.autocast("cuda", dtype=torch.bfloat16):
-                            logits = model(tokens)[0, -1].float()
-                        if mode.get("penalty"):
-                            ids = tokens.unique()
-                            old = logits[ids]
-                            logits[ids] = torch.where(
-                                old < 0, old * mode["penalty"], old / mode["penalty"]
-                            )
-                        if not mode["temperature"]:
-                            token = int(logits.argmax())
-                        else:
-                            scaled = logits / mode["temperature"]
-                            if mode.get("top_k"):
-                                values, indices = torch.topk(scaled, mode["top_k"])
-                            else:
-                                values, indices = torch.sort(scaled, descending=True)
-                                prob = values.softmax(-1)
-                                values[(prob.cumsum(-1) - prob) > mode["top_p"]] = -float("inf")
-                            token = int(indices[torch.multinomial(values.softmax(-1), 1)])
-                        generated.append(token)
-                        tokens = torch.cat([tokens, torch.tensor([[token]], device="cuda")], dim=1)
-                        if token == 2:
-                            break
-                    sample = {
-                        "prompt": prompt,
-                        "mode": mode["name"],
-                        "seed": mode["seed_offset"] + pi,
-                        "completion": tokenizer.decode(generated, skip_special_tokens=True),
-                        "generated_tokens": len(generated),
-                        "ended_with_eos": generated[-1] == 2,
-                        "repeated_4gram_fraction": rep4(generated),
-                        "generation_ids": generated,
-                    }
-                    samples.append(sample)
-            aggregate = {
-                mode["name"]: {
-                    "mean_repeated_4gram_fraction": sum(
-                        s["repeated_4gram_fraction"] for s in samples if s["mode"] == mode["name"]
-                    )
-                    / len(prompts),
-                    "eos_completions": sum(
-                        s["ended_with_eos"] for s in samples if s["mode"] == mode["name"]
-                    ),
-                }
-                for mode in modes
-            }
         report = {
             "step": expected_step,
             "trained_tokens": p["tokens"],
             "revision": revision,
             "heldout": heldout,
-            "decoding_summary": aggregate,
             "reference_continuation_scores": answer_scores,
-            "samples": samples,
         }
         reports.append(report)
         print(
@@ -274,7 +202,6 @@ def compare():
                     "step": expected_step,
                     "tokens": p["tokens"],
                     "heldout_loss": heldout["mixture_weighted_loss"],
-                    "decoding_summary": aggregate,
                 }
             ),
             flush=True,
@@ -282,13 +209,10 @@ def compare():
         interim = {
             "random_initialization": random_eval,
             "checkpoints": reports,
-            "modes": modes,
-            "prompts": prompts,
             "evaluation_context": 2048,
-            "generation_max_new_tokens": 128,
             "note": "Bounded diagnostic evaluation, not a sealed benchmark. Reference prompts are manually chosen and not a standardized factual test.",
         }
-        (Path("/runs") / "simple-llm-repetition-comparison-20261018.json").write_text(
+        (Path("/runs") / "simple-llm-repetition-heldout.json").write_text(
             json.dumps(interim, indent=2) + "\n"
         )
         run_volume.commit()
@@ -300,7 +224,7 @@ def compare():
         torch_version=str(torch.__version__),
         device=torch.cuda.get_device_name(),
     )
-    (Path("/runs") / "simple-llm-repetition-comparison-20261018.json").write_text(
+    (Path("/runs") / "simple-llm-repetition-heldout.json").write_text(
         json.dumps(interim, indent=2) + "\n"
     )
     run_volume.commit()
@@ -308,7 +232,7 @@ def compare():
 
 
 @app.local_entrypoint()
-def main(output: str = "artifacts/pr-16/results/simple-llm-repetition-comparison-20261018.json"):
+def main(output: str = "artifacts/results/simple-llm-repetition-heldout.json"):
     r = compare.remote()
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
