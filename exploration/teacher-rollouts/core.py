@@ -319,3 +319,19 @@ def supervise_call(call, deadline, now=time.time):
     finally:
         if not completed:
             call.cancel(terminate_containers=True)
+
+
+def ignore_source(path):
+    """Exclude local outputs and caches at every nesting depth from Modal images."""
+    return any(
+        part
+        in {
+            "artifacts",
+            ".budget",
+            "__pycache__",
+            ".venv",
+            ".ruff_cache",
+            ".pytest_cache",
+        }
+        for part in Path(path).parts
+    ) or Path(path).suffix in {".pyc", ".so"}

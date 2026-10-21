@@ -11,6 +11,7 @@ from unittest.mock import patch
 from core import (
     Store,
     digest,
+    ignore_source,
     reserve_budget,
     select_best,
     summarize,
@@ -225,6 +226,17 @@ class BudgetAndMetricsTests(unittest.TestCase):
             supervise_call(expired, 100, now=lambda: 101)
         expired.get.assert_not_called()
         expired.cancel.assert_called_once_with(terminate_containers=True)
+
+    def test_image_sources_exclude_nested_caches_and_run_outputs(self):
+        for path in [
+            "megakernel/__pycache__/probe.pyc",
+            "artifacts/run/results.json",
+            ".budget/ledger.json",
+            "megakernel/kernel.so",
+        ]:
+            self.assertTrue(ignore_source(Path(path)))
+        for path in ["megakernel/kernel.cu", "megakernel/model.py", "prompts.json"]:
+            self.assertFalse(ignore_source(Path(path)))
 
     def test_invalid_caps(self):
         for key, value in [

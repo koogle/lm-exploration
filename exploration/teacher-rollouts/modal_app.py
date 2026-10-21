@@ -5,16 +5,21 @@ import os
 import re
 import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 import modal
 
-from core import atomic_json, supervise_call, validate_config
-
 HERE = Path(__file__).parent if modal.is_local() else Path("/experiment")
+sys.path.insert(0, str(HERE))
+
+from core import atomic_json, ignore_source, supervise_call, validate_config
+
 CONFIG = json.loads((HERE / "config.json").read_text())
 app = modal.App("lm-exploration-teacher-rollouts")
+
+
 image = (
     modal.Image.from_registry(CONFIG["image"])
     .entrypoint([])
@@ -22,7 +27,7 @@ image = (
     .add_local_dir(
         HERE,
         "/experiment",
-        ignore=["artifacts", ".budget", "__pycache__", ".venv", ".ruff_cache"],
+        ignore=ignore_source,
     )
 )
 KERNEL_IMAGE = "nvidia/cuda@sha256:6617a625f4090c76c545a0e7d63f2e441718ef9af7f4efe7dd1242a29e289fd7"
@@ -33,7 +38,7 @@ kernel_image = (
         HERE,
         "/experiment",
         copy=True,
-        ignore=["artifacts", ".budget", "__pycache__", ".venv", ".ruff_cache"],
+        ignore=ignore_source,
     )
     .run_commands(
         "nvcc -std=c++17 -O3 -arch=sm_90 -DTARGET_SM=90 --shared -Xcompiler=-fPIC /experiment/megakernel/kernel.cu -o /experiment/megakernel/kernel.so"
@@ -134,7 +139,7 @@ control_image = (
     .add_local_dir(
         HERE,
         "/experiment",
-        ignore=["artifacts", ".budget", "__pycache__", ".venv", ".ruff_cache"],
+        ignore=ignore_source,
     )
 )
 supervision = modal.Dict.from_name(

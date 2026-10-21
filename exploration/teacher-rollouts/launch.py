@@ -75,6 +75,7 @@ def main():
     out = HERE / "artifacts" / args.run_id
     out.mkdir(parents=True, exist_ok=True)
     atomic_json(out / f"{args.attempt}-launch.json", {"deadline_unix": deadline})
+    report = None
     with modal.enable_output(), app.run():
         call = supervisor.spawn(args.run_id, args.attempt, manifest, deadline)
         atomic_json(
@@ -87,6 +88,10 @@ def main():
             state = supervision.get(f"{args.run_id}/{args.attempt}")
             if state:
                 atomic_json(out / f"{args.attempt}-supervision.json", state)
+    if report is None:
+        raise RuntimeError(
+            "Run interrupted before a report was returned; inspect persisted supervision state"
+        )
     report["client_total_seconds_including_build_and_queue"] = (
         time.monotonic() - started
     )
