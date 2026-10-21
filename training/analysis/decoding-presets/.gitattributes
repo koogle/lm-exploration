@@ -1,2 +1,0 @@
-# Preserve verbatim generated code indentation and trailing spaces.
-all-completions.md -whitespace

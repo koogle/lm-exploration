@@ -109,20 +109,35 @@ def compare():
     tokenizer = Tokenizer.from_file(str(source / "tokenizer/tokenizer.json"))
     tokenizer_hash = hashlib.sha256((source / "tokenizer/tokenizer.json").read_bytes()).hexdigest()
     settings = [
-        ("baseline_t1_p95", 1.0, .95, 1.0),
-        ("t085_p95", .85, .95, 1.0),
-        ("t07_p95_rp110", .7, .95, 1.1),
-        ("t085_p95_rp110", .85, .95, 1.1),
-        ("t1_p95_rp110", 1.0, .95, 1.1),
-        ("t085_p90_rp105", .85, .9, 1.05),
-        ("t085_p90_rp115", .85, .9, 1.15),
-        ("t07_p90_rp110", .7, .9, 1.1),
+        ("baseline_t1_p95", 1.0, 0.95, 1.0),
+        ("t085_p95", 0.85, 0.95, 1.0),
+        ("t07_p95_rp110", 0.7, 0.95, 1.1),
+        ("t085_p95_rp110", 0.85, 0.95, 1.1),
+        ("t1_p95_rp110", 1.0, 0.95, 1.1),
+        ("t085_p90_rp105", 0.85, 0.9, 1.05),
+        ("t085_p90_rp115", 0.85, 0.9, 1.15),
+        ("t07_p90_rp110", 0.7, 0.9, 1.1),
     ]
-    modes = [{"name": "greedy", "temperature": 0.0, "top_p": 1.0, "repetition_penalty": 1.0, "seed_offset": 1000}]
+    modes = [
+        {
+            "name": "greedy",
+            "temperature": 0.0,
+            "top_p": 1.0,
+            "repetition_penalty": 1.0,
+            "seed_offset": 1000,
+        }
+    ]
     for name, temperature, top_p, penalty in settings:
         for seed_offset in (1000, 2000):
-            modes.append({"name": name, "temperature": temperature, "top_p": top_p,
-                          "repetition_penalty": penalty, "seed_offset": seed_offset})
+            modes.append(
+                {
+                    "name": name,
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "repetition_penalty": penalty,
+                    "seed_offset": seed_offset,
+                }
+            )
     output = Path("/runs/simple-llm-decoding-presets-20261018.json")
     checkpoints = []
     previous_elapsed = 0.0
@@ -178,11 +193,15 @@ def compare():
                         penalty = mode["repetition_penalty"]
                         seen = tokens[0].unique()
                         seen_logits = logits[seen]
-                        logits[seen] = torch.where(seen_logits < 0, seen_logits * penalty, seen_logits / penalty)
+                        logits[seen] = torch.where(
+                            seen_logits < 0, seen_logits * penalty, seen_logits / penalty
+                        )
                         if mode["temperature"] == 0:
                             token = int(logits.argmax())
                         else:
-                            values, indices = torch.sort(logits / mode["temperature"], descending=True)
+                            values, indices = torch.sort(
+                                logits / mode["temperature"], descending=True
+                            )
                             remove = values.softmax(-1).cumsum(-1) > mode["top_p"]
                             remove[1:] = remove[:-1].clone()
                             remove[0] = False
@@ -213,7 +232,10 @@ def compare():
                 selected = [s for s in samples if s["mode"] == name]
                 summary[name] = {
                     "completions": len(selected),
-                    "mean_repeated_4gram_fraction": sum(s["repeated_4gram_fraction"] for s in selected) / len(selected),
+                    "mean_repeated_4gram_fraction": sum(
+                        s["repeated_4gram_fraction"] for s in selected
+                    )
+                    / len(selected),
                     "eos_completions": sum(s["ended_with_eos"] for s in selected),
                 }
             checkpoints.append(
@@ -253,9 +275,11 @@ def compare():
 
 
 @app.local_entrypoint()
-def main():
+def main(output: str = "../../artifacts/decoding-presets/decoding-presets-20261018.json"):
     report = compare.remote()
-    Path("decoding-presets-20261018.json").write_text(json.dumps(report, indent=2) + "\n")
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2) + "\n")
     print(
         json.dumps(
             {

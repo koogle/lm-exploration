@@ -111,16 +111,49 @@ def compare():
     model = GPT(ModelConfig(**config)).cuda().eval()
     tokenizer = Tokenizer.from_file(str(source / "tokenizer/tokenizer.json"))
     tokenizer_hash = hashlib.sha256((source / "tokenizer/tokenizer.json").read_bytes()).hexdigest()
-    modes = [{"name": "greedy", "temperature": 0.0, "top_p": 1.0, "top_k": 0, "repetition_penalty": 1.0, "seed_offset": 1000}]
-    for temperature in (.1, .8):
+    modes = [
+        {
+            "name": "greedy",
+            "temperature": 0.0,
+            "top_p": 1.0,
+            "top_k": 0,
+            "repetition_penalty": 1.0,
+            "seed_offset": 1000,
+        }
+    ]
+    for temperature in (0.1, 0.8):
         for seed in (1000, 2000):
-            modes.append({"name": f"topk50_t{temperature}", "temperature": temperature,
-                          "top_p": 1.0, "top_k": 50, "repetition_penalty": 1.0, "seed_offset": seed})
-    modes.append({"name": "baseline_t1_p95", "temperature": 1.0, "top_p": .95,
-                  "top_k": 0, "repetition_penalty": 1.0, "seed_offset": 1000})
+            modes.append(
+                {
+                    "name": f"topk50_t{temperature}",
+                    "temperature": temperature,
+                    "top_p": 1.0,
+                    "top_k": 50,
+                    "repetition_penalty": 1.0,
+                    "seed_offset": seed,
+                }
+            )
+    modes.append(
+        {
+            "name": "baseline_t1_p95",
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "top_k": 0,
+            "repetition_penalty": 1.0,
+            "seed_offset": 1000,
+        }
+    )
     for seed in (1000, 2000):
-        modes.append({"name": "t085_p95_rp110", "temperature": .85, "top_p": .95,
-                      "top_k": 0, "repetition_penalty": 1.1, "seed_offset": seed})
+        modes.append(
+            {
+                "name": "t085_p95_rp110",
+                "temperature": 0.85,
+                "top_p": 0.95,
+                "top_k": 0,
+                "repetition_penalty": 1.1,
+                "seed_offset": seed,
+            }
+        )
     output = Path("/runs/simple-llm-own-precision-fp32-20261018.json")
     checkpoints = []
     previous_elapsed = 0.0
@@ -175,14 +208,20 @@ def compare():
                         penalty = mode["repetition_penalty"]
                         seen = tokens[0].unique()
                         seen_logits = logits[seen]
-                        logits[seen] = torch.where(seen_logits < 0, seen_logits * penalty, seen_logits / penalty)
+                        logits[seen] = torch.where(
+                            seen_logits < 0, seen_logits * penalty, seen_logits / penalty
+                        )
                         if mode["temperature"] == 0:
                             token = int(logits.argmax())
                         else:
                             if mode["top_k"]:
-                                values, indices = torch.topk(logits / mode["temperature"], mode["top_k"])
+                                values, indices = torch.topk(
+                                    logits / mode["temperature"], mode["top_k"]
+                                )
                             else:
-                                values, indices = torch.sort(logits / mode["temperature"], descending=True)
+                                values, indices = torch.sort(
+                                    logits / mode["temperature"], descending=True
+                                )
                                 remove = values.softmax(-1).cumsum(-1) > mode["top_p"]
                                 remove[1:] = remove[:-1].clone()
                                 remove[0] = False
@@ -213,7 +252,10 @@ def compare():
                 selected = [s for s in samples if s["mode"] == name]
                 summary[name] = {
                     "completions": len(selected),
-                    "mean_repeated_4gram_fraction": sum(s["repeated_4gram_fraction"] for s in selected) / len(selected),
+                    "mean_repeated_4gram_fraction": sum(
+                        s["repeated_4gram_fraction"] for s in selected
+                    )
+                    / len(selected),
                     "eos_completions": sum(s["ended_with_eos"] for s in selected),
                 }
             checkpoints.append(
@@ -255,11 +297,16 @@ def compare():
 
 
 @app.local_entrypoint()
-def main():
+def main(output: str = "../../artifacts/decoding-presets/own-precision-fp32-20261018.json"):
     report = compare.remote()
     # Normalize the descriptive note of a reused remote result, never sample data.
-    report["note"] = report["note"].replace("No top-k filter or n-gram ban.", "Top-k/nucleus filters are identified per mode; no n-gram ban.")
-    Path("own-precision-fp32-20261018.json").write_text(json.dumps(report, indent=2) + "\n")
+    report["note"] = report["note"].replace(
+        "No top-k filter or n-gram ban.",
+        "Top-k/nucleus filters are identified per mode; no n-gram ban.",
+    )
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2) + "\n")
     print(
         json.dumps(
             {

@@ -10,6 +10,11 @@ published model definition from that revision, verifies source and weight hashes
 and checks finite parameters. Current repository model code is intentionally not
 used because the architecture has changed since training.
 
+Generated outputs (raw JSONs with token IDs, summary tables, all 170 completions,
+the FP32 comparison and the manual qualitative review) are archived on Hugging Face in
+[`jfrick/lm-exploration-results` under `pr-20/training/analysis/decoding-presets/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-20/training/analysis/decoding-presets)
+(private dataset).
+
 ## Measured results
 
 | Preset | Temperature | Top-p | Penalty | Repeated token 4-grams | Prose/math | Python |
@@ -36,101 +41,41 @@ repetition from 20.68% to 3.48%. The T=1/top-p=.95 pair decreases from 6.24% to
 was more repetitive than top-p=.95 (19.36% versus 12.72%). These are observations
 on a small reused prompt set, not population estimates.
 
-**No setting fixed general generation quality.** Manual inspection found readable
-phrases alongside contradictions, topic drift, and malformed or incorrect code.
-The [paired examples](quality-review.md) include counterexamples where a penalty
-reduced repetition but damaged an initially useful answer. No subjective quality
-percentage or automated judge score is reported.
+**No setting fixed general generation quality.** A manual review (first 240
+characters of all 90 first-seed completions, plus full second-seed completions for
+the baseline and the three lowest-repetition presets; no generated code executed,
+no automated judge or quality percentage) found readable phrases alongside
+contradictions, topic drift, invented names and malformed or incorrect code.
+Counterexamples from that review:
+
+- Breaking a loop is not coherence: for `The solar system consists of`, greedy
+  repeats "a solar system"; T=.85/p=.95/penalty1.1 avoids the loop but drifts to
+  cameras, a power station and heat transfer.
+- A penalty can spoil a useful start: for `2 + 2 =` (seed 1008, T=1/p=.95) penalty
+  1.0 starts with 4 and penalty 1.1 with 3; seed 2008 reverses the direction. This
+  is a tradeoff example, not an accuracy estimate.
+- Stronger penalties can damage code: for `def add(a, b):` (seed 1004,
+  T=.85/p=.90) penalty 1.05 writes `a += b; return a`, while penalty 1.15 increments
+  both arguments before adding them.
 
 For prose exploration, **T=.85, top-p=.95, repetition_penalty=1.1** is a provisional
 anti-loop candidate: it substantially reduces loops without choosing the highest
-tested temperature. It is not a validated fluency or relevance improvement.
-T=1/penalty1.1 minimizes this study's repetition metric but is not recommended
-solely on that basis. For code, this experiment identifies **no reliable preset**;
-retain a penalty-1.0 control because discouraging necessary repeated tokens can
-damage the program. A fresh prompt set with more seeds is needed before promoting
-any setting to a general default. No product default is changed by this PR.
-
-## Method
-
-Ten fixed prompts from the previous repetition study, including three Python
-prompts, are evaluated at a 128-new-token limit. Greedy has one completion per
-prompt. Eight sampled presets each use seeds `1000 + prompt_index` and
-`2000 + prompt_index`: 170 completions in total. Same prompts and seed identities
-across settings permit comparison; two seeds are insufficient to estimate broad
-generation quality or confidence intervals. These prompts are reused diagnostics,
-not a fresh held-out benchmark.
-
-Nucleus sampling keeps the token that crosses the top-p threshold. No top-k
-filter or n-gram ban is applied. The sign-aware repetition penalty divides
-positive logits and multiplies negative logits for token identities already in
-the prompt or generated prefix. Each identity is penalized once, regardless of
-its occurrence count. At penalty 1.0 this is a no-op. Repeated subword tokens are
-penalized too: this can damage identifiers, indentation, and normal language.
-
-Repetition is `1 - unique_generated_token_4grams / all_generated_token_4grams`,
-averaged equally across completions. Prompt tokens are excluded from that metric.
-The report also separates the seven prose/math prompts from the three Python
-prompts and reports repeated character 16-grams over the first 256 generated
-characters. EOS and completion lengths are retained to expose early termination.
-Neither metric establishes relevance, correctness, fluency, or executable code.
-The summary additionally includes lowercased, whitespace-collapsed character
-16-grams over the first 256 normalized characters, explicitly named separately
-from the raw-character metric for comparison with the external-baseline study.
-
-## Reproduce
-
-Run from this directory with Modal credentials and access to the existing
-`lm-exploration-training` output volume:
-
-```sh
-modal run --detach modal_decoding.py
-python build_report.py
-```
-
-The job uses one H100, four requested CPUs, 8 GiB RAM, a 30-minute hard timeout,
-and no automatic function retries. Downloads have four bounded retry attempts.
-Completed matching results are reused from the output volume. The remote image
-pins PyTorch 2.6.0 and tokenizers 0.22.2; model execution uses FP32 weights with
-BF16 autocast. The local report builder uses only Python's standard library.
-
-For a local environment whose outbound proxy uses the system CA store, the
-equivalent launch command used here is:
-
-```sh
-python -c 'import truststore; truststore.inject_into_ssl(); from modal.__main__ import main; main()' run --detach modal_decoding.py
-```
-
-TLS verification remains enabled. No credentials, local model weights, or
-generated code execution are required in this folder.
-
-## Execution and artifacts
-
-Completed Modal app:
-[ap-ZMqpEOdumyv0gGOiTsl7aT](https://modal.com/apps/radiantai/main/ap-ZMqpEOdumyv0gGOiTsl7aT).
-Remote execution, including model download/loading and inference, took
-188.822 seconds on one H100. At the previously checked Modal H100 rate of
-$3.9492/GPU-hour, that is approximately **$0.21 of GPU time**, plus CPU/RAM and
-startup charges. This is a rate-based estimate, not an invoice. No additional
-training, deployment, or model-repository upload occurred.
-
-Validation: source/weight provenance checks passed remotely; all 170 sample
-records and all twenty matching prior-study baselines were checked locally.
-Sign-aware penalty and nucleus threshold-crossing retention passed CPU reference
-checks; both Python files compile. The report builder regenerates the summary,
-table, baseline comparisons, and unfiltered completion document from raw JSON.
-
-[Raw results](decoding-presets-20261018.json) · [Summary](summary.json) ·
-[All completions](all-completions.md) · [Qualitative review](quality-review.md) ·
-[Baseline reproducibility](baseline-reproducibility.json)
+tested temperature. Keep the unpenalized T=1/top-p=.95 control beside it. It is
+not a validated fluency or relevance improvement. T=1/penalty1.1 minimizes this
+study's repetition metric but often produces especially disordered prose or code,
+so it is not recommended on that basis. For code, this experiment identifies
+**no reliable preset**; retain a penalty-1.0 control because discouraging
+necessary repeated tokens can damage the program. A task-specific stop rule might
+preserve useful prefixes but was not tested. A fresh prompt set with more seeds
+is needed before promoting any setting to a general default. No product default
+is changed by this PR.
 
 ## Full-FP32 precision sensitivity
 
 The independent external-baseline study found substantial BF16 sensitivity in
-Pythia. That motivated an additional controlled check on **our** model, preserving
-our original BOS prefix and matching prompts, seeds, and decode settings. It uses
-full-FP32 weights and forward execution, CUDA/cuDNN TF32 disabled, and highest
-float32 matmul precision. Original BF16 artifacts remain unchanged.
+Pythia. This check reruns **our** model with the same BOS prefix, prompts, seeds
+and decode settings, using full-FP32 weights and forward execution, CUDA/cuDNN
+TF32 disabled and highest float32 matmul precision.
 
 | Setting | Matched completions | BF16 repeat token4 | FP32 repeat token4 | Token-identical completions |
 |---|---:|---:|---:|---:|
@@ -146,24 +91,85 @@ token-identical. The remaining France completion switches from repeating
 States.” Both are wrong and highly repetitive. Sampled paths are more sensitive
 to small numerical differences, but the broad repetition pattern persists.
 This result is specific to our model; do not infer that other models are
-insensitive to inference precision.
+insensitive to inference precision. The T=1 row uses only the ten matching
+original seeds (6.32% BF16 versus the sweep's twenty-completion 6.24%). The raw
+FP32 artifact records a corrected descriptive note; sample data are unchanged.
 
-The T=1 comparison uses only the ten matching original seeds, explaining its
-6.32% BF16 baseline versus the twenty-completion sweep's 6.24% mean.
+## Method
 
-The additional job completed 80 samples in 99.215 seconds of remote execution
-(approximately $0.11 GPU time plus CPU/RAM, excluding any unbilled queue time;
-not an invoice):
-[ap-D4K27UYN5JP4NSmEMulsi7](https://modal.com/apps/radiantai/main/ap-D4K27UYN5JP4NSmEMulsi7).
-The raw artifact preserves an original copied descriptive note and explicitly
-records its correction; actual per-mode top-k/nucleus fields and all generated
-sample data are unchanged.
+Ten fixed prompts from the previous repetition study, including three Python
+prompts, are evaluated at a 128-new-token limit. Greedy has one completion per
+prompt. Eight sampled presets each use seeds `1000 + prompt_index` and
+`2000 + prompt_index`: 170 completions in total. Same prompts and seed identities
+across settings permit comparison; two seeds are insufficient to estimate broad
+generation quality or confidence intervals. These prompts are reused diagnostics,
+not a fresh held-out benchmark.
+
+Nucleus sampling keeps the token that crosses the top-p threshold. No top-k
+filter or n-gram ban is applied. The sign-aware repetition penalty divides
+positive logits and multiplies negative logits for token identities already in
+the prompt or generated prefix, once per identity regardless of count; 1.0 is a
+no-op. Repeated subword tokens are penalized too, which can damage identifiers,
+indentation and normal language.
+
+Repetition is `1 - unique_generated_token_4grams / all_generated_token_4grams`,
+averaged equally across completions, excluding prompt tokens. The summary also
+splits prose/math from Python prompts and reports repeated raw and normalized
+(lowercased, whitespace-collapsed) character 16-grams over the first 256
+characters, plus EOS counts and completion lengths. Neither metric establishes
+relevance, correctness, fluency or executable code.
+
+## Reproduce
+
+Run from this directory with Modal credentials and access to the existing
+`lm-exploration-training` output volume. Outputs go to the ignored
+`training/artifacts/decoding-presets/` by default (`--output` overrides). Matching
+completed results are reused from the output volume.
 
 ```sh
+modal run --detach modal_decoding.py
 modal run --detach modal_precision.py
-python build_precision_report.py
 ```
 
-[Raw FP32 results and token IDs](own-precision-fp32-20261018.json) ·
-[Matched precision comparisons and text](precision-comparison.json) ·
-[Generated comparison table](precision-results.md)
+Each job uses one H100, four requested CPUs, 8 GiB RAM, a 30-minute hard timeout
+and no automatic function retries; downloads have four bounded retry attempts. The
+remote image pins PyTorch 2.6.0 and tokenizers 0.22.2. The sweep uses FP32 weights
+with BF16 autocast; the precision job uses full FP32.
+
+The report builders use only the Python standard library and take explicit input
+folders; they write their tables, summaries and completion dump beside the raw
+JSONs. They also need `previous-comparison-20261018.json` and
+`low-temperature-20261018.json` from the repetition study (published in
+`jfrick/scholarly-code-modern-gpt-124m-step2` under `analysis/repetition/`):
+
+```sh
+python build_report.py ../../artifacts/decoding-presets \
+  --previous ../../artifacts/repetition/previous-comparison-20261018.json
+python build_precision_report.py ../../artifacts/decoding-presets \
+  --repetition ../../artifacts/repetition
+```
+
+To rebuild the archived reports, download `decoding-presets-20261018.json` and
+`own-precision-fp32-20261018.json` from the HF folder above into
+`../../artifacts/decoding-presets/`. Rebuilding from the archived raw JSONs
+reproduces the archived summaries, tables and completion dump byte for byte.
+
+For a local environment whose outbound proxy uses the system CA store, the
+equivalent launch command used here is (TLS verification stays enabled):
+
+```sh
+python -c 'import truststore; truststore.inject_into_ssl(); from modal.__main__ import main; main()' run --detach modal_decoding.py
+```
+
+## Execution
+
+- Sweep: [ap-ZMqpEOdumyv0gGOiTsl7aT](https://modal.com/apps/radiantai/main/ap-ZMqpEOdumyv0gGOiTsl7aT),
+  188.822 s remote execution on one H100 (about $0.21 GPU time at $3.9492/GPU-hour,
+  plus CPU/RAM and startup; not an invoice).
+- FP32 check: [ap-D4K27UYN5JP4NSmEMulsi7](https://modal.com/apps/radiantai/main/ap-D4K27UYN5JP4NSmEMulsi7),
+  80 samples in 99.215 s (about $0.11 GPU time).
+
+Validation: source/weight provenance checks passed remotely; all 170 sample
+records and all twenty matching prior-study baselines were checked locally.
+Sign-aware penalty and nucleus threshold-crossing retention passed CPU reference
+checks. No training, deployment or model-repository upload occurred.
