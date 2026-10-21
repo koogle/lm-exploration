@@ -121,6 +121,15 @@ class Decoder:
             ctypes.c_void_p,
         ]
         self.library.decode.restype = ctypes.c_int
+        self.library.decode_device.argtypes = [
+            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.c_void_p,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_void_p,
+        ]
+        self.library.decode_device.restype = ctypes.c_int
         self.library.error_string.argtypes = [ctypes.c_int]
         self.library.error_string.restype = ctypes.c_char_p
         self.resident_blocks = self.library.maximum_blocks()
@@ -265,3 +274,65 @@ class Decoder:
                 logits = self.step(token)
         torch.cuda.synchronize()
         return out
+
+    @torch.inference_mode()
+    def step_device(self, token):
+        """Device token must come from a checked vocabulary argmax, on this stream."""
+        if (
+            token.device != self.head.device
+            or token.dtype != torch.int64
+            or token.numel() != 1
+            or not token.is_contiguous()
+            or self.position >= self.max_seq_len
+        ):
+            raise ValueError("Invalid device token or cache position")
+        code = self.library.decode_device(
+            self.pointers,
+            token.data_ptr(),
+            self.position,
+            self.max_seq_len,
+            0,
+            torch.cuda.current_stream().cuda_stream,
+        )
+        if code:
+            raise RuntimeError(self.library.error_string(code).decode())
+        self.position += 1
+        return torch.nn.functional.linear(
+            self.normalized.to(torch.bfloat16), self.head
+        ).float()
+
+    @torch.inference_mode()
+    def generate_buffered(self, ids, max_tokens=16, eos=None, capture="logits"):
+        """Greedy decode with no per-token D2H read; one final CPU transfer per tensor.
+
+        Row i is p(output_token[i] | prompt, output_tokens[:i]). EOS is excluded,
+        like generate(). Fixed-size extra work after EOS is discarded. 'hidden'
+        stores normalized BF16 hidden states and projects them together afterward.
+        """
+        if (
+            not ids
+            or max_tokens < 1
+            or len(ids) + max_tokens > self.max_seq_len
+            or capture not in ("logits", "hidden")
+        ):
+            raise ValueError("Invalid prompt, budget or capture mode")
+        self.reset()
+        for token in ids:
+            logits = self.step(token)
+        tokens = torch.empty(max_tokens, dtype=torch.int64, device=self.head.device)
+        width = self.head.shape[0] if capture == "logits" else self.head.shape[1]
+        buffer = torch.empty(
+            (max_tokens, width),
+            device=self.head.device,
+            dtype=torch.float32 if capture == "logits" else torch.bfloat16,
+        )
+        for i in range(max_tokens):
+            buffer[i].copy_(logits if capture == "logits" else self.normalized)
+            torch.argmax(logits, dim=0, out=tokens[i])
+            if i + 1 < max_tokens:
+                logits = self.step_device(tokens[i])
+        if capture == "hidden":
+            buffer = torch.nn.functional.linear(buffer, self.head).float()
+        cpu_tokens = tokens.cpu().tolist()
+        stop = cpu_tokens.index(eos) if eos in cpu_tokens else max_tokens
+        return cpu_tokens[:stop], buffer[:stop].cpu()

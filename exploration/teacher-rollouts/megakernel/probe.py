@@ -74,6 +74,32 @@ def run(root, attempt, manifest):
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
         save()
+        if manifest["config"].get("targets_only"):
+            prior = Path(
+                "/runs/qwen35-targets-kernel-20261022-01/attempts/targets-kernel-01/report.json"
+            )
+            previous = json.loads(prior.read_text())
+            if not previous.get("buffered_distillation", {}).get("correctness_passed"):
+                raise ValueError("Prior sparse-target qualification has not passed")
+            prior_manifest = json.loads(
+                (prior.parents[2] / "manifest.json").read_text()
+            )
+            for key in (
+                "megakernel/model.py",
+                "megakernel/kernel.cu",
+                "megakernel/targets.py",
+            ):
+                if (
+                    prior_manifest["source_hashes"][key]
+                    != manifest["source_hashes"][key]
+                ):
+                    raise ValueError(f"Qualified source changed: {key}")
+            report["qualification_source"] = str(prior)
+            from megakernel.throughput import measure
+
+            measure(decoder, tokenizer, manifest, out, volume, report, save)
+            report["status"] = "completed"
+            return report
         # Capture every transformer layer without relying on hidden-state output conventions.
         reference_layers = {}
         hooks = [
@@ -176,6 +202,16 @@ def run(root, attempt, manifest):
         if not report["reset_reproducible"]:
             report["status"] = "reset_failed"
             return report
+        from megakernel.buffer_probe import qualify
+
+        report["buffered_distillation"] = qualify(decoder, tokenizer, out)
+        save()
+        if not report["buffered_distillation"]["correctness_passed"]:
+            report["status"] = "buffered_correctness_failed"
+            return report
+        from megakernel.throughput import measure
+
+        measure(decoder, tokenizer, manifest, out, volume, report, save)
         measurements = []
         for backend in ("megakernel", "transformers_eager"):
             rows = []

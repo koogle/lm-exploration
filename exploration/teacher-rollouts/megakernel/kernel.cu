@@ -804,8 +804,11 @@ decode_kernel(
     unsigned int *__restrict__ barrier_generation,
     float *__restrict__ seen_token_mask,
     float repetition_penalty,
-    int input_token_id, int position, int max_seq_len, int debug)
+    int input_token_id, int position, int max_seq_len, int debug,
+    const int64_t *device_token)
 {
+    if (device_token) input_token_id = (int)*device_token;
+    if (input_token_id < 0 || input_token_id >= VOCAB_SIZE) return;
     int block_id = blockIdx.x;
     int num_blocks = gridDim.x;
 
@@ -892,17 +895,25 @@ extern "C" int maximum_blocks() {
     return sms*active;
 }
 extern "C" const char *error_string(int code) { return cudaGetErrorString((cudaError_t)code); }
-extern "C" int decode(void **p, int token, int position, int max_seq, int debug, void *stream_ptr) {
+static int launch_decode(void **p, int token, int position, int max_seq, int debug, void *stream_ptr, const int64_t *device_token) {
     int resident = maximum_blocks();
     if (resident < DN_NUM_HEADS) return (int)cudaErrorCooperativeLaunchTooLarge;
     int blocks = min(resident, NUM_BLOCKS);
     // First 22 arguments are device pointers, then repetition penalty and scalar indices.
     float penalty = 1.0f;
-    void *args[27];
+    void *args[28];
     for (int i=0; i<22; ++i) args[i] = &p[i];
     args[22] = &penalty;
     args[23] = &token; args[24] = &position; args[25] = &max_seq; args[26] = &debug;
+    args[27] = &device_token;
     return (int)cudaLaunchCooperativeKernel((void*)decode_kernel,
                 dim3(blocks), dim3(BLOCK_SIZE), args,
                 SHMEM_FLOATS*sizeof(float), (cudaStream_t)stream_ptr);
+}
+
+extern "C" int decode(void **p, int token, int position, int max_seq, int debug, void *stream_ptr) {
+    return launch_decode(p, token, position, max_seq, debug, stream_ptr, nullptr);
+}
+extern "C" int decode_device(void **p, const int64_t *token, int position, int max_seq, int debug, void *stream_ptr) {
+    return launch_decode(p, 0, position, max_seq, debug, stream_ptr, token);
 }

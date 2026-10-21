@@ -51,7 +51,7 @@ propcache==0.5.4
     # via
     #   aiohttp
     #   yarl
-protobuf==7.36.2
+protobuf==6.33.5
     # via modal
 pygments==2.21.0
     # via rich

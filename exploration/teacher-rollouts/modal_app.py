@@ -23,10 +23,14 @@ app = modal.App("lm-exploration-teacher-rollouts")
 image = (
     modal.Image.from_registry(CONFIG["image"])
     .entrypoint([])
+    .run_commands(
+        "python3 -c \"import pathlib, sys; pathlib.Path('/usr/local/bin/python').symlink_to(sys.executable)\""
+    )
     .pip_install_from_requirements(str(HERE / "requirements.lock"))
     .add_local_dir(
         HERE,
         "/experiment",
+        copy=True,
         ignore=ignore_source,
     )
 )

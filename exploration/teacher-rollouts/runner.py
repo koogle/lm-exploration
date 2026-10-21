@@ -56,6 +56,8 @@ def body(c, prompt, seed, max_tokens=None):
         "max_tokens": max_tokens or c["max_tokens"],
         "seed": seed,
         "chat_template_kwargs": {"enable_thinking": False},
+        "logprobs": True,
+        "top_logprobs": 64,
     }
 
 
@@ -210,6 +212,10 @@ def run(root, attempt, manifest, commit=lambda: None):
         str(c["max_model_len"]),
         "--max-num-seqs",
         str(max(c["concurrency"])),
+        "--max-logprobs",
+        "64",
+        "--logprobs-mode",
+        "raw_logprobs",
         "--gpu-memory-utilization",
         "0.85",
         "--no-enable-prefix-caching",
