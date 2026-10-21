@@ -160,7 +160,7 @@ def generate(
         shutil.copytree(
             "/project/distillation",
             output / "source",
-            ignore=shutil.ignore_patterns("__pycache__", "results"),
+            ignore=shutil.ignore_patterns("__pycache__", "artifacts"),
         )
     if token_kind not in ("original", "qwen"):
         raise ValueError("Invalid token counter")

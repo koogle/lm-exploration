@@ -17,7 +17,7 @@ image = (
     )
     .env({"PYTHONPATH": "/project", "HF_HOME": "/distill/hf-cache"})
     .add_local_dir(
-        "distillation", "/project/distillation", ignore=["results", "__pycache__"]
+        "distillation", "/project/distillation", ignore=["artifacts", "__pycache__"]
     )
     .add_local_dir("training/100m", "/project/model_100m")
     .add_local_dir("training/10m", "/project/model_10m")
@@ -68,7 +68,7 @@ def main(
     run_id: str, target_tokens: int = 262144, max_seconds: int = 1200, resume: str = ""
 ):
     report = worker.remote(run_id, target_tokens, max_seconds, resume)
-    path = Path("distillation/results") / (run_id + ".json")
+    path = Path("distillation/artifacts") / (run_id + ".json")
     path.parent.mkdir(exist_ok=True)
     path.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

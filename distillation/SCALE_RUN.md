@@ -8,7 +8,7 @@ the corpus and both small-student targets remain 500M.
 Run `python-distillation-500m-20261021-01` was launched on Modal on 2026-10-21:
 https://modal.com/apps/radiantai/main/ap-ed39mfL1LCi5IGKaCOluxg
 
-The [first progress report](results/scale-500m-20261021.md) records completion of
+The [first progress report](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/pr-31/distillation/results/scale-500m-20261021.md) records completion of
 the larger model's 4.5M-token update and the first 5.23M-token segments of both
 fresh students. The 500M sweep continues automatically.
 
@@ -139,8 +139,8 @@ remote index at an immutable HF revision. Other historical `.pt` files remain
 on the original volume. The archive excludes the active phased student's folder.
 The private archive repository is
 `jfrick/python-math-500m-sweep-stopped-20261021`; completion is recorded in
-`stopped-archive-receipt.json` on the volume and the checked-in
-[immutable artifact index](stopped-sweep-artifact-index.json). The archive preserves
+`stopped-archive-receipt.json` on the volume; the archive's `index.json` lists
+per-file revisions and checksums. The archive preserves
 243,440,328 original-tokenizer targets across 665,534 examples. All five remote
 archive sizes and SHA256 hashes match the saved manifest, and the downloaded
 index SHA256 was verified at the pinned commit. Original supervisor status is preserved in `status-before-stop.json`.

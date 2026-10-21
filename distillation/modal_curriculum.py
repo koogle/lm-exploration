@@ -47,7 +47,7 @@ def generate(run_id, count):
     shutil.copytree(
         "/project/distillation",
         output / "source",
-        ignore=shutil.ignore_patterns("__pycache__", "results"),
+        ignore=shutil.ignore_patterns("__pycache__", "artifacts"),
     )
     settings = {
         "teacher": TEACHER,
@@ -189,8 +189,8 @@ def generate(run_id, count):
 @app.local_entrypoint()
 def main(run_id: str, count: int = 512):
     report = generate.remote(run_id, count)
-    Path("distillation/results").mkdir(exist_ok=True)
-    Path(f"distillation/results/{run_id}.json").write_text(
+    Path("distillation/artifacts").mkdir(exist_ok=True)
+    Path(f"distillation/artifacts/{run_id}.json").write_text(
         json.dumps(report, indent=2) + "\n"
     )
     print(json.dumps(report, indent=2))

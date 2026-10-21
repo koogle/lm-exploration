@@ -64,7 +64,7 @@ def run(output, commit, target_tokens=TARGET, max_seconds=82000, resume=""):
         shutil.copytree(
             Path("/project") / folder,
             output / "source" / folder,
-            ignore=shutil.ignore_patterns("__pycache__", "results"),
+            ignore=shutil.ignore_patterns("__pycache__", "artifacts"),
         )
     shutil.copyfile(MANIFEST, output / "data-manifest.json")
     tokenizer.save_pretrained(output / "tokenizer")

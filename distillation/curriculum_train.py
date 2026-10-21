@@ -72,7 +72,7 @@ def run(corpus, output, commit):
     shutil.copytree(
         "/project/distillation",
         output / "source",
-        ignore=shutil.ignore_patterns("__pycache__", "results"),
+        ignore=shutil.ignore_patterns("__pycache__", "artifacts"),
     )
     for name in ("model_10m", "model_100m"):
         shutil.copytree(

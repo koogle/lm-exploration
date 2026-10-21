@@ -133,7 +133,7 @@ def run(root, name, segment_tokens, commit):
         shutil.copytree(
             "/project/distillation",
             output / "source",
-            ignore=shutil.ignore_patterns("__pycache__", "results"),
+            ignore=shutil.ignore_patterns("__pycache__", "artifacts"),
         )
         for package in ("model_10m", "model_100m"):
             shutil.copytree(
@@ -234,7 +234,7 @@ def run(root, name, segment_tokens, commit):
                 "/project/distillation",
                 output / "source-unique-policy",
                 dirs_exist_ok=True,
-                ignore=shutil.ignore_patterns("__pycache__", "results"),
+                ignore=shutil.ignore_patterns("__pycache__", "artifacts"),
             )
     model = GPT(config)
     if saved or large:
@@ -311,7 +311,7 @@ def run(root, name, segment_tokens, commit):
             "/project/distillation",
             output / f"source-ddp-{world}",
             dirs_exist_ok=True,
-            ignore=shutil.ignore_patterns("__pycache__", "results"),
+            ignore=shutil.ignore_patterns("__pycache__", "artifacts"),
         )
     write_json(output / "request.json", settings)
     corpus = Path("/distill/qwen8b-python-curriculum-20261021-02")

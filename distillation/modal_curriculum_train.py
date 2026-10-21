@@ -38,7 +38,8 @@ def train(corpus_id, run_id):
 @app.local_entrypoint()
 def main(corpus_id: str, run_id: str):
     result = train.remote(corpus_id, run_id)
-    Path(f"distillation/results/{run_id}.json").write_text(
+    Path("distillation/artifacts").mkdir(exist_ok=True)
+    Path(f"distillation/artifacts/{run_id}.json").write_text(
         json.dumps(result, indent=2) + "\n"
     )
     print(json.dumps(result, indent=2))

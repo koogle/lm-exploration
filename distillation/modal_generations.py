@@ -118,7 +118,8 @@ def worker(output_id):
 @app.local_entrypoint()
 def main(output_id: str):
     report = worker.remote(output_id)
-    Path("distillation/results", output_id + ".json").write_text(
+    Path("distillation/artifacts").mkdir(exist_ok=True)
+    Path("distillation/artifacts", output_id + ".json").write_text(
         json.dumps(report, indent=2) + "\n"
     )
     print(json.dumps(report, indent=2))

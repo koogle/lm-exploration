@@ -1,9 +1,0 @@
-{
-  "repo_id": "jfrick/python-math-qwen3-distillation-20261021",
-  "repo_type": "dataset",
-  "revision": "31753882a98754a369cf8979523d7021df9a788b",
-  "index_path": "index.json",
-  "index_sha256": "abfdc494ed549f02c0eb7a7b4e5eb24a8743e28e885e9145a54d457c6e193ac1",
-  "archived_qwen_tokens_at_revision": 11396274,
-  "note": "First verified reusable dataset reference; live archive continues publishing newer commits."
-}

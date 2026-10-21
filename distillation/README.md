@@ -10,6 +10,29 @@ training after archived 1B-token generation phases, up to 256 requested teacher
 GPUs, and a reusable private dataset archive.
 Earlier sections retain pilot history.
 
+## Results on Hugging Face
+
+Generated reports, result JSONs and samples are archived in the private dataset
+[`jfrick/lm-exploration-results`, folder `pr-31/distillation/results/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-31/distillation/results).
+Local launchers write their JSON reports to the ignored `distillation/artifacts/`.
+Datasets: `jfrick/python-math-qwen3-distillation-20261021` (live billion-run archive)
+and `jfrick/python-math-500m-sweep-stopped-20261021` (stopped 500M sweep, with
+per-file revisions and checksums in its `index.json`).
+
+Key findings (2026-10-21):
+
+- Byte-marginal pilot (124.4M, 261,907 tokens): 16-window code CE worsened
+  1.2724 -> 1.3782; on the larger 512-document holdout (342,549 tokens) CE rose
+  1.7349 -> 1.8245 / 1.8496 / 1.8625 at steps 500 / 1000 / 1133. Negative result.
+- vLLM export parity (L4): 5/5 greedy tokens matched, max log-prob error 1.16e-5.
+- Shared-tokenizer 215.9M, 50M tokens, full KL: validation CE 3.533 -> 2.275,
+  7,162 updates, ~14.3K tokens/s on one H100. No CE-only control.
+- Qwen3-8B curriculum: 456/512 then 500/512 accepted after fixing the factorial
+  spec; 26.8M/48.3M fresh students reached CE 7.40/6.40 after 74.7K tokens, 0/8
+  diagnostics (pipeline smoke only).
+- 500M sweep (later stopped): 215.9M +4.5M tokens CE 2.569 -> 1.621, diagnostics
+  0/8 -> 1/8; fresh 26.8M/48.3M students CE ~2.85 after 5.23M tokens.
+
 For the next Python/math curriculum experiment, see the
 [scaling and token-budget plan](SCALING.md). It distinguishes from-scratch
 compute allocation from continued distillation, counts the large shared
@@ -142,7 +165,7 @@ vllm serve /path/to/step-000001000-hf --dtype float32 --max-model-len 256
 
 The bounded L4 qualification checks greedy tokens and log probabilities on five
 code prompts using vLLM 0.11.0. Its Llama backend supports both attention and MLP
-biases. The [L4 GPU check passed](results/vllm-parity-20261021.json): all five greedy
+biases. The [L4 GPU check passed](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/pr-31/distillation/results/vllm-parity-20261021.json): all five greedy
 tokens matched, with maximum log-probability error 1.16e-5.
 For evaluation use raw completion prompts, exactly one BOS, identical prompt
 IDs, temperature, stop IDs and context truncation. Do not silently apply a chat
@@ -151,7 +174,7 @@ coding evaluation and BF16 parity remain follow-up qualification.
 
 ## Measured first pilot
 
-The [first report](results/pilot-20261021.md) records 261,907 trained tokens at
+The [first report](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/pr-31/distillation/results/pilot-20261021.md) records 261,907 trained tokens at
 1,711 tokens/sec on one L40S. Held-out CE worsened from 1.2724 to 1.3782; this
 recipe has not earned a 5B launch. The actual checkpoint and negative result are
 preserved.
@@ -244,7 +267,7 @@ objective and batching before launching the full request.
 
 ## Checkpoint generations
 
-[Matched code continuations](results/shared-checkpoint-generations-20261021-01.md)
+[Matched code continuations](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/pr-31/distillation/results/shared-checkpoint-generations-20261021-01.md)
 compare 0M (after tokenizer conversion), 1M, 5M, 10M, 25M and 50M on three identical
 Python prompts. Native FP32, greedy decoding, up to 128 new tokens; decoded text,
 raw IDs and stop reasons are retained. Reproduce with:

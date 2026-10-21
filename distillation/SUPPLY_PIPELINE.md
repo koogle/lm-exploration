@@ -138,7 +138,7 @@ Teacher expansion remains conditional on the first measured eight-GPU segment.
 
 The archive committed 11,396,274 targets / 31,006 examples to the private dataset
 `jfrick/python-math-qwen3-distillation-20261021`. The downloaded index's SHA256 was
-verified against the recorded commit. See [the pinned artifact index](dataset-artifact-index.json)
-for the immutable revision/checksum; ongoing archive commits are tracked on the
-run volume. The HF/Xet cache is placed outside the training volume so open log
+verified against the recorded commit (first verified revision
+`31753882a98754a369cf8979523d7021df9a788b`); ongoing archive commits are tracked
+on the run volume. The HF/Xet cache is placed outside the training volume so open log
 files do not prevent the archiver from reloading newly published shards.

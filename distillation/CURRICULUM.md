@@ -1,6 +1,6 @@
 # Fresh teacher generation and student qualification
 
-The [first measured report](results/curriculum-generation-20261021.md) records
+The [first measured report](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/pr-31/distillation/results/curriculum-generation-20261021.md) records
 two completed fresh generation batches and the completed one-pass comparison
 of both student sizes. It includes accepted/rejected teacher examples and all
 student checkpoint continuations.

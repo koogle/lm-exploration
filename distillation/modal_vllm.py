@@ -11,7 +11,7 @@ image = (
     .pip_install("vllm==0.11.0", "transformers==4.57.1", "tokenizers==0.22.2")
     .env({"PYTHONPATH": "/project", "VLLM_ENABLE_V1_MULTIPROCESSING": "0"})
     .add_local_dir(
-        "distillation", "/project/distillation", ignore=["results", "__pycache__"]
+        "distillation", "/project/distillation", ignore=["artifacts", "__pycache__"]
     )
     .add_local_dir("training/100m", "/project/model_100m")
     .add_local_dir("training/10m", "/project/model_10m")
