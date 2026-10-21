@@ -1,6 +1,18 @@
 """Pure checks used by the durable 5B workflow."""
 
 import math
+import re
+
+
+def validate_paths(run_id, snapshot, resume):
+    if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
+        raise ValueError("Invalid run ID")
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+/snapshots/[a-zA-Z0-9_-]+", snapshot):
+        raise ValueError("Expected version/snapshots/name")
+    if resume and not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}/step-[0-9]{9}\.pt", resume):
+        raise ValueError("Resume must name a trusted run-id/step-NNNNNNNNN.pt on our run volume")
+    if resume and resume.split("/")[0] == run_id:
+        raise ValueError("Resume uses a fresh run ID to preserve the previous job")
 
 
 def check_capacity(report, target):

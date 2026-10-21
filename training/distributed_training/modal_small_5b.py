@@ -64,9 +64,12 @@ def train_segment(run_id, snapshot, settings, provenance, resume="", max_steps=N
 def continue_training(run_id, snapshot, settings, provenance, previous=None, first_segment=0):
     from distributed_training.config import DistributedConfig
     from distributed_training.run_validation import validate_small_5b_run
-    from distributed_training.workflow import check_progress, check_resume
+    from distributed_training.workflow import check_progress, check_resume, validate_paths
 
     validate_small_5b_run(DistributedConfig(**settings))
+    if type(first_segment) is not int or not 0 <= first_segment < 20:
+        raise ValueError("Invalid first segment")
+    validate_paths(f"{run_id}-s{first_segment:02d}", snapshot, "")
     resume = str(Path(previous["final_checkpoint"]).relative_to("/runs")) if previous else ""
     target = settings["target_tokens"]
     try:
@@ -142,10 +145,11 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
 
     from distributed_training.config import DistributedConfig
     from distributed_training.run_validation import validate_small_5b_run
-    from distributed_training.workflow import check_capacity
+    from distributed_training.workflow import check_capacity, validate_paths
 
     config = DistributedConfig(**settings)
     validate_small_5b_run(config)
+    validate_paths(run_id + "-s00", f"{version}/snapshots/{run_id}", "")
     folder = Path("/data/scholarly-code") / version
     corpus = None
     os.environ["RAYON_NUM_THREADS"] = "8"

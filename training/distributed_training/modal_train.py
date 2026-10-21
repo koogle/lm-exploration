@@ -3,7 +3,6 @@
 import hashlib
 import json
 import os
-import re
 import shutil
 import signal
 import subprocess
@@ -13,21 +12,11 @@ import modal
 
 from distributed_training.config import DistributedConfig
 from distributed_training.image import image
+from distributed_training.workflow import validate_paths
 
 app = modal.App("lm-exploration-distributed-training")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
 run_volume = modal.Volume.from_name("lm-exploration-training")
-
-
-def validate_paths(run_id, snapshot, resume):
-    if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
-        raise ValueError("Invalid run ID")
-    if not re.fullmatch(r"[a-zA-Z0-9_-]+/snapshots/[a-zA-Z0-9_-]+", snapshot):
-        raise ValueError("Expected version/snapshots/name")
-    if resume and not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}/step-[0-9]{9}\.pt", resume):
-        raise ValueError("Resume must name a trusted run-id/step-NNNNNNNNN.pt on our run volume")
-    if resume and resume.split("/")[0] == run_id:
-        raise ValueError("Resume uses a fresh run ID to preserve the previous job")
 
 
 @app.function(

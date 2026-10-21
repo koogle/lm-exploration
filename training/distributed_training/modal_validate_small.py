@@ -20,6 +20,7 @@ run_volume = modal.Volume.from_name("lm-exploration-training")
     timeout=1800,
     retries=0,
     max_containers=1,
+    single_use_containers=True,
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def validate(
@@ -29,23 +30,33 @@ def validate(
     database_override="",
     output_path="/runs/scholarly-modern-10m-5b-validation-20261018.json",
     local=False,
+    source_override="",
 ):
     import math
     import sqlite3
     import zlib
 
-    import model_100m.model
     import torch
 
     torch.set_num_threads(4)
-    from model_100m.model import GPT, ModelConfig
     from torch.nn import functional as F
     from training_data.subword import digest, load_frozen
+
+    from distributed_training.archived_model import load_archived_model
 
     checkpoint = Path(checkpoint_path)
     saved = torch.load(checkpoint, map_location="cpu", weights_only=False)
     assert saved["step"] == 72805 and saved["tokens"] == 4999934057
-    assert digest(model_100m.model.__file__) == saved["source_sha256"]["model"]
+    source = Path(source_override) if source_override else checkpoint.parent / "source"
+    GPT, ModelConfig = load_archived_model(
+        source,
+        {
+            "model_100m": saved["source_sha256"]["model"],
+            # This checkpoint predates dependency hashing. Pin its vanilla backbone
+            # to the same historical source as publication/export_completed.py (4d24240).
+            "model_10m": "cee2225572e14f2243f0e7f774f010305bb715a9e1e8dc9d0ff34008dc79dfe5",
+        },
+    )
     cfg = {k: saved["config"][k] for k in ("n_layer", "n_head", "n_embd")}
     cfg.update(vocab_size=32768, block_size=2048, architecture_version=2)
     torch.manual_seed(42)
@@ -188,6 +199,9 @@ def validate(
     report = {
         "checkpoint": str(checkpoint),
         "checkpoint_sha256": digest(checkpoint),
+        "model_source": str(source),
+        "model_source_sha256": digest(source / "model_100m/model.py"),
+        "backbone_source_sha256": digest(source / "model_10m/model.py"),
         "step": saved["step"],
         "trained_tokens": saved["tokens"],
         "parameters": 9849536,

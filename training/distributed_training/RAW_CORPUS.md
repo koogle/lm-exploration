@@ -9,7 +9,7 @@ remain the default prepared format; the two loader cursor schemas are distinct.
 
 ## Explicit small-model workflow
 
-`modal_small_5b.py` implements preparation, qualification and bounded continuation
+`distributed_training/modal_small_5b.py` implements preparation, qualification and bounded continuation
 for the modern 9.85M architecture (eight layers, width 192, three heads) on three
 H100s, with a non-pilot token target no larger than 5B. These are checks for this
 particular workflow in `distributed_training/run_validation.py`, not restrictions
@@ -27,6 +27,21 @@ Reviewed snapshots need no override; pending snapshots require the explicit
 `allow_unreviewed_data: true` flag. New exports remain `training_ready: false`.
 The workflow rejects missing permission before upstream ingestion or GPU
 scheduling. No flag clears pending audits or removes the repetition limit.
+The obsolete standalone `modal_prepare_raw.py` route has been removed; use this
+workflow so preparation cannot bypass the explicit data permission. Run IDs,
+segment suffixes and snapshot paths are checked before filesystem access.
+
+## Evaluate the historical completed checkpoint
+
+Run `modal run distributed_training/modal_validate_small.py` from `training/`.
+The evaluator loads the checkpoint's archived `source/model_100m` and
+`source/model_10m` packages, not today's installed decoder. It requires the exact
+model hash recorded in the checkpoint and the pinned historical backbone hash
+from source commit `4d24240` (also used by the completed-model exporter).
+Missing or changed archives fail closed. The worker's `source_override` parameter
+can point at a separately restored, verified source archive; it does not bypass
+hash verification. Historical report bytes remain unchanged; new evaluation
+reports record both model source hashes. This does not authorize a GPU rerun.
 
 ## Prepare once, reuse across runs
 

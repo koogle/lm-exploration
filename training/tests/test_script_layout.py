@@ -14,6 +14,7 @@ class ScriptLayoutTests(unittest.TestCase):
         self.assertEqual({p.name for p in ROOT.glob("*.py")}, {"generate.py"})
         self.assertEqual(len(list((ROOT / "modal_scripts").glob("modal_*.py"))), 8)
         self.assertFalse((ROOT / "trainer/subword_pilot.py").exists())
+        self.assertFalse((ROOT / "modal_prepare_raw.py").exists())
         self.assertTrue((ROOT / "data/prepare_simple_llm.py").is_file())
 
     def test_installed_module_locations(self):
@@ -33,6 +34,9 @@ class ScriptLayoutTests(unittest.TestCase):
             "distributed_training.config": "distributed_training/config.py",
             "distributed_training.modal_train": "distributed_training/modal_train.py",
             "distributed_training.modal_checks": "distributed_training/modal_checks.py",
+            "distributed_training.modal_small_5b": "distributed_training/modal_small_5b.py",
+            "distributed_training.modal_prep_benchmark": "distributed_training/modal_prep_benchmark.py",
+            "distributed_training.modal_validate_small": "distributed_training/modal_validate_small.py",
         }
         for name, relative in expected.items():
             with self.subTest(module=name):
