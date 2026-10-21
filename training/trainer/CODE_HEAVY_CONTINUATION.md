@@ -92,3 +92,28 @@ Deploy from `training/` with `modal deploy modal_code_heavy.py`. Launch once via
 `modal.Function.from_name("simple-llm-code-heavy-5b", "start").spawn(run_id, provenance)`.
 The provenance must identify the committed runtime source. Deploying alone does
 not launch data preparation or GPUs. Actual launch/status belongs in the run record.
+
+## Results
+
+The first launch stopped during CPU preparation when LibreTexts exhausted at
+5,874,724 fresh targets (minimum 42,857,143); no GPUs were allocated. The
+replacement run `simple-llm-code60-fresh-5b-20261019-r02` used the capacity-aware
+book pool and completed 4,999,971,081 additional targets over 66,065 updates
+(10,878,562,619 lifetime; 2,999,962,024 coding exposures; 28,919 targets left
+unused in the last partial batch).
+
+On the matched 7,620,187-target validation sample, Python loss is **1.421**
+(original 5B: 1.559, EU parent: 3.994). All 12 original sources improve over the
+EU parent, but the 11 non-coding ones stay slightly worse than the original 5B
+model. ECB (2.494) and EMA (2.379) keep small gains over the original model but
+lose most of the EU parent's gains (2.065 and 1.766). Token-weighted loss on the
+sample: 2.4019 → 2.8187 → 2.4030. Repetition is not solved: greedy decoding still
+has 8/10 long exact loops and 81.6% repeated four-grams; T=0.8/k=50 drops to 23.5%
+and 0/20 loops in this small 150-continuation diagnostic.
+
+Launch/run records, the validation JSON, the rendered report and aggregate
+generation/validation summaries are archived in the HF dataset
+[`jfrick/lm-exploration-results` / `pr-26/training/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-26/training)
+(HF commit `851b6064470949337e449e85157744d16acd6a90`). Rebuild the report from the
+private generation outputs with
+`uv run python analysis/code-heavy-evaluation/build_report.py --input <private-generation-dir> --output artifacts/pr-26/analysis/code-heavy-evaluation`.

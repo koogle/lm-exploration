@@ -638,3 +638,25 @@ def test_legacy_migration_without_metadata_falls_back_to_pinned_flat_path(tmp_pa
     assert legacy in api.downloads
     assert set(state["raw_blob_metrics"]) == {legacy}
     assert state["metrics"]["stored_raw_gzip_bytes"] == len(b"legacy-body")
+
+
+def test_staged_raw_is_linked_by_later_parquet_commit_without_double_count(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    raw_hash = "a" * 64
+    path = raw_blob_path(raw_hash)
+    state["download_queue"] = {"queued": {"raw_path": path}}
+    revision = store.commit(state, revision, [], raw_files={path: b"queued-original"})
+    assert state["metrics"]["rows"] == 0
+    assert state["metrics"]["stored_raw_gzip_bytes"] == len(b"queued-original")
+    assert state["raw_blob_metrics"][path]["shard_path"] is None
+    del state["download_queue"]["queued"]
+    revision = store.commit(state, revision, [record() | {"raw_sha256": raw_hash}])
+    assert path not in api.commits[-1]
+    assert state["metrics"]["rows"] == 1
+    assert state["metrics"]["stored_raw_gzip_bytes"] == len(b"queued-original")
+    assert state["raw_blob_metrics"][path]["shard_path"] == state["shards"][0]["path"]
+    assert state["download_queue"] == {}
+    loaded, loaded_revision = store.load()
+    assert loaded_revision == revision and loaded == state

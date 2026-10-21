@@ -1,8 +1,31 @@
 # Multi-language code repair SFT pilot
 
-The [first executed pilot](../results/repair-sft-20261020/README.md) completed
-200 updates after nine-language data verification and exact GPU resume qualification.
-Held-out loss worsened; this is a pipeline qualification, not an improved-model claim.
+The first executed pilot completed 200 updates after nine-language data
+verification and exact GPU resume qualification. Held-out loss worsened; this is
+a pipeline qualification, not an improved-model claim.
+
+## Findings
+
+Reports, launch/progress records, summaries and generations for the pilot and the
+CommitPack run are in the private HF dataset
+[`jfrick/lm-exploration-results` under `pr-28/training/results/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-28/training/results)
+(archive commit `5e49f888181a02591d3806e8949b78bb7dd459b1`). Reports for runs that
+used the private patch collections, or a base pretrained on private code, remain
+in `../results/repair-*private*` and `../results/repair-eval-124m-20b-20261020/`.
+
+| Run | Data | Updates | Held-out answer loss | Synthetic executable repairs |
+| --- | --- | ---: | --- | --- |
+| Arithmetic pilot `repair-sft-multilang-20261020-r01` | 576 / 36 synthetic, 9 languages | 200 | 0.86136 → **1.30722** (worse in all 9 languages) | 0/18 → 0/18; EOS and runnable 0/18 → 18/18 |
+| CommitPack `repair-sft-commitpack-20261020-r01` | CommitPackFT 37,388 / 561, 9 languages | 5,000 | 0.47947 → 0.34446 | not evaluated |
+| Private patches `repair-sft-private-patches-20261020-r01` | 79,441 / 1,617, 12 languages | 20,000 | 0.83449 → 0.56741 | 0/18; 6/18 reach output comparison, 15/18 EOS |
+| Private patches from 20.879B base `repair-sft-20b-private-patches-20261020-r01` | same 79,441 / 1,617 | 20,000 | 0.712214 → 0.521979 | 0/18; 10/18 reach output comparison, 12/18 EOS |
+
+The 20.879B-token base alone also scores 0/18 (3/18 reach output comparison).
+The full private-snapshot preparation (`repair-private-full-20261020-v1`) was
+cancelled before training; no checkpoint exists. Losses on different validation
+corpora are not comparable, and lower teacher-forced loss has not produced a
+single passing synthetic repair. All runs start from PR #26's parent with fresh
+AdamW state; checkpoints stay on the private `lm-exploration-training` volume.
 
 Stacked on PR #26, initialized from its completed 124M / 10.879B checkpoint:
 `simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt`.
@@ -95,14 +118,16 @@ absolute-difference and maximum task families are held out across every language
 The 612 pairs are small and highly templated: they qualify the pipeline and teach
 short repair/termination behavior, not broad repository repair competence.
 
-From `training/`, prepare and execute-verify every broken/fixed pair on Modal CPU:
+From `training/`, prepare and execute-verify every broken/fixed pair on Modal CPU.
+Local outputs go to the ignored `artifacts/repair-sft/` directory (created by the
+first command; run `mkdir -p artifacts/repair-sft` before the later commands otherwise):
 
 ```sh
-modal run modal_repair_data.py --output /tmp/repair-sft-data/repairs.jsonl
+modal run modal_repair_data.py --output artifacts/repair-sft/repairs.jsonl
 modal run modal_repair_sft.py::qualify \
-  --dataset /tmp/repair-sft-data/repairs.jsonl --run-prefix repair-qual-UNIQUE
+  --dataset artifacts/repair-sft/repairs.jsonl --run-prefix repair-qual-UNIQUE
 modal run modal_repair_sft.py::main \
-  --dataset /tmp/repair-sft-data/repairs.jsonl --run-id repair-pilot-UNIQUE
+  --dataset artifacts/repair-sft/repairs.jsonl --run-id repair-pilot-UNIQUE
 ```
 
 Qualification compares two uninterrupted updates against one update followed by
@@ -120,9 +145,9 @@ secrets. Expected answers stay outside the sandbox; a successful exit alone does
 not earn a pass. This is an 18-task diagnostic, not a benchmark capability claim.
 
 ```sh
-modal run modal_repair_eval.py --dataset /tmp/repair-sft-data/repairs.jsonl \
+modal run modal_repair_eval.py --dataset artifacts/repair-sft/repairs.jsonl \
   --checkpoint repair-pilot-UNIQUE/step-000000200.pt \
-  --output /tmp/repair-sft-data/generation-evaluation.json
+  --output artifacts/repair-sft/generation-evaluation.json
 ```
 
 ## Larger commit-derived experiment
@@ -150,8 +175,8 @@ Sampling in training remains uniform over examples, not uniform over languages.
 ```sh
 modal run modal_commitpack_sft.py \
   --data-id repair-commitpack-UNIQUE \
-  --old-dataset /tmp/repair-sft-data/repairs.jsonl \
-  --report-path /tmp/repair-sft-data/commitpack-report.json
+  --old-dataset artifacts/repair-sft/repairs.jsonl \
+  --report-path artifacts/repair-sft/commitpack-report.json
 modal deploy modal_repair_scale.py
 ```
 
@@ -268,11 +293,11 @@ modal deploy modal_repair_scale.py
 modal run modal_private_patch_sft.py::main \
   --sources sft/private-patch-sources.json \
   --data-id repair-private-patches-UNIQUE \
-  --report-path /tmp/private-patch-report.json
+  --report-path artifacts/repair-sft/private-patch-report.json
 modal run modal_private_patch_sft.py::launch \
   --data-id repair-private-patches-UNIQUE \
   --run-id repair-private-sft-UNIQUE \
-  --report-path /tmp/private-patch-report.json
+  --report-path artifacts/repair-sft/private-patch-report.json
 ```
 
 Preparation uses Modal CPU and the existing `simple-llm-hf` secret. A source
@@ -303,7 +328,7 @@ From `training/`, after deploying `modal_repair_scale.py`:
 modal run --detach modal_private_patch_sft.py::main \
   --sources sft/private-patch-full-sources.json \
   --data-id repair-private-full-20261020-v1 \
-  --report-path /tmp/private-full-report.json --full \
+  --report-path artifacts/repair-sft/private-full-report.json --full \
   --train-run-id repair-sft-private-full-20261020-r01
 ```
 

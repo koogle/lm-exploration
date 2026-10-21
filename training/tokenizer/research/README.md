@@ -71,12 +71,13 @@ Storage:
 - `lm-exploration-mixture-data:/tokenizer-research/<run-id>/`: staging and `frozen/`.
 - `lm-exploration-training:/tokenizer-research/<run-id>/<MiB>mib-<vocab>/`:
   `tokenizer.json` and full `result.json`, including parent-level totals.
-- `results/tokenizer-learning-curve/<run-id>/`: downloaded measurements and report.
+- `artifacts/tokenizer-learning-curve/<run-id>/` (ignored): downloaded measurements and report.
+  Published outputs live in `jfrick/scholarly-code-tokenizer` under `research/`.
 
 ## Report
 
 ```sh
-uv run python -m tokenizer.tokenizer_report results/tokenizer-learning-curve/<run-id>
+uv run python -m tokenizer.tokenizer_report artifacts/tokenizer-learning-curve/<run-id>
 ```
 
 Generates `REPORT.md`, `research-report.pdf`, compact `measurements.json`, and
@@ -108,7 +109,7 @@ uv run modal run --detach modal_scripts/modal_tokenizer_evaluation.py \
 # After collection and all 18 fits have finished:
 uv run modal run --detach modal_scripts/modal_tokenizer_evaluation.py \
   --run-id learning-curve-20261016-v2 --phase evaluate
-uv run python -m tokenizer.tokenizer_report results/tokenizer-learning-curve/learning-curve-20261016-v2
+uv run python -m tokenizer.tokenizer_report artifacts/tokenizer-learning-curve/learning-curve-20261016-v2
 ```
 
 Collection has four CPU/16 GiB requests and hard caps and a two-hour timeout.
@@ -135,7 +136,7 @@ After downloading candidate `tokenizer.json` files into
 
 ```sh
 uv run python -m tokenizer.package_tokenizer_research \
-  results/tokenizer-learning-curve/learning-curve-20261016-v2 \
+  artifacts/tokenizer-learning-curve/learning-curve-20261016-v2 \
   <artifacts> <new-publication-folder> --repo-id jfrick/simple-llm-tokenizer
 ```
 
@@ -160,7 +161,7 @@ uv run --isolated --no-project --with transformers==4.57.6 \
 
 ## JSON, code, diffs and tool calls
 
-The [structured-output follow-up](../../results/tokenizer-structured/structured-code-v1/REPORT.md)
+The [structured-output follow-up](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/tokenizer-structured/structured-code-v1/REPORT.md)
 scores all 18 original candidates and three fresh 64 MiB code-focused fits at
 16K/32K/50K. It uses 512 disjoint held-out Python parents to construct each of four
 workloads. JSON, patches and tool formats are controlled generated fixtures, not

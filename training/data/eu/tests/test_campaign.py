@@ -100,7 +100,7 @@ def test_long_cooldown_stops_without_dispatch():
 def test_round_limit_validated_before_creation():
     store = Store()
     with pytest.raises(ValueError):
-        run_campaign("ema", "pilot", None, rounds=4, store=store)
+        run_campaign("ema", "pilot", None, rounds=7, store=store)
     assert "campaigns" not in store.state
 
 
