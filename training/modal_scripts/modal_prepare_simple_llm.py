@@ -59,8 +59,10 @@ def main(version: str, snapshot: str, max_records: int = 100, convert_from: str 
         if convert_from
         else prepare.remote(version, snapshot, max_records)
     )
-    Path("results").mkdir(exist_ok=True)
-    Path(f"results/prep-{version}-{snapshot}.json").write_text(json.dumps(report, indent=2) + "\n")
+    Path("artifacts/results").mkdir(parents=True, exist_ok=True)
+    Path(f"artifacts/results/prep-{version}-{snapshot}.json").write_text(
+        json.dumps(report, indent=2) + "\n"
+    )
 
 
 @app.function(

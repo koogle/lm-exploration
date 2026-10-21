@@ -8,9 +8,9 @@ from pathlib import Path
 
 import modal
 
-from modal_simple_llm_8k import image, run_volume
+from modal_scripts.modal_simple_llm_8k import image, run_volume
 
-image = image.add_local_file("modal_simple_llm_8k.py", "/project/modal_simple_llm_8k.py")
+image = image.add_local_dir("modal_scripts", "/project/modal_scripts")
 app = modal.App("simple-llm-code-heavy-publication")
 RUN = "simple-llm-code60-fresh-5b-20261019-r02"
 REPO = "jfrick/124M-10.879B"

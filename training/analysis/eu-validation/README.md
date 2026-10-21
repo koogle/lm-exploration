@@ -1,10 +1,17 @@
 # Expanded EU continuation validation
 
 Completed: **7,620,187 matched targets**, 4,615 windows and 2,782 source-family
-selections per checkpoint. All 12 original categories worsened, with category-wise
-95% paired intervals above zero; ECB and EMA improved. Python loss rose from
-1.559 to 3.994. See the [full results and intervals](report.md),
-[plot](expanded-validation.png), and [aggregate JSON](comparison-20261019.json).
+selections per checkpoint, covering all 14 categories. All 12 original categories
+worsened, with category-wise 95% paired intervals above zero; ECB and EMA improved.
+Python loss rose from 1.559 to 3.994; ECB fell from 2.548 to 2.065 and EMA from
+2.475 to 1.766. This is evidence of domain specialization and forgetting on the
+sampled distributions, not a claim about coding accuracy or medical correctness.
+
+The full report with per-category intervals and coverage, the plot, the aggregate
+comparison JSON and the launch record are archived in the HF dataset
+[`jfrick/lm-exploration-results` / `pr-25/training/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-25/training)
+(HF commit `89d000a15b448f7f76a731531083d174e38b828e`), under
+`analysis/eu-validation/` and `results/`.
 
 Compare the original 124M/5B checkpoint and the completed 878,610,362-token
 ECB/EMA continuation on identical held-out windows. The small original diagnostic
@@ -48,6 +55,14 @@ SDK. Deployment alone starts no work. The isolated app is
 `simple-llm-eu-expanded-validation-20261019`. The launch record stores the durable
 controller call ID. Use its `inspect(run_id)` function to read aggregate status,
 coverage and comparison. Nothing redeploys the training app.
+
+Render the report and plot from a saved comparison JSON into the ignored
+`artifacts/` folder (or pass `--output`):
+
+```sh
+uv run python analysis/eu-validation/build_report.py <comparison.json> \
+  --output artifacts/pr-25/analysis/eu-validation
+```
 
 CPU checks validate order-independent family selection, one-document-per-family
 sampling, valid deterministic offsets and paired token-weighted aggregation against

@@ -1,7 +1,7 @@
 # Updated 100M-family architecture
 
 A subsequent [bounded subword pilot](PILOT.md) trained this architecture for
-4.08M tokens on Modal. See its [measured report](../results/simple-llm-124m-pilot-20261016-01.md);
+4.08M tokens on Modal. See its [measured report](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-124m-pilot-20261016-01.md);
 the architecture-merge verification described below remains separate.
 
 `model.py` uses **RMSNorm, RoPE, SwiGLU and tied input/output embeddings** by
@@ -97,7 +97,7 @@ architecture versions is rejected. This is not a second modern model variant.
 
 The general recipe trainer and generation CLI remain character-only. The separate
 [subword pilot](PILOT.md) integrates the frozen BPE tokenizer and mixture loader.
-The [GPU comparison](../results/simple-llm-124m-gpu-comparison-20261017.md) measures
+The [GPU comparison](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-124m-gpu-comparison-20261017.md) measures
 SDPA and fused AdamW on the full model, including two- and three-H100 DDP.
 The historical pilot used explicit attention; its original source is archived
 with its run. SDPA preserves the model shape and checkpoint keys, with output

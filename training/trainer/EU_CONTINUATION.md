@@ -1,8 +1,8 @@
 # Simple LLM: one-pass ECB/EMA continuation
 
 Continue the completed **124,389,632-parameter / 4,999,981,176-token** checkpoint,
-not a five-billion-parameter model. This branch is stacked on optimization PR #17
-at `43cee6bcb7bf4d1d68ea31d73b780787f840a5e1`; it does not merge that stack.
+not a five-billion-parameter model. The run used optimization PR #17 at
+`43cee6bcb7bf4d1d68ea31d73b780787f840a5e1`; #17 has since merged into main.
 
 `modal_eu_continuation.py` deploys a separate app. It never modifies the old run,
 its app, or any Hugging Face repository. EU text, checkpoints and generated samples
@@ -61,7 +61,8 @@ is off. PR #17's independently retrieved completed eight-GPU comparison measured
 275,631 nonpadding tokens/sec for compiled microbatch two versus 258,793 for compiled
 microbatch four and 213,354 for eager microbatch four on the original corpus. Those
 are reference measurements, not a throughput promise for longer EU documents.
-Raw evidence is retained in `results/eu-continuation-pr17-eight-gpu-evidence-20261018.json`.
+Raw evidence is archived on HF as
+[`pr-25/training/results/eu-continuation-pr17-eight-gpu-evidence-20261018.json`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-25/training/results).
 
 The new workflow runs the eight-rank CUDA loss/gradient gate, then two updates,
 then a fresh-process restore for two updates. Exact diagnostic validation agreement
@@ -91,7 +92,8 @@ Spawn `prepare(snapshot, pinned_datasets)` through the authenticated SDK. Then s
 the bounded GPU workflow. The request folder records its controller call ID once
 preparation completes. Deployment alone starts no work.
 
-The launch record stores call IDs and dataset revisions. Inspect using
+The launch record (archived in [`pr-25/training/results/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-25/training/results))
+stores call IDs and dataset revisions. Inspect using
 `modal.Function.from_name("simple-llm-eu-continuation", "inspect").remote(...)`.
 Run status lives in `/runs/<run-id>/workflow.json`; each segment has metrics, a
 report and checkpoints. The before/after evaluation files are separate from

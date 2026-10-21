@@ -90,7 +90,7 @@ def evaluate_candidate(run_id, size, vocab):
 def main(run_id: str, phase: str = "collect"):
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id) or phase not in ("collect", "evaluate"):
         raise ValueError("Invalid run ID or phase")
-    out = Path("results/tokenizer-learning-curve") / run_id
+    out = Path("artifacts/tokenizer-learning-curve") / run_id
     out.mkdir(parents=True, exist_ok=True)
     if phase == "collect":
         result = collect_evaluation.remote(run_id)
