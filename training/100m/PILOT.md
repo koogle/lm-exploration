@@ -1,7 +1,7 @@
 # Simple LLM subword pilot (historical)
 
 The duplicate pilot launcher and loop described below have been removed. Use
-[`../distributed_training/`](../distributed_training/README.md) for new runs,
+[`../distributed/`](../distributed/README.md) for new runs,
 including one GPU. The commands/settings below document the measured historical
 experiment, not an available entrypoint or settings identical to the current
 trainer. Its code remains in Git history; its checkpoints require that code.

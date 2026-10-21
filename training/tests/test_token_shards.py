@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from training_data.mixture import open_mixture
 from training_data.subword import TOKENIZER_SHA256, digest
 from training_data.token_shards import (
     FORMAT,
@@ -65,9 +66,23 @@ class SeekableTokenTests(unittest.TestCase):
         self.path.write_text(json.dumps(self.manifest))
 
     def loader(self, **kwargs):
-        loader = TokenMixture(self.path, allow_unreviewed=True, **kwargs)
+        loader = open_mixture(
+            self.path,
+            loader="token_shards",
+            context=kwargs.pop("context", 2048),
+            allow_unreviewed=True,
+            **kwargs,
+        )
         self.addCleanup(lambda: [it.close() for it in loader.iterators.values()])
         return loader
+
+    def test_explicit_raw_loader_rejects_token_shards(self):
+        with self.assertRaisesRegex(ValueError, "raw manifest format"):
+            open_mixture(self.path, loader="raw", context=4, allow_unreviewed=True)
+
+    def test_unknown_loader_does_not_read_manifest(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported data loader"):
+            open_mixture(self.root / "missing.json", loader="auto", context=4)
 
     def expected(self, context, passes):
         for pass_index in range(passes):

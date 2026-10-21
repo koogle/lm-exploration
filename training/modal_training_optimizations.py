@@ -6,7 +6,7 @@ from pathlib import Path
 
 import modal
 
-from distributed_training.modal_train import worker
+from distributed.modal_train import worker
 from modal_simple_llm_8k import SNAPSHOT, data_volume, image, run_volume
 
 image = image.add_local_file("modal_simple_llm_8k.py", "/project/modal_simple_llm_8k.py")
@@ -151,7 +151,7 @@ def suite(prefix, provenance, single_gpu=False):
 
 @app.local_entrypoint()
 def main(prefix: str):
-    from distributed_training.modal_train import validate_paths
+    from distributed.modal_train import validate_paths
 
     validate_paths(prefix, SNAPSHOT, "")
     provenance = {

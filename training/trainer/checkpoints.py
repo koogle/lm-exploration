@@ -1,38 +1,19 @@
-"""Trusted checkpoint I/O, resume compatibility, RNG restoration and run provenance.
+"""Historical format-1 checkpoint loading, compatibility checks and provenance.
 
-Format version 1 is unchanged: existing checkpoints remain readable.
+The active trainer owns its durable DDP checkpoint save/restore in loop.py.
+These helpers retain published character-checkpoint interpretation.
 """
 
 import hashlib
 import platform
-import random
 import subprocess
 from pathlib import Path
 
 import torch
 
 
-def rng_state(batch_generator):
-    state = {
-        "python": random.getstate(),
-        "torch": torch.get_rng_state(),
-        "batches": batch_generator.get_state(),
-    }
-    if torch.cuda.is_available():
-        state["cuda"] = torch.cuda.get_rng_state_all()
-    return state
-
-
-def restore_rng(state, batch_generator):
-    random.setstate(state["python"])
-    torch.set_rng_state(state["torch"])
-    batch_generator.set_state(state["batches"])
-    if "cuda" in state:
-        torch.cuda.set_rng_state_all(state["cuda"])
-
-
 def load_checkpoint(path):
-    # Only load trusted checkpoints: this restores Python RNG objects as well.
+    # Only load trusted checkpoints: the format contains Python RNG objects.
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     if checkpoint.get("format_version") != 1:
         raise ValueError("unsupported checkpoint format")
@@ -74,41 +55,6 @@ def validate_resume(checkpoint, config, fingerprint, steps):
         )
     if steps < checkpoint["step"]:
         raise ValueError("steps cannot be smaller than the checkpoint's completed step")
-
-
-def restore_checkpoint(checkpoint, model, optimizer, batch_generator):
-    model.load_state_dict(checkpoint["model"])
-    optimizer.load_state_dict(checkpoint["optimizer"])
-    restore_rng(checkpoint["rng"], batch_generator)
-    return tuple(checkpoint[key] for key in ("step", "elapsed_seconds", "train_loss"))
-
-
-def save_checkpoint(
-    path,
-    *,
-    config,
-    model,
-    tokenizer,
-    optimizer,
-    step,
-    batch_generator,
-    fingerprint,
-    elapsed_seconds,
-    train_loss,
-):
-    state = {
-        "format_version": 1,
-        "config": config,
-        "model": model.state_dict(),
-        "tokenizer": tokenizer.config(),
-        "optimizer": optimizer.state_dict(),
-        "step": step,
-        "rng": rng_state(batch_generator),
-        "dataset_fingerprint": fingerprint,
-        "elapsed_seconds": elapsed_seconds,
-        "train_loss": train_loss,
-    }
-    torch.save(state, path)
 
 
 def runtime_provenance(device, model_source, model_definition=None, *, model_dependencies=None):

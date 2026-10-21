@@ -13,7 +13,7 @@ from unittest.mock import patch
 import torch
 from training_data.subword import TOKENIZER_SHA256, digest, load_frozen
 
-from distributed_training.config import DistributedConfig, validate_resume
+from distributed.config import DistributedConfig, validate_resume
 from trainer.eu_continuation import family, migrate_checkpoint, normalize, split_for
 
 

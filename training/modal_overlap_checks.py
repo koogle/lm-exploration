@@ -26,8 +26,8 @@ run_volume = modal.Volume.from_name("lm-exploration-training")
 def check(world_size=3, tag="three01"):
     import torch
 
-    from distributed_training.config import DistributedConfig
-    from distributed_training.modal_train import worker
+    from distributed.config import DistributedConfig
+    from distributed.modal_train import worker
 
     base = DistributedConfig(
         world_size=world_size,
@@ -48,7 +48,9 @@ def check(world_size=3, tag="three01"):
 
     def run(name, settings, steps, resume=""):
         name = name.replace("20261018-01", f"20261018-{tag}")
-        return worker.local(name, snapshot, settings, provenance, resume, 900, steps)
+        return worker.local(
+            name, snapshot, settings, provenance, resume, 900, steps, dataset_root="scholarly-code"
+        )
 
     sync = run("overlap-sync-20261018-01", base, 128)
     settings = {**base, "prefetch_batches": 8}
