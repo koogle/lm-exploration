@@ -148,6 +148,9 @@ under `research/` and `reports/`. The 16 files PR #22 added under `research/` an
 its version of `reports/CONTINUATION_20261018.md` are also archived, byte-verified,
 in the private dataset
 [`jfrick/lm-exploration-results`, folder `pr-22/training/data/eu/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-22/training/data/eu)
-(HF commit `4740d892b85a33ba6cdebda5ab1113c9eb065ba2`). HF checkpoint state (`state/progress.json`,
+(HF commit `4740d892b85a33ba6cdebda5ab1113c9eb065ba2`). The 110 `research/` and `reports/`
+files that already existed on `main` are archived, byte-verified, in the same dataset under
+[`pr-22/removed-from-main-2117364/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-22/removed-from-main-2117364/training/data/eu)
+(HF commit `878178cdcbd97985b95c0bcaa61ab2da3da04d3c`). HF checkpoint state (`state/progress.json`,
 `metrics_history`, campaign records) and the control repository hold the durable
 operational record.
