@@ -69,6 +69,8 @@ memory, compute and communication instead of executing coarse operations seriall
 It reports over 22% higher end-to-end throughput than SGLang for its H100 Llama-70B
 workload. This predates the current announcement and is inference research, not
 evidence for Flapping Airplanes' current training or continual-learning claims.
+See [the older megakernel results](megakernels-2025.md) for the March, May and
+September releases, workload details, scheduling regressions and code references.
 
 ## Relevant experiments for this repository
 
