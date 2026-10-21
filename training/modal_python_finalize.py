@@ -74,8 +74,8 @@ def finish():
 def settle_existing_selection(full_code_call_id: str):
     """Close a bounded old-pool selection after its writer has been stopped.
 
-    The separately prepared full Python split supersedes another exhaustive
-    scan of its older subset. Preserve every accepted row and prior holdout.
+    The separately prepared full Python split supplies code capacity without
+    exhausting every older supplemental pool. Preserve accepted rows and holdouts.
     """
     from training_data.python_experiment import TARGETS, Corpus
 
