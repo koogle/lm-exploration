@@ -111,7 +111,8 @@ def check_one_gpu():
 def main(single: bool = False):
     report = check_one_gpu.remote() if single else check.remote()
     suffix = "one01" if single else "three01"
-    Path(f"results/overlap-checks-20261018-{suffix}.json").write_text(
+    Path("artifacts/results").mkdir(parents=True, exist_ok=True)
+    Path(f"artifacts/results/overlap-checks-20261018-{suffix}.json").write_text(
         json.dumps(report, indent=2) + "\n"
     )
     print(json.dumps({k: v for k, v in report.items() if k != "reports"}))

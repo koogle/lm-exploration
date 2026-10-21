@@ -12,7 +12,7 @@ launcher, shared image and GPU checks live in this package. The actual training
 loop, evaluation and checkpointing live in [`../trainer/`](../trainer/README.md). Training settings live in [`../workflows/model_configs/`](../workflows/model_configs/README.md);
 preparation and continuation live in [`../workflows/`](../workflows/README.md).
 The duplicate `modal_simple-llm_pilot.py` / `trainer/subword_pilot.py`
-path has been removed; historical pilot results remain in `results/` and its
+path has been removed; historical pilot results are in the HF dataset `jfrick/lm-exploration-results` and its
 implementation remains in Git history. Historical character recipes are retained
 for provenance; their loop and launcher have been removed.
 
@@ -280,6 +280,6 @@ resume/audit rejection. Floating model/optimizer tensors use FP32 tolerances
 reduction order can change low bits across fresh jobs.
 
 Measured run evidence is recorded in
-[`results/simple-llm-ddp-support-20261017.md`](../results/simple-llm-ddp-support-20261017.md).
+[`simple-llm-ddp-support-20261017.md`](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-ddp-support-20261017.md).
 Those GPU measurements predate the seekable snapshot format. The format change
 has local loader/conversion/resume checks; a new CUDA qualification has not been run.

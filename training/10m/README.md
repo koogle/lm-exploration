@@ -85,9 +85,9 @@ exposures. Validation selected **update 1,800**, after 14,745,600 exposures:
 The final update scored 2.10690 on validation; later training overfit this small
 corpus, so the public weights come from the earlier checkpoint.
 
-[Full training report](../results/shakespeare-10m-train-01.json),
-[loss history](../results/shakespeare-10m-metrics.jsonl),
-and [smoke report](../results/shakespeare-10m-smoke-01.json).
+[Full training report](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/shakespeare-10m-train-01.json),
+[loss history](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/shakespeare-10m-metrics.jsonl),
+and [smoke report](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/shakespeare-10m-smoke-01.json).
 One seed, validation used for checkpoint selection, no untouched test result.
 
 Local verification covered the 10M parameter count, causal attention and gradients

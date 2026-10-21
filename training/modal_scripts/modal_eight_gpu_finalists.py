@@ -1,31 +1,30 @@
-"""Single-H100 optimization suite, independent of the queued eight-GPU app."""
+"""Matched eight-H100 comparison of the three selected optimization configurations."""
 
 import json
+import os
 from pathlib import Path
 
 import modal
 
-from modal_training_optimizations import benchmark, data_volume, image, run_volume
+from modal_scripts.modal_training_optimizations import benchmark, data_volume, image, run_volume
 
-image = image.add_local_file(
-    "modal_training_optimizations.py", "/project/modal_training_optimizations.py"
-)
-app = modal.App("simple-llm-single-gpu-optimizations")
+app = modal.App("simple-llm-eight-gpu-finalists")
 
 
 @app.function(
     image=image,
-    gpu="H100",
-    cpu=8,
-    memory=32768,
+    gpu="H100:8",
+    cpu=32,
+    memory=65536,
     timeout=7200,
     retries=0,
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def trial(run_id, settings, provenance, qualify=False):
-    if settings["world_size"] != 1:
-        raise ValueError("Expected one GPU")
+    os.environ["TORCHINDUCTOR_COMPILE_THREADS"] = "1"
+    if settings["world_size"] != 8:
+        raise ValueError("Expected eight GPUs")
     return benchmark.local(run_id, settings, provenance, qualify)
 
 
@@ -33,40 +32,19 @@ def trial(run_id, settings, provenance, qualify=False):
     image=image, cpu=1, memory=2048, timeout=43200, retries=0, volumes={"/runs": run_volume}
 )
 def run_suite(prefix, provenance):
+    common = {"crop_padding": True, "cache_rope": True}
     variants = [
-        ("baseline-m1", {}),
-        ("crop-m1", {"crop_padding": True}),
-        ("crop-m2", {"crop_padding": True, "microbatch": 2}),
-        ("crop-m4", {"crop_padding": True, "microbatch": 4}),
-        ("chunk-m2", {"crop_padding": True, "microbatch": 2, "loss_chunk_size": 1024}),
-        ("rope-m2", {"crop_padding": True, "microbatch": 2, "cache_rope": True}),
-        (
-            "compile-m2",
-            {"crop_padding": True, "microbatch": 2, "cache_rope": True, "compile_model": True},
-        ),
+        ("rope-m4", {**common, "microbatch": 4}),
+        ("compile-m4", {**common, "microbatch": 4, "compile_model": True}),
+        ("compile-m2", {**common, "microbatch": 2, "compile_model": True}),
     ]
     return run_variants(prefix, provenance, variants)
-
-
-@app.function(
-    image=image, cpu=1, memory=2048, timeout=18000, retries=0, volumes={"/runs": run_volume}
-)
-def run_m4_fusion_suite(prefix, provenance):
-    common = {"crop_padding": True, "microbatch": 4, "cache_rope": True}
-    return run_variants(
-        prefix,
-        provenance,
-        [
-            ("rope-m4", common),
-            ("compile-m4", {**common, "compile_model": True}),
-        ],
-    )
 
 
 def run_variants(prefix, provenance, variants):
     settings = json.loads(Path("/project/settings.json").read_text())
     settings.update(
-        world_size=1, target_tokens=100_000_000, checkpoint_every=10000, evaluate_every=10000
+        world_size=8, target_tokens=100_000_000, checkpoint_every=10000, evaluate_every=10000
     )
     folder = Path("/runs") / prefix
     folder.mkdir(exist_ok=False)

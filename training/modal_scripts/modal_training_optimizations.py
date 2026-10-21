@@ -5,11 +5,11 @@ import subprocess
 from pathlib import Path
 
 import modal
-from modal_simple_llm_8k import SNAPSHOT, data_volume, image, run_volume
 
 from distributed.modal_train import worker
+from modal_scripts.modal_simple_llm_8k import SNAPSHOT, data_volume, image, run_volume
 
-image = image.add_local_file("modal_simple_llm_8k.py", "/project/modal_simple_llm_8k.py")
+image = image.add_local_dir("modal_scripts", "/project/modal_scripts")
 
 app = modal.App("simple-llm-optimization-benchmarks")
 
@@ -159,4 +159,6 @@ def main(prefix: str):
         "purpose": "100M nonpadding tokens per variant, fixed global batch 32",
     }
     results = suite.remote(prefix, provenance)
-    Path(f"results/{prefix}.json").write_text(json.dumps(results, indent=2) + "\n")
+    output = Path("artifacts/pr-17/results") / f"{prefix}.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(results, indent=2) + "\n")

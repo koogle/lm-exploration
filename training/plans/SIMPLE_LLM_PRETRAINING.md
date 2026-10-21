@@ -23,7 +23,7 @@ The earlier references to 100 billion parameters were not the selected scale.
 
 As of 2026-10-17, the merged modern architecture has 124,389,632 parameters,
 the [subword pilot](../100m/PILOT.md) has completed 4.08M exposures, and
-[matched GPU profiling](../results/simple-llm-124m-gpu-comparison-20261017.md)
+[matched GPU profiling](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-124m-gpu-comparison-20261017.md)
 covers one/two/three A10, L40S and H100 GPUs. Full corpus preparation, corpus audits
 and substantial pretraining remain pending. The [distributed launcher](../distributed/README.md) now supports explicit
 multi-GPU checkpoint/resume across Modal jobs. It remains separate from the
@@ -109,7 +109,7 @@ The user selected this tokenizer for the model's code and tool-calling focus.
   fixtures, 11.83% fewer on diffs, 8.21% fewer on JSON and 2.81% fewer on Python;
   13.99% more tokens on the simple LLM mixture. This trade-off was accepted explicitly.
 - JSON/diff/tool examples are controlled generated fixtures, not production traces.
-  See the [full comparison](../results/tokenizer-structured/structured-code-v1/REPORT.md).
+  See the [full comparison](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/tokenizer-structured/structured-code-v1/REPORT.md).
 
 The old `simple-llm-v1` 16K assets and all prior measured candidates remain
 immutable historical versions. Existing encoded shards/checkpoints are not compatible

@@ -161,7 +161,7 @@ uv run --isolated --no-project --with transformers==4.57.6 \
 
 ## JSON, code, diffs and tool calls
 
-The [structured-output follow-up](../../results/tokenizer-structured/structured-code-v1/REPORT.md)
+The [structured-output follow-up](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/tokenizer-structured/structured-code-v1/REPORT.md)
 scores all 18 original candidates and three fresh 64 MiB code-focused fits at
 16K/32K/50K. It uses 512 disjoint held-out Python parents to construct each of four
 workloads. JSON, patches and tool formats are controlled generated fixtures, not
