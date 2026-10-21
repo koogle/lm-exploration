@@ -55,7 +55,12 @@ def qualify(checkpoint):
         "# café\nx = ",
         "function sum(a, b) {\n  return",
     ]
-    token_ids = [[1] + tokenizer.encode(p, add_special_tokens=False) for p in prompts]
+    prefix = tokenizer.bos_token_id
+    if prefix is None:
+        prefix = tokenizer.eos_token_id
+    token_ids = [
+        [prefix] + tokenizer.encode(p, add_special_tokens=False) for p in prompts
+    ]
     reference = AutoModelForCausalLM.from_pretrained(
         export, torch_dtype=torch.float32
     ).eval()

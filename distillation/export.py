@@ -1,7 +1,7 @@
 """Exact modern-student conversion to Llama weights for standard HF/vLLM serving."""
 
 
-def convert(student):
+def convert(student, bos_token_id=1, eos_token_id=2, pad_token_id=0):
     import torch
     from transformers import LlamaConfig, LlamaForCausalLM
 
@@ -22,9 +22,9 @@ def convert(student):
         attention_bias=True,
         mlp_bias=True,
         tie_word_embeddings=True,
-        bos_token_id=1,
-        eos_token_id=2,
-        pad_token_id=0,
+        bos_token_id=bos_token_id,
+        eos_token_id=eos_token_id,
+        pad_token_id=pad_token_id,
     )
     config._attn_implementation = "eager"
     model = LlamaForCausalLM(config).to(
@@ -91,24 +91,39 @@ def export_checkpoint(checkpoint, output):
     import torch
     from model_100m.model import GPT, ModelConfig
     from training_data.subword import load_frozen
-    from transformers import PreTrainedTokenizerFast
+    from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
     saved = torch.load(checkpoint, map_location="cpu", weights_only=False)
-    if saved.get("format") != "byte-distillation-v1":
+    if saved.get("format") not in {
+        "byte-distillation-v1",
+        "shared-token-distillation-v1",
+    }:
         raise ValueError("Expected trusted distillation checkpoint")
     student = GPT(ModelConfig(**saved["model_config"]))
     student.load_state_dict(saved["model"], strict=True)
-    model, report = convert(student)
+    if saved["format"] == "shared-token-distillation-v1":
+        import hashlib
+
+        tokenizer = AutoTokenizer.from_pretrained(Path(checkpoint).parent / "tokenizer")
+        digest = hashlib.sha256(
+            tokenizer.backend_tokenizer.to_str().encode()
+        ).hexdigest()
+        if digest != saved["settings"]["tokenizer_sha256"]:
+            raise ValueError("Archived tokenizer mismatch")
+        eos = tokenizer.eos_token_id
+        model, report = convert(student, eos, eos, eos)
+    else:
+        model, report = convert(student)
+        tokenizer = PreTrainedTokenizerFast(
+            tokenizer_object=load_frozen(),
+            bos_token="<|bos|>",
+            eos_token="<|eos|>",
+            pad_token="<|pad|>",
+            unk_token="<|unk|>",
+        )
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)
     model.save_pretrained(output)
-    tokenizer = PreTrainedTokenizerFast(
-        tokenizer_object=load_frozen(),
-        bos_token="<|bos|>",
-        eos_token="<|eos|>",
-        pad_token="<|pad|>",
-        unk_token="<|unk|>",
-    )
     tokenizer.save_pretrained(output)
     (output / "parity.json").write_text(json.dumps(report, indent=2) + "\n")
     return report

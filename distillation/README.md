@@ -170,3 +170,54 @@ Report code loss, teacher KL and coding-task correctness. The tokenizer change
 requires a fresh baseline; old-tokenizer token CE cannot be compared directly
 with Qwen-tokenizer token CE. These milestones are a proposed follow-up, not
 runs already launched by the evaluation command above.
+
+## Authorized 50M shared-tokenizer run
+
+The follow-up uses `modal_shared.py` / `shared_train.py`, not the earlier byte
+pilot. User authorization is **50,000,000 loss-bearing Qwen tokens**; early
+validation regression is explicitly tolerated.
+
+```sh
+modal run --detach -m distillation.modal_shared \
+  --run-id qwen4b-shared-50m-20261021-01
+```
+
+One H100, 512-token document-local context, four windows per microbatch and four
+accumulated microbatches (up to 8,192 targets/update). Both models receive the
+same IDs, with Qwen end-of-text as document prefix and EOS. Right padding receives
+no loss. Teacher forcing on existing code continues; no synthetic conversations
+are generated. The objective is equal-weight code CE and **full-vocabulary
+KL(teacher || student)** at temperature 1, normalized by the actual number of
+unmasked targets across the complete optimizer batch.
+
+The backbone retains the original trained weights. Qwen's 151,936 output rows
+increase the student to **215,910,656 parameters**, keeping tied embeddings.
+Byte-identical vocabulary entries are copied from the old table; other text
+entries use the mean of their old-token decomposition (byte fallback for partial
+UTF-8 pieces). Special/unused rows retain seeded initialization, with end-of-text
+copied from the old EOS. This is an initialization heuristic, not equivalent to
+having pretrained with Qwen's tokenizer. Exact transfer counts are recorded.
+
+Fresh AdamW uses backbone LR 1e-5 and embedding LR 1e-4, both linearly warmed over
+1M tokens, then constant. Weight decay 0.1, betas 0.9/0.95, gradient clipping at 1.
+A matched CE-only control has not been launched. It would be needed to attribute
+quality differences specifically to teacher supervision.
+
+Validation uses up to 128 documents / four windows per document in the shared
+tokenizer, initially, at 1M tokens, every 5M tokens and at exit. The sample's token
+fingerprint is recorded. Checkpoints also save every 500 updates for durability.
+Milestone boundaries trim the final window exactly and resume its unused suffix;
+no overshoot or dropped suffix is allowed. Snapshots include optimizer, RNG,
+loader cursor, tokenizer identity, source hashes and initialization provenance.
+A new-directory resume must use identical settings and archived source:
+
+```sh
+modal run --detach -m distillation.modal_shared --run-id FRESH_RUN_ID \
+  --resume OLD_RUN_ID/step-NNNNNNNNN.pt
+```
+
+There is no validation-based early stopping. Stop conditions are 50M tokens,
+source exhaustion, nonfinite loss/gradients, a termination signal or the operational
+time limit (82,000 seconds cooperative; 24 hours hard). No automatic retries or
+unbounded job chaining. The 16,384-token GPU smoke uses the same architecture,
+objective and batching before launching the full request.
