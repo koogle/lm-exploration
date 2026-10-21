@@ -1,5 +1,10 @@
 # 215.9M shared-Qwen continuation to 4.5B tokens
 
+**Current execution upgrade:** [eight-GPU training and a throughput-sized teacher
+pool](SUPPLY_PIPELINE.md) supersede the single-GPU/four-teacher configuration
+below. It also adds an append-only dataset manifest and private HF archive.
+Historical launch and recovery evidence is preserved below.
+
 The corrected user target is **4,500,000,000 shared-Qwen-tokenizer training
 targets from a single pass over freshly generated data**, including the completed
 4,500,000-token update. Dataset replay is disabled. This supersedes the

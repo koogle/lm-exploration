@@ -6,10 +6,54 @@ import unittest
 from pathlib import Path
 
 from distillation.scale_data import atomic_json, available_chunks
-from distillation.scale_train import Stream
+from distillation.scale_train import Stream, rank_batches
 
 
 class ScaleTests(unittest.TestCase):
+    def test_rank_partition_and_padding_preserve_global_token_gradient(self):
+        import torch
+        from torch.nn import functional as F
+
+        torch.manual_seed(7)
+        windows = [([0, 1, 2], [1, 2, 0]), ([1], [2]), ([2, 0], [0, 1])]
+        reference = torch.nn.Embedding(3, 3)
+        total = sum(len(y) for _, y in windows)
+        loss = (
+            sum(
+                F.cross_entropy(
+                    reference(torch.tensor(x)), torch.tensor(y), reduction="sum"
+                )
+                for x, y in windows
+            )
+            / total
+        )
+        loss.backward()
+        gradients = []
+        seen = []
+        for rank in range(8):
+            model = torch.nn.Embedding(3, 3)
+            model.load_state_dict(reference.state_dict())
+            batches = rank_batches(windows, rank, 8, 1, 0)
+            self.assertEqual(len(batches), 4)
+            for batch in batches:
+                for x, y in batch:
+                    seen.extend(t for t in y if t != -100)
+                    (
+                        F.cross_entropy(
+                            model(torch.tensor(x)),
+                            torch.tensor(y),
+                            ignore_index=-100,
+                            reduction="sum",
+                        )
+                        * 8
+                        / total
+                    ).backward()
+            gradients.append(model.weight.grad)
+        torch.testing.assert_close(
+            torch.stack(gradients).mean(0), reference.weight.grad
+        )
+        self.assertEqual(seen, [1, 2, 0, 2, 0, 1])
+
     def test_fresh_continuation_is_append_only_and_never_replayed(self):
         with tempfile.TemporaryDirectory() as temporary:
             first, second = Path(temporary) / "first", Path(temporary) / "second"

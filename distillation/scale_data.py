@@ -135,7 +135,13 @@ def atomic_json(path, value):
 
 
 def generate(
-    root, worker, commit, target=125_000_000, token_kind="original", index_offset=0
+    root,
+    worker,
+    commit,
+    target=125_000_000,
+    token_kind="original",
+    index_offset=0,
+    segment_tokens=None,
 ):
     import os
     import shutil
@@ -215,9 +221,14 @@ def generate(
         seed=42 + worker + index_offset,
     )
     params = SamplingParams(temperature=0.85, top_p=0.95, max_tokens=1024)
+    initial_tokens = state[counter]
     started = time.monotonic()
     elapsed_before = state["generation_seconds"]
-    while state[counter] < target and time.monotonic() - started < 80000:
+    while (
+        state[counter] < target
+        and time.monotonic() - started < 80000
+        and (segment_tokens is None or state[counter] - initial_tokens < segment_tokens)
+    ):
         prompts = [
             qwen.apply_chat_template(
                 [{"role": "user", "content": specification(worker, i)}],
@@ -328,7 +339,11 @@ def generate(
         if state["attempts"] >= 4096 and not state["tokens"]:
             raise ValueError("No usable generation output")
     if state[counter] < target:
-        state["status"] = "time_limit_resume_required"
+        state["status"] = (
+            "segment_complete"
+            if time.monotonic() - started < 80000
+            else "time_limit_resume_required"
+        )
         atomic_json(progress_file, state)
         commit()
     seen.close()
@@ -336,6 +351,9 @@ def generate(
 
 
 def available_chunks(root):
+    manifest = Path(root) / "manifest.json"
+    if manifest.exists():
+        return json.loads(manifest.read_text())["chunks"]
     chunks = []
     # Round-robin order is deterministic regardless of producer speed.
     states = [
