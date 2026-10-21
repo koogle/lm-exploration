@@ -38,5 +38,5 @@ class ResultArtifactTests(unittest.TestCase):
                     fetch_artifacts(folder / "output", path)
                 verify(folder / "output/result.json", entry)
             path.write_text(json.dumps({**index, "revision": "main"}))
-            with self.assertRaisesRegex(ValueError, "immutable dataset revision"):
+            with self.assertRaisesRegex(ValueError, "immutable dataset or model revision"):
                 read_index(path)

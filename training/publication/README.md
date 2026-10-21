@@ -62,10 +62,15 @@ repetition-validation JSONs from PR #16 in the same dataset at immutable revisio
 `e581149e7983fdae1d198da6f76ab98d21d135b9`, under `pr-16/training/results/`. Every
 remote file was re-downloaded and byte-compared before its Git copy was removed.
 New inference or repetition runs write to `artifacts/pr-16/results/` by default.
+The repetition report and plot are in the public model repository's `analysis/repetition/`
+at revision `a5111f064480c8b39b7d6e791a6f7746290619ab`, indexed by
+[`pr16-model-artifacts.json`](pr16-model-artifacts.json).
 
 ```sh
 uv run --extra corpus python -m publication.artifacts \
   --index publication/pr16-artifacts.json --output artifacts/pr-16
+uv run --extra corpus python -m publication.artifacts \
+  --index publication/pr16-model-artifacts.json --output artifacts/pr-16
 ```
 
 ## Model-card source

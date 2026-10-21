@@ -1,4 +1,4 @@
-"""Fetch pinned dataset artifacts into an ignored directory; verify before use."""
+"""Fetch pinned dataset or model artifacts into an ignored directory; verify before use."""
 
 import argparse
 import hashlib
@@ -12,8 +12,10 @@ INDEX = Path(__file__).with_name("pr13-artifacts.json")
 
 def read_index(path=INDEX):
     index = json.loads(Path(path).read_text())
-    if index["repo_type"] != "dataset" or not re.fullmatch(r"[0-9a-f]{40}", index["revision"]):
-        raise ValueError("Artifacts require an immutable dataset revision")
+    if index["repo_type"] not in ("dataset", "model") or not re.fullmatch(
+        r"[0-9a-f]{40}", index["revision"]
+    ):
+        raise ValueError("Artifacts require an immutable dataset or model revision")
     for name in index["files"]:
         relative = PurePosixPath(name)
         if relative.is_absolute() or ".." in relative.parts:
@@ -41,7 +43,7 @@ def fetch_artifacts(folder, index_path=INDEX):
     for name, entry in index["files"].items():
         source = hf_hub_download(
             repo_id=index["repo_id"],
-            repo_type="dataset",
+            repo_type=index["repo_type"],
             revision=index["revision"],
             filename=entry["path"],
         )
