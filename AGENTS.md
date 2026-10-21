@@ -21,19 +21,33 @@ Keep credentials and local checkpoints out of Git.
 
 ## Modal job runtime
 
-Every Modal job launched by an agent must stop automatically within 12 hours
-(43,200 seconds) of launch, including detached and background jobs.
+Every Modal job launched by an agent must stop automatically within 24 hours
+(86,400 seconds) of launch, including detached and background jobs. Enforce this
+through Modal's API/SDK before launch so shutdown survives agent disconnection.
 
-- Configure an explicit Modal timeout of at most `12 * 60 * 60` seconds on each
-  function or sandbox before launching it; preserve any shorter existing limit.
-- For jobs spanning multiple calls, retries or child jobs, enforce a shared
-  12-hour deadline and automatically cancel outstanding work when it expires.
-  Per-call timeouts alone must not let the overall job exceed the deadline.
-- The shutdown mechanism must work without the agent, chat session or local
-  terminal remaining connected. Do not rely on a reminder or manual cleanup.
-- Verify the timeout and shutdown configuration before launch. Save checkpoints
-  and partial results early enough to survive termination; do not automatically
-  restart a timed-out job to bypass the limit.
+- Set a server-side execution timeout of at most `24 * 60 * 60` seconds with
+  `@app.function(timeout=86400, retries=0)` (or the equivalent class/function
+  configuration). For sandboxes, use `modal.Sandbox.create(..., timeout=86400)`.
+  Preserve shorter existing limits.
+- A Function timeout covers execution time per attempt, excluding queue/startup
+  time; retries reset it. For the overall 24-hour deadline from launch, including
+  queued work, retries and child jobs, persist the deadline and call/sandbox IDs
+  and use an independently running remote supervisor to cancel outstanding work
+  through `modal.FunctionCall.from_id(call_id).cancel()` or
+  `modal.Sandbox.from_id(sandbox_id).terminate()`. Track and cancel children
+  explicitly; do not assume stopping a parent stops them.
+- Bound each new call by the remaining budget and refuse work after the deadline.
+  Keep retries disabled unless they respect that same deadline. Do not restart
+  a timed-out job automatically to bypass the cap.
+- `FunctionCall.get(timeout=...)` only limits how long the caller waits; it does
+  not stop the remote job. Reminders, local timers and manual cleanup are not
+  shutdown enforcement.
+- Verify the effective Modal timeout and any remote deadline supervisor before
+  launch. Save checkpoints and partial results early enough to survive shutdown.
+
+See Modal's [timeout semantics](https://modal.com/docs/guide/timeouts),
+[FunctionCall cancellation](https://modal.com/docs/reference/modal.FunctionCall#cancel)
+and [Sandbox API](https://modal.com/docs/reference/modal.Sandbox).
 
 ## Source and artifact ownership
 
