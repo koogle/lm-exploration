@@ -175,6 +175,7 @@ class BudgetAndMetricsTests(unittest.TestCase):
                 **CONFIG,
                 "budget_authorized": True,
                 "authorization_reference": "test fixture only",
+                "campaign_usd_cap": 5.0,
             }
             self.assertEqual(reserve_budget(c, d, "a"), 2.1)
             with self.assertRaises(ValueError):
