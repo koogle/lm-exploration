@@ -34,3 +34,10 @@ architecture compatibility and measured evidence are preserved.
 
 Muon/AdamW implementation lives in `optimizers.py`; see the
 [matched comparison](../distributed/MUON_COMPARISON.md) for measured context.
+
+Continued pretraining from a saved checkpoint (new data phase, preserved AdamW state
+and lineage) lives in `continued_pretraining.py`; frozen stratified held-out sets in
+`representative_validation.py`; matched generation/repetition metrics in
+`continuation_generation.py`; fixed Python generations and sandbox-script helpers in
+`python_evaluation.py`; restart-safe attempt selection in `python_workflow.py`.
+Their origin and the failed runs they came from are in [NEGATIVE_RESULTS](../NEGATIVE_RESULTS.md).

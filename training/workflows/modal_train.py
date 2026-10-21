@@ -319,7 +319,7 @@ def launch_snapshot(run_id, bundle, provenance, resume=""):
     try:
         if not config.pilot:
             capacity = min(
-                mixture.manifest["max_passes"]
+                s.get("max_passes", mixture.manifest["max_passes"])
                 * s["splits"]["train"]["loss_tokens"]
                 * 100
                 / s["weight_percent"]

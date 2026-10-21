@@ -42,6 +42,10 @@ class RawTokenMixture(TokenMixture):
         if digest(database) != artifact["sha256"]:
             raise ValueError("Raw database checksum mismatch")
         self.db = sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro&immutable=1", uri=True)
+        if self.manifest.get("external_databases"):
+            from .prepared_reference import attach_prepared
+
+            attach_prepared(self.db, self.manifest)
         self.context, self.split = context, split
         self.identity = {
             "manifest_sha256": digest(self.path),
@@ -52,22 +56,55 @@ class RawTokenMixture(TokenMixture):
         self.sources = self.manifest["sources"]
         if any(s["splits"][split]["loss_tokens"] <= 0 for s in self.sources.values()):
             raise ValueError("Every mixture source needs data for this split")
+        for source in self.sources.values():
+            cap = source.get("max_passes", 2)
+            if type(cap) is not int or cap not in (1, 2):
+                raise ValueError("Source pass cap must be one or two")
         self.positions = dict.fromkeys(self.sources, 0)
         self.exposures = dict.fromkeys(self.sources, 0)
         self.iterators = {}
         self.cursors = {name: {"pass": 0, "hash": "", "offset": 0} for name in self.sources}
         self.tokenizer = load_frozen()
+        self.single_pass = self.manifest.get("continuation_passes") == 1
+        self.budgets = {}
+        if split == "train" and any("target_tokens" in s for s in self.sources.values()):
+            for name, source in self.sources.items():
+                budget = source.get("target_tokens")
+                capacity = source["splits"]["train"]["loss_tokens"] * source.get("max_passes", 2)
+                if type(budget) is not int or not 0 < budget <= capacity:
+                    raise ValueError("Invalid or unsupported exact source target")
+                self.budgets[name] = budget
 
     def blocks(self, name):
         saved = dict(self.cursors[name])
-        passes = 2 if self.split == "train" else 1
+        passes = (
+            self.sources[name].get("max_passes", 2)
+            if self.split == "train" and not self.single_pass
+            else 1
+        )
         for pass_index in range(saved["pass"], passes):
             start_hash = saved["hash"] if pass_index == saved["pass"] else ""
-            rows = self.db.execute(
-                """SELECT hash,text,loss_tokens FROM documents
-                WHERE source=? AND split=? AND conflict=0 AND hash>=? ORDER BY hash""",
-                (name, self.split, start_hash),
-            )
+            if self.manifest.get("prefer_collected"):
+                tier = "CASE WHEN json_extract(provenance,'$.origin')='collected_git' THEN 0 ELSE 1 END"
+                start_tier = 0
+                if start_hash:
+                    row = self.db.execute(
+                        f"SELECT {tier} FROM documents WHERE hash=?", (start_hash,)
+                    ).fetchone()
+                    if row is None:
+                        raise ValueError("Restored document is missing from immutable snapshot")
+                    start_tier = row[0]
+                rows = self.db.execute(
+                    f"SELECT hash,text,loss_tokens FROM documents WHERE source=? AND split=? AND conflict=0 "
+                    f"AND ({tier}>? OR ({tier}=? AND hash>=?)) ORDER BY {tier},hash",
+                    (name, self.split, start_tier, start_tier, start_hash),
+                )
+            else:
+                rows = self.db.execute(
+                    """SELECT hash,text,loss_tokens FROM documents
+                    WHERE source=? AND split=? AND conflict=0 AND hash>=? ORDER BY hash""",
+                    (name, self.split, start_hash),
+                )
             for key, raw, expected_count in rows:
                 ids = self.tokenizer.encode(
                     zlib.decompress(raw).decode(), add_special_tokens=False
@@ -96,15 +133,60 @@ class RawTokenMixture(TokenMixture):
                     }
 
     def next_block(self):
+        eligible = [
+            name
+            for name in self.sources
+            if not self.budgets or self.exposures[name] < self.budgets[name]
+        ]
+        if not eligible:
+            raise StopIteration("Exact per-category target budgets completed")
         name = min(
-            self.sources, key=lambda n: (self.exposures[n] / self.sources[n]["weight_percent"], n)
+            eligible, key=lambda n: (self.exposures[n] / self.sources[n]["weight_percent"], n)
         )
         if name not in self.iterators:
             self.iterators[name] = self.blocks(name)
         block = next(self.iterators[name])
+        if self.budgets:
+            remaining = self.budgets[name] - self.exposures[name]
+            if block["loss_tokens"] > remaining:
+                block["labels"][remaining:] = [LOSS_IGNORE_INDEX] * (self.context - remaining)
+                block["loss_tokens"] = remaining
         self.positions[name] += 1
         self.exposures[name] += block["loss_tokens"]
         return block
+
+    def next_batch(self, batch_size, device="cpu"):
+        if not self.single_pass and not self.budgets:
+            return super().next_batch(batch_size, device)
+        import torch
+
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        state = self.state_dict()
+        blocks = []
+        try:
+            for _ in range(batch_size):
+                try:
+                    blocks.append(self.next_block())
+                except StopIteration:
+                    break
+            if not blocks:
+                raise StopIteration("Completed the single continuation pass")
+            # Train every final target exactly once; empty windows still join DDP.
+            blocks.extend(
+                {
+                    "input_ids": [PAD_TOKEN_ID] * self.context,
+                    "labels": [LOSS_IGNORE_INDEX] * self.context,
+                }
+                for _ in range(batch_size - len(blocks))
+            )
+            return (
+                torch.tensor([b["input_ids"] for b in blocks], dtype=torch.long, device=device),
+                torch.tensor([b["labels"] for b in blocks], dtype=torch.long, device=device),
+            )
+        except Exception:
+            self.load_state_dict(state)
+            raise
 
     def state_dict(self):
         # Raw-document cursors are not the seekable token-shard cursor schema.
@@ -126,16 +208,22 @@ class RawTokenMixture(TokenMixture):
         cursors = state["raw_cursors"]
         if set(cursors) != set(self.sources):
             raise ValueError("Raw source cursor mismatch")
-        for cursor in cursors.values():
+        for name, cursor in cursors.items():
             if (
                 type(cursor["pass"]) is not int
-                or cursor["pass"] not in (0, 1)
+                or not 0
+                <= cursor["pass"]
+                < (1 if self.single_pass else self.sources[name].get("max_passes", 2))
                 or type(cursor["offset"]) is not int
                 or cursor["offset"] < 0
                 or cursor["offset"] % self.context
                 or not isinstance(cursor["hash"], str)
             ):
                 raise ValueError("Invalid raw cursor")
+        if self.budgets and any(
+            state["loss_token_exposures"][name] > target for name, target in self.budgets.items()
+        ):
+            raise ValueError("Restored exposure exceeds exact source budget")
         for iterator in self.iterators.values():
             iterator.close()
         self.iterators.clear()

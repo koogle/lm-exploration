@@ -24,6 +24,7 @@ def source_hashes():
     import training_data.live_stream
     import training_data.mixture
     import training_data.prefetch
+    import training_data.prepared_reference
     import training_data.raw_token_stream
     import training_data.subword
     import training_data.token_shards
@@ -31,9 +32,11 @@ def source_hashes():
 
     import distributed.config
     import trainer.optimizers
+    import trainer.representative_validation
 
     paths = {
         "trainer": Path(__file__),
+        "heldout_loader": Path(trainer.representative_validation.__file__),
         "config": Path(distributed.config.__file__),
         "optimizer": Path(trainer.optimizers.__file__),
         "model": Path(model_100m.model.__file__),
@@ -41,6 +44,7 @@ def source_hashes():
         "loader": Path(training_data.token_stream.__file__),
         "loader_selection": Path(training_data.mixture.__file__),
         "raw_loader": Path(training_data.raw_token_stream.__file__),
+        "prepared_loader": Path(training_data.prepared_reference.__file__),
         "prefetch": Path(training_data.prefetch.__file__),
         "live_loader": Path(training_data.live_stream.__file__),
         "token_shards": Path(training_data.token_shards.__file__),
@@ -77,12 +81,12 @@ def make_optimizer(model, config, *, fused=True):
     return create_optimizer(model, config, fused=fused)
 
 
-def evaluate_sources(model, heldout, *, device="cuda", bf16=True):
+def evaluate_sources(model, heldout, *, device="cuda", bf16=True, details=False):
     """Mean loss per valid target, including unequal-length validation windows."""
     import torch
     from torch.nn import functional as F
 
-    losses = {}
+    losses, counts, stratum_sums, stratum_counts = {}, {}, {}, {}
     with torch.no_grad():
         for name, blocks in heldout.items():
             summed_loss = loss_tokens = 0
@@ -98,7 +102,19 @@ def evaluate_sources(model, heldout, *, device="cuda", bf16=True):
                     )
                 summed_loss += float(loss)
                 loss_tokens += block["loss_tokens"]
+                stratum = block.get("stratum", name)
+                stratum_sums[stratum] = stratum_sums.get(stratum, 0.0) + float(loss)
+                stratum_counts[stratum] = stratum_counts.get(stratum, 0) + block["loss_tokens"]
             losses[name] = summed_loss / loss_tokens
+            counts[name] = loss_tokens
+    if details:
+        return {
+            "per_source": losses,
+            "target_counts": counts,
+            "per_stratum": {k: v / stratum_counts[k] for k, v in stratum_sums.items()},
+            "stratum_target_counts": stratum_counts,
+            "windows": sum(len(blocks) for blocks in heldout.values()),
+        }
     return losses
 
 
@@ -157,6 +173,7 @@ def train(
     resume=None,
     max_seconds=3000,
     max_steps=None,
+    stop_tokens=None,
     commit=None,
 ):
     import numpy as np
@@ -167,6 +184,8 @@ def train(
 
     if not 1 <= max_seconds <= 82800 or (max_steps is not None and max_steps < 1):
         raise ValueError("Session limits must be positive; maximum session length is 82800 seconds")
+    if stop_tokens is not None and not 0 < stop_tokens <= config.target_tokens:
+        raise ValueError("Invalid token evaluation boundary")
     rank, world = runtime.rank, runtime.world_size
     if world != config.world_size:
         raise ValueError("torchrun world size differs from configuration")
@@ -247,14 +266,16 @@ def train(
                 data = make_data()
             if not config.pilot and config.data_loader != "live":
                 capacity = min(
-                    data.manifest["max_passes"]
+                    s.get("max_passes", data.manifest["max_passes"])
                     * s["splits"]["train"]["loss_tokens"]
                     * 100
                     / s["weight_percent"]
                     for s in data.sources.values()
                 )
                 if config.target_tokens > capacity:
-                    raise ValueError("Snapshot cannot support target mixture within two passes")
+                    raise ValueError(
+                        "Snapshot cannot support target mixture within source pass caps"
+                    )
             validation = open_mixture(
                 manifest,
                 loader=config.data_loader,
@@ -310,6 +331,8 @@ def train(
                 validate_resume(
                     saved, config, identity, metadata["source_sha256"], str(torch.__version__)
                 )
+                if "lineage" in saved:
+                    metadata["lineage"] = saved["lineage"]
                 model.load_state_dict(saved["model"])
                 optimizer.load_state_dict(saved["optimizer"])
                 step, tokens = saved["step"], saved["tokens"]
@@ -341,10 +364,20 @@ def train(
         final_checkpoint = None
         heldout = None
         if rank == 0:
-            # A fixed small validation set: diagnostics, not capability evaluation.
-            heldout = primary(
-                lambda: validation_blocks(validation, config.validation_windows_per_source)
-            )
+            if json.loads(manifest.read_text()).get("heldout"):
+                from trainer.representative_validation import load_heldout
+
+                def grouped_heldout():
+                    grouped = {}
+                    for name, block in load_heldout(manifest, validation):
+                        grouped.setdefault(name, []).append(block)
+                    return grouped
+
+                heldout = primary(grouped_heldout)
+            else:
+                heldout = primary(
+                    lambda: validation_blocks(validation, config.validation_windows_per_source)
+                )
         else:
             primary(lambda: None)
 
@@ -356,12 +389,14 @@ def train(
         def evaluate():
             model.eval()
             try:
-                losses = evaluate_sources(model, heldout)
+                stats = evaluate_sources(model, heldout, details=True)
+                losses = stats["per_source"]
             finally:
                 model.train()
             return {
                 "step": step,
                 "tokens": tokens,
+                **stats,
                 "per_source": losses,
                 "weighted_loss": sum(
                     losses[n] * data.sources[n]["weight_percent"] / 100 for n in losses
@@ -416,6 +451,9 @@ def train(
         reason = "token_limit"
         data_error = None
         while tokens < config.target_tokens:
+            if stop_tokens is not None and tokens >= stop_tokens:
+                reason = "evaluation_boundary"
+                break
             flag = torch.tensor(int(stopped), device="cuda")
             dist.all_reduce(flag, op=dist.ReduceOp.MAX)
             if int(flag):
@@ -549,6 +587,7 @@ def train(
                 steps=step,
                 session_steps=step - start_step,
                 total_loss_tokens=tokens,
+                lifetime_loss_tokens=metadata.get("lineage", {}).get("parent_tokens", 0) + tokens,
                 session_loss_tokens=tokens - start_tokens,
                 stop_reason=reason,
                 data_error=data_error,
@@ -558,7 +597,9 @@ def train(
                 final_validation=final_validation,
                 loss_token_exposures=data.exposures,
                 validation_note=(
-                    f"{config.validation_windows_per_source} fixed windows/source; diagnostic only"
+                    "Frozen stratified held-out windows"
+                    if json.loads(manifest.read_text()).get("heldout")
+                    else f"{config.validation_windows_per_source} fixed windows/source; diagnostic only"
                 ),
                 prefetch=data.stats() if config.prefetch_batches else None,
             )
@@ -584,6 +625,7 @@ if __name__ == "__main__":
     parser.add_argument("--resume")
     parser.add_argument("--max-seconds", type=int, default=3000)
     parser.add_argument("--max-steps", type=int)
+    parser.add_argument("--stop-tokens", type=int)
     parser.add_argument("--volume-name")
     args = parser.parse_args()
     runtime = DistributedRuntime.from_torchrun(os.environ)
@@ -600,5 +642,6 @@ if __name__ == "__main__":
         resume=args.resume,
         max_seconds=args.max_seconds,
         max_steps=args.max_steps,
+        stop_tokens=args.stop_tokens,
         commit=commit,
     )

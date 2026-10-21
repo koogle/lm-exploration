@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 import zlib
@@ -113,3 +114,23 @@ class RawTokenStreamTests(unittest.TestCase):
                     break
             self.assertEqual(total, counts["train"] * 2)
             c.close()
+
+            # One-pass source caps survive restore and never silently wrap.
+            manifest = json.loads(path.read_text())
+            manifest["sources"]["fineweb_edu"]["max_passes"] = 1
+            path.write_text(json.dumps(manifest))
+            d = RawTokenMixture(path, context=8, allow_unreviewed=True)
+            first = d.next_block()
+            state = d.state_dict()
+            e = RawTokenMixture(path, context=8, allow_unreviewed=True)
+            e.load_state_dict(state)
+            total = first["loss_tokens"] + sum(
+                block["loss_tokens"] for block in e.blocks("fineweb_edu")
+            )
+            self.assertEqual(total, counts["train"])
+            bad = d.state_dict()
+            bad["raw_cursors"]["fineweb_edu"]["pass"] = 1
+            with self.assertRaisesRegex(ValueError, "Invalid raw cursor"):
+                d.load_state_dict(bad)
+            d.close()
+            e.close()

@@ -20,6 +20,15 @@ Paths in it are relative to this `data/` directory. Historical character
 `DATASETS` table in `trainer/recipe.py`. Their training loop and launcher have
 been removed; active training consumes the prepared snapshots described above.
 
+Raw-snapshot extensions from the [failed continuation runs](../NEGATIVE_RESULTS.md):
+per-source `max_passes`, exact per-source `target_tokens`, single-pass continuation,
+fresh-only corpora with a prior-hash exclusion ledger (`fresh_raw_corpus.py`,
+`fresh_book_pool.py`), references to completed databases (`prepared_reference.py`),
+multilingual permissive code collection (`multilingual_code.py`, `parallel_code.py`,
+`parallel_code_merge.py`), a read-only readiness audit (`readiness_audit.py`) and the
+Python corpus pipeline (`python_*.py`). They have CPU tests in `../tests/`; no Modal
+launcher is kept for them.
+
 
 ## Registered datasets
 
