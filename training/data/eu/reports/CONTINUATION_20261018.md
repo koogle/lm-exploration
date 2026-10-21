@@ -494,9 +494,8 @@ Both pipeline mappings add the four collections at weight 3; other weights are
 unchanged. The goal/manual apps are redeployed. The existing controller starts
 one tracked ECB writer and handles discovery; no independent writer or replay
 was launched. Existing pacing, backoff, budgets and recovery schedule remain.
-Validation: 349 tests, Ruff lint/format and whitespace checks. Sample URLs, hashes,
-openings, extraction sizes and the deferred annual-account evidence are retained
-in `research/ecb-survey-expansion-20261018.json`; bodies remain ignored artifacts.
+Validation: 349 tests, Ruff lint/format and whitespace checks. Bodies remain
+ignored artifacts.
 
 
 ## 19 October: larger ECB statistical archive expansion
