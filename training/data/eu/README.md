@@ -897,7 +897,7 @@ Native HTML remains preferred per language, and historical PDFs retain their
 existing language metadata rules. Three annual-account samples were also tested;
 historical openings identify sections of already collected Annual Reports, so
 that series is deferred. Exact deduplication remains active; passage overlap is
-not measured. See [sample evidence](research/ecb-survey-expansion-20261018.json).
+not measured.
 
 
 ### Larger statistical archive backlog

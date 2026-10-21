@@ -81,8 +81,7 @@ and T2S annual reports (159). The cached snapshot has 198 distinct candidate
 URLs, none overlapping prior configured URLs. Eleven of twelve selected samples
 extracted; one bank-lending PDF returned 503. Annual accounts are deferred because
 historical PDFs are sections of already-collected Annual Reports. Both pipeline
-mappings are updated; the goal and manual apps are redeployed. See
-`research/ecb-survey-expansion-20261018.json`. Do not count candidates as saved
+mappings are updated; the goal and manual apps are redeployed. Do not count candidates as saved
 documents. Preserve discovery of further unconfigured types after this batch.
 
 The owner renewed the request to keep ECB adding new documents on 19 October.
