@@ -44,7 +44,10 @@ def record(run_id, stage, **details):
 )
 def train_segment(run_id, snapshot, settings, provenance, resume="", max_steps=None):
     from modal_distributed_train import worker
+    from trainer.distributed_config import DistributedConfig
+    from trainer.run_validation import validate_small_5b_run
 
+    validate_small_5b_run(DistributedConfig(**settings))
     return worker.local(run_id, snapshot, settings, provenance, resume, 21600, max_steps)
 
 
@@ -58,8 +61,11 @@ def train_segment(run_id, snapshot, settings, provenance, resume="", max_steps=N
     volumes={"/runs": run_volume},
 )
 def continue_training(run_id, snapshot, settings, provenance, previous=None, first_segment=0):
+    from trainer.distributed_config import DistributedConfig
+    from trainer.run_validation import validate_small_5b_run
     from trainer.workflow import check_progress, check_resume
 
+    validate_small_5b_run(DistributedConfig(**settings))
     resume = str(Path(previous["final_checkpoint"]).relative_to("/runs")) if previous else ""
     target = settings["target_tokens"]
     try:
@@ -130,12 +136,15 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
     from training_data.export_raw import export_raw
     from training_data.fast_raw_corpus import FastRawCorpus
     from training_data.prepared_snapshot import find_prepared_snapshot
+    from training_data.review import require_data_review
     from training_data.scholarly import load_recipe
 
     from trainer.distributed_config import DistributedConfig
+    from trainer.run_validation import validate_small_5b_run
     from trainer.workflow import check_capacity
 
-    DistributedConfig(**settings)
+    config = DistributedConfig(**settings)
+    validate_small_5b_run(config)
     folder = Path("/data/scholarly-code") / version
     corpus = None
     os.environ["RAYON_NUM_THREADS"] = "8"
@@ -152,10 +161,14 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
     elif resume_preparation:
         raise ValueError("No preparation exists to resume")
     try:
-        record(run_id, "preparing", target_tokens=settings["target_tokens"], provenance=provenance)
         recipe = load_recipe("/project/tokenizer/recipe-v1.json")
         target = settings["target_tokens"]
         cached = find_prepared_snapshot(folder, recipe, target)
+        # New snapshots retain pending audits. Reject before upstream ingestion
+        # or GPU scheduling unless the caller explicitly accepts that status.
+        training_ready = json.loads(cached.read_text())["training_ready"] if cached else False
+        require_data_review(training_ready, config.allow_unreviewed_data)
+        record(run_id, "preparing", target_tokens=target, provenance=provenance)
         if cached is not None:
             snapshot = str(cached.parent.relative_to("/data/scholarly-code"))
             manifest = json.loads(cached.read_text())
@@ -192,8 +205,8 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
         corpus = None
         snapshot = f"{version}/snapshots/{run_id}"
         manifest = export_raw(folder, Path("/data/scholarly-code") / snapshot)
-        # Preserve pending audit flags. The explicitly scoped experimental_data
-        # configuration permits this research run, without claiming audited data.
+        # Preserve pending audit flags. The explicit allow_unreviewed_data
+        # opt-in permits this research run, without claiming audited data.
         manifest["pending"] = [
             "tokenizer split reconciliation",
             "global near deduplication",
