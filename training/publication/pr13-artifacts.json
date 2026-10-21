@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "repo_id": "jfrick/lm-exploration-results",
+  "repo_type": "dataset",
+  "source_git_commit": "d608c5b1b329d16bf9ade3ff2e8e5e3b9873c2b3",
+  "files": {
+    "publication/scholarly-124m-step2-card.md": {
+      "path": "pr-13/training/publication/scholarly-124m-step2-card.md",
+      "sha256": "cf771e82604941919b7d3c842df9ba63be0096f95d9f7a7c5f9c302bbeb60d2b",
+      "size_bytes": 3894
+    },
+    "publication/scholarly-modern-10m-5b-card.md": {
+      "path": "pr-13/training/publication/scholarly-modern-10m-5b-card.md",
+      "sha256": "77568938018f16d2fe87b4ca2c9dc5f732d3602589cb82e6276bb5c07397c6a2",
+      "size_bytes": 7376
+    },
+    "results/preparation-live-throughput-20261017.json": {
+      "path": "pr-13/training/results/preparation-live-throughput-20261017.json",
+      "sha256": "53e47fabedf5c97bcd0bbf4e6a688c4cf963282a5f9c2af0ee7cd5d2ab596773",
+      "size_bytes": 516
+    },
+    "results/preparation-speedup-20261017.json": {
+      "path": "pr-13/training/results/preparation-speedup-20261017.json",
+      "sha256": "4f6725770e6c22c55aaeff62d847a1bbb7a8378a2bec88aefbccbbcb35c906d5",
+      "size_bytes": 2406
+    },
+    "results/preparation-speedup-20261017.md": {
+      "path": "pr-13/training/results/preparation-speedup-20261017.md",
+      "sha256": "96025eea0e163a6a11a26f01ce71d346d581d9705417f1f297e7075a914042d4",
+      "size_bytes": 3852
+    },
+    "results/raw-10m-gpu-qualify-20261017-01.json": {
+      "path": "pr-13/training/results/raw-10m-gpu-qualify-20261017-01.json",
+      "sha256": "5e62821fd5288c7760cb60ae0bcb954069a99de7abdbb96a8e2887d7e1c7d13e",
+      "size_bytes": 2053
+    },
+    "results/raw-10m-gpu-resume-20261017-01.json": {
+      "path": "pr-13/training/results/raw-10m-gpu-resume-20261017-01.json",
+      "sha256": "65da9734ce498525cd3209a7ffb5858f1bd71982019ab7ea4bfa16e5f9b55ee2",
+      "size_bytes": 2114
+    },
+    "results/scholarly-124m-step2-publication.json": {
+      "path": "pr-13/training/results/scholarly-124m-step2-publication.json",
+      "sha256": "d8e5efe8ba31ad6acbe3570da260ac2efba0822b4af3f433d3476c0c162698d7",
+      "size_bytes": 419
+    },
+    "results/scholarly-modern-10m-5b-20261017-s00.json": {
+      "path": "pr-13/training/results/scholarly-modern-10m-5b-20261017-s00.json",
+      "sha256": "98fc3897042799cf4ce2da477e3ca5955f7a8b8def75c472e35fddfae93cd33e",
+      "size_bytes": 3179
+    },
+    "results/scholarly-modern-10m-5b-20261017-s01.json": {
+      "path": "pr-13/training/results/scholarly-modern-10m-5b-20261017-s01.json",
+      "sha256": "fecc2fb240180ab869989455581be5e149ed7bd3bed69a9f47b8d02a6ca1ef86",
+      "size_bytes": 3252
+    },
+    "results/scholarly-modern-10m-5b-20261017-s02.json": {
+      "path": "pr-13/training/results/scholarly-modern-10m-5b-20261017-s02.json",
+      "sha256": "303df1816e2d990f1593a6f42efc0f47c2a49a803133f562ecc17e904e28f911",
+      "size_bytes": 3330
+    },
+    "results/scholarly-modern-10m-5b-completed-20261018.md": {
+      "path": "pr-13/training/results/scholarly-modern-10m-5b-completed-20261018.md",
+      "sha256": "57e2d0c58e5d14404552ed7a22430f61371eda3d0e7379d4d28c34e0ed976704",
+      "size_bytes": 3426
+    },
+    "results/scholarly-modern-10m-5b-launch-20261017.json": {
+      "path": "pr-13/training/results/scholarly-modern-10m-5b-launch-20261017.json",
+      "sha256": "315fed9390480e396a5f1a8c779d1b2beae2cd898098c8ef8938954afb04d84b",
+      "size_bytes": 583
+    },
+    "results/scholarly-modern-10m-5b-publication-20261018.json": {
+      "path": "pr-13/training/results/scholarly-modern-10m-5b-publication-20261018.json",
+      "sha256": "fc821223fc0f56eaa39072dfe705cad15453e3f6836828cd5905bffd7e8e2b71",
+      "size_bytes": 755
+    },
+    "results/scholarly-modern-10m-5b-status-20261017.md": {
+      "path": "pr-13/training/results/scholarly-modern-10m-5b-status-20261017.md",
+      "sha256": "48ca280509f08427a94a9202398c60a630d9dbcd672ea8b51b075ed5de1b4e10",
+      "size_bytes": 10765
+    },
+    "results/scholarly-modern-10m-5b-training-audit-20261018.json": {
+      "path": "pr-13/training/results/scholarly-modern-10m-5b-training-audit-20261018.json",
+      "sha256": "7d2cc82c0ec9eb9eb55534b4c50b1f49e2b6b726f3d92356657a8cc3d92dcf36",
+      "size_bytes": 97151
+    },
+    "results/scholarly-modern-10m-5b-validation-20261018.json": {
+      "path": "pr-13/training/results/scholarly-modern-10m-5b-validation-20261018.json",
+      "sha256": "74edb2fdeaa2637e28c27ab2f388b7ab32aabb7d243510d687459cdbb3db5447",
+      "size_bytes": 19517
+    },
+    "results/scholarly-modern-10m-qualify-20261017-01.json": {
+      "path": "pr-13/training/results/scholarly-modern-10m-qualify-20261017-01.json",
+      "sha256": "4acf6b67d741503a0daf1cc624fb91e16716fadbb72c98c530be705c0e581c44",
+      "size_bytes": 3081
+    },
+    "results/scholarly-modern-10m-resume-20261017-01.json": {
+      "path": "pr-13/training/results/scholarly-modern-10m-resume-20261017-01.json",
+      "sha256": "f1acc21b38db81b0fee4cc76364751f39539232f81cb64faf3fd62e276f3a87e",
+      "size_bytes": 3136
+    }
+  },
+  "revision": "292e06c89b8965f565d33b9c7ed52531030c6086"
+}

@@ -4,8 +4,8 @@ import unittest
 import torch
 from model_100m.model import GPT, ModelConfig
 
-from distributed_training.config import DistributedConfig
-from distributed_training.optimizers import make_optimizer, orthogonalize, set_learning_rate
+from distributed.config import DistributedConfig
+from trainer.optimizers import make_optimizer, orthogonalize, set_learning_rate
 
 
 class MuonTests(unittest.TestCase):

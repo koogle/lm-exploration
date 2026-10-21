@@ -1,0 +1,22 @@
+{
+  "optimizer": "adamw",
+  "world_size": 3,
+  "global_windows": 48,
+  "microbatch": 8,
+  "context": 2048,
+  "warmup_tokens": 20000000,
+  "peak_lr": 0.0003,
+  "min_lr_ratio": 0.1,
+  "weight_decay": 0.1,
+  "seed": 42,
+  "checkpoint_every": 500,
+  "evaluate_every": 500,
+  "n_layer": 8,
+  "n_head": 3,
+  "n_embd": 192,
+  "adam_beta1": 0.9,
+  "adam_beta2": 0.95,
+  "gradient_clip_norm": 1.0,
+  "validation_windows_per_source": 1,
+  "log_every": 10
+}

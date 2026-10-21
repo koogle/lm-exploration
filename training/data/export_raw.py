@@ -41,7 +41,7 @@ def export_raw(folder, destination):
         source.close()
         target.close()
     manifest = {
-        "format": "scholarly-raw-v1",
+        "format": "raw-text-v1",
         "training_ready": False,
         "max_passes": 2,
         "tokenizer_sha256": TOKENIZER_SHA256,

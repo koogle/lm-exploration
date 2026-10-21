@@ -7,7 +7,7 @@ from pathlib import Path
 
 import modal
 
-from distributed_training.modal_train import validate_paths, worker
+from distributed.modal_train import validate_paths, worker
 from modal_simple_llm_8k import SNAPSHOT, data_volume, image, run_volume
 
 image = image.add_local_file("modal_simple_llm_8k.py", "/project/modal_simple_llm_8k.py")
@@ -84,7 +84,7 @@ def run_arm(run_id, settings, provenance):
 def main(prefix: str):
     validate_paths(prefix + "-adamw-start", SNAPSHOT, "")
     settings = json.loads(
-        Path("distributed_training/recipes/h100x8-muon-comparison.json").read_text()
+        Path("workflows/model_configs/historical/h100x8-muon-comparison.json").read_text()
     )
     provenance = {
         "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
