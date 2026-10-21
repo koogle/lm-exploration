@@ -19,6 +19,7 @@ from huggingface_hub.errors import EntryNotFoundError
 from eu_corpus import normalize_text
 from goal_controller import cached_token_lower_bound
 from hf_store import RECORD_SCHEMA, HFStore, json_bytes
+from pipeline import load_mapping
 
 ROOT = Path(__file__).resolve().parent
 
@@ -290,7 +291,7 @@ def main():
         help="Read matching exact token caches without recounting",
     )
     args = parser.parse_args()
-    mapping = json.loads(args.mapping.read_text())
+    mapping = load_mapping(args.mapping)
     encoder = None
     if args.tokens:
         import tiktoken

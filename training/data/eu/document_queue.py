@@ -94,24 +94,38 @@ def record_failure(state, outcome, error):
         run.update(status="paused_rate_limit", retry_after_epoch=retry)
 
 
+def exhausted(state, key, max_attempts):
+    return state["failures"].get(key, {}).get("attempts", 0) >= max_attempts
+
+
 def parse_staged(
-    store, state, revision, keys, source, adapter, deadline, max_bytes, local_paths=None
+    store, state, revision, keys, source, adapter, deadline, bounds, local_paths=None, replay=False
 ):
     """Parse only raw bodies already committed with queue metadata."""
-    records = []
+    records, processed = [], 0
     for key in keys:
         if time.monotonic() >= deadline:
             break  # Durable queued raw remains available to the next worker.
+        processed += 1
+        run = state["runs"][-1]
+        if replay:
+            run["attempted"] += 1
+            run["queue_replayed"] = run.get("queue_replayed", 0) + 1
         entry = state["download_queue"][key]
         candidate, provenance = entry["candidate"], entry["provenance"]
-        # Integrity/storage errors abort; they are not website-document failures.
-        body = (
-            local_paths[key].read_bytes()
-            if local_paths and key in local_paths
-            else gzip.decompress(store._download_bytes(entry["raw_path"], revision))
-        )
-        if len(body) > max_bytes or digest(body) != provenance["raw_sha256"]:
-            raise ValueError("Durable queued raw body size or digest mismatch")
+        try:
+            body = (
+                local_paths[key].read_bytes()
+                if local_paths and key in local_paths
+                else gzip.decompress(store._download_bytes(entry["raw_path"], revision))
+            )
+            if len(body) > bounds["max_document_bytes"] or digest(body) != provenance["raw_sha256"]:
+                raise ValueError("Durable queued raw body size or digest mismatch")
+        except Exception as error:  # noqa: BLE001 - one bad blob must not wedge every replay
+            # Drop the unreadable staged body so a later worker downloads it again.
+            record_failure(state, entry, f"staged_raw_unreadable: {error}")
+            del state["download_queue"][key]
+            continue
         try:
             if entry.get("used_alternate"):
                 validator = getattr(adapter, "validate_alternate", None)
@@ -130,7 +144,6 @@ def parse_staged(
             record = pipeline.extract_record(candidate, data, parse_provenance, source)
             text_hash = record["text_sha256"]
             previous = state["text_index"].get(text_hash)
-            run = state["runs"][-1]
             if previous:
                 run["duplicates"] += 1
             else:
@@ -150,6 +163,12 @@ def parse_staged(
             del state["download_queue"][key]
         except Exception as error:  # noqa: BLE001 - retain raw for bounded parse retry
             record_failure(state, entry, error)
+            if exhausted(state, key, bounds["max_attempts_per_item"]):
+                # The failure record keeps raw_path; the queue holds only retryable work.
+                state["failures"][key]["raw_path"] = entry["raw_path"]
+                del state["download_queue"][key]
+    if not processed:
+        return revision
     state["runs"][-1]["heartbeat_at"] = now()
     return checkpoint(
         store, state, revision, records, {}, message="Checkpoint parsed document queue"
@@ -176,6 +195,9 @@ def run_queued_documents(
     run["document_pipeline"] = "durable_download_queue_v1"
     run["document_queue_sha256"] = digest(Path(__file__).read_bytes())
     queue = state.setdefault("download_queue", {})
+    # Entries left behind by an earlier queue version after exhausting parse retries.
+    for key in [k for k in queue if exhausted(state, k, bounds["max_attempts_per_item"])]:
+        state["failures"][key]["raw_path"] = queue.pop(key)["raw_path"]
     # Queue entries are immutable source revisions, not just URLs. Failed parses
     # keep the body and the existing retry budget/cooldown; completed items vanish
     # only in the same atomic commit that stores their parsed result.
@@ -237,20 +259,18 @@ def run_queued_documents(
 
         try:
             for start in range(0, len(replay), batch_size):
-                keys = replay[start : start + batch_size]
-                state["runs"][-1]["attempted"] += len(keys)
-                state["runs"][-1]["queue_replayed"] = state["runs"][-1].get(
-                    "queue_replayed", 0
-                ) + len(keys)
+                if time.monotonic() >= deadline:
+                    break
                 revision = parse_staged(
                     store,
                     state,
                     revision,
-                    keys,
+                    replay[start : start + batch_size],
                     source,
                     adapter,
                     deadline,
-                    bounds["max_document_bytes"],
+                    bounds,
+                    replay=True,
                 )
             future = submit_next()
             while future is not None:
@@ -300,7 +320,7 @@ def run_queued_documents(
                         source,
                         adapter,
                         deadline,
-                        bounds["max_document_bytes"],
+                        bounds,
                         local_paths,
                     )
                 for path in local_paths.values():

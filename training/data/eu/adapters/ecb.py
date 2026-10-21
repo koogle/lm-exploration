@@ -489,8 +489,8 @@ def enumerate_report_translations(fetch, limit=1000, seed_limit=100):
 
 # Exact standalone assets verified on 2026-10-16 and 2026-10-17. No blanket prefix rewrite:
 # inventory errors in other historical files need their own verification.
-# Exact PDF identities verified in research/ecb-convergence-links-20261017.json
-# and research/ecb-convergence-recovery-20261018.json.
+# Exact PDF identities verified in research/ecb-convergence-links-20261017.json and
+# research/ecb-convergence-recovery-20261018.json at commit 3d25fa6 (see RESEARCH.md).
 VERIFIED_CONVERGENCE_REPORTS = {
     "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2006en.pdf": {
         "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2006en.pdf",

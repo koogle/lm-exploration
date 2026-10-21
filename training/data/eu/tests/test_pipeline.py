@@ -204,26 +204,6 @@ def test_exact_duplicates_share_persisted_record(harness):
     assert h.run(store, run_id="next-round")["attempted"] == 0
 
 
-def test_failed_document_commit_replays_uncommitted_documents(harness):
-    h = harness
-    h.inventories.update({"a": [h.candidate("a1")], "b": [h.candidate("b1", "b")]})
-    store = DurableStore()
-    store.fail_document_commit = True
-    with pytest.raises(RuntimeError, match="simulated commit failure"):
-        h.run(store)
-    assert not store.rows
-    assert not store.state["completed"]
-    assert not store.state["text_index"]
-    assert store.state["runs"][-1]["attempted"] == 0
-    assert store.state["runs"][-1]["status"] == "running"
-    assert len(store.state["collections"]) == 2
-    store.fail_document_commit = False
-    result = h.run(store)
-    assert result["extracted"] == result["total_rows"] == 2
-    assert len(h.fetched) == 4
-    assert h.enumerated == ["a", "b"]
-
-
 def test_new_extraction_version_revisits_completed_candidates(harness, monkeypatch):
     h = harness
     h.inventories.update({"a": [h.candidate("a1")], "b": []})
@@ -396,8 +376,12 @@ def test_restart_uses_remaining_wall_time_for_fetch_deadline(harness, monkeypatc
     h.inventories.update({"a": [h.candidate("a1"), h.candidate("a2")], "b": []})
     monkeypatch.setattr(pipeline.time, "time", lambda: 1000)
     # 10 seconds already elapsed: the new deadline is 120, not 130.
-    ticks = iter([100, 100, 110, 121, 121])
-    monkeypatch.setattr(pipeline.time, "monotonic", lambda: next(ticks))
+    ticks = iter([100, 100])
+    monkeypatch.setattr(
+        pipeline.time,
+        "monotonic",
+        lambda: next(ticks, 121 if h.fetched else 110),
+    )
     store = DurableStore()
     store.state["runs"].append(interrupted_run())
     result = h.run(store)
@@ -597,18 +581,10 @@ def test_expansion_preserves_missing_candidates_provenance_and_dedup(harness):
     assert seen_limits == [1000]
 
 
-@pytest.fixture
-def queued_harness(harness):
-    for config in harness.mapping["sources"].values():
-        config["download_queue"] = True
-    harness.mapping_path.write_text(json.dumps(harness.mapping))
-    return harness
-
-
-def test_download_thread_overlaps_parsing_after_durable_stage(queued_harness, monkeypatch):
+def test_download_thread_overlaps_parsing_after_durable_stage(harness, monkeypatch):
     from threading import Event, get_ident
 
-    h = queued_harness
+    h = harness
     candidates = [h.candidate(f"queued{i}") for i in range(4)]
     h.inventories.update(a=candidates, b=[])
     store = DurableStore()
@@ -649,8 +625,8 @@ def test_download_thread_overlaps_parsing_after_durable_stage(queued_harness, mo
     assert store.state["download_queue"] == {}
 
 
-def test_parse_commit_crash_replays_raw_without_refetch(queued_harness):
-    h = queued_harness
+def test_parse_commit_crash_replays_raw_without_refetch(harness):
+    h = harness
     h.inventories.update(a=[h.candidate("crash1"), h.candidate("crash2")], b=[])
     store = DurableStore()
     store.fail_document_commit = True
@@ -670,8 +646,8 @@ def test_parse_commit_crash_replays_raw_without_refetch(queued_harness):
 
 
 @pytest.mark.parametrize("failure", [{"http_status": 429}, {"error": "http_429"}])
-def test_queued_downloader_stops_at_rate_limit(queued_harness, failure):
-    h = queued_harness
+def test_queued_downloader_stops_at_rate_limit(harness, failure):
+    h = harness
     candidates = [h.candidate(f"limit{i}") for i in range(5)]
     h.inventories.update(a=candidates, b=[])
     h.bodies[candidates[1]["url"]] = failure
@@ -684,8 +660,8 @@ def test_queued_downloader_stops_at_rate_limit(queued_harness, failure):
     assert store.state["source_retry_after_epoch"] > pipeline.time.time()
 
 
-def test_parse_failure_retries_saved_body_with_cooldown(queued_harness, monkeypatch):
-    h = queued_harness
+def test_parse_failure_retries_saved_body_with_cooldown(harness, monkeypatch):
+    h = harness
     candidate = h.candidate("retryparse")
     h.inventories.update(a=[candidate], b=[])
     store = DurableStore()
@@ -708,8 +684,8 @@ def test_parse_failure_retries_saved_body_with_cooldown(queued_harness, monkeypa
     assert key not in store.state["failures"]
 
 
-def test_queued_prefetch_keeps_authorized_attempt_bound(queued_harness):
-    h = queued_harness
+def test_queued_prefetch_keeps_authorized_attempt_bound(harness):
+    h = harness
     h.inventories.update(a=[h.candidate(f"budget{i}") for i in range(7)], b=[])
     store = DurableStore()
     result = h.run(store, maximum=3)
@@ -717,10 +693,10 @@ def test_queued_prefetch_keeps_authorized_attempt_bound(queued_harness):
     assert result["remaining_supported_candidates"] == 4
 
 
-def test_queued_alternate_validated_on_parser_thread(queued_harness, monkeypatch):
+def test_queued_alternate_validated_on_parser_thread(harness, monkeypatch):
     from threading import get_ident
 
-    h = queued_harness
+    h = harness
     original, alternate = h.candidate("original"), h.candidate("alternate")
     h.inventories.update(a=[original], b=[])
     h.bodies[original["url"]] = {"http_status": 404, "error": "http_404"}
@@ -739,8 +715,8 @@ def test_queued_alternate_validated_on_parser_thread(queued_harness, monkeypatch
     assert h.fetched == [original["url"], alternate["url"]]
 
 
-def test_queue_stage_failure_never_marks_download_complete(queued_harness, monkeypatch):
-    h = queued_harness
+def test_queue_stage_failure_never_marks_download_complete(harness, monkeypatch):
+    h = harness
     h.inventories.update(a=[h.candidate("stagefail")], b=[])
     store = DurableStore()
     commit = store.commit
@@ -760,8 +736,8 @@ def test_queue_stage_failure_never_marks_download_complete(queued_harness, monke
     assert not store.state["completed"] and not store.rows
 
 
-def test_queued_exact_duplicates_leave_one_parquet_record(queued_harness):
-    h = queued_harness
+def test_queued_exact_duplicates_leave_one_parquet_record(harness):
+    h = harness
     text = "Same institutional full document wording and economic evidence. " * 20
     h.inventories.update(
         a=[h.candidate("original", text=text), h.candidate("mirror", text=text)], b=[]
@@ -773,8 +749,8 @@ def test_queued_exact_duplicates_leave_one_parquet_record(queued_harness):
     assert not store.state["download_queue"]
 
 
-def test_parse_retry_budget_does_not_loop_or_redownload(queued_harness, monkeypatch):
-    h = queued_harness
+def test_parse_retry_budget_does_not_loop_or_redownload(harness, monkeypatch):
+    h = harness
     candidate = h.candidate("unparseable")
     h.inventories.update(a=[candidate], b=[])
     store = DurableStore()
@@ -788,14 +764,61 @@ def test_parse_retry_budget_does_not_loop_or_redownload(queued_harness, monkeypa
         monkeypatch.setattr(pipeline.time, "time", lambda retry=retry: retry + 1)
     result = h.run(store, maximum=1, run_id="after-exhaustion")
     assert result["attempted"] == result["remaining_supported_candidates"] == 0
-    assert store.state["failures"][pipeline.item_key(candidate)]["attempts"] == 3
+    failure = store.state["failures"][pipeline.item_key(candidate)]
+    assert failure["attempts"] == 3
+    # Exhausted items leave the queue; the failure keeps the staged raw reference.
+    assert not store.state["download_queue"]
+    assert failure["raw_path"] in store.files
     assert len(h.fetched) == 1
 
 
-def test_queue_deadline_leaves_downloaded_raw_for_next_worker(queued_harness, monkeypatch):
+def test_unreadable_staged_raw_is_dropped_and_redownloaded(harness, monkeypatch):
+    h = harness
+    h.inventories.update(a=[h.candidate("corrupt"), h.candidate("intact")], b=[])
+    store = DurableStore()
+    store.fail_document_commit = True
+    with pytest.raises(RuntimeError, match="simulated commit failure"):
+        h.run(store, maximum=2)
+    corrupt = next(
+        key
+        for key, entry in store.state["download_queue"].items()
+        if entry["candidate"]["document_id"] == "corrupt"
+    )
+    store.files[store.state["download_queue"][corrupt]["raw_path"]] = b"not gzip"
+    store.fail_document_commit = False
+    replayed = h.run(store, maximum=2, run_id="replay-corrupt")
+    assert replayed["queue_replayed"] == 2
+    assert replayed["extracted"] == replayed["failed"] == 1
+    assert corrupt not in store.state["download_queue"]
+    assert store.state["failures"][corrupt]["error"].startswith("staged_raw_unreadable")
+    retry = store.state["failures"][corrupt]["retry_after_epoch"]
+    monkeypatch.setattr(pipeline.time, "time", lambda: retry + 1)
+    fetched = len(h.fetched)
+    recovered = h.run(store, maximum=1, run_id="redownload-corrupt")
+    assert recovered["downloaded"] == recovered["extracted"] == 1
+    assert len(h.fetched) == fetched + 1
+
+
+def test_parse_after_deadline_neither_commits_nor_counts():
     import document_queue
 
-    h = queued_harness
+    state = {"runs": [{"attempted": 0}], "download_queue": {"k": {}}}
+
+    class NoCommit:
+        def commit(self, *args, **kwargs):
+            raise AssertionError("empty checkpoint")
+
+    revision = document_queue.parse_staged(
+        NoCommit(), state, "7", ["k"], {}, None, 0, {}, replay=True
+    )
+    assert revision == "7"
+    assert state["runs"][0]["attempted"] == 0
+
+
+def test_queue_deadline_leaves_downloaded_raw_for_next_worker(harness, monkeypatch):
+    import document_queue
+
+    h = harness
     h.inventories.update(a=[h.candidate("deferredparse")], b=[])
     store = DurableStore()
     original = document_queue.parse_staged
@@ -815,8 +838,8 @@ def test_queue_deadline_leaves_downloaded_raw_for_next_worker(queued_harness, mo
     assert len(h.fetched) == 1
 
 
-def test_interrupted_queue_reserves_one_speculative_batch(queued_harness):
-    h = queued_harness
+def test_interrupted_queue_reserves_one_speculative_batch(harness):
+    h = harness
     h.inventories.update(a=[h.candidate(f"preempt{i}") for i in range(6)], b=[])
     store = DurableStore()
     store.fail_document_commit = True
@@ -833,3 +856,15 @@ def test_interrupted_queue_reserves_one_speculative_batch(queued_harness):
     assert resumed["logical_run_attempts_reserved"] == 2
     assert resumed["queue_replayed"] == resumed["extracted"] == 2
     assert h.fetched == fetches
+
+
+def test_mapping_collections_default_to_adapter_registry():
+    import importlib
+
+    mapping = pipeline.load_mapping()
+    ecb, ema = mapping["sources"]["ecb"], mapping["sources"]["ema"]
+    assert ecb["collections"] == list(importlib.import_module("adapters.ecb").COLLECTIONS)
+    assert "epar_documents" not in ema["collections"]
+    assert len(ema["collections"]) == len(importlib.import_module("adapters.ema").COLLECTIONS) - 1
+    for config in mapping["sources"].values():
+        assert set(config.get("collection_weights", {})) <= set(config["collections"])
