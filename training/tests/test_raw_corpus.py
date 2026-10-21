@@ -3,7 +3,7 @@ import unittest
 import zlib
 
 from training_data.raw_corpus import RawCorpus
-from training_data.scholarly import adapt
+from training_data.simple_llm import adapt
 
 
 class Encoding:

@@ -14,7 +14,7 @@ All 18 original tokenizers and three fresh code-focused tokenizers were scored o
 - Same byte-level BPE, pretokenization, full byte alphabet, four special tokens, min frequency 2 and maximum learned token length 32 as the original experiment. No 120K experiment.
 - Paired 95% intervals use 1,000 bootstrap samples of source parents. They quantify variation within this fixture set, not production generalization or training-seed variance.
 - Actual fitting bytes: 67,116,295; fitting source parents: 14,911.
-- All 21 structured evaluations passed exact round-trip and zero-UNK checks. The three new fits were also evaluated on the original shared 32 MiB scholarly mixture.
+- All 21 structured evaluations passed exact round-trip and zero-UNK checks. The three new fits were also evaluated on the original shared 32 MiB simple LLM mixture.
 
 ## Focused fits versus matched 64 MiB originals
 

@@ -1,4 +1,4 @@
-"""Immutable tokenizer contract for scholarly/code data and future checkpoints."""
+"""Immutable tokenizer contract for Simple LLM data and future checkpoints."""
 
 import hashlib
 import json
