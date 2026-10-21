@@ -122,3 +122,22 @@ run ID and saved state after ensuring the previous supervisor has stopped.
 Status at launch: four teacher workers started; student launches are automatic
 once data thresholds are met. Read live `status.json` for completion instead of
 treating this launch record as a completed 500M result.
+
+## Stopped by user, 2026-10-21
+
+The old sweep's supervisor, four teachers and student calls were cancelled, and
+both old Modal apps were stopped (`ap-8bAPE3T70ta0BfBMFxgLKP` and
+`ap-ed39mfL1LCi5IGKaCOluxg`). The separate `lm-distillation-215m-4p5b` phased run
+was left running. Durable progress at stop: 27M student 135,406,075 tokens;
+48M student 85,406,075; old 215.9M pilot 4,500,000. Later metric rows are not
+proof of a resumable checkpoint. The original volume remains intact.
+
+`modal_archive_sweep.py` archives every producer directory, including uneven
+shard tails, raw audits and provenance, and the latest student checkpoints plus
+diagnostics. It verifies committed shard hashes before upload and verifies the
+remote index at an immutable HF revision. Other historical `.pt` files remain
+on the original volume. The archive excludes the active phased student's folder.
+The private archive repository is
+`jfrick/python-math-500m-sweep-stopped-20261021`; completion is recorded in
+`stopped-archive-receipt.json` on the volume, with a pinned reference added here
+once verified. Original supervisor status is preserved in `status-before-stop.json`.
