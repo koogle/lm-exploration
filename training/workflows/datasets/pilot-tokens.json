@@ -1,0 +1,6 @@
+{
+  "mode": "snapshot",
+  "root": "scholarly-code",
+  "loader": "token_shards",
+  "snapshot": "simple-llm-124m-20261016/snapshots/pilot-001-seekable"
+}

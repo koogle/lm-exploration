@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 import torch
 import torch.distributed as dist
@@ -12,22 +13,11 @@ from model_100m.model import GPT, ModelConfig
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from distributed_training.config import DistributedConfig
-from distributed_training.train import backward_batch
+from distributed.config import DistributedConfig
+from trainer.loop import backward_batch, evaluate_sources, make_optimizer, validation_blocks
 
 
 class SingleRankParityTests(unittest.TestCase):
-    def test_pilot_recipes_only_change_world_size(self):
-        recipes = Path(__file__).resolve().parents[1] / "distributed_training" / "recipes"
-        single = json.loads((recipes / "h100x1-pilot.json").read_text())
-        multi = json.loads((recipes / "h100x2-pilot.json").read_text())
-        self.assertEqual(single["world_size"], 1)
-        self.assertEqual(multi["world_size"], 2)
-        multi["world_size"] = 1
-        self.assertEqual(single, multi)
-        config = DistributedConfig(**single)
-        self.assertEqual(config.global_windows // config.microbatch, 2)
-
     @unittest.skipUnless(dist.is_gloo_available(), "Local one-rank DDP check requires Gloo")
     def test_single_rank_matches_plain_model(self):
         # Exercise production accumulation with one-rank DDP and compare with a
@@ -74,5 +64,46 @@ class SingleRankParityTests(unittest.TestCase):
                 dist.destroy_process_group()
 
 
-if __name__ == "__main__":
-    unittest.main()
+class TrainingMathTests(unittest.TestCase):
+    def test_optimizer_uses_nondefault_recipe_after_json_roundtrip(self):
+        config = DistributedConfig(
+            adam_beta1=0.8,
+            adam_beta2=0.99,
+            peak_lr=0.002,
+            weight_decay=0.02,
+            gradient_clip_norm=0.25,
+            validation_windows_per_source=3,
+            log_every=7,
+        )
+        restored = DistributedConfig(**json.loads(json.dumps(config.as_dict())))
+        self.assertEqual(restored, config)
+        parameter = torch.nn.Linear(2, 1)
+        optimizer = make_optimizer(parameter, restored, fused=False)
+        group = optimizer.param_groups[0]
+        self.assertEqual(group["betas"], (0.8, 0.99))
+        self.assertEqual(group["lr"], 0.002)
+        self.assertEqual(group["weight_decay"], 0.02)
+        parameter(torch.ones(1, 2)).sum().backward()
+        optimizer.step()
+        self.assertTrue(optimizer.state)
+
+    def test_validation_samples_exact_count_and_fails_if_split_is_too_small(self):
+        data = SimpleNamespace(sources={"source": {}}, blocks=lambda _: (i for i in range(5)))
+        self.assertEqual(validation_blocks(data, 3), {"source": [0, 1, 2]})
+        self.assertEqual(validation_blocks(data, 1), {"source": [0]})
+        with self.assertRaisesRegex(ValueError, "fewer than 6"):
+            validation_blocks(data, 6)
+
+    def test_validation_weights_unequal_windows_by_valid_targets(self):
+        with torch.random.fork_rng():
+            torch.manual_seed(12)
+            model = torch.nn.Embedding(8, 8)
+            blocks = [
+                {"input_ids": [1, 2, 3], "labels": [2, 3, 4], "loss_tokens": 3},
+                {"input_ids": [5, 0, 0], "labels": [6, -100, -100], "loss_tokens": 1},
+            ]
+            loss = evaluate_sources(model, {"source": blocks}, device="cpu", bf16=False)["source"]
+            expected = F.cross_entropy(
+                model(torch.tensor([1, 2, 3, 5])), torch.tensor([2, 3, 4, 6])
+            )
+            self.assertAlmostEqual(loss, expected.item(), places=6)
