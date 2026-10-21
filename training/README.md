@@ -22,7 +22,7 @@ training exposures, 64,227 updates, and 7.67 recorded worker-hours on eight H100
 The [published final model](https://huggingface.co/jfrick/scholarly-code-modern-gpt-124m-step2)
 includes weights, code, tokenizer, training curves and raw metrics. Final fixed-window
 diagnostic validation loss is 1.8708; broader quality and long-context evaluation remain
-pending. See the [publication record](results/simple-llm-124m-8k-5b-publication-20261018.json).
+pending. Its run, publication and repetition records are [archived on HF](publication/README.md#pr-16).
 
 The [Simple LLM 9.85M / 5B-token experiment](publication/README.md#pr-13)
 is complete and [published on Hugging Face](https://huggingface.co/jfrick/scholarly-code-modern-gpt-10m-5b).

@@ -136,8 +136,9 @@ def infer():
 
 
 @app.local_entrypoint()
-def main():
+def main(output: str = "artifacts/pr-16/results/simple-llm-124m-8k-inference-20261018.json"):
     report = infer.remote()
-    path = Path("results/simple-llm-124m-8k-inference-20261018.json")
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps({"output": str(path), "samples": len(report["samples"])}))

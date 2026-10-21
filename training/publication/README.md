@@ -54,6 +54,20 @@ mutable revision. Existing model repositories and Modal volumes are unchanged.
 The former experiment-specific exporters have been replaced by the generic export
 function above. Card rendering is independent of weight export.
 
+### PR #16
+
+[`pr16-artifacts.json`](pr16-artifacts.json) indexes the Simple LLM 124M / 8K / 5B
+session, launch, qualification, throughput, publication, inference-sample and
+repetition-validation JSONs from PR #16 in the same dataset at immutable revision
+`e581149e7983fdae1d198da6f76ab98d21d135b9`, under `pr-16/training/results/`. Every
+remote file was re-downloaded and byte-compared before its Git copy was removed.
+New inference or repetition runs write to `artifacts/pr-16/results/` by default.
+
+```sh
+uv run --extra corpus python -m publication.artifacts \
+  --index publication/pr16-artifacts.json --output artifacts/pr-16
+```
+
 ## Model-card source
 
 [`cards/completed.md`](cards/completed.md) is the editable source document, not a

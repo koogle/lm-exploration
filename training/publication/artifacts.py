@@ -28,9 +28,9 @@ def verify(path, entry):
     return Path(path)
 
 
-def artifact_path(folder, name):
+def artifact_path(folder, name, index_path=INDEX):
     """Resolve an explicitly downloaded artifact; never implicitly access the network."""
-    index = read_index()
+    index = read_index(index_path)
     return verify(Path(folder) / name, index["files"][name])
 
 
@@ -55,9 +55,10 @@ def fetch_artifacts(folder, index_path=INDEX):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--index", type=Path, default=INDEX)
     parser.add_argument("--output", type=Path, default=Path("artifacts/pr-13"))
     args = parser.parse_args()
-    index = fetch_artifacts(args.output)
+    index = fetch_artifacts(args.output, args.index)
     print(f"Verified {len(index['files'])} artifacts at {index['revision']} in {args.output}")
 
 

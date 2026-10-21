@@ -31,6 +31,6 @@ Next steps: use less restrictive sampling for exploration, and run a controlled 
 
 ## All completions
 
-All 200 completions and reference-continuation scores are in the adjacent JSON. The human-readable file contains every completion.
+All 200 completions and reference-continuation scores are in the archived comparison JSON. The human-readable file contains every completion.
 
-[Full comparison JSON](simple-llm-repetition-comparison-20261018.json) · [Real-data audit](simple-llm-repetition-data-audit-20261018.json) · [Implementation checks](simple-llm-repetition-implementation-checks-20261018.json)
+The full comparison, real-data audit and implementation-check JSONs are archived on HF and indexed in [`pr16-artifacts.json`](../publication/pr16-artifacts.json) as `results/simple-llm-repetition-{comparison,data-audit,implementation-checks}-20261018.json`.
