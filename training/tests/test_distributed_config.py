@@ -1,6 +1,6 @@
 import unittest
 
-from distributed_training.config import DistributedConfig, DistributedRuntime, validate_resume
+from distributed.config import DistributedConfig, DistributedRuntime, validate_resume
 
 
 class DistributedConfigTests(unittest.TestCase):
@@ -20,6 +20,17 @@ class DistributedConfigTests(unittest.TestCase):
             {"seed": -1},
             {"checkpoint_every": 0},
             {"target_tokens": 100, "warmup_tokens": 100},
+            {"data_loader": "auto"},
+            {"data_loader": None},
+            {"adam_beta1": 1},
+            {"adam_beta2": -0.1},
+            {"adam_beta2": True},
+            {"adam_beta1": float("nan")},
+            {"gradient_clip_norm": 0},
+            {"gradient_clip_norm": float("inf")},
+            {"validation_windows_per_source": 0},
+            {"validation_windows_per_source": True},
+            {"log_every": 0},
         ):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 DistributedConfig(**change)
@@ -71,6 +82,26 @@ class DistributedConfigTests(unittest.TestCase):
                 validate_resume(
                     {**saved, field: value}, config, {"hash": "x"}, {"model": "y"}, "2.6"
                 )
+
+    def test_resume_rejects_changed_loader_optimizer_and_diagnostics(self):
+        config = DistributedConfig()
+        for change in (
+            {"data_loader": "raw"},
+            {"adam_beta1": 0.8},
+            {"adam_beta2": 0.99},
+            {"gradient_clip_norm": 0.5},
+            {"validation_windows_per_source": 2},
+            {"log_every": 20},
+        ):
+            saved = {
+                "format": "scholarly-ddp-v1",
+                "config": {**config.as_dict(), **change},
+            }
+            with (
+                self.subTest(change=change),
+                self.assertRaisesRegex(ValueError, "identical training"),
+            ):
+                validate_resume(saved, config, {}, {}, "2.6")
 
     def test_runtime_resolves_torchrun_launch_details(self):
         runtime = DistributedRuntime.from_torchrun(

@@ -181,6 +181,11 @@ class TokenMixture:
             "loss_token_exposures": dict(self.exposures),
         }
 
+    def close(self):
+        for iterator in self.iterators.values():
+            iterator.close()
+        self.iterators.clear()
+
     def load_state_dict(self, state):
         if any(state.get(k) != v for k, v in self.identity.items()):
             raise ValueError("Checkpoint data identity mismatch")

@@ -1,34 +1,40 @@
 # Raw-corpus preparation
 
-The shared [distributed trainer](../distributed_training/README.md) accepts seekable
-token snapshots and `raw-text-v1` SQLite snapshots. Raw snapshots store compressed
+The shared [distributed trainer](../distributed/README.md) accepts seekable
+token snapshots and `raw-text-v1` SQLite snapshots (including historical `scholarly-raw-v1`). Raw snapshots store compressed
 document text; `training_data.raw_token_stream.RawTokenMixture` tokenizes document-local
 windows as requested. It retains token-weighted scheduling, padding rules, a two-pass
 source limit and resumable raw-document cursors. Seekable token shards remain the
-default prepared format; the two loader cursor schemas are distinct.
+default prepared format; the two loader cursor schemas are distinct. Select
+`loader: "raw"` or `"token_shards"` in the workflow's dataset config. A mismatched
+manifest is rejected, never used to switch implementations implicitly.
 
 ## Explicit small-model workflow
 
-Run commands from `training/`. `distributed_training/modal_small_5b.py` implements
-preparation, qualification and bounded continuation for the modern 9.85M model
-(eight layers, width 192, three heads) on three H100s, targeting at most 5B tokens
-in non-pilot mode. These are dedicated workflow checks in
-`distributed_training/run_validation.py`, not shared configuration restrictions.
+Run commands from `training/`. `workflows/modal_train.py` implements
+preparation, qualification and bounded continuation. The selected model config specifies
+the modern 9.85M model (eight layers, width 192, three heads).
+[`workflows/small-5b.json`](../workflows/small-5b.json) selects
+three H100s, a 5B-token target, preparation settings and continuation limits.
+The workflow resolves its GPU allocation and token target with the selected model
+and dataset configs; non-pilot runs enforce capacity checks. Model dimensions are not
+duplicated in Python validation.
 
-The active Simple LLM recipes are `distributed_training/recipes/simple-llm-10m-5b.json`
-and `distributed_training/recipes/simple-llm-10m-qualification.json`.
+The workflow selects `model_configs/modern-10m.json` and
+`datasets/scholarly-raw.json`. Model/optimizer settings, dataset selection and
+execution settings each have one owner. Use `workflows.modal_train` with
+`--workflow workflows/small-5b.json`; selectors can choose another model or dataset.
+Qualification uses the selected final training schedule with a short step limit.
 Importing or deploying the module does not launch training:
 `prepare_and_launch.spawn(...)` explicitly requires approved resources and a fresh
 run ID. Run IDs, segment suffixes and snapshot paths are checked before filesystem
 access. A staging identity change requires a new data version.
 
-Preparation and loaders directly check the data-readiness flag.
+Preparation and loaders check data review status directly.
 Reviewed snapshots need no override; pending snapshots require the explicit
 `allow_unreviewed_data: true` flag before ingestion or GPU scheduling. New exports
 remain `training_ready: false`. No flag clears audits or removes repetition limits.
-The obsolete standalone raw-preparation launcher has been removed. Readers still
-accept the historical `scholarly-raw-v1` tag; the existing checkpoint format tag,
-persisted volume paths and published repository IDs are not renamed.
+The obsolete standalone raw-preparation launcher has been removed.
 
 ## Prepare once, reuse across runs
 
@@ -46,8 +52,9 @@ refiltering, recounting or copying it. Pending audit flags remain in the manifes
 - `PersistentStream` keeps the upstream connection and decompressor open across
   durable chunks; restart, rollback or shard/source changes reopen from the cursor.
 - `CachedShards` retains one compressed shard per active source locally.
-- `FastRawCorpus` fetches/tokenizes across up to three workers, using eight
-  tokenizer threads and batches capped at 64 documents or roughly 4 MiB.
+- `FastRawCorpus` uses the workflow's configured source workers, tokenizer threads
+  and document batch size (currently three, eight and 64). It also bounds each
+  batch to roughly 4 MiB.
 - One SQLite writer commits documents, decisions, repetition counts and source
   cursors atomically. Deterministic source order, not completion timing, assigns
   duplicate ownership; this can differ from the old whole-source schedule.

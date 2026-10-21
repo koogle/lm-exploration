@@ -12,11 +12,13 @@ ROOT = Path(__file__).resolve().parents[1]
 class ScriptLayoutTests(unittest.TestCase):
     def test_training_root_keeps_only_generation_entrypoint(self):
         self.assertEqual({p.name for p in ROOT.glob("*.py")}, {"generate.py"})
-        self.assertEqual(len(list((ROOT / "modal_scripts").glob("modal_*.py"))), 8)
+        self.assertEqual(len(list((ROOT / "modal_scripts").glob("modal_*.py"))), 7)
         self.assertFalse((ROOT / "trainer/subword_pilot.py").exists())
+        self.assertFalse((ROOT / "distributed/train.py").exists())
+        self.assertFalse((ROOT / "modal_scripts/modal_train.py").exists())
         self.assertFalse((ROOT / "modal_prepare_raw.py").exists())
-        self.assertFalse((ROOT / "distributed_training/archived_model.py").exists())
-        self.assertFalse((ROOT / "distributed_training/modal_validate_small.py").exists())
+        self.assertFalse((ROOT / "distributed/archived_model.py").exists())
+        self.assertFalse((ROOT / "distributed/modal_validate_small.py").exists())
         self.assertTrue((ROOT / "data/prepare_simple_llm.py").is_file())
 
     def test_installed_module_locations(self):
@@ -31,13 +33,14 @@ class ScriptLayoutTests(unittest.TestCase):
             "tokenizer.structured_tokenizer_report": "tokenizer/structured_tokenizer_report.py",
             "tokenizer.package_tokenizer_research": "tokenizer/package_tokenizer_research.py",
             "tokenizer.verify_tokenizer_publication": "tokenizer/verify_tokenizer_publication.py",
-            "modal_scripts.modal_train": "modal_scripts/modal_train.py",
-            "distributed_training.train": "distributed_training/train.py",
-            "distributed_training.config": "distributed_training/config.py",
-            "distributed_training.modal_train": "distributed_training/modal_train.py",
-            "distributed_training.modal_checks": "distributed_training/modal_checks.py",
-            "distributed_training.modal_small_5b": "distributed_training/modal_small_5b.py",
-            "distributed_training.modal_prep_benchmark": "distributed_training/modal_prep_benchmark.py",
+            "trainer.loop": "trainer/loop.py",
+            "distributed.config": "distributed/config.py",
+            "distributed.modal_train": "distributed/modal_train.py",
+            "distributed.modal_checks": "distributed/modal_checks.py",
+            "workflows.modal_train": "workflows/modal_train.py",
+            "workflows.config": "workflows/config.py",
+            "workflows.checks": "workflows/checks.py",
+            "distributed.modal_prep_benchmark": "distributed/modal_prep_benchmark.py",
         }
         for name, relative in expected.items():
             with self.subTest(module=name):
@@ -53,7 +56,8 @@ class ScriptLayoutTests(unittest.TestCase):
     def test_modal_image_local_sources_exist(self):
         paths = [
             *(ROOT / "modal_scripts").glob("modal_*.py"),
-            *(ROOT / "distributed_training").glob("*.py"),
+            *(ROOT / "distributed").glob("*.py"),
+            *(ROOT / "workflows").glob("*.py"),
         ]
         for path in paths:
             tree = ast.parse(path.read_text())
@@ -82,7 +86,7 @@ class ScriptLayoutTests(unittest.TestCase):
             "prepare_simple_llm",
             "modal_simple_llm_pilot",
         }
-        for folder in ("modal_scripts", "distributed_training", "tokenizer", "tests"):
+        for folder in ("modal_scripts", "distributed", "workflows", "tokenizer", "tests"):
             for path in (ROOT / folder).glob("*.py"):
                 for node in ast.walk(ast.parse(path.read_text())):
                     if isinstance(node, ast.ImportFrom):

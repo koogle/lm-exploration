@@ -144,5 +144,5 @@ class RawTokenMixture(TokenMixture):
         self.cursors = {k: dict(v) for k, v in cursors.items()}
 
     def close(self):
-        self.iterators.clear()
+        super().close()
         self.db.close()

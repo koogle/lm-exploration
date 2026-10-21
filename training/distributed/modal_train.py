@@ -1,8 +1,8 @@
 """Train or explicitly resume the simple LLM model on one/two/three Modal GPUs."""
 
-import hashlib
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -10,9 +10,9 @@ from pathlib import Path
 
 import modal
 
-from distributed_training.config import DistributedConfig
-from distributed_training.image import image
-from distributed_training.workflow import validate_paths
+from distributed.config import DistributedConfig
+from distributed.image import image
+from workflows.checks import validate_paths
 
 app = modal.App("lm-exploration-distributed-training")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -29,20 +29,33 @@ run_volume = modal.Volume.from_name("lm-exploration-training")
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
 )
-def worker(run_id, snapshot, settings, provenance, resume="", max_seconds=3000, max_steps=None):
+def worker(
+    run_id,
+    snapshot,
+    settings,
+    provenance,
+    resume="",
+    max_seconds=3000,
+    max_steps=None,
+    *,
+    dataset_root,
+):
     validate_paths(run_id, snapshot, resume)
+    if not isinstance(dataset_root, str) or not re.fullmatch(r"[a-zA-Z0-9_-]+", dataset_root):
+        raise ValueError("Invalid dataset root")
     config = DistributedConfig(**settings)
     if not 1 <= max_seconds <= 82800 or (max_steps is not None and max_steps < 1):
         raise ValueError("Invalid session limits")
     output = Path("/runs") / run_id
     output.mkdir(parents=True, exist_ok=False)
-    manifest = Path("/data/scholarly-code") / snapshot / "manifest.json"
+    manifest = Path("/data") / dataset_root / snapshot / "manifest.json"
     try:
         for folder in (
             "model_100m",
             "model_10m",
             "trainer",
-            "distributed_training",
+            "distributed",
+            "workflows",
             "training_data",
         ):
             shutil.copytree(
@@ -62,7 +75,7 @@ def worker(run_id, snapshot, settings, provenance, resume="", max_seconds=3000, 
             "--standalone",
             f"--nproc_per_node={config.world_size}",
             "-m",
-            "distributed_training.train",
+            "trainer.loop",
             "--config",
             str(request),
             "--manifest",
@@ -104,43 +117,3 @@ def worker(run_id, snapshot, settings, provenance, resume="", max_seconds=3000, 
         return json.loads((output / "report.json").read_text())
     finally:
         run_volume.commit()
-
-
-@app.local_entrypoint()
-def main(
-    config: str,
-    run_id: str,
-    snapshot: str,
-    gpu: str = "H100",
-    resume: str = "",
-    max_seconds: int = 3000,
-    max_steps: int = 0,
-):
-    validate_paths(run_id, snapshot, resume)
-    settings = DistributedConfig(**json.loads(Path(config).read_text()))
-    if gpu not in {"H100", "L40S", "A10G"}:
-        raise ValueError("Supported GPU families: H100, L40S, A10G")
-    if not 1 <= max_seconds <= 82800 or max_steps < 0:
-        raise ValueError("Invalid session limits")
-    files = [
-        Path(__file__),
-        *Path("trainer").glob("*.py"),
-        *Path("distributed_training").glob("*.py"),
-        *Path("data").glob("*.py"),
-        Path("100m/model.py"),
-        Path("10m/model.py"),
-        Path("10m/legacy.py"),
-    ]
-    provenance = {
-        "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
-        "source_sha256": {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
-        "gpu": gpu,
-    }
-    report = worker.with_options(
-        gpu=f"{gpu}:{settings.world_size}", cpu=4 * settings.world_size
-    ).remote(
-        run_id, snapshot, settings.as_dict(), provenance, resume, max_seconds, max_steps or None
-    )
-    Path("results").mkdir(exist_ok=True)
-    Path(f"results/{run_id}.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(json.dumps(report, indent=2))

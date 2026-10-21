@@ -1,4 +1,4 @@
-"""Pure checks used by the durable 5B workflow."""
+"""Pure path, capacity, progress and resume checks for training workflows."""
 
 import math
 import re

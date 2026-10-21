@@ -1,7 +1,6 @@
 """Local mathematical checks, not a CPU training entrypoint or CUDA qualification."""
 
 import copy
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,21 +11,21 @@ from model_100m.model import GPT, ModelConfig
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from distributed_training.config import DistributedConfig
-from distributed_training.train import backward_batch
+from trainer.loop import backward_batch
+from workflows.config import load_workflow, resolve_payload
 
 
 class SingleRankParityTests(unittest.TestCase):
     def test_pilot_recipes_only_change_world_size(self):
-        recipes = Path(__file__).resolve().parents[1] / "distributed_training" / "recipes"
-        single = json.loads((recipes / "h100x1-pilot.json").read_text())
-        multi = json.loads((recipes / "h100x2-pilot.json").read_text())
-        self.assertEqual(single["world_size"], 1)
-        self.assertEqual(multi["world_size"], 2)
-        multi["world_size"] = 1
-        self.assertEqual(single, multi)
-        config = DistributedConfig(**single)
-        self.assertEqual(config.global_windows // config.microbatch, 2)
+        root = Path(__file__).resolve().parents[1] / "workflows"
+        single = resolve_payload(load_workflow(root / "h100x1-pilot.json"))[2]
+        multi = resolve_payload(load_workflow(root / "h100x2-pilot.json"))[2]
+        self.assertEqual(single.world_size, 1)
+        self.assertEqual(multi.world_size, 2)
+        settings = multi.as_dict()
+        settings["world_size"] = 1
+        self.assertEqual(single.as_dict(), settings)
+        self.assertEqual(single.global_windows // single.microbatch, 2)
 
     @unittest.skipUnless(dist.is_gloo_available(), "Local one-rank DDP check requires Gloo")
     def test_single_rank_matches_plain_model(self):

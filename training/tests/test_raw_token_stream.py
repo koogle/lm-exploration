@@ -4,6 +4,7 @@ from pathlib import Path
 
 import torch
 from training_data.export_raw import export_raw
+from training_data.mixture import open_mixture
 from training_data.raw_corpus import RawCorpus
 from training_data.raw_token_stream import RawTokenMixture
 from training_data.simple_llm import adapt
@@ -38,11 +39,13 @@ class RawTokenStreamTests(unittest.TestCase):
             path = snapshot / "manifest.json"
             with self.assertRaises(ValueError):
                 RawTokenMixture(path)
-            a = RawTokenMixture(path, context=8, allow_unreviewed=True)
+            with self.assertRaisesRegex(ValueError, "Seekable token snapshot required"):
+                open_mixture(path, loader="token_shards", context=8, allow_unreviewed=True)
+            a = open_mixture(path, loader="raw", context=8, allow_unreviewed=True)
             a.next_batch(3)
             state = a.state_dict()
             expected = a.next_batch(5)
-            b = RawTokenMixture(path, context=8, allow_unreviewed=True)
+            b = open_mixture(path, loader="raw", context=8, allow_unreviewed=True)
             b.load_state_dict(state)
             actual = b.next_batch(5)
             self.assertTrue(all(torch.equal(x, y) for x, y in zip(expected, actual)))
