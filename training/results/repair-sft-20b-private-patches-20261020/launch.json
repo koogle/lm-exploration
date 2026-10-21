@@ -3,7 +3,7 @@
   "data_id": "repair-private-patches-20261020-v1",
   "parent": "simple-llm-code60-unique-10b-20261020-r01-s04/step-000153342.pt",
   "call_id": "fc-01M5DJMJ4S692FC2304JSBPWAA",
-  "status": "running_initialization",
+  "status": "completed",
   "settings": {
     "steps": 20000,
     "batch_size": 8,
@@ -17,5 +17,10 @@
     "backlog": 0,
     "num_total_runners": 1,
     "num_running_inputs": 1
+  },
+  "result": {
+    "checkpoint": "/runs/repair-sft-20b-private-patches-20261020-r01/step-000020000.pt",
+    "step": 20000,
+    "answer_tokens": 41579095
   }
 }

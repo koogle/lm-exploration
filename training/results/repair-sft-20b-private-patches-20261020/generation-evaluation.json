@@ -1,0 +1,591 @@
+{
+  "decoding": "greedy BF16, 128 new tokens, PAD/BOS/UNK suppressed",
+  "models": {
+    "base": {
+      "checkpoint": "simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt",
+      "samples": [
+        {
+          "id": "repair-arithmetic-v1-python-absolute_difference-11",
+          "language": "python",
+          "family": "absolute_difference",
+          "code": "def solve(a, b):\n    return a - b + 11\n\ndef solve2(a, b):\n    return a - b + 11\n\ndef solve3(a, b):\n    return a - b + 11\n\ndef solve4(a, b):\n    return a - b + 11\n\ndef solve5(a, b):\n    return a - b + 11\n\ndef solve6(a, b):\n    return a - b + 11\n\ndef solve7(a, b):\n    return a - b + 11\n\ndef solve8(a, b):\n    return a - b + 11\n\ndef",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "run",
+            "diagnostic": "  File \"/tmp/main.py\", line 25\n    def\n       ^\nSyntaxError: invalid syntax\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-python-maximum-11",
+          "language": "python",
+          "family": "maximum",
+          "code": "def solve(a, b):\n    return (a if a < b else b) + 11\n\ndef solve2(a, b):\n    return (a if a < b else b) + 11\n\ndef solve3(a, b):\n    return (a if a < b else b) + 11\n\ndef solve4(a, b):\n    return (a if a < b else b) + 11\n\ndef solve5(a, b):\n    return (a if a < b else b) + 11\n\ndef solve6(a, b):\n    return (a if a < b else b) +",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "run",
+            "diagnostic": "  File \"/tmp/main.py\", line 17\n    return (a if a < b else b) +\n                                ^\nSyntaxError: invalid syntax\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-javascript-absolute_difference-11",
+          "language": "javascript",
+          "family": "absolute_difference",
+          "code": "function solve(a, b) {\n    return a - b + 11;\n}\n\nFunction signature:\nfunction solve(a, b) {\n    return a - b + 11;\n}\n\nFunction result:\nfunction solve(a, b) {\n    return a - b + 11;\n}\n\nFunction result:\nfunction solve(a, b) {\n    return a - b + 11;\n}\n\nFunction result:\nfunction solve(a, b) {\n    return a - b + 11;\n}\n\nFunction result:\nfunction solve(a, b) {\n    return a - b + 11;\n}\n\nFunction result:\nfunction solve(a, b) {\n   ",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "run",
+            "diagnostic": "/tmp/main.js:5\nFunction signature:\n         ^^^^^^^^^\n\nSyntaxError: Unexpected identifier\n    at internalCompileFunction (node:internal/vm:76:18)\n    at wrapSafe (node:internal/modules/cjs/loader:1283:20)\n    at Module._compile (node:internal/modules/cjs/loader:1328:27)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1422:10)\n    at Module.load (node:internal/modules/cjs/loader:1203:32)\n    at Module._load (node:internal/modules/cjs/loader:1019:12)\n    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:128:12)\n    at node:internal/main/run_main_module:28:49\n\nNode.js v18.20.4\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-javascript-maximum-11",
+          "language": "javascript",
+          "family": "maximum",
+          "code": "function solve(a, b) {\n    return (a < b ? a : b) + 11;\n}\n\nFunction signature:\nfunction solve(a, b) {\n    return a < b ? a : b;\n}\n\nFunction signature:\nfunction solve(a, b) {\n    return a < b ? a : b;\n}\n\nFunction signature:\nfunction solve(a, b) {\n    return a < b ? a : b;\n}\n\nFunction signature:\nfunction solve(a, b) {\n    return a < b ? a : b;\n}\n\nFunction signature:\nfunction solve(a, b) {\n    return a < b ? a : b;\n}\n\n",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "run",
+            "diagnostic": "/tmp/main.js:5\nFunction signature:\n         ^^^^^^^^^\n\nSyntaxError: Unexpected identifier\n    at internalCompileFunction (node:internal/vm:76:18)\n    at wrapSafe (node:internal/modules/cjs/loader:1283:20)\n    at Module._compile (node:internal/modules/cjs/loader:1328:27)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1422:10)\n    at Module.load (node:internal/modules/cjs/loader:1203:32)\n    at Module._load (node:internal/modules/cjs/loader:1019:12)\n    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:128:12)\n    at node:internal/main/run_main_module:28:49\n\nNode.js v18.20.4\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-typescript-absolute_difference-11",
+          "language": "typescript",
+          "family": "absolute_difference",
+          "code": "function solve(a: number, b: number): number {\n    return a - b + 11;\n}\n\nFunction signature:\nfunction solve(a: number, b: number): number {\n    return a - b + 11;\n}\n\nFunction signature:\nfunction solve(a: number, b: number): number {\n    return a - b + 11;\n}\n\nFunction signature:\nfunction solve(a: number, b: number): number {\n    return a - b + 11;\n}\n\nFunction signature:\nfunction solve(a: number, b: number): number {\n    return a - b + 11;\n}\n\nFunction signature:\nfunction solve(a",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": ""
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-typescript-maximum-11",
+          "language": "typescript",
+          "family": "maximum",
+          "code": "function solve(a: number, b: number): number {\n    return (a < b ? a : b) + 11;\n}\n\nFunction signature:\nfunction solve(a: number, b: number): number {\n    return (a < b ? a : b) + 11;\n}\n\nFunction signature:\nfunction solve(a: number, b: number): number {\n    return (a < b ? a : b) + 11;\n}\n\nFunction signature:\nfunction solve(a: number, b: number): number {\n    return (a < b ? a : b) + 11;\n}\n\nFunction signature:\nfunction solve(a:",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": ""
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-go-absolute_difference-11",
+          "language": "go",
+          "family": "absolute_difference",
+          "code": "func solve(a, b int) int {\n    return a - b + 11\n}\n\nThe function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "# command-line-arguments\n./main.go:7:1: syntax error: non-declaration statement outside function body\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-go-maximum-11",
+          "language": "go",
+          "family": "maximum",
+          "code": "func solve(a, b int) int {\n    return choose(a < b, a, b) + 11\n}\n\nThe function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler. The function is called by the compiler",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "# command-line-arguments\n./main.go:7:1: syntax error: non-declaration statement outside function body\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-rust-absolute_difference-11",
+          "language": "rust",
+          "family": "absolute_difference",
+          "code": "fn solve(a: i32, b: i32) -> i32 {\n    a - b + 11\n}\n\nReturn the absolute difference of a and b, plus 11. Preserve the solve function signature. Inputs are small signed integers.\nInputs are small signed integers.\nBroken code:\nfn solve(a: i32, b: i32) -> i32 {\n    a - b + 11\n}\n\nCorrected code:\nfn solve(a: i32, b: i32) -> i32 {\n    a - b + 11\n}\n\nReturn the absolute difference of a and b, plus ",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "error: expected one of `!` or `::`, found `the`\n --> main.rs:5:8\n  |\n5 | Return the absolute difference of a and b, plus 11. Preserve the solve function signature. Inputs are small signed integers.\n  |        ^^^ expected one of `!` or `::`\n\nerror: aborting due to previous error\n\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-rust-maximum-11",
+          "language": "rust",
+          "family": "maximum",
+          "code": "fn solve(a: i32, b: i32) -> i32 {\n    (if a < b { a } else { b }) + 11\n}\n\nThen, return the smaller of a and b, plus 11.\nOutput:\n```1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 ",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": " 31 32 33 34 35 36 37 \n  | ~\n\nerror: unknown start of token: `\n --> main.rs:7:2\n  |\n7 | ```1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 \n  |  ^\n  |\nhelp: Unicode character '`' (Grave Accent) looks like ''' (Single Quote), but it is not\n  |\n7 | `'`1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 \n  |  ~\n\nerror: unknown start of token: `\n --> main.rs:7:3\n  |\n7 | ```1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 \n  |   ^\n  |\nhelp: Unicode character '`' (Grave Accent) looks like ''' (Single Quote), but it is not\n  |\n7 | ``'1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 \n  |   ~\n\nerror: expected one of `!` or `::`, found `,`\n --> main.rs:5:5\n  |\n5 | Then, return the smaller of a and b, plus 11.\n  |     ^ expected one of `!` or `::`\n\nerror: aborting due to 4 previous errors\n\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-c-absolute_difference-11",
+          "language": "c",
+          "family": "absolute_difference",
+          "code": "int solve(int a, int b) {\n    return a - b + 11;\n}\n\nint main() {\nint a = 1, b = 1;\nint x = 1, y = 1;\nint x2 = 1, y2 = 1;\nint x3 = 1, y3 = 1;\nint x4 = 1, y4 = 1;\nint x5 = 1, y5 = 1;\nint x6 = 1, y6 = 1;\nint x7 = 1, y7 = 1;\nint x8 = ",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "main.c: In function \u2018main\u2019:\nmain.c:16:1: error: expected expression before \u2018int\u2019\n   16 | int main(void) {\n      | ^~~\nmain.c:24:1: error: expected declaration or statement at end of input\n   24 | return 0; }\n      | ^~~~~~\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-c-maximum-11",
+          "language": "c",
+          "family": "maximum",
+          "code": "int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n\nThe solution is the same as the original solution.\nThe solution is the same as the original solution.\nThe solution is the same as the original solution.\nThe solution is the same as the original solution.\nThe solution is the same as the original solution.\nThe solution is the same as the original solution.\nThe solution is the same as the original solution.\nThe solution is the same as the original solution.\nThe solution is the same as the original solution.\nThe solution is the same as the original solution.\nThe solution is",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "main.c:6:1: error: unknown type name \u2018The\u2019\n    6 | The solution is the same as the original solution.\n      | ^~~\nmain.c:6:14: error: expected \u2018=\u2019, \u2018,\u2019, \u2018;\u2019, \u2018asm\u2019 or \u2018__attribute__\u2019 before \u2018is\u2019\n    6 | The solution is the same as the original solution.\n      |              ^~\nmain.c:6:14: error: unknown type name \u2018is\u2019\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-cpp-absolute_difference-11",
+          "language": "cpp",
+          "family": "absolute_difference",
+          "code": "int solve(int a, int b) {\n    return a - b + 11;\n}\n\nint main() {\nint a = 1, b = 1;\nint n = 1;\nint m = 1;\nint m2 = 1;\nint m3 = 1;\nint n2 = 1;\nint n3 = 1;\nint m2 = 1;\nint m3 = 1;\nint n2 = 1;\nint n3 = 1;\nint m2 = 1;\nint m3 = 1;\nint n2 = 1;\nint n3 = ",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "e\n   13 | int n3 = 1;\n      |     ^~\nmain.cpp:18:5: error: redeclaration of \u2018int m2\u2019\n   18 | int m2 = 1;\n      |     ^~\nmain.cpp:10:5: note: \u2018int m2\u2019 previously declared here\n   10 | int m2 = 1;\n      |     ^~\nmain.cpp:19:5: error: redeclaration of \u2018int m3\u2019\n   19 | int m3 = 1;\n      |     ^~\nmain.cpp:11:5: note: \u2018int m3\u2019 previously declared here\n   11 | int m3 = 1;\n      |     ^~\nmain.cpp:20:5: error: redeclaration of \u2018int n2\u2019\n   20 | int n2 = 1;\n      |     ^~\nmain.cpp:12:5: note: \u2018int n2\u2019 previously declared here\n   12 | int n2 = 1;\n      |     ^~\nmain.cpp:21:5: error: redeclaration of \u2018int n3\u2019\n   21 | int n3 =\n      |     ^~\nmain.cpp:13:5: note: \u2018int n3\u2019 previously declared here\n   13 | int n3 = 1;\n      |     ^~\nmain.cpp:22:1: error: expected primary-expression before \u2018int\u2019\n   22 | int main(void) {\n      | ^~~\nmain.cpp:30:12: error: expected \u2018}\u2019 at end of input\n   30 | return 0; }\n      |            ^\nmain.cpp:6:12: note: to match this \u2018{\u2019\n    6 | int main() {\n      |            ^\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-cpp-maximum-11",
+          "language": "cpp",
+          "family": "maximum",
+          "code": "int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n\nThe code is the same as the one in the original code. The code is not modified.\nThe code is the same as the one in the original code. The code is not modified.\nThe code is the same as the one in the original code. The code is not modified.\nThe code is the same as the one in the original code. The code is not modified.\nThe code is the same as the one in the original code. The code is not modified.\nThe code is the same as the one",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "main.cpp:6:1: error: \u2018The\u2019 does not name a type\n    6 | The code is the same as the one in the original code. The code is not modified.\n      | ^~~\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-java-absolute_difference-11",
+          "language": "java",
+          "family": "absolute_difference",
+          "code": "static int solve(int a, int b) {\n    return a - b + 11;\n}\n\nint main() {\nint a = 1, b = 1;\nint n = 1;\nint i = 1;\nint j = 1;\nint k = 1;\nint k2 = 1;\nint k3 = 1;\nint k4 = 1;\nint k5 = 1;\nint k6 = 1;\nint k7 = 1;\nint k8 = 1;\nint k9 = 1;\nint k10 = 1;\nint k11 = 1",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "Main.java:21: error: ';' expected\nint k11 = 1\n           ^\nMain.java:22: error: illegal start of expression\npublic static void main(String[] args) {\n^\n2 errors\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-java-maximum-11",
+          "language": "java",
+          "family": "maximum",
+          "code": "static int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n\nint main() {\nint a = 1, b = 1;\nint n = 1;\nint i = 1;\nint j = 1;\nint k = 1;\nint n = 1;\nint i = 1;\nint j = 1;\nint k = 1;\nint n = 1;\nint i = 1;\nint j = 1;\nint k = 1;\nint n = 1;\nint i = 1;\nint j =",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "Main.java:23: error: illegal start of expression\npublic static void main(String[] args) {\n^\n1 error\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-bash-absolute_difference-11",
+          "language": "bash",
+          "family": "absolute_difference",
+          "code": "solve() {\n    local a=\"$1\" b=\"$2\"\n    printf '%s\\n' \"$((a - b + 11))\"\n}\n\nThe result is the same as the original code, except that the result is a tuple of the original code and the result of the solution.\nThe result is the same as the original code, except that the result is a tuple of the original code and the result of the solution.\nThe result is the same as the original code, except that the result is a tuple of the original code and the result of the solution.\nThe result is the same as the original code, except",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "run",
+            "diagnostic": "main.sh: line 7: The: command not found\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-bash-maximum-11",
+          "language": "bash",
+          "family": "maximum",
+          "code": "solve() {\n    local a=\"$1\" b=\"$2\"\n    printf '%s\\n' \"$(((a < b ? a : b) + 11))\"\n}\n\nThe result is the same as the original code, except that the result is a tuple of the two strings.\nThe result is a tuple of the two strings.\nThe result is a tuple of the two strings.\nThe result is a tuple of the two strings.\nThe result is a tuple of the two strings.\nThe result is a tuple of the two strings.\nThe result is a tuple of the two strings.\nThe result is a tuple of the two",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "run",
+            "diagnostic": "main.sh: line 7: The: command not found\n"
+          }
+        }
+      ],
+      "passed": 0,
+      "total": 18,
+      "eos": 0,
+      "grading_stages": {
+        "run": 6,
+        "build": 12
+      }
+    },
+    "newest_sft": {
+      "checkpoint": "repair-sft-20b-private-patches-20261020-r01/step-000020000.pt",
+      "samples": [
+        {
+          "id": "repair-arithmetic-v1-python-absolute_difference-11",
+          "language": "python",
+          "family": "absolute_difference",
+          "code": "def solve(a, b):\n    return a - b + 11\n\ndef solve(a, b, c):\n    return a * b + c * b + 11\n",
+          "tokens": 36,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "run",
+            "diagnostic": "Traceback (most recent call last):\n  File \"/tmp/main.py\", line 7, in <module>\n    print(solve(-7, 2))\n          ^^^^^^^^^^^^\nTypeError: solve() missing 1 required positional argument: 'c'\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-python-maximum-11",
+          "language": "python",
+          "family": "maximum",
+          "code": "def solve(a, b):\n    return (a if a < b else b) + 11\n\ndef solve(a, b, c, d):\n    return (a if a < b else b) + c + d + 11\n",
+          "tokens": 50,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "run",
+            "diagnostic": "Traceback (most recent call last):\n  File \"/tmp/main.py\", line 7, in <module>\n    print(solve(-7, 2))\n          ^^^^^^^^^^^^\nTypeError: solve() missing 2 required positional arguments: 'c' and 'd'\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-javascript-absolute_difference-11",
+          "language": "javascript",
+          "family": "absolute_difference",
+          "code": "function solve(a, b) {\n    return a - b + 11;\n}\n\n// Solve a linear system in two variables\nfunction solve2(a, b) {\n    return a * b - b * a;\n}\n",
+          "tokens": 46,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "2\n11\n18\n11\n13\n18\n18\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-javascript-maximum-11",
+          "language": "javascript",
+          "family": "maximum",
+          "code": "function solve(a, b) {\n    return (a < b ? a : b) + 11;\n}\n\n// Solve a linear system in two variables.\nfunction solve2(a, b) {\n    return (a * b) + 11;\n}\n",
+          "tokens": 53,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-typescript-absolute_difference-11",
+          "language": "typescript",
+          "family": "absolute_difference",
+          "code": "function solve(a: number, b: number): number {\n    return a - b + 11;\n}\n\n// Solve a + b == c\nfunction solve(a: number, b: number, c: number): number {\n    return a + b + c;\n}\n",
+          "tokens": 56,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": ""
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-typescript-maximum-11",
+          "language": "typescript",
+          "family": "maximum",
+          "code": "function solve(a: number, b: number): number {\n    return (a < b ? a : b) + 11;\n}\n\n// Solve a + b + c = 10, where a and b are integers. The larger of a and b is\n// the smaller of c and a, which is the same as the larger of a and b.\nfunction solve(a: number, b: number): number {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 103,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": ""
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-go-absolute_difference-11",
+          "language": "go",
+          "family": "absolute_difference",
+          "code": "func solve(a, b int) int {\n    return a - b + 11\n}\n\n// Solve a linear system in two variables: a and b.\n// The two variables must be integers, or the absolute difference of two\n// integers is not a positive integer.\nfunc solve2(a, b int) int {\n    return a - b + 11\n}\n",
+          "tokens": 76,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "2\n11\n18\n11\n13\n18\n18\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-go-maximum-11",
+          "language": "go",
+          "family": "maximum",
+          "code": "func choose(c bool, x, y int) int { if c { return x }; return y }\nfunc solve(a, b int) int {\n    return choose(a < b, a, b) + 11\n}\n\n// Solve a linear system of equations in two variables.\n// The two sides of the system are the constants and the x and y values.\nfunc solve2(x, y int) int {\n    return solve(x, y, 11)\n}\n\n// Solve a linear system of equations in three variables.\n// The three sides of the system are the constants and the x and y values.\n",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "# command-line-arguments\n./main.go:11:24: too many arguments in call to solve\n\thave (int, int, number)\n\twant (int, int)\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-rust-absolute_difference-11",
+          "language": "rust",
+          "family": "absolute_difference",
+          "code": "fn solve(a: i32, b: i32) -> i32 {\n    a - b + 11\n}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn a_and_b_are_equal() {\n        assert_eq!(a, b);\n    }\n}\n",
+          "tokens": 59,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "2\n11\n18\n11\n13\n18\n18\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-rust-maximum-11",
+          "language": "rust",
+          "family": "maximum",
+          "code": "fn solve(a: i32, b: i32) -> i32 {\n    (if a < b { a } else { b }) + 11\n}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn solve_preserves_integer_and_integer_types() {\n        let a = 10;\n        let b = 20;\n        let c = 30;\n        let d = 40;\n        let e = 50;\n        let f = 60;\n        let g = 70;\n        let h = 80;\n        let i = 90;\n        let j = ",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "error: this file contains an unclosed delimiter\n  --> main.rs:27:3\n   |\n6  | mod tests {\n   |           - unclosed delimiter\n7  |     #[test]\n8  |     fn solve_preserves_integer_and_integer_types() {\n   |                                                    - unclosed delimiter\n...\n27 | }\n   |   ^\n\nerror: expected expression, found keyword `fn`\n  --> main.rs:19:1\n   |\n19 | fn main() {\n   | ^^ expected expression\n\nerror: aborting due to 2 previous errors\n\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-c-absolute_difference-11",
+          "language": "c",
+          "family": "absolute_difference",
+          "code": "int solve(int a, int b) {\n    return a - b + 11;\n}\n\n// Solve a + b == c\n//\n// This is a bit more complicated than the previous function, but it is more efficient\n// and more efficient to use than the previous function.\nint solve2(int a, int b) {\n    return a - b + 11;\n}\n",
+          "tokens": 80,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "2\n11\n18\n11\n13\n18\n18\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-c-maximum-11",
+          "language": "c",
+          "family": "maximum",
+          "code": "int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n\n// Solve a linear system in two variables.\n// The first term is the input and the second is the output.\nint solve2(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n",
+          "tokens": 75,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-cpp-absolute_difference-11",
+          "language": "cpp",
+          "family": "absolute_difference",
+          "code": "int solve(int a, int b) {\n    return a - b + 11;\n}\n\nint main() {\n    int a = 1, b = 2;\n    int c = a - b;\n    int d = a + b;\n    int e = b - a;\n    int f = a + b;\n    int g = b - a;\n    int h = a + b;\n    int i = a - b;\n    int j = b - a;\n    int k = a + b;\n    int l = a + b;\n    int m = b - a;\n    int n = b",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "main.cpp: In function \u2018int main()\u2019:\nmain.cpp:20:1: error: expected \u2018,\u2019 or \u2018;\u2019 before \u2018int\u2019\n   20 | int main(void) {\n      | ^~~\nmain.cpp:28:12: error: expected \u2018}\u2019 at end of input\n   28 | return 0; }\n      |            ^\nmain.cpp:6:12: note: to match this \u2018{\u2019\n    6 | int main() {\n      |            ^\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-cpp-maximum-11",
+          "language": "cpp",
+          "family": "maximum",
+          "code": "int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n\nint main() {\n    int a = 1, b = 2;\n    int c = a + b, d = b + a;\n    int e = a - b, f = b - a;\n    int g = a * b, h = b * a;\n    int k = a * b - b * a;\n    int x = a * b - b * a;\n    int y = a * b + b * a;\n    int z = a * b + b",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "build",
+            "diagnostic": "main.cpp: In function \u2018int main()\u2019:\nmain.cpp:15:1: error: expected \u2018,\u2019 or \u2018;\u2019 before \u2018int\u2019\n   15 | int main(void) {\n      | ^~~\nmain.cpp:23:12: error: expected \u2018}\u2019 at end of input\n   23 | return 0; }\n      |            ^\nmain.cpp:6:12: note: to match this \u2018{\u2019\n    6 | int main() {\n      |            ^\n"
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-java-absolute_difference-11",
+          "language": "java",
+          "family": "absolute_difference",
+          "code": "static int solve(int a, int b) {\n    return a - b + 11;\n}\n\n// Solve a + b == c\n//\n// This is a bit more complicated than the previous function, but it is more efficient\n// and more efficient to use than the previous function.\nint solve2(int a, int b) {\n    return a - b + 11;\n}\n",
+          "tokens": 81,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "2\n11\n18\n11\n13\n18\n18\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-java-maximum-11",
+          "language": "java",
+          "family": "maximum",
+          "code": "static int solve(int a, int b) {\n    return (a < b ? a : b) + 11;\n}\n\n// Solve a linear system in two variables.\n// The first term is the input and the second is the output.\nstatic int solve2(int a, int b) {\n    return (a * b) + 11;\n}\n",
+          "tokens": 73,
+          "eos": true,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-bash-absolute_difference-11",
+          "language": "bash",
+          "family": "absolute_difference",
+          "code": "solve() {\n    local a=\"$1\" b=\"$2\"\n    printf '%s\\n' \"$((a - b + 11))\"\n}\n\n# Convert a to b\n# Preserve the solve function signature.\n# Inputs are small signed integers.\n# b is not a whole number.\n# Returns a negative number.\n# Preserve the solve function signature.\n# Returns a positive number.\n# Return a string representation of the result.\n# Return a string representation of the result.\n# Return a string representation of the result.\n# Return a string representation of the result.\n# Return a string representation of the result.\n",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "2\n11\n18\n11\n13\n18\n18\n",
+            "expected": [
+              "20",
+              "11",
+              "18",
+              "11",
+              "13",
+              "18",
+              "18"
+            ]
+          }
+        },
+        {
+          "id": "repair-arithmetic-v1-bash-maximum-11",
+          "language": "bash",
+          "family": "maximum",
+          "code": "solve() {\n    local a=\"$1\" b=\"$2\"\n    printf '%s\\n' \"$(((a < b ? a : b) + 11))\"\n}\n\n# Solve a linear system of equations in two variables.\n# The first line is a function of the form x + b, which is\n# not a function of the form x + b. The first line is a\n# function of the form x + b, which is not a function of the\n# form x + b.\n# The first line is a function of the form x + b, which is\n# not a",
+          "tokens": 128,
+          "eos": false,
+          "grading": {
+            "passed": false,
+            "stage": "outputs",
+            "observed": "4\n11\n7\n22\n21\n2\n16\n",
+            "expected": [
+              "13",
+              "11",
+              "14",
+              "22",
+              "23",
+              "9",
+              "23"
+            ]
+          }
+        }
+      ],
+      "passed": 0,
+      "total": 18,
+      "eos": 12,
+      "grading_stages": {
+        "run": 2,
+        "outputs": 10,
+        "build": 6
+      }
+    }
+  },
+  "evaluation_app": "https://modal.com/apps/radiantai/main/ap-VNqhh3A30R9qG1x3cAc9j0",
+  "dataset_sha256": "35c2120026104f85611f7361c99422b8d3d8c3faab463cca909a2f886ed53123",
+  "calibration": "Reference passes and broken fails for one validation example per language in all nine languages."
+}
