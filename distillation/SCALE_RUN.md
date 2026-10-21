@@ -139,5 +139,8 @@ remote index at an immutable HF revision. Other historical `.pt` files remain
 on the original volume. The archive excludes the active phased student's folder.
 The private archive repository is
 `jfrick/python-math-500m-sweep-stopped-20261021`; completion is recorded in
-`stopped-archive-receipt.json` on the volume, with a pinned reference added here
-once verified. Original supervisor status is preserved in `status-before-stop.json`.
+`stopped-archive-receipt.json` on the volume and the checked-in
+[immutable artifact index](stopped-sweep-artifact-index.json). The archive preserves
+243,440,328 original-tokenizer targets across 665,534 examples. All five remote
+archive sizes and SHA256 hashes match the saved manifest, and the downloaded
+index SHA256 was verified at the pinned commit. Original supervisor status is preserved in `status-before-stop.json`.
