@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sys
 import tempfile
 import threading
 import time
@@ -194,6 +195,13 @@ class BudgetAndMetricsTests(unittest.TestCase):
         self.assertEqual(select_best(rows, 2), 4)
         self.assertEqual(select_best(rows[:3], 2), 1)
         self.assertIsNone(select_best([row(1, 0, 0), row(1, 1, 0)], 2))
+
+    def test_launch_rejects_before_modal_import(self):
+        import launch
+        with patch.object(sys, 'argv', ['launch.py', '--run-id', 'test', '--attempt', 'test', '--launch']):
+            with patch.dict(sys.modules, {'modal_app': None}):
+                with self.assertRaisesRegex(ValueError, 'No explicit budget authorization'):
+                    launch.main()
 
     def test_invalid_caps(self):
         for key, value in [

@@ -11,8 +11,8 @@ Run all commands from `exploration/teacher-rollouts/`:
 uv venv --python 3.12
 uv pip sync requirements.lock
 .venv/bin/python -m unittest discover -s tests -v
-# Definition/manifest dry run; does not call the GPU function.
-.venv/bin/modal run modal_app.py --run-id baseline-001 --attempt attempt-001
+# Manifest dry run; does not import Modal, build images or call the GPU function.
+.venv/bin/python launch.py --run-id baseline-001 --attempt attempt-001
 ```
 
 After an explicit budget is authorized, copy `config.json` into ignored
@@ -21,7 +21,7 @@ After an explicit budget is authorized, copy `config.json` into ignored
 ceiling. Do not change these fields merely to make the launch work.
 
 ```sh
-.venv/bin/modal run modal_app.py --run-id baseline-001 --attempt attempt-001 \
+.venv/bin/python launch.py --run-id baseline-001 --attempt attempt-001 \
   --config artifacts/authorized.json --launch
 ```
 
@@ -36,7 +36,7 @@ reservation controls cap configured compute exposure, not the provider invoice.
 There is no API here that imposes an account-wide billing cap. If the verified
 rates/overhead cannot fit the approved cap, shorten the job or do not launch.
 
-Local `.budget/ledger.json` reserves the full attempt before dispatch; reservations
+Local `.budget/ledger.json` reserves the full attempt before importing Modal or building images; reservations
 are never refunded automatically, including failed launches. Keep this ledger
 between attempts and use one launch host. This is not a distributed account-wide
 ledger. Do not launch from another checkout or bypass the entrypoint. No automatic

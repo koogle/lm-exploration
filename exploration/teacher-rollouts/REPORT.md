@@ -123,7 +123,7 @@ throughput as gates. A full megakernel remains subsequent work.
 
 ## Validation and artifact status
 
-**10 passing CPU unit tests** cover semantic code failures and prohibited code, strict structured
+**11 passing CPU unit tests** cover semantic code failures and prohibited code, strict structured
 output checks, technical rubric limits, corruption/conflict refusal, partial and
 complete resume, cumulative budget exhaustion, and zero-acceptance metric handling.
 Modal 1.6.1 definitions import locally. Ruff checks and formatting pass; the dry-run manifest path also passes without
