@@ -69,6 +69,10 @@ def backward_batch(ddp, x, y, count, microbatch, world, *, bf16=True):
 
 
 def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=None, commit=None):
+    from .run_validation import validate_run
+
+    validate_run(config)
+
     import numpy as np
     import torch
     import torch.distributed as dist
@@ -90,8 +94,8 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
     if data_format == "scholarly-live-v1":
         from training_data.live_stream import LiveTokenMixture
 
-        if not config.prefetch_batches or not config.experimental_data:
-            raise ValueError("Live upstream data requires prefetch and experimental_data")
+        if not config.prefetch_batches or not config.allow_unreviewed_data:
+            raise ValueError("Live upstream data requires prefetch and allow_unreviewed_data")
         TokenMixture = LiveTokenMixture
     elif data_format == "scholarly-raw-v1":
         from training_data.raw_token_stream import RawTokenMixture
@@ -139,7 +143,7 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 return TokenMixture(
                     manifest,
                     context=config.context,
-                    allow_unreviewed=(config.pilot or config.experimental_data),
+                    allow_unreviewed=config.allow_unreviewed_data,
                 )
 
             if config.prefetch_batches:
@@ -168,7 +172,7 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 manifest,
                 context=config.context,
                 split="validation",
-                allow_unreviewed=(config.pilot or config.experimental_data),
+                allow_unreviewed=config.allow_unreviewed_data,
             )
             return data.identity
 

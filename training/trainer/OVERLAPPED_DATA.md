@@ -27,7 +27,7 @@ flowchart LR
   blocks that source's turn; no silent substitution changes the mixture.
 - `prefetch_batches: 0` keeps the synchronous path. Positive values from 1 to 64
   enable overlap for frozen snapshots; a live manifest requires positive prefetch
-  and the scoped `experimental_data` flag. The provided live recipe uses 16 ready
+  and the explicit `allow_unreviewed_data` flag. The provided live recipe uses 16 ready
   batches. One further batch may be in preparation, and one may be in training.
 - GPU availability is not guaranteed. The queue absorbs short download stalls;
   a sustained CPU/network bottleneck can drain it. Metrics include cumulative

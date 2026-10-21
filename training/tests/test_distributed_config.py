@@ -17,7 +17,7 @@ class DistributedConfigTests(unittest.TestCase):
             {"prefetch_batches": -1},
             {"world_size": 2, "microbatch": 16},
             {"target_tokens": True},
-            {"pilot": True},
+            {"pilot": "yes"},
             {"n_embd": 64},
             {"peak_lr": float("nan")},
             {"seed": -1},
@@ -27,23 +27,37 @@ class DistributedConfigTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 DistributedConfig(**change)
 
-    def test_modern_small_architecture(self):
-        config = DistributedConfig(n_layer=8, n_head=3, n_embd=192, target_tokens=5_000_000_000)
-        self.assertFalse(config.pilot)
-
-    def test_experimental_data_is_scoped(self):
-        config = DistributedConfig(
-            n_layer=8, n_head=3, n_embd=192, target_tokens=5_000_000_000, experimental_data=True
-        )
-        self.assertTrue(config.experimental_data)
-        for change in (
-            {"target_tokens": 5_000_000_001},
-            {"n_layer": 14},
-            {"pilot": True},
-            {"experimental_data": "yes"},
+    def test_architecture_and_budget_are_not_experiment_scoped(self):
+        for settings in (
+            {"n_layer": 8, "n_head": 3, "n_embd": 192, "target_tokens": 5_000_000_000},
+            {"n_layer": 4, "n_head": 4, "n_embd": 256, "target_tokens": 30_000_000_000},
+            {"pilot": True, "target_tokens": 10_000_000},
         ):
-            with self.subTest(change=change), self.assertRaises(ValueError):
-                DistributedConfig(**{**config.as_dict(), **change})
+            with self.subTest(settings=settings):
+                config = DistributedConfig(**settings, warmup_tokens=100_000)
+                self.assertEqual(config.target_tokens, settings["target_tokens"])
+
+    def test_unreviewed_data_requires_explicit_boolean(self):
+        self.assertFalse(DistributedConfig().allow_unreviewed_data)
+        self.assertFalse(
+            DistributedConfig(
+                pilot=True, target_tokens=5_000_000, warmup_tokens=100_000
+            ).allow_unreviewed_data
+        )
+        for value in ("yes", 1, 0, None):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                DistributedConfig(allow_unreviewed_data=value)
+
+    def test_unreviewed_data_is_independent_of_run_shape(self):
+        for settings in (
+            {},
+            {"n_layer": 8, "n_head": 3, "n_embd": 192, "target_tokens": 5_000_000_001},
+            {"pilot": True, "target_tokens": 5_000_000, "warmup_tokens": 100_000},
+        ):
+            with self.subTest(settings=settings):
+                config = DistributedConfig(allow_unreviewed_data=True, **settings)
+                self.assertTrue(config.allow_unreviewed_data)
+                self.assertTrue(config.as_dict()["allow_unreviewed_data"])
 
     def test_schedule_uses_tokens(self):
         config = DistributedConfig()
