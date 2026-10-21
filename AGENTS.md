@@ -19,6 +19,22 @@ provenance and negative results. Run project commands from the documented workin
 directory. A repository consolidation does not require GPU training or deployment.
 Keep credentials and local checkpoints out of Git.
 
+## Modal job runtime
+
+Every Modal job launched by an agent must stop automatically within 12 hours
+(43,200 seconds) of launch, including detached and background jobs.
+
+- Configure an explicit Modal timeout of at most `12 * 60 * 60` seconds on each
+  function or sandbox before launching it; preserve any shorter existing limit.
+- For jobs spanning multiple calls, retries or child jobs, enforce a shared
+  12-hour deadline and automatically cancel outstanding work when it expires.
+  Per-call timeouts alone must not let the overall job exceed the deadline.
+- The shutdown mechanism must work without the agent, chat session or local
+  terminal remaining connected. Do not rely on a reminder or manual cleanup.
+- Verify the timeout and shutdown configuration before launch. Save checkpoints
+  and partial results early enough to survive termination; do not automatically
+  restart a timed-out job to bypass the limit.
+
 ## Source and artifact ownership
 
 Git is the source of truth for executable logic, training/evaluation/preparation
