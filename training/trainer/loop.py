@@ -106,11 +106,20 @@ def evaluate_sources(model, heldout, *, device="cuda", bf16=True):
     return losses
 
 
-def backward_batch(ddp, x, y, count, microbatch, world, *, bf16=True):
-    """Return local summed loss with globally averaged token gradients ready.
+def crop_trailing_padding(x, y):
+    """Keep every supervised position, including interior masks and its causal prefix."""
+    valid_columns = (y != LOSS_IGNORE_INDEX).any(dim=0).nonzero()
+    # An empty rank must still participate in DDP backward with zero loss.
+    length = int(valid_columns[-1]) + 1 if valid_columns.numel() else 1
+    return x[:, :length].contiguous(), y[:, :length].contiguous()
 
-    DDP's autograd hooks perform NCCL gradient reduction during the final
-    backward pass; no separate gradient all_reduce is needed at the call site.
+
+def backward_batch(
+    ddp, x, y, count, microbatch, world, *, bf16=True, crop_padding=False, loss_chunk_size=0
+):
+    """Accumulate the gradient of the global mean over nonpadding loss tokens.
+
+    DDP's autograd hooks reduce gradients during the final microbatch backward.
     """
     import torch
     from torch.nn import functional as F
@@ -118,18 +127,21 @@ def backward_batch(ddp, x, y, count, microbatch, world, *, bf16=True):
     total_loss = torch.zeros((), device=x.device)
     parts = list(zip(x.split(microbatch), y.split(microbatch)))
     for index, (mx, my) in enumerate(parts):
+        if crop_padding:
+            mx, my = crop_trailing_padding(mx, my)
         is_last_microbatch = index == len(parts) - 1
-        # Earlier microbatches accumulate local gradients without communication.
-        # The final backward reduces the accumulated gradients across all ranks.
-        # no_sync must cover the forward pass as well as backward.
+        # no_sync must cover forward and backward for earlier microbatches.
         with nullcontext() if is_last_microbatch else ddp.no_sync():
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=bf16):
-                loss = F.cross_entropy(
-                    ddp(mx).flatten(0, 1),
-                    my.flatten(),
-                    reduction="sum",
-                    ignore_index=LOSS_IGNORE_INDEX,
-                )
+                if loss_chunk_size:
+                    loss = ddp(mx, labels=my, loss_chunk_size=loss_chunk_size)
+                else:
+                    loss = F.cross_entropy(
+                        ddp(mx).flatten(0, 1),
+                        my.flatten(),
+                        reduction="sum",
+                        ignore_index=LOSS_IGNORE_INDEX,
+                    )
             total_loss += loss.detach()
             # DDP averages across ranks, while count covers valid tokens globally:
             # (1 / world) * sum_r grad(loss_r * world / count)
@@ -265,7 +277,18 @@ def train(
             n_embd=config.n_embd,
         )
         model = GPT(model_config).cuda()
-        ddp = DDP(model, device_ids=[runtime.local_rank], gradient_as_bucket_view=True)
+        if config.cache_rope:
+            for block in model.blocks:
+                block.attention.cache_rotary(config.context)
+        # Compile in place so state-dict keys and optimizer parameter identity stay stable.
+        if config.compile_model:
+            model.compile(dynamic=True)
+        ddp = DDP(
+            model,
+            device_ids=[runtime.local_rank],
+            gradient_as_bucket_view=True,
+            broadcast_buffers=False,
+        )
         optimizer = make_optimizer(model, config)
         metadata = {
             "format": "scholarly-ddp-v1",
@@ -455,15 +478,35 @@ def train(
             for group in optimizer.param_groups:
                 group["lr"] = lr
             optimizer.zero_grad(set_to_none=True)
-            total_loss = backward_batch(ddp, x, y, count, config.microbatch, world)
-            # backward_batch has synchronized gradients; every replica now clips
-            # the same gradient and applies the same optimizer update.
+            torch.cuda.synchronize()
+            compute_tick = time.monotonic()
+            total_loss = backward_batch(
+                ddp,
+                x,
+                y,
+                count,
+                config.microbatch,
+                world,
+                crop_padding=config.crop_padding,
+                loss_chunk_size=config.loss_chunk_size,
+            )
+            # DDP has synchronized gradients; replicas now clip and update alike.
             norm = torch.nn.utils.clip_grad_norm_(
                 model.parameters(), config.gradient_clip_norm, error_if_nonfinite=True, foreach=True
             )
             optimizer.step()
-            # This separate reduction sums detached losses for logging only.
-            # It does not synchronize gradients (DDP already did that above).
+            torch.cuda.synchronize()
+            rank_stats = [None] * world
+            dist.all_gather_object(
+                rank_stats,
+                {
+                    "compute_seconds": time.monotonic() - compute_tick,
+                    "nonpadding_tokens": int((y != LOSS_IGNORE_INDEX).sum()),
+                    "peak_allocated_bytes": torch.cuda.max_memory_allocated(),
+                    "peak_reserved_bytes": torch.cuda.max_memory_reserved(),
+                },
+            )
+            # This reduction sums detached losses for logging, not gradients.
             dist.all_reduce(total_loss)
             # Wait for this GPU's queued work to finish for accurate timing.
             torch.cuda.synchronize()
@@ -481,6 +524,8 @@ def train(
                 "lr": lr,
                 "gradient_norm": float(norm),
                 "seconds": duration,
+                "nonpadding_tokens_per_second": count / duration,
+                "ranks": rank_stats,
                 "data_fetch_seconds": data_fetch_seconds,
                 "prefetch": data.stats() if rank == 0 and config.prefetch_batches else None,
             }

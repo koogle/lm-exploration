@@ -5,9 +5,9 @@ import subprocess
 from pathlib import Path
 
 import modal
-
-from modal_distributed_train import worker
 from modal_simple_llm_8k import SNAPSHOT, data_volume, image, run_volume
+
+from distributed.modal_train import worker
 
 image = image.add_local_file("modal_simple_llm_8k.py", "/project/modal_simple_llm_8k.py")
 
@@ -151,7 +151,7 @@ def suite(prefix, provenance, single_gpu=False):
 
 @app.local_entrypoint()
 def main(prefix: str):
-    from modal_distributed_train import validate_paths
+    from distributed.modal_train import validate_paths
 
     validate_paths(prefix, SNAPSHOT, "")
     provenance = {
