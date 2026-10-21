@@ -1,8 +1,36 @@
 # Fresh 124.4M Muon versus AdamW comparison
 
-**Completed October 19:** [measured report](../results/muon-124m-100mt-20261019.md).
-Muon diagnostic loss was 2.7204 versus AdamW 3.5525 at matched 99.99M tokens,
-with 9.8% lower steady throughput. Both GPU runs and restore checks passed.
+**Completed October 19.** Muon diagnostic loss was 2.7204 versus AdamW 3.5525 at
+matched 99.99M tokens, with 9.8% lower steady throughput. Both GPU runs and restore
+checks passed. The measured report, combined summary, per-step metrics, validation
+histories, curve and the failed first-attempt record are archived in the HF dataset
+`jfrick/lm-exploration-results` under [`pr-24/training/results/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-24/training/results)
+(`muon-124m-100mt-*`).
+
+## Measured results (run prefix `muon-124m-100mt-20261019-b`)
+
+Both arms: 99,988,281 nonpadding tokens / 1,296 updates, seed 42, Modal app
+`ap-Pqtzos5cN2U8xxPqAj5UKc`, implementation commit `ebc5464`.
+
+| Measurement | AdamW | Muon + AdamW |
+| --- | ---: | ---: |
+| Final weighted diagnostic loss (nats) | 3.5525 | 2.7204 |
+| Steady nonpadding tokens/sec | 275,395 | 248,500 |
+| Peak allocated GiB (max over ranks) | 14.364 | 13.993 |
+| Combined training-process seconds | 734.18 | 642.39 |
+| Fresh-process restore validation | exact | exact |
+
+Muon is 0.8322 nats (23.4%) lower and had lower loss on all 12 per-source diagnostic
+windows (e.g. code_python 2.4095 vs 3.5364, fineweb_edu 3.9616 vs 4.5927). Its steady
+throughput is 9.8% **lower**; the shorter combined time is not a speed win (AdamW ran
+first and the arms shared compiler caches, so startup was not a controlled cold-cache
+comparison). One seed, untuned LRs and one fixed validation window per source:
+diagnostic evidence only, not long-run quality. Next: larger held-out set, repeated
+seeds/LRs, and profiling the uncompiled Muon matrix updates.
+
+To rebuild the curve, download the `*-validation.jsonl` files into an ignored folder
+and run `uv run --with matplotlib python analysis/muon/plot_comparison.py --input-dir
+<folder> --output artifacts/pr-24/muon-curve.png` from `training/`.
 
 This is a stacked follow-up to PR #17 (`training/padding-optimizations`). It uses
 Simple LLM's existing scholarly/code raw snapshot, frozen 32K tokenizer, 14×768
@@ -33,7 +61,7 @@ From `training/`:
 
 ```sh
 uv sync --locked --extra corpus --extra research
-uv run modal run modal_muon_comparison.py --prefix muon-124m-100mt-<fresh-id>
+uv run modal run -m modal_scripts.modal_muon_comparison --prefix muon-124m-100mt-<fresh-id>
 ```
 
 The arms run sequentially, each with a two-update checkpoint followed by a fresh
@@ -43,7 +71,8 @@ compiled BF16 check including a fully masked rank, identical rank updates and an
 exact next-update optimizer restore. CPU unit tests run inside the pinned Torch
 2.6 worker before each arm as well as locally.
 
-The launcher retains local JSON after each completed arm and verifies equal data
+The launcher retains local JSON in the ignored `artifacts/pr-24/results/` (or
+`--output-dir`) after each completed arm and verifies equal data
 identity, per-source exposures, token count and initial validation. Full metrics,
 source snapshots, data manifest, checkpoints and logs live on the training volume.
 It reports steady throughput excluding ten continuation steps, whole-run elapsed
@@ -61,8 +90,8 @@ and 3 existing training optimization tests. Local locked Torch is 2.14.1; the Mo
 image remains Torch 2.6.0, matching the earlier speed experiment. GPU qualification
 and training are **not verified**. The launch attempt could not connect to Modal:
 `https://api.modal.com` returned HTTP 503 and a bounded client probe timed out.
-No application ID or measured training results were returned. See the retained
-[attempt record](../results/muon-124m-100mt-20261018-attempt.json).
+No application ID or measured training results were returned. The attempt record
+(`muon-124m-100mt-20261018-attempt.json`) is archived in the HF folder above.
 
 ## Proxy certificate setup
 
@@ -71,9 +100,9 @@ workspace proxy, use the installed `truststore` package to load system certifica
 authorities while keeping TLS verification enabled:
 
 ```sh
-uv run python -c 'import truststore; truststore.inject_into_ssl(); from modal.__main__ import main; main()' run modal_muon_comparison.py --prefix muon-124m-100mt-<fresh-id>
+uv run python -c 'import truststore; truststore.inject_into_ssl(); from modal.__main__ import main; main()' run -m modal_scripts.modal_muon_comparison --prefix muon-124m-100mt-<fresh-id>
 ```
 
 On October 19 this resolved the client connection failure. The retry was accepted
 as Modal app `ap-Pqtzos5cN2U8xxPqAj5UKc`, prefix
-`muon-124m-100mt-20261019-b`. Both arms subsequently completed; see the measured report linked above.
+`muon-124m-100mt-20261019-b`. Both arms subsequently completed; see the measured results above.

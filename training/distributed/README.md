@@ -100,7 +100,7 @@ configures the AdamW companion. Both share the token-based warmup/cosine factor.
 For new eight-H100 runs, use `workflows/model_configs/historical/h100x8-muon-8k-5b.json`.
 It combines Muon with microbatch 2, cropping, cached RoPE and model compilation.
 The 5B ceiling is a configuration, not an automatically launched run or a measured
-5B result. The [100M-token comparison](../results/muon-124m-100mt-20261019.md)
+5B result. The [100M-token comparison](MUON_COMPARISON.md#measured-results-run-prefix-muon-124m-100mt-20261019-b)
 supports this default; longer-run quality remains unmeasured. See the
 [comparison guide](MUON_COMPARISON.md) for the bounded experiment.
 
@@ -266,9 +266,8 @@ are explicit; eight-GPU performance requires separate qualification.
 
 The [raw-corpus preparation guide](../data/RAW_CORPUS.md) covers reusable SQLite snapshots,
 preparation throughput evidence and the dedicated modern 9.85M / 5B workflow.
-The [overlapped-data guide](OVERLAPPED_DATA.md) describes bounded live preparation
-and producer/consumer prefetch. These workflows use this package's worker and
-explicit runtime contract, not an alternate trainer. The generic trainer permits sessions up to 82,800 seconds; the worker's
+It uses this package's worker and explicit runtime contract, not an alternate
+trainer. The generic trainer permits sessions up to 82,800 seconds; the worker's
 86,400-second hard limit leaves time for checkpointing. Individual experiment
 launchers may impose shorter bounds.
 

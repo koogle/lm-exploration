@@ -8,9 +8,9 @@ from pathlib import Path
 import modal
 
 from distributed.modal_train import validate_paths, worker
-from modal_simple_llm_8k import SNAPSHOT, data_volume, image, run_volume
+from modal_scripts.modal_simple_llm_8k import SNAPSHOT, data_volume, image, run_volume
 
-image = image.add_local_file("modal_simple_llm_8k.py", "/project/modal_simple_llm_8k.py")
+image = image.add_local_dir("modal_scripts", "/project/modal_scripts")
 
 app = modal.App("simple-llm-muon-comparison")
 
@@ -81,7 +81,7 @@ def run_arm(run_id, settings, provenance):
 
 
 @app.local_entrypoint()
-def main(prefix: str):
+def main(prefix: str, output_dir: str = "artifacts/pr-24/results"):
     validate_paths(prefix + "-adamw-start", SNAPSHOT, "")
     settings = json.loads(
         Path("workflows/model_configs/historical/h100x8-muon-comparison.json").read_text()
@@ -91,7 +91,8 @@ def main(prefix: str):
         "purpose": "Fresh matched 100M-token optimizer comparison; single seed; diagnostic validation",
     }
     results = {}
-    destination = Path("results") / (prefix + ".json")
+    destination = Path(output_dir) / (prefix + ".json")
+    destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         raise ValueError("Comparison results already exist")
     for optimizer in ("adamw", "muon"):
