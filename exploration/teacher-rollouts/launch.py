@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import time
@@ -18,6 +19,9 @@ def main():
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--attempt", required=True)
     parser.add_argument("--config", type=Path, default=HERE / "config.json")
+    parser.add_argument(
+        "--backend", choices=["baseline", "megakernel"], default="baseline"
+    )
     parser.add_argument("--launch", action="store_true")
     args = parser.parse_args()
     c = json.loads(args.config.read_text())
@@ -30,6 +34,7 @@ def main():
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", name):
             raise ValueError("invalid ID")
     manifest = {
+        "backend": args.backend,
         "config": c,
         "prompts": json.loads((HERE / "prompts.json").read_text()),
         "tokenizer_revision": c["revision"],
@@ -37,8 +42,17 @@ def main():
             ["git", "rev-parse", "HEAD"], text=True
         ).strip(),
         "source_hashes": {
-            p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in sorted(HERE.glob("*.py"))
+            str(p.relative_to(HERE)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(
+                p
+                for p in HERE.rglob("*")
+                if p.is_file()
+                and p.suffix in (".py", ".cu", ".h", ".lock")
+                and not any(
+                    part.startswith(".") or part == "artifacts"
+                    for part in p.relative_to(HERE).parts
+                )
+            )
             + [HERE / "prompts.json", HERE / "requirements.lock"]
         },
     }
@@ -47,6 +61,13 @@ def main():
         return
     reserve_budget(c, HERE / ".budget", args.attempt)
     # Import and app startup only after authorization and budget reservation.
+    if os.environ.get("CODEX_PROXY_CERT"):
+        import truststore
+
+        truststore.inject_into_ssl()
+    import modal
+
+    os.environ["ROLLOUT_BACKEND"] = args.backend
     from modal_app import app, supervision, supervisor
 
     started = time.monotonic()
@@ -54,7 +75,7 @@ def main():
     out = HERE / "artifacts" / args.run_id
     out.mkdir(parents=True, exist_ok=True)
     atomic_json(out / f"{args.attempt}-launch.json", {"deadline_unix": deadline})
-    with app.run():
+    with modal.enable_output(), app.run():
         call = supervisor.spawn(args.run_id, args.attempt, manifest, deadline)
         atomic_json(
             out / f"{args.attempt}-launch.json",

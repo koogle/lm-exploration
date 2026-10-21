@@ -25,6 +25,24 @@ image = (
         ignore=["artifacts", ".budget", "__pycache__", ".venv", ".ruff_cache"],
     )
 )
+KERNEL_IMAGE = "nvidia/cuda@sha256:6617a625f4090c76c545a0e7d63f2e441718ef9af7f4efe7dd1242a29e289fd7"
+kernel_image = (
+    modal.Image.from_registry(KERNEL_IMAGE, add_python="3.12")
+    .pip_install_from_requirements(str(HERE / "megakernel/requirements.lock"))
+    .add_local_dir(
+        HERE,
+        "/experiment",
+        copy=True,
+        ignore=["artifacts", ".budget", "__pycache__", ".venv", ".ruff_cache"],
+    )
+    .run_commands(
+        "nvcc -std=c++17 -O3 -arch=sm_90 -DTARGET_SM=90 --shared -Xcompiler=-fPIC /experiment/megakernel/kernel.cu -o /experiment/megakernel/kernel.so"
+    )
+)
+BACKEND = os.environ.get("ROLLOUT_BACKEND", "baseline")
+image = (kernel_image if BACKEND == "megakernel" else image).env(
+    {"ROLLOUT_BACKEND": BACKEND}
+)
 volume = modal.Volume.from_name(
     "lm-exploration-teacher-rollouts", create_if_missing=True
 )
@@ -42,6 +60,19 @@ volume = modal.Volume.from_name(
     volumes={"/runs": volume},
 )
 def worker(run_id, attempt, manifest, deadline, supervisor_id):
+    return execute_worker(
+        run_id,
+        attempt,
+        manifest,
+        deadline,
+        supervisor_id,
+        "megakernel/probe.py"
+        if manifest.get("backend") == "megakernel"
+        else "runner.py",
+    )
+
+
+def execute_worker(run_id, attempt, manifest, deadline, supervisor_id, script):
     c = manifest["config"]
     validate_config(c)
     if not c["budget_authorized"] or not c["authorization_reference"]:
@@ -72,7 +103,7 @@ def worker(run_id, attempt, manifest, deadline, supervisor_id):
     try:
         # Parent timeout includes startup, model loading, generation and verification.
         proc = subprocess.Popen(
-            ["python", "/experiment/runner.py", str(root), attempt, str(path)],
+            ["python", "/experiment/" + script, str(root), attempt, str(path)],
             cwd="/experiment",
             start_new_session=True,
         )
@@ -98,6 +129,7 @@ def worker(run_id, attempt, manifest, deadline, supervisor_id):
 # A separate, small CPU function remains alive while the GPU call queues/runs.
 control_image = (
     modal.Image.debian_slim(python_version="3.12")
+    .env({"ROLLOUT_BACKEND": BACKEND})
     .pip_install_from_requirements(str(HERE / "requirements.lock"))
     .add_local_dir(
         HERE,

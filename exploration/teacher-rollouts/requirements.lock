@@ -65,6 +65,8 @@ synchronicity==0.12.6
     # via modal
 toml==0.10.2
     # via modal
+truststore==0.10.4
+    # via -r requirements.txt
 types-certifi==2021.10.8.3
     # via modal
 types-toml==0.10.8.20260518
