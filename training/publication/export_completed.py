@@ -11,12 +11,15 @@ import torch
 from safetensors.torch import load_file, save_file
 from training_data.subword import digest
 
+from publication.artifacts import artifact_path
+
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--checkpoint", required=True)
     p.add_argument("--output", required=True)
     p.add_argument("--data-manifest", required=True)
+    p.add_argument("--artifacts", required=True, help="Verified dataset download directory")
     args = p.parse_args()
     root = Path(__file__).resolve().parents[1]
     out = Path(args.output)
@@ -74,7 +77,7 @@ def main():
     (out / "requirements.txt").write_text("torch==2.6.0\nsafetensors>=0.4\ntokenizers==0.22.2\n")
     shutil.copyfile(root / "publication/generate_completed.py", out / "generate.py")
     for name in ("scholarly-modern-10m-5b-training-audit-20261018.json",):
-        shutil.copyfile(root / "results" / name, out / name)
+        shutil.copyfile(artifact_path(args.artifacts, "results/" + name), out / name)
     print(json.dumps({"output": str(out), "parameters": 9849536, "tokens": saved["tokens"]}))
 
 

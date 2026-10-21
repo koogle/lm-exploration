@@ -11,6 +11,8 @@ from pathlib import Path
 import torch
 from safetensors.torch import load_file, save_file
 
+from publication.artifacts import artifact_path
+
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -21,6 +23,8 @@ def main():
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--data-manifest", required=True)
+    parser.add_argument("--artifacts", required=True, help="Verified dataset download directory")
+    parser.add_argument("--training-report", required=True, help="Explicit smoke-run report path")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     out = Path(args.output)
@@ -60,7 +64,7 @@ def main():
     (out / "config.json").write_text(json.dumps(cfg, indent=2) + "\n")
     shutil.copytree(root / "tokenizer/structured-code-v1", out / "tokenizer")
     assert digest(out / "tokenizer/tokenizer.json") == saved["data_identity"]["tokenizer_sha256"]
-    report = root / "results/scholarly-ddp-full-smoke-20261017-02.json"
+    report = Path(args.training_report)
     shutil.copyfile(report, out / "training-report.json")
     provenance = {k: v for k, v in saved.items() if k not in ["model", "optimizer", "rng", "data"]}
     provenance.update(
@@ -72,7 +76,9 @@ def main():
     )
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
     (out / "requirements.txt").write_text("torch==2.6.0\nsafetensors>=0.4\ntokenizers==0.22.2\n")
-    shutil.copyfile(root / "publication/scholarly-124m-step2-card.md", out / "README.md")
+    shutil.copyfile(
+        artifact_path(args.artifacts, "publication/scholarly-124m-step2-card.md"), out / "README.md"
+    )
     shutil.copyfile(root / "publication/generate_smoke.py", out / "generate.py")
     shutil.copyfile(args.data_manifest, out / "data-manifest.json")
     assert digest(out / "data-manifest.json") == saved["data_identity"]["manifest_sha256"]

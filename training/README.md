@@ -17,12 +17,15 @@ jobs. Human-readable reports use the new labels; consult their accompanying JSON
 for exact original artifact locations and provenance. Example version/run labels
 are illustrative; use the actual prepared snapshot version when launching a job.
 
-The [modern 9.85M / 5B-token experiment](results/scholarly-modern-10m-5b-completed-20261018.md)
+The [modern 9.85M / 5B-token experiment](publication/README.md#pr-13)
 is complete and [published on Hugging Face](https://huggingface.co/jfrick/scholarly-code-modern-gpt-10m-5b).
 It processed 4,999,934,057 targets over 72,805 updates. Broader exploratory
 validation loss is 2.6926 nats/token; generated samples remain repetitive and
 factually weak. The model card includes all examples, per-source evaluation,
-training curve, code/tokenizer and provenance. The remaining sections retain
+training curve, code/tokenizer and provenance. Generated reports and cards added by
+PR #13 are stored in the pinned HF **dataset** documented in the
+[artifact index and download guide](publication/README.md), not in this repository.
+The remaining sections retain
 historical plans and earlier experiment state.
 
 ## Current handoff — 2026-10-16

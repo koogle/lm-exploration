@@ -5,7 +5,8 @@ extraction project with ten source candidates, bounded crawlers, agent research
 notes and Parquet export. Its artifacts are not registered training inputs.
 
 For the new frozen-tokenizer corpus, use the separate
-[Simple LLM streaming pipeline](SIMPLE_LLM_STREAMING.md). Its local preparation
+[Simple LLM streaming pipeline](SIMPLE_LLM_STREAMING.md) and
+[raw-corpus preparation guide](RAW_CORPUS.md). Its local preparation
 CLI lives in [`prepare_simple_llm.py`](prepare_simple_llm.py); run
 `uv run lm-prepare-simple-llm --help` (or
 `uv run python -m training_data.prepare_simple_llm --help`) from `training/`.

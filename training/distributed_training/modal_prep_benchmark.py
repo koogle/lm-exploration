@@ -63,9 +63,9 @@ def measure():
 
 
 @app.local_entrypoint()
-def main():
+def main(output: str = "artifacts/unpublished/preparation-speedup.json"):
     report = measure.remote()
-    Path("results/preparation-speedup-20261017.json").write_text(
-        json.dumps(report, indent=2) + "\n"
-    )
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

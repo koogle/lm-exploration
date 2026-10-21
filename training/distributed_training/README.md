@@ -213,7 +213,7 @@ also require their original code for resume.
 
 ## Raw-corpus experiments
 
-The [raw-corpus preparation guide](RAW_CORPUS.md) covers reusable SQLite snapshots,
+The [raw-corpus preparation guide](../data/RAW_CORPUS.md) covers reusable SQLite snapshots,
 preparation throughput evidence and the dedicated modern 9.85M / 5B workflow.
 It uses this package's worker and explicit runtime contract, not an alternate
 trainer. The generic trainer permits sessions up to 82,800 seconds; the worker's

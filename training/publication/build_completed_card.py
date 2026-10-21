@@ -1,20 +1,29 @@
 """Build the completed model card from measured validation and training reports."""
 
+import argparse
 import json
 import math
 import shutil
 from pathlib import Path
 
+from publication.artifacts import artifact_path
+
 
 def main():
-    root = Path(__file__).resolve().parents[1]
-    output = Path("/tmp/modern-10m-5b-hf")
-    audit = json.loads(
-        (root / "results/scholarly-modern-10m-5b-training-audit-20261018.json").read_text()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--artifacts", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    output = args.output
+    output.mkdir(parents=True, exist_ok=True)
+    audit_path = artifact_path(
+        args.artifacts, "results/scholarly-modern-10m-5b-training-audit-20261018.json"
     )
-    validation = json.loads(
-        (root / "results/scholarly-modern-10m-5b-validation-20261018.json").read_text()
+    validation_path = artifact_path(
+        args.artifacts, "results/scholarly-modern-10m-5b-validation-20261018.json"
     )
+    audit = json.loads(audit_path.read_text())
+    validation = json.loads(validation_path.read_text())
     assert validation["strict_load"] and validation["per_source_two_pass_limit_verified"]
     trained = validation["trained"]
     random = validation["random_initialization_seed42"]
@@ -99,18 +108,13 @@ Optional `--device cuda` or `--device mps` uses supported local hardware. Weight
 Files include the exact model code/dependency, configuration, frozen tokenizer, measured validation and all samples, training audit/curve, and SHA256 provenance. Export verified strict loading, finite parameters, exact safetensors round-trip weights and CPU logits, and tied-embedding storage. Source: https://github.com/koogle/lm-exploration . Run: `scholarly-modern-10m-5b-20261017`; final checkpoint: `scholarly-modern-10m-5b-20261017-s02/step-000072805.pt`.
 """
     (output / "README.md").write_text(card)
-    (root / "publication/scholarly-modern-10m-5b-card.md").write_text(card)
-    shutil.copyfile(
-        root / "results/scholarly-modern-10m-5b-validation-20261018.json",
-        output / "validation.json",
-    )
-    shutil.copyfile(
-        root / "results/scholarly-modern-10m-5b-training-audit-20261018.json",
-        output / "training-audit.json",
-    )
+    shutil.copyfile(validation_path, output / "validation.json")
+    shutil.copyfile(audit_path, output / "training-audit.json")
     for i in range(3):
         shutil.copyfile(
-            root / f"results/scholarly-modern-10m-5b-20261017-s{i:02d}.json",
+            artifact_path(
+                args.artifacts, f"results/scholarly-modern-10m-5b-20261017-s{i:02d}.json"
+            ),
             output / f"training-segment-{i:02d}.json",
         )
     print({"evaluation_targets": tokens, "final_loss": trained["mixture_weighted_loss"]})
