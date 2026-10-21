@@ -1,6 +1,6 @@
 import unittest
 
-from trainer.workflow import check_capacity, check_progress, check_resume
+from distributed_training.workflow import check_capacity, check_progress, check_resume
 
 
 class WorkflowTests(unittest.TestCase):

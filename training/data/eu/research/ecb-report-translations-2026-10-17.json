@@ -1,0 +1,147 @@
+{
+  "observed_at": "2026-10-17T10:38:37.499144+00:00",
+  "seed_url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.en.html",
+  "seed_raw_sha256": "d8f6291823a496c556481eacd3720b6586e774daa5a4c652091a84f01bd703c3",
+  "explicit_candidates": [
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.bg.html",
+      "language": "bg"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.cs.html",
+      "language": "cs"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.da.html",
+      "language": "da"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.de.html",
+      "language": "de"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.el.html",
+      "language": "el"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.es.html",
+      "language": "es"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.et.html",
+      "language": "et"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.fi.html",
+      "language": "fi"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.fr.html",
+      "language": "fr"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.ga.html",
+      "language": "ga"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.hr.html",
+      "language": "hr"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.hu.html",
+      "language": "hu"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.it.html",
+      "language": "it"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.lt.html",
+      "language": "lt"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.lv.html",
+      "language": "lv"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.mt.html",
+      "language": "mt"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.nl.html",
+      "language": "nl"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.pl.html",
+      "language": "pl"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.pt.html",
+      "language": "pt"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.ro.html",
+      "language": "ro"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.sk.html",
+      "language": "sk"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.sl.html",
+      "language": "sl"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.sv.html",
+      "language": "sv"
+    }
+  ],
+  "samples": [
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.de.html",
+      "url_language": "de",
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.de.html",
+        "retrieved_at": "2026-10-17T10:38:37.499172+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.de.html",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 591582,
+        "raw_sha256": "b7e042a5286ace15c1525dab1509684747966912ffbb8e9278ba620da6f410ed",
+        "content_type": "text/html; charset=UTF-8",
+        "etag": "\"myra-ea34db97\"",
+        "last_modified": null
+      },
+      "characters": 368093,
+      "title": "Jahresbericht 2025",
+      "html_language": "de",
+      "kind": "html"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.fr.html",
+      "url_language": "fr",
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.fr.html",
+        "retrieved_at": "2026-10-17T10:38:43.110801+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/press/annual-reports-financial-statements/annual/html/ecb.ar2025~b7f898b33d.fr.html",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 628849,
+        "raw_sha256": "47277f6c78ccf7e50cb73e1d472d24b301b1b34a6eaac6a751d7c75d84b2bd43",
+        "content_type": "text/html; charset=UTF-8",
+        "etag": "\"myra-ae9b8c0b\"",
+        "last_modified": null
+      },
+      "characters": 383993,
+      "title": "Rapport annuel 2025 de la BCE",
+      "html_language": "fr",
+      "kind": "html"
+    }
+  ]
+}

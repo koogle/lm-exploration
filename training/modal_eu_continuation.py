@@ -13,7 +13,7 @@ from pathlib import Path
 
 import modal
 
-from modal_distributed_train import data_volume, run_volume, worker
+from distributed_training.modal_train import data_volume, run_volume, worker
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -31,12 +31,11 @@ image = (
     .add_local_dir("100m", "/project/model_100m")
     .add_local_dir("10m", "/project/model_10m")
     .add_local_dir("trainer", "/project/trainer")
+    .add_local_dir("distributed_training", "/project/distributed_training")
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer")
     .add_local_dir("tests", "/project/tests")
     .add_local_file("generate.py", "/project/generate.py")
-    .add_local_file("modal_scholarly_pilot.py", "/project/modal_scholarly_pilot.py")
-    .add_local_file("modal_distributed_train.py", "/project/modal_distributed_train.py")
 )
 app = modal.App("simple-llm-eu-continuation")
 PARENT = "simple-llm-124m-8k-5b-20261018-s03/step-000064227.pt"
@@ -138,8 +137,8 @@ def inspect(snapshot="", run_id=""):
 def initialize(run_id, snapshot, settings):
     import torch
 
-    from modal_distributed_train import validate_paths
-    from trainer.distributed_config import DistributedConfig
+    from distributed_training.config import DistributedConfig
+    from distributed_training.modal_train import validate_paths
     from trainer.eu_continuation import migrate_checkpoint
 
     torch.set_num_threads(4)
@@ -197,7 +196,7 @@ def segment(run_id, snapshot, settings, provenance, resume, max_steps=None, qual
 
 
 def mark(folder, stage, **details):
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
 
     atomic_json(folder / "workflow.json", {"stage": stage, "updated_unix": time.time(), **details})
     run_volume.commit()
@@ -264,7 +263,7 @@ def after_preparation(run_id, snapshot, prepare_call_id, provenance):
 )
 def start(run_id, snapshot, provenance, *, compile_model=True):
     """One pass, preserving Adam; qualify, restore, then bounded continuation."""
-    from modal_distributed_train import validate_paths
+    from distributed_training.modal_train import validate_paths
 
     validate_paths(run_id, snapshot, "")
     manifest = json.loads((snapshot_path(snapshot) / "manifest.json").read_text())

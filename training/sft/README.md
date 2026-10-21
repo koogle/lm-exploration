@@ -110,7 +110,7 @@ fresh-container restore and the second update. Model, optimizer, counters, sampl
 and CPU/CUDA RNG must match exactly. A stop-step argument permits qualification
 without changing the total target or checkpoint identity. Every worker uses a fresh
 container. Use the installed environment/extras and system CA setup described in
-`100m/PILOT.md` in the managed workspace.
+`distributed_training/README.md` in the managed workspace.
 
 After training, `modal_repair_eval.py` compares the parent and selected SFT checkpoint
 on two held-out repair families per language using greedy decoding capped at 128
@@ -282,7 +282,7 @@ parent, one H100, batch 8, context 2,048, LR 1e-5, 20,000 total updates, evaluat
 every 500 and checkpoints every 1,000. Each invocation has a four-hour training
 loop limit, so inspect its actual completion count. Raw examples, detailed source
 inventories and license evidence remain on the private Modal volume. Only
-aggregate reports belong in Git.
+concise aggregate summaries belong in Git; complete generated reports belong on HF.
 
 ## Full private patch snapshot
 

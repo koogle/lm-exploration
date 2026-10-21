@@ -1,0 +1,194 @@
+{
+  "observed_at": "2026-10-16T20:29:51.272951+00:00",
+  "combined_metrics": {
+    "characters": 146526615,
+    "parquet_bytes": 54706409,
+    "rows": 2272,
+    "stored_raw_gzip_bytes": 1560342911,
+    "text_utf8_bytes": 150159224,
+    "words": 22097435
+  },
+  "sources": [
+    {
+      "source_id": "ecb",
+      "repo_id": "jfrick/eu-ecb",
+      "revision": "bd6aa84be449f635b7003120a18acdb565e9c6b7",
+      "visibility": "private",
+      "metrics": {
+        "characters": 82015011,
+        "parquet_bytes": 35443163,
+        "rows": 1694,
+        "stored_raw_gzip_bytes": 945991554,
+        "text_utf8_bytes": 82972771,
+        "words": 12661574
+      },
+      "collection_metrics": {
+        "decisions": {
+          "characters": 1680676,
+          "parquet_bytes": 1303513,
+          "rows": 209,
+          "stored_raw_gzip_bytes": 4820285,
+          "text_utf8_bytes": 1689665,
+          "words": 255071
+        },
+        "economic_bulletin_articles": {
+          "characters": 6342414,
+          "parquet_bytes": 2500026,
+          "rows": 133,
+          "stored_raw_gzip_bytes": 5093315,
+          "text_utf8_bytes": 6377947,
+          "words": 970270
+        },
+        "economic_bulletin_boxes": {
+          "characters": 2517782,
+          "parquet_bytes": 1609932,
+          "rows": 210,
+          "stored_raw_gzip_bytes": 5324245,
+          "text_utf8_bytes": 2532030,
+          "words": 384771
+        },
+        "interviews": {
+          "characters": 2679704,
+          "parquet_bytes": 1786754,
+          "rows": 209,
+          "stored_raw_gzip_bytes": 5367892,
+          "text_utf8_bytes": 2693795,
+          "words": 455137
+        },
+        "meeting_accounts": {
+          "characters": 5086609,
+          "parquet_bytes": 1796112,
+          "rows": 97,
+          "stored_raw_gzip_bytes": 3523341,
+          "text_utf8_bytes": 5099800,
+          "words": 788474
+        },
+        "occasional_papers": {
+          "characters": 33906415,
+          "parquet_bytes": 12235175,
+          "rows": 209,
+          "stored_raw_gzip_bytes": 257001605,
+          "text_utf8_bytes": 34312809,
+          "words": 5217073
+        },
+        "press_releases": {
+          "characters": 1191055,
+          "parquet_bytes": 2321941,
+          "rows": 209,
+          "stored_raw_gzip_bytes": 18731948,
+          "text_utf8_bytes": 1204728,
+          "words": 168191
+        },
+        "speeches": {
+          "characters": 3991978,
+          "parquet_bytes": 2747427,
+          "rows": 209,
+          "stored_raw_gzip_bytes": 49703916,
+          "text_utf8_bytes": 4018891,
+          "words": 616811
+        },
+        "working_papers": {
+          "characters": 24618378,
+          "parquet_bytes": 9142283,
+          "rows": 209,
+          "stored_raw_gzip_bytes": 596425007,
+          "text_utf8_bytes": 25043106,
+          "words": 3805776
+        }
+      }
+    },
+    {
+      "source_id": "ema",
+      "repo_id": "jfrick/eu-ema",
+      "revision": "ddb4d539078570f5e22a4bf332b10dc6cdff3656",
+      "visibility": "private",
+      "metrics": {
+        "characters": 64511604,
+        "parquet_bytes": 19263246,
+        "rows": 578,
+        "stored_raw_gzip_bytes": 614351357,
+        "text_utf8_bytes": 67186453,
+        "words": 9435861
+      },
+      "collection_metrics": {
+        "committee_documents": {
+          "characters": 2761934,
+          "parquet_bytes": 1123009,
+          "rows": 78,
+          "stored_raw_gzip_bytes": 29005395,
+          "text_utf8_bytes": 2774685,
+          "words": 357736
+        },
+        "epar_assessment_reports": {
+          "characters": 31955891,
+          "parquet_bytes": 9899862,
+          "rows": 97,
+          "stored_raw_gzip_bytes": 407589075,
+          "text_utf8_bytes": 32050609,
+          "words": 4767393
+        },
+        "epar_overviews": {
+          "characters": 838641,
+          "parquet_bytes": 710154,
+          "rows": 100,
+          "stored_raw_gzip_bytes": 14287903,
+          "text_utf8_bytes": 922150,
+          "words": 116758
+        },
+        "epar_product_information": {
+          "characters": 23863258,
+          "parquet_bytes": 4811621,
+          "rows": 99,
+          "stored_raw_gzip_bytes": 121183813,
+          "text_utf8_bytes": 26332171,
+          "words": 3458256
+        },
+        "news": {
+          "characters": 546398,
+          "parquet_bytes": 808566,
+          "rows": 102,
+          "stored_raw_gzip_bytes": 1539238,
+          "text_utf8_bytes": 547624,
+          "words": 79251
+        },
+        "scientific_guidelines": {
+          "characters": 4545482,
+          "parquet_bytes": 1910034,
+          "rows": 102,
+          "stored_raw_gzip_bytes": 40745933,
+          "text_utf8_bytes": 4559214,
+          "words": 656467
+        }
+      }
+    }
+  ],
+  "operations": {
+    "ecb": "Existing expansion continues; no overlapping writer launched.",
+    "ema": {
+      "previous_campaign": "ema-expand-20261016",
+      "previous_status": "stopped_worker_failure",
+      "failure_evidence": "Modal child fc-01M533NRS1XGT8GGKS836ECNCM FAILURE; exact cause unavailable",
+      "new_campaign": "ema-continue-20261016-2025",
+      "supervisor_call_id": "fc-01M536731GDCZ1KF1FH9AZV3RJ",
+      "first_worker_call_id": "fc-01M53677BFGA71VPJXKT98MC8F",
+      "rounds": 3,
+      "max_attempts_per_round": 1000,
+      "work_seconds_per_round": 3000,
+      "first_checkpoint": {
+        "attempted": 20,
+        "extracted": 9,
+        "failed": 11
+      }
+    }
+  },
+  "verification": {
+    "tests_passed": 73,
+    "ruff": "passed",
+    "sample_audit": "Six recent shards spanning three ECB and three EMA collections; not a full corpus audit.",
+    "exact_openai_tokens": null
+  },
+  "changes": [
+    "Persist Modal child call IDs and reattach after supervisor restart; gate worker start until dispatch is durable.",
+    "Two verified standalone ECB historical PDF fallback URLs only after primary HTTP 404; retain original inventory identity and fetch provenance. Available to future workers, not deployed into existing ECB campaign."
+  ]
+}

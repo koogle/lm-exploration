@@ -1,0 +1,28 @@
+{
+  "call_id": "fc-01M55983HA0A3FCMBVKFVZ2VKD",
+  "result": {
+    "status": "waiting_for_calls",
+    "pairs_reserved": 1,
+    "max_pairs": 48,
+    "unresolved_calls": 2,
+    "cooldown_until_epoch": 0,
+    "observed_at_epoch": 1792252582.8655853
+  },
+  "tests_passed": 225,
+  "period_seconds": 3600,
+  "max_pairs_including_adopted": 48,
+  "adopted_calls": [
+    {
+      "source_id": "ecb",
+      "call_id": "fc-01M558G0YKDPTM21RA45NMADXX"
+    },
+    {
+      "source_id": "ema",
+      "call_id": "fc-01M558G11VM5GPPM9ZS4CPKENS"
+    }
+  ],
+  "notes": [
+    "Existing audit pair remains unresolved; verified scheduler did not dispatch duplicate jobs.",
+    "Goal and corpus settings remain private."
+  ]
+}

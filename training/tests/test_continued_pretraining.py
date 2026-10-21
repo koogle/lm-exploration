@@ -9,8 +9,8 @@ from unittest.mock import patch
 import torch
 from training_data.subword import TOKENIZER_SHA256
 
+from distributed_training.config import DistributedConfig, validate_resume
 from trainer.continued_pretraining import coding_double_mix, migrate_phase, token_targets
-from trainer.distributed_config import DistributedConfig, validate_resume
 
 
 class ContinuedPretrainingTests(unittest.TestCase):

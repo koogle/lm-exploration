@@ -104,7 +104,7 @@ Source: https://github.com/koogle/lm-exploration/pull/26 . Run: `{RUN}`.
 def publish_all():
     from huggingface_hub import HfApi
 
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
     from trainer.hub_checkpoint import export_checkpoint
 
     api = HfApi()
@@ -309,7 +309,7 @@ def archive_checkpoint(relative_path):
 
     from huggingface_hub import HfApi
 
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
     from trainer.hub_checkpoint import export_checkpoint
 
     if not re.fullmatch(RUN + r"-(?:s[0-9]{2}|seed)/step-[0-9]{9}\.pt", relative_path):
@@ -375,7 +375,7 @@ def publish_remaining():
     """Resume the serial publisher with four independent bounded upload workers."""
     from huggingface_hub import HfApi
 
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
 
     api = HfApi()
     folder = Path("/runs") / RUN
@@ -505,7 +505,7 @@ def verify_download():
     from huggingface_hub import HfApi, snapshot_download
     from training_data.subword import digest
 
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
 
     api = HfApi()
     info = api.model_info(REPO, files_metadata=True)
@@ -578,7 +578,7 @@ def publish_evaluation():
 
     from huggingface_hub import HfApi
 
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
 
     api = HfApi()
     if not api.model_info(REPO).private:

@@ -1,0 +1,835 @@
+{
+  "observed_at": "2026-10-18T06:26:55.379398+00:00",
+  "prior_source_revision": "f31e2c76ba8ba339d2bd012b3164cddf71a8771a",
+  "prior_collections": 21,
+  "prior_unique_urls": 14372,
+  "series": [
+    {
+      "collection_id": "macroprudential_bulletin_articles",
+      "enumeration": {
+        "strategy": "ECB FOEDB versioned type indexes and publication chunks",
+        "inventory_urls": [
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/12/chunk_0.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_2.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_3.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_4.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_5.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_6.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_7.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_10.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_12.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_13.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_15.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_16.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_17.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_18.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_19.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_20.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_22.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_23.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_25.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_27.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_28.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_30.json"
+        ],
+        "snapshot_version": "1792213219",
+        "snapshot_hash": "2sP68GoB",
+        "reported_total": 85,
+        "database_total_records": 20162,
+        "publication_records_scanned": 85,
+        "enumerated_count": 85,
+        "complete": true,
+        "limitations": [
+          "English publication database only; explicitly listed translations retained. Other language databases and linked attachments are not enumerated.",
+          "Reported total counts publication records, not language/format URLs.",
+          "HTML preferred over PDF for each publication-language pair.",
+          "Historical PDFs without explicit language suffix are retained with language=und.",
+          "Inventory coverage is not a claim of complete institutional or historical coverage."
+        ]
+      },
+      "candidate_urls": 85,
+      "overlap_prior_urls": 0,
+      "overlap_earlier_new_series": 0,
+      "sorted_urls_sha256": "81ad2aede04fa6dab5b19580c38033fb5ef572d4ae34a2f79ba16c32c745324c"
+    },
+    {
+      "collection_id": "financial_integration_reports",
+      "enumeration": {
+        "strategy": "ECB FOEDB versioned type indexes and publication chunks",
+        "inventory_urls": [
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/58/chunk_0.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_1.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_16.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_24.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_30.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_32.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_36.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_39.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_42.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_45.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_48.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_51.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_54.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_57.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_60.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_63.json"
+        ],
+        "snapshot_version": "1792213219",
+        "snapshot_hash": "2sP68GoB",
+        "reported_total": 16,
+        "database_total_records": 20162,
+        "publication_records_scanned": 16,
+        "enumerated_count": 16,
+        "complete": true,
+        "limitations": [
+          "English publication database only; explicitly listed translations retained. Other language databases and linked attachments are not enumerated.",
+          "Reported total counts publication records, not language/format URLs.",
+          "HTML preferred over PDF for each publication-language pair.",
+          "Historical PDFs without explicit language suffix are retained with language=und.",
+          "Inventory coverage is not a claim of complete institutional or historical coverage."
+        ]
+      },
+      "candidate_urls": 16,
+      "overlap_prior_urls": 0,
+      "overlap_earlier_new_series": 0,
+      "sorted_urls_sha256": "2166f8212532365471647579897dcfb3ee5360afc8196fe33eeaa01267c1c207"
+    },
+    {
+      "collection_id": "international_role_euro",
+      "enumeration": {
+        "strategy": "ECB FOEDB versioned type indexes and publication chunks",
+        "inventory_urls": [
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/60/chunk_0.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_1.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_5.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_12.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_16.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_19.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_23.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_26.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_29.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_32.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_35.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_38.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_41.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_45.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_47.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_50.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_53.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_56.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_59.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_62.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_66.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_69.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_71.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_73.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_76.json"
+        ],
+        "snapshot_version": "1792213219",
+        "snapshot_hash": "2sP68GoB",
+        "reported_total": 25,
+        "database_total_records": 20162,
+        "publication_records_scanned": 25,
+        "enumerated_count": 25,
+        "complete": true,
+        "limitations": [
+          "English publication database only; explicitly listed translations retained. Other language databases and linked attachments are not enumerated.",
+          "Reported total counts publication records, not language/format URLs.",
+          "HTML preferred over PDF for each publication-language pair.",
+          "Historical PDFs without explicit language suffix are retained with language=und.",
+          "Inventory coverage is not a claim of complete institutional or historical coverage."
+        ]
+      },
+      "candidate_urls": 25,
+      "overlap_prior_urls": 0,
+      "overlap_earlier_new_series": 0,
+      "sorted_urls_sha256": "a8adda1b8749b71c0d929f6f3d2d913e9e3e9a85913be0fcb81a81c5ba1fb061"
+    },
+    {
+      "collection_id": "target_annual_reports",
+      "enumeration": {
+        "strategy": "ECB FOEDB versioned type indexes and publication chunks",
+        "inventory_urls": [
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/59/chunk_0.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_12.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_16.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_19.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_23.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_26.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_30.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_32.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_36.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_39.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_42.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_45.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_48.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_51.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_54.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_57.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_60.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_63.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_65.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_68.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_71.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_73.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_75.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_76.json"
+        ],
+        "snapshot_version": "1792213219",
+        "snapshot_hash": "2sP68GoB",
+        "reported_total": 24,
+        "database_total_records": 20162,
+        "publication_records_scanned": 24,
+        "enumerated_count": 24,
+        "complete": true,
+        "limitations": [
+          "English publication database only; explicitly listed translations retained. Other language databases and linked attachments are not enumerated.",
+          "Reported total counts publication records, not language/format URLs.",
+          "HTML preferred over PDF for each publication-language pair.",
+          "Historical PDFs without explicit language suffix are retained with language=und.",
+          "Inventory coverage is not a claim of complete institutional or historical coverage."
+        ]
+      },
+      "candidate_urls": 24,
+      "overlap_prior_urls": 0,
+      "overlap_earlier_new_series": 0,
+      "sorted_urls_sha256": "850de205de9012b1e4262340847d52bc6240abf18b2ac7219033b3d72d47a6b9"
+    }
+  ],
+  "requests": [
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:06.058111+00:00",
+      "sha256": "975335f0022baff4cd7e2373e87a9a5d89fcafbd45f10c80eac71cab87c60003"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:46.889522+00:00",
+      "sha256": "3b2dee73cc1ef1f942ce042aec05e7c58aaf9ec5f272d3a0b187a281adc6f32c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:11.224642+00:00",
+      "sha256": "b5240fb928b094c52a3f14b870c81462b940fe77419ad375cc3a1305cb15622d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/12/chunk_0.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T06:24:52.109101+00:00",
+      "sha256": "7c27cbd3419cac30cc80663b53da8d45423f76cc09d67c9c3861f82cdde8c7e7"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_2.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T06:24:57.323767+00:00",
+      "sha256": "de0c9aae0151b02b93db368690370cf330988f26135f4272a05b0f2f93fd4a6f"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_3.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:35:02.010880+00:00",
+      "sha256": "c74c125dbbea6f0deadb68d881ba69aac934ec06f03e37678cdfb624cf4e1068"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_4.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:26:55.388535+00:00",
+      "sha256": "6b4ba7a1b44d35410c9e8db8b51a84f2a1726eaa514ec7bef21b6f0fae634b71"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_5.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T06:25:22.376708+00:00",
+      "sha256": "b01c1f7c400c385af3df29cfcba0c739b4169ec140ba8f1bf4b5812531ba5c1d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_6.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:36:08.720506+00:00",
+      "sha256": "11465235ca7fb26e997b540465a71ecd909dfb271ebbefd30bae025c6f454011"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_7.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:00.836484+00:00",
+      "sha256": "60fea200a25050435d0e0a1528596eb22aebfb02a7a40bcc96f3cc678a4ff901"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:35:07.915101+00:00",
+      "sha256": "1eb9a2ace4b6231e6f1c712ab459f68191bdf72a1a12162c59cf8e21b1c544ea"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_10.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:36:13.467446+00:00",
+      "sha256": "49d2a459ae8acb1696004ec9a3f2bc20128bd37184c47bd724d6919fa72b0174"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_12.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T06:25:37.378240+00:00",
+      "sha256": "a1406bf2cd6c3f3b159b325257ee5fcc51fd8a4b97d0f1bf6b20a2c42ca17ff5"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_13.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:05.564586+00:00",
+      "sha256": "d90618c9871cc302745e92e6acf485a3f6e4ad2f295fdc8a4afc2cc68cdef55c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_15.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:10.558619+00:00",
+      "sha256": "6ca00e502efaa0c3c31c7f4fa44f09201121d5332c2cf875b44ace487df8e3f6"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_16.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:15.657593+00:00",
+      "sha256": "bc82a8e2e7c23c1a7643f505a832256a911cc6f1e6c635a39a83b2ab9d9cd831"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_17.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:20.546943+00:00",
+      "sha256": "7d48fc61f8132cbb42d8f72055b8d4f02fe68311bc5f473d6322a77795b4b365"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_18.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:25.547216+00:00",
+      "sha256": "2c6426289b519d5d04305f8c61edb2bd67ca1f808d5d251d8ddca6ec9d3925ac"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_19.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:30.553662+00:00",
+      "sha256": "bec272d235f05aad6f7aebb403f655e11d06a3fc97e606445f1de37424c25046"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_20.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:35.556259+00:00",
+      "sha256": "43f92ce3e822ccc218877075a23252b30ccdd98ec380ee2a7e3fbc21e0731ff1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_22.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:40.579235+00:00",
+      "sha256": "3469e7496b780b6e99da55ba0de982920b54361988a4bfaa94d26520e676463b"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_23.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:45.550675+00:00",
+      "sha256": "77c4b41ef79278b02f7057499b2e3b17e6a8e326f54c1b89452399c58649f0e1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_25.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:50.555108+00:00",
+      "sha256": "62d8bfcc6e75293a48ba4fc3c65e5a12f31ef51556ed07cb31537970260d7051"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_27.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:27:55.579052+00:00",
+      "sha256": "ce5add7907dd21c7c87f9ddcbb23816acca2844ec6776274e519c326b73d2c29"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_28.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:00.556458+00:00",
+      "sha256": "2c9ea0112644bbd5977ec793e52416f01a0f2cb5d31173cbaefddfe942960b89"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_30.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:05.591795+00:00",
+      "sha256": "f2bc5a17c9893e5c8b33d93ebd7052644c17aafbbb5dbefbd3fc2f2af7ee7adc"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:06.058111+00:00",
+      "sha256": "975335f0022baff4cd7e2373e87a9a5d89fcafbd45f10c80eac71cab87c60003"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:46.889522+00:00",
+      "sha256": "3b2dee73cc1ef1f942ce042aec05e7c58aaf9ec5f272d3a0b187a281adc6f32c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:11.224642+00:00",
+      "sha256": "b5240fb928b094c52a3f14b870c81462b940fe77419ad375cc3a1305cb15622d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/58/chunk_0.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T06:25:08.362667+00:00",
+      "sha256": "679a4970f844ee1dd92fb345682ea6b47383ed9cf590a3fa183136de73800686"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_1.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:36:32.558921+00:00",
+      "sha256": "d303974dabffa0cd61c6fb002d5acdfd0dde4f609e9fe340e03f1357b7316885"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:35:07.915101+00:00",
+      "sha256": "1eb9a2ace4b6231e6f1c712ab459f68191bdf72a1a12162c59cf8e21b1c544ea"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_16.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:10.555776+00:00",
+      "sha256": "bc82a8e2e7c23c1a7643f505a832256a911cc6f1e6c635a39a83b2ab9d9cd831"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_24.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:15.555653+00:00",
+      "sha256": "41e28975c3d1601098a69dafc92984a646b4534fb5c59354ca3935e5f64eb3fc"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_30.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:20.559699+00:00",
+      "sha256": "f2bc5a17c9893e5c8b33d93ebd7052644c17aafbbb5dbefbd3fc2f2af7ee7adc"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_32.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:25.551371+00:00",
+      "sha256": "2de4979102ee93dfc31dc91d5aeab928885392ead552a9827fcff49c98b3a35d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_36.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:30.887093+00:00",
+      "sha256": "bafcbac7c7b5392158c7ce7d6bf772d5d41df613d9c7fbad5e8ac2c868cdabc5"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_39.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:35.750897+00:00",
+      "sha256": "e805e74b69492a328fa2f187e038fb5512ca58451793345bc12cc70d6913312c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_42.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:40.706580+00:00",
+      "sha256": "b979684c1579835b18f8be0228c42da6e7253d2cfa9332e98e397a7733b200e2"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_45.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:46.209210+00:00",
+      "sha256": "0d1c56a38b187d47b28e7b1fec224836f105877ab3eab32bda01c9fc106339b8"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_48.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:50.753590+00:00",
+      "sha256": "d94558753546b0e8b5a98b5d25aebc535e90f8b36e86976955c9832449be6a70"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_51.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:28:55.598184+00:00",
+      "sha256": "4c3c8a965734f05c171cf761f366909a8a4a4796472ed2045353da4d410fdcdc"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_54.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:00.899545+00:00",
+      "sha256": "df533c040dffd4bb04da8cc07bf1883597cae4223765efb2b642e4aa14342d04"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_57.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:05.873907+00:00",
+      "sha256": "99a24473aff9ac215142db73ffbe7d48fbe72cf0e374ebae38ce44dbfc2044b1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_60.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:10.735852+00:00",
+      "sha256": "af2b05bb3d7287e5fefd44b065688be4a918f9c2045e4552668791da618bde1a"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_63.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:15.889157+00:00",
+      "sha256": "cf1dee6f05a3507da6586d7870baf91219e782c6430daa990653823d97bd66a1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:06.058111+00:00",
+      "sha256": "975335f0022baff4cd7e2373e87a9a5d89fcafbd45f10c80eac71cab87c60003"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:46.889522+00:00",
+      "sha256": "3b2dee73cc1ef1f942ce042aec05e7c58aaf9ec5f272d3a0b187a281adc6f32c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:11.224642+00:00",
+      "sha256": "b5240fb928b094c52a3f14b870c81462b940fe77419ad375cc3a1305cb15622d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/60/chunk_0.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T06:25:17.650465+00:00",
+      "sha256": "7e5ba7d329bb05cab0874cdd09c801d320d7e4d038c0f467b06bb9a54bf3f776"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_1.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:36:32.558921+00:00",
+      "sha256": "d303974dabffa0cd61c6fb002d5acdfd0dde4f609e9fe340e03f1357b7316885"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_5.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T06:25:22.376708+00:00",
+      "sha256": "b01c1f7c400c385af3df29cfcba0c739b4169ec140ba8f1bf4b5812531ba5c1d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:35:07.915101+00:00",
+      "sha256": "1eb9a2ace4b6231e6f1c712ab459f68191bdf72a1a12162c59cf8e21b1c544ea"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_12.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T06:25:37.378240+00:00",
+      "sha256": "a1406bf2cd6c3f3b159b325257ee5fcc51fd8a4b97d0f1bf6b20a2c42ca17ff5"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_16.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:20.658719+00:00",
+      "sha256": "bc82a8e2e7c23c1a7643f505a832256a911cc6f1e6c635a39a83b2ab9d9cd831"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_19.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:25.633252+00:00",
+      "sha256": "bec272d235f05aad6f7aebb403f655e11d06a3fc97e606445f1de37424c25046"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_23.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:30.747712+00:00",
+      "sha256": "77c4b41ef79278b02f7057499b2e3b17e6a8e326f54c1b89452399c58649f0e1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_26.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:35.690335+00:00",
+      "sha256": "32a04f8a65fdd90bc0c4ae2041684149c52ea7cf001fba0532b075d93febc757"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_29.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:40.646884+00:00",
+      "sha256": "ef28960a3b20a847db02a6e4712daada6b62ac0f78826d6face2e822a69ac603"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_32.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:45.616502+00:00",
+      "sha256": "2de4979102ee93dfc31dc91d5aeab928885392ead552a9827fcff49c98b3a35d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_35.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:50.653240+00:00",
+      "sha256": "57d4f3baa2ba23e591d294a83c924ab6390e131fe62444a3eed7c9b902ff1302"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_38.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:29:55.647944+00:00",
+      "sha256": "fa20e224b315853ab4d52c30ea26445fb716f8446e7cc76ea199bbb4664410e6"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_41.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:00.647575+00:00",
+      "sha256": "9920db800e53276f37276436bd10fb3a0679f7190cf00933b3d599ee594941ff"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_45.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:05.691847+00:00",
+      "sha256": "0d1c56a38b187d47b28e7b1fec224836f105877ab3eab32bda01c9fc106339b8"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_47.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:10.664683+00:00",
+      "sha256": "708f0ca98f86fc28b50c20437722ed4cfaf87e44a7c436ab87572ed282dee93b"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_50.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:15.633962+00:00",
+      "sha256": "e04bb8bfc1b720094a4554fd871c35217580ecfd234085a0659f0eaf007ed391"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_53.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:20.614577+00:00",
+      "sha256": "826049ed7cae8647eae14dd74c4a4c6c9981da0fb390cc605210bdf8e8b9ddb2"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_56.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:25.624256+00:00",
+      "sha256": "7878ebbc936a3a9af12df417b6ee6cd778ba7ed00aee5a1ab4e2959db05292d4"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_59.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:30.897937+00:00",
+      "sha256": "0f3aaca174c650ab3c188b229dbf6ce2b97f24a552fc05e54648bbd79dae3969"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_62.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:35.669217+00:00",
+      "sha256": "156243de2882c7c1faeb8e37ddd16e7067f46a78c4799efa08ed6a1ca30f5ee6"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_66.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:40.659632+00:00",
+      "sha256": "09d23bf3d9c4a0d65eac3d84fd28e5d2b57fe990362e70be9e1eb6b9ef3752be"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_69.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:45.623877+00:00",
+      "sha256": "53d51c075a57dc84c4eee74f403ad5f64eebf216395e07a6bc0843494b45e011"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_71.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:50.631513+00:00",
+      "sha256": "e1617d85a2e58597c8d6423933e23b68e82fd4f6b5b2948ce0132d61b0d4bb49"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_73.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:30:55.618541+00:00",
+      "sha256": "4940b6e646fe6d52cffe884d544f6f78d77e9029e1fc96ec0b3b30ef15486af7"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_76.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:00.616886+00:00",
+      "sha256": "3dfd04b740a2aaa57debd4f95ad8b10790744762c38a2adb1a0547f1a59396d4"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:06.058111+00:00",
+      "sha256": "975335f0022baff4cd7e2373e87a9a5d89fcafbd45f10c80eac71cab87c60003"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:46.889522+00:00",
+      "sha256": "3b2dee73cc1ef1f942ce042aec05e7c58aaf9ec5f272d3a0b187a281adc6f32c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:11.224642+00:00",
+      "sha256": "b5240fb928b094c52a3f14b870c81462b940fe77419ad375cc3a1305cb15622d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/59/chunk_0.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T06:25:32.594285+00:00",
+      "sha256": "0d98c632db9e12aacf6f8329da12fc744a49a4d53abeab5a8d39a1d63a18ff66"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:35:07.915101+00:00",
+      "sha256": "1eb9a2ace4b6231e6f1c712ab459f68191bdf72a1a12162c59cf8e21b1c544ea"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_12.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T06:25:37.378240+00:00",
+      "sha256": "a1406bf2cd6c3f3b159b325257ee5fcc51fd8a4b97d0f1bf6b20a2c42ca17ff5"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_16.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:05.634542+00:00",
+      "sha256": "bc82a8e2e7c23c1a7643f505a832256a911cc6f1e6c635a39a83b2ab9d9cd831"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_19.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:10.652373+00:00",
+      "sha256": "bec272d235f05aad6f7aebb403f655e11d06a3fc97e606445f1de37424c25046"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_23.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:15.642183+00:00",
+      "sha256": "77c4b41ef79278b02f7057499b2e3b17e6a8e326f54c1b89452399c58649f0e1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_26.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:21.302362+00:00",
+      "sha256": "32a04f8a65fdd90bc0c4ae2041684149c52ea7cf001fba0532b075d93febc757"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_30.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:25.689917+00:00",
+      "sha256": "f2bc5a17c9893e5c8b33d93ebd7052644c17aafbbb5dbefbd3fc2f2af7ee7adc"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_32.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:30.644551+00:00",
+      "sha256": "2de4979102ee93dfc31dc91d5aeab928885392ead552a9827fcff49c98b3a35d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_36.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:35.649112+00:00",
+      "sha256": "bafcbac7c7b5392158c7ce7d6bf772d5d41df613d9c7fbad5e8ac2c868cdabc5"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_39.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:40.650483+00:00",
+      "sha256": "e805e74b69492a328fa2f187e038fb5512ca58451793345bc12cc70d6913312c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_42.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:45.642940+00:00",
+      "sha256": "b979684c1579835b18f8be0228c42da6e7253d2cfa9332e98e397a7733b200e2"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_45.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:50.633338+00:00",
+      "sha256": "0d1c56a38b187d47b28e7b1fec224836f105877ab3eab32bda01c9fc106339b8"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_48.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:31:55.629302+00:00",
+      "sha256": "d94558753546b0e8b5a98b5d25aebc535e90f8b36e86976955c9832449be6a70"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_51.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:32:00.654180+00:00",
+      "sha256": "4c3c8a965734f05c171cf761f366909a8a4a4796472ed2045353da4d410fdcdc"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_54.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:32:05.632691+00:00",
+      "sha256": "df533c040dffd4bb04da8cc07bf1883597cae4223765efb2b642e4aa14342d04"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_57.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:32:10.622734+00:00",
+      "sha256": "99a24473aff9ac215142db73ffbe7d48fbe72cf0e374ebae38ce44dbfc2044b1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_60.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:32:15.643686+00:00",
+      "sha256": "af2b05bb3d7287e5fefd44b065688be4a918f9c2045e4552668791da618bde1a"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_63.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:32:20.636649+00:00",
+      "sha256": "cf1dee6f05a3507da6586d7870baf91219e782c6430daa990653823d97bd66a1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_65.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:32:25.629510+00:00",
+      "sha256": "99fd1f83660afc0c0babd1a82e35e070219c1f675c80986a5f52ff7aee02668f"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_68.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:32:30.860244+00:00",
+      "sha256": "5efd2932bded349ee605fdd3b7bdfe1a509052e0426618ed0060a6ee42bef108"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_71.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:32:35.807754+00:00",
+      "sha256": "e1617d85a2e58597c8d6423933e23b68e82fd4f6b5b2948ce0132d61b0d4bb49"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_73.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:32:40.888637+00:00",
+      "sha256": "4940b6e646fe6d52cffe884d544f6f78d77e9029e1fc96ec0b3b30ef15486af7"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_75.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:32:45.673668+00:00",
+      "sha256": "535b8274d15c56e8a8c46108fe83072e132f30525ec5e7cedf39c872f824d6ec"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_76.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:32:50.805338+00:00",
+      "sha256": "3dfd04b740a2aaa57debd4f95ad8b10790744762c38a2adb1a0547f1a59396d4"
+    }
+  ]
+}

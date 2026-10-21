@@ -8,7 +8,7 @@ from training_data.fresh_book_pool import BOOK_SOURCES, FreshBookPoolCorpus, all
 from training_data.fresh_raw_corpus import initialize_fresh
 from training_data.raw_corpus import RawCorpus
 from training_data.raw_token_stream import RawTokenMixture
-from training_data.scholarly import adapt
+from training_data.simple_llm import adapt
 
 
 class BookAllocationTests(unittest.TestCase):
