@@ -1,6 +1,15 @@
 # Python 124M / 5B execution record
 
-**Current status (2026-10-21): documentation acquisition and single-H100 diagnostics passed; code preparation continues. No eight-GPU experiment updates or model publication yet.**
+**Current status (2026-10-21 02:20 UTC): all source acquisition is complete; global merging and exclusions are running. No eight-GPU experiment updates or model publication yet.**
+
+All 53 pinned full-Python shards completed, with **5,742,078,521 candidate
+training targets** before global deduplication and exclusions. All 95 documentation
+shards completed with **617,694,542 candidate targets**. The existing-source census
+also completed normally; no early stop was used. See [acquisition totals](acquisition.json).
+The finalizer now merges these sources and freezes only sufficient measured
+capacity. Training remains behind that check and eight-GPU qualification.
+
+The paragraphs below preserve preparation history and diagnostic evidence.
 
 The first full-code preparation attempt stopped after 16 completed shards
 (1,723,939,858 candidate targets): a complex source file raised Python parser
