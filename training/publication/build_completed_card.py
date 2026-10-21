@@ -1,119 +1,187 @@
-"""Build the completed model card from measured validation and training reports."""
+"""Render a Markdown model-card document using verified measured reports."""
 
+import argparse
 import json
 import math
+import re
 import shutil
+import tomllib
 from pathlib import Path
+from string import Template
+
+from publication.artifacts import artifact_path
+
+DEFAULT_DOCUMENT = Path(__file__).with_name("cards") / "completed.md"
+
+
+def load_document(path):
+    text = Path(path).read_text()
+    if not text.startswith("+++\n"):
+        raise ValueError("Card document requires TOML front matter delimited by +++")
+    try:
+        metadata, markdown = text[4:].split("\n+++\n", 1)
+    except ValueError as exc:
+        raise ValueError("Unclosed card document front matter") from exc
+    settings = tomllib.loads(metadata)
+    if not settings.get("segments"):
+        raise ValueError("Card document must reference at least one training segment")
+    count = settings.get("displayed_samples")
+    if type(count) is not int or count < 0:
+        raise ValueError("displayed_samples must be a nonnegative integer")
+    return settings, Template(markdown)
+
+
+def sample_markdown(sample):
+    # A generated completion can itself contain Markdown code fences.
+    completion = sample["completion"]
+    fence = "`" * max(3, 1 + max((len(s) for s in re.findall(r"`+", completion)), default=0))
+    return (
+        f"Prompt: {sample['prompt']}\n\nMode: {sample['mode']}; seed: {sample['seed']}\n\n"
+        f"{fence}text\n{completion}\n{fence}"
+    )
+
+
+def card_values(settings, audit, validation, segments):
+    for key in (
+        "strict_load",
+        "per_source_two_pass_limit_verified",
+        "finite_parameters",
+        "token_accounting_verified",
+    ):
+        if validation.get(key) is not True:
+            raise ValueError(f"Validation did not verify {key}")
+    for key in (
+        "all_metrics_finite",
+        "contiguous_steps",
+        "optimizer_states_finite",
+        "optimizer_step_counters_verified",
+        "session_resume_validation_boundaries_exact",
+    ):
+        if audit.get(key) is not True:
+            raise ValueError(f"Training audit did not verify {key}")
+    final = segments[-1]
+    config = final["config"]
+    tokens, updates = audit["tokens"], audit["updates"]
+    if not tokens == validation["trained_tokens"] == final["total_loss_tokens"]:
+        raise ValueError("Training token counts disagree across reports")
+    if not updates == validation["step"] == final["steps"]:
+        raise ValueError("Training update counts disagree across reports")
+    if validation["parameters"] != final["parameters"]:
+        raise ValueError("Parameter counts disagree across reports")
+    if not (
+        audit["data_manifest_sha256"]
+        == validation["data_manifest_sha256"]
+        == final["data_identity"]["manifest_sha256"]
+    ):
+        raise ValueError("Dataset identities disagree across reports")
+    if sum(audit["source_exposures"].values()) != tokens:
+        raise ValueError("Source exposures do not sum to trained tokens")
+    trained = validation["trained"]
+    baseline = validation[settings["baseline"]]
+    if {name: row["tokens"] for name, row in trained["per_source"].items()} != {
+        name: row["tokens"] for name, row in baseline["per_source"].items()
+    }:
+        raise ValueError("Final and baseline evaluation targets disagree")
+    count = settings["displayed_samples"]
+    if count > len(validation["samples"]):
+        raise ValueError("Requested more displayed samples than the report contains")
+    local_batch = config["world_size"] * config["microbatch"]
+    if config["global_windows"] % local_batch:
+        raise ValueError("Training batch does not divide into whole accumulation rounds")
+    if config["n_embd"] % config["n_head"]:
+        raise ValueError("Model width does not divide into whole attention heads")
+    values = {
+        **settings.get("historical_training", {}),
+        **config,
+        "parameters": f"{validation['parameters']:,}",
+        "trained_tokens": f"{tokens:,}",
+        "updates": f"{updates:,}",
+        "target_tokens": f"{config['target_tokens']:,}",
+        "unused_tokens": f"{config['target_tokens'] - tokens:,}",
+        "layers": config["n_layer"],
+        "width": config["n_embd"],
+        "heads": config["n_head"],
+        "head_dimension": config["n_embd"] // config["n_head"],
+        "context": f"{config['context']:,}",
+        "world_size": config["world_size"],
+        "gpu": final["gpu"],
+        "training_torch_version": final["torch_version"],
+        "seed": config["seed"],
+        "weight_decay": config["weight_decay"],
+        "global_windows": config["global_windows"],
+        "microbatch": config["microbatch"],
+        "accumulation_rounds": config["global_windows"] // local_batch,
+        "warmup_tokens": f"{config['warmup_tokens']:,}",
+        "peak_lr": config["peak_lr"],
+        "min_lr_percent": f"{config['min_lr_ratio'] * 100:g}",
+        "session_hours": f"{audit['total_session_seconds'] / 3600:.2f}",
+        "tokens_per_second": f"{tokens / audit['total_session_seconds']:,.0f}",
+        "source_shares": ", ".join(
+            f"{name} {exposures / tokens:.3%}"
+            for name, exposures in audit["source_exposures"].items()
+        ),
+        "unique_train_tokens": f"{sum(s['unique_train_tokens'] for s in validation['source_exposures'].values()):,}",
+        "evaluation_policy": validation["evaluation"],
+        "evaluation_parents": f"{sum(r['parents'] for r in trained['per_source'].values()):,}",
+        "evaluation_targets": f"{sum(r['tokens'] for r in trained['per_source'].values()):,}",
+        "evaluation_device": validation["evaluation_device"].upper(),
+        "evaluation_torch_version": validation["torch_version"],
+        "baseline_label": settings["baseline_label"],
+        "baseline_loss": f"{baseline['mixture_weighted_loss']:.4f}",
+        "baseline_perplexity": f"{math.exp(baseline['mixture_weighted_loss']):.2f}",
+        "trained_loss": f"{trained['mixture_weighted_loss']:.4f}",
+        "trained_perplexity": f"{math.exp(trained['mixture_weighted_loss']):.2f}",
+        "source_rows": "\n".join(
+            f"| {name} | {r['tokens']:,} | {r['loss']:.4f} | {r['perplexity']:.2f} |"
+            for name, r in trained["per_source"].items()
+        ),
+        "diagnostic_loss": f"{final['final_validation']['weighted_loss']:.4f}",
+        "pending_audits": "; ".join(validation["pending_data_audits"]) or "none recorded",
+        "prompt_count": len({s["prompt"] for s in validation["samples"]}),
+        "completion_count": len(validation["samples"]),
+        "displayed_samples": count,
+        "sample_text": "\n\n".join(sample_markdown(s) for s in validation["samples"][:count]),
+        "segment_count": len(segments),
+        "final_checkpoint": final["final_checkpoint"],
+    }
+    return values
+
+
+def build_card(artifacts, output, document=DEFAULT_DOCUMENT):
+    settings, template = load_document(document)
+    names = [settings["audit"], settings["validation"], *settings["segments"]]
+    paths = [artifact_path(artifacts, name) for name in names]
+    audit, validation, *segments = [json.loads(path.read_text()) for path in paths]
+    values = card_values(settings, audit, validation, segments)
+    # Fail on unknown placeholders before writing any output; never evaluate code.
+    markdown = template.substitute(values)
+    output = Path(output)
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "README.md").write_text(markdown)
+    for source, name in zip(
+        paths,
+        [
+            "training-audit.json",
+            "validation.json",
+            *[f"training-segment-{i:02d}.json" for i in range(len(segments))],
+        ],
+    ):
+        shutil.copyfile(source, output / name)
+    return {
+        "evaluation_targets": sum(
+            r["tokens"] for r in validation["trained"]["per_source"].values()
+        ),
+        "final_loss": validation["trained"]["mixture_weighted_loss"],
+    }
 
 
 def main():
-    root = Path(__file__).resolve().parents[1]
-    output = Path("/tmp/modern-10m-5b-hf")
-    audit = json.loads(
-        (root / "results/scholarly-modern-10m-5b-training-audit-20261018.json").read_text()
-    )
-    validation = json.loads(
-        (root / "results/scholarly-modern-10m-5b-validation-20261018.json").read_text()
-    )
-    assert validation["strict_load"] and validation["per_source_two_pass_limit_verified"]
-    trained = validation["trained"]
-    random = validation["random_initialization_seed42"]
-    tokens = sum(r["tokens"] for r in trained["per_source"].values())
-    rows = "\n".join(
-        f"| {name} | {r['tokens']:,} | {r['loss']:.4f} | {r['perplexity']:.2f} |"
-        for name, r in trained["per_source"].items()
-    )
-    sample_text = "\n\n".join(
-        "Prompt: " + s["prompt"] + "\n\n```text\n" + s["completion"] + "\n```"
-        for s in validation["samples"][:2]
-    )
-    card = f"""---
-language: en
-library_name: pytorch
-tags:
-- causal-lm
-- from-scratch
-- custom-code
-- experimental
-- base-model
----
-# Scholarly/code modern GPT — 9.85M parameters, 5B-token experiment
-
-A **base language model trained from random initialization**, with **9,849,536 parameters**, **4,999,934,057 next-token training exposures** and **72,805 optimizer updates**. It is not instruction-tuned. Generated samples contain repetition, invented terminology and factual errors; the model is a small research artifact rather than a reliable assistant.
-
-## Architecture and tokenizer
-
-Eight decoder layers, width 192, three attention heads (64 dimensions/head), RMSNorm, RoPE (theta 10,000), SwiGLU (hidden width 512), causal SDPA with zero dropout, and tied input/output embeddings. Context: 2,048. The frozen `structured-code-v1` byte-level BPE vocabulary has 32,768 entries. PAD=0, BOS=1, EOS=2, UNK=3; ignored training labels use -100, which is not a vocabulary ID. Embeddings account for 6,291,456 parameters; the rest of the model has 3,558,080.
-
-## How it was trained
-
-Three NVIDIA H100 80GB GPUs on Modal using single-host DDP/NCCL, PyTorch 2.6.0+cu124, BF16 autocast with FP32 parameters, fused AdamW (betas 0.9/0.95, weight decay 0.1), gradient clipping at 1.0, and seed 42. Each optimizer update uses 48 document-local windows, microbatch eight per GPU with two accumulation rounds. Padding is excluded from loss and gradients are normalized over actual global targets. Learning rate warms up over 20M tokens to 3e-4, then follows cosine decay to 10% of peak.
-
-The final update stays 65,943 tokens below the nominal 5B ceiling because another complete global batch would exceed it. Model/optimizer, per-rank RNG and consumed data cursors were saved together at optimizer boundaries. The first two bounded sessions tested startup and fresh-job resume before the long segment. All 72,805 recorded steps are consecutive, all recorded losses/gradient norms/learning rates are finite, and optimizer counters/finite state and resume validation boundaries were verified.
-
-The sum of recorded training-worker elapsed time was **{audit["total_session_seconds"] / 3600:.2f} hours** (about {audit["tokens"] / audit["total_session_seconds"]:,.0f} loss tokens/second); upstream preparation, GPU queueing and model evaluation are excluded. This completed run used the original synchronous raw-text loader. The proposed producer/consumer overlap implementation is a separate experiment and did not produce these weights.
-
-## Data
-
-Token-weighted target shares, matched to three decimal places in the run: FineWeb-Edu 10%, permissively licensed Python code 30%, FineMath 20%, peS2o 10%, PubMed 3%, arXiv 2%, Pressbooks 3%, LibreTexts 3%, DOAB 4%, Gutenberg 5%, pre-1929 books 7%, and Library of Congress 3%. The prepared corpus contains 2,745,331,556 eligible training tokens under this tokenizer; the 5B count is exposures, with **at most two passes per source**, verified from checkpoint counters.
-
-Pinned upstream revisions, counts and data hashes are in `data-manifest.json`. The split policy is `scholarly-parent-v2`, grouping books/papers/repositories before windows. Exact duplicate contents are excluded and detected split conflicts quarantined during staging. Global near deduplication, cross-source parent reconciliation, tokenizer fitting-split reconciliation, eligibility and contamination audits remain pending. Therefore the evaluations below are exploratory, not a sealed or contamination-audited benchmark.
-
-## Validation
-
-A fresh evaluation used the first **32 distinct validation parents per source** in content-hash order, at most four 2,048-token windows per parent: **384 parents and {tokens:,} nonpadding targets**. This is a fixed bounded sample, not a random population estimate. Final and seed-42 randomly initialized models were evaluated on the **same targets** using {validation["evaluation_device"].upper()} / PyTorch {validation["torch_version"]}. Loss is token-mean cross-entropy within each source, then combined using the training source weights.
-
-| Model | Mixture-weighted loss (nats/token) | exp(weighted loss) |
-|---|---:|---:|
-| Random initialization | {random["mixture_weighted_loss"]:.4f} | {math.exp(random["mixture_weighted_loss"]):.2f} |
-| Final 5B checkpoint | {trained["mixture_weighted_loss"]:.4f} | {math.exp(trained["mixture_weighted_loss"]):.2f} |
-
-| Source | Evaluated targets | Final loss | Perplexity |
-|---|---:|---:|---:|
-{rows}
-
-These metrics measure next-token prediction, not factual accuracy, instruction following or functional programming ability. No standardized downstream benchmark score is claimed.
-
-The training-time diagnostic below used only one fixed window per source, so its final loss of 2.6051 is distinct from the broader evaluation above.
-
-![Training diagnostic validation](training-curve.png)
-
-## Unfiltered generation examples
-
-Ten fixed prompts were generated with both greedy decoding and temperature 0.8 / top-k 50, at most 128 new tokens. Seeds and all 20 completions, including poor outputs, are retained in `validation.json`. The first prompt's two completions are shown here without selecting a preferred seed:
-
-{sample_text}
-
-## Download and run
-
-This is standalone custom PyTorch code, not a Transformers AutoModel package. Download the repository, then:
-
-```bash
-pip install -r requirements.txt
-python generate.py --prompt 'The solar system consists of' --tokens 128 --seed 1000
-python generate.py --prompt 'def add(a, b):' --temperature 0 --tokens 64
-```
-
-Optional `--device cuda` or `--device mps` uses supported local hardware. Weights are FP32 safetensors. Both tied state-dict keys are stored for strict loading; constructing the supplied model restores shared storage. Optimizer/RNG state remains in the original trusted Modal checkpoint; this bundle alone is not an exact training-resume checkpoint.
-
-Files include the exact model code/dependency, configuration, frozen tokenizer, measured validation and all samples, training audit/curve, and SHA256 provenance. Export verified strict loading, finite parameters, exact safetensors round-trip weights and CPU logits, and tied-embedding storage. Source: https://github.com/koogle/lm-exploration . Run: `scholarly-modern-10m-5b-20261017`; final checkpoint: `scholarly-modern-10m-5b-20261017-s02/step-000072805.pt`.
-"""
-    (output / "README.md").write_text(card)
-    (root / "publication/scholarly-modern-10m-5b-card.md").write_text(card)
-    shutil.copyfile(
-        root / "results/scholarly-modern-10m-5b-validation-20261018.json",
-        output / "validation.json",
-    )
-    shutil.copyfile(
-        root / "results/scholarly-modern-10m-5b-training-audit-20261018.json",
-        output / "training-audit.json",
-    )
-    for i in range(3):
-        shutil.copyfile(
-            root / f"results/scholarly-modern-10m-5b-20261017-s{i:02d}.json",
-            output / f"training-segment-{i:02d}.json",
-        )
-    print({"evaluation_targets": tokens, "final_loss": trained["mixture_weighted_loss"]})
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--artifacts", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--document", type=Path, default=DEFAULT_DOCUMENT)
+    args = parser.parse_args()
+    print(build_card(args.artifacts, args.output, args.document))
 
 
 if __name__ == "__main__":

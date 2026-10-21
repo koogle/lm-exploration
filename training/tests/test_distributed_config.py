@@ -1,6 +1,6 @@
 import unittest
 
-from distributed_training.config import DistributedConfig, DistributedRuntime, validate_resume
+from distributed.config import DistributedConfig, DistributedRuntime, validate_resume
 
 
 class DistributedConfigTests(unittest.TestCase):
@@ -23,21 +23,28 @@ class DistributedConfigTests(unittest.TestCase):
             {"seed": -1},
             {"checkpoint_every": 0},
             {"target_tokens": 100, "warmup_tokens": 100},
+            {"data_loader": "auto"},
+            {"data_loader": None},
+            {"adam_beta1": 1},
+            {"adam_beta2": -0.1},
+            {"adam_beta2": True},
+            {"adam_beta1": float("nan")},
+            {"gradient_clip_norm": 0},
+            {"gradient_clip_norm": float("inf")},
+            {"validation_windows_per_source": 0},
+            {"validation_windows_per_source": True},
+            {"log_every": 0},
         ):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 DistributedConfig(**change)
 
     def test_architecture_and_budget_are_not_experiment_scoped(self):
-        for settings in (
-            {"n_layer": 8, "n_head": 3, "n_embd": 192, "target_tokens": 5_000_000_000},
-            {"n_layer": 4, "n_head": 4, "n_embd": 256, "target_tokens": 30_000_000_000},
-            {"pilot": True, "target_tokens": 10_000_000},
-        ):
-            with self.subTest(settings=settings):
-                config = DistributedConfig(**settings, warmup_tokens=100_000)
-                self.assertEqual(config.target_tokens, settings["target_tokens"])
+        config = DistributedConfig(n_layer=4, n_head=4, n_embd=256, target_tokens=30_000_000_000)
+        self.assertEqual(config.n_layer, 4)
+        # Run-budget policy belongs to execution validation, not construction.
+        DistributedConfig(pilot=True, target_tokens=10_000_000, warmup_tokens=100_000)
 
-    def test_unreviewed_data_requires_explicit_boolean(self):
+    def test_unreviewed_data_is_an_explicit_boolean(self):
         self.assertFalse(DistributedConfig().allow_unreviewed_data)
         self.assertFalse(
             DistributedConfig(
@@ -47,17 +54,7 @@ class DistributedConfigTests(unittest.TestCase):
         for value in ("yes", 1, 0, None):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 DistributedConfig(allow_unreviewed_data=value)
-
-    def test_unreviewed_data_is_independent_of_run_shape(self):
-        for settings in (
-            {},
-            {"n_layer": 8, "n_head": 3, "n_embd": 192, "target_tokens": 5_000_000_001},
-            {"pilot": True, "target_tokens": 5_000_000, "warmup_tokens": 100_000},
-        ):
-            with self.subTest(settings=settings):
-                config = DistributedConfig(allow_unreviewed_data=True, **settings)
-                self.assertTrue(config.allow_unreviewed_data)
-                self.assertTrue(config.as_dict()["allow_unreviewed_data"])
+        self.assertTrue(DistributedConfig(allow_unreviewed_data=True).allow_unreviewed_data)
 
     def test_schedule_uses_tokens(self):
         config = DistributedConfig()

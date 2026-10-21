@@ -174,7 +174,8 @@ default. Preparation is not a claim that these gates have passed:
   upstream capacity estimates. Full-source capacity and final sampling approval
   remain outstanding. Final-test text is not tokenized or exported.
 
-The existing character trainer remains separate. The planned approximately 150M
+The historical character training loop has since been removed; active training
+uses [`trainer/loop.py`](../trainer/loop.py). At this preparation milestone, the planned approximately 150M
 model, optimizer integration, GPU profiling and paid execution qualification are
 the next milestones; these preparation tools do not imply they are complete.
 

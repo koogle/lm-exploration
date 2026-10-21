@@ -1,4 +1,4 @@
-"""Sampling shared by training previews and the generation CLI."""
+"""Sampling for the generation CLI and historical character checkpoints."""
 
 import torch
 
