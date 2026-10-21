@@ -33,7 +33,7 @@ image = (
 def collect(run_id: str):
     import time
 
-    from training_data.scholarly import load_recipe
+    from training_data.simple_llm import load_recipe
 
     from tokenizer.tokenizer_research import CorpusBuilder, load_spec
 
@@ -98,7 +98,7 @@ def candidate(run_id: str, size_mib: int, vocab_size: int):
 import sys
 from tokenizer.tokenizer_research import train_candidate
 train_candidate(sys.argv[1],sys.argv[2],int(sys.argv[3]),int(sys.argv[4]),
-                '/project/tokenizer/scholarly-code-v1/config.json',execution='modal-cpu')
+                '/project/tokenizer/simple-llm-v1/config.json',execution='modal-cpu')
 """
     print(f"Training {size_mib} MiB / {vocab_size} vocabulary", flush=True)
     try:

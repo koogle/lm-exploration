@@ -12,7 +12,7 @@ from pathlib import Path
 
 import modal
 
-from modal_scripts.modal_scholarly_pilot import image
+from distributed.image import image
 
 app = modal.App("lm-exploration-h100-confirmation")
 data = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -32,7 +32,9 @@ results = modal.Volume.from_name("lm-exploration-training")
 def worker(world, run_id, provenance):
     output = Path("/runs") / run_id / f"H100x{world}"
     output.mkdir(parents=True, exist_ok=False)
-    manifest = "/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001/manifest.json"
+    manifest = (
+        "/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001-seekable/manifest.json"
+    )
     started = time.monotonic()
     try:
         if world == 1:
@@ -98,7 +100,7 @@ def worker(world, run_id, provenance):
 
 
 @app.local_entrypoint()
-def main(run_id: str = "scholarly-124m-h100-confirmation-20261017-01"):
+def main(run_id: str = "simple-llm-124m-h100-confirmation-20261017-01"):
     import re
 
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
@@ -106,7 +108,7 @@ def main(run_id: str = "scholarly-124m-h100-confirmation-20261017-01"):
     Path("results").mkdir(exist_ok=True)
     files = [
         Path("modal_scripts/modal_gpu_confirmation.py"),
-        Path("modal_scripts/modal_scholarly_pilot.py"),
+        *Path("distributed").glob("*.py"),
         Path("trainer/ddp_benchmark.py"),
         Path("trainer/gpu_benchmark.py"),
         Path("100m/model.py"),

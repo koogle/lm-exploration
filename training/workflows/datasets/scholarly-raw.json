@@ -1,0 +1,6 @@
+{
+  "mode": "prepare_raw",
+  "root": "scholarly-code",
+  "loader": "raw",
+  "recipe": "tokenizer/recipe-v1.json"
+}
