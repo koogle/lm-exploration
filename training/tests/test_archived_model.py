@@ -33,6 +33,7 @@ class ArchivedModelTests(unittest.TestCase):
             self.assertEqual(GPT.__bases__[0].__module__, "model_10m.model")
             self.assertEqual(config.__module__, "model_10m.model")
             self.assertIsNot(GPT, current_model.GPT)
+            self.assertFalse(list(source.rglob("__pycache__")))
             self.assertEqual(
                 {k: v for k, v in sys.modules.copy().items() if k.startswith("model_")}, before
             )

@@ -1,7 +1,6 @@
 """Load trusted, hash-verified model sources without replacing installed packages."""
 
 import hashlib
-import importlib.util
 import sys
 import types
 from pathlib import Path
@@ -12,9 +11,11 @@ def load_archived_model(source, expected_hashes):
     packages = ("model_10m", "model_100m")
     if set(expected_hashes) != set(packages):
         raise ValueError("Both archived model source hashes are required")
+    verified = {}
     for package in packages:
         path = source / package / "model.py"
-        if hashlib.sha256(path.read_bytes()).hexdigest() != expected_hashes[package]:
+        verified[package] = path.read_bytes()
+        if hashlib.sha256(verified[package]).hexdigest() != expected_hashes[package]:
             raise ValueError(f"Archived {package} source checksum mismatch")
 
     def belongs(name):
@@ -29,10 +30,12 @@ def load_archived_model(source, expected_hashes):
             module.__path__ = [str(source / package)]
             sys.modules[package] = module
             name = package + ".model"
-            spec = importlib.util.spec_from_file_location(name, source / package / "model.py")
-            model = importlib.util.module_from_spec(spec)
+            model = types.ModuleType(name)
+            model.__file__ = str(source / package / "model.py")
+            model.__package__ = package
             sys.modules[name] = model
-            spec.loader.exec_module(model)
+            # Execute exactly the verified bytes, never a cached .pyc or a reread.
+            exec(compile(verified[package], model.__file__, "exec"), model.__dict__)  # noqa: S102
             module.model = model
         return model.GPT, model.ModelConfig
     finally:
