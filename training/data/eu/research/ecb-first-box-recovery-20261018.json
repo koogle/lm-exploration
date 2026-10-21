@@ -1,0 +1,68 @@
+{
+  "revision": "82a0bc3a946e32eac8465bac4e8d2c9d3b45e19d",
+  "shard": {
+    "collection_id": "economic_bulletin_boxes",
+    "format": "pdf",
+    "metrics": {
+      "characters": 10157,
+      "parquet_bytes": 18019,
+      "rows": 1,
+      "stored_raw_gzip_bytes": 131526,
+      "text_utf8_bytes": 10169,
+      "words": 1548
+    },
+    "path": "data/economic_bulletin_boxes/pdf/part-c534e82b50955919909b9567fc076e78c33f8b662bb02f4fd790f6ee5b6bc5e4.parquet",
+    "rows": 1,
+    "sha256": "c534e82b50955919909b9567fc076e78c33f8b662bb02f4fd790f6ee5b6bc5e4"
+  },
+  "rows": [
+    {
+      "id": "be500ae260b7b76a47e3f873e372d897b6c1333bfc13c53c79cce22439bb0b01",
+      "title": "Update of the index and weight reference year to 2010 for short-term business statistics",
+      "url": "https://www.ecb.europa.eu/pub/pdf/other/mb201304_focus04.en.pdf",
+      "published_at": "2013-04-10T22:00:00+00:00",
+      "retrieved_at": "2026-10-18T06:39:16.904819+00:00",
+      "raw_sha256": "8e5bd684997c6d50f53b6296f865e66789b89d959947a04945c141a6f351595b",
+      "characters": 10157,
+      "inventory_record": {
+        "collection_id": "economic_bulletin_boxes",
+        "document_id": "1d96bc5581b7b5feb9ecaeb5ea8be1cd7a4c30a9c9446c67f101a60c60f7cea6",
+        "document_type": "economic_bulletin_boxes",
+        "format": "pdf",
+        "language": "en",
+        "modified_at": null,
+        "published_at": "2013-04-10T22:00:00+00:00",
+        "source_document_id": "3943",
+        "source_id": "ecb",
+        "title": "Update of the index and weight reference year to 2010 for short-term business statistics",
+        "url": "https://www.ecb.europa.eu/press/economic-bulletin/focus/2013/pdf/mb201304_focus04.en.pdf"
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/pub/pdf/other/mb201304_focus04.en.pdf",
+        "retrieved_at": "2026-10-18T06:39:16.904819+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/pub/pdf/other/mb201304_focus04.en.pdf",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 138286,
+        "raw_sha256": "8e5bd684997c6d50f53b6296f865e66789b89d959947a04945c141a6f351595b",
+        "content_type": "application/pdf",
+        "etag": null,
+        "last_modified": "Tue, 10 Mar 2015 14:41:18 GMT",
+        "original_fetch": {
+          "url": "https://www.ecb.europa.eu/press/economic-bulletin/focus/2013/pdf/mb201304_focus04.en.pdf",
+          "source_id": "ecb",
+          "retrieved_at": "2026-10-18T06:39:13.788388+00:00",
+          "robots_request": false,
+          "final_url": "https://www.ecb.europa.eu/press/economic-bulletin/focus/2013/pdf/mb201304_focus04.en.pdf",
+          "http_status": 404,
+          "retry_after": null,
+          "status": "failed",
+          "error": "http_404"
+        }
+      }
+    }
+  ]
+}

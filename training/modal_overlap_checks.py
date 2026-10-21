@@ -26,14 +26,15 @@ run_volume = modal.Volume.from_name("lm-exploration-training")
 def check(world_size=3, tag="three01"):
     import torch
 
-    from modal_distributed_train import worker
-    from trainer.distributed_config import DistributedConfig
+    from distributed_training.config import DistributedConfig
+    from distributed_training.modal_train import worker
 
     base = DistributedConfig(
         world_size=world_size,
         global_windows=2 * world_size,
         microbatch=2,
         pilot=True,
+        allow_unreviewed_data=True,
         target_tokens=5_000_000,
         warmup_tokens=100000,
         n_layer=8,

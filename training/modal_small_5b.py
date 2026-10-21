@@ -9,15 +9,16 @@ from pathlib import Path
 
 import modal
 
-from modal_prepare_scholarly import image as cpu_image
-from modal_scholarly_pilot import image as gpu_image
+from distributed_training.image import image as gpu_image
+from modal_scripts.modal_prepare_simple_llm import image as cpu_image
 
-# All top-level imports must also be available when Modal imports this module remotely.
-imports = ("modal_prepare_scholarly.py", "modal_scholarly_pilot.py", "modal_distributed_train.py")
-for name in imports:
-    cpu_image = cpu_image.add_local_file(name, f"/project/{name}")
-    gpu_image = gpu_image.add_local_file(name, f"/project/{name}")
-cpu_image = cpu_image.add_local_dir("trainer", "/project/trainer")
+# Both images must be able to resolve this module's canonical package imports.
+cpu_image = (
+    cpu_image.add_local_dir("distributed_training", "/project/distributed_training")
+    .add_local_dir("trainer", "/project/trainer")
+    .add_local_dir("modal_scripts", "/project/modal_scripts")
+)
+gpu_image = gpu_image.add_local_dir("modal_scripts", "/project/modal_scripts")
 app = modal.App("lm-exploration-modern-10m-5b")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
 run_volume = modal.Volume.from_name("lm-exploration-training")
@@ -43,9 +44,9 @@ def record(run_id, stage, **details):
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def train_segment(run_id, snapshot, settings, provenance, resume="", max_steps=None):
-    from modal_distributed_train import worker
-    from trainer.distributed_config import DistributedConfig
-    from trainer.run_validation import validate_small_5b_run
+    from distributed_training.config import DistributedConfig
+    from distributed_training.modal_train import worker
+    from distributed_training.run_validation import validate_small_5b_run
 
     validate_small_5b_run(DistributedConfig(**settings))
     return worker.local(run_id, snapshot, settings, provenance, resume, 21600, max_steps)
@@ -61,9 +62,9 @@ def train_segment(run_id, snapshot, settings, provenance, resume="", max_steps=N
     volumes={"/runs": run_volume},
 )
 def continue_training(run_id, snapshot, settings, provenance, previous=None, first_segment=0):
-    from trainer.distributed_config import DistributedConfig
-    from trainer.run_validation import validate_small_5b_run
-    from trainer.workflow import check_progress, check_resume
+    from distributed_training.config import DistributedConfig
+    from distributed_training.run_validation import validate_small_5b_run
+    from distributed_training.workflow import check_progress, check_resume
 
     validate_small_5b_run(DistributedConfig(**settings))
     resume = str(Path(previous["final_checkpoint"]).relative_to("/runs")) if previous else ""
@@ -137,11 +138,11 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
     from training_data.fast_raw_corpus import FastRawCorpus
     from training_data.prepared_snapshot import find_prepared_snapshot
     from training_data.review import require_data_review
-    from training_data.scholarly import load_recipe
+    from training_data.simple_llm import load_recipe
 
-    from trainer.distributed_config import DistributedConfig
-    from trainer.run_validation import validate_small_5b_run
-    from trainer.workflow import check_capacity
+    from distributed_training.config import DistributedConfig
+    from distributed_training.run_validation import validate_small_5b_run
+    from distributed_training.workflow import check_capacity
 
     config = DistributedConfig(**settings)
     validate_small_5b_run(config)
