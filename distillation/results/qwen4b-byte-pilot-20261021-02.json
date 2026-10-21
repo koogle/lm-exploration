@@ -1,0 +1,45 @@
+{
+  "teacher": "Qwen/Qwen3-4B-Base",
+  "revision": "906bfd4b4dc7f14ee4320094d8b41684abff8539",
+  "context": 256,
+  "alpha": 0.5,
+  "lr": 1e-05,
+  "temperature": 1.0,
+  "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+  "database": "/data/scholarly-code/readiness-20261020-v2/multilingual/raw.sqlite",
+  "manifest_sha256": "f0c1e3a62aec45b5db72cc43cde513a6c278c0d1e075489e94a87cbc71b62133",
+  "parent": "simple-llm-code60-unique-10b-20261020-r01-s04/step-000153342.pt",
+  "parent_sha256": "ec6a6550f4f237d4c3c9530efe763061178440c09a8821265a67655c3bf8b85e",
+  "initial_validation": {
+    "ce": 1.272439274444744,
+    "tokens": 3724,
+    "windows": 16
+  },
+  "final_validation": {
+    "ce": 1.3782239395616902,
+    "tokens": 3724,
+    "windows": 16
+  },
+  "tokens": 261907,
+  "session_tokens": 261907,
+  "steps": 1133,
+  "aligned_boundaries": 224675,
+  "skipped_unicode_or_empty_windows": 16,
+  "train_seconds": 153.07209781100002,
+  "loss_tokens_per_second": 1711.004185252493,
+  "elapsed_seconds": 171.50686097899998,
+  "stop_reason": "token_limit",
+  "last_metrics": {
+    "step": 1133,
+    "tokens": 261907,
+    "ce": 3.1799497604370117,
+    "byte_kl": 0.558400571346283,
+    "aligned": 174,
+    "grad_norm": 12.221954345703125
+  },
+  "checkpoint": "/distill/qwen4b-byte-pilot-20261021-02/step-000001133.pt",
+  "peak_memory_bytes": 10631648256,
+  "parameters": 124389632,
+  "torch_version": "2.6.0+cu124",
+  "gpu": "NVIDIA L40S"
+}
