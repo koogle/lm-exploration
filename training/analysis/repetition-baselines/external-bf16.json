@@ -1,0 +1,29 @@
+{
+  "name": "external-bf16",
+  "note": "Initial BF16-autocast run; Pythia gets EOS-as-BOS (token 0) prepended. Kept as a precision-confounded negative result.",
+  "precision": "bf16-autocast",
+  "max_new_tokens": 128,
+  "prompts": [
+    {"text": "The solar system consists of", "group": "prose"},
+    {"text": "In mathematics, a prime number is", "group": "prose"},
+    {"text": "The purpose of an experiment is to", "group": "prose"},
+    {"text": "Once upon a time,", "group": "prose"},
+    {"text": "def add(a, b):\n    ", "group": "python"},
+    {"text": "def factorial(n):\n    ", "group": "python"},
+    {"text": "import json\n\ndef read_config(path):\n    ", "group": "python"},
+    {"text": "The capital of France is", "group": "prose"},
+    {"text": "2 + 2 =", "group": "prose"},
+    {"text": "A language model predicts", "group": "prose"}
+  ],
+  "modes": [
+    {"name": "greedy", "temperature": 0.0, "seed_offsets": [1000]},
+    {"name": "topk50_t0.1", "temperature": 0.1, "top_k": 50, "seed_offsets": [1000, 2000]},
+    {"name": "sampled_08", "temperature": 0.8, "top_k": 50, "seed_offsets": [1000, 2000]},
+    {"name": "sampled_10_topp95", "temperature": 1.0, "top_p": 0.95, "seed_offsets": [1000]}
+  ],
+  "models": [
+    {"kind": "transformers", "name": "pythia-160m-4b", "repo": "EleutherAI/pythia-160m", "revision": "a4817f95aaebbfddd0763a6a027f5be6bd2c9246", "trained_tokens": 4194304000, "prefix_token_ids": [0]},
+    {"kind": "transformers", "name": "pythia-160m-300b", "repo": "EleutherAI/pythia-160m", "revision": "50f5173d932e8e61f858120bcb800b97af589f46", "trained_tokens": 299892736000, "prefix_token_ids": [0]},
+    {"kind": "transformers", "name": "smollm-135m-600b", "repo": "HuggingFaceTB/SmolLM-135M", "revision": "1d461723eec654e65efdc40cf49301c89c0c92f4", "trained_tokens": 600000000000}
+  ]
+}

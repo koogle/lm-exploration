@@ -1,6 +1,11 @@
-"""Independent greedy API / precision / prefix check on Pythia160M final."""
+"""Independent greedy API / precision / prefix check on Pythia160M final.
+
+Run from training/: modal run analysis/repetition-baselines/modal_verify_pythia.py
+One H100, 10-minute hard timeout, no retries; refuses to start 24 hours after launch.
+"""
 
 import json
+import time
 from pathlib import Path
 
 import modal
@@ -10,14 +15,18 @@ image = modal.Image.debian_slim(python_version="3.12").pip_install(
 )
 
 app = modal.App("simple-llm-pythia-verification")
+LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
 
 
 @app.function(image=image, gpu="H100", cpu=4, memory=8192, timeout=600, retries=0)
-def verify():
+def verify(deadline):
     from contextlib import nullcontext
 
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing the check")
 
     repo = "EleutherAI/pythia-160m"
     revision = "50f5173d932e8e61f858120bcb800b97af589f46"
@@ -68,7 +77,7 @@ def verify():
 
 
 @app.local_entrypoint()
-def main(output: str = "../../artifacts/repetition-baselines/pythia-verification.json"):
+def main(output: str = "artifacts/repetition-baselines/pythia-verification.json"):
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(verify.remote(), indent=2))
+    path.write_text(json.dumps(verify.remote(time.time() + LAUNCH_LIMIT_SECONDS), indent=2))

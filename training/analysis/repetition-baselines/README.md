@@ -5,9 +5,25 @@ Pythia-160M (step 2000, about 4.19B tokens; final, 299.89B tokens) and SmolLM-13
 tokens), plus a read-only audit of the training corpus. No training updates.
 
 Raw outputs, all completions, metrics tables, the corpus audit and manual notes are on
-Hugging Face:
-[`jfrick/lm-exploration-results` / `pr-23/training/analysis/repetition-baselines/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-23/training/analysis/repetition-baselines)
-(private dataset; archived in commit `56e1e8b`, see its `pr-23/README.md` for a file list).
+Hugging Face in
+[`jfrick/lm-exploration-results` under `pr-23/training/analysis/repetition-baselines/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-23/training/analysis/repetition-baselines)
+(private dataset; its `pr-23/README.md` lists the files).
+
+This folder holds only the study: recipes for the shared
+[sampling toolkit](../sampling/README.md), two audit scripts the toolkit does not cover, and
+these findings.
+
+| File | Role |
+|---|---|
+| `external-fp32.json` | Recipe: Pythia/SmolLM baselines, full FP32, tokenizer-default prefixes (primary) |
+| `external-bf16.json` | Recipe: initial BF16-autocast run, Pythia with EOS-as-BOS (token 0) prepended |
+| `modal_corpus_patterns.py` | Read-only training-corpus audit (CPU, read-only SQLite) |
+| `modal_verify_pythia.py` | Transformers `generate` check of Pythia final: precision x BOS prefix |
+
+Our own FP32 samples use [`../decoding-presets/precision-fp32.json`](../decoding-presets/precision-fp32.json)
+(same checkpoint, prompts, decoders, seeds and 128-token cap, plus one extra
+T=0.85/top-p 0.95/penalty 1.1 decoder). Our BF16 samples are the final-checkpoint rows of the
+earlier [repetition study](../repetition/README.md) (`previous-comparison` and `low-temperature`).
 
 ## Method
 
@@ -24,9 +40,6 @@ Hugging Face:
 - Corpus audit: first 64 eligible training documents per source in content-hash order
   (768 total), first eight nonoverlapping 128-token windows per document, plus
   within-document and cross-document duplicate normalized lines (lines of 20+ characters).
-- `modal_simple_llm_fp32.py` is derived from `training/analysis/decoding-presets/modal_precision.py`
-  in [PR #20](https://github.com/koogle/lm-exploration/pull/20) (source SHA256
-  `650f3e02…a9fa3`); only the CLI/output naming changed.
 
 ## Key findings
 
@@ -73,32 +86,56 @@ Repeated character 16-grams, first 128 normalized characters, FP32:
 
 ## Rerun
 
-From this directory, with Modal credentials and read access to the project data volume. Outputs
-go to the ignored `training/artifacts/repetition-baselines/` by default (each script accepts
-`--output`).
+From `training/`, with Modal credentials. Each launch is one bounded call with `retries=0` that
+refuses work 24 hours after launch (see the toolkit README); outputs go to the ignored
+`artifacts/` folder.
 
 ```sh
-modal run modal_baselines.py
-modal run modal_simple_llm_fp32.py
-modal run modal_corpus_patterns.py
-modal run modal_verify_pythia.py
-modal run modal_baselines_bf16.py   # optional: initial BF16 outputs
+modal run --detach -m sampling.modal_sample --recipe analysis/repetition-baselines/external-fp32.json \
+  --output artifacts/repetition-baselines/external-results.json
+modal run --detach -m sampling.modal_sample --recipe analysis/decoding-presets/precision-fp32.json \
+  --output artifacts/repetition-baselines/simple-llm-fp32.json
+modal run analysis/repetition-baselines/modal_corpus_patterns.py   # CPU, 10-minute timeout
+modal run analysis/repetition-baselines/modal_verify_pythia.py     # H100, 10-minute timeout
+# optional: initial BF16 outputs
+modal run --detach -m sampling.modal_sample --recipe analysis/repetition-baselines/external-bf16.json \
+  --output artifacts/repetition-baselines/external-results-bf16.json
 ```
 
-The GPU functions run on one H100 each with 30-minute (verification: 10-minute) timeouts and no
-retries; the corpus audit is CPU-only with a ten-minute timeout and read-only SQLite access. In the
-managed environment, run Modal through truststore:
-`python -c "import truststore,runpy; truststore.inject_into_ssl(); runpy.run_module('modal',run_name='__main__')" run modal_baselines.py`.
+The corpus audit needs read access to the `lm-exploration-mixture-data` volume. Fresh toolkit
+results name the merged seeds `topk50_t0.1` and `sampled_08` rather than the archived
+per-seed mode names; the report groups by decoding settings, so tables are unaffected.
 
-`build_report.py` derives the summary, metrics table, paired-prefix summary and completions file.
-It also needs `previous-comparison-20261018.json` and `low-temperature-20261018.json` from
-`analysis/repetition/` in the model repository `jfrick/scholarly-code-modern-gpt-124m-step2`:
+## Rebuild the report
+
+Download `external-results.json`, `external-results-bf16.json` and `simple-llm-fp32.json` from
+the HF folder above into `artifacts/repetition-baselines/`, and
+`previous-comparison-20261018.json` and `low-temperature-20261018.json` from `analysis/repetition/`
+in the model repository `jfrick/scholarly-code-modern-gpt-124m-step2` into
+`artifacts/repetition/`. Then, from `training/`, select our final-checkpoint BF16 rows for the
+shared decoders and build both reports:
 
 ```sh
-python build_report.py ../../artifacts/repetition-baselines --repetition ../../artifacts/repetition
-python build_report.py ../../artifacts/repetition-baselines --repetition ../../artifacts/repetition --bf16
+jq '.checkpoints |= [last | .samples |= map(select(.mode | IN("greedy", "sampled_08_seed1", "sampled_08_seed2", "sampled_10_topp95")))]' \
+  artifacts/repetition/previous-comparison-20261018.json > artifacts/repetition-baselines/simple-llm-bf16-previous.json
+jq '.checkpoints |= [last | .samples |= map(select(.mode | startswith("topk50_t0.1_")))]' \
+  artifacts/repetition/low-temperature-20261018.json > artifacts/repetition-baselines/simple-llm-bf16-low-temperature.json
+
+uv run python -m sampling.report \
+  artifacts/repetition-baselines/simple-llm-fp32.json artifacts/repetition-baselines/external-results.json \
+  --reference artifacts/repetition-baselines/simple-llm-bf16-previous.json \
+  --reference artifacts/repetition-baselines/simple-llm-bf16-low-temperature.json \
+  --group-by decoding --paired --output-dir artifacts/repetition-baselines/report-fp32
+uv run python -m sampling.report \
+  artifacts/repetition-baselines/simple-llm-bf16-previous.json \
+  artifacts/repetition-baselines/simple-llm-bf16-low-temperature.json \
+  artifacts/repetition-baselines/external-results-bf16.json \
+  --group-by decoding --paired --output-dir artifacts/repetition-baselines/report-bf16
 ```
 
-To rebuild from the archived raw outputs instead of rerunning Modal, download
-`external-results*.json` and `simple-llm-fp32.json` from the HF folder above into the input folder.
-Rebuilding from those files reproduces the archived derived outputs byte for byte.
+Our model appears as run `step-64227`. In `summary.json`, `char_rep16_first128` and
+`char_rep16_first256` (with `_n`) reproduce the archived `paired-prefix-summary*.json`, and N,
+EOS, Token4, Word4 and Char16 reproduce the archived `metrics-table*.md`. The archived tables'
+`First256char` column was unpaired; the new report pairs it. The FP32 report's `Identical` column
+compares our FP32 samples with the BF16 ones (9/10 greedy). The extra T=0.85/penalty 1.1 row has
+no external counterpart, so its paired prefix metrics are empty.
