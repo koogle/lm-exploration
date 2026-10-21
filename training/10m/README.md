@@ -87,8 +87,7 @@ corpus, so the public weights come from the earlier checkpoint.
 
 [Full training report](../results/shakespeare-10m-train-01.json),
 [loss history](../results/shakespeare-10m-metrics.jsonl),
-[smoke report](../results/shakespeare-10m-smoke-01.json),
-and [publication receipt](../results/shakespeare-10m-publication.json).
+and [smoke report](../results/shakespeare-10m-smoke-01.json).
 One seed, validation used for checkpoint selection, no untouched test result.
 
 Local verification covered the 10M parameter count, causal attention and gradients

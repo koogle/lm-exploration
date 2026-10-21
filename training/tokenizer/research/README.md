@@ -71,12 +71,13 @@ Storage:
 - `lm-exploration-mixture-data:/tokenizer-research/<run-id>/`: staging and `frozen/`.
 - `lm-exploration-training:/tokenizer-research/<run-id>/<MiB>mib-<vocab>/`:
   `tokenizer.json` and full `result.json`, including parent-level totals.
-- `results/tokenizer-learning-curve/<run-id>/`: downloaded measurements and report.
+- `artifacts/tokenizer-learning-curve/<run-id>/` (ignored): downloaded measurements and report.
+  Published outputs live in `jfrick/scholarly-code-tokenizer` under `research/`.
 
 ## Report
 
 ```sh
-uv run python -m tokenizer.tokenizer_report results/tokenizer-learning-curve/<run-id>
+uv run python -m tokenizer.tokenizer_report artifacts/tokenizer-learning-curve/<run-id>
 ```
 
 Generates `REPORT.md`, `research-report.pdf`, compact `measurements.json`, and
@@ -108,7 +109,7 @@ uv run modal run --detach modal_scripts/modal_tokenizer_evaluation.py \
 # After collection and all 18 fits have finished:
 uv run modal run --detach modal_scripts/modal_tokenizer_evaluation.py \
   --run-id learning-curve-20261016-v2 --phase evaluate
-uv run python -m tokenizer.tokenizer_report results/tokenizer-learning-curve/learning-curve-20261016-v2
+uv run python -m tokenizer.tokenizer_report artifacts/tokenizer-learning-curve/learning-curve-20261016-v2
 ```
 
 Collection has four CPU/16 GiB requests and hard caps and a two-hour timeout.
@@ -135,7 +136,7 @@ After downloading candidate `tokenizer.json` files into
 
 ```sh
 uv run python -m tokenizer.package_tokenizer_research \
-  results/tokenizer-learning-curve/learning-curve-20261016-v2 \
+  artifacts/tokenizer-learning-curve/learning-curve-20261016-v2 \
   <artifacts> <new-publication-folder> --repo-id jfrick/simple-llm-tokenizer
 ```
 
