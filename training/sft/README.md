@@ -110,7 +110,7 @@ fresh-container restore and the second update. Model, optimizer, counters, sampl
 and CPU/CUDA RNG must match exactly. A stop-step argument permits qualification
 without changing the total target or checkpoint identity. Every worker uses a fresh
 container. Use the installed environment/extras and system CA setup described in
-`distributed_training/README.md` in the managed workspace.
+`distributed/README.md` in the managed workspace.
 
 After training, `modal_repair_eval.py` compares the parent and selected SFT checkpoint
 on two held-out repair families per language using greedy decoding capped at 128
@@ -160,6 +160,7 @@ preparation (use the environment's documented proxy/CA setup):
 
 ```python
 import modal
+
 worker = modal.Function.from_name("simple-llm-repair-sft-scale", "worker")
 call = worker.spawn("repair-scale-UNIQUE", "repair-commitpack-UNIQUE")
 print(call.object_id)  # retain for status/result retrieval

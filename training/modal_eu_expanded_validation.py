@@ -56,8 +56,8 @@ def score(run_id, checkpoint, label):
     image=image, cpu=1, memory=4096, timeout=14400, retries=0, volumes={"/runs": run_volume}
 )
 def start(run_id, provenance):
-    from distributed_training.train import atomic_json
     from trainer.eu_expanded_validation import paired_summary
+    from trainer.loop import atomic_json
 
     folder = Path("/runs") / run_id
     folder.mkdir(exist_ok=False)

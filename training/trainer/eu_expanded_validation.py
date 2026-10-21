@@ -13,7 +13,7 @@ from pathlib import Path
 
 from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, TOKENIZER_SHA256, digest, load_frozen
 
-from distributed_training.train import atomic_json
+from trainer.loop import atomic_json
 
 SEED = 20261019
 CONTEXT = 2048

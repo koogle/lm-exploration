@@ -1,13 +1,9 @@
-"""Training recipes: which model, which dataset, which settings and which GPU.
+"""Historical character-recipe validation and model registry for checkpoint loading.
 
-A recipe is a JSON file in ../recipes/ validated by the Recipe model below.
-Unknown keys, wrong types and values outside the fixed choices fail when the
-file is loaded, before any Modal worker starts. No run starts on import.
+These schemas preserve old recipe interpretation; the character training loop and
+launcher have been removed. Active recipes use distributed.config.DistributedConfig.
 """
 
-import json
-import shutil
-import time
 from pathlib import Path
 from typing import Literal, get_args
 
@@ -98,79 +94,11 @@ class Recipe(BaseModel):
         )
 
 
-class MetricRow(BaseModel):
-    """One line of a run's metrics.jsonl, as written by trainer/loop.py."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    step: int
-    train_loss: float
-    tokens_seen: int
-    val_loss: float | None = None  # Only on evaluation steps.
-    elapsed_seconds: float
-    tokens_per_second: float
-
-
 def load_recipe(path):
-    # Local only: the registry is not part of the installed package on the worker.
+    """Validate a historical character recipe locally; no training entrypoint."""
     from training_data.registry import load_registry
 
     recipe = Recipe.model_validate_json(Path(path).read_text(encoding="utf-8"))
     if not load_registry()[recipe.dataset].training_eligible:
         raise ValueError(f"dataset {recipe.dataset!r} is not training eligible")
     return recipe
-
-
-def select_best_checkpoint(run_dir):
-    """Copy the saved checkpoint with the lowest validation loss to best.pt."""
-    lines = (run_dir / "metrics.jsonl").read_text().splitlines()
-    metrics = [MetricRow.model_validate_json(line) for line in lines]
-    saved = [
-        row
-        for row in metrics
-        if row.val_loss is not None
-        and (run_dir / "checkpoints" / f"step-{row.step:06d}.pt").is_file()
-    ]
-    if not saved:
-        raise ValueError("no evaluated checkpoint available")
-    best = min(saved, key=lambda row: row.val_loss)
-    shutil.copyfile(run_dir / "checkpoints" / f"step-{best.step:06d}.pt", run_dir / "best.pt")
-    return best, metrics[-1]
-
-
-def run_recipe(recipe, run_dir):
-    """Fetch the dataset, train, select the best checkpoint and write report.json."""
-    import torch
-    from training_data.loading import load_data
-
-    from .loop import train
-
-    run_dir = Path(run_dir)
-    fetcher = DATASETS[recipe.dataset]
-    fetcher.main()
-    data = fetcher.DESTINATION
-    tokenizer = load_data(data, recipe.build_model_config(vocab_size=1).block_size)[0]
-    started = time.perf_counter()
-    train(
-        recipe.training,
-        data,
-        run_dir,
-        architecture_module=MODELS[recipe.model],
-        model_config=recipe.build_model_config(len(tokenizer.characters)),
-        max_seconds=recipe.backend.max_seconds,
-    )
-    best, final = select_best_checkpoint(run_dir)
-    report = {
-        "run_id": run_dir.name,
-        "recipe": recipe.model_dump(),
-        "gpu": torch.cuda.get_device_name(),
-        "config": json.loads((run_dir / "config.json").read_text()),
-        "selected": best.model_dump(exclude_none=True),
-        "final": final.model_dump(exclude_none=True),
-        "worker_elapsed_seconds": time.perf_counter() - started,
-        "sample": (run_dir / "sample.txt").read_text(),
-        "selection": "lowest measured validation loss among saved checkpoints",
-        "limits": "one seed; contiguous 90/10 split; no sealed test or broad capability claims",
-    }
-    (run_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-    return report

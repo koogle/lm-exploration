@@ -21,7 +21,7 @@ def find_prepared_snapshot(folder, recipe, target_tokens):
     for path in sorted((folder / "snapshots").glob("*/manifest.json")):
         manifest = json.loads(path.read_text())
         if (
-            manifest.get("format") != "scholarly-raw-v1"
+            manifest.get("format") not in ("raw-text-v1", "scholarly-raw-v1")
             or manifest.get("staging_identity") != expected
             or manifest.get("tokenizer_sha256") != TOKENIZER_SHA256
             or manifest.get("max_passes") != 2
