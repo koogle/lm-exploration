@@ -122,11 +122,19 @@ vllm serve /path/to/step-000001000-hf --dtype float32 --max-model-len 256
 
 The bounded L4 qualification checks greedy tokens and log probabilities on five
 code prompts using vLLM 0.11.0. Its Llama backend supports both attention and MLP
-biases. The script is implemented; GPU results are recorded separately when run.
+biases. The [L4 GPU check passed](results/vllm-parity-20261021.json): all five greedy
+tokens matched, with maximum log-probability error 1.16e-5.
 For evaluation use raw completion prompts, exactly one BOS, identical prompt
 IDs, temperature, stop IDs and context truncation. Do not silently apply a chat
 template. A serving endpoint alone does not establish harness parity; expanded
 coding evaluation and BF16 parity remain follow-up qualification.
+
+## Measured first pilot
+
+The [first report](results/pilot-20261021.md) records 261,907 trained tokens at
+1,711 tokens/sec on one L40S. Held-out CE worsened from 1.2724 to 1.3782; this
+recipe has not earned a 5B launch. The actual checkpoint and negative result are
+preserved.
 
 ## Before scaling to 5B
 

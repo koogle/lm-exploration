@@ -1,0 +1,8 @@
+{
+  "max_abs_logit_error": 2.5510787963867188e-05,
+  "vllm_version": "0.11.0",
+  "prompts": 5,
+  "max_logprob_error": 1.1593103408813477e-05,
+  "export": "/distill/qwen4b-byte-pilot-20261021-02/step-000001000-hf",
+  "dtype": "float32"
+}
