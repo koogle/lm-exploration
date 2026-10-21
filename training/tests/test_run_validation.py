@@ -1,38 +1,21 @@
 import unittest
+from unittest.mock import patch
 
 from trainer.distributed_config import DistributedConfig
 from trainer.distributed_train import train
-from trainer.run_validation import validate_run, validate_small_5b_run
+from trainer.run_validation import validate_small_5b_run
 
 
 class RunValidationTests(unittest.TestCase):
-    def test_generic_run_has_no_architecture_or_nonpilot_budget_allowlist(self):
-        for allow_unreviewed in (False, True):
-            config = DistributedConfig(
-                n_layer=4,
-                n_head=4,
-                n_embd=256,
-                target_tokens=30_000_000_000,
-                allow_unreviewed_data=allow_unreviewed,
-            )
-            validate_run(config)
-
-    def test_pilot_limit_is_a_run_policy(self):
-        validate_run(
-            DistributedConfig(
-                pilot=True,
-                target_tokens=5_000_000,
-                warmup_tokens=100_000,
-            )
-        )
+    def test_large_pilot_reaches_runtime_validation_without_a_token_ceiling(self):
         config = DistributedConfig(
-            pilot=True,
-            target_tokens=5_000_001,
-            warmup_tokens=100_000,
+            pilot=True, target_tokens=30_000_000_000, allow_unreviewed_data=True
         )
-        with self.assertRaisesRegex(ValueError, "Pilot runs"):
-            validate_run(config)
-        with self.assertRaisesRegex(ValueError, "Pilot runs"):
+        # Deliberately reject a mismatched runtime before touching CUDA or files.
+        with (
+            patch.dict("os.environ", {"LOCAL_RANK": "0", "WORLD_SIZE": "1"}),
+            self.assertRaisesRegex(ValueError, "torchrun world size differs"),
+        ):
             train(config, "missing-manifest", "missing-output")
 
     def test_small_workflow_accepts_its_recipe_without_requiring_unreviewed_data(self):
