@@ -5,7 +5,7 @@ Run from training/ (see sft/README.md for the recipe format):
         [--run-id <fresh-id>] [--parent <run/step-N.pt>] [--dataset <jsonl> | --data-id <id>] \
         [--resume <run/step-N.pt>] [--output <result.json>]
     modal run -m modal_scripts.modal_sft_train::qualify --recipe <recipe.json> \
-        --run-prefix <fresh-prefix> [--steps 2]
+        --run-prefix <fresh-prefix> [--steps 2] [same --parent/--dataset/--data-id/--resume]
 
 Each launch makes one training call (qualification: three sequential calls) with no retries
 and a six-hour function timeout. The launcher records a deadline 24 hours after launch; a call
@@ -174,7 +174,16 @@ def main(
 
 
 @app.local_entrypoint()
-def qualify(recipe: str, run_prefix: str, steps: int = 2, output: str = ""):
+def qualify(
+    recipe: str,
+    run_prefix: str,
+    steps: int = 2,
+    parent: str = "",
+    dataset: str = "",
+    data_id: str = "",
+    resume: str = "",
+    output: str = "",
+):
     """Compare an uninterrupted run with stop-at-(steps-1), fresh-container restore, continue.
 
     A recipe with `resume` and `extend` qualifies an extension from that checkpoint; set
@@ -182,7 +191,7 @@ def qualify(recipe: str, run_prefix: str, steps: int = 2, output: str = ""):
     """
     from trainer.sft_recipe import load_recipe, run_id
 
-    spec = load_recipe(recipe)
+    spec = load_recipe(recipe, "", parent, dataset, data_id, resume)
     run_id(run_prefix + "-resume", "run_prefix")
     if steps < 2:
         raise ValueError("Qualification needs at least two steps")
