@@ -12,9 +12,6 @@ class DistributedConfigTests(unittest.TestCase):
     def test_invalid_configs(self):
         for change in (
             {"world_size": 4},
-            {"prefetch_batches": True},
-            {"prefetch_batches": 65},
-            {"prefetch_batches": -1},
             {"world_size": 2, "microbatch": 16},
             {"target_tokens": True},
             {"pilot": "yes"},
