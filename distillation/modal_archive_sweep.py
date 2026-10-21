@@ -23,7 +23,9 @@ ROOT = "python-distillation-500m-20261021-01"
 def archive_stopped_sweep():
     import hashlib
     import json
+    import shutil
     import tarfile
+    from concurrent.futures import ThreadPoolExecutor
     from datetime import UTC, datetime
     from pathlib import Path
 
@@ -60,15 +62,30 @@ def archive_stopped_sweep():
     for worker in range(4):
         folder = root / f"producer-{worker}"
         progress = json.loads((folder / "progress.json").read_text())
-        for chunk in progress["chunks"]:
-            if sha(folder / chunk["file"]) != chunk["sha256"]:
-                raise ValueError(f"Corrupt source shard: {worker}/{chunk['file']}")
+        stage = Path("/tmp/sweep-archive") / folder.name
+        stage.mkdir(parents=True, exist_ok=True)
+        expected = {chunk["file"]: chunk["sha256"] for chunk in progress["chunks"]}
+
+        def copy_verified(
+            source, folder=folder, stage=stage, expected=expected, worker=worker
+        ):
+            relative = source.relative_to(folder)
+            target = stage / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+            if str(relative) in expected and sha(target) != expected[str(relative)]:
+                raise ValueError(f"Corrupt source shard: {worker}/{relative}")
+
+        # Parallel staging avoids thousands of serial remote-volume reads.
+        with ThreadPoolExecutor(max_workers=32) as pool:
+            list(pool.map(copy_verified, [p for p in folder.rglob("*") if p.is_file()]))
         index["producers"][folder.name] = {
             k: v for k, v in progress.items() if k != "chunks"
         }
         path = output / f"{folder.name}.tar"
         with tarfile.open(path, "w") as tar:
-            tar.add(folder, arcname=folder.name)
+            tar.add(stage, arcname=folder.name)
+        shutil.rmtree(stage)
         descriptor = {
             "path": path.name,
             "bytes": path.stat().st_size,
