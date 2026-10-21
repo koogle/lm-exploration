@@ -49,8 +49,8 @@ def publish_checkpoint(run_id, checkpoint):
     from huggingface_hub import HfApi
     from training_data.subword import digest
 
-    from distributed_training.train import atomic_json
     from trainer.hub_checkpoint import export_checkpoint
+    from trainer.loop import atomic_json
 
     path = refresh_checkpoint(run_id, checkpoint)
     api = HfApi()
@@ -131,7 +131,7 @@ def watch(run_id):
     """Chain 45-minute CPU watchers while preparation/training proceeds elsewhere."""
     from huggingface_hub import HfApi
 
-    from distributed_training.train import atomic_json
+    from trainer.loop import atomic_json
 
     checked_checkpoint(run_id, run_id + "-s00/step-000000002.pt")
     run_volume.reload()

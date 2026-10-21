@@ -81,7 +81,7 @@ def prepare_partition(folder, exclusions, identity, worker, workers, target, com
     import pyarrow.parquet as pq
     from huggingface_hub import hf_hub_download
 
-    from distributed_training.train import atomic_json
+    from trainer.loop import atomic_json
 
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)

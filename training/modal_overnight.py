@@ -7,7 +7,7 @@ from pathlib import Path
 
 import modal
 
-from distributed_training.modal_train import validate_paths, worker
+from distributed.modal_train import validate_paths, worker
 from modal_eu_continuation import data_volume, run_volume
 
 image = (
@@ -27,7 +27,8 @@ image = (
     .add_local_dir("100m", "/project/model_100m")
     .add_local_dir("10m", "/project/model_10m")
     .add_local_dir("trainer", "/project/trainer")
-    .add_local_dir("distributed_training", "/project/distributed_training")
+    .add_local_dir("distributed", "/project/distributed")
+    .add_local_dir("workflows", "/project/workflows")
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer")
     .add_local_dir("tests", "/project/tests")
@@ -49,6 +50,7 @@ PARENT = "simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt"
 SNAPSHOT = VERSION + "/snapshots/code60-onepass-10b"
 TARGET = 10_000_000_000
 SETTINGS = {
+    "data_loader": "raw",
     "world_size": 8,
     "global_windows": 32,
     "microbatch": 2,
@@ -71,7 +73,7 @@ SETTINGS = {
 
 
 def mark(run_id, stage, **details):
-    from distributed_training.train import atomic_json
+    from trainer.loop import atomic_json
 
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -95,8 +97,8 @@ def prepare_original():
     from training_data.original_refresh import fork_original
     from training_data.overnight_snapshot import weights_from
 
-    from distributed_training.train import atomic_json
     from trainer.continued_pretraining import token_targets
+    from trainer.loop import atomic_json
 
     class Refresh(FreshRawCorpus):
         def report(self, target):
@@ -314,9 +316,9 @@ def start_prepared_run(run_id, provenance):
 def initialize(run_id):
     import torch
 
-    from distributed_training.config import DistributedConfig
-    from distributed_training.run_validation import validate_overnight_run
+    from distributed.config import DistributedConfig
     from trainer.continued_pretraining import migrate_phase
+    from workflows.overnight import validate_overnight_run
 
     config = DistributedConfig(**SETTINGS, target_tokens=TARGET)
     validate_overnight_run(config)
@@ -353,8 +355,8 @@ def initialize(run_id):
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def segment(run_id, provenance, resume, max_steps=None):
-    from distributed_training.config import DistributedConfig
-    from distributed_training.run_validation import validate_overnight_run
+    from distributed.config import DistributedConfig
+    from workflows.overnight import validate_overnight_run
 
     config = DistributedConfig(**SETTINGS, target_tokens=TARGET)
     validate_overnight_run(config)
@@ -370,6 +372,7 @@ def segment(run_id, provenance, resume, max_steps=None):
         resume,
         18000,
         max_steps,
+        dataset_root="scholarly-code",
     )
 
 
@@ -559,7 +562,7 @@ def finish(run_id, checkpoint):
 
     from huggingface_hub import HfApi, hf_hub_download
 
-    from distributed_training.train import atomic_json
+    from trainer.loop import atomic_json
 
     folder = Path("/runs") / run_id
     results = {}

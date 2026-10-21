@@ -75,7 +75,7 @@ def prepare_code(
     import pyarrow.parquet as pq
     from huggingface_hub import HfApi, hf_hub_download
 
-    from distributed_training.train import atomic_json
+    from trainer.loop import atomic_json
 
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
