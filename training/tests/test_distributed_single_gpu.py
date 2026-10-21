@@ -67,6 +67,7 @@ class SingleRankParityTests(unittest.TestCase):
 class TrainingMathTests(unittest.TestCase):
     def test_optimizer_uses_nondefault_recipe_after_json_roundtrip(self):
         config = DistributedConfig(
+            optimizer="adamw",
             adam_beta1=0.8,
             adam_beta2=0.99,
             peak_lr=0.002,

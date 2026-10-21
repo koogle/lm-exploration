@@ -30,10 +30,12 @@ def source_hashes():
     import training_data.token_stream
 
     import distributed.config
+    import trainer.optimizers
 
     paths = {
         "trainer": Path(__file__),
         "config": Path(distributed.config.__file__),
+        "optimizer": Path(trainer.optimizers.__file__),
         "model": Path(model_100m.model.__file__),
         **{name: Path(path) for name, path in model_100m.model.MODEL_DEPENDENCIES.items()},
         "loader": Path(training_data.token_stream.__file__),
@@ -70,15 +72,9 @@ def validation_blocks(data, windows_per_source):
 
 
 def make_optimizer(model, config, *, fused=True):
-    import torch
+    from trainer.optimizers import make_optimizer as create_optimizer
 
-    return torch.optim.AdamW(
-        model.parameters(),
-        lr=config.peak_lr,
-        betas=(config.adam_beta1, config.adam_beta2),
-        weight_decay=config.weight_decay,
-        fused=fused,
-    )
+    return create_optimizer(model, config, fused=fused)
 
 
 def evaluate_sources(model, heldout, *, device="cuda", bf16=True):
@@ -289,6 +285,8 @@ def train(
             gradient_as_bucket_view=True,
             broadcast_buffers=False,
         )
+        from trainer.optimizers import set_learning_rate
+
         optimizer = make_optimizer(model, config)
         metadata = {
             "format": "scholarly-ddp-v1",
@@ -475,8 +473,7 @@ def train(
             dist.scatter(x, list(full_x.chunk(world)) if rank == 0 else None, src=0)
             dist.scatter(y, list(full_y.chunk(world)) if rank == 0 else None, src=0)
             lr = config.learning_rate(tokens + count)
-            for group in optimizer.param_groups:
-                group["lr"] = lr
+            set_learning_rate(optimizer, lr)
             optimizer.zero_grad(set_to_none=True)
             torch.cuda.synchronize()
             compute_tick = time.monotonic()
@@ -522,6 +519,7 @@ def train(
                 "loss_tokens": count,
                 "loss": float(total_loss) / count,
                 "lr": lr,
+                "optimizer_lrs": [g["lr"] for g in optimizer.param_groups],
                 "gradient_norm": float(norm),
                 "seconds": duration,
                 "nonpadding_tokens_per_second": count / duration,

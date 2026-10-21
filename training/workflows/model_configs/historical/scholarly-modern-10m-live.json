@@ -1,4 +1,5 @@
 {
+  "optimizer": "adamw",
   "data_loader": "live",
   "world_size": 3,
   "global_windows": 48,

@@ -17,6 +17,9 @@ class DistributedConfig:
     context: int = 2048
     target_tokens: int = 20_000_000_000
     warmup_tokens: int = 20_000_000
+    optimizer: str = "muon"
+    muon_lr: float = 0.02
+    muon_momentum: float = 0.95
     peak_lr: float = 3e-4
     min_lr_ratio: float = 0.1
     weight_decay: float = 0.1
@@ -77,7 +80,11 @@ class DistributedConfig:
             raise ValueError("RoPE requires an even integral head dimension")
         if self.warmup_tokens >= self.target_tokens:
             raise ValueError("Warmup must end before the token target")
+        if self.optimizer not in ("adamw", "muon"):
+            raise ValueError("optimizer must be adamw or muon")
         for name in (
+            "muon_lr",
+            "muon_momentum",
             "peak_lr",
             "min_lr_ratio",
             "weight_decay",
@@ -94,6 +101,8 @@ class DistributedConfig:
                 raise ValueError(f"Invalid {name}")
         if self.peak_lr <= 0 or not 0 <= self.min_lr_ratio <= 1 or self.weight_decay < 0:
             raise ValueError("Invalid optimizer settings")
+        if self.muon_lr <= 0 or not 0 <= self.muon_momentum < 1:
+            raise ValueError("Invalid Muon settings")
         if not 0 <= self.adam_beta1 < 1 or not 0 <= self.adam_beta2 < 1:
             raise ValueError("Adam betas must be in [0, 1)")
         if self.gradient_clip_norm <= 0:
