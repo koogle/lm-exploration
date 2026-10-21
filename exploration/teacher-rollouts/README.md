@@ -4,8 +4,7 @@ Separate experiment for distillation data from **Qwen/Qwen3.5-9B**. No student
 training, pretraining-plan changes or large generation campaign. Includes a
 [Qwen3.5-9B CUDA megakernel](megakernel/) and a separate continuously batched vLLM
 baseline. **The CUDA port compiles and passes its H100 correctness smoke gate.**
-The dated implementation/status report (runtime inspection, prior-research
-reverification, profiling decision rule) is archived on HF; see
+The initial pre-GPU runtime/research inspection report is archived on HF; see
 [Findings so far](#findings-so-far).
 
 Run all commands from `exploration/teacher-rollouts/`:
@@ -125,8 +124,13 @@ in the private HF dataset `jfrick/lm-exploration-results`.
   Download/loading took 79.84 s; total probe time including both backends and
   correctness was 123.24 s (estimated GPU compute $0.1352; actual bill unknown).
   Peak PyTorch allocated memory was 18.21 GB, not peak whole-device memory.
-- The vLLM concurrency sweep is in progress; batched cost and bottleneck findings
-  remain pending. Detailed smoke results, raw outputs, manifests and prior launch
+- **The vLLM sweep and bottleneck profile remain incomplete.** Image import did
+  not complete before a workspace connection failure terminated the first
+  launcher. A retry shared that unfinished build and failed when cleanup stopped
+  the original app. Neither attempt submitted a GPU worker. Negative evidence is
+  archived in HF folders `baseline-20261022-v1` and `baseline-20261022-v2`.
+  Complete this baseline before claiming aggregate rollout improvements.
+- Detailed smoke results, raw outputs, manifests and prior launch
   failures are byte-verified in HF folder
   [`kernel-9b-20261022-v3`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-36/exploration/teacher-rollouts/kernel-9b-20261022-v3).
 - Runtime: vLLM 0.32.0 (`5df63a7`) chosen from source inspection (Qwen3.5
