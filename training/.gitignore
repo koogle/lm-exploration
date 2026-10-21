@@ -8,3 +8,8 @@ __pycache__/
 /*.egg-info/
 /build/
 /dist/
+# Detailed parent-level tokenizer measurements remain on the Modal results volume.
+# Commit generated compact measurements, reports and figures instead.
+/results/tokenizer-learning-curve/*/*mib-*.json
+# Downloaded and newly generated experiment artifacts belong on HF datasets.
+/artifacts/

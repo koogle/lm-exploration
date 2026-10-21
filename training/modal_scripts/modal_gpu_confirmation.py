@@ -105,7 +105,7 @@ def main(run_id: str = "simple-llm-124m-h100-confirmation-20261017-01"):
 
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
         raise ValueError("Invalid run ID")
-    Path("results").mkdir(exist_ok=True)
+    Path("artifacts/results").mkdir(parents=True, exist_ok=True)
     files = [
         Path("modal_scripts/modal_gpu_confirmation.py"),
         *Path("distributed").glob("*.py"),
@@ -128,4 +128,6 @@ def main(run_id: str = "simple-llm-124m-h100-confirmation-20261017-01"):
     }
     for world, call in calls.items():
         report = call.get()
-        Path(f"results/{run_id}-H100x{world}.json").write_text(json.dumps(report, indent=2) + "\n")
+        Path(f"artifacts/results/{run_id}-H100x{world}.json").write_text(
+            json.dumps(report, indent=2) + "\n"
+        )

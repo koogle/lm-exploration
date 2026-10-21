@@ -137,7 +137,7 @@ def main(
         raise ValueError("GPUs must be a comma-separated subset of H100,L40S,A10G")
     if not 1 <= sustained_steps <= 100:
         raise ValueError("Sustained steps must be in 1..100 for the bounded pilot buffer")
-    Path("results").mkdir(exist_ok=True)
+    Path("artifacts/results").mkdir(parents=True, exist_ok=True)
     files = [
         Path("modal_scripts/modal_multi_gpu_benchmark.py"),
         *Path("distributed").glob("*.py"),
@@ -161,7 +161,7 @@ def main(
     for (gpu, world), call in calls.items():
         try:
             result = call.get()
-            Path(f"results/{run_id}-{gpu}x{world}.json").write_text(
+            Path(f"artifacts/results/{run_id}-{gpu}x{world}.json").write_text(
                 json.dumps(result, indent=2) + "\n"
             )
         except Exception as exc:  # noqa: BLE001 -- retain results from independent remote trials

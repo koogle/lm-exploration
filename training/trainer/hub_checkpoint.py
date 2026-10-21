@@ -57,7 +57,7 @@ def export_checkpoint(checkpoint, output, source, run_id):
     shutil.copytree(source / "tokenizer", output / "tokenizer", dirs_exist_ok=True)
     shutil.copyfile(source / "data-manifest.json", output / "data-manifest.json")
     shutil.copyfile(
-        Path(__file__).resolve().parents[1] / "publication/generate_legacy.py",
+        Path(__file__).resolve().parents[1] / "publication/generate_checkpoint_archive.py",
         output / "generate.py",
     )
     (output / "config.json").write_text(json.dumps(cfg, indent=2) + "\n")

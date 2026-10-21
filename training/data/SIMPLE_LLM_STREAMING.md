@@ -181,7 +181,7 @@ the next milestones; these preparation tools do not imply they are complete.
 
 ## Measured local smoke result — 2026-10-16
 
-The [retained report](../results/simple-llm-streaming-smoke-2026-10-16.json)
+The [retained report](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-streaming-smoke-2026-10-16.json)
 records a live run against all 12 pinned upstream sources: 32 records each, with
 LibreTexts continued to 160 records to reach a training parent. The exported
 sample contains 7,066,054 training loss tokens and 999,253 validation loss tokens.

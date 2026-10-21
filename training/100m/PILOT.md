@@ -38,7 +38,7 @@ The GPU worker verifies tiny-set fitting, then reloads the actual step-10
 checkpoint and checks identical next-batch IDs, labels and logits. Checkpoints
 include optimizer/RNG/data state, source hashes, model settings, token counts and
 manifest/tokenizer identities. Checkpoints and logs use fresh paths on
-`lm-exploration-training/<run-id>/`; the final report is also copied to `results/`.
+`lm-exploration-training/<run-id>/`; the final report is also copied to the ignored `artifacts/results/`.
 This pilot checkpoint format is separate from the character-only `lm-generate`
 format. Cross-job resume and generation CLI integration remain future work.
 
@@ -61,7 +61,7 @@ proxy settings and TLS verification enabled.
 
 ## First measured run
 
-[The 2026-10-16 report](../results/simple-llm-124m-pilot-20261016-01.md) records
+[The 2026-10-16 report](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-124m-pilot-20261016-01.md) records
 600 updates / 4,078,340 tokens, weighted pilot validation loss 10.5811 → 6.0272,
 23 passing qualification tests, and a successful checkpoint/data reload.
 The final checkpoint is `lm-exploration-training/simple-llm-124m-pilot-20261016-01/step-000600.pt`.

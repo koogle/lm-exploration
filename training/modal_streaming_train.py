@@ -12,27 +12,13 @@ from pathlib import Path
 
 import modal
 
-image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .pip_install(
-        "torch==2.6.0",
-        "numpy",
-        "pydantic>=2.11,<3",
-        "tokenizers==0.22.2",
-        "requests==2.34.2",
-        "pyarrow==26.0.0",
-        "huggingface-hub==1.33.0",
-    )
-    .env({"PYTHONPATH": "/project", "RAYON_NUM_THREADS": "8"})
-    .add_local_dir("100m", "/project/model_100m")
-    .add_local_dir("10m", "/project/model_10m")
-    .add_local_dir("trainer", "/project/trainer")
-    .add_local_dir("distributed", "/project/distributed")
-    .add_local_dir("workflows", "/project/workflows")
-    .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
-    .add_local_dir("tokenizer", "/project/tokenizer")
-    .add_local_dir("tests", "/project/tests")
-    .add_local_file("generate.py", "/project/generate.py")
+from distributed.image import project_image
+
+image = project_image(
+    "requests==2.34.2",
+    "pyarrow==26.0.0",
+    "huggingface-hub==1.33.0",
+    env={"RAYON_NUM_THREADS": "8"},
 )
 app = modal.App("lm-exploration-overlapped-training")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -133,5 +119,6 @@ def main(
     report = worker.with_options(gpu=f"{gpu}:{cfg.world_size}", cpu=4 * cfg.world_size).remote(
         run_id, snapshot, cfg.as_dict(), provenance, resume, max_steps or None, max_seconds
     )
-    Path(f"results/{run_id}.json").write_text(json.dumps(report, indent=2) + "\n")
+    Path("artifacts/results").mkdir(parents=True, exist_ok=True)
+    Path(f"artifacts/results/{run_id}.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
