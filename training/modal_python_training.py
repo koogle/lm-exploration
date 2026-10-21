@@ -430,6 +430,17 @@ def publish(checkpoint: str, evaluation_path: str):
     (output / "evaluation.json").write_text(json.dumps(current, indent=2))
     for capacity_file in ("capacity.json", "capacity.md"):
         shutil.copyfile(Path(SNAPSHOT) / capacity_file, output / capacity_file)
+    data_provenance = json.loads(
+        Path("/project/publication/python_data_provenance.json").read_text()
+    )
+    manifest = json.loads((output / "data-manifest.json").read_text())
+    capacity = json.loads((output / "capacity.json").read_text())
+    data_provenance.update(
+        corpus_database_sha256=manifest["database"]["sha256"],
+        tokenizer_sha256=manifest["tokenizer_sha256"],
+        capacity_by_origin=capacity["by_origin"],
+    )
+    (output / "data-provenance.json").write_text(json.dumps(data_provenance, indent=2))
     for file in ["qualification.json", "execution-harness.json"]:
         shutil.copyfile(Path("/runs", RUN, file), output / file)
     figure, axes = plt.subplots(2, 2, figsize=(12, 8))
@@ -515,7 +526,9 @@ Complete recent collected repository snapshots are preferred. Supplemental
 sources include pinned CodeParrot pools, Common Pile StackExchange, FineWeb-Edu,
 FineMath and public-domain Gutenberg material. All code allocations are Python.
 The capacity table and exact per-category targets are in `capacity.json` and
-`data-manifest.json`; one pass is preferred and two is the maximum.
+`data-manifest.json`; one pass is preferred and two is the maximum. Public source
+pins, aggregate collected-source capacity and filtering limitations are recorded
+in `data-provenance.json`.
 
 Repository/thread splits precede windows. Exact held-out hashes and repositories
 are excluded across sources. Exact deduplication and repository caps are applied;

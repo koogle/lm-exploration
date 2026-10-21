@@ -1,0 +1,28 @@
+{
+  "experiment": "python-124m-muon-5b",
+  "public_source_snapshots": [
+    {
+      "dataset": "codeparrot/codeparrot-clean-train",
+      "revision": "3e6ab65f2864931e041f6a82db9b5a6ec2b71ab4",
+      "representation": "complete Python files; dataset snapshot is pinned, individual upstream Git commits are not supplied"
+    },
+    {
+      "dataset": "common-pile/stackexchange",
+      "revision": "5ec3aa2e65b7c61b7c18f1ff18ccbc4d3279a23c",
+      "representation": "complete explanatory Python Stack Overflow threads with per-record CC-BY-SA attribution"
+    }
+  ],
+  "collected_repositories": "Complete pinned Git blobs from the user's collected snapshots; prefer recent snapshots and consume retained collected files first within each category. Repository identities, commits and notices remain in the private ledger.",
+  "existing_source_pools": "Pinned prepared CodeParrot, FineWeb-Edu, FineMath, Gutenberg and programming-documentation pools. Original database hashes, upstream record metadata and license evidence remain in the private ledger.",
+  "filters": [
+    "Exclusive implementation, tests/examples, Python documentation and supporting-text categories",
+    "Exclude vendored, generated, minified, boilerplate-heavy and malformed files; preserve accepted text unchanged",
+    "Python 3.12 AST validation; newer syntax can be conservatively excluded",
+    "Exact file/document deduplication across sources; near clones can remain",
+    "Per-repository/category cap of 1 percent of that category's training budget",
+    "Repository/thread holdouts before window construction; cross-source heldout repository and exact document-hash exclusions",
+    "Exclude exact MBPP reference hashes; no exhaustive benchmark-contamination claim"
+  ],
+  "token_accounting": "Nonpadding next-token labels, including each document's EOS target. Existing frozen tokenizer; exact six-category budgets; prefer one pass, never exceed two.",
+  "limitations": "Supplemental code and technical Q&A include older material. Heuristic filters and upstream licensing metadata are imperfect. Detailed provenance is retained privately; this file contains only aggregate and public-source information."
+}
