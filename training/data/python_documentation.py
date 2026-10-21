@@ -16,6 +16,13 @@ OTHER_CODE = re.compile(
 LICENSES = {f"https://creativecommons.org/licenses/by-sa/{v}/" for v in ["2.5", "3.0", "4.0"]}
 
 
+def python2_specific(text):
+    title = text.splitlines()[0]
+    return bool(re.search(r"\bpython\s*2(?:\.\d+)?\b", title, re.IGNORECASE)) and not bool(
+        re.search(r"\bpython\s*3(?:\.\d+)?\b", title, re.IGNORECASE)
+    )
+
+
 def select_document(record):
     """Keep whole explanatory threads; never treat a name as a quality guarantee."""
     if not isinstance(record, dict):
@@ -25,6 +32,8 @@ def select_document(record):
         return None, "malformed_record"
     if not 800 <= len(text) <= 60_000 or "\x00" in text:
         return None, "length_or_encoding"
+    if python2_specific(text):
+        return None, "python2_specific_documentation"
     if not TOPIC.search(text.splitlines()[0]) or not PYTHON_CODE.search(text):
         return None, "not_python_instruction"
     if OTHER_CODE.search(text):

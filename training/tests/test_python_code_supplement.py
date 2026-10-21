@@ -10,6 +10,15 @@ TEXT = '# Preserve this implementation comment.\ndef add(a, b):\n    """Add two 
 
 
 class CodeSupplementTests(unittest.TestCase):
+    def test_observed_placeholder_scaffold_is_excluded(self):
+        row = {
+            "repo_name": "org/repo",
+            "path": "tests/test_cli.py",
+            "license": "mit",
+            "content": TEXT + "\n# Sample pytest fixture.\n# Sample pytest test function.\n",
+        }
+        self.assertEqual(select_document(row)[1], "placeholder_test_scaffold")
+
     def test_file_category_license_and_malformed_fields(self):
         row = {
             "repo_name": "org/repo",

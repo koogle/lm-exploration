@@ -47,6 +47,22 @@ GENERATED = re.compile(
 )
 
 
+def placeholder_scaffold(text):
+    """Recognize observed, unmodified cookiecutter test placeholders."""
+    lower = text.lower()
+    return (
+        sum(
+            marker in lower
+            for marker in (
+                "sample pytest fixture",
+                "sample pytest test function",
+                "cookiecutter-pypackage",
+            )
+        )
+        >= 2
+    )
+
+
 def cache_database(source, root=Path("/tmp/python-supplement-cache")):
     """Pin an unchanged source locally to avoid remote random-page reads."""
     from .subword import digest
@@ -108,6 +124,8 @@ def category(path, text, python_repo=False):
         return None, "malformed_or_size"
     if GENERATED.search(text[:2000]):
         return None, "generated"
+    if placeholder_scaffold(text):
+        return None, "placeholder_test_scaffold"
     lines = [s.strip() for s in text.splitlines() if s.strip()]
     if not lines or max(map(len, lines)) > 2000:
         return None, "minified_or_long_line"

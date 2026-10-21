@@ -26,6 +26,15 @@ class DocumentationTests(unittest.TestCase):
             },
         }
 
+    def test_python2_specific_howto_is_excluded_but_comparison_is_allowed(self):
+        row = self.record()
+        row["text"] = row["text"].replace(
+            "How to write a Python iterator?", "How to write an iterator in Python 2.7?"
+        )
+        self.assertEqual(select_document(row)[1], "python2_specific_documentation")
+        row["text"] = row["text"].replace("Python 2.7?", "Python 2.7 versus Python 3?")
+        self.assertIsNone(select_document(row)[1])
+
     def test_complete_text_and_attribution(self):
         r = self.record()
         selected, reason = select_document(r)

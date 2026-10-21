@@ -8,7 +8,8 @@ import sqlite3
 import zlib
 from pathlib import Path
 
-from .python_experiment import TARGETS, Corpus, split_for
+from .python_documentation import python2_specific
+from .python_experiment import TARGETS, Corpus, placeholder_scaffold, split_for
 from .subword import BOS_TOKEN_ID, EOS_TOKEN_ID, TOKENIZER_SHA256, digest
 
 
@@ -27,6 +28,10 @@ def merge_documentation(folder, documentation_root, commit=lambda: None):
             text = zlib.decompress(raw).decode("utf-8")
             if hashlib.sha256(text.encode()).hexdigest() != key:
                 raise ValueError("Documentation hash mismatch")
+            meta = json.loads(provenance)
+            if python2_specific(text):
+                corpus.reject("python2_specific_documentation")
+                continue
             referenced = set(
                 re.findall(r"https?://github\.com/([\w.-]+/[\w.-]+)", text, re.IGNORECASE)
             )
@@ -43,7 +48,7 @@ def merge_documentation(folder, documentation_root, commit=lambda: None):
                 text,
                 "python_documentation",
                 parent,
-                json.loads(provenance),
+                meta,
                 split=split,
                 verified_count=count,
             )
@@ -176,6 +181,9 @@ def merge_code(folder, supplemental_root, commit=lambda: None):
             text = zlib.decompress(raw).decode("utf-8")
             if hashlib.sha256(text.encode()).hexdigest() != key:
                 raise ValueError("Supplemental code hash mismatch")
+            if placeholder_scaffold(text):
+                corpus.reject("placeholder_test_scaffold")
+                continue
             corpus.add(
                 text, name, parent, json.loads(provenance), split=split, verified_count=count
             )
@@ -187,3 +195,22 @@ def merge_code(folder, supplemental_root, commit=lambda: None):
     corpus.db.close()
     commit()
     return result
+
+
+def exclude_existing_scaffolds(folder, commit=lambda: None):
+    corpus = Corpus(folder)
+    marker = "quality:placeholder_scaffolds_v1"
+    if not corpus.db.execute("SELECT 1 FROM completed WHERE name=?", (marker,)).fetchone():
+        rejected = [
+            (key,)
+            for key, raw in corpus.db.execute(
+                "SELECT hash,text FROM documents WHERE source IN ('python_implementation','python_tests_examples') AND conflict=0"
+            )
+            if placeholder_scaffold(zlib.decompress(raw).decode("utf-8"))
+        ]
+        corpus.db.executemany("UPDATE documents SET conflict=1 WHERE hash=?", rejected)
+        corpus.stats["placeholder_test_scaffold"] += len(rejected)
+        corpus.db.execute("INSERT INTO completed VALUES(?)", (marker,))
+        corpus.report("quality_exclusions_applied")
+        commit()
+    corpus.db.close()

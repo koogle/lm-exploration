@@ -30,7 +30,12 @@ image = (
     volumes={"/data": volume},
 )
 def finish():
-    from training_data.python_snapshot import freeze, merge_code, merge_documentation
+    from training_data.python_snapshot import (
+        exclude_existing_scaffolds,
+        freeze,
+        merge_code,
+        merge_documentation,
+    )
 
     volume.reload()
     from training_data.python_experiment import Corpus
@@ -47,6 +52,7 @@ def finish():
         )
     corpus.db.close()
     volume.commit()
+    exclude_existing_scaffolds(FOLDER, volume.commit)
     merge_code(FOLDER, "/data/python-code-supplement-20261021-v1", volume.commit)
     capacity = merge_documentation(FOLDER, DOCUMENTATION, volume.commit)
     if not capacity["capacity_sufficient"]:

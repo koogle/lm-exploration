@@ -168,3 +168,25 @@ costs approximately **$1.54/hour** at the retrieved public Modal CPU/memory rate
 excluding storage and other charges. Preparation through this report is estimated
 at **$2–5**, not a measured invoice. The bounded CPU workflow may continue to
 accrue charges after this snapshot. No 5B training runtime or measured cost exists.
+
+
+## Bounded accepted-record quality check, 2026-10-21
+
+Deterministic hash-ordered samples from one completed code shard and one completed
+documentation shard retained complete Python implementation/example/test files
+and explanatory threads. The check also found an unmodified cookiecutter pytest
+scaffold and a Python-2-specific how-to. Narrow filters now exclude observed
+placeholder-marker combinations and Python-2-specific titles (while retaining
+explicit Python-2/Python-3 comparisons). They apply at final merge, including to
+previously prepared code. Candidate counts precede these exclusions. Thirteen
+Python data tests pass, including both observed cases.
+
+Supplemental CodeParrot provenance pins the dataset revision and shard bytes;
+individual repository commit IDs and update dates are not available for those
+records. Collected Git snapshots retain their actual commit IDs/dates and remain
+first in training order. The checks are not a guarantee that every retained
+file or explanation is correct or current.
+
+The published Python generation script uses the evaluation suite's PAD/BOS/UNK
+suppression, EOS stopping and independent seeded sampling. Prior model publication
+scripts remain unchanged.

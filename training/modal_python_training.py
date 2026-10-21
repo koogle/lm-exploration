@@ -381,6 +381,7 @@ def publish(checkpoint: str, evaluation_path: str):
     output = Path("/tmp/python-publication")
     shutil.rmtree(output, ignore_errors=True)
     progress = export_checkpoint(checkpoint, output, Path(checkpoint).parent, RUN)
+    shutil.copyfile("/project/publication/generate_python.py", output / "generate.py")
     api = HfApi()
     try:
         api.repo_info(REPO)
