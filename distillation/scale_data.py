@@ -134,7 +134,9 @@ def atomic_json(path, value):
     temporary.replace(path)
 
 
-def generate(root, worker, commit, target=125_000_000):
+def generate(
+    root, worker, commit, target=125_000_000, token_kind="original", index_offset=0
+):
     import os
     import shutil
     import sqlite3
@@ -154,12 +156,17 @@ def generate(root, worker, commit, target=125_000_000):
             output / "source",
             ignore=shutil.ignore_patterns("__pycache__", "results"),
         )
+    if token_kind not in ("original", "qwen"):
+        raise ValueError("Invalid token counter")
     progress_file = output / "progress.json"
     state = (
         json.loads(progress_file.read_text())
         if progress_file.exists()
         else {
-            "next_index": 0,
+            "next_index": index_offset,
+            "index_offset": index_offset,
+            "token_kind": token_kind,
+            "qwen_tokens": 0,
             "chunks": [],
             "tokens": 0,
             "accepted_records": 0,
@@ -173,9 +180,15 @@ def generate(root, worker, commit, target=125_000_000):
             "verification": "syntax and format only; semantics and explanations unverified",
         }
     )
+    if (
+        state.get("token_kind", "original") != token_kind
+        or state.get("index_offset", 0) != index_offset
+    ):
+        raise ValueError("Generation provenance mismatch")
+    counter = "qwen_tokens" if token_kind == "qwen" else "tokens"
     if state["target"] != target:
         raise ValueError("Cannot change target on resume")
-    if state["tokens"] >= target:
+    if state[counter] >= target:
         return state
     frozen = load_frozen()
     qwen = AutoTokenizer.from_pretrained(TEACHER, revision=REVISION)
@@ -199,12 +212,12 @@ def generate(root, worker, commit, target=125_000_000):
         max_num_seqs=128,
         enforce_eager=True,
         enable_prefix_caching=True,
-        seed=42 + worker,
+        seed=42 + worker + index_offset,
     )
     params = SamplingParams(temperature=0.85, top_p=0.95, max_tokens=1024)
     started = time.monotonic()
     elapsed_before = state["generation_seconds"]
-    while state["tokens"] < target and time.monotonic() - started < 80000:
+    while state[counter] < target and time.monotonic() - started < 80000:
         prompts = [
             qwen.apply_chat_template(
                 [{"role": "user", "content": specification(worker, i)}],
@@ -218,6 +231,7 @@ def generate(root, worker, commit, target=125_000_000):
         chunk = len(state["chunks"])
         accepted, raw = [], []
         chunk_tokens = 0
+        chunk_qwen_tokens = 0
         for i, response in enumerate(responses):
             completion = response.outputs[0]
             index = state["next_index"] + i
@@ -252,12 +266,20 @@ def generate(root, worker, commit, target=125_000_000):
                 ).fetchone():
                     raise ValueError("Exact duplicate within producer")
                 ids = frozen.encode(text).ids + [2]
-                if state["tokens"] + chunk_tokens >= target:
-                    continue
-                # Final record is explicitly truncated only at the global token budget.
-                take = min(len(ids), target - state["tokens"] - chunk_tokens)
-                ids = ids[:take]
                 qids = student_tokenizer.encode(text, add_special_tokens=False) + [eos]
+                used = chunk_qwen_tokens if token_kind == "qwen" else chunk_tokens
+                remaining = target - state[counter] - used
+                if remaining <= 0:
+                    continue
+                truncated = False
+                if token_kind == "qwen":
+                    truncated = len(qids) > remaining
+                    if truncated:
+                        qids = qids[:remaining]
+                        qids[-1] = eos
+                else:
+                    truncated = len(ids) > remaining
+                    ids = ids[:remaining]
                 accepted.append(
                     {
                         "id": fingerprint,
@@ -266,11 +288,12 @@ def generate(root, worker, commit, target=125_000_000):
                         "text": text,
                         "ids": ids,
                         "qwen_ids": qids,
-                        "truncated_at_budget": take < len(frozen.encode(text).ids) + 1,
+                        "truncated_at_budget": truncated,
                     }
                 )
                 seen.execute("INSERT INTO records VALUES (?,?)", (fingerprint, chunk))
                 chunk_tokens += len(ids)
+                chunk_qwen_tokens += len(qids)
                 audit["accepted"] = True
             except (ValueError, TypeError, SyntaxError, KeyError):
                 state["rejected"] += 1
@@ -287,22 +310,24 @@ def generate(root, worker, commit, target=125_000_000):
             {
                 "file": filename,
                 "tokens": chunk_tokens,
+                "qwen_tokens": chunk_qwen_tokens,
                 "records": len(accepted),
                 "sha256": hashlib.sha256((output / filename).read_bytes()).hexdigest(),
             }
         )
         state["tokens"] += chunk_tokens
+        state["qwen_tokens"] = state.get("qwen_tokens", 0) + chunk_qwen_tokens
         state["accepted_records"] += len(accepted)
         state["next_index"] += 128
         state["generation_seconds"] = elapsed_before + time.monotonic() - started
-        state["status"] = "completed" if state["tokens"] == target else "running"
+        state["status"] = "completed" if state[counter] == target else "running"
         seen.commit()
         atomic_json(progress_file, state)
         commit()
         print(json.dumps({k: v for k, v in state.items() if k != "chunks"}), flush=True)
         if state["attempts"] >= 4096 and not state["tokens"]:
             raise ValueError("No usable generation output")
-    if state["tokens"] < target:
+    if state[counter] < target:
         state["status"] = "time_limit_resume_required"
         atomic_json(progress_file, state)
         commit()

@@ -8,13 +8,20 @@ from pathlib import Path
 
 from distillation.scale_data import atomic_json, available_chunks, read_chunk
 
+FRESH_CORPUS = "python-distillation-unique-qwen-20261021-01"
+
 LARGE_PARENT = "qwen4b-shared-50m-20261021-01/step-000007162.pt"
 
 
 class Stream:
-    def __init__(self, root, cursor=None, large=False, repeat=False):
+    def __init__(self, root, cursor=None, large=False, repeat=False, continuation=None):
         self.root, self.large = root, large
         self.chunks = available_chunks(root)
+        self.chunk_roots = [root] * len(self.chunks)
+        if continuation is not None and corpus_complete(root):
+            extra = available_chunks(continuation)
+            self.chunks.extend(extra)
+            self.chunk_roots.extend([continuation] * len(extra))
         self.cursor = dict(cursor or {"chunk": 0, "record": 0, "offset": 0})
         self.cache_index, self.cache = -1, None
         self.repeat = repeat
@@ -25,7 +32,7 @@ class Stream:
         while self.cursor["chunk"] < len(self.chunks):
             c = self.cursor["chunk"]
             if c != self.cache_index:
-                self.cache = read_chunk(self.root, self.chunks[c])
+                self.cache = read_chunk(self.chunk_roots[c], self.chunks[c])
                 self.cache_index = c
             r, offset = self.cursor["record"], self.cursor["offset"]
             if r >= len(self.cache):
@@ -137,7 +144,8 @@ def run(root, name, segment_tokens, commit):
             initialization=str(root / "existing-216m" / "latest.pt"),
             migration_tokens=4_500_000,
             migration_ramp_tokens=1_000_000,
-            repeat_completed_corpus=True,
+            repeat_completed_corpus=False,
+            continuation_corpus=FRESH_CORPUS,
         )
     if migrating:
         if saved["settings"]["tokenizer_sha256"] != tokenizer_hash:
@@ -151,8 +159,34 @@ def run(root, name, segment_tokens, commit):
                 "new_settings": settings,
             },
         )
+    policy_migration = False
     if saved and not migrating and saved["settings"] != settings:
-        raise ValueError("Resume configuration mismatch")
+        old_expected = dict(settings)
+        old_expected.pop("continuation_corpus", None)
+        old_expected["repeat_completed_corpus"] = True
+        if (
+            not extended
+            or saved["settings"] != old_expected
+            or saved["cursor"].get("pass", 0) != 0
+        ):
+            raise ValueError("Resume configuration mismatch or corpus already replayed")
+        policy_migration = True
+        atomic_json(
+            output / "unique-policy-migration.json",
+            {
+                "old_settings": saved["settings"],
+                "new_settings": settings,
+                "tokens": saved["tokens"],
+                "cursor": saved["cursor"],
+                "reason": "User requested fresh data instead of repeated passes",
+            },
+        )
+        shutil.copytree(
+            "/project/distillation",
+            output / "source-unique-policy",
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns("__pycache__", "results"),
+        )
     model = GPT(config)
     if saved or large:
         model.load_state_dict((saved or parent)["model"], strict=True)
@@ -166,7 +200,11 @@ def run(root, name, segment_tokens, commit):
     )
     tokens, step = (saved["tokens"], saved["step"]) if saved else (0, 0)
     stream = Stream(
-        root, saved["cursor"] if saved else None, large=large, repeat=extended
+        root,
+        saved["cursor"] if saved else None,
+        large=large,
+        repeat=False,
+        continuation=Path("/distill") / FRESH_CORPUS if extended else None,
     )
     first_pass_tokens = saved.get("first_pass_tokens", tokens) if saved else 0
     if saved:
@@ -315,7 +353,7 @@ def run(root, name, segment_tokens, commit):
     eval_interval = 10_000_000 if extended or not large else 1_000_000
     next_eval = ((tokens // eval_interval) + 1) * eval_interval
     last_checkpoint = tokens
-    if migrating:
+    if migrating or policy_migration:
         checkpoint()
     while tokens < stop and time.monotonic() - started < 72000:
         boundary = min(stop, next_eval)

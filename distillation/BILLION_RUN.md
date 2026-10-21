@@ -1,7 +1,8 @@
 # 215.9M shared-Qwen continuation to 4.5B tokens
 
 The corrected user target is **4,500,000,000 shared-Qwen-tokenizer training
-exposures**, including the completed 4,500,000-token update. This supersedes the
+targets from a single pass over freshly generated data**, including the completed
+4,500,000-token update. Dataset replay is disabled. This supersedes the
 large student's original target in [the historical sweep plan](SCALE_RUN.md).
 
 Launched 2026-10-21 on [Modal](https://modal.com/apps/radiantai/main/ap-7elUlhJSfXhz3tZEqgV2uD).
@@ -15,11 +16,13 @@ Run output on volume `lm-exploration-distillation`:
   record retains the old settings; the original checkpoint remains intact.
 - Continue consuming the newly generated Qwen3-8B Python/math problem, code and
   explanation corpus. Wait for more shards if the first pass catches generation.
-  Repeat the full corpus only after all four producers finish their 500M total
-  **original-tokenizer** token budget. That budget differs from the Qwen count.
+  After the initial 500M **original-tokenizer** corpus finishes, append shards
+  from `python-distillation-unique-qwen-20261021-01`. Never wrap to the start.
+  Appending only after the original corpus closes preserves its consumed order.
 - Count every loss-bearing Qwen target exactly, trimming the final batch to 4.5B.
   Checkpoints separately retain first-pass tokens and the zero-based corpus pass.
-  Repeated exposures are not unique examples or fresh teacher generation.
+  Corpus pass remains zero. The migration rejects a checkpoint already on a
+  repeated pass; the selected 21,639,566-token checkpoint had no replay.
 - All-token cross entropy sequence distillation, context 512, H100, BF16 autocast,
   AdamW with existing moments, batch four accumulated four times. No probability
   KL in this phase. Teacher code is syntax checked; semantics remain unverified.
@@ -35,25 +38,25 @@ Run output on volume `lm-exploration-distillation`:
   GPU workers exit when they exhaust available data; the CPU waits for new shards.
 
 This is about 20.84 training tokens per total parameter. It is **not a claim of
-Chinchilla optimality**: this is continued training, much of the budget repeats
-synthetic data, and the vocabulary embedding accounts for a large fraction of
+Chinchilla optimality**: this is continued training on synthetic data, and
+the vocabulary embedding accounts for a large fraction of
 parameters. Generalization must be judged on held-out execution tasks.
 
 Launch once from the repository root:
 
 ```sh
 modal deploy -m distillation.modal_billion
-python -c 'import modal; print(modal.Function.from_name("lm-distillation-215m-4p5b", "supervise").spawn().object_id)' 
+python -c 'import modal; print(modal.Function.from_name("lm-distillation-215m-4p5b", "supervise").spawn().object_id)'
 ```
 
 Inspect `supervisor.json` for running/waiting/failed state and active function
 call, `progress.json` for durable trained-token count, `metrics.jsonl` for updates,
 `validation.jsonl` and `generations-*.json` for diagnostics. The original 500M
-corpus and two small-student jobs continue under their existing supervisor.
+corpus and small-student jobs retain their separate configuration.
 
-Validation before launch: all 19 distillation tests passed, including exact
-partial-record resume, Qwen EOS alignment, no repetition of an unfinished
-corpus, and resume across a completed-corpus pass boundary. Ruff checks passed.
+Validation for the fresh-data policy: all 21 distillation tests passed, including
+exact partial-record resume, Qwen EOS alignment, stable append ordering and no
+replay after exhausting both corpora. Ruff checks passed.
 
 ## Supervisor recovery
 
@@ -64,3 +67,25 @@ The app was subsequently deployed and the supervisor spawned through its deploye
 function (`fc-01M5FN8X0CWRTD15M2EPVXGGCS`) to resume the existing checkpoint.
 Use the deployed launch above for persistent background work.
 Deployment: https://modal.com/apps/radiantai/main/deployed/lm-distillation-215m-4p5b
+
+## Fresh-data correction
+
+The user rejected the repeated-pass plan before any repeated pass occurred.
+The controller and worker were cancelled, then the 21,639,566-token checkpoint
+was migrated with optimizer, RNG, cursor and learning-rate schedule preserved.
+`unique-policy-migration.json` records the before/after settings on the volume;
+`source-unique-policy/` archives the new executable source. The new deployed
+supervisor call is `fc-01M5FNFQX6D5RBMMQQ2YW3VPGY`.
+
+Four additional H100 Qwen3-8B producers generate a continuation corpus. Each has
+an upper bound of 1.125B accepted **shared-Qwen** tokens, not original-tokenizer
+tokens. Prompt indices start at 100,000,000 and sampling seeds change, avoiding
+reuse of the first corpus's prompt sequence. The first corpus also counts toward
+the student's 4.5B target, so some generated tail can be unused. The supervisor
+cancels remaining continuation producers when the student reaches exactly 4.5B.
+It resumes producers at their committed cursors after cooperative time limits.
+
+Fresh means newly sampled records consumed once, not 4.5B distinct vocabulary
+items or a guarantee of semantic uniqueness. Exact full-record deduplication is
+within each producer; cross-producer and semantic duplicates remain possible.
+Generation still checks syntax rather than independently verifying correctness.

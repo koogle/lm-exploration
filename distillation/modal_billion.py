@@ -7,12 +7,64 @@ from pathlib import Path
 import modal
 
 from distillation.modal_app import image
+from distillation.modal_vllm import image as generation_image
 from distillation.modal_vllm import volume
+from distillation.scale_train import FRESH_CORPUS
 
 app = modal.App("lm-distillation-215m-4p5b", include_source=False)
 CORPUS = "python-distillation-500m-20261021-01"
 NAME = "shared-qwen-215m-4p5b"
 TARGET = 4_500_000_000
+
+
+@app.function(
+    image=generation_image,
+    gpu="H100",
+    cpu=8,
+    memory=32768,
+    timeout=86400,
+    retries=2,
+    max_containers=4,
+    volumes={"/distill": volume},
+)
+def fresh_producer(worker):
+    from distillation.scale_data import generate
+
+    # Upper bound: consumed old data also counts toward training's 4.5B target.
+    # Producers are stopped when training completes; unused tail is not replayed.
+    return generate(
+        Path("/distill") / FRESH_CORPUS,
+        worker,
+        volume.commit,
+        target=1_125_000_000,
+        token_kind="qwen",
+        index_offset=100_000_000,
+    )
+
+
+@app.function(
+    image=image, cpu=1, memory=2048, timeout=300, volumes={"/distill": volume}
+)
+def prepare_unique_policy():
+    """Run only after the old controller and training call are cancelled."""
+    from distillation.scale_data import atomic_json
+
+    output = Path("/distill") / CORPUS / NAME
+    path = output / "supervisor.json"
+    state = json.loads(path.read_text())
+    progress = json.loads((output / "progress.json").read_text())
+    if progress.get("corpus_pass", 0) != 0:
+        raise ValueError("Cannot claim a fresh-only continuation after replay")
+    state.update(
+        call_id=None,
+        progress=progress,
+        drained=False,
+        policy="Single pass over fresh generated data; never repeat",
+        continuation_corpus=FRESH_CORPUS,
+    )
+    atomic_json(path, state)
+    volume.commit()
+    return state
 
 
 @app.function(
@@ -56,14 +108,48 @@ def supervise():
             "call_id": None,
             "target": TARGET,
             "corpus": CORPUS,
-            "policy": "No validation early stopping; repeat only completed corpus",
+            "policy": "Single pass over fresh generated data; never repeat",
         }
     )
     call = modal.FunctionCall.from_id(state["call_id"]) if state["call_id"] else None
+    fresh_root = Path("/distill") / FRESH_CORPUS
+    generation = {
+        key: modal.FunctionCall.from_id(value)
+        for key, value in state.get("generation_calls", {}).items()
+    }
+    state["policy"] = "Single pass over fresh generated data; never repeat"
     started = time.monotonic()
     while time.monotonic() - started < 82000:
         volume.reload()
+        initial_complete = corpus_complete(root)
         ready = sum(chunk[2]["tokens"] for chunk in available_chunks(root))
+        fresh_ready = sum(
+            chunk[2]["qwen_tokens"] for chunk in available_chunks(fresh_root)
+        )
+        # A byte-stable original prefix must finish before appending fresh shards.
+        watermark = ready + (fresh_ready if initial_complete else 0)
+        for worker in range(4):
+            key = str(worker)
+            if key in generation:
+                try:
+                    result = generation[key].get(timeout=0)
+                except TimeoutError:
+                    continue
+                except Exception as error:
+                    state.update(status="failed", error=f"producer {worker}: {error}")
+                    atomic_json(state_path, state)
+                    volume.commit()
+                    raise
+                del generation[key]
+                if result["status"] == "completed":
+                    continue
+            path = fresh_root / f"producer-{worker}" / "progress.json"
+            if path.exists() and json.loads(path.read_text())["status"] == "completed":
+                continue
+            generation[key] = fresh_producer.spawn(worker)
+            state["generation_calls"] = {k: c.object_id for k, c in generation.items()}
+            atomic_json(state_path, state)
+            volume.commit()
         if call:
             try:
                 result = call.get(timeout=0)
@@ -78,6 +164,9 @@ def supervise():
                 state.update(progress=result, call_id=None)
                 call = None
                 if result["tokens"] == TARGET:
+                    for producer_call in generation.values():
+                        producer_call.cancel(terminate_containers=True)
+                    state["generation_calls"] = {}
                     state["status"] = "completed"
                     atomic_json(state_path, state)
                     volume.commit()
@@ -87,16 +176,23 @@ def supervise():
                 state["drained"] = result["tokens"] - state["start_tokens"] < 50_000_000
         if call is None and (
             not state.get("drained", False)
-            or ready - state["last_ready"] >= 10_000_000
-            or corpus_complete(root)
+            or watermark - state["last_ready"] >= 10_000_000
+            or (
+                initial_complete
+                and corpus_complete(fresh_root)
+                and not state.get("final_drain", False)
+            )
         ):
             state["start_tokens"] = state.get("progress", {}).get("tokens", 4_500_000)
-            state["last_ready"] = ready
+            state["last_ready"] = watermark
+            state["final_drain"] = initial_complete and corpus_complete(fresh_root)
             call = train.spawn()
             state["call_id"] = call.object_id
         state.update(
             status="running" if call else "waiting_for_corpus",
             ready_original_tokenizer_tokens=ready,
+            ready_fresh_qwen_tokens=fresh_ready,
+            generation_calls={k: c.object_id for k, c in generation.items()},
         )
         atomic_json(state_path, state)
         volume.commit()

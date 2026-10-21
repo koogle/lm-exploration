@@ -10,6 +10,60 @@ from distillation.scale_train import Stream
 
 
 class ScaleTests(unittest.TestCase):
+    def test_fresh_continuation_is_append_only_and_never_replayed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            first, second = Path(temporary) / "first", Path(temporary) / "second"
+            for root, value in ((first, 10), (second, 20)):
+                for worker in range(4):
+                    folder = root / f"producer-{worker}"
+                    folder.mkdir(parents=True)
+                    path = folder / "chunk.jsonl.gz"
+                    with gzip.open(path, "wt") as handle:
+                        handle.write(
+                            json.dumps({"qwen_ids": [value + worker, 151643]}) + "\n"
+                        )
+                    atomic_json(
+                        folder / "progress.json",
+                        {
+                            "status": "running" if root == first else "completed",
+                            "chunks": [
+                                {
+                                    "file": path.name,
+                                    "tokens": 2,
+                                    "sha256": hashlib.sha256(
+                                        path.read_bytes()
+                                    ).hexdigest(),
+                                }
+                            ],
+                        },
+                    )
+            stream = Stream(first, large=True, continuation=second)
+            targets = []
+            while (item := stream.next()) is not None:
+                targets.extend(item[1])
+            self.assertEqual(targets, [10, 151643, 11, 151643, 12, 151643, 13, 151643])
+            self.assertEqual(stream.cursor["chunk"], 4)
+            for worker in range(4):
+                path = first / f"producer-{worker}" / "progress.json"
+                state = json.loads(path.read_text())
+                state["status"] = "completed"
+                atomic_json(path, state)
+            resumed = Stream(first, stream.cursor, large=True, continuation=second)
+            self.assertEqual(resumed.next(1), ([151643], [20]))
+            resumed_again = Stream(
+                first, resumed.cursor, large=True, continuation=second
+            )
+            targets = []
+            while (item := resumed_again.next()) is not None:
+                targets.extend(item[1])
+            self.assertEqual(targets, [151643, 21, 151643, 22, 151643, 23, 151643])
+            self.assertIsNone(resumed_again.next())
+            self.assertIsNone(
+                Stream(
+                    first, resumed_again.cursor, large=True, continuation=second
+                ).next()
+            )
+
     def test_publication_preserves_consumed_prefix(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -3,7 +3,9 @@
 **Active scale-up:** the [500M-token sweep](SCALE_RUN.md) launches fresh synthetic
 generation, two 500M-token small-student runs, and a [4.5B-token continuation](BILLION_RUN.md) of
 the existing 215.9M shared-tokenizer model (corrected from the initial 4.5M
-request). Earlier sections retain pilot history.
+request). The large run now uses a single pass over newly generated data, with
+an expanded Qwen-counted continuation corpus; repeated passes are disabled.
+Earlier sections retain pilot history.
 
 For the next Python/math curriculum experiment, see the
 [scaling and token-budget plan](SCALING.md). It distinguishes from-scratch
