@@ -1,6 +1,44 @@
 # Code-focused 124M experiment with Muon
 
-Status: implementation and CPU corpus preparation in progress. The tested Muon implementation from PR #24 is integrated, stacked on #27. Modal and Hugging Face access have been verified. No GPU optimizer step or model publication is claimed for this experiment. See the execution record for measured status.
+Status: implementation and CPU corpus preparation in progress. The tested Muon implementation from PR #24 is integrated, stacked on #27. Modal and Hugging Face access have been verified. No GPU optimizer step or model publication is claimed for this experiment. See [Measured status](#measured-status-2026-10-21-0314-utc) below.
+
+## Measured status (2026-10-21 03:14 UTC)
+
+Corpus frozen; eight-H100 qualification queued (call `fc-01M5E6S46XR9X2H8CH7JWH1820`,
+controller `fc-01M5E6S52WN7SZ9C9B0CQSWX85`). No eight-GPU optimizer update, checkpoint
+or model publication yet.
+
+| Category | Target | Unique train targets | Required passes |
+|---|---:|---:|---:|
+| python_implementation | 3,250,000,000 | 3,344,840,434 | 0.972 |
+| python_tests_examples | 750,000,000 | 1,455,959,517 | 0.515 |
+| python_documentation | 500,000,000 | 638,756,689 | 0.783 |
+| cs_math | 250,000,000 | 255,001,393 | 0.980 |
+| general_education | 150,000,000 | 153,000,047 | 0.980 |
+| books | 100,000,000 | 102,061,503 | 0.980 |
+
+- Final corpus: 5,949,619,583 unique usable targets after filtering, global dedup and
+  validation exclusions; all categories `max_passes=1`. Collected Git snapshots
+  contribute 108,063,930 targets (31,016 files), consumed first. 192 fixed validation
+  windows from distinct held-out parents.
+- Acquisition: 53 code shards (5,742,078,521 candidate targets) and 95 documentation
+  shards (617,694,542) before global merge.
+- Negative results kept: the repository-only census gave only 109,455,272 targets;
+  a partial supplemental census left documentation at 29,876,984 vs the 250M two-pass
+  minimum; `codeparrot/github-jupyter-parsed` has at most 186,211,988 targets (upper
+  bound, not added); The Stack / StarCoderData probes returned `GatedRepoError`. The
+  first full-code preparation failed on a parser `MemoryError` (fixed, shards resumed).
+- Single-H100 124M diagnostic: tiny-set loss 10.464919 → 0.001435 in 21 updates,
+  greedy `return a + b`; logit agreement, causality, cached RoPE and Muon parameter
+  assignment passed. All 32 MBPP reference tasks and the isolation probe passed the
+  network-blocked sandbox harness. Partial Modal billing snapshot: USD 6.18 (not total).
+
+The dated execution record, capacity tables/JSON, frozen manifest, qualification,
+harness and billing evidence are archived in
+[`jfrick/lm-exploration-results` / `pr-30/training/results/python-124m-5b-20261020/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-30/training/results/python-124m-5b-20261020)
+(HF commit `b63cb65d6d3cc24f683355bf8771a70e586af93d`). The PR #24 Muon vs AdamW results
+this branch carried are archived once under
+[`pr-24/training/results/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-24/training/results).
 
 ## Objective and evidence
 

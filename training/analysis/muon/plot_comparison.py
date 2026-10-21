@@ -1,5 +1,14 @@
-"""Rebuild the matched-token validation plot from retained diagnostic records."""
+"""Rebuild the matched-token validation plot from retained diagnostic records.
 
+The validation JSONL inputs are archived in the HF dataset
+`jfrick/lm-exploration-results` under `pr-24/training/results/`. Download them into
+an ignored local folder and pass it explicitly, e.g. from `training/`:
+
+    uv run --with matplotlib python analysis/muon/plot_comparison.py \
+      --input-dir artifacts/pr-24/results --output artifacts/pr-24/muon-curve.png
+"""
+
+import argparse
 import json
 from pathlib import Path
 
@@ -8,8 +17,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-folder = Path(__file__).parent
-prefix = "muon-124m-100mt-20261019-b"
+parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+parser.add_argument("--input-dir", type=Path, required=True)
+parser.add_argument("--prefix", default="muon-124m-100mt-20261019-b")
+parser.add_argument("--output", type=Path, required=True)
+args = parser.parse_args()
+folder = args.input_dir
+prefix = args.prefix
 fig, ax = plt.subplots(figsize=(8, 4.8), layout="constrained")
 for name, label, color in (("adamw", "AdamW", "#3454d1"), ("muon", "Muon + AdamW", "#cf5c36")):
     rows = []
@@ -42,4 +56,5 @@ fig.text(
     ha="center",
     fontsize=9,
 )
-fig.savefig(folder / "muon-124m-100mt-20261019-curve.png", dpi=180, bbox_inches="tight")
+args.output.parent.mkdir(parents=True, exist_ok=True)
+fig.savefig(args.output, dpi=180, bbox_inches="tight")

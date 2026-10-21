@@ -100,7 +100,7 @@ configures the AdamW companion. Both share the token-based warmup/cosine factor.
 For new eight-H100 runs, use `workflows/model_configs/historical/h100x8-muon-8k-5b.json`.
 It combines Muon with microbatch 2, cropping, cached RoPE and model compilation.
 The 5B ceiling is a configuration, not an automatically launched run or a measured
-5B result. The [100M-token comparison](../results/muon-124m-100mt-20261019.md)
+5B result. The [100M-token comparison](MUON_COMPARISON.md#measured-results-run-prefix-muon-124m-100mt-20261019-b)
 supports this default; longer-run quality remains unmeasured. See the
 [comparison guide](MUON_COMPARISON.md) for the bounded experiment.
 
