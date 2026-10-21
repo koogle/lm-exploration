@@ -1,17 +1,20 @@
 # Resumable subword training on multiple Modal GPUs
 
-`distributed_training/modal_train.py` runs the modern 124.4M model on **one, two or three
+`distributed/modal_train.py` supplies the worker that runs selected models on **one, two or three
 GPUs on one host**, using PyTorch NCCL DistributedDataParallel. It trains a shared
-model with synchronized gradients. It is separate from the historical character
-trainer and from the throughput-only benchmarks.
+model with synchronized gradients through [`trainer/loop.py`](../trainer/loop.py).
+The legacy character loop has been removed; throughput-only benchmarks remain separate.
 
 ## One implementation, including one GPU
 
-All subword training code, Modal launchers, the shared image and recipes live in
-this package. The duplicate `modal_simple-llm_pilot.py` / `trainer/subword_pilot.py`
+Shared configuration, per-process distributed runtime, the generic Modal
+launcher, shared image and GPU checks live in this package. The actual training
+loop, evaluation and checkpointing live in [`../trainer/`](../trainer/README.md). Training settings live in [`../workflows/model_configs/`](../workflows/model_configs/README.md);
+preparation and continuation live in [`../workflows/`](../workflows/README.md).
+The duplicate `modal_simple-llm_pilot.py` / `trainer/subword_pilot.py`
 path has been removed; historical pilot results remain in `results/` and its
-implementation remains in Git history. Character training and throughput-only
-benchmarks are separate experiments, not alternate subword training paths.
+implementation remains in Git history. Historical character recipes are retained
+for provenance; their loop and launcher have been removed.
 
 For one GPU, set `world_size` to 1: the very same `train()` and `backward_batch()`
 run under one-rank DDP, with the same model, loader, global batch, valid-token loss
@@ -22,12 +25,9 @@ bitwise equality across GPU counts or reproduction of the removed pilot's
 step-based warmup/constant learning-rate schedule.
 
 ```sh
-# One-GPU bounded pilot, using the same implementation as the two-GPU recipe.
-modal run --detach -m distributed_training.modal_train \
-  --config distributed_training/recipes/h100x1-pilot.json \
-  --run-id my-single-gpu-pilot-01 \
-  --snapshot simple-llm-124m-20261016/snapshots/pilot-001-seekable \
-  --gpu H100 --max-steps 2 --max-seconds 300
+# One-GPU bounded pilot, using the same model config as the two-GPU workflow.
+modal run --detach -m workflows.modal_train \
+  --workflow workflows/h100x1-pilot.json --run-id my-single-gpu-pilot-01
 ```
 
 ## How the GPUs work together
@@ -72,7 +72,7 @@ split the model across devices or increase the configured global batch.
    use actual valid-token counts. The cycle repeats with the next global batch.
 
 The production implementation is
-[`backward_batch()` and `train()` in train.py](train.py).
+[`backward_batch()` and `train()` in trainer/loop.py](../trainer/loop.py).
 Input shards remain on the shared `/data` volume and are read only by rank zero
 within a job. Independent jobs can read the same immutable snapshot; each keeps
 its own cursor and output directory. The launcher copies source, tokenizer assets
@@ -92,24 +92,18 @@ committed checkpoint.
 ## Start a job
 
 Run from `training/`, with Modal credentials and prepared data on
-`lm-exploration-mixture-data`. The configuration is a JSON `DistributedConfig`,
-not the character trainer's `Recipe` format.
+`lm-exploration-mixture-data`. Select a workflow JSON; it resolves the model and dataset configurations into
+one validated trainer request. See the [workflow guide](../workflows/README.md).
 
 ```sh
 # First convert the existing gzip pilot using the linked conversion instructions.
 # Bounded smoke run against that converted snapshot; creates a checkpoint.
-modal run --detach -m distributed_training.modal_train \
-  --config distributed_training/recipes/h100x2-pilot.json \
-  --run-id my-ddp-pilot-01 \
-  --snapshot simple-llm-124m-20261016/snapshots/pilot-001-seekable \
-  --gpu H100 --max-steps 2 --max-seconds 300
+modal run --detach -m workflows.modal_train \
+  --workflow workflows/h100x2-pilot.json --run-id my-ddp-pilot-01
 
 # Substantial-run settings: requires a training-ready snapshot with capacity.
-modal run --detach -m distributed_training.modal_train \
-  --config distributed_training/recipes/h100x3-20b.json \
-  --run-id my-pretraining-segment-01 \
-  --snapshot APPROVED_VERSION/snapshots/APPROVED_SNAPSHOT \
-  --gpu H100 --max-seconds 3000
+modal run --detach -m workflows.modal_train \
+  --workflow workflows/h100x3-20b.json --run-id my-pretraining-segment-01
 ```
 
 The second example is a template, not a launched full run. Snapshot audit and
@@ -120,14 +114,38 @@ Pilot mode alone does not permit unreviewed data, and neither flag resets
 exhausted sources or removes the loader's two-pass source limit.
 
 `DistributedConfig` validates general settings, not an architecture allowlist or
-experiment token ceiling. Architecture dimensions and token budgets are recipe
-choices; pilot mode has no separate token ceiling. Model/runtime compatibility
+experiment token ceiling. Architecture dimensions come from the model config and token budgets from the workflow; pilot mode has no separate token ceiling. Model/runtime compatibility
 and the loader's two-pass source limit still apply. Non-pilot runs also check
 mixture capacity before model allocation. This does not authorize a run.
 
 Recipes now record data permission explicitly. Historical configs and measured
 artifacts are unchanged; exact resume from older checkpoints requires their
 original source and settings because config and source identity are checked.
+
+### Explicit experiment settings
+
+The selected dataset config supplies `data_loader`: `"token_shards"` or `"raw"`.
+The selected loader validates the manifest; an incompatible snapshot fails rather
+than selecting another implementation. Both training and validation use that
+selection. Raw dataset configs select `loader: "raw"` explicitly.
+
+These settings are validated by `DistributedConfig`, recorded in resolved run
+metadata/checkpoints, and included in strict resume compatibility checks:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `adam_beta1`, `adam_beta2` | `0.9`, `0.95` | AdamW moving-average coefficients, each in `[0, 1)` |
+| `gradient_clip_norm` | `1.0` | Positive maximum gradient norm |
+| `validation_windows_per_source` | `1` | Fixed initial windows from each validation source; insufficient data fails |
+| `log_every` | `10` | Console step interval; the first step also prints and every step is saved to metrics |
+
+Validation averages by valid target count within each source, then applies source
+mixture weights. Vocabulary size comes from the frozen tokenizer definition and
+capacity from the validated snapshot's repetition policy. Tokenizer identity,
+supported snapshot formats and repetition limits remain data compatibility checks.
+
+The [configuration choices audit](choices.md) records the findings behind these
+changes. Earlier measured results retain their original settings and evidence.
 
 Supported GPU families are `H100`, `L40S` and `A10G`; `world_size` in the JSON
 chooses the number of GPUs. Global windows must be divisible by
@@ -149,7 +167,7 @@ windows and unequal valid-token counts across ranks do not bias the objective.
 The trainer uses BF16 autocast, FP32 parameters, causal SDPA, fused AdamW
 (betas 0.9/0.95), gradient clipping at 1 and a token-based warmup/cosine schedule.
 The supplied schedule is a configurable starting point, not a quality-qualified
-20B recipe. Learning rate is calculated at the end-token count of each update.
+20B experiment. Learning rate is calculated at the end-token count of each update.
 
 ## Resume in a fresh Modal job
 
@@ -159,15 +177,12 @@ to a temporary file, renamed, then committed to the Modal Volume before training
 continues. Every graceful stop saves an optimizer-boundary checkpoint.
 
 ```sh
-modal run --detach -m distributed_training.modal_train \
-  --config distributed_training/recipes/h100x2-pilot.json \
-  --run-id my-ddp-pilot-02 \
-  --snapshot simple-llm-124m-20261016/snapshots/pilot-001-seekable \
-  --resume my-ddp-pilot-01/step-000000002.pt \
-  --gpu H100 --max-steps 2 --max-seconds 300
+modal run --detach -m workflows.modal_train \
+  --workflow workflows/h100x2-pilot.json --run-id my-ddp-pilot-02 \
+  --resume my-ddp-pilot-01/step-000000002.pt
 ```
 
-`--max-steps` counts **additional steps in this job**; `target_tokens` is the
+Qualification step limits count **additional steps in each job**; `target_tokens` is the
 cumulative ceiling across the entire checkpoint lineage. A batch that would
 exceed the ceiling is rolled back without training, so completion can fall short
 by less than one global batch. Exhaustion similarly rolls back a partial batch.
@@ -187,35 +202,51 @@ JSON; model checkpoints and corpus text are not committed to Git.
 
 ## Stop and operational limits
 
-Each worker has a one-hour hard limit, no automatic retry, and one container per
-app. A job's cooperative time limit is at most 3,000 seconds, leaving a reserve
-for checkpointing. `--max-steps`, time limits, token limits, source exhaustion and
+The generic worker has a 24-hour hard limit, no automatic retry, and one container
+per app. The workflow selects each job's cooperative time limit, which is at most
+82,800 seconds, leaving a reserve for checkpointing. `--max-steps`, time limits, token limits, source exhaustion and
 SIGINT/SIGTERM stop at optimizer boundaries. Signal handling is best effort:
 hard termination or a failed rank can lose work after the last committed
 checkpoint. Torchrun stops peer ranks on failure; rank-zero loader/save errors
 are broadcast so peers do not wait indefinitely in the next collective.
 
-There is **no automatic chain of jobs**. Resume explicitly from the last committed
-checkpoint into a fresh run ID. The worker commits artifacts in `finally`, and
+The workflow explicitly chains bounded sessions using fresh segment IDs and
+committed checkpoints, up to its configured segment limit. The low-level worker
+has no automatic retry. Manual checkpoint resume uses a fresh workflow run ID. The worker commits artifacts in `finally`, and
 preserves torchrun logs if training fails. Checkpoints are retained; budget storage
 and remove old run artifacts deliberately. The example 20B configuration saves
 every 1,000 steps. Each full-model optimizer checkpoint is roughly 1.5 GB.
 
-Validation reports one fixed window per source and its mixture-weighted loss at
+Validation reports the configured fixed windows per source and mixture-weighted loss at
 startup, configured intervals and the end. This is a diagnostic, not production
 capability evaluation or automatic best-checkpoint selection. Full-scale corpus
 preparation/audits remain separate work. Seekable token shards remove compressed
 cursor replay; full-corpus restart latency, throughput and multi-day reliability
 have not been measured. Old gzip snapshots need one-time conversion for new runs;
-old checkpoints require their original code and snapshot. Moving the trainer
-into this package changes source hashes, so checkpoints from before the move
-also require their original code for resume.
+old checkpoints require their original code and snapshot. The active loop now lives in `trainer/loop.py`; resume continues to enforce
+source hashes. Historical checkpoints require compatible original code and settings.
+
+## Raw-corpus experiments
+
+The [raw-corpus preparation guide](../data/RAW_CORPUS.md) covers reusable SQLite snapshots,
+preparation throughput evidence and the dedicated modern 9.85M / 5B workflow.
+It uses this package's worker and explicit runtime contract, not an alternate
+trainer. The generic trainer permits sessions up to 82,800 seconds; the worker's
+86,400-second hard limit leaves time for checkpointing. Individual experiment
+launchers may impose shorter bounds.
+
+The [generic controller](../workflows/modal_train.py) accepts an explicit workflow
+path, model config and dataset config. The [workflow guide](../workflows/README.md)
+documents raw preparation, prepared-snapshot selection, qualification and continuation.
+`workflows/small-5b.json` retains the small-model experiment's execution settings.
+The target token count and GPU allocation now belong only to the workflow;
+the dataset owns loader selection and the model config owns architecture/optimizer settings.
 
 ## Verification
 
 ```sh
 uv run python -m unittest discover -s tests -p 'test_distributed_*.py' -v
-modal run --detach -m distributed_training.modal_checks --run-id UNIQUE_CHECK_RUN_ID
+modal run --detach -m distributed.modal_checks --run-id UNIQUE_CHECK_RUN_ID
 ```
 
 The local checks compare the production one-rank accumulation loss, gradients

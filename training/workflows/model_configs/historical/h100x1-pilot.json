@@ -1,5 +1,5 @@
 {
-  "world_size": 2,
+  "world_size": 1,
   "global_windows": 48,
   "microbatch": 24,
   "context": 2048,
@@ -15,5 +15,11 @@
   "allow_unreviewed_data": true,
   "n_layer": 14,
   "n_head": 12,
-  "n_embd": 768
+  "n_embd": 768,
+  "data_loader": "token_shards",
+  "adam_beta1": 0.9,
+  "adam_beta2": 0.95,
+  "gradient_clip_norm": 1.0,
+  "validation_windows_per_source": 1,
+  "log_every": 10
 }
