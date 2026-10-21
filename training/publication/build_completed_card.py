@@ -9,8 +9,6 @@ import tomllib
 from pathlib import Path
 from string import Template
 
-from publication.artifacts import artifact_path
-
 DEFAULT_DOCUMENT = Path(__file__).with_name("cards") / "completed.md"
 
 
@@ -150,7 +148,7 @@ def card_values(settings, audit, validation, segments):
 def build_card(artifacts, output, document=DEFAULT_DOCUMENT):
     settings, template = load_document(document)
     names = [settings["audit"], settings["validation"], *settings["segments"]]
-    paths = [artifact_path(artifacts, name) for name in names]
+    paths = [Path(artifacts) / name for name in names]
     audit, validation, *segments = [json.loads(path.read_text()) for path in paths]
     values = card_values(settings, audit, validation, segments)
     # Fail on unknown placeholders before writing any output; never evaluate code.

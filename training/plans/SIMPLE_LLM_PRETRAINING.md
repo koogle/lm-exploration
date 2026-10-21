@@ -105,7 +105,6 @@ The user selected this tokenizer for the model's code and tool-calling focus.
 - Special IDs: PAD 0, BOS 1, EOS 2, UNK 3. Model vocabulary size must be 32,768.
 - Exact artifact SHA256: `add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9`.
 - Published at [Simple LLM tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).
-  The adjacent `publication.json` pins the immutable Hub revision.
 - Compared with the earlier 2 GiB / 32K default: 13.97% fewer tokens on tool-format
   fixtures, 11.83% fewer on diffs, 8.21% fewer on JSON and 2.81% fewer on Python;
   13.99% more tokens on the simple LLM mixture. This trade-off was accepted explicitly.

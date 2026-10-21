@@ -1,6 +1,6 @@
 # Resumable subword training on multiple Modal GPUs
 
-`distributed/modal_train.py` supplies the worker that runs selected models on **one, two or three
+`distributed/modal_train.py` supplies the worker that runs selected models on **one, two, three or eight
 GPUs on one host**, using PyTorch NCCL DistributedDataParallel. It trains a shared
 model with synchronized gradients through [`trainer/loop.py`](../trainer/loop.py).
 The legacy character loop has been removed; throughput-only benchmarks remain separate.
@@ -235,6 +235,12 @@ and keeps up to `prefetch_batches` (1–64; 0 keeps the synchronous path) ready
 while the GPUs train. Checkpoints save only the acknowledged optimizer cursor, so
 a restart discards and rebuilds speculative batches; live manifests require
 `allow_unreviewed_data`. CUDA equivalence and throughput have not been measured.
+
+## Eight-GPU experiment
+
+The dedicated [eight-H100 / 8K / 5B workflow](SIMPLE_LLM_8K.md) uses the frozen raw
+snapshot and publishes inference checkpoints to HF. Its recipe and resource bounds
+are explicit; eight-GPU performance requires separate qualification.
 
 ## Raw-corpus experiments
 

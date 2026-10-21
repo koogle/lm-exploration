@@ -61,7 +61,7 @@ class WorkflowConfig:
         ):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"Workflow {name} must be a positive integer")
-        if self.gpu not in ("H100", "L40S", "A10G") or self.world_size not in (1, 2, 3):
+        if self.gpu not in ("H100", "L40S", "A10G") or self.world_size not in (1, 2, 3, 8):
             raise ValueError("Unsupported workflow GPU allocation")
         if not self.segment_seconds <= 82800 or not (
             self.segment_seconds + 480 < self.worker_timeout_seconds <= 86400

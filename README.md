@@ -1,6 +1,6 @@
-# LM Exploration
+# Simple LLM
 
-My personal scratchpad for exploring language model design and architecture.
+Simple LLM is my personal project for exploring language model design, training and inference.
 
 - [Inference](inference/): browser experiments and custom Metal kernels for Apple hardware.
 - [Training](training/): models from scratch and a Modal training-run UI; [public Shakespeare 10M](https://huggingface.co/jfrick/shakespeare-vanilla-gpt-10m).
