@@ -56,7 +56,7 @@ These ranges imply approximately 231K–463K loss tokens/second at 8K, and
 measured eight-GPU scaling factors. The 50B row is rounded from the same ranges.
 
 The measured anchor is **345,895 nonpadding loss tokens/second on three H100s at
-2,048 context** in the [500-update comparison](../results/scholarly-124m-gpu-comparison-20261017.md).
+2,048 context** in the [500-update comparison](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-124m-gpu-comparison-20261017.md).
 It does not establish throughput at 8K/16K or on eight GPUs. For provisional
 scheduling only, allow about one day for 20B exposures at 8K, then replace this
 estimate with measured long-context throughput before committing to the full run.

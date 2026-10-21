@@ -119,5 +119,6 @@ def main(
     report = worker.with_options(gpu=f"{gpu}:{cfg.world_size}", cpu=4 * cfg.world_size).remote(
         run_id, snapshot, cfg.as_dict(), provenance, resume, max_steps or None, max_seconds
     )
-    Path(f"results/{run_id}.json").write_text(json.dumps(report, indent=2) + "\n")
+    Path("artifacts/results").mkdir(parents=True, exist_ok=True)
+    Path(f"artifacts/results/{run_id}.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
