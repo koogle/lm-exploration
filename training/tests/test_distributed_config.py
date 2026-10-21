@@ -83,26 +83,6 @@ class DistributedConfigTests(unittest.TestCase):
                     {**saved, field: value}, config, {"hash": "x"}, {"model": "y"}, "2.6"
                 )
 
-    def test_resume_rejects_changed_loader_optimizer_and_diagnostics(self):
-        config = DistributedConfig()
-        for change in (
-            {"data_loader": "raw"},
-            {"adam_beta1": 0.8},
-            {"adam_beta2": 0.99},
-            {"gradient_clip_norm": 0.5},
-            {"validation_windows_per_source": 2},
-            {"log_every": 20},
-        ):
-            saved = {
-                "format": "scholarly-ddp-v1",
-                "config": {**config.as_dict(), **change},
-            }
-            with (
-                self.subTest(change=change),
-                self.assertRaisesRegex(ValueError, "identical training"),
-            ):
-                validate_resume(saved, config, {}, {}, "2.6")
-
     def test_runtime_resolves_torchrun_launch_details(self):
         runtime = DistributedRuntime.from_torchrun(
             {

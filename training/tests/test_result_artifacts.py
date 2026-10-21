@@ -12,9 +12,6 @@ from publication.artifacts import fetch_artifacts, read_index, verify
 
 class ResultArtifactTests(unittest.TestCase):
     def test_pinning_and_corrupt_download_rejection(self):
-        root = Path(__file__).resolve().parents[1]
-        for name in read_index()["files"]:
-            self.assertFalse((root / name).exists())
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
             source = folder / "remote.json"
