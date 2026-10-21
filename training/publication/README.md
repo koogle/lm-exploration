@@ -36,42 +36,17 @@ Generation defaults to 128 tokens, seed 42, temperature 0.8, top-k 50 and CPU.
 
 ## Historical evidence
 
-[`pr13-artifacts.json`](pr13-artifacts.json) indexes the original PR #13 results
-and model cards in the private **dataset** `jfrick/lm-exploration-results` at
-immutable revision `292e06c89b8965f565d33b9c7ed52531030c6086`. It records original
-paths, byte sizes, SHA256 checksums and source Git commit. Every remote file was
-re-downloaded and verified before its Git copy was removed. Original identifiers
-and bytes are retained; no historical measurements are claimed as new results.
+Completed experiments' results, reports and original model cards live on HF, not in Git:
 
-Download verified copies explicitly, using an authenticated account with access:
+- Result JSONs: private dataset `jfrick/lm-exploration-results`, under `pr-13/` and `pr-16/`.
+- PR #16 repetition report and plot: model repository
+  `jfrick/scholarly-code-modern-gpt-124m-step2`, under `analysis/repetition/`.
+- Published model cards: each model repository's `README.md` and commit history.
 
-```sh
-uv run --extra corpus python -m publication.artifacts --output artifacts/pr-13
-```
-
-`artifact_path()` verifies local bytes before use. It never silently fetches a
-mutable revision. Existing model repositories and Modal volumes are unchanged.
+Download what you need into the ignored `artifacts/` directory and pass explicit paths.
+New inference or repetition runs write to `artifacts/pr-16/results/` by default.
 The former experiment-specific exporters have been replaced by the generic export
 function above. Card rendering is independent of weight export.
-
-### PR #16
-
-[`pr16-artifacts.json`](pr16-artifacts.json) indexes the Simple LLM 124M / 8K / 5B
-session, launch, qualification, throughput, publication, inference-sample and
-repetition-validation JSONs from PR #16 in the same dataset at immutable revision
-`e581149e7983fdae1d198da6f76ab98d21d135b9`, under `pr-16/training/results/`. Every
-remote file was re-downloaded and byte-compared before its Git copy was removed.
-New inference or repetition runs write to `artifacts/pr-16/results/` by default.
-The repetition report and plot are in the public model repository's `analysis/repetition/`
-at revision `a5111f064480c8b39b7d6e791a6f7746290619ab`, indexed by
-[`pr16-model-artifacts.json`](pr16-model-artifacts.json).
-
-```sh
-uv run --extra corpus python -m publication.artifacts \
-  --index publication/pr16-artifacts.json --output artifacts/pr-16
-uv run --extra corpus python -m publication.artifacts \
-  --index publication/pr16-model-artifacts.json --output artifacts/pr-16
-```
 
 ## Model-card source
 
@@ -98,7 +73,7 @@ in this experiment's Markdown. Do not infer historical settings from current
 recipe defaults or reuse those descriptions for a different architecture without
 review. The original archived cards and reports remain unchanged.
 
-Rebuild the Markdown card and copy its verified evidence into an ignored output directory:
+Rebuild the Markdown card from downloaded `pr-13/training/` files and copy its evidence into an ignored output directory:
 
 ```sh
 uv run --extra corpus python -m publication.build_completed_card \
@@ -108,4 +83,4 @@ uv run --extra corpus python -m publication.build_completed_card \
 
 The checked-in Markdown is authored source. Generated `README.md` files and copied
 result JSONs belong in the HF artifact archive, not Git. Rendering does not publish
-or upload anything and does not modify the original pinned evidence.
+or upload anything and does not modify the original evidence.

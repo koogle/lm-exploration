@@ -20,8 +20,9 @@ The existing roughly 2.75B unique-token corpus supports this exposure budget wit
 at most two passes per source, so preparation is reused.
 
 After qualification, a separate CPU publisher watches durable checkpoints and
-uploads inference weights, exact model code, tokenizer, config, provenance and a
-progress card to **jfrick/scholarly-code-modern-gpt-124m-step2**. The original smoke
+exports each new checkpoint with the generic [`publication.export`](../publication/README.md)
+and uploads the bundle to **jfrick/scholarly-code-modern-gpt-124m-step2**. Uploads never
+replace the repository's authored `README.md` model card. The original smoke
 artifact is archived on branch `smoke-step2-before-8k`. Later uploads replace the
 current inference bundle; older weights remain addressable by Hub commit revision.
 The completed 10M repository is unchanged. Full optimizer/per-rank RNG/data cursors

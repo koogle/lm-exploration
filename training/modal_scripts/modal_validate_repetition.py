@@ -5,20 +5,9 @@ from pathlib import Path
 
 import modal
 
-image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .pip_install(
-        "torch==2.6.0",
-        "numpy",
-        "pydantic>=2.11,<3",
-        "tokenizers==0.22.2",
-        "huggingface-hub==1.33.0",
-        "safetensors>=0.4",
-    )
-    .env({"PYTHONPATH": "/project"})
-    .add_local_dir("100m", "/project/model_100m")
-    .add_local_dir("10m", "/project/model_10m")
-)
+from distributed.image import project_image
+
+image = project_image("huggingface-hub==1.33.0", "safetensors>=0.4")
 app = modal.App("simple-llm-repetition-validation")
 run_volume = modal.Volume.from_name("lm-exploration-training")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")

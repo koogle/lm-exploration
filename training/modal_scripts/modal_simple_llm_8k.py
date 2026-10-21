@@ -9,26 +9,10 @@ from pathlib import Path
 
 import modal
 
+from distributed.image import project_image
+
 image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .pip_install(
-        "torch==2.6.0",
-        "numpy",
-        "pydantic>=2.11,<3",
-        "tokenizers==0.22.2",
-        "huggingface-hub==1.33.0",
-        "safetensors>=0.4",
-    )
-    .env({"PYTHONPATH": "/project", "RAYON_NUM_THREADS": "8"})
-    .add_local_dir("100m", "/project/model_100m")
-    .add_local_dir("10m", "/project/model_10m")
-    .add_local_dir("trainer", "/project/trainer")
-    .add_local_dir("distributed", "/project/distributed")
-    .add_local_dir("workflows", "/project/workflows")
-    .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
-    .add_local_dir("tokenizer", "/project/tokenizer")
-    .add_local_dir("tests", "/project/tests")
-    .add_local_file("generate.py", "/project/generate.py")
+    project_image("huggingface-hub==1.33.0", "safetensors>=0.4", env={"RAYON_NUM_THREADS": "8"})
     .add_local_dir("publication", "/project/publication")
     .add_local_file(
         "workflows/model_configs/historical/h100x8-8k-5b.json", "/project/settings.json"
@@ -114,7 +98,7 @@ def publish_progress(run_id):
 
     from huggingface_hub import HfApi
 
-    from trainer.hub_checkpoint import export_checkpoint
+    from publication.export import export_checkpoint
     from trainer.loop import atomic_json
 
     api = HfApi()
@@ -136,13 +120,27 @@ def publish_progress(run_id):
                 try:
                     output = Path("/tmp/hub-export")
                     shutil.rmtree(output, ignore_errors=True)
-                    progress = export_checkpoint(checkpoint, output, checkpoint.parent, run_id)
+                    exported = export_checkpoint(
+                        checkpoint,
+                        output,
+                        checkpoint.parent / "tokenizer/tokenizer.json",
+                        data_manifest=checkpoint.parent / "data-manifest.json",
+                    )
+                    # The authored model card is maintained separately; never replace it here.
                     info = api.upload_folder(
                         repo_id=REPO,
                         folder_path=str(output),
-                        commit_message=f"Simple LLM 124M 8K: step {step}, {progress['tokens']} tokens",
+                        ignore_patterns=["README.md"],
+                        commit_message=f"Simple LLM 124M 8K: step {step}, {exported['tokens']} tokens",
                     )
-                    progress.update(repo_id=REPO, revision=info.oid, updated_unix=time.time())
+                    progress = {
+                        "step": exported["step"],
+                        "tokens": exported["tokens"],
+                        "checkpoint": str(checkpoint),
+                        "repo_id": REPO,
+                        "revision": info.oid,
+                        "updated_unix": time.time(),
+                    }
                     atomic_json(prior, progress)
                     run_volume.commit()
                     published = step
