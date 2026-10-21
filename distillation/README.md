@@ -1,5 +1,10 @@
 # Probability distillation into the existing 124.4M model
 
+For the next Python/math curriculum experiment, see the
+[scaling and token-budget plan](SCALING.md). It distinguishes from-scratch
+compute allocation from continued distillation, counts the large shared
+embedding table explicitly, and provides a reproducible sizing calculator.
+
 This experiment starts from the completed code-heavy 124,389,632-parameter
 checkpoint, preserving the custom frozen 32K tokenizer and architecture. The
 first teacher is **Qwen/Qwen3-4B-Base**, revision

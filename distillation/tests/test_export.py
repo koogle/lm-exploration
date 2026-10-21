@@ -6,6 +6,7 @@ from pathlib import Path
 import torch
 
 from distillation.export import convert
+from distillation.scaling import parameter_counts
 
 ROOT = Path(__file__).resolve().parents[2]
 for name, folder in [("model_10m", "10m"), ("model_100m", "100m")]:
@@ -21,6 +22,27 @@ from model_100m.model import GPT, ModelConfig
 
 
 class ExportTests(unittest.TestCase):
+    def test_budget_counts_match_actual_architecture(self):
+        for vocabulary in (32768, 151936):
+            for layers, heads, width in ((8, 6, 384), (10, 8, 512), (14, 12, 768)):
+                with self.subTest(vocabulary=vocabulary, width=width):
+                    with torch.device("meta"):
+                        model = GPT(
+                            ModelConfig(
+                                vocab_size=vocabulary,
+                                n_layer=layers,
+                                n_head=heads,
+                                n_embd=width,
+                            )
+                        )
+                    counts = parameter_counts(layers, width, vocabulary)
+                    self.assertEqual(
+                        counts["total"], sum(p.numel() for p in model.parameters())
+                    )
+                    self.assertEqual(
+                        counts["tied_embedding"], model.token_embedding.weight.numel()
+                    )
+
     def test_full_logits_and_cached_decode(self):
         torch.manual_seed(42)
         native = GPT(
