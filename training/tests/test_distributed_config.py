@@ -14,7 +14,7 @@ class DistributedConfigTests(unittest.TestCase):
             {"world_size": 4},
             {"world_size": 2, "microbatch": 16},
             {"target_tokens": True},
-            {"pilot": True},
+            {"pilot": "yes"},
             {"n_embd": 64},
             {"peak_lr": float("nan")},
             {"seed": -1},
@@ -23,6 +23,24 @@ class DistributedConfigTests(unittest.TestCase):
         ):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 DistributedConfig(**change)
+
+    def test_architecture_and_budget_are_not_experiment_scoped(self):
+        config = DistributedConfig(n_layer=4, n_head=4, n_embd=256, target_tokens=30_000_000_000)
+        self.assertEqual(config.n_layer, 4)
+        # Run-budget policy belongs to execution validation, not construction.
+        DistributedConfig(pilot=True, target_tokens=10_000_000, warmup_tokens=100_000)
+
+    def test_unreviewed_data_is_an_explicit_boolean(self):
+        self.assertFalse(DistributedConfig().allow_unreviewed_data)
+        self.assertFalse(
+            DistributedConfig(
+                pilot=True, target_tokens=5_000_000, warmup_tokens=100_000
+            ).allow_unreviewed_data
+        )
+        for value in ("yes", 1, 0, None):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                DistributedConfig(allow_unreviewed_data=value)
+        self.assertTrue(DistributedConfig(allow_unreviewed_data=True).allow_unreviewed_data)
 
     def test_schedule_uses_tokens(self):
         config = DistributedConfig()

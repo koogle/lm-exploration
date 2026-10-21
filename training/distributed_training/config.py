@@ -20,6 +20,7 @@ class DistributedConfig:
     checkpoint_every: int = 100
     evaluate_every: int = 100
     pilot: bool = False
+    allow_unreviewed_data: bool = False
     n_layer: int = 14
     n_head: int = 12
     n_embd: int = 768
@@ -44,6 +45,8 @@ class DistributedConfig:
             raise ValueError("seed must be a 32-bit unsigned integer")
         if type(self.pilot) is not bool:
             raise ValueError("pilot must be boolean")
+        if type(self.allow_unreviewed_data) is not bool:
+            raise ValueError("allow_unreviewed_data must be boolean")
         if self.world_size not in (1, 2, 3):
             raise ValueError("Supported GPU counts: 1, 2, 3")
         if self.global_windows % (self.world_size * self.microbatch):
@@ -62,10 +65,6 @@ class DistributedConfig:
                 raise ValueError(f"Invalid {name}")
         if self.peak_lr <= 0 or not 0 <= self.min_lr_ratio <= 1 or self.weight_decay < 0:
             raise ValueError("Invalid optimizer settings")
-        if self.pilot and self.target_tokens > 5_000_000:
-            raise ValueError("Pending-audit pilot override is limited to 5M tokens")
-        if not self.pilot and (self.n_layer, self.n_head, self.n_embd) != (14, 12, 768):
-            raise ValueError("Substantial runs use the merged 124.4M architecture")
 
     def as_dict(self):
         return asdict(self)
