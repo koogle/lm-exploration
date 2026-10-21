@@ -156,6 +156,7 @@ def checks(output):
                 target_tokens=5000,
                 warmup_tokens=100,
                 pilot=True,
+                allow_unreviewed_data=True,
                 n_layer=1,
                 n_head=2,
                 n_embd=32,
