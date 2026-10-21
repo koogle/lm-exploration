@@ -80,4 +80,13 @@ This policy does not itself migrate existing files or authorize uploads, trainin
 or deployment. Perform migrations explicitly, preserving existing experiment
 identifiers and provenance.
 
+## Reports
+
+Building reports by concatenating strings in code (`lines += [...]`, f-string
+tables, prose in `print`/`write_text`) is a red flag; avoid it. Scripts emit
+structured results (JSON/CSV); render tables with a library or a checked-in
+template. Write findings and narrative by hand in the owning folder's
+docs, not in generator code. Prefer reusing or extending shared tooling over a new
+per-study report builder.
+
 See [migration notes](docs/consolidation.md) for imported histories and source PRs.
