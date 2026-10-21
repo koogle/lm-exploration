@@ -68,7 +68,8 @@ a new version. Pending audit flags remain in the manifest.
 
 Controlled CPU trials recorded 4.3–4.6x faster preparation with matched stored
 outputs. They exclude upstream downloads, volume commits and the count migration;
-see `../results/preparation-speedup-20261017.md` and its retained JSON for evidence.
+see `preparation-speedup-20261017.md` and its JSON in
+[`jfrick/lm-exploration-results` / `pr-13/training/results/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-13/training/results) for evidence.
 They do not establish live end-to-end speedup. Producer/consumer overlap between
 preparation and GPU training belongs to PR #15 and did not produce the completed
 small-model checkpoint.
@@ -76,7 +77,8 @@ small-model checkpoint.
 ## Historical provenance
 
 The completed run, public model and limitations are described in
-`../results/scholarly-modern-10m-5b-completed-20261018.md`. Historical run IDs,
+`scholarly-modern-10m-5b-completed-20261018.md` in the same
+[HF folder](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-13/training/results). Historical run IDs,
 checkpoint formats, HF revisions and result bytes remain unchanged. The package
 move, updated source hashes and active config changes mean exact continuation of
 old checkpoints requires their original code and settings. New preparation
