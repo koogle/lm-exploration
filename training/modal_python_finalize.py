@@ -66,6 +66,49 @@ def finish():
 
 @app.function(
     image=image,
+    cpu=4,
+    memory=8192,
+    timeout=900,
+    volumes={"/data": volume},
+)
+def settle_existing_selection(full_code_call_id: str):
+    """Close a bounded old-pool selection after its writer has been stopped.
+
+    The separately prepared full Python split supersedes another exhaustive
+    scan of its older subset. Preserve every accepted row and prior holdout.
+    """
+    from training_data.python_experiment import TARGETS, Corpus
+
+    prepared = modal.FunctionCall.from_id(full_code_call_id).get()
+    if prepared.get("completed_shards") != 53:
+        raise ValueError("The bounded full Python split must be complete first")
+    volume.reload()
+    corpus = Corpus(FOLDER)
+    try:
+        for source in ("original-refresh", "multilingual"):
+            origin = f"/data/scholarly-code/readiness-20261020-v2/{source}/raw.sqlite"
+            if not corpus.db.execute(
+                "SELECT 1 FROM completed WHERE name=?", ("exclusions:" + origin,)
+            ).fetchone():
+                raise ValueError("Prior-source heldout ledger is incomplete")
+        result = corpus.report("bounded_existing_selection")
+        for name in ("cs_math", "general_education", "books"):
+            if result["categories"][name]["unique_train_targets"] < TARGETS[name]:
+                raise ValueError("Supporting-text selection is incomplete")
+        result["note"] = (
+            "Existing-pool selection stopped at committed cursors; not an upstream "
+            "exhaustion claim. Complete collected snapshots are retained. "
+            "The separately pinned full Python split supplies remaining code capacity."
+        )
+        Path(FOLDER, "existing-selection.json").write_text(json.dumps(result, indent=2))
+    finally:
+        corpus.db.close()
+    volume.commit()
+    return result
+
+
+@app.function(
+    image=image,
     cpu=1,
     memory=1024,
     timeout=86400,

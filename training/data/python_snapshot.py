@@ -130,6 +130,14 @@ def freeze(folder, destination):
             for row in selected:
                 writer.write(json.dumps(row) + "\n")
                 windows += 1
+    capacity["by_origin"] = [
+        {"category": name, "origin": origin, "documents": count, "unique_train_targets": tokens}
+        for name, origin, count, tokens in corpus.db.execute(
+            "SELECT source,json_extract(provenance,'$.origin'),COUNT(*),SUM(loss_tokens) "
+            "FROM documents WHERE split='train' AND conflict=0 "
+            "GROUP BY source,json_extract(provenance,'$.origin') ORDER BY source,2"
+        )
+    ]
     corpus.db.close()
     manifest = {
         "format": "scholarly-raw-v1",
@@ -157,6 +165,7 @@ def freeze(folder, destination):
     }
     (destination / "manifest.json").write_text(json.dumps(manifest, indent=2))
     (destination / "capacity.json").write_text(json.dumps(capacity, indent=2))
+    (destination / "capacity.md").write_text((folder / "capacity.md").read_text())
     return manifest
 
 
