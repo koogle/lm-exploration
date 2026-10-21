@@ -6,7 +6,7 @@ from pathlib import Path
 
 import modal
 
-from distributed_training.modal_train import validate_paths, worker
+from distributed.modal_train import validate_paths, worker
 from modal_eu_continuation import data_volume, image, run_volume, snapshot_path
 
 image = image.add_local_file("modal_eu_continuation.py", "/project/modal_eu_continuation.py")
@@ -20,6 +20,7 @@ SNAPSHOT = "code-heavy-fresh-20261019/snapshots/code60-5b-books-v2"
 VALIDATION = "simple-llm-eu-expanded-validation-20261019"
 TARGET = 5_000_000_000
 SETTINGS = {
+    "data_loader": "raw",
     "world_size": 8,
     "global_windows": 32,
     "microbatch": 2,
@@ -42,7 +43,7 @@ SETTINGS = {
 
 
 def mark(folder, stage, **details):
-    from distributed_training.train import atomic_json
+    from trainer.loop import atomic_json
 
     atomic_json(folder / "workflow.json", {"stage": stage, "updated_unix": time.time(), **details})
     run_volume.commit()
@@ -65,8 +66,8 @@ def prepare():
     from training_data.fresh_book_pool import FreshBookPoolCorpus
     from training_data.fresh_raw_corpus import initialize_fresh
 
-    from distributed_training.train import atomic_json
     from trainer.continued_pretraining import coding_double_mix, token_targets
+    from trainer.loop import atomic_json
 
     started = time.monotonic()
     destination = snapshot_path(SNAPSHOT)
@@ -145,7 +146,7 @@ def prepare():
 def initialize(run_id):
     import torch
 
-    from distributed_training.config import DistributedConfig
+    from distributed.config import DistributedConfig
     from trainer.continued_pretraining import migrate_phase
 
     torch.set_num_threads(4)
@@ -181,7 +182,16 @@ def segment(run_id, provenance, resume, max_steps=None):
 
     if torch.cuda.device_count() != 8:
         raise RuntimeError("Expected eight GPUs")
-    return worker.local(run_id, SNAPSHOT, SETTINGS, provenance, resume, 21600, max_steps)
+    return worker.local(
+        run_id,
+        SNAPSHOT,
+        SETTINGS,
+        provenance,
+        resume,
+        21600,
+        max_steps,
+        dataset_root="scholarly-code",
+    )
 
 
 @app.function(

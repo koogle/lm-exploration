@@ -1,13 +1,10 @@
-"""Training settings. Runs come from recipes (../recipes/) and train on a Modal GPU."""
+"""Historical character-recipe schema; active settings use distributed.config."""
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
-# Training runs only on Modal GPU workers; there is no CPU or MPS training path.
-DEVICE = "cuda"
-
 
 class TrainConfig(BaseModel):
-    """Hyperparameters only; the dataset and any resume checkpoint are train() arguments."""
+    """Recorded character-training hyperparameters; not the active loop's settings."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 

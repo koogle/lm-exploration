@@ -9,7 +9,7 @@ from model_100m.model import GPT, ModelConfig
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from distributed_training.train import backward_batch
+from trainer.loop import backward_batch
 
 rank, world = int(os.environ["LOCAL_RANK"]), int(os.environ["WORLD_SIZE"])
 torch.cuda.set_device(rank)

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import modal
 
-from distributed_training.image import image
+from distributed.image import image
 
 app = modal.App("lm-exploration-h100-confirmation")
 data = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -108,7 +108,7 @@ def main(run_id: str = "simple-llm-124m-h100-confirmation-20261017-01"):
     Path("results").mkdir(exist_ok=True)
     files = [
         Path("modal_scripts/modal_gpu_confirmation.py"),
-        *Path("distributed_training").glob("*.py"),
+        *Path("distributed").glob("*.py"),
         Path("trainer/ddp_benchmark.py"),
         Path("trainer/gpu_benchmark.py"),
         Path("100m/model.py"),
