@@ -21,7 +21,9 @@ from distributed.config import DistributedConfig, DistributedRuntime, validate_r
 
 def source_hashes():
     import model_100m.model
+    import training_data.live_stream
     import training_data.mixture
+    import training_data.prefetch
     import training_data.raw_token_stream
     import training_data.subword
     import training_data.token_shards
@@ -37,6 +39,8 @@ def source_hashes():
         "loader": Path(training_data.token_stream.__file__),
         "loader_selection": Path(training_data.mixture.__file__),
         "raw_loader": Path(training_data.raw_token_stream.__file__),
+        "prefetch": Path(training_data.prefetch.__file__),
+        "live_loader": Path(training_data.live_stream.__file__),
         "token_shards": Path(training_data.token_shards.__file__),
         "tokenizer": Path(training_data.subword.__file__),
     }
@@ -168,6 +172,10 @@ def train(
         timeout=timedelta(seconds=300),
     )
     output, manifest = Path(output), Path(manifest)
+    if config.data_loader == "live" and (
+        not config.prefetch_batches or not config.allow_unreviewed_data
+    ):
+        raise ValueError("Live upstream data requires prefetch and allow_unreviewed_data")
     commit = commit or (lambda: None)
     stopped = False
     old_handlers = {}
@@ -205,13 +213,31 @@ def train(
             if (output / "config.json").exists():
                 raise ValueError("Use a fresh run ID, including for resume")
             output.mkdir(parents=True, exist_ok=True)
-            data = open_mixture(
-                manifest,
-                loader=config.data_loader,
-                context=config.context,
-                allow_unreviewed=config.allow_unreviewed_data,
-            )
-            if not config.pilot:
+
+            def make_data():
+                return open_mixture(
+                    manifest,
+                    loader=config.data_loader,
+                    context=config.context,
+                    allow_unreviewed=config.allow_unreviewed_data,
+                )
+
+            if config.prefetch_batches:
+                from training_data.prefetch import PrefetchedBatches
+
+                initial = None
+                if resume:
+                    initial = torch.load(resume, map_location="cpu", weights_only=False)["data"]
+                data = PrefetchedBatches(
+                    make_data,
+                    config.global_windows,
+                    depth=config.prefetch_batches,
+                    state=initial,
+                    device=torch.device("cuda", rank),
+                )
+            else:
+                data = make_data()
+            if not config.pilot and config.data_loader != "live":
                 capacity = min(
                     data.manifest["max_passes"]
                     * s["splits"]["train"]["loss_tokens"]
@@ -279,7 +305,7 @@ def train(
                 np.random.set_state(state["numpy"])
                 torch.set_rng_state(state["torch"])
                 torch.cuda.set_rng_state(state["cuda"])
-                if rank == 0:
+                if rank == 0 and not config.prefetch_batches:
                     data.load_state_dict(saved["data"])
             except Exception as exc:  # noqa: BLE001 -- every rank must fail together
                 error = f"{type(exc).__name__}: {exc}"
@@ -300,6 +326,10 @@ def train(
             )
         else:
             primary(lambda: None)
+
+        if rank == 0 and validation is not None and hasattr(validation, "close"):
+            validation.close()
+            validation = None
 
         @torch.no_grad()
         def evaluate():
@@ -363,6 +393,7 @@ def train(
         initial_validation = primary(evaluate_and_record)
         local_windows = config.global_windows // world
         reason = "token_limit"
+        data_error = None
         while tokens < config.target_tokens:
             flag = torch.tensor(int(stopped), device="cuda")
             dist.all_reduce(flag, op=dist.ReduceOp.MAX)
@@ -402,7 +433,16 @@ def train(
 
             torch.cuda.synchronize()
             tick = time.monotonic()
-            batch = primary(fetch)
+            fetch_tick = time.monotonic()
+            try:
+                batch = primary(fetch)
+            except RuntimeError as exc:
+                # All ranks received the same producer failure. Save the last
+                # completed optimizer boundary, without acknowledging bad data.
+                reason = "data_error"
+                data_error = str(exc)
+                break
+            data_fetch_seconds = time.monotonic() - fetch_tick
             if "stop" in batch:
                 reason = batch["stop"]
                 break
@@ -427,6 +467,8 @@ def train(
             dist.all_reduce(total_loss)
             # Wait for this GPU's queued work to finish for accurate timing.
             torch.cuda.synchronize()
+            if config.prefetch_batches and rank == 0:
+                data.acknowledge()
             step += 1
             tokens += count
             duration = time.monotonic() - tick
@@ -439,6 +481,8 @@ def train(
                 "lr": lr,
                 "gradient_norm": float(norm),
                 "seconds": duration,
+                "data_fetch_seconds": data_fetch_seconds,
+                "prefetch": data.stats() if rank == 0 and config.prefetch_batches else None,
             }
 
             def record(row=row):
@@ -464,6 +508,7 @@ def train(
                 total_loss_tokens=tokens,
                 session_loss_tokens=tokens - start_tokens,
                 stop_reason=reason,
+                data_error=data_error,
                 elapsed_seconds=time.monotonic() - started,
                 final_checkpoint=final_checkpoint,
                 initial_validation=initial_validation,
@@ -472,6 +517,7 @@ def train(
                 validation_note=(
                     f"{config.validation_windows_per_source} fixed windows/source; diagnostic only"
                 ),
+                prefetch=data.stats() if config.prefetch_batches else None,
             )
             atomic_json(output / "report.json", report)
             commit()

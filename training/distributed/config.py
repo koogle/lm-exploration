@@ -27,6 +27,7 @@ class DistributedConfig:
     evaluate_every: int = 100
     pilot: bool = False
     allow_unreviewed_data: bool = False
+    prefetch_batches: int = 0
     n_layer: int = 14
     n_head: int = 12
     n_embd: int = 768
@@ -55,10 +56,12 @@ class DistributedConfig:
             raise ValueError("pilot must be boolean")
         if type(self.allow_unreviewed_data) is not bool:
             raise ValueError("allow_unreviewed_data must be boolean")
-        if self.data_loader not in ("token_shards", "raw"):
-            raise ValueError("data_loader must be token_shards or raw")
-        if self.world_size not in (1, 2, 3):
-            raise ValueError("Supported GPU counts: 1, 2, 3")
+        if type(self.prefetch_batches) is not int or not 0 <= self.prefetch_batches <= 64:
+            raise ValueError("prefetch_batches must be an integer from 0 to 64")
+        if self.data_loader not in ("token_shards", "raw", "live"):
+            raise ValueError("data_loader must be token_shards, raw or live")
+        if self.world_size not in (1, 2, 3, 8):
+            raise ValueError("Supported GPU counts: 1, 2, 3, 8")
         if self.global_windows % (self.world_size * self.microbatch):
             raise ValueError("Global windows must divide into whole per-GPU microbatches")
         if self.n_embd % self.n_head or (self.n_embd // self.n_head) % 2:

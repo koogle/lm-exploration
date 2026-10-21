@@ -25,6 +25,10 @@ uv run modal run -m workflows.modal_train \
 | `modal_tokenizer_research.py` | Tokenizer fitting grid; [research](../tokenizer/research/README.md) |
 | `modal_tokenizer_evaluation.py` | Held-out parent coverage and rescoring; same research guide |
 | `modal_structured_tokenizer.py` | Structured-code/tokenizer comparison; same research guide |
+| `modal_simple_llm_8k.py` | Eight-H100 124M / 8K / 5B controller; [workflow](../distributed/SIMPLE_LLM_8K.md) |
+| `modal_infer_simple_llm.py` | Fixed-prompt samples from the final 124M / 8K checkpoint |
+| `modal_validate_repetition.py` | Four-checkpoint repetition comparison; [report](https://huggingface.co/jfrick/scholarly-code-modern-gpt-124m-step2/blob/a5111f064480c8b39b7d6e791a6f7746290619ab/analysis/repetition/simple-llm-repetition-validation-20261018.md) |
+| `modal_overlap_checks.py` | Bounded three-GPU equivalence/resume checks for the overlapped [`../modal_streaming_train.py`](../modal_streaming_train.py) launcher |
 
 The benchmark launchers retain their historical defaults, resource bounds and
 measured outputs in `../results/`; they do not start full pretraining. Inspect
