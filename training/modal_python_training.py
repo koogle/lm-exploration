@@ -23,7 +23,14 @@ image = (
         "safetensors>=0.4",
         "matplotlib",
     )
-    .env({"PYTHONPATH": "/project", "RAYON_NUM_THREADS": "8", "TOKENIZERS_PARALLELISM": "false"})
+    .env(
+        {
+            "PYTHONPATH": "/project",
+            "RAYON_NUM_THREADS": "8",
+            "TOKENIZERS_PARALLELISM": "false",
+            "TORCHINDUCTOR_COMPILE_THREADS": "1",
+        }
+    )
     .add_local_dir("100m", "/project/model_100m")
     .add_local_dir("10m", "/project/model_10m")
     .add_local_dir("trainer", "/project/trainer")
@@ -421,7 +428,8 @@ def publish(checkpoint: str, evaluation_path: str):
         shutil.copyfile(path, evaluations / path.name)
     current = json.loads(Path(evaluation_path).read_text())
     (output / "evaluation.json").write_text(json.dumps(current, indent=2))
-    shutil.copyfile(Path(SNAPSHOT) / "capacity.json", output / "capacity.json")
+    for capacity_file in ("capacity.json", "capacity.md"):
+        shutil.copyfile(Path(SNAPSHOT) / capacity_file, output / capacity_file)
     for file in ["qualification.json", "execution-harness.json"]:
         shutil.copyfile(Path("/runs", RUN, file), output / file)
     figure, axes = plt.subplots(2, 2, figsize=(12, 8))
