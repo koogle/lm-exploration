@@ -29,6 +29,8 @@ image = (
 def shard(filename: str):
     import gzip
     import hashlib
+    import shutil
+    import tempfile
 
     from huggingface_hub import hf_hub_download
     from training_data.python_code_supplement import REPOSITORY, REVISION, select_document
@@ -40,36 +42,50 @@ def shard(filename: str):
     done = folder / "complete.json"
     if done.exists():
         return json.loads(done.read_text())
-    corpus = Corpus(folder)
-    path = hf_hub_download(REPOSITORY, filename, repo_type="dataset", revision=REVISION)
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        while block := handle.read(8 * 1024 * 1024):
-            digest.update(block)
-    scanned = 0
-    with gzip.open(path, "rt", encoding="utf-8") as handle:
-        for line in handle:
-            scanned += 1
-            try:
-                record = json.loads(line)
-            except (ValueError, TypeError):
-                corpus.reject("malformed_json")
-                continue
-            selected, reason = select_document(record)
-            if selected is None:
-                corpus.reject(reason)
-                continue
-            text, category, parent, provenance = selected
-            provenance.update(shard=filename, shard_sha256=digest.hexdigest())
-            corpus.add(text, category, parent, provenance)
-            if scanned % 5000 == 0:
-                corpus.report("code_shard_preparing")
-                volume.commit()
-    result = corpus.report("code_shard_complete")
-    result.update(shard=filename, rows_scanned=scanned, source_sha256=digest.hexdigest())
-    done.write_text(json.dumps(result, indent=2))
-    corpus.db.close()
-    volume.commit()
+    # SQLite transactions stay on local disk. A failed parser/download must never
+    # leave a connection open against the shared volume for a subsequent retry.
+    with tempfile.TemporaryDirectory(prefix="python-code-") as scratch:
+        local = Path(scratch)
+        corpus = Corpus(local)
+        try:
+            path = hf_hub_download(REPOSITORY, filename, repo_type="dataset", revision=REVISION)
+            digest = hashlib.sha256()
+            with open(path, "rb") as handle:
+                while block := handle.read(8 * 1024 * 1024):
+                    digest.update(block)
+            scanned = 0
+            with gzip.open(path, "rt", encoding="utf-8") as handle:
+                for line in handle:
+                    scanned += 1
+                    try:
+                        record = json.loads(line)
+                    except (ValueError, TypeError):
+                        corpus.reject("malformed_json")
+                        continue
+                    selected, reason = select_document(record)
+                    if selected is None:
+                        corpus.reject(reason)
+                        continue
+                    text, category, parent, provenance = selected
+                    provenance.update(shard=filename, shard_sha256=digest.hexdigest())
+                    corpus.add(text, category, parent, provenance)
+                    if scanned % 5000 == 0:
+                        corpus.report("code_shard_preparing")
+            result = corpus.report("code_shard_complete")
+            result.update(shard=filename, rows_scanned=scanned, source_sha256=digest.hexdigest())
+        finally:
+            corpus.db.close()
+        # Publish the completion marker last; interrupted copies are never merged.
+        folder.mkdir(parents=True, exist_ok=True)
+        for suffix in ("-journal", "-wal", "-shm"):
+            (folder / ("raw.sqlite" + suffix)).unlink(missing_ok=True)
+        for source in local.iterdir():
+            if source.is_file():
+                pending = folder / (source.name + ".pending")
+                shutil.copyfile(source, pending)
+                pending.replace(folder / source.name)
+        done.write_text(json.dumps(result, indent=2))
+        volume.commit()
     print(
         json.dumps(
             {

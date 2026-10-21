@@ -2,6 +2,16 @@
 
 **Current status (2026-10-21): documentation acquisition and single-H100 diagnostics passed; code preparation continues. No eight-GPU experiment updates or model publication yet.**
 
+The first full-code preparation attempt stopped after 16 completed shards
+(1,723,939,858 candidate targets): a complex source file raised Python parser
+`MemoryError`, leaving a SQLite transaction open and causing a retry lock.
+The repaired worker explicitly rejects parser resource exhaustion, closes every
+connection in `finally`, builds each shard on local disk, and publishes its
+completion marker only after copying the closed database. Completed shards are
+reused; incomplete shards are rebuilt. The regression check passes.
+Resumed source call: `fc-01M5E1TW1CXC2EKM962BAHSZ1G`; dependent training controller:
+`fc-01M5E1TXGAHSCBPSWT0XGH669D` (waiting, not GPU training).
+
 Documentation preparation completed all 95 shards with **617,694,542 candidate
 training targets**, before global exclusions. The full 5.3M-file pinned CodeParrot
 Python split is now being prepared to fill implementation capacity and prefer

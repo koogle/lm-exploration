@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from training_data.python_code_supplement import select_document
 from training_data.python_experiment import Corpus
@@ -10,6 +11,14 @@ TEXT = '# Preserve this implementation comment.\ndef add(a, b):\n    """Add two 
 
 
 class CodeSupplementTests(unittest.TestCase):
+    def test_parser_resource_exhaustion_rejects_record(self):
+        row = {"repo_name": "org/repo", "path": "module.py", "license": "mit", "content": TEXT}
+        with patch(
+            "training_data.python_experiment.ast.parse",
+            side_effect=MemoryError("Parser stack overflowed"),
+        ):
+            self.assertEqual(select_document(row)[1], "python_parser_resource_limit")
+
     def test_observed_placeholder_scaffold_is_excluded(self):
         row = {
             "repo_name": "org/repo",

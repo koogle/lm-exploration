@@ -136,6 +136,8 @@ def category(path, text, python_repo=False):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", SyntaxWarning)
                 ast.parse(text)
+        except MemoryError:
+            return None, "python_parser_resource_limit"
         except (SyntaxError, ValueError, RecursionError):
             return None, "invalid_python3"
         test = (
