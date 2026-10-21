@@ -5,9 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from training_data.scholarly import adapt, load_recipe
+from training_data.simple_llm import adapt, load_recipe
 
-from tokenizer_research import CorpusBuilder, load_spec, records, train_candidate
+from tokenizer.tokenizer_research import CorpusBuilder, load_spec, records, train_candidate
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -64,7 +64,7 @@ class LearningCurveTests(unittest.TestCase):
         eval_parents = {p for _, _, p in records(path, manifest, "validation")}
         self.assertFalse(train_parents & eval_parents)
         self.assertFalse(builder.db.execute('SELECT 1 FROM chunks WHERE split="test"').fetchone())
-        config = ROOT / "tokenizer/scholarly-code-v1/config.json"
+        config = ROOT / "tokenizer/simple-llm-v1/config.json"
         a = train_candidate(path, self.root / "a", 1 / 128, 512, config)
         b = train_candidate(path, self.root / "b", 1 / 64, 1024, config)
         self.assertEqual(a["corpus_manifest_sha256"], b["corpus_manifest_sha256"])
@@ -133,7 +133,7 @@ class LearningCurveTests(unittest.TestCase):
         builder.collect("fineweb_edu", reader=reader)
         builder.freeze()
         path = self.root / "data/frozen"
-        config = ROOT / "tokenizer/scholarly-code-v1/config.json"
+        config = ROOT / "tokenizer/simple-llm-v1/config.json"
         with self.assertRaises(ValueError):
             train_candidate(path, self.root / "bad", 2, 512, config)
         with (path / "fineweb_edu-validation.jsonl").open("a") as handle:

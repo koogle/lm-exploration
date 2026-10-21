@@ -1,11 +1,34 @@
-# Vanilla Shakespeare GPT, approximately 10M parameters
+# Modern GPT, approximately 10M parameters
 
-The complete, readable architecture is in [model.py](model.py): six pre-LayerNorm
-causal decoder blocks, width 384, six attention heads, learned positions, GELU
-MLPs, and a separate output projection. With 65 characters and context 256 it has
-**10,795,776 parameters**. The [100M architecture](../100m/README.md) now defaults
-to RMSNorm, RoPE and SwiGLU; its explicit version-1 mode preserves this vanilla
-block design at larger dimensions. This published 10M definition is unchanged.
+The complete architecture is in [model.py](model.py): six pre-RMSNorm causal
+decoder blocks, width 384, six attention heads, RoPE (theta 10,000), SwiGLU
+(hidden width 1,024), causal SDPA and tied input/output embeddings. Projection
+biases, normal initialization (std 0.02), context 256 and norm epsilon 1e-5
+remain. With 65 characters it has **10,670,592 unique parameters**.
+The [100M model](../100m/README.md) uses this same implementation at larger dimensions.
+There are no separate RMSNorm/RoPE/SwiGLU model folders or recipe choices.
+Their untrained single-factor experiments remain in Git history.
+
+New recipes select `model="10m"` and default to `architecture_version=2`.
+All active configuration, projection, block, initialization and forward code lives
+in `model.py`; modern classes do not inherit from the old architecture.
+The [legacy implementation](legacy.py) is explicitly the old code, retained only
+for historical checkpoint compatibility: version 1 uses LayerNorm, learned positions, GELU and
+untied embeddings (**10,795,776 parameters**). Checkpoints without version
+metadata load as version 1; resuming across versions is rejected. The public
+vanilla bundle and historical results below have not been changed. No training
+or quality comparison has been run for the consolidated modern 10M architecture.
+Removing inherited legacy construction changes fresh seeded initializations, but
+not the initialization distribution, checkpoint keys or loaded-weight computation.
+
+From `training/`, verify with:
+
+```sh
+uv sync --locked
+uv run python -m unittest discover -s tests -p 'test_10m.py' -v
+```
+
+## Historical Shakespeare publication
 
 The model starts from random weights and learns next-character prediction from
 Tiny Shakespeare. This is a learning benchmark, not an instruction-following
@@ -20,11 +43,14 @@ independently of the newer version selected by the local training project's lock
 The executed versions and source hashes are saved in every run's config.
 
 The published runs used the former `modal_shakespeare.py` (commit `ec5ebd1`). The
-same settings are now the [`shakespeare-10m` recipe](../recipes/shakespeare-10m.json),
-launched with the generic [recipe launcher](../recipes/README.md) (use a new run ID):
+same training settings are now the [`shakespeare-10m` recipe](../recipes/shakespeare-10m.json),
+which defaults to the modern architecture, not the published vanilla definition.
+For historical architecture reproduction, set `model_overrides` to
+`{"architecture_version": 1}`. Launch with the generic
+[recipe launcher](../recipes/README.md) (use a new run ID):
 
 ```bash
-uv run --with 'modal[api-proxy-support]==1.6.1' modal run modal_train.py \
+uv run --with 'modal[api-proxy-support]==1.6.1' modal run modal_scripts/modal_train.py \
   --recipe recipes/shakespeare-10m.json --run-id shakespeare-10m-smoke-02 --smoke
 ```
 

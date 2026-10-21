@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 from training_data.live_stream import LiveTokenMixture
 from training_data.prefetch import PrefetchedBatches
-from training_data.scholarly import SPLIT_VERSION, load_recipe
+from training_data.simple_llm import SPLIT_VERSION, load_recipe
 from training_data.subword import TOKENIZER_SHA256
 
 

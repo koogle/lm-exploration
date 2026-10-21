@@ -1,0 +1,132 @@
+{
+  "observed_at": "2026-10-17T06:48:38.670971+00:00",
+  "combined_metrics": {
+    "characters": 402355985,
+    "parquet_bytes": 151075860,
+    "rows": 7592,
+    "stored_raw_gzip_bytes": 3438583602,
+    "text_utf8_bytes": 422532017,
+    "words": 59394318
+  },
+  "sources": [
+    {
+      "source_id": "ecb",
+      "repo_id": "jfrick/eu-ecb",
+      "revision": "59d64260b02385e38ae435f0608287bc295c9015",
+      "metrics": {
+        "characters": 155555690,
+        "parquet_bytes": 70207768,
+        "rows": 3233,
+        "stored_raw_gzip_bytes": 1987558776,
+        "text_utf8_bytes": 157328835,
+        "words": 24340487
+      }
+    },
+    {
+      "source_id": "ema",
+      "repo_id": "jfrick/eu-ema",
+      "revision": "0cbafa31544f693413053fa3469f7835999dbc52",
+      "metrics": {
+        "characters": 113243267,
+        "parquet_bytes": 37547588,
+        "rows": 1342,
+        "stored_raw_gzip_bytes": 1154502492,
+        "text_utf8_bytes": 117460157,
+        "words": 16515435
+      }
+    },
+    {
+      "source_id": "eurlex",
+      "repo_id": "jfrick/eu-eurlex",
+      "revision": "782d30c55d9e43f2105df5827869885381534581",
+      "metrics": {
+        "characters": 133557028,
+        "parquet_bytes": 43320504,
+        "rows": 3017,
+        "stored_raw_gzip_bytes": 296522334,
+        "text_utf8_bytes": 147743025,
+        "words": 18538396
+      }
+    },
+    {
+      "source_id": "commission-press",
+      "repo_id": "jfrick/eu-commission-press",
+      "revision": "094b7477487b0d53ada5c18f1484083c1c3c8861",
+      "metrics": {
+        "characters": 0,
+        "parquet_bytes": 0,
+        "rows": 0,
+        "stored_raw_gzip_bytes": 0,
+        "text_utf8_bytes": 0,
+        "words": 0
+      }
+    }
+  ],
+  "campaigns": [
+    {
+      "run_id": "ecb-optimized-20261017-0648",
+      "rounds": 3,
+      "after_campaign": "",
+      "predecessor_wait_seconds": 0,
+      "calls": {
+        "ecb": "fc-01M549VTFNGV736Z576M8YKKW8"
+      },
+      "datasets": {
+        "ecb": "jfrick/eu-ecb"
+      }
+    },
+    {
+      "run_id": "ema-optimized-20261017-0648",
+      "rounds": 3,
+      "after_campaign": "",
+      "predecessor_wait_seconds": 0,
+      "calls": {
+        "ema": "fc-01M549VY4D65Z94619Q4C79B8G"
+      },
+      "datasets": {
+        "ema": "jfrick/eu-ema"
+      }
+    },
+    {
+      "run_id": "eurlex-continue-20261017-0648",
+      "rounds": 3,
+      "after_campaign": "",
+      "predecessor_wait_seconds": 0,
+      "calls": {
+        "eurlex": "fc-01M549VN980Z67SW7FF623BRK5"
+      },
+      "datasets": {
+        "eurlex": "jfrick/eu-eurlex"
+      }
+    },
+    {
+      "run_id": "commission-continue-20261017-0648",
+      "rounds": 3,
+      "after_campaign": "",
+      "predecessor_wait_seconds": 0,
+      "calls": {
+        "commission-press": "fc-01M549VMX7P818Q7ZMSS454RE4"
+      },
+      "datasets": {
+        "commission-press": "jfrick/eu-commission-press"
+      }
+    }
+  ],
+  "verification": "All four HF repositories show running round-1 claims; resumed EUR-Lex already added20 rows. ECB/EMA/Commission first-batch uploads not yet observed at this snapshot.",
+  "recovery": {
+    "old_ecb_supervisor": "TERMINATED",
+    "old_ecb_child": "TERMINATED",
+    "old_ema_supervisor": "FAILURE",
+    "old_ema_child": "TERMINATED",
+    "ecb_reconciliation_revision": "69e19598e17352480aada9a10c8d4ec4ba49cfae",
+    "ema_reconciliation_revision": "ee31e6effd91ec2bd736e42a8898a689c967b49b",
+    "code_push": "d4a7933 pushed successfully after network recovery"
+  },
+  "bounds": {
+    "rounds_per_source": 3,
+    "max_attempts_per_round": 1000,
+    "work_seconds_per_round": 3000,
+    "worker_timeout_seconds": 3600
+  },
+  "exact_tokens": null
+}

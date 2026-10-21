@@ -6,18 +6,16 @@ from pathlib import Path
 
 import modal
 
-from modal_prepare_scholarly import image
+from modal_scripts.modal_prepare_simple_llm import image
 
-image = image.add_local_dir("trainer", "/project/trainer").add_local_file(
-    "modal_prepare_scholarly.py", "/project/modal_prepare_scholarly.py"
-)
+image = image.add_local_dir("modal_scripts", "/project/modal_scripts")
 app = modal.App("lm-exploration-preparation-benchmark")
 
 
 @app.function(image=image, cpu=16, memory=16384, timeout=900, retries=0, max_containers=1)
 def measure():
     os.environ["RAYON_NUM_THREADS"] = "8"
-    from trainer.benchmark_preparation import benchmark
+    from training_data.benchmark_preparation import benchmark
 
     print("Starting controlled CPU benchmarks", flush=True)
     result = {
@@ -30,7 +28,7 @@ def measure():
     from concurrent.futures import ThreadPoolExecutor
 
     from training_data.cached_shards import CachedShards
-    from training_data.scholarly import load_recipe
+    from training_data.simple_llm import load_recipe
 
     sources = [
         s

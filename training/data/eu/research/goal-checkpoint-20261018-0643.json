@@ -1,0 +1,202 @@
+{
+  "observed_at": "2026-10-18T06:43:14.490023+00:00",
+  "control": {
+    "revision": "0d413668eefff0980918c425fa36a493b83c3e3e",
+    "goal_status": "collecting",
+    "campaigns_reserved": 24,
+    "reserved_documents": 6000,
+    "audit_schedule": {
+      "cooldown_until_epoch": 0,
+      "max_pairs": 48,
+      "observed_at_epoch": 1792302970.2015767,
+      "pairs_reserved": 15,
+      "status": "waiting_for_calls",
+      "unresolved_calls": 2
+    }
+  },
+  "combined_metrics": {
+    "characters": 1561032864,
+    "parquet_bytes": 570539547,
+    "rows": 19237,
+    "stored_raw_gzip_bytes": 15566167803,
+    "text_utf8_bytes": 1615784663,
+    "words": 231936530
+  },
+  "exact_tokens_lower_bound": 425356977,
+  "sources": [
+    {
+      "source_id": "ecb",
+      "revision": "82a0bc3a946e32eac8465bac4e8d2c9d3b45e19d",
+      "rows": 10813,
+      "cached_tokens": {
+        "encoding": "o200k_base",
+        "control_revision": "0d413668eefff0980918c425fa36a493b83c3e3e",
+        "exact_tokens_lower_bound": 175182377,
+        "matched_rows": 10416,
+        "matched_shards": 2782,
+        "total_shards": 2907,
+        "complete_for_source_revision": false,
+        "cache_present": true,
+        "audit_summary": {
+          "complete_for_revision": true,
+          "counted_characters": 635828896,
+          "counted_rows": 10416,
+          "counted_shards": 2782,
+          "counting_rule": "Sum of independently encoded text fields; no separators or EOS",
+          "encoding": "o200k_base",
+          "exact_tokens_counted": 175182377,
+          "new_shards_this_run": 67,
+          "observed_at": "2026-10-18T05:59:37.984513+00:00",
+          "repo_id": "jfrick/eu-ecb",
+          "source_id": "ecb",
+          "source_revision": "868d8b0ca5263a993a2e8eae58f60229bd9995d2",
+          "total_rows": 10416,
+          "total_shards": 2782
+        }
+      },
+      "visibility": "private",
+      "latest_run": {
+        "run_id": "goal-ecb-1792299182-bd9cb0969b-round-3",
+        "status": "running",
+        "heartbeat_at": "2026-10-18T06:41:15.433636+00:00",
+        "attempted": 20,
+        "adapter_sha256": "f6069d5c3c5f7122582012bd58aa8f382bc301e9386749e2ded083069aa1ef83",
+        "collection_weights": {
+          "annual_report_translations": 2,
+          "annual_reports": 3,
+          "central_banking_proceedings": 3,
+          "convergence_reports": 3,
+          "decisions": 1,
+          "discussion_papers": 3,
+          "ecb_blog": 1,
+          "economic_bulletin_articles": 1,
+          "economic_bulletin_boxes": 1,
+          "financial_integration_reports": 3,
+          "financial_stability_reviews": 3,
+          "international_role_euro": 3,
+          "interviews": 1,
+          "legal_conference_proceedings": 3,
+          "legal_working_papers": 3,
+          "letters_to_meps": 1,
+          "macroprudential_bulletin_articles": 3,
+          "meeting_accounts": 1,
+          "occasional_papers": 3,
+          "press_releases": 1,
+          "research_bulletins": 2,
+          "speeches": 1,
+          "statistics_papers": 3,
+          "target_annual_reports": 3,
+          "working_papers": 5
+        }
+      },
+      "new_or_repaired_collections": {
+        "convergence_reports": {
+          "candidates": 20,
+          "reported_total": 20,
+          "enumeration_complete": true,
+          "updated_at": "2026-10-17T10:04:30.524745+00:00",
+          "completed": 13,
+          "failures": 7,
+          "rows": 13
+        },
+        "macroprudential_bulletin_articles": {
+          "candidates": 85,
+          "reported_total": 85,
+          "enumeration_complete": true,
+          "updated_at": "2026-10-18T06:36:16.820919+00:00",
+          "completed": 3,
+          "failures": 0,
+          "rows": 3
+        },
+        "financial_integration_reports": {
+          "candidates": 16,
+          "reported_total": 16,
+          "enumeration_complete": true,
+          "updated_at": "2026-10-18T06:37:26.827574+00:00",
+          "completed": 3,
+          "failures": 0,
+          "rows": 3
+        },
+        "international_role_euro": {
+          "candidates": 25,
+          "reported_total": 25,
+          "enumeration_complete": true,
+          "updated_at": "2026-10-18T06:38:51.845404+00:00",
+          "completed": 3,
+          "failures": 0,
+          "rows": 3
+        },
+        "target_annual_reports": {
+          "candidates": 24,
+          "reported_total": 24,
+          "enumeration_complete": true,
+          "updated_at": "2026-10-18T06:39:11.871670+00:00",
+          "completed": 1,
+          "failures": 0,
+          "rows": 1
+        },
+        "other_publications": {
+          "candidates": null,
+          "reported_total": null,
+          "enumeration_complete": null,
+          "updated_at": null,
+          "completed": 0,
+          "failures": 0,
+          "rows": 0
+        }
+      }
+    },
+    {
+      "source_id": "ema",
+      "revision": "dd6a0e4b93e2048269a16645056cfc79f39a76d8",
+      "rows": 8424,
+      "cached_tokens": {
+        "encoding": "o200k_base",
+        "control_revision": "0d413668eefff0980918c425fa36a493b83c3e3e",
+        "exact_tokens_lower_bound": 250174600,
+        "matched_rows": 8170,
+        "matched_shards": 2977,
+        "total_shards": 3069,
+        "complete_for_source_revision": false,
+        "cache_present": true,
+        "audit_summary": {
+          "complete_for_revision": true,
+          "counted_characters": 880260738,
+          "counted_rows": 8170,
+          "counted_shards": 2977,
+          "counting_rule": "Sum of independently encoded text fields; no separators or EOS",
+          "encoding": "o200k_base",
+          "exact_tokens_counted": 250174600,
+          "new_shards_this_run": 134,
+          "observed_at": "2026-10-18T06:06:25.563572+00:00",
+          "repo_id": "jfrick/eu-ema",
+          "source_id": "ema",
+          "source_revision": "2151239a52a54e2220aa32a945050df545af14bf",
+          "total_rows": 8170,
+          "total_shards": 2977
+        }
+      },
+      "visibility": "private",
+      "latest_run": {
+        "run_id": "goal-ema-1792301652-8336f3de89-round-2",
+        "status": "running",
+        "heartbeat_at": "2026-10-18T06:41:57.326184+00:00",
+        "attempted": 100,
+        "adapter_sha256": "a17aede0437f2c3c7761f2988b88baf30934330bba4f6686922fb578fff53cc9",
+        "collection_weights": {
+          "committee_documents": 1,
+          "epar_assessment_reports": 6,
+          "epar_overviews": 1,
+          "epar_product_information": 20,
+          "epar_scientific_discussion_variations": 3,
+          "epar_scientific_discussions": 3,
+          "epar_variation_reports": 3,
+          "news": 1,
+          "non_epar_documents": 2,
+          "scientific_guidelines": 1
+        }
+      },
+      "new_or_repaired_collections": {}
+    }
+  ]
+}

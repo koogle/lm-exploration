@@ -1,0 +1,122 @@
+{
+  "observed_at": "2026-10-17T10:38:40Z",
+  "discovery_method": "Three bounded same-basename /pub/pdf/conrep/ hypotheses, not index-backed links. Official current index returned503. Verified downloaded PDF title, month where present, and year against cached FOEDB records.",
+  "index_probe": {
+    "url": "https://www.ecb.europa.eu/press/other-publications/convergence/html/index.en.html",
+    "http_status": 503
+  },
+  "verified_mappings": [
+    {
+      "original_url": "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2006en.pdf",
+      "replacement_url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2006en.pdf",
+      "inventory_record": {
+        "source_id": "ecb",
+        "collection_id": "convergence_reports",
+        "document_id": "1c4cdfacdbba8c673d1bf4b90371c61909818fd43f781737dc2ce93406d1eca2",
+        "source_document_id": "1122",
+        "url": "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2006en.pdf",
+        "title": "Convergence Report May",
+        "language": "und",
+        "document_type": "convergence_reports",
+        "format": "pdf",
+        "published_at": "2006-05-15T22:00:00+00:00",
+        "modified_at": null
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2006en.pdf",
+        "retrieved_at": "2026-10-17T10:38:29.397981+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2006en.pdf",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 898794,
+        "raw_sha256": "8e545100a568ed8752c759365a6261c82e252178427e918c57eeeb5b4b99a3d7",
+        "content_type": "application/pdf",
+        "etag": null,
+        "last_modified": "Tue, 05 Dec 2006 09:21:14 GMT",
+        "pages": 88,
+        "characters": 246962
+      },
+      "identity_evidence": "CONVERGENCE REPORT\n MAY 2006\nISSN 1725931-2\n9 771725 931009\nEUROPEAN CENTRAL BANK CONVERGENCE REPORT  MAY 2006\nIn 2006 all ECB \npublications \nwill feature \na motif taken \nfrom the \n\u20ac5 banknote.\nCONVERGENCE REPORT\n MAY 2006\n\n\u00a9 European Central Bank, 2006\nAddress\nKaiserstrasse 29\n60311 Frankfurt am Main \nGermany\nPostal address\nPostfach 16 03 19\n60066 Frankfurt am Main \nGermany\nTelephone \n+49 69 1344 0\nWebsite\nhttp://www.ecb.int\nFax \n+49 69 1344 6000\nTelex\n411 144 ecb d\nAll rights reserved. Reproduction for \neducational and non-commercial purposes \nis permitted provided that the source is \nacknowledged.\nThe cut-off date for the statistics included \nin this issue was 28 April 2006.\nISSN 1725-9312 (print)\nISSN 1725-9525 (online)",
+      "verification": "First pages explicitly say CONVERGENCE REPORT and corresponding year; 2006/2007 explicitly say MAY. English body; full PDF parsed successfully.",
+      "recommended_runtime_guard": "Exact old URL and collection match, then SHA256 fetched body must equal verified hash; retain original candidate identity and both URLs in provenance."
+    },
+    {
+      "original_url": "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2000en.pdf",
+      "replacement_url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2000en.pdf",
+      "inventory_record": {
+        "source_id": "ecb",
+        "collection_id": "convergence_reports",
+        "document_id": "a070ca505784aec0871bcb81ac57e650a488e9a1e35c711e91705699f97667d6",
+        "source_document_id": "303",
+        "url": "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2000en.pdf",
+        "title": "Convergence Report",
+        "language": "und",
+        "document_type": "convergence_reports",
+        "format": "pdf",
+        "published_at": "2000-04-30T22:00:00+00:00",
+        "modified_at": null
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2000en.pdf",
+        "retrieved_at": "2026-10-17T10:38:36.377566+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2000en.pdf",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 473508,
+        "raw_sha256": "fccdf76e68a1a61505dd630d2d4f6e5e4f30309f7fcc2338e52bcc04b87fb156",
+        "content_type": "application/pdf",
+        "etag": null,
+        "last_modified": "Thu, 11 Dec 2003 10:11:19 GMT",
+        "pages": 86,
+        "characters": 200065
+      },
+      "identity_evidence": "EN\nCONVERGENCE\nREPORT\n2000\nECB EZB EKT BCE EKP\nCONVERGENCE REPORT 2000\nCONVERGENCE\nREPORT\n2000\n\u00a9 European Central Bank, 2000\nAddress Kaiserstrasse 29\nD-60311 Frankfurt am Main\nGermany\nPostal address Postfach 16 03 19\nD-60066 Frankfurt am Main\nGermany\nTelephone +49 69 1344 0\nInternet http://www.ecb.int\nFax +49 69 1344 6000\nTelex 411 144 ecb d\nAll rights reserved.\nReproduction for educational and non-commercial purposes is permitted provided that the source is acknowledged.\nThe cut-off date for the statistics included in this Report was 14 April 2000, with the exception of the HICPs published on\n18 April 2000.\nISBN 92-9181-061-4",
+      "verification": "First pages explicitly say CONVERGENCE REPORT and corresponding year; 2006/2007 explicitly say MAY. English body; full PDF parsed successfully.",
+      "recommended_runtime_guard": "Exact old URL and collection match, then SHA256 fetched body must equal verified hash; retain original candidate identity and both URLs in provenance."
+    },
+    {
+      "original_url": "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200705en.pdf",
+      "replacement_url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200705en.pdf",
+      "inventory_record": {
+        "source_id": "ecb",
+        "collection_id": "convergence_reports",
+        "document_id": "52426ae8f28e9b46b65977555dae415f3ec8842d65a362b1b5b5f43c98fac8da",
+        "source_document_id": "1475",
+        "url": "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200705en.pdf",
+        "title": "Convergence Report May",
+        "language": "und",
+        "document_type": "convergence_reports",
+        "format": "pdf",
+        "published_at": "2007-05-15T22:00:00+00:00",
+        "modified_at": null
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200705en.pdf",
+        "retrieved_at": "2026-10-17T10:38:40.307249+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200705en.pdf",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 1588343,
+        "raw_sha256": "22076668ff99886ef0f7d15656fea2dc2bf17471a3242a4e6af53ffdcf646cdb",
+        "content_type": "application/pdf",
+        "etag": null,
+        "last_modified": "Fri, 01 Jun 2007 12:17:57 GMT",
+        "pages": 91,
+        "characters": 266451
+      },
+      "identity_evidence": "ISSN 1725931-2\n9 771725 931009\nCONVERGENCE REPORT   MAY 2007\nEN\nCONVERGENCE REPORT\n MAY 2007\nEUROPEAN CENTRAL BANK\nCONVERGENCE REPORT\n MAY 2007\nIn 2007 all ECB \npublications \nfeature a motif \ntaken from the \n\u20ac20 banknote.\n\u00a9 European Central Bank, 2007\nAddress\nKaiserstrasse 29\n60311 Frankfurt am Main \nGermany\nPostal address\nPostfach 16 03 19\n60066 Frankfurt am Main \nGermany\nTelephone \n+49 69 1344 0\nWebsite\nhttp://www.ecb.int\nFax \n+49 69 1344 6000\nTelex\n411 144 ecb d\nAll rights reserved. Reproduction for \neducational and non-commercial purposes \nis permitted provided that the source is \nacknowledged.\nThe cut-off date for the statistics included \nin this issue was 26 April 2007.\nISSN 1725-9312 (print)\nISSN 1725-9525 (online)",
+      "verification": "First pages explicitly say CONVERGENCE REPORT and corresponding year; 2006/2007 explicitly say MAY. English body; full PDF parsed successfully.",
+      "recommended_runtime_guard": "Exact old URL and collection match, then SHA256 fetched body must equal verified hash; retain original candidate identity and both URLs in provenance."
+    }
+  ],
+  "limits": "Only these exact three pairs verified. No broad prefix rewrite. Collector robots and minimum5second host pacing used; two robots requests, one index request, three PDFs. No HF writes, no adapter changes."
+}

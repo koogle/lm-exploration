@@ -1,0 +1,14 @@
+{
+  "observed_at": "2026-10-17T09:29:52.715276+00:00",
+  "app_name": "lm-exploration-eu-recovery-20261017",
+  "app_id": "ap-qZfUtI8a5UmKK9EyWFAL3D",
+  "app_creation": "succeeded",
+  "deploy": "failed at AppGetByDeploymentName with upstream ServiceError",
+  "detached_run": "failed during app initialization with upstream ServiceError",
+  "new_workers_started": false,
+  "hf_source_reads": {
+    "ecb": 503,
+    "ema": 503
+  },
+  "existing_workers": "not stopped; current state unavailable"
+}

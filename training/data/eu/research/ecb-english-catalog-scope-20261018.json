@@ -1,0 +1,1607 @@
+{
+  "observed_at": "2026-10-18T06:39:27.415053+00:00",
+  "snapshot": "1792213219/2sP68GoB",
+  "metadata_url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+  "data_chunks": 81,
+  "catalog_records": 20162,
+  "catalog_type_count": 113,
+  "configured_collections": 26,
+  "configured_type_count": 26,
+  "configured_catalog_records": 14888,
+  "unconfigured_catalog_records": 5274,
+  "supported_unique_urls": 20369,
+  "configured_supported_unique_urls": 15043,
+  "additional_unconfigured_unique_urls": 5326,
+  "by_type": {
+    "1": {
+      "name": "ECB Press release",
+      "catalog_records": 2235,
+      "supported_unique_urls": 2391,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 156,
+        "html": 2235
+      }
+    },
+    "2": {
+      "name": "ECB Working Paper Series",
+      "catalog_records": 3300,
+      "supported_unique_urls": 3297,
+      "configured": true,
+      "records_without_supported_representation": 2,
+      "formats": {
+        "pdf": 3298
+      }
+    },
+    "3": {
+      "name": "ECB Occasional Paper Series",
+      "catalog_records": 400,
+      "supported_unique_urls": 400,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 400
+      }
+    },
+    "4": {
+      "name": "ECB Legal Working Paper Series",
+      "catalog_records": 23,
+      "supported_unique_urls": 23,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 23
+      }
+    },
+    "5": {
+      "name": "ECB Statistics Paper Series",
+      "catalog_records": 54,
+      "supported_unique_urls": 54,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 54
+      }
+    },
+    "6": {
+      "name": "ECB Economic Bulletin",
+      "catalog_records": 94,
+      "supported_unique_urls": 94,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 86,
+        "pdf": 8
+      }
+    },
+    "7": {
+      "name": "ECB Euro area economic and financial developments by institutional sector (early)",
+      "catalog_records": 48,
+      "supported_unique_urls": 55,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 34,
+        "pdf": 21
+      }
+    },
+    "8": {
+      "name": "ECB MFI interest rate statistics",
+      "catalog_records": 274,
+      "supported_unique_urls": 298,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 200,
+        "html": 98
+      }
+    },
+    "9": {
+      "name": "ECB Euro area securities issues statistics",
+      "catalog_records": 268,
+      "supported_unique_urls": 268,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 46,
+        "pdf": 222
+      }
+    },
+    "10": {
+      "name": "ECB Monetary developments in the euro area",
+      "catalog_records": 334,
+      "supported_unique_urls": 358,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 261,
+        "html": 97
+      }
+    },
+    "11": {
+      "name": "ECB Euro area insurance corporation and pension fund statistics",
+      "catalog_records": 24,
+      "supported_unique_urls": 24,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 24
+      }
+    },
+    "12": {
+      "name": "ECB Euro area investment fund statistics",
+      "catalog_records": 105,
+      "supported_unique_urls": 103,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 22,
+        "pdf": 83
+      }
+    },
+    "13": {
+      "name": "ECB Euro area financial vehicle corporation statistics",
+      "catalog_records": 50,
+      "supported_unique_urls": 50,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 23,
+        "pdf": 27
+      }
+    },
+    "14": {
+      "name": "ECB Payment instruments and systems",
+      "catalog_records": 17,
+      "supported_unique_urls": 21,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 9,
+        "html": 12
+      }
+    },
+    "18": {
+      "name": "ECB Letters to MEPs",
+      "catalog_records": 723,
+      "supported_unique_urls": 723,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 723
+      }
+    },
+    "19": {
+      "name": "ECB Speech",
+      "catalog_records": 3080,
+      "supported_unique_urls": 3080,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 2910,
+        "pdf": 170
+      }
+    },
+    "20": {
+      "name": "ECB Monetary policy account",
+      "catalog_records": 97,
+      "supported_unique_urls": 97,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 97
+      }
+    },
+    "21": {
+      "name": "ECB Weekly financial statement - Commentary",
+      "catalog_records": 645,
+      "supported_unique_urls": 645,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 645
+      }
+    },
+    "22": {
+      "name": "ECB Convergence Report",
+      "catalog_records": 20,
+      "supported_unique_urls": 20,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 6,
+        "pdf": 14
+      }
+    },
+    "23": {
+      "name": "ECB Other publication",
+      "catalog_records": 772,
+      "supported_unique_urls": 771,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 760,
+        "html": 12
+      }
+    },
+    "24": {
+      "name": "ECB Economic Bulletin - Article",
+      "catalog_records": 503,
+      "supported_unique_urls": 503,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 133,
+        "pdf": 370
+      }
+    },
+    "25": {
+      "name": "ECB Economic Bulletin - Box",
+      "catalog_records": 1829,
+      "supported_unique_urls": 1829,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 458,
+        "pdf": 1371
+      }
+    },
+    "27": {
+      "name": "ECB Interview",
+      "catalog_records": 617,
+      "supported_unique_urls": 617,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 617
+      }
+    },
+    "53": {
+      "name": "ECB Balance of payments (monthly)",
+      "catalog_records": 143,
+      "supported_unique_urls": 166,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 23,
+        "html": 143
+      }
+    },
+    "54": {
+      "name": "ECB Monetary policy statement",
+      "catalog_records": 298,
+      "supported_unique_urls": 298,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 298
+      }
+    },
+    "55": {
+      "name": "ECB Governing Council decisions - Other decisions",
+      "catalog_records": 248,
+      "supported_unique_urls": 248,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 248
+      }
+    },
+    "56": {
+      "name": "ECB Balance of payments (quarterly)",
+      "catalog_records": 49,
+      "supported_unique_urls": 57,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 8,
+        "html": 49
+      }
+    },
+    "61": {
+      "name": "ECB Research Bulletin",
+      "catalog_records": 126,
+      "supported_unique_urls": 127,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 126,
+        "pdf": 1
+      }
+    },
+    "90": {
+      "name": "ECB Euro area economic and financial developments by institutional sector (full)",
+      "catalog_records": 47,
+      "supported_unique_urls": 55,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 22,
+        "html": 33
+      }
+    },
+    "92": {
+      "name": "ECB Monetary policy decision",
+      "catalog_records": 322,
+      "supported_unique_urls": 322,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 322
+      }
+    },
+    "95": {
+      "name": "ECB Macroeconomic projections for the euro area",
+      "catalog_records": 90,
+      "supported_unique_urls": 90,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 31,
+        "pdf": 59
+      }
+    },
+    "96": {
+      "name": "ECB Macroprudential Bulletin - Article",
+      "catalog_records": 85,
+      "supported_unique_urls": 85,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 85
+      }
+    },
+    "97": {
+      "name": "ECB Euro area insurance corporations statistics",
+      "catalog_records": 27,
+      "supported_unique_urls": 27,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 22,
+        "pdf": 5
+      }
+    },
+    "99": {
+      "name": "Euro area bank lending survey",
+      "catalog_records": 94,
+      "supported_unique_urls": 94,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 32,
+        "pdf": 62
+      }
+    },
+    "101": {
+      "name": "ECB Weekly financial statement",
+      "catalog_records": 801,
+      "supported_unique_urls": 801,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 472,
+        "pdf": 329
+      }
+    },
+    "113": {
+      "name": "ECB Euro money market statistics",
+      "catalog_records": 41,
+      "supported_unique_urls": 41,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 41
+      }
+    },
+    "116": {
+      "name": "ECB Disaggregated financial statement",
+      "catalog_records": 44,
+      "supported_unique_urls": 0,
+      "configured": false,
+      "records_without_supported_representation": 44,
+      "formats": {}
+    },
+    "132": {
+      "name": "ECB Annual Report",
+      "catalog_records": 34,
+      "supported_unique_urls": 36,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 11,
+        "pdf": 25
+      }
+    },
+    "133": {
+      "name": "ECB Annual Accounts",
+      "catalog_records": 27,
+      "supported_unique_urls": 27,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 7,
+        "pdf": 20
+      }
+    },
+    "134": {
+      "name": "ECB Annual consolidated balance sheet of the Eurosystem",
+      "catalog_records": 27,
+      "supported_unique_urls": 27,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 7,
+        "pdf": 20
+      }
+    },
+    "137": {
+      "name": "ECB Financial Stability Review",
+      "catalog_records": 44,
+      "supported_unique_urls": 44,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 17,
+        "pdf": 27
+      }
+    },
+    "138": {
+      "name": "ECB Financial Stability Review - Article",
+      "catalog_records": 153,
+      "supported_unique_urls": 153,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 44,
+        "pdf": 109
+      }
+    },
+    "139": {
+      "name": "ECB Macroprudential Bulletin",
+      "catalog_records": 4,
+      "supported_unique_urls": 4,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 4
+      }
+    },
+    "140": {
+      "name": "Financial integration and structure in the euro area",
+      "catalog_records": 16,
+      "supported_unique_urls": 16,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 4,
+        "pdf": 12
+      }
+    },
+    "142": {
+      "name": "TARGET Annual Report",
+      "catalog_records": 24,
+      "supported_unique_urls": 24,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 7,
+        "pdf": 17
+      }
+    },
+    "143": {
+      "name": "The international role of the euro",
+      "catalog_records": 25,
+      "supported_unique_urls": 25,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 9,
+        "pdf": 16
+      }
+    },
+    "145": {
+      "name": "Card fraud report",
+      "catalog_records": 8,
+      "supported_unique_urls": 8,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 4,
+        "pdf": 4
+      }
+    },
+    "149": {
+      "name": "Euro area balance of payments and international investment position statistics - Quality report",
+      "catalog_records": 16,
+      "supported_unique_urls": 16,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 5,
+        "pdf": 11
+      }
+    },
+    "150": {
+      "name": "Euro area quarterly financial accounts - Quality report",
+      "catalog_records": 9,
+      "supported_unique_urls": 9,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 6,
+        "pdf": 3
+      }
+    },
+    "155": {
+      "name": "ECB Forum on Central Banking - Conference proceedings",
+      "catalog_records": 13,
+      "supported_unique_urls": 13,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 10,
+        "html": 3
+      }
+    },
+    "156": {
+      "name": "Eurosystem oversight report",
+      "catalog_records": 5,
+      "supported_unique_urls": 5,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 5
+      }
+    },
+    "157": {
+      "name": "Survey on the Access to Finance of Enterprises in the euro area",
+      "catalog_records": 39,
+      "supported_unique_urls": 39,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 21,
+        "pdf": 18
+      }
+    },
+    "158": {
+      "name": "ECB Survey of Professional Forecasters",
+      "catalog_records": 52,
+      "supported_unique_urls": 52,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 36,
+        "pdf": 16
+      }
+    },
+    "159": {
+      "name": "T2S Annual Report",
+      "catalog_records": 13,
+      "supported_unique_urls": 13,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 13
+      }
+    },
+    "160": {
+      "name": "T2S financial statement",
+      "catalog_records": 11,
+      "supported_unique_urls": 11,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 11
+      }
+    },
+    "168": {
+      "name": "ECB Conference on Accounting, Financial Reporting and Corporate Governance",
+      "catalog_records": 1,
+      "supported_unique_urls": 1,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 1
+      }
+    },
+    "180": {
+      "name": "T2S Harmonisation progress report",
+      "catalog_records": 19,
+      "supported_unique_urls": 19,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 19
+      }
+    },
+    "183": {
+      "name": "MIP News",
+      "catalog_records": 223,
+      "supported_unique_urls": 223,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 223
+      }
+    },
+    "199": {
+      "name": "ECB Survey of Monetary Analysts",
+      "catalog_records": 61,
+      "supported_unique_urls": 61,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 61
+      }
+    },
+    "200": {
+      "name": "ECB Annual Report - Statistical annex",
+      "catalog_records": 3,
+      "supported_unique_urls": 3,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 3
+      }
+    },
+    "207": {
+      "name": "Euro area monetary and financial statistics - Quality report",
+      "catalog_records": 8,
+      "supported_unique_urls": 8,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 2,
+        "pdf": 6
+      }
+    },
+    "211": {
+      "name": "ECB Environmental Statement",
+      "catalog_records": 6,
+      "supported_unique_urls": 6,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 3,
+        "pdf": 3
+      }
+    },
+    "213": {
+      "name": "ECB Euro money market",
+      "catalog_records": 14,
+      "supported_unique_urls": 14,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 4,
+        "pdf": 10
+      }
+    },
+    "217": {
+      "name": "ECB Financial Stability Review - Box",
+      "catalog_records": 449,
+      "supported_unique_urls": 449,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 87,
+        "pdf": 362
+      }
+    },
+    "223": {
+      "name": "\u20acSTR Transparency on errors",
+      "catalog_records": 27,
+      "supported_unique_urls": 27,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 27
+      }
+    },
+    "224": {
+      "name": "Financial integration and structure article",
+      "catalog_records": 3,
+      "supported_unique_urls": 3,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 3
+      }
+    },
+    "226": {
+      "name": "The ECB Blog",
+      "catalog_records": 256,
+      "supported_unique_urls": 256,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 256
+      }
+    },
+    "236": {
+      "name": "AMI-SeCo report",
+      "catalog_records": 34,
+      "supported_unique_urls": 34,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 34
+      }
+    },
+    "237": {
+      "name": "Euro area pension fund statistics",
+      "catalog_records": 15,
+      "supported_unique_urls": 15,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 15
+      }
+    },
+    "246": {
+      "name": "\u20acSTR Annual Methodology Review",
+      "catalog_records": 6,
+      "supported_unique_urls": 6,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 4,
+        "pdf": 2
+      }
+    },
+    "249": {
+      "name": "ECB Strategy review",
+      "catalog_records": 6,
+      "supported_unique_urls": 6,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 6
+      }
+    },
+    "250": {
+      "name": "ECB public consultation - payments and markets",
+      "catalog_records": 5,
+      "supported_unique_urls": 5,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 4,
+        "html": 1
+      }
+    },
+    "254": {
+      "name": "Digital euro FAQ",
+      "catalog_records": 1,
+      "supported_unique_urls": 1,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 1
+      }
+    },
+    "268": {
+      "name": "ECB Survey of Monetary Analysts - Aggregate results",
+      "catalog_records": 43,
+      "supported_unique_urls": 43,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 43
+      }
+    },
+    "279": {
+      "name": "ECB Digital Euro Investigation Phase document",
+      "catalog_records": 38,
+      "supported_unique_urls": 38,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 38
+      }
+    },
+    "280": {
+      "name": "ECB Digital Euro Experimentation work",
+      "catalog_records": 5,
+      "supported_unique_urls": 5,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 5
+      }
+    },
+    "281": {
+      "name": "ECB Digital Euro Governance",
+      "catalog_records": 1,
+      "supported_unique_urls": 1,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 1
+      }
+    },
+    "282": {
+      "name": "ECB Macroprudential Bulletin - Focus",
+      "catalog_records": 20,
+      "supported_unique_urls": 20,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 20
+      }
+    },
+    "290": {
+      "name": "ECB Podcast",
+      "catalog_records": 23,
+      "supported_unique_urls": 23,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 23
+      }
+    },
+    "291": {
+      "name": "Combined monetary policy decisions and statement",
+      "catalog_records": 39,
+      "supported_unique_urls": 39,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 39
+      }
+    },
+    "298": {
+      "name": "ECB Consumer Expectation Survey",
+      "catalog_records": 92,
+      "supported_unique_urls": 92,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 92
+      }
+    },
+    "329": {
+      "name": "Target services pricing guide",
+      "catalog_records": 2,
+      "supported_unique_urls": 2,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 2
+      }
+    },
+    "343": {
+      "name": "Study on the payment attitudes of consumers in the euro area (SPACE)",
+      "catalog_records": 3,
+      "supported_unique_urls": 3,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 2,
+        "pdf": 1
+      }
+    },
+    "344": {
+      "name": "The international role of the euro - Special feature",
+      "catalog_records": 23,
+      "supported_unique_urls": 23,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 5,
+        "pdf": 18
+      }
+    },
+    "345": {
+      "name": "The international role of the euro - Box",
+      "catalog_records": 36,
+      "supported_unique_urls": 36,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 13,
+        "pdf": 23
+      }
+    },
+    "362": {
+      "name": "Digital Euro Preparation Phase - Scheme Rulebook Development Group documents",
+      "catalog_records": 31,
+      "supported_unique_urls": 31,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 31
+      }
+    },
+    "368": {
+      "name": "ECB Legal act",
+      "catalog_records": 12,
+      "supported_unique_urls": 12,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 12
+      }
+    },
+    "377": {
+      "name": "ECB Discussion Paper Series",
+      "catalog_records": 32,
+      "supported_unique_urls": 32,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 32
+      }
+    },
+    "390": {
+      "name": "ECB public consultation - statistics",
+      "catalog_records": 5,
+      "supported_unique_urls": 4,
+      "configured": false,
+      "records_without_supported_representation": 1,
+      "formats": {
+        "pdf": 3,
+        "html": 1
+      }
+    },
+    "392": {
+      "name": "Climate-related financial disclosures",
+      "catalog_records": 8,
+      "supported_unique_urls": 8,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 8
+      }
+    },
+    "396": {
+      "name": "Euro area bank lending survey - Questionnaire",
+      "catalog_records": 1,
+      "supported_unique_urls": 1,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 1
+      }
+    },
+    "397": {
+      "name": "Euro area bank lending survey - Glossary",
+      "catalog_records": 1,
+      "supported_unique_urls": 1,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 1
+      }
+    },
+    "399": {
+      "name": "ECB Digital Euro Preparation Phase document",
+      "catalog_records": 30,
+      "supported_unique_urls": 30,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 30
+      }
+    },
+    "400": {
+      "name": "Digital Euro Investigation Phase - Scheme Rulebook Development Group documents",
+      "catalog_records": 16,
+      "supported_unique_urls": 16,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 16
+      }
+    },
+    "402": {
+      "name": "Feedback on the input provided by the European Parliament as part of its resolution on the ECB\u2019s Annual Report",
+      "catalog_records": 11,
+      "supported_unique_urls": 11,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 3,
+        "pdf": 8
+      }
+    },
+    "406": {
+      "name": "ECB Digital Euro Investigation Phase - Progress Report",
+      "catalog_records": 5,
+      "supported_unique_urls": 5,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 5
+      }
+    },
+    "407": {
+      "name": "ECB Governing Council statement",
+      "catalog_records": 4,
+      "supported_unique_urls": 4,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 3,
+        "html": 1
+      }
+    },
+    "408": {
+      "name": "ECB Digital Euro Preparation Phase - Progress Report",
+      "catalog_records": 4,
+      "supported_unique_urls": 4,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 4
+      }
+    },
+    "409": {
+      "name": "Financial integration and structure box",
+      "catalog_records": 14,
+      "supported_unique_urls": 14,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 14
+      }
+    },
+    "425": {
+      "name": "EBA/ECB report",
+      "catalog_records": 2,
+      "supported_unique_urls": 2,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 2
+      }
+    },
+    "443": {
+      "name": "Use of cash by companies in the euro area",
+      "catalog_records": 2,
+      "supported_unique_urls": 2,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 2
+      }
+    },
+    "447": {
+      "name": "Integrated Reporting Framework document",
+      "catalog_records": 1,
+      "supported_unique_urls": 1,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 1
+      }
+    },
+    "448": {
+      "name": "Consultation response",
+      "catalog_records": 6,
+      "supported_unique_urls": 6,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 6
+      }
+    },
+    "450": {
+      "name": "Legal conference proceedings",
+      "catalog_records": 10,
+      "supported_unique_urls": 10,
+      "configured": true,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 10
+      }
+    },
+    "454": {
+      "name": "Survey on credit terms and conditions in euro-denominated securities financing and OTC derivatives markets",
+      "catalog_records": 24,
+      "supported_unique_urls": 24,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 24
+      }
+    },
+    "456": {
+      "name": "Letters and responses",
+      "catalog_records": 2,
+      "supported_unique_urls": 2,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 2
+      }
+    },
+    "458": {
+      "name": "The exchange of balance of payments, international investment position statistics \u2013 BPM6 - booklet",
+      "catalog_records": 4,
+      "supported_unique_urls": 4,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 4
+      }
+    },
+    "462": {
+      "name": "TARGET Services Annual Report",
+      "catalog_records": 2,
+      "supported_unique_urls": 2,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 2
+      }
+    },
+    "471": {
+      "name": "Digital euro project document",
+      "catalog_records": 12,
+      "supported_unique_urls": 12,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 12
+      }
+    },
+    "472": {
+      "name": "Digital euro project - Scheme Rulebook Development Group documents",
+      "catalog_records": 11,
+      "supported_unique_urls": 11,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 11
+      }
+    },
+    "474": {
+      "name": "ECB Climate Change Indicators Statistical Release",
+      "catalog_records": 1,
+      "supported_unique_urls": 2,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "pdf": 1,
+        "html": 1
+      }
+    },
+    "477": {
+      "name": "Digital euro pilot FAQs",
+      "catalog_records": 1,
+      "supported_unique_urls": 1,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 1
+      }
+    },
+    "488": {
+      "name": "Bank treasurer survey",
+      "catalog_records": 1,
+      "supported_unique_urls": 1,
+      "configured": false,
+      "records_without_supported_representation": 0,
+      "formats": {
+        "html": 1
+      }
+    }
+  },
+  "data_chunk_receipts": [
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_0.json",
+      "retrieved_at": "2026-10-18T05:35:21.998663+00:00",
+      "raw_sha256": "95431b1e15fadfa325e4df2b05921c49e7673945fe34306c00efac2f1c160ee3"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_1.json",
+      "retrieved_at": "2026-10-18T05:36:32.558921+00:00",
+      "raw_sha256": "d303974dabffa0cd61c6fb002d5acdfd0dde4f609e9fe340e03f1357b7316885"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_10.json",
+      "retrieved_at": "2026-10-18T05:36:13.467446+00:00",
+      "raw_sha256": "49d2a459ae8acb1696004ec9a3f2bc20128bd37184c47bd724d6919fa72b0174"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_11.json",
+      "retrieved_at": "2026-10-18T05:35:37.024037+00:00",
+      "raw_sha256": "6492fea61b11b38c5680a9276cdab83116557f6d156b113757e87a98d6bd7225"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_12.json",
+      "retrieved_at": "2026-10-18T06:25:37.378240+00:00",
+      "raw_sha256": "a1406bf2cd6c3f3b159b325257ee5fcc51fd8a4b97d0f1bf6b20a2c42ca17ff5"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_13.json",
+      "retrieved_at": "2026-10-18T06:27:05.564586+00:00",
+      "raw_sha256": "d90618c9871cc302745e92e6acf485a3f6e4ad2f295fdc8a4afc2cc68cdef55c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_14.json",
+      "retrieved_at": "2026-10-18T06:34:50.121505+00:00",
+      "raw_sha256": "878f95e66e58125a6c2c88238f79df1278273e3fa202f29deeade700ba031bcf"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_15.json",
+      "retrieved_at": "2026-10-18T06:27:10.558619+00:00",
+      "raw_sha256": "6ca00e502efaa0c3c31c7f4fa44f09201121d5332c2cf875b44ace487df8e3f6"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_16.json",
+      "retrieved_at": "2026-10-18T06:31:05.634542+00:00",
+      "raw_sha256": "bc82a8e2e7c23c1a7643f505a832256a911cc6f1e6c635a39a83b2ab9d9cd831"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_17.json",
+      "retrieved_at": "2026-10-18T06:27:20.546943+00:00",
+      "raw_sha256": "7d48fc61f8132cbb42d8f72055b8d4f02fe68311bc5f473d6322a77795b4b365"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_18.json",
+      "retrieved_at": "2026-10-18T06:27:25.547216+00:00",
+      "raw_sha256": "2c6426289b519d5d04305f8c61edb2bd67ca1f808d5d251d8ddca6ec9d3925ac"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_19.json",
+      "retrieved_at": "2026-10-18T06:31:10.652373+00:00",
+      "raw_sha256": "bec272d235f05aad6f7aebb403f655e11d06a3fc97e606445f1de37424c25046"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_2.json",
+      "retrieved_at": "2026-10-18T06:24:57.323767+00:00",
+      "raw_sha256": "de0c9aae0151b02b93db368690370cf330988f26135f4272a05b0f2f93fd4a6f"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_20.json",
+      "retrieved_at": "2026-10-18T06:27:35.556259+00:00",
+      "raw_sha256": "43f92ce3e822ccc218877075a23252b30ccdd98ec380ee2a7e3fbc21e0731ff1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_21.json",
+      "retrieved_at": "2026-10-18T06:34:54.827019+00:00",
+      "raw_sha256": "d0194713a3b41d3653eb6b2fa97027b7551a812b240279d6e13e247f479b3313"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_22.json",
+      "retrieved_at": "2026-10-18T06:27:40.579235+00:00",
+      "raw_sha256": "3469e7496b780b6e99da55ba0de982920b54361988a4bfaa94d26520e676463b"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_23.json",
+      "retrieved_at": "2026-10-18T06:31:15.642183+00:00",
+      "raw_sha256": "77c4b41ef79278b02f7057499b2e3b17e6a8e326f54c1b89452399c58649f0e1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_24.json",
+      "retrieved_at": "2026-10-18T06:28:15.555653+00:00",
+      "raw_sha256": "41e28975c3d1601098a69dafc92984a646b4534fb5c59354ca3935e5f64eb3fc"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_25.json",
+      "retrieved_at": "2026-10-18T06:27:50.555108+00:00",
+      "raw_sha256": "62d8bfcc6e75293a48ba4fc3c65e5a12f31ef51556ed07cb31537970260d7051"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_26.json",
+      "retrieved_at": "2026-10-18T06:31:21.302362+00:00",
+      "raw_sha256": "32a04f8a65fdd90bc0c4ae2041684149c52ea7cf001fba0532b075d93febc757"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_27.json",
+      "retrieved_at": "2026-10-18T06:27:55.579052+00:00",
+      "raw_sha256": "ce5add7907dd21c7c87f9ddcbb23816acca2844ec6776274e519c326b73d2c29"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_28.json",
+      "retrieved_at": "2026-10-18T06:28:00.556458+00:00",
+      "raw_sha256": "2c9ea0112644bbd5977ec793e52416f01a0f2cb5d31173cbaefddfe942960b89"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_29.json",
+      "retrieved_at": "2026-10-18T06:29:40.646884+00:00",
+      "raw_sha256": "ef28960a3b20a847db02a6e4712daada6b62ac0f78826d6face2e822a69ac603"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_3.json",
+      "retrieved_at": "2026-10-18T05:35:02.010880+00:00",
+      "raw_sha256": "c74c125dbbea6f0deadb68d881ba69aac934ec06f03e37678cdfb624cf4e1068"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_30.json",
+      "retrieved_at": "2026-10-18T06:31:25.689917+00:00",
+      "raw_sha256": "f2bc5a17c9893e5c8b33d93ebd7052644c17aafbbb5dbefbd3fc2f2af7ee7adc"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_31.json",
+      "retrieved_at": "2026-10-18T06:34:59.882606+00:00",
+      "raw_sha256": "0ece3ca58846313888f91b20d02dfcc7904421c30c00d03acc171303c82b2bdb"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_32.json",
+      "retrieved_at": "2026-10-18T06:31:30.644551+00:00",
+      "raw_sha256": "2de4979102ee93dfc31dc91d5aeab928885392ead552a9827fcff49c98b3a35d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_33.json",
+      "retrieved_at": "2026-10-18T06:35:04.872288+00:00",
+      "raw_sha256": "cf3e82d54da0089868b31c4de606bd684f635b50c850d2374205bd68f3467328"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_34.json",
+      "retrieved_at": "2026-10-18T06:35:09.975270+00:00",
+      "raw_sha256": "9008e6f91322aa0ac631373328dc0a93ccdfe304ee5c3bbc4a956f53e87897ad"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_35.json",
+      "retrieved_at": "2026-10-18T06:29:50.653240+00:00",
+      "raw_sha256": "57d4f3baa2ba23e591d294a83c924ab6390e131fe62444a3eed7c9b902ff1302"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_36.json",
+      "retrieved_at": "2026-10-18T06:31:35.649112+00:00",
+      "raw_sha256": "bafcbac7c7b5392158c7ce7d6bf772d5d41df613d9c7fbad5e8ac2c868cdabc5"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_37.json",
+      "retrieved_at": "2026-10-18T06:35:14.822906+00:00",
+      "raw_sha256": "5d416eef7d30d73abcf801e9b8a8871beb4f13f7d547f56ec39714a1233f2054"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_38.json",
+      "retrieved_at": "2026-10-18T06:29:55.647944+00:00",
+      "raw_sha256": "fa20e224b315853ab4d52c30ea26445fb716f8446e7cc76ea199bbb4664410e6"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_39.json",
+      "retrieved_at": "2026-10-18T06:31:40.650483+00:00",
+      "raw_sha256": "e805e74b69492a328fa2f187e038fb5512ca58451793345bc12cc70d6913312c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_4.json",
+      "retrieved_at": "2026-10-18T06:26:55.388535+00:00",
+      "raw_sha256": "6b4ba7a1b44d35410c9e8db8b51a84f2a1726eaa514ec7bef21b6f0fae634b71"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_40.json",
+      "retrieved_at": "2026-10-18T06:35:19.814194+00:00",
+      "raw_sha256": "ddb7f81c995bd29ef51ee79d63c2c822dc8e492177d14f884a1d18714214b7b1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_41.json",
+      "retrieved_at": "2026-10-18T06:30:00.647575+00:00",
+      "raw_sha256": "9920db800e53276f37276436bd10fb3a0679f7190cf00933b3d599ee594941ff"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_42.json",
+      "retrieved_at": "2026-10-18T06:31:45.642940+00:00",
+      "raw_sha256": "b979684c1579835b18f8be0228c42da6e7253d2cfa9332e98e397a7733b200e2"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_43.json",
+      "retrieved_at": "2026-10-18T06:35:24.829368+00:00",
+      "raw_sha256": "d7642cdcd028695477facebd975cc095156503c40723ab2827da4fc49110e5c3"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_44.json",
+      "retrieved_at": "2026-10-18T06:35:29.888623+00:00",
+      "raw_sha256": "0575a481bbb068e64e74d63942fb259ea3c392f5ea17ac4aa9edeb3672593b68"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_45.json",
+      "retrieved_at": "2026-10-18T06:31:50.633338+00:00",
+      "raw_sha256": "0d1c56a38b187d47b28e7b1fec224836f105877ab3eab32bda01c9fc106339b8"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_46.json",
+      "retrieved_at": "2026-10-18T06:35:34.901054+00:00",
+      "raw_sha256": "604c92be619a3fafda23f5158f2470039f5e575770fba6f7f36b6a0469ad9c73"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_47.json",
+      "retrieved_at": "2026-10-18T06:30:10.664683+00:00",
+      "raw_sha256": "708f0ca98f86fc28b50c20437722ed4cfaf87e44a7c436ab87572ed282dee93b"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_48.json",
+      "retrieved_at": "2026-10-18T06:31:55.629302+00:00",
+      "raw_sha256": "d94558753546b0e8b5a98b5d25aebc535e90f8b36e86976955c9832449be6a70"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_49.json",
+      "retrieved_at": "2026-10-18T06:35:39.875437+00:00",
+      "raw_sha256": "17b6e73e1327a6bcbdc3a34b949435a74cda9d547814c83d134663273f37ea62"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_5.json",
+      "retrieved_at": "2026-10-18T06:25:22.376708+00:00",
+      "raw_sha256": "b01c1f7c400c385af3df29cfcba0c739b4169ec140ba8f1bf4b5812531ba5c1d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_50.json",
+      "retrieved_at": "2026-10-18T06:30:15.633962+00:00",
+      "raw_sha256": "e04bb8bfc1b720094a4554fd871c35217580ecfd234085a0659f0eaf007ed391"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_51.json",
+      "retrieved_at": "2026-10-18T06:32:00.654180+00:00",
+      "raw_sha256": "4c3c8a965734f05c171cf761f366909a8a4a4796472ed2045353da4d410fdcdc"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_52.json",
+      "retrieved_at": "2026-10-18T06:35:44.846703+00:00",
+      "raw_sha256": "20e62382ba19283d205689468ae04780bc65bf989c0c249d27b16be1cfec1011"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_53.json",
+      "retrieved_at": "2026-10-18T06:30:20.614577+00:00",
+      "raw_sha256": "826049ed7cae8647eae14dd74c4a4c6c9981da0fb390cc605210bdf8e8b9ddb2"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_54.json",
+      "retrieved_at": "2026-10-18T06:32:05.632691+00:00",
+      "raw_sha256": "df533c040dffd4bb04da8cc07bf1883597cae4223765efb2b642e4aa14342d04"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_55.json",
+      "retrieved_at": "2026-10-18T06:35:49.820415+00:00",
+      "raw_sha256": "4242eac1a06ef6431ccf8f07e4ab6739e9759b2983a15d575278102586ca1738"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_56.json",
+      "retrieved_at": "2026-10-18T06:30:25.624256+00:00",
+      "raw_sha256": "7878ebbc936a3a9af12df417b6ee6cd778ba7ed00aee5a1ab4e2959db05292d4"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_57.json",
+      "retrieved_at": "2026-10-18T06:32:10.622734+00:00",
+      "raw_sha256": "99a24473aff9ac215142db73ffbe7d48fbe72cf0e374ebae38ce44dbfc2044b1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_58.json",
+      "retrieved_at": "2026-10-18T06:35:54.822698+00:00",
+      "raw_sha256": "12acf9000d10692e411c5a70e4238747c1c0d495580bfcd3b98af3ec79bb3926"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_59.json",
+      "retrieved_at": "2026-10-18T06:30:30.897937+00:00",
+      "raw_sha256": "0f3aaca174c650ab3c188b229dbf6ce2b97f24a552fc05e54648bbd79dae3969"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_6.json",
+      "retrieved_at": "2026-10-18T05:36:08.720506+00:00",
+      "raw_sha256": "11465235ca7fb26e997b540465a71ecd909dfb271ebbefd30bae025c6f454011"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_60.json",
+      "retrieved_at": "2026-10-18T06:32:15.643686+00:00",
+      "raw_sha256": "af2b05bb3d7287e5fefd44b065688be4a918f9c2045e4552668791da618bde1a"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_61.json",
+      "retrieved_at": "2026-10-18T06:35:59.821235+00:00",
+      "raw_sha256": "89d8202610236c11d03e5f662a5193849dfb233ed2d5e63ffd7ada6be0b0aeb5"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_62.json",
+      "retrieved_at": "2026-10-18T06:30:35.669217+00:00",
+      "raw_sha256": "156243de2882c7c1faeb8e37ddd16e7067f46a78c4799efa08ed6a1ca30f5ee6"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_63.json",
+      "retrieved_at": "2026-10-18T06:32:20.636649+00:00",
+      "raw_sha256": "cf1dee6f05a3507da6586d7870baf91219e782c6430daa990653823d97bd66a1"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_64.json",
+      "retrieved_at": "2026-10-18T06:36:05.478452+00:00",
+      "raw_sha256": "4a16b628506579a02d8c93cb167284f3e91a8c24a3dbaeab15d815e1e16844f6"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_65.json",
+      "retrieved_at": "2026-10-18T06:32:25.629510+00:00",
+      "raw_sha256": "99fd1f83660afc0c0babd1a82e35e070219c1f675c80986a5f52ff7aee02668f"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_66.json",
+      "retrieved_at": "2026-10-18T06:30:40.659632+00:00",
+      "raw_sha256": "09d23bf3d9c4a0d65eac3d84fd28e5d2b57fe990362e70be9e1eb6b9ef3752be"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_67.json",
+      "retrieved_at": "2026-10-18T06:36:09.818107+00:00",
+      "raw_sha256": "b44c2f72a866bd2ed342c42ca0bd112e748a93a46f33ec97a17c05e07d5a1a5d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_68.json",
+      "retrieved_at": "2026-10-18T06:32:30.860244+00:00",
+      "raw_sha256": "5efd2932bded349ee605fdd3b7bdfe1a509052e0426618ed0060a6ee42bef108"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_69.json",
+      "retrieved_at": "2026-10-18T06:30:45.623877+00:00",
+      "raw_sha256": "53d51c075a57dc84c4eee74f403ad5f64eebf216395e07a6bc0843494b45e011"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_7.json",
+      "retrieved_at": "2026-10-18T06:27:00.836484+00:00",
+      "raw_sha256": "60fea200a25050435d0e0a1528596eb22aebfb02a7a40bcc96f3cc678a4ff901"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_70.json",
+      "retrieved_at": "2026-10-18T06:36:14.829251+00:00",
+      "raw_sha256": "e224b94bc1b97a1361ef33b95f59a594bb12ac7a4fc90b47df6b2dacb65b2c5a"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_71.json",
+      "retrieved_at": "2026-10-18T06:32:35.807754+00:00",
+      "raw_sha256": "e1617d85a2e58597c8d6423933e23b68e82fd4f6b5b2948ce0132d61b0d4bb49"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_72.json",
+      "retrieved_at": "2026-10-18T06:36:19.817400+00:00",
+      "raw_sha256": "4a61f7a266879b61fae42a5da964efdcf529e7b3ae2200725ac6f512682e59fd"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_73.json",
+      "retrieved_at": "2026-10-18T06:32:40.888637+00:00",
+      "raw_sha256": "4940b6e646fe6d52cffe884d544f6f78d77e9029e1fc96ec0b3b30ef15486af7"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_74.json",
+      "retrieved_at": "2026-10-18T06:36:24.850808+00:00",
+      "raw_sha256": "a5331c4d4fb13b3d626d005d694be33287a84c9c880f57c364d263b49c9a7c94"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_75.json",
+      "retrieved_at": "2026-10-18T06:32:45.673668+00:00",
+      "raw_sha256": "535b8274d15c56e8a8c46108fe83072e132f30525ec5e7cedf39c872f824d6ec"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_76.json",
+      "retrieved_at": "2026-10-18T06:32:50.805338+00:00",
+      "raw_sha256": "3dfd04b740a2aaa57debd4f95ad8b10790744762c38a2adb1a0547f1a59396d4"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_77.json",
+      "retrieved_at": "2026-10-18T06:36:29.819117+00:00",
+      "raw_sha256": "356a9ea2f0b47a80ba2314e11a5fc1c754923574f7c4f482dc2f3cb0b2011864"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_78.json",
+      "retrieved_at": "2026-10-18T06:36:34.854777+00:00",
+      "raw_sha256": "853e61fce426c9d6cc4fe1d85d12554025d0bf55128b11584c55187e73c9c917"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_79.json",
+      "retrieved_at": "2026-10-18T06:36:39.904617+00:00",
+      "raw_sha256": "da448828950fd9c02fc01c7d86f668c53dd157d056bb2f7b725261511e3a78fb"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+      "retrieved_at": "2026-10-18T05:35:07.915101+00:00",
+      "raw_sha256": "1eb9a2ace4b6231e6f1c712ab459f68191bdf72a1a12162c59cf8e21b1c544ea"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_80.json",
+      "retrieved_at": "2026-10-18T06:36:44.851952+00:00",
+      "raw_sha256": "8a1b699b1345e16d8275d2d4a7e9b818b5e28de7f1fc018e80afc285fc5530aa"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_9.json",
+      "retrieved_at": "2026-10-18T06:34:44.865642+00:00",
+      "raw_sha256": "4daa160c8fd1133a69b806ae89b8af05cc7c2fbb1785df9c81fec31b915c0591"
+    }
+  ],
+  "limitations": [
+    "Offline classification of cached English FOEDB metadata, not source text or uploaded corpus coverage.",
+    "Configured includes type 23 awaiting a later worker; source state and failures remain authoritative.",
+    "Other language databases, attachments and website areas outside FOEDB remain unenumerated.",
+    "Support means representation URL accepted by current rules; retrieval and extraction may fail."
+  ]
+}
