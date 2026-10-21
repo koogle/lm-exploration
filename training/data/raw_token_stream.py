@@ -66,6 +66,14 @@ class RawTokenMixture(TokenMixture):
         self.cursors = {name: {"pass": 0, "hash": "", "offset": 0} for name in self.sources}
         self.tokenizer = load_frozen()
         self.single_pass = self.manifest.get("continuation_passes") == 1
+        self.budgets = {}
+        if split == "train" and any("target_tokens" in s for s in self.sources.values()):
+            for name, source in self.sources.items():
+                budget = source.get("target_tokens")
+                capacity = source["splits"]["train"]["loss_tokens"] * source.get("max_passes", 2)
+                if type(budget) is not int or not 0 < budget <= capacity:
+                    raise ValueError("Invalid or unsupported exact source target")
+                self.budgets[name] = budget
 
     def blocks(self, name):
         saved = dict(self.cursors[name])
@@ -109,18 +117,30 @@ class RawTokenMixture(TokenMixture):
                     }
 
     def next_block(self):
+        eligible = [
+            name
+            for name in self.sources
+            if not self.budgets or self.exposures[name] < self.budgets[name]
+        ]
+        if not eligible:
+            raise StopIteration("Exact per-category target budgets completed")
         name = min(
-            self.sources, key=lambda n: (self.exposures[n] / self.sources[n]["weight_percent"], n)
+            eligible, key=lambda n: (self.exposures[n] / self.sources[n]["weight_percent"], n)
         )
         if name not in self.iterators:
             self.iterators[name] = self.blocks(name)
         block = next(self.iterators[name])
+        if self.budgets:
+            remaining = self.budgets[name] - self.exposures[name]
+            if block["loss_tokens"] > remaining:
+                block["labels"][remaining:] = [LOSS_IGNORE_INDEX] * (self.context - remaining)
+                block["loss_tokens"] = remaining
         self.positions[name] += 1
         self.exposures[name] += block["loss_tokens"]
         return block
 
     def next_batch(self, batch_size, device="cpu"):
-        if not self.single_pass:
+        if not self.single_pass and not self.budgets:
             return super().next_batch(batch_size, device)
         import torch
 
@@ -174,6 +194,10 @@ class RawTokenMixture(TokenMixture):
                 or not isinstance(cursor["hash"], str)
             ):
                 raise ValueError("Invalid raw cursor")
+        if self.budgets and any(
+            state["loss_token_exposures"][name] > target for name, target in self.budgets.items()
+        ):
+            raise ValueError("Restored exposure exceeds exact source budget")
         super().load_state_dict(state)
         self.cursors = {k: dict(v) for k, v in cursors.items()}
 

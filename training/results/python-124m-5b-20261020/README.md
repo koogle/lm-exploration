@@ -1,6 +1,47 @@
 # Python 124M / 5B execution record
 
-**Status: CPU preparation; no GPU training or model publication.**
+**Current status (2026-10-21): resumed CPU preparation and expanded documentation acquisition; no GPU training or model publication.**
+
+The previous ephemeral app was cancelled at 2026-10-20 22:54 UTC. Its final
+saved counts reached 555,882,002 implementation, 292,688,273 tests/examples,
+and 29,876,984 documentation training targets; the source census was incomplete.
+The cancellation is visible in Modal logs; its initiator is not established.
+
+Preparation now runs through deployed functions invoked with `spawn`, independent
+of the local CLI. Existing source cursors are retained. The user's collected
+private code datasets were rechecked and have not changed since the first pass;
+their complete pinned repository files remain preferred over older duplicates.
+
+- [Resumed corpus census](https://modal.com/apps/radiantai/main/deployed/simple-llm-python-124m-5b)
+- [Parallel Python documentation acquisition](https://modal.com/apps/radiantai/main/deployed/simple-llm-python-documentation)
+- [Dependent merge and snapshot finalization](https://modal.com/apps/radiantai/main/deployed/simple-llm-python-finalize)
+
+The added source is `common-pile/stackexchange`, pinned at
+`5ec3aa2e65b7c61b7c18f1ff18ccbc4d3279a23c`. Its Stack Overflow subset has
+95 compressed shards (27,392,996,805 bytes). Only complete explanatory Python
+threads with Python examples, sufficient prose and per-document CC-BY-SA
+license/attribution metadata are accepted. Explicit non-Python code signatures,
+missing provenance, repetitive content and error-dump-like documents are rejected.
+This expands the documentation category to include explanatory technical Q&A;
+it does not change the 10% target. Filters are heuristics, not a guarantee that
+all examples are correct or that every embedded snippet is Python. Attribution,
+source shard hashes and creation metadata remain with private records.
+
+Eight shard workers measure capacity independently. The deployed coordinator
+waits for both source jobs, merges with exact deduplication and held-out hash/
+repository exclusions, and freezes only if all six categories meet their budgets
+within two passes. Candidate shard totals are not globally deduplicated capacity.
+No GPU launch is attached to these preparation functions.
+
+The raw loader now supports exact per-category target budgets, masks only excess
+final labels, and returns a padded partial final batch. Tests verify exact counts
+and identical continuation after restore. One budget/resume test, the existing
+raw-loader test, and nine Python corpus/documentation/snapshot tests pass locally.
+The snapshot builder preserves tokenizer identity and freezes representative
+validation windows from distinct held-out parents. New-corpus GPU qualification,
+training, executable evaluation and publication remain pending.
+
+The sections below retain the previous measurements as historical evidence.
 
 [Draft PR #30](https://github.com/koogle/lm-exploration/pull/30) remains stacked on
 #27. It incorporates the tested Muon implementation from #24, at

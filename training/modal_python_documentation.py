@@ -1,0 +1,136 @@
+"""Deployed, parallel, bounded documentation preparation; never allocates GPUs."""
+
+import json
+from pathlib import Path
+
+import modal
+
+app = modal.App("simple-llm-python-documentation")
+volume = modal.Volume.from_name("lm-exploration-mixture-data")
+ROOT = "/data/python-documentation-20261021-v1"
+image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install("tokenizers==0.22.2", "huggingface_hub==0.36.0", "requests")
+    .env({"PYTHONPATH": "/project", "TOKENIZERS_PARALLELISM": "false", "HF_HUB_DISABLE_XET": "1"})
+    .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
+    .add_local_dir("tokenizer/structured-code-v1", "/project/tokenizer/structured-code-v1")
+)
+
+
+@app.function(
+    image=image,
+    cpu=4,
+    memory=8192,
+    timeout=3600,
+    retries=1,
+    max_containers=8,
+    volumes={"/data": volume},
+)
+def shard(filename: str):
+    import gzip
+    import hashlib
+
+    from huggingface_hub import hf_hub_download
+    from training_data.python_documentation import REPOSITORY, REVISION, select_document
+    from training_data.python_experiment import Corpus
+
+    if not filename.startswith("stackoverflow.com/documents/") or not filename.endswith(
+        ".jsonl.gz"
+    ):
+        raise ValueError("Unexpected source shard")
+    folder = Path(ROOT) / Path(filename).name.removesuffix(".jsonl.gz")
+    done = folder / "complete.json"
+    if done.exists():
+        return json.loads(done.read_text())
+    corpus = Corpus(folder)
+    path = hf_hub_download(REPOSITORY, filename, repo_type="dataset", revision=REVISION)
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        while block := handle.read(8 * 1024 * 1024):
+            digest.update(block)
+    scanned = 0
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
+        for line in handle:
+            scanned += 1
+            try:
+                record = json.loads(line)
+            except (ValueError, TypeError):
+                corpus.reject("malformed_json")
+                continue
+            selected, reason = select_document(record)
+            if selected is None:
+                corpus.reject(reason)
+                continue
+            text, parent, provenance = selected
+            provenance.update(shard=filename, shard_sha256=digest.hexdigest())
+            corpus.add(text, "python_documentation", parent, provenance)
+            if scanned % 5000 == 0:
+                corpus.report("documentation_shard_preparing")
+                volume.commit()
+    result = corpus.report("documentation_shard_complete")
+    result.update(shard=filename, rows_scanned=scanned, source_sha256=digest.hexdigest())
+    done.write_text(json.dumps(result, indent=2))
+    corpus.db.close()
+    volume.commit()
+    print(
+        json.dumps(
+            {
+                "shard": filename,
+                "rows": scanned,
+                "capacity": result["categories"]["python_documentation"],
+            }
+        ),
+        flush=True,
+    )
+    return result
+
+
+@app.function(
+    image=image,
+    cpu=1,
+    memory=1024,
+    timeout=43200,
+    retries=0,
+    max_containers=1,
+    volumes={"/data": volume},
+)
+def prepare(max_shards: int = 32):
+    from huggingface_hub import HfApi
+    from training_data.python_documentation import REPOSITORY, REVISION
+
+    if not 1 <= max_shards <= 95:
+        raise ValueError("Preparation bound must be between 1 and 95 shards")
+    files = sorted(
+        (
+            f
+            for f in HfApi().list_repo_files(REPOSITORY, repo_type="dataset", revision=REVISION)
+            if f.startswith("stackoverflow.com/documents/") and f.endswith(".jsonl.gz")
+        ),
+        reverse=True,
+    )
+    results = []
+    for start in range(0, min(max_shards, len(files)), 8):
+        results.extend(shard.map(files[start : min(start + 8, max_shards)]))
+        total = sum(
+            r["categories"]["python_documentation"]["unique_train_targets"] for r in results
+        )
+        volume.reload()
+        Path(ROOT).mkdir(parents=True, exist_ok=True)
+        Path(ROOT, "summary.json").write_text(
+            json.dumps(
+                {
+                    "stage": "prepared_separate_shards",
+                    "requires_global_merge_and_exclusions": True,
+                    "train_targets_before_global_dedup": total,
+                    "shards": results,
+                },
+                indent=2,
+            )
+        )
+        volume.commit()
+        print(
+            json.dumps({"completed_shards": len(results), "candidate_targets": total}), flush=True
+        )
+        if total >= 600_000_000:
+            break
+    return {"candidate_targets": total, "completed_shards": len(results)}
