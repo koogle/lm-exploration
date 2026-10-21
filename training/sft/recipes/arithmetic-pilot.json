@@ -1,0 +1,27 @@
+{
+  "name": "arithmetic-pilot",
+  "description": "200-update repair SFT on the verified arithmetic curriculum (576/36, nine languages).",
+  "run_id": "repair-sft-multilang-20261020-r01",
+  "parent": "simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt",
+  "data": {
+    "local": "artifacts/sft/repairs.jsonl"
+  },
+  "gpu": "L40S",
+  "settings": {
+    "steps": 200,
+    "batch_size": 4,
+    "context": 1024,
+    "lr": 1e-05,
+    "seed": 42,
+    "evaluate_every": 50,
+    "save_every": 50,
+    "max_seconds": 1200,
+    "objective": "sft",
+    "cig_proximity": 0.3
+  },
+  "provenance": {
+    "note": "Recorded run used the PR #26 checkpoint (124M, 10.879B tokens) as parent; that pretraining PR was not merged. Pass --parent for new runs.",
+    "source_commit": "f15d319",
+    "results": "pr-28/training/results/repair-sft-20261020/"
+  }
+}
