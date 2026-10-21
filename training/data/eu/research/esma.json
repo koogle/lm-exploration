@@ -1,0 +1,100 @@
+{
+  "source_id": "esma",
+  "observed_date_utc": "2026-10-16",
+  "scope": "Bounded live HTTP reconnaissance; not a complete corpus census or training eligibility assessment.",
+  "recommended_source": {
+    "id": "esma",
+    "name": "European Securities and Markets Authority",
+    "seed_urls": [
+      "https://www.esma.europa.eu/press-news/esma-news",
+      "https://www.esma.europa.eu/news-publications"
+    ],
+    "allowed_hosts": [
+      "www.esma.europa.eu"
+    ],
+    "document_url_patterns": [
+      "^https://www\\.esma\\.europa\\.eu/press-news/esma-news/(?!rss\\.xml)[^/?#]+/?$",
+      "^https://www\\.esma\\.europa\\.eu/sites/default/files/.+\\.pdf(?:\\?.*)?$"
+    ],
+    "discovery_url_patterns": [
+      "^https://www\\.esma\\.europa\\.eu/press-news/esma-news(?:\\?page=\\d+)?$",
+      "^https://www\\.esma\\.europa\\.eu/news-publications/?$"
+    ],
+    "min_delay_seconds": 2
+  },
+  "observations": [
+    {
+      "url": "https://www.esma.europa.eu/robots.txt",
+      "final_url": "https://www.esma.europa.eu/robots.txt",
+      "status": 200,
+      "content_type": "text/plain; charset=UTF-8",
+      "bytes": 2027,
+      "observed_at": "2026-10-16T08:59:43.272577+00:00"
+    },
+    {
+      "url": "https://www.esma.europa.eu/press-news/esma-news",
+      "final_url": "https://www.esma.europa.eu/press-news/esma-news",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 97283,
+      "observed_at": "2026-10-16T08:59:43.586699+00:00"
+    },
+    {
+      "url": "https://www.esma.europa.eu/press-news/esma-news/rss.xml",
+      "final_url": "https://www.esma.europa.eu/press-news/esma-news/rss.xml",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 47541,
+      "observed_at": "2026-10-16T08:59:43.791513+00:00"
+    },
+    {
+      "url": "https://www.esma.europa.eu/publications-and-data",
+      "final_url": "https://www.esma.europa.eu/news-publications",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 77329,
+      "observed_at": "2026-10-16T08:59:44.546496+00:00"
+    },
+    {
+      "url": "https://www.esma.europa.eu/press-news/esma-news/one-year-go-t1-settlement-regulatory-framework-complete-now-lets-make-it",
+      "final_url": "https://www.esma.europa.eu/press-news/esma-news/one-year-go-t1-settlement-regulatory-framework-complete-now-lets-make-it",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 62951,
+      "observed_at": "2026-10-16T09:00:30.417129+00:00"
+    },
+    {
+      "url": "https://www.esma.europa.eu/press-news/esma-news/esma-updates-its-manual-transparency-new-guidance-otc-derivatives-and-tick",
+      "final_url": "https://www.esma.europa.eu/press-news/esma-news/esma-updates-its-manual-transparency-new-guidance-otc-derivatives-and-tick",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 58128,
+      "observed_at": "2026-10-16T09:00:30.897431+00:00"
+    },
+    {
+      "url": "https://www.esma.europa.eu/press-news/esma-news?page=1",
+      "final_url": "https://www.esma.europa.eu/press-news/esma-news?page=1",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 97981,
+      "observed_at": "2026-10-16T09:00:31.354022+00:00"
+    }
+  ],
+  "findings": [
+    "Likely interpretation of the user\u2019s European market agency: European Securities and Markets Authority (not a confirmed clarification).",
+    "Native HTML article text verified on two financial-regulatory news items; linked PDFs include technical reports, manuals and a duplicate press-release representation. PDF bytes and text layers were not fetched or validated.",
+    "The guessed /press-news/esma-news/rss.xml returned HTTP 200 text/html, not RSS; omit as a feed seed.",
+    "The list and ?page=1 return distinct HTML with article links. Full archive page count remains unmeasured.",
+    "Article HTML includes repeated full and side-teaser article blocks. Extract the primary article body and deduplicate; stripping all page text will retain related-news and navigation noise.",
+    "Robots excludes search, administration and user paths; the sampled press-news and publications routes are not disallowed. English samples only; multilingual technical reports need later enumeration."
+  ],
+  "token_estimate": {
+    "status": "unmeasured",
+    "reason": "No complete inventory, tokenizer pass or representative language-stratified sample."
+  },
+  "next_steps": [
+    "Extract native article bodies with provenance and content hashes.",
+    "Inventory historical archive pages and translation families.",
+    "Measure unique text tokens with a named tokenizer; separate PDF copies and updated versions."
+  ]
+}

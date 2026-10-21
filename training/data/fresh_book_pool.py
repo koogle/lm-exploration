@@ -5,7 +5,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from .fresh_raw_corpus import FreshRawCorpus
-from .scholarly import canonical
+from .simple_llm import canonical
 
 BOOK_SOURCES = frozenset(
     ("pressbooks", "libretexts", "doab", "gutenberg", "pre_1929_books", "library_of_congress")

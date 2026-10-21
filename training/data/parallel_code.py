@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .overnight_corpus import CODE_REPO, CODE_REVISION, LANGUAGES, LICENSES, SCHEMA, task_family
 from .readiness_audit import normalized_hash
-from .scholarly import SPLIT_VERSION, canonical
+from .simple_llm import SPLIT_VERSION, canonical
 from .subword import FIRST_CONTENT_TOKEN_ID, TOKENIZER_SHA256, digest, load_frozen
 
 
@@ -81,7 +81,7 @@ def prepare_partition(folder, exclusions, identity, worker, workers, target, com
     import pyarrow.parquet as pq
     from huggingface_hub import hf_hub_download
 
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
 
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)

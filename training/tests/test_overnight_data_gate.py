@@ -8,9 +8,9 @@ from pathlib import Path
 from training_data.overnight_snapshot import check_variety
 from training_data.subword import TOKENIZER_SHA256, digest
 
-from trainer.distributed_config import DistributedConfig
+from distributed_training.config import DistributedConfig
+from distributed_training.run_validation import validate_overnight_run
 from trainer.representative_validation import load_heldout
-from trainer.run_validation import validate_overnight_run
 
 
 class OvernightGateTests(unittest.TestCase):

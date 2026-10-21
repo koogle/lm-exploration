@@ -1,0 +1,90 @@
+{
+  "observed_at": "2026-10-18T08:08:18.568700+00:00",
+  "control": {
+    "revision": "3bc8a66d8f92e17b4707042783cede584084ebe4",
+    "goal_status": "collecting",
+    "campaigns_reserved": 25,
+    "reserved_documents": 6000,
+    "audit_schedule": {
+      "cooldown_until_epoch": 0,
+      "max_pairs": 48,
+      "observed_at_epoch": 1792310169.6075118,
+      "pairs_reserved": 17,
+      "status": "waiting_for_calls",
+      "unresolved_calls": 2
+    }
+  },
+  "combined_metrics": {
+    "characters": 1654910551,
+    "parquet_bytes": 600114555,
+    "rows": 20292,
+    "stored_raw_gzip_bytes": 16191556348,
+    "text_utf8_bytes": 1714967480,
+    "words": 245764680
+  },
+  "exact_tokens_lower_bound": 459981239,
+  "sources": [
+    {
+      "source_id": "ecb",
+      "revision": "91e9e1c2d07f950e12bbe8511987ec028865bfeb",
+      "rows": 11398,
+      "cached_tokens": {
+        "encoding": "o200k_base",
+        "control_revision": "3bc8a66d8f92e17b4707042783cede584084ebe4",
+        "exact_tokens_lower_bound": 186633399,
+        "matched_rows": 11278,
+        "matched_shards": 3067,
+        "total_shards": 3107,
+        "complete_for_source_revision": false,
+        "cache_present": true,
+        "audit_summary": {
+          "complete_for_revision": true,
+          "counted_characters": 684496564,
+          "counted_rows": 11278,
+          "counted_shards": 3067,
+          "counting_rule": "Sum of independently encoded text fields; no separators or EOS",
+          "encoding": "o200k_base",
+          "exact_tokens_counted": 186633399,
+          "new_shards_this_run": 96,
+          "observed_at": "2026-10-18T08:00:57.144089+00:00",
+          "repo_id": "jfrick/eu-ecb",
+          "source_id": "ecb",
+          "source_revision": "b731701f2e28200b8b282520e99c098c6e9a8f6c",
+          "total_rows": 11278,
+          "total_shards": 3067
+        }
+      }
+    },
+    {
+      "source_id": "ema",
+      "revision": "57655ff2c6bc9ff8abb2bfc50031039f3c784afa",
+      "rows": 8894,
+      "cached_tokens": {
+        "encoding": "o200k_base",
+        "control_revision": "3bc8a66d8f92e17b4707042783cede584084ebe4",
+        "exact_tokens_lower_bound": 273347840,
+        "matched_rows": 8874,
+        "matched_shards": 3191,
+        "total_shards": 3195,
+        "complete_for_source_revision": false,
+        "cache_present": true,
+        "audit_summary": {
+          "complete_for_revision": true,
+          "counted_characters": 952968152,
+          "counted_rows": 8874,
+          "counted_shards": 3191,
+          "counting_rule": "Sum of independently encoded text fields; no separators or EOS",
+          "encoding": "o200k_base",
+          "exact_tokens_counted": 273347840,
+          "new_shards_this_run": 87,
+          "observed_at": "2026-10-18T08:05:21.495864+00:00",
+          "repo_id": "jfrick/eu-ema",
+          "source_id": "ema",
+          "source_revision": "374d78b40753026912dfa05e7bc7722cfbea7db1",
+          "total_rows": 8874,
+          "total_shards": 3191
+        }
+      }
+    }
+  ]
+}

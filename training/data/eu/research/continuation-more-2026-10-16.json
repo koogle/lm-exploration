@@ -1,0 +1,51 @@
+{
+  "observed_at": "2026-10-16T21:14:32.068814+00:00",
+  "combined_metrics": {
+    "characters": 182334783,
+    "parquet_bytes": 69749358,
+    "rows": 2866,
+    "stored_raw_gzip_bytes": 2016453245,
+    "text_utf8_bytes": 186488627,
+    "words": 27542258
+  },
+  "sources": [
+    {
+      "source_id": "ecb",
+      "revision": "5e9f05cdf152952e666fccf4d12d13977083a11a",
+      "metrics": {
+        "characters": 99360878,
+        "parquet_bytes": 43964889,
+        "rows": 2057,
+        "stored_raw_gzip_bytes": 1188044680,
+        "text_utf8_bytes": 100527835,
+        "words": 15376771
+      }
+    },
+    {
+      "source_id": "ema",
+      "revision": "cf89a41e8ea2c1ecd9c68c246cc5d50a37fadcca",
+      "metrics": {
+        "characters": 82973905,
+        "parquet_bytes": 25784469,
+        "rows": 809,
+        "stored_raw_gzip_bytes": 828408565,
+        "text_utf8_bytes": 85960792,
+        "words": 12165487
+      }
+    }
+  ],
+  "new_launch": {
+    "run_id": "ecb-more-20261016-2118",
+    "rounds": 3,
+    "after_campaign": "ecb-expand-20261016",
+    "calls": {
+      "ecb": "fc-01M5393VSM8HEG5WTMGJ7RAPT1"
+    },
+    "datasets": {
+      "ecb": "jfrick/eu-ecb"
+    }
+  },
+  "ema": "Existing three-round campaign continues; no overlapping writer launched.",
+  "ecb": "New supervisor waits up to 30 minutes for predecessor complete; unsafe or timed-out predecessors prevent collection.",
+  "validation": "78 tests passed; ruff check passed"
+}

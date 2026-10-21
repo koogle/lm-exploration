@@ -1,0 +1,114 @@
+{
+  "source_id": "ecb",
+  "observed_date_utc": "2026-10-16",
+  "scope": "Bounded live HTTP reconnaissance; not a complete corpus census or training eligibility assessment.",
+  "recommended_source": {
+    "id": "ecb",
+    "name": "European Central Bank",
+    "seed_urls": [
+      "https://www.ecb.europa.eu/rss/press.html",
+      "https://www.ecb.europa.eu/press/pubbydate/html/index.en.html"
+    ],
+    "allowed_hosts": [
+      "www.ecb.europa.eu"
+    ],
+    "document_url_patterns": [
+      "^https://www\\.ecb\\.europa\\.eu/+press/(?:key|pr|inter|accounts|govcdec)/.+\\.(?:html|pdf)$"
+    ],
+    "discovery_url_patterns": [
+      "^https://www\\.ecb\\.europa\\.eu/rss/press\\.(?:html|xml)$",
+      "^https://www\\.ecb\\.europa\\.eu/+press/(?:pubbydate|key|pr|inter|accounts|govcdec)/.*index\\.[a-z]{2}\\.html(?:\\?.*)?$"
+    ],
+    "min_delay_seconds": 5
+  },
+  "observations": [
+    {
+      "url": "https://www.ecb.europa.eu/robots.txt",
+      "final_url": "https://www.ecb.europa.eu/robots.txt",
+      "status": 200,
+      "content_type": "text/plain; charset=UTF-8",
+      "bytes": 1141,
+      "observed_at": "2026-10-16T08:59:43.199183+00:00"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/rss/press.html",
+      "final_url": "https://www.ecb.europa.eu/rss/press.html",
+      "status": 200,
+      "content_type": "application/rss+xml",
+      "bytes": 5752,
+      "observed_at": "2026-10-16T08:59:43.204145+00:00"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/rss/press.xml",
+      "final_url": "https://www.ecb.europa.eu/rss/press.xml",
+      "status": 200,
+      "content_type": "text/xml",
+      "bytes": 5713,
+      "observed_at": "2026-10-16T08:59:43.462743+00:00"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/html/index.en.html",
+      "final_url": "https://www.ecb.europa.eu/press/pubbydate/html/index.en.html",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 99897,
+      "observed_at": "2026-10-16T08:59:43.929209+00:00"
+    },
+    {
+      "url": "https://www.ecb.europa.eu//press/key/date/2026/html/ecb.sp261014~e4ca33588e.en.html",
+      "final_url": "https://www.ecb.europa.eu//press/key/date/2026/html/ecb.sp261014~e4ca33588e.en.html",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 134546,
+      "observed_at": "2026-10-16T09:00:13.644998+00:00"
+    },
+    {
+      "url": "https://www.ecb.europa.eu//press/accounts/2026/html/ecb.mg261008~a10153d090.en.html",
+      "final_url": "https://www.ecb.europa.eu//press/accounts/2026/html/ecb.mg261008~a10153d090.en.html",
+      "status": 503,
+      "content_type": "text/plain",
+      "bytes": 100,
+      "observed_at": "2026-10-16T09:00:19.109495+00:00"
+    },
+    {
+      "url": "https://www.ecb.europa.eu//press/inter/date/2026/html/ecb.in261008~3184e7d0d0.en.html",
+      "final_url": "https://www.ecb.europa.eu//press/inter/date/2026/html/ecb.in261008~3184e7d0d0.en.html",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 108942,
+      "observed_at": "2026-10-16T09:00:24.971309+00:00"
+    },
+    {
+      "url": "https://www.ecb.europa.eu//press/pr/date/2026/html/ecb.pr261007~6447350434.en.html",
+      "final_url": "https://www.ecb.europa.eu//press/pr/date/2026/html/ecb.pr261007~6447350434.en.html",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 108235,
+      "observed_at": "2026-10-16T09:00:54.441643+00:00"
+    },
+    {
+      "url": "https://www.ecb.europa.eu//press/govcdec/otherdec/2026/html/ecb.gc261002~54c6b5672b.en.html",
+      "final_url": "https://www.ecb.europa.eu//press/govcdec/otherdec/2026/html/ecb.gc261002~54c6b5672b.en.html",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "bytes": 120596,
+      "observed_at": "2026-10-16T09:00:59.641752+00:00"
+    }
+  ],
+  "findings": [
+    "RSS is metadata and URLs, not full article text. Fifteen current items observed; do not extrapolate archive size from this window.",
+    "Native HTML full text verified for speech, interview, survey press release and Governing Council decisions. Meeting account sample returned 503; preserve failure and retry later.",
+    "Robots requests Crawl-delay: 5 and disallows *_content.<language>.html fragments and several shared video paths. Initial independent seed probes were simultaneous; follow-up article requests were spaced five seconds. Production must enforce per-host scheduling.",
+    "English sampled only. Language variants and full historical pagination need separate inventory. Feed URLs contain a double slash after the host.",
+    "Banking supervision links point to www.bankingsupervision.europa.eu; this separate host is outside this bounded adapter. European Investment Bank would also require its own source."
+  ],
+  "token_estimate": {
+    "status": "unmeasured",
+    "reason": "No complete inventory, tokenizer pass or representative language-stratified sample."
+  },
+  "next_steps": [
+    "Extract native article bodies with provenance and content hashes.",
+    "Inventory historical archive pages and translation families.",
+    "Measure unique text tokens with a named tokenizer; separate PDF copies and updated versions."
+  ]
+}

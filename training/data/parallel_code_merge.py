@@ -11,7 +11,7 @@ import zlib
 from pathlib import Path
 
 from .readiness_audit import normalized_hash
-from .scholarly import canonical
+from .simple_llm import canonical
 
 
 def merge_partitions(central, partitions, commit=lambda: None):

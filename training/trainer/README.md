@@ -1,14 +1,14 @@
 # Trainer implementation
 
 The trainer is an installed Python package within the `training/` uv project.
-Training runs only on Modal GPU workers: [`../modal_train.py`](../modal_train.py)
+Training runs only on Modal GPU workers: [`../modal_scripts/modal_train.py`](../modal_scripts/modal_train.py)
 validates a [recipe](../recipes/README.md) locally and calls `recipe.run_recipe()`
 on the worker, which supplies the architecture (e.g. `../10m/model.py`) to the loop.
 There is no CPU or MPS training path.
 
 ## Responsibilities
 
-- `../modal_train.py`: the Modal app, image, budget reservation and launcher.
+- `../modal_scripts/modal_train.py`: the Modal app, image, budget reservation and launcher.
 - `../generate.py`: model-agnostic local `lm-generate`; loads the architecture named
   by a checkpoint's `model_name` and streams samples.
 - `config.py`: the pydantic `TrainConfig` (validated hyperparameters) and the fixed CUDA device.
@@ -31,7 +31,9 @@ loading is not safe for untrusted files.
 
 ## Distributed subword training
 
-[`DISTRIBUTED.md`](DISTRIBUTED.md) documents the separate one/two/three-GPU
-NCCL trainer, token-budget stopping, durable checkpoints and explicit cross-job
-resume through `../modal_distributed_train.py`. It uses the frozen 32K tokenizer
-and prepared mixture snapshots. The character trainer above is unchanged.
+[`../distributed_training/`](../distributed_training/README.md) owns the shared
+one/two/three-GPU NCCL trainer, Modal launchers and recipes, token-budget stopping,
+durable checkpoints and explicit cross-job resume. It uses the frozen 32K
+tokenizer and prepared mixture snapshots. The duplicate single-GPU subword pilot
+has been removed; one GPU runs the same distributed implementation. The
+character trainer above is unchanged.
