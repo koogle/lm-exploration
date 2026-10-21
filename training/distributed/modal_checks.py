@@ -62,5 +62,5 @@ def main(run_id: str):
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
         raise ValueError("Invalid run ID")
     result = check.remote(run_id)
-    Path("results").mkdir(exist_ok=True)
-    Path(f"results/{run_id}.json").write_text(json.dumps(result, indent=2) + "\n")
+    Path("artifacts/results").mkdir(parents=True, exist_ok=True)
+    Path(f"artifacts/results/{run_id}.json").write_text(json.dumps(result, indent=2) + "\n")

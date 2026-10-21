@@ -105,3 +105,51 @@ def test_unknown_inspection_preserves_call_and_does_not_overlap():
     result = run(cache, inspect=lambda _: {"status": "unknown"})
     assert result["status"] == "waiting_for_calls"
     assert cache.state["pairs"][0]["jobs"]["ecb"]["call_id"] == "ecb"
+
+
+def completed_pairs(count):
+    return {
+        "schema_version": 1,
+        "pairs": [
+            {
+                "pair_id": f"old-{i}",
+                "created_at_epoch": i,
+                "jobs": {
+                    source: {"status": "complete", "call_id": f"{source}-{i}"}
+                    for source in ("ecb", "ema")
+                },
+            }
+            for i in range(count)
+        ],
+    }
+
+
+def test_budget_extension_resumes_without_resetting_history_or_duplicating_calls():
+    previous = completed_pairs(48)
+    cache, calls = Cache(previous), []
+    result = run(cache, lambda source: calls.append(source) or f"new-{source}", max_pairs=96)
+    assert calls == ["ecb", "ema"]
+    assert cache.state["pairs"][:48] == previous["pairs"]
+    assert result["pairs_reserved"] == 49
+    assert result["max_pairs"] == 96
+    result = run(
+        cache,
+        lambda _: pytest.fail("Must not duplicate active audits"),
+        inspect=lambda _: {"status": "running"},
+        max_pairs=96,
+    )
+    assert result["status"] == "waiting_for_calls"
+
+
+def test_extended_budget_still_stops_at_its_limit():
+    result = run(
+        Cache(completed_pairs(96)), lambda _: pytest.fail("Budget exhausted"), max_pairs=96
+    )
+    assert result["status"] == "pair_budget_exhausted"
+    assert result["pairs_reserved"] == 96
+
+
+@pytest.mark.parametrize("limit", [0, 97, True, "96"])
+def test_invalid_extended_budget_rejected(limit):
+    with pytest.raises(ValueError, match="max_pairs"):
+        run(Cache(), max_pairs=limit)

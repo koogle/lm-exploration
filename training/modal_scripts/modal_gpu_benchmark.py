@@ -86,13 +86,15 @@ def main(run_id: str = "simple-llm-124m-gpu-comparison-20261017-01"):
         gpu: worker.with_options(gpu=gpu).spawn(gpu, run_id, provenance)
         for gpu in ("L40S", "H100", "A10G")
     }
-    Path("results").mkdir(exist_ok=True)
+    Path("artifacts/results").mkdir(parents=True, exist_ok=True)
     # Keep individual results even if another device fails or is unavailable.
     errors = []
     for gpu, call in calls.items():
         try:
             result = call.get()
-            Path(f"results/{run_id}-{gpu}.json").write_text(json.dumps(result, indent=2) + "\n")
+            Path(f"artifacts/results/{run_id}-{gpu}.json").write_text(
+                json.dumps(result, indent=2) + "\n"
+            )
         except Exception as exc:  # noqa: BLE001 -- collect independent remote failures
             errors.append(f"{gpu}: {exc}")
     if errors:

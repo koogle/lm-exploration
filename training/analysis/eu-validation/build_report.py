@@ -160,7 +160,7 @@ def build(source, output):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("source")
-    parser.add_argument("--output", default=str(Path(__file__).parent))
+    parser.add_argument("source", help="Aggregate comparison JSON from inspect(run_id)")
+    parser.add_argument("--output", default="artifacts/pr-25/analysis/eu-validation")
     args = parser.parse_args()
     build(args.source, args.output)

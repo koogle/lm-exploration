@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import gzip
 import importlib
 import json
 import time
@@ -21,9 +20,20 @@ from eu_corpus import (
     normalize_text,
     parse_content,
 )
-from hf_store import HFStore, json_bytes, resolve_raw_blob_path
+from hf_store import HFStore, json_bytes
 
 ROOT = Path(__file__).resolve().parent
+
+
+def load_mapping(path=None):
+    """Source mapping; collections default to the adapter registry minus exclusions."""
+    mapping = json.loads(Path(path or ROOT / "pipeline_sources.json").read_text())
+    for config in mapping["sources"].values():
+        if "collections" not in config:
+            excluded = set(config.get("exclude_collections", []))
+            registry = importlib.import_module(config["adapter"]).COLLECTIONS
+            config["collections"] = [name for name in registry if name not in excluded]
+    return mapping
 
 
 def now():
@@ -205,7 +215,7 @@ def run_source(
     artifacts_root=None,
     store=None,
 ):
-    mapping = json.loads(Path(mapping_path or ROOT / "pipeline_sources.json").read_text())
+    mapping = load_mapping(mapping_path)
     config = mapping["sources"][source_id]
     bounds = mapping["limits"]
     if not 1 <= max_documents <= bounds["max_documents_per_source"]:
@@ -301,7 +311,6 @@ def run_source(
             inventory_cache[url] = data, provenance
         return inventory_cache[url]
 
-    records, raw_files = [], {}
     collection_records = []
     try:
         inventory_limit = min(
@@ -359,7 +368,6 @@ def run_source(
             collection_records.append(saved["records"])
         inventory_cache.clear()
         collector.max_bytes = bounds["max_document_bytes"]
-        since_commit = 0
         # Filter before scheduling so completed prefixes cannot consume weight slots.
         supports = getattr(adapter, "supported_record", lambda _: True)
         active_run()["unsupported_candidates"] = sum(
@@ -380,117 +388,24 @@ def run_source(
             config.get("collection_weights", {}).get(name, 1) for name in config["collections"]
         ]
         active_run()["collection_weights"] = dict(zip(config["collections"], weights, strict=True))
-        for candidate in round_robin(eligible, weights):
-            if active_run()["attempted"] >= remaining_documents or time.monotonic() >= deadline:
-                break
-            if not pending(
-                candidate, state, max_attempts=bounds["max_attempts_per_item"], adapter=adapter
-            ):
-                continue
-            key = item_key(candidate)
-            active_run()["attempted"] += 1
-            since_commit += 1
-            provenance = {}
-            attempted_alternates = list(
-                state["failures"].get(key, {}).get("attempted_alternates", [])
-            )
-            rate_limited = False
-            try:
-                data, provenance = collector.fetch(candidate["url"], source)
-                if data is None and (
-                    str(provenance.get("http_status", provenance.get("status"))) == "404"
-                    or provenance.get("error") == "http_404"
-                ):
-                    alternatives = getattr(adapter, "alternate_document_urls", lambda _: [])(
-                        candidate
-                    )
-                    if alternatives:
-                        original_fetch = {"url": candidate["url"], **provenance}
-                        attempted_alternates.append(alternatives[0])
-                        data, provenance = collector.fetch(alternatives[0], source)
-                        provenance["original_fetch"] = original_fetch
-                        if data is not None:
-                            validator = getattr(adapter, "validate_alternate", None)
-                            if validator:
-                                validator(candidate, data)
-                rate_limited = (
-                    str(provenance.get("http_status", provenance.get("status"))) == "429"
-                    or provenance.get("error") == "http_429"
-                )
-                if rate_limited:
-                    raise ValueError("http_429")
-                if data is None:
-                    raise ValueError(provenance.get("error", "fetch_failed"))
-                parse_data, parse_provenance = data, provenance
-                transform = getattr(adapter, "extract_document", None)
-                if transform:
-                    parse_data, transform_metadata = transform(candidate, data)
-                    parse_provenance = {
-                        **provenance,
-                        "content_type": "text/html",
-                        "original_content_type": provenance.get("content_type"),
-                        "adapter_transform": transform_metadata,
-                    }
-                record = extract_record(candidate, parse_data, parse_provenance, source)
-                text_hash = record["text_sha256"]
-                previous = state["text_index"].get(text_hash)
-                if previous:
-                    active_run()["duplicates"] += 1
-                else:
-                    records.append(record)
-                    raw_files[resolve_raw_blob_path(state, record["raw_sha256"])] = gzip.compress(
-                        data, mtime=0
-                    )
-                    state["text_index"][text_hash] = record["id"]
-                    active_run()["extracted"] += 1
-                state["completed"][key] = {
-                    "status": "duplicate" if previous else "extracted",
-                    "record_id": previous or record["id"],
-                    "collection_id": candidate["collection_id"],
-                    "url": candidate["url"],
-                    "document_id": candidate["document_id"],
-                    "text_sha256": text_hash,
-                    "completed_at": now(),
-                }
-                state["failures"].pop(key, None)
-            except Exception as error:  # noqa: BLE001 - isolate bad documents and persist retry state
-                attempts = state["failures"].get(key, {}).get("attempts", 0) + 1
-                state["failures"][key] = {
-                    "url": candidate["url"],
-                    "collection_id": candidate["collection_id"],
-                    "attempts": attempts,
-                    "attempted_alternates": sorted(set(attempted_alternates)),
-                    "error": str(error)[:1000],
-                    "failed_at": now(),
-                    "retry_after_epoch": (
-                        rate_limit_retry_epoch(provenance, time.time())
-                        if rate_limited
-                        else time.time() + 300 * attempts
-                    ),
-                }
-                active_run()["failed"] += 1
-                if rate_limited:
-                    state["source_retry_after_epoch"] = state["failures"][key]["retry_after_epoch"]
-                    active_run()["status"] = "paused_rate_limit"
-                    active_run()["retry_after_epoch"] = state["failures"][key]["retry_after_epoch"]
-                    # Flush accumulated rows and this failure together below; never
-                    # request the next candidate after a server rate-limit response.
-                    break
-            if since_commit >= bounds["batch_size"]:
-                active_run()["heartbeat_at"] = now()
-                revision = checkpoint(
-                    store,
-                    state,
-                    revision,
-                    records,
-                    raw_files,
-                    message=f"Checkpoint {source_id}: {active_run()['attempted']} attempts",
-                )
-                print(
-                    json.dumps({"source_id": source_id, "revision": revision, **active_run()}),
-                    flush=True,
-                )
-                records, raw_files, since_commit = [], {}, 0
+        # Imported here because document_queue imports this module.
+        from document_queue import run_queued_documents
+
+        revision = run_queued_documents(
+            store=store,
+            state=state,
+            revision=revision,
+            collector=collector,
+            source=source,
+            adapter=adapter,
+            candidates=round_robin(eligible, weights),
+            supports=supports,
+            config=config,
+            bounds=bounds,
+            maximum=remaining_documents,
+            deadline=deadline,
+            output=output,
+        )
         if active_run()["status"] == "running":
             active_run()["status"] = "bounded_complete"
         active_run()["finished_at"] = now()
@@ -514,8 +429,8 @@ def run_source(
             store,
             state,
             revision,
-            records,
-            raw_files,
+            [],
+            {},
             message=f"Finish bounded {source_id} run {run_id}",
         )
         result = run_result(config, state, revision, active_run())
