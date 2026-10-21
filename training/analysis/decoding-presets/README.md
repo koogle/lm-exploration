@@ -134,20 +134,14 @@ modal run --detach -m sampling.modal_sample --recipe analysis/decoding-presets/p
   --output artifacts/decoding-presets/precision-fp32.json
 ```
 
-To rebuild the tables from the archived raw outputs, first download the pinned inputs. The
-two repetition-study files come from that study's
+To rebuild the tables, download the raw outputs archived in
+[`jfrick/lm-exploration-results`, folder `pr-20/training/analysis/decoding-presets/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-20/training/analysis/decoding-presets).
+The two repetition-study files come from that study's
 [archive](../repetition/README.md#archived-outputs).
-
-| HF dataset file (`jfrick/lm-exploration-results`, revision `878178cdcbd97985b95c0bcaa61ab2da3da04d3c`) | SHA256 |
-| --- | --- |
-| `pr-20/training/analysis/decoding-presets/decoding-presets-20261018.json` | `5a752f249c3a1eec1b419009ab434317968b2aef2f45c72e7262b49d6762718a` |
-| `pr-20/training/analysis/decoding-presets/own-precision-fp32-20261018.json` | `cfe1310b40369f3a9453fd7f2abadff4166915a60218b3b67be65ec6f57ba847` |
-| `pr-20/training/analysis/decoding-presets/summary.json` | `5eab6c372c6c8cd532251716dff93570f7cf004fb36d5931b949d8ea5b262eac` |
-| `pr-20/training/analysis/decoding-presets/precision-comparison.json` | `8a96ce14482eecaba20b3e243508c4b6b88ded23d68d9270df527ba9c0b93972` |
 
 ```sh
 uv run hf download jfrick/lm-exploration-results --repo-type dataset \
-  --revision 878178cdcbd97985b95c0bcaa61ab2da3da04d3c --local-dir artifacts/hf \
+  --local-dir artifacts/hf \
   --include 'pr-20/training/analysis/decoding-presets/*.json'
 P=artifacts/hf/pr-20/training/analysis/decoding-presets R=artifacts/hf/analysis/repetition
 uv run python -m sampling.report $P/decoding-presets-20261018.json \

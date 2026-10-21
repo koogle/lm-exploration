@@ -35,15 +35,10 @@ different samples.
 
 ## Archived outputs
 
-Everything lives in the model repo `jfrick/scholarly-code-modern-gpt-124m-step2`, revision
-`a5111f064480c8b39b7d6e791a6f7746290619ab`, under `analysis/repetition/`: report, plots,
-completions, the data audit and implementation checks. The raw inputs are:
-
-| File | SHA256 |
-| --- | --- |
-| `low-temperature-20261018.json` | `90924b6a531fa641d7eead353cc9e7fd5e0efe5f0ce33910fef82eba802209d2` |
-| `previous-comparison-20261018.json` | `53cbac4b7690a5f8025eec4cc650c11f41ffc24b3efd9f1971f4571557971441` |
-| `summary.json` | `265b795440c2a657b6114923eedb0019b541a18733b28ca06e7fbcb4f48fb0e5` |
+Everything lives in the model repo
+[`jfrick/scholarly-code-modern-gpt-124m-step2`, folder `analysis/repetition/`](https://huggingface.co/jfrick/scholarly-code-modern-gpt-124m-step2/tree/main/analysis/repetition):
+report, plots, completions, raw results (`low-temperature-20261018.json`,
+`previous-comparison-20261018.json`), `summary.json`, the data audit and implementation checks.
 
 ## Rerun
 
@@ -62,8 +57,7 @@ To rebuild the table from the archived raw inputs:
 ```sh
 uv run hf download jfrick/scholarly-code-modern-gpt-124m-step2 \
   analysis/repetition/low-temperature-20261018.json analysis/repetition/previous-comparison-20261018.json \
-  --revision a5111f064480c8b39b7d6e791a6f7746290619ab --local-dir artifacts/hf
-sha256sum artifacts/hf/analysis/repetition/*.json   # compare with the table above
+  --local-dir artifacts/hf
 A=artifacts/hf/analysis/repetition
 uv run python -m sampling.report $A/low-temperature-20261018.json \
   --reference $A/previous-comparison-20261018.json --group-by temperature \
