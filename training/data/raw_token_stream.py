@@ -24,13 +24,12 @@ class RawTokenMixture(TokenMixture):
     def __init__(self, manifest_path, context=2048, split="train", allow_unreviewed=False):
         self.path = Path(manifest_path)
         self.manifest = json.loads(self.path.read_text())
-        if self.manifest.get("format") != "scholarly-raw-v1":
+        if self.manifest.get("format") not in ("raw-text-v1", "scholarly-raw-v1"):
             raise ValueError("Unexpected raw manifest format")
         if context < 1 or split not in ("train", "validation"):
             raise ValueError("Invalid context or split")
-        from .review import require_data_review
-
-        require_data_review(self.manifest["training_ready"], allow_unreviewed)
+        if not self.manifest["training_ready"] and not allow_unreviewed:
+            raise ValueError("Dataset has pending audits; allow_unreviewed_data required")
         if (
             self.manifest["tokenizer_sha256"] != TOKENIZER_SHA256
             or self.manifest["max_passes"] != 2

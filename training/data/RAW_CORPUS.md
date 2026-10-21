@@ -1,7 +1,7 @@
 # Raw-corpus preparation
 
 The shared [distributed trainer](../distributed_training/README.md) accepts seekable
-token snapshots and `scholarly-raw-v1` SQLite snapshots. Raw snapshots store compressed
+token snapshots and `raw-text-v1` SQLite snapshots. Raw snapshots store compressed
 document text; `training_data.raw_token_stream.RawTokenMixture` tokenizes document-local
 windows as requested. It retains token-weighted scheduling, padding rules, a two-pass
 source limit and resumable raw-document cursors. Seekable token shards remain the
@@ -15,18 +15,20 @@ preparation, qualification and bounded continuation for the modern 9.85M model
 in non-pilot mode. These are dedicated workflow checks in
 `distributed_training/run_validation.py`, not shared configuration restrictions.
 
-The active recipes are `distributed_training/recipes/scholarly-modern-10m-5b.json`
-and `distributed_training/recipes/scholarly-modern-10m-qualification.json`.
+The active Simple LLM recipes are `distributed_training/recipes/simple-llm-10m-5b.json`
+and `distributed_training/recipes/simple-llm-10m-qualification.json`.
 Importing or deploying the module does not launch training:
 `prepare_and_launch.spawn(...)` explicitly requires approved resources and a fresh
 run ID. Run IDs, segment suffixes and snapshot paths are checked before filesystem
 access. A staging identity change requires a new data version.
 
-Preparation and loaders share `training_data.review.require_data_review`.
+Preparation and loaders directly check the data-readiness flag.
 Reviewed snapshots need no override; pending snapshots require the explicit
 `allow_unreviewed_data: true` flag before ingestion or GPU scheduling. New exports
 remain `training_ready: false`. No flag clears audits or removes repetition limits.
-The obsolete standalone raw-preparation launcher has been removed.
+The obsolete standalone raw-preparation launcher has been removed. Readers still
+accept the historical `scholarly-raw-v1` tag; the existing checkpoint format tag,
+persisted volume paths and published repository IDs are not renamed.
 
 ## Prepare once, reuse across runs
 

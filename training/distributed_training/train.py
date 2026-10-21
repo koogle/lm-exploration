@@ -8,10 +8,11 @@ import random
 import signal
 import time
 from contextlib import nullcontext
+from dataclasses import asdict
 from datetime import timedelta
 from pathlib import Path
 
-from training_data.subword import LOSS_IGNORE_INDEX
+from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, LOSS_IGNORE_INDEX
 
 from distributed_training.config import DistributedConfig, DistributedRuntime, validate_resume
 
@@ -113,7 +114,7 @@ def train(
         timeout=timedelta(seconds=300),
     )
     output, manifest = Path(output), Path(manifest)
-    if json.loads(manifest.read_text()).get("format") == "scholarly-raw-v1":
+    if json.loads(manifest.read_text()).get("format") in ("raw-text-v1", "scholarly-raw-v1"):
         from training_data.raw_token_stream import RawTokenMixture
 
         TokenMixture = RawTokenMixture
@@ -192,6 +193,8 @@ def train(
         metadata = {
             "format": "scholarly-ddp-v1",
             "config": config.as_dict(),
+            "architecture": {"module": ModelConfig.__module__, "config": asdict(model_config)},
+            "special_tokens": {"bos": BOS_TOKEN_ID, "eos": EOS_TOKEN_ID},
             "data_identity": identity,
             "source_sha256": source_hashes(),
             "torch_version": str(torch.__version__),

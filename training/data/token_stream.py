@@ -39,9 +39,8 @@ class TokenMixture:
                 "Seekable token snapshot required; convert legacy snapshots with "
                 "python -m training_data.token_shards convert MANIFEST NEW_DIRECTORY"
             )
-        from .review import require_data_review
-
-        require_data_review(self.manifest["training_ready"], allow_unreviewed)
+        if not self.manifest["training_ready"] and not allow_unreviewed:
+            raise ValueError("Dataset has pending audits; allow_unreviewed_data required")
         if self.manifest["max_passes"] != 2:
             raise ValueError("Unexpected repetition policy")
         self.context, self.split = context, split

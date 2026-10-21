@@ -22,6 +22,8 @@ gpu_image = gpu_image.add_local_dir("modal_scripts", "/project/modal_scripts")
 app = modal.App("lm-exploration-modern-10m-5b")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
 run_volume = modal.Volume.from_name("lm-exploration-training")
+# Existing volume directory; keep its actual persisted identifier.
+CORPUS_ROOT = Path("/data/scholarly-code")
 
 
 def record(run_id, stage, **details):
@@ -140,7 +142,6 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
     from training_data.export_raw import export_raw
     from training_data.fast_raw_corpus import FastRawCorpus
     from training_data.prepared_snapshot import find_prepared_snapshot
-    from training_data.review import require_data_review
     from training_data.simple_llm import load_recipe
 
     from distributed_training.config import DistributedConfig
@@ -150,7 +151,7 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
     config = DistributedConfig(**settings)
     validate_small_5b_run(config)
     validate_paths(run_id + "-s00", f"{version}/snapshots/{run_id}", "")
-    folder = Path("/data/scholarly-code") / version
+    folder = CORPUS_ROOT / version
     corpus = None
     os.environ["RAYON_NUM_THREADS"] = "8"
     status_path = Path("/runs") / run_id / "workflow.json"
@@ -172,10 +173,11 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
         # New snapshots retain pending audits. Reject before upstream ingestion
         # or GPU scheduling unless the caller explicitly accepts that status.
         training_ready = json.loads(cached.read_text())["training_ready"] if cached else False
-        require_data_review(training_ready, config.allow_unreviewed_data)
+        if not training_ready and not config.allow_unreviewed_data:
+            raise ValueError("Dataset has pending audits; allow_unreviewed_data required")
         record(run_id, "preparing", target_tokens=target, provenance=provenance)
         if cached is not None:
-            snapshot = str(cached.parent.relative_to("/data/scholarly-code"))
+            snapshot = str(cached.parent.relative_to(CORPUS_ROOT))
             manifest = json.loads(cached.read_text())
             record(
                 run_id,
@@ -209,7 +211,7 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
         corpus.close()
         corpus = None
         snapshot = f"{version}/snapshots/{run_id}"
-        manifest = export_raw(folder, Path("/data/scholarly-code") / snapshot)
+        manifest = export_raw(folder, CORPUS_ROOT / snapshot)
         # Preserve pending audit flags. The explicit allow_unreviewed_data
         # opt-in permits this research run, without claiming audited data.
         manifest["pending"] = [
@@ -219,9 +221,7 @@ def prepare_and_launch(run_id, version, settings, provenance, resume_preparation
             "eligibility and contamination review",
         ]
         manifest["capacity_verified_for_tokens"] = target
-        (Path("/data/scholarly-code") / snapshot / "manifest.json").write_text(
-            json.dumps(manifest, indent=2) + "\n"
-        )
+        (CORPUS_ROOT / snapshot / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
         data_volume.commit()
         record(
             run_id,

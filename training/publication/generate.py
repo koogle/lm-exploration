@@ -1,6 +1,7 @@
 """Standalone text generation for exported custom PyTorch model bundles."""
 
 import argparse
+import importlib
 import json
 import math
 import sys
@@ -28,18 +29,20 @@ def main():
     root = Path(__file__).absolute().parent
     sys.path.insert(0, str(root))
     import torch
-    from model_100m.model import GPT, ModelConfig
     from safetensors.torch import load_file
     from tokenizers import Tokenizer
 
     torch.set_num_threads(2)
     torch.manual_seed(args.seed)
-    model = (
-        GPT(ModelConfig(**json.loads((root / "config.json").read_text()))).to(args.device).eval()
-    )
+    settings = json.loads((root / "config.json").read_text())
+    architecture = settings["architecture"]
+    module = importlib.import_module(architecture["module"])
+    model = module.GPT(module.ModelConfig(**architecture["config"])).to(args.device).eval()
     model.load_state_dict(load_file(str(root / "model.safetensors")), strict=True)
     tokenizer = Tokenizer.from_file(str(root / "tokenizer/tokenizer.json"))
-    ids = [1] + tokenizer.encode(args.prompt, add_special_tokens=False).ids
+    ids = [settings["special_tokens"]["bos"]] + tokenizer.encode(
+        args.prompt, add_special_tokens=False
+    ).ids
     with torch.inference_mode():
         for _ in range(args.tokens):
             logits = model(torch.tensor([ids[-model.config.block_size :]], device=args.device))[
@@ -55,7 +58,7 @@ def main():
             else:
                 token = int(torch.multinomial((logits / args.temperature).softmax(-1), 1))
             ids.append(token)
-            if token == 2:
+            if token == settings["special_tokens"]["eos"]:
                 break
     print(tokenizer.decode(ids, skip_special_tokens=True))
 
