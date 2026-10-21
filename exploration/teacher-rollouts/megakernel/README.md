@@ -11,6 +11,10 @@ FP32 recurrent state. It is separate from the continuously batched vLLM runner.
 There is no claim that batch-one speed improves aggregate rollout throughput.
 Sequential token processing supplies prefill for correctness and short probes;
 optimized prefill and batching are not implemented for this backend.
+The probe uses a 1,024-token cache and greedy generation capped at 128 output
+tokens; output counts exclude terminal EOS. The parent's sampling/concurrency
+configuration describes the vLLM sweep. Only its teacher pin, authorization,
+resource limits and accounting settings are shared with this fixed smoke probe.
 
 ## Changes beyond dimensions
 
