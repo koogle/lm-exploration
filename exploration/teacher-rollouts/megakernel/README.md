@@ -117,8 +117,8 @@ each, $2.10 reserved per job plus $0.80 held for overhead. Do not launch using
 this proposal alone. The batched baseline still needs measured results; kernel
 launch geometry is not request concurrency. No new GPU sweep has been run.
 
-CPU validation: 17 tests and Ruff pass. Local CUDA compilation is a build
-diagnostic only; the workspace uses GCC 14 and newer glibc, requiring temporary
+CPU validation: 17 tests and Ruff pass; all eight variants compile locally.
+Local CUDA compilation is a build diagnostic only; the workspace uses GCC 14 and newer glibc, requiring temporary
 `noexcept` compatibility declarations in the downloaded CUDA 12.8 math headers.
 Those local compiler changes are not part of the Modal image or kernel source.
 The pinned Ubuntu 22.04 image must build the variants unmodified before GPU runs.
