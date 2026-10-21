@@ -74,6 +74,7 @@ def main():
     deadline = time.time() + c["runtime_seconds"] + 60
     out = HERE / "artifacts" / args.run_id
     out.mkdir(parents=True, exist_ok=True)
+    atomic_json(out / f"{args.attempt}-manifest.json", manifest)
     atomic_json(out / f"{args.attempt}-launch.json", {"deadline_unix": deadline})
     report = None
     with modal.enable_output(), app.run():
