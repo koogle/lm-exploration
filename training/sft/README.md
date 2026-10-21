@@ -208,8 +208,30 @@ Longer training is an experiment, not evidence of improved held-out repair succe
 
 `Settings(objective="cig")` enables the token-weighted objective from
 [What Should SFT Learn? (October 9, 2026)](https://arxiv.org/abs/2610.12995v1).
-Ordinary SFT remains the default. See the
-[matched pilot report](../results/cig-sft-20261020/README.md).
+Ordinary SFT remains the default.
+
+**Findings (negative).** Reports, metrics, generations, grades and loss plots for
+the 200-update pilot and the 5,000-update continuation are in the private HF dataset
+[`jfrick/lm-exploration-results` under `pr-29/training/results/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-29/training/results)
+(archive commit `e4400ef5644fcf6b5f895d68ce25f4fe97c45e53`). Both arms start from
+the same PR #26 parent, train on the 576-example synthetic curriculum with batch 4,
+LR 1e-5, seed 42 and CIG lambda 0.3, and see identical answer tokens
+(21,531 at step 200; 530,091 at step 5,000).
+
+| Held-out ordinary cross-entropy (start 0.861365) | Ordinary SFT | CIG-SFT |
+| --- | ---: | ---: |
+| Step 200 | 1.307223 | 1.263123 (3.37% lower) |
+| Step 5,000 | 1.590171 | 1.512819 |
+
+Both arms score **0/18** correct synthetic repairs at steps 200, 1,000, 3,000 and
+5,000; all 18 responses terminate and run, and the generated code never changes
+after step 200. Training objectives approach zero (final-100 medians 2.3e-7 SFT,
+1.8e-7 CIG) while held-out loss worsens: overfitting the tiny curriculum. CIG
+assigns positive information to 92.50% of unique training answer tokens, so it can
+reward copying unchanged code rather than the fix. The exact GPU extension
+qualification (steps 201–202 uninterrupted versus restored) matched exactly.
+This single-seed 124M pilot does not support CIG over ordinary SFT here and does
+not test the paper's larger-model claims.
 
 The frozen parent scores each training answer twice: with the full repair prompt,
 and with the instruction and broken code emptied while preserving language and
@@ -222,8 +244,8 @@ uses ordinary cross-entropy so the two training objectives remain comparable.
 From `training/` with corpus/research extras and the documented system CA setup:
 
 ```sh
-modal run modal_cig_pilot.py --run-prefix cig-repair-UNIQUE --output /tmp/cig-results
-modal run modal_cig_eval.py::evaluate_cig --folder /tmp/cig-results
+modal run modal_cig_pilot.py --run-prefix cig-repair-UNIQUE --output artifacts/cig-sft-UNIQUE
+modal run modal_cig_eval.py::evaluate_cig --folder artifacts/cig-sft-UNIQUE
 ```
 
 This explicitly runs two sequential one-L40S jobs, each capped at 200 updates,
@@ -241,7 +263,7 @@ CIG pilot does not claim fresh-process GPU resume qualification.
 
 ### Longer continuation
 
-The [5,000-update follow-up](../results/cig-sft-long-20261020/README.md) extends each
+The 5,000-update follow-up (findings above) extends each
 objective's own 200-update checkpoint. `extend=True` on the worker (or `--extend`
 on `modal_repair_sft.py::main`) explicitly permits a larger total step target,
 new checkpoint/evaluation cadence and a new runtime cap. It preserves all learning
@@ -255,6 +277,19 @@ CUDA state from the real CIG pilot. `modal_cig_long.py::main` requires that pass
 report and launches the bounded pair, with at most two training GPU workers.
 `modal_cig_eval.py::evaluate_cig --folder RESULT_FOLDER --step N` evaluates a saved
 step named in that folder's launch record without changing its training examples.
+Local reports go to the ignored `artifacts/` directory: the pilot writes
+`repairs.jsonl`, `training.json` and `evaluation.json` to `--output`; the
+continuation reads the pilot's `repairs.jsonl` from `--pilot`
+(default `artifacts/cig-sft-20261020`) and writes `qualification.json`,
+`launch.json`, `training.json` and `evaluation-step-*.json` to `--output`
+(default `artifacts/cig-sft-long-20261020`). Its launcher hard-codes the recorded
+run IDs; choose new IDs before rerunning.
+
+```sh
+modal run modal_cig_long.py::qualify_extension --pilot artifacts/cig-sft-UNIQUE
+modal run modal_cig_long.py::main --pilot artifacts/cig-sft-UNIQUE
+modal run modal_cig_eval.py::evaluate_cig --folder artifacts/cig-sft-long-20261020 --step 5000
+```
 
 ## Private patch SFT
 

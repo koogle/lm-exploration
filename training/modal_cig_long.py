@@ -30,12 +30,14 @@ def extend_worker(run_id, examples, settings, resume):
 
 
 @app.local_entrypoint()
-def qualify_extension(output: str = "results/cig-sft-long-20261020"):
+def qualify_extension(
+    output: str = "artifacts/cig-sft-long-20261020", pilot: str = "artifacts/cig-sft-20261020"
+):
     from trainer.repair_sft import Settings
 
     destination = Path(output)
     destination.mkdir(parents=True, exist_ok=True)
-    examples = Path("results/cig-sft-20261020/repairs.jsonl").read_bytes()
+    examples = (Path(pilot) / "repairs.jsonl").read_bytes()
     parent = "cig-repair-20261020-r01-cig/step-000000200.pt"
     settings = Settings(steps=202, objective="cig", save_every=1000, evaluate_every=200).__dict__
     full = worker.remote("cig-long-qual-full", examples, settings, resume=parent, extend=True)
@@ -58,7 +60,9 @@ def qualify_extension(output: str = "results/cig-sft-long-20261020"):
 
 
 @app.local_entrypoint()
-def main(output: str = "results/cig-sft-long-20261020"):
+def main(
+    output: str = "artifacts/cig-sft-long-20261020", pilot: str = "artifacts/cig-sft-20261020"
+):
     from training_data.repair_sft import prepare
     from training_data.subword import load_frozen
 
@@ -68,7 +72,7 @@ def main(output: str = "results/cig-sft-long-20261020"):
     qualification = json.loads((destination / "qualification.json").read_text())
     if not qualification.get("passed"):
         raise ValueError("GPU extension qualification must pass first")
-    examples = Path("results/cig-sft-20261020/repairs.jsonl").read_bytes()
+    examples = (Path(pilot) / "repairs.jsonl").read_bytes()
     dataset = destination / "repairs.jsonl"
     dataset.write_bytes(examples)
     prepare(dataset, load_frozen(), 1024)

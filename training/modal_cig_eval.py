@@ -8,7 +8,7 @@ from modal_repair_eval import app, generate, grade
 
 
 @app.local_entrypoint()
-def evaluate_cig(folder: str = "results/cig-sft-20261020", step: int = 0):
+def evaluate_cig(folder: str = "artifacts/cig-sft-20261020", step: int = 0):
     root = Path(folder)
     if step < 0:
         raise ValueError("Step must be nonnegative")

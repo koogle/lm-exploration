@@ -33,7 +33,7 @@ def collect(run_id):
 
 @app.local_entrypoint()
 def main(
-    output: str = "results/cig-sft-20261020",
+    output: str = "artifacts/cig-sft-20261020",
     run_prefix: str = "cig-repair-20261020-r01",
     completed_sft: str = "",
 ):
