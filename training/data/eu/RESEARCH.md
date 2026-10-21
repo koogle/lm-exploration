@@ -144,6 +144,10 @@ The dated research notes, per-expansion sample/inventory JSONs, live evidence an
 agent handoff reports were removed from the working tree after this summary. They
 remain in Git history at commit
 [`3d25fa6`](https://github.com/koogle/lm-exploration/tree/3d25fa6905fff7521106809565e3df8fef090b52/training/data/eu)
-under `research/` and `reports/`. HF checkpoint state (`state/progress.json`,
+under `research/` and `reports/`. The 16 files PR #22 added under `research/` and
+its version of `reports/CONTINUATION_20261018.md` are also archived, byte-verified,
+in the private dataset
+[`jfrick/lm-exploration-results`, folder `pr-22/training/data/eu/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-22/training/data/eu)
+(HF commit `4740d892b85a33ba6cdebda5ab1113c9eb065ba2`). HF checkpoint state (`state/progress.json`,
 `metrics_history`, campaign records) and the control repository hold the durable
 operational record.
