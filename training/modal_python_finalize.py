@@ -16,6 +16,7 @@ image = (
     .env({"PYTHONPATH": "/project", "TOKENIZERS_PARALLELISM": "false"})
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer/structured-code-v1", "/project/tokenizer/structured-code-v1")
+    .add_local_dir("evaluation", "/project/evaluation")
 )
 
 
@@ -29,9 +30,24 @@ image = (
     volumes={"/data": volume},
 )
 def finish():
-    from training_data.python_snapshot import freeze, merge_documentation
+    from training_data.python_snapshot import freeze, merge_code, merge_documentation
 
     volume.reload()
+    from training_data.python_experiment import Corpus
+
+    corpus = Corpus(FOLDER)
+    heldout = json.loads(Path("/project/evaluation/python-tasks.json").read_text())
+    with corpus.db:
+        corpus.db.executemany(
+            "INSERT OR IGNORE INTO excluded_hashes VALUES(?)",
+            [(key,) for key in heldout["reference_hashes"]],
+        )
+        corpus.db.execute(
+            "UPDATE documents SET conflict=1 WHERE split='train' AND hash IN (SELECT hash FROM excluded_hashes)"
+        )
+    corpus.db.close()
+    volume.commit()
+    merge_code(FOLDER, "/data/python-code-supplement-20261021-v1", volume.commit)
     capacity = merge_documentation(FOLDER, DOCUMENTATION, volume.commit)
     if not capacity["capacity_sufficient"]:
         result = {"stage": "more_data_required", "capacity": capacity}
@@ -51,7 +67,7 @@ def finish():
     max_containers=1,
     volumes={"/data": volume},
 )
-def continue_preparation(code_call_id: str, documentation_call_id: str):
-    for call_id in [code_call_id, documentation_call_id]:
+def continue_preparation(code_call_id: str, documentation_call_id: str, full_code_call_id: str):
+    for call_id in [code_call_id, documentation_call_id, full_code_call_id]:
         modal.FunctionCall.from_id(call_id).get()
     return finish.remote()

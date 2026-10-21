@@ -72,6 +72,11 @@ def freeze(folder, destination):
     database = destination / "raw.sqlite"
     target = sqlite3.connect(database)
     corpus.db.backup(target)
+    target.execute(
+        "CREATE INDEX IF NOT EXISTS collected_priority ON documents(source,split,conflict,"
+        "(CASE WHEN json_extract(provenance,'$.origin')='collected_git' THEN 0 ELSE 1 END),hash)"
+    )
+    target.commit()
     target.close()
     sources = {}
     for name, budget in TARGETS.items():
@@ -126,6 +131,7 @@ def freeze(folder, destination):
         "training_ready": True,
         "max_passes": 2,
         "experiment": "python-124m-muon-5b",
+        "prefer_collected": True,
         "target_tokens": 5_000_000_000,
         "tokenizer_sha256": TOKENIZER_SHA256,
         "database": {"path": "raw.sqlite", "sha256": digest(database)},
@@ -147,3 +153,37 @@ def freeze(folder, destination):
     (destination / "manifest.json").write_text(json.dumps(manifest, indent=2))
     (destination / "capacity.json").write_text(json.dumps(capacity, indent=2))
     return manifest
+
+
+def merge_code(folder, supplemental_root, commit=lambda: None):
+    """Preserve collected repository versions and deduplicate the larger code pool."""
+    corpus = Corpus(folder)
+    for complete in sorted(Path(supplemental_root).glob("*/complete.json")):
+        marker = "full_python_code:" + complete.parent.name
+        if corpus.db.execute("SELECT 1 FROM completed WHERE name=?", (marker,)).fetchone():
+            continue
+        source = sqlite3.connect(
+            f"file:{complete.parent / 'raw.sqlite'}?mode=ro&immutable=1", uri=True
+        )
+        for key, raw, name, parent, split, provenance, count in source.execute(
+            "SELECT hash,text,source,parent,split,provenance,loss_tokens FROM documents WHERE conflict=0"
+        ):
+            if name not in ("python_implementation", "python_tests_examples"):
+                raise ValueError("Unexpected supplemental code category")
+            if corpus.db.execute("SELECT 1 FROM repositories WHERE parent=?", (parent,)).fetchone():
+                corpus.reject("older_collected_repository_version")
+                continue
+            text = zlib.decompress(raw).decode("utf-8")
+            if hashlib.sha256(text.encode()).hexdigest() != key:
+                raise ValueError("Supplemental code hash mismatch")
+            corpus.add(
+                text, name, parent, json.loads(provenance), split=split, verified_count=count
+            )
+        source.close()
+        corpus.db.execute("INSERT INTO completed VALUES(?)", (marker,))
+        corpus.report("merging_full_python_code")
+        commit()
+    result = corpus.report("merged_code_capacity")
+    corpus.db.close()
+    commit()
+    return result

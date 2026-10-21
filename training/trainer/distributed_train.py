@@ -26,8 +26,8 @@ def source_hashes():
     import training_data.token_stream
 
     import trainer.distributed_config
-    import trainer.representative_validation
     import trainer.optimizers
+    import trainer.representative_validation
 
     paths = {
         "trainer": Path(__file__),
@@ -89,7 +89,17 @@ def backward_batch(
     return total_loss
 
 
-def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=None, commit=None):
+def train(
+    config,
+    manifest,
+    output,
+    *,
+    resume=None,
+    max_seconds=3000,
+    max_steps=None,
+    stop_tokens=None,
+    commit=None,
+):
     import numpy as np
     import torch
     import torch.distributed as dist
@@ -100,6 +110,8 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
 
     if not 1 <= max_seconds <= 82800 or (max_steps is not None and max_steps < 1):
         raise ValueError("Session limits must be positive; maximum session length is 82800 seconds")
+    if stop_tokens is not None and not 0 < stop_tokens <= config.target_tokens:
+        raise ValueError("Invalid token evaluation boundary")
     rank, world = int(os.environ["LOCAL_RANK"]), int(os.environ["WORLD_SIZE"])
     if world != config.world_size:
         raise ValueError("torchrun world size differs from configuration")
@@ -369,6 +381,9 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
         reason = "token_limit"
         data_error = None
         while tokens < config.target_tokens:
+            if stop_tokens is not None and tokens >= stop_tokens:
+                reason = "evaluation_boundary"
+                break
             flag = torch.tensor(int(stopped), device="cuda")
             dist.all_reduce(flag, op=dist.ReduceOp.MAX)
             if int(flag):
@@ -538,6 +553,7 @@ if __name__ == "__main__":
     parser.add_argument("--resume")
     parser.add_argument("--max-seconds", type=int, default=3000)
     parser.add_argument("--max-steps", type=int)
+    parser.add_argument("--stop-tokens", type=int)
     parser.add_argument("--volume-name")
     args = parser.parse_args()
     commit = None
@@ -552,5 +568,6 @@ if __name__ == "__main__":
         resume=args.resume,
         max_seconds=args.max_seconds,
         max_steps=args.max_steps,
+        stop_tokens=args.stop_tokens,
         commit=commit,
     )

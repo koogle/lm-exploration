@@ -84,11 +84,27 @@ class RawTokenMixture(TokenMixture):
         )
         for pass_index in range(saved["pass"], passes):
             start_hash = saved["hash"] if pass_index == saved["pass"] else ""
-            rows = self.db.execute(
-                """SELECT hash,text,loss_tokens FROM documents
-                WHERE source=? AND split=? AND conflict=0 AND hash>=? ORDER BY hash""",
-                (name, self.split, start_hash),
-            )
+            if self.manifest.get("prefer_collected"):
+                tier = "CASE WHEN json_extract(provenance,'$.origin')='collected_git' THEN 0 ELSE 1 END"
+                start_tier = 0
+                if start_hash:
+                    row = self.db.execute(
+                        f"SELECT {tier} FROM documents WHERE hash=?", (start_hash,)
+                    ).fetchone()
+                    if row is None:
+                        raise ValueError("Restored document is missing from immutable snapshot")
+                    start_tier = row[0]
+                rows = self.db.execute(
+                    f"SELECT hash,text,loss_tokens FROM documents WHERE source=? AND split=? AND conflict=0 "
+                    f"AND ({tier}>? OR ({tier}=? AND hash>=?)) ORDER BY {tier},hash",
+                    (name, self.split, start_tier, start_tier, start_hash),
+                )
+            else:
+                rows = self.db.execute(
+                    """SELECT hash,text,loss_tokens FROM documents
+                    WHERE source=? AND split=? AND conflict=0 AND hash>=? ORDER BY hash""",
+                    (name, self.split, start_hash),
+                )
             for key, raw, expected_count in rows:
                 ids = self.tokenizer.encode(
                     zlib.decompress(raw).decode(), add_special_tokens=False

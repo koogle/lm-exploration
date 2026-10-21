@@ -1,6 +1,35 @@
 # Python 124M / 5B execution record
 
-**Current status (2026-10-21): resumed CPU preparation and expanded documentation acquisition; no GPU training or model publication.**
+**Current status (2026-10-21): documentation acquisition and single-H100 diagnostics passed; code preparation continues. No eight-GPU experiment updates or model publication yet.**
+
+Documentation preparation completed all 95 shards with **617,694,542 candidate
+training targets**, before global exclusions. The full 5.3M-file pinned CodeParrot
+Python split is now being prepared to fill implementation capacity and prefer
+one pass where possible. Collected repository versions win over supplemental
+versions, and the loader consumes collected files first within every category.
+Tests cover priority ordering across checkpoint restore.
+
+The separate fresh 124,389,632-parameter single-H100 diagnostic passed: loss fell
+from 10.464919 to 0.001435 in 21 tiny-set updates; greedy completion produced
+`return a + b`. Training/evaluation prefix logits, causality, cached RoPE and
+Muon/tied-embedding parameter assignment passed. Those diagnostic weights are
+discarded. See [qualification evidence](qualification.json).
+
+All 32 fixed MBPP reference tasks and an explicit network/environment isolation
+probe passed the credential-free, network-blocked sandbox harness. See
+[execution evidence](execution-harness.json). Candidate generations have not yet
+been evaluated because the substantial experiment has not started.
+
+The deployed training workflow now includes fresh eight-H100 start, two-update
+checkpoint/restore qualification, an early evaluation boundary around 50M targets,
+regular 250M-target checkpoints, isolated executable evaluation, fixed greedy and
+sampled generations, and separate Hugging Face publication with remote/final
+weight hash verification. Worker time limits resume from complete checkpoints.
+These later stages remain unexecuted until the corpus snapshot is sufficient.
+[Training workflow](https://modal.com/apps/radiantai/main/deployed/simple-llm-python-training).
+[Full Python code supplement](https://modal.com/apps/radiantai/main/deployed/simple-llm-python-code-supplement).
+
+The paragraphs below describe earlier stages and measurements.
 
 The previous ephemeral app was cancelled at 2026-10-20 22:54 UTC. Its final
 saved counts reached 555,882,002 implementation, 292,688,273 tests/examples,

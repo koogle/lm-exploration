@@ -1,0 +1,622 @@
+{
+  "dataset": "google-research-datasets/mbpp",
+  "revision": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
+  "split": "sanitized/test",
+  "license": "CC-BY-4.0",
+  "source": "https://github.com/google-research/google-research/tree/master/mbpp",
+  "selection": "first 32 function tasks ordered by SHA256(python5b:task_id)",
+  "reference_hashes": [
+    "05a06ba137a4a1d4a6991664ec4e4da3934e140b12efbbe0ec262cde2fe4e6fd",
+    "9ec011bdec0adcb15184948053e3326f7adf21c7a89db6ed978f1d3c0338bb39",
+    "c11e13c75f1b900bc0dd63283d44931d30f00f44365f876732519eaa199ebcbd",
+    "c6982089b938aad5e82d62a9d0efdc809798a25edb4f3969e737860c01b9c07f",
+    "6d7f27fd6773dfde7e46a7af1a8d0b25e3fe4c19dd83add3ec58973e6e071631",
+    "080db3998909aa72fbe2b4e9ccfbe19a81030dc6edc66ff8b309515359e891f3",
+    "50b265e919db7421185c361528dc4e3d71347fc7c5489850cb51a2ab60684cfb",
+    "be6b280f9d3a97c4147fa112d6f5114b7d9ee7786fec2736df9df201b0cf67cc",
+    "08a1125e390e1ac855123c4e4699c6b2f56cfeaa522dae46ed17c9984b1a7d79",
+    "28059dbd30fc55c6255de1ce73e684e5e17cb263a65eb19db38c6494b16a768f",
+    "040c982808124268f9c3cd357862b15bd7f71c254515ef88df3f418267c23d0a",
+    "9be354db80412e4cd6cf29ab8983ccc8244c233027b8b87ddbf70de94e490a42",
+    "6cd7fb58fd139fc531b0872587f492db5cbfc1cc9f4a7a0e452017ba617014e2",
+    "71535cbb3f143fb19abed1bb182950e94f4639d7f46c5f08c05c50a8fc3ce05f",
+    "887c9cc12a86696dd2ae9d46cd3104e7841b25616bf88ae6ef8b1b7b6c6cd2b5",
+    "fa2e7837f30ec2231e816c4f2e8a0a45a78997f0eb99b3e9889e073fff42e25d",
+    "5946ef87f75b4b6621860bee086a64d8e097f6ba0c7146bcc0b39fb0bc814e75",
+    "707e0131e0fbc05bf740afb12a7d8a8791a418273e723bfd01686dfaee5775e1",
+    "b18deef0367472a76c2ef42704ee2c9602fa7bee880bd758f59404480f0e0caa",
+    "fd64458708480aa5fec817a99e960bf4f22b01030e8de6e9f714a35d10c799b6",
+    "bafbea5d6b11a5ce42c4183f30ddfdab63a66b83860f60cd7d94b32973ee87cf",
+    "13a11d353e94d9a3531847405892fa52f0babd89a3e51398fb4ca5ebfbd0d735",
+    "3e95dcff06a6d4142acfde6fec96373218ea67d92a6d160a798ed022f84fa8f2",
+    "37eed046df7a30c7e959599203fef8430109b67075ed510dad28283a196c5e6d",
+    "e13e00bf26d315e3e5b42de71054c01e2e943cbb807c6a86cc25d4e51752516f",
+    "fc8543a9fcf0dac80b5f7c4e6f2b730de829e0ca86aef935ceafbfcb5c85029c",
+    "0dc668f43cb90fe742ec9d1a1694266ab7938503c8a8351a3cbdd0e7890cd575",
+    "db87aaf4685266ece10a4f17dd1e9495b40fc437744cc278e0fd3bed16a6884b",
+    "31ece634c305fe4cffd1715230fdfc8bc4a93667c96b57357a71c04293458e82",
+    "2c145ba10af6f77e21f26fe57f318e533c5f46c1d9aaaee55f31643a22cbd045",
+    "0aed57ce78e3db823ef61ec9908646fd3a65238331e20831e7246a165506b731",
+    "05618399da96a7d13082362459236aafb4b6cecc330801479dbcac188cfb4388",
+    "27f12346115e4af8779c7557c4de77f656d0219224af221c7a2017f5b95affb3",
+    "1ed1e158f1a8f2f172c16be376b76cce0ffd32145e982aaf462f8375f648f3e9",
+    "c99b93a5aece7c4cc6f2cc2a7e45a328891c938d7711d2beab01c5e8138fcd4c",
+    "5e0d062a354767279867c42cd8256bc1148dab8141a89dc7e7542ee80926f743",
+    "8ad524c2eba29d6b0f93ea337cf223ab5c42e86306e46b5f0b1b06918b61a011",
+    "823e2ef3232014f9bc02edb485bf7e06bb59f2e418f3b50a3840a7ca258feb14",
+    "1d936332fcb1ed8074b704c5d764ac39a707f66293aaf71ed430721204b97a68",
+    "6f26ebf07b6385ecec6307c20dab513bc8aac1d53381dce56aad6e6aed03860c",
+    "be109d80f1a06dcd217d785aa0177f5a489ffcc7a1d8015cff71b1e933f97100",
+    "3ae11abe7e943fa3390da35a18d44418459676035294098c77a715b6c628668e",
+    "8a3b8f987007e2d9b35ea415a356bd6377342238bcd60eabf4d49cb17b456493",
+    "857011e2820cbe9ec7985a238c8ea15d2ff325093c3ee7e8344fbea485bf1860",
+    "9f2fe71e6f0e2eebc494a96ec97d6f6eabb5ec75e1a6ad5cf94a03a9cfefcd6c",
+    "d7d565ac32c4b2395b47737ff1adba593865fe75527d46d3ee8fbbe71c750804",
+    "40f62a45578553368d5de658f2fc94e6af50b07c2c32aa3a51df78398b0e8b51",
+    "3ec598f0b9eca6efd6203f628137abfa4730dd06c7dea96ff22b2cf140561d78",
+    "5b03d2357f3ef86d1e066c052bb38cb4a85143e2d1384d840a3209c51973e8bd",
+    "e24bcf390817c81559601dd37eb0efd630c4d2d2c846b6643529fd408d7b152b",
+    "995c1b9dd35997329562931a681efc00b0e54cf94051a14cedfbe6dd08d90fb1",
+    "a09334e19421a10f9d71e92f55a8336a4dafd8af2c203773a29b4b36de2aabed",
+    "8fc6f2acbec09db888fcfd0a81ff09a1f428c02dbfcf1bd894e247eefcb97066",
+    "99aa02ea28d355088ffb5d2ce810cb13abc7deb6b877ed24a1d56746452193bd",
+    "b89ddaa87a06572a44a8b3cf373d668ab81ef06280f7a98e5575e050a8a3c6de",
+    "6029b3f8b145c4b448c40e9401f069a811051b89f81b0c891c273f66698a8876",
+    "4ed2db6f13d58b7931718ada288f4d0b17e7ff7ad72124d7287affdf1dce5b04",
+    "a3266da18b9196462daad28d03c6feaf2ddd4089aa0a45b1a0148878fc1aef73",
+    "35f5576d9dc9e278d00577d32f5d573bd97ab00928ada3b41c003d25adb7eaff",
+    "ab17fd4c3dee67754d0b71050b7dbe04d061c67a556941f68ccfff8d0ab9a656",
+    "b032256118f440afef93edda5c88d631356c1d8d5da9b4e6e2ea66940e331d96",
+    "0dab56a8d838a0d6beee7afe085115ca75f1b872659272fa13b2875c9328d7aa",
+    "1dffba278c5016d853dcc2279354f670d032b17e7ac3d473502f90c0d09528c5",
+    "1e2be82e1829e7e26389c5d6be7c9e8f5f6f746ecf58794035f056fd073922df",
+    "e7c19059e9c0fadf672331cd49cc361722aa278349eadcd1aa9eb462baa6109b",
+    "b1f7b5258356381c771a85bd82abbf2bbe510ddbe47515665954f9c4f766371e",
+    "efb9ac5b90aca21d76f23ba19fc82c06a79d51e15980b90308e4b8780053ce11",
+    "af6b95c86e8a20afb00d618f51db250543a66adae1ed0f6348c6394d89f6a7c5",
+    "e90909cff5ffacc6da1ae313e794aa37d05c99a9cb6893f47d85dc5fb62ac70a",
+    "3de55d7c883bcdfa8bb9b4d409c4983fc2d89564e15d1cda808b66854c5acd94",
+    "1f4f5e865420874786e877e4e2a300c6064fe033ab3e58cd76fdf9902a76d605",
+    "f03a8f14af4d49546017e674043b9b4e96dbb8f4f7c1990c2d7344f1db1c2fbd",
+    "3c805efb4f9bf1acc9845a206b2e6afe0468c329efa97e4885aba54d3c9b885e",
+    "38173aa9338fa543ae2b214d130c3e0950764fbabec20d09a4dc4cb3a0c0c751",
+    "b8517ec74d6cf1a3c8a2a7b869b732150d2df37c1d2d3c25932abf4400b14183",
+    "088d6e3ec80ca2b75efb0c3fb8eb4ef1a33b4efec60ca5e641335063af910bcb",
+    "04e5f1adf5ae0c829962707dc18a8de08cfc88462c422671b230cc6efa0f214d",
+    "d0c6c0f4cf61535a05a6ab3811eae9aad54f275e2ce5c6268c37d0f6a7d1ef95",
+    "c6b1672a1b929c22538ef12829c94d259920b14f885efdeb7876c1f467b389ee",
+    "8869fa4272759a06f6805ef1540ce843e732939e6f037bc6160736454088ecf4",
+    "c2af2d9476f6a7691aba118ed8ec6b1f933164b45bcc2d62888ef423c61bb67a",
+    "32b2f3d0153054c70f80c3be56dbaef5a18f49defba38f6ead81999cf3732332",
+    "d36be759e7d5d40bee03640008f97947fe3a376fea8a798424a373093bb6f3bb",
+    "9cde3aee87bdb7c9ec7de5ef8ea127544ff0401e6f0d00ea6e7fa5ba9d3fd340",
+    "4f3bcc9b7b3f034259284347dbac7f7fd39a455a175ec5b280244003ba6257c3",
+    "d242d6cb062c843a426461491f52e0e176cd67f54fdb3c0f89cc22d5f5aaf966",
+    "d7c7b0e63267fa40945b9e8d8c67024ae324cb00b4c17ec7dccf2ed83b4cc787",
+    "556fbcd10708db318ebdfa6a4f94359273a86b36aecaad08b3204366c7b6cc59",
+    "b692acf6cd92abf8d7522c209391bb35af329c53ea49a09652b75f4edfc72478",
+    "0600aa4ffb6414f6b4cb86643278e4cdad87b2cb5f403df51615423f935de6e8",
+    "e55569df5bf589a3bfadbf3f7af7506f453154e28b93ec8a25fc589e8dab6234",
+    "c8a0176f2f517c66cabdacfb806656a0b1e075b3347bebe76966e6e28de7704d",
+    "a5c2c0e7fbd4d2c50832fea7740ab365d48b76f0032b2a6de39dce1a6cf22806",
+    "619abe08bc5056ce04a94e45d70296d2e876ef12b49e68d970d429ec7cab5c58",
+    "34382137bbbe286c8abf174bba6bec4b0ec648e6f144e846f4cd49a6ad6b5cec",
+    "719d4c184b2f5f55df03fcdb3c496e424285001e3b31da1c7de333e5ee7109c0",
+    "0992ded7ab23a29a2952209208f86c98a88eb05ec1bfde343aac673ee95ba0b2",
+    "2c689390f7ce3fd640183315ed2e8592233a8212166500ec5d4fe3460bd14e48",
+    "dd16a93b60898b6fffd03371b51947cd38db10727c034f285c2112a1b5e511a5",
+    "7146e080cfd8afd63517e479b27901bda6abcc79b62ff71a049e5707c557abc9",
+    "430f43c607da0ff1e301bc425be13f7dac20cba9d396293d67ea89857e224ca5",
+    "b1f705e3998ffa8b4c64d93ba7a039b04c919a6437f0696081c5fbbc11a7d895",
+    "b4ebf27c0902e7531c4117f11de5acd7c95e495662dfb977716320b1874f0991",
+    "df630648525505196f3384c1686827205dad5d7e18d4a42d55c0066248d01438",
+    "9d37722f2e7e4d0493fb0ac5e752dcbdb98b3679b6fb8cca3ca971dc30d017bb",
+    "4764fecb650071b486167a18f9f962040df9fb925de6a62112b92c60cb224f69",
+    "b9911d851626d4d63518b4a8298d7dec915c0b4c6ac9d417db77aef3e9579749",
+    "92a1eb13b44b0a0cf8b14920f497f88c6c491212f4e9d3871a8a179ba2318efc",
+    "a2ce2d780ebd85e99ecb16af50d1d98d4ed7d6bd494fcd05dd23dd2db2792678",
+    "d18aa0d7f0a7788a51819fb29689770d94058abd56b0f56582af7ab674586975",
+    "13798279e7081cbd145f287ec3e1c5cd19234248e2d5a78ea5beb12acf2ad858",
+    "545b8d057080aadb2bb87908af252774cc1d7752976797d200b4ea0a05373a79",
+    "2962bd40e12f89bb69e2905f3a1cd3b578348eeebd0e64f58b8ccbceed34f6e8",
+    "3fded67e06657624b37a30f33782357703736560e66a14a26e223beb6eb02f08",
+    "d1c1ddd6ce27394fcee6e5fd3697364e2486db237549ac70da84ccef2d79a7b9",
+    "03b30988161a35ef68ecc7fb4e7c62438b8f89e11ec4ca7dd95a821290c22583",
+    "7938814e3181a7571c0839861075cd00589582a87ddf6c9aee7b76a1e55c2505",
+    "9d40cf45d03cd54d4071c8957cc3a70997a2d01063d1063931ff4cea9e76fb80",
+    "3bce9cc37265b64d18389d7a24f21cb1c0db40e2b4eb3b4fa5011c95b8f098d5",
+    "b239002c49d64ef6f5def4c56757bbf1cb902a4e28975c5535b8b0566f319749",
+    "ad8682c24f2d62e9f980440ac2b7f713b90d2b44a288962a420c1f466172d4d4",
+    "413dac413451fd75e9e5ab1d4cc33731d8077fa4835b3fe8de91a9fdcf3ece05",
+    "e3d3504861095c830270d434b7b42c54c1479e2a51078277247c84e4ef21cbcd",
+    "e7e2d22477c419a7ce336eef19f6e50c44e7e3e650b90eddafbc20ac6c5927e6",
+    "16d40ab489bb9612cb3aadbadc5c214bfce02af5fcfabebe45de1940ca5b4ab1",
+    "4bcd66d41f7f98ba91d6bfbfe7e9edbb2d6897b017e33e030130327f182a2807",
+    "24e778ff942c8055a40e95dfc5c53a39d87cb9acbabe98298e86f6da96c0d346",
+    "764cbb641d161ad957479fff7ae06b12fe55ef260afad21db0f4d6ea520fd813",
+    "fb8e57312be1a75b1f8e73ec70c823cd2560bd3c3cd9fd072445779f06606326",
+    "3748fcc34a87755cc1276d04d95bd12c5d796d1d03b7dc2e18f0177940b2bcf2",
+    "de4f1952e6aa75458ababf4ac15791afaaa3a4c47431ff692204f1976b4781b4",
+    "4a951cfe2ded929c0aacd749f9cd299abab5f65b36bcfd028fc7ab0625e76d83",
+    "7f77a23dd08e599baf1439914cd0e27a86d2448455d02c087e79ca1345974dff",
+    "be06764a3c551049fc2ae5fb5023d2849f442146a04087cf84b5d884f88e065d",
+    "97774429e4cf4a07eb83e97ae30f0c80ea9cabc5657e85f9821344cde7f1a3c9",
+    "fe240396d31c6a0c3cf9f1bf7077a8993c360ea6b75408c582338201b7eddd4e",
+    "df71ceaca60e410cff5f7982dd758713ed0d4706be6393d041b99e37c2e2f7c6",
+    "cb1a33e0678b5db5ec3989f0956c4d5a2052ddc6a617df5283a7dbab6f8ca0f0",
+    "aa269c5b24b25aafe91a9196ac850baa499998d7cb64ce708bcb9a60b5d6d2af",
+    "e52fef004010c73d0213254ec27315c54e4086c255bce69f81ea54635fa5b59a",
+    "d8e8db69ccf6b0e6e92406790401fb6656131db92c29d8cd85d756f187872689",
+    "2ab0e72a6731a8226ddea77faa7f0eb693ed84c6862ee85457415f3471aacaea",
+    "fb628720e9ed7c17f5880825a7944c19728c80b5b8634655f1eb7211b6bbdf91",
+    "9a20d65a5008e06d2153c435cdf81ea17341bfffa7491718228b33e2c301fc9f",
+    "9600d0ef37c0c1f0bdc45f508b3fca746ca2fc4a7bc8093899305f27de429d65",
+    "53a48ccf37022d54cf8e4c7e897d5f97d2ee4fcffc21840f03c21ed3d9605512",
+    "f99a21579724d2a59dcae3bebe0b3125566a2439e439007bf2e594df68001fa0",
+    "ea8945b1a90d00df11fc7434f7499a3fff5c548f6fd139fea3e95bc5177694de",
+    "3ed22a0bc0d97255ed8ddf43ac3accd3237d8255a78ba4b9270aaffd735cdf8f",
+    "cd1bbb998bd2d7506d5393b9dc2453a31c67cdce68da7f3539f5955b66ec7791",
+    "a134ea614cc1525d16de9fcf1e22a6f62c270fa14f25d0c7cce4f9e719609f3f",
+    "e0f625cec3aa3faa85015f04eda5a3e960ab0f263009e5f946e767032ce290e0",
+    "4b0633b71386db086612ad6d1d403d9442c51da9c753ed70a74f438708e46c6d",
+    "3719df0a77ff60e921cb4d452a7e297902ed3ad0746d816e08ca728d4d81fc4d",
+    "13e9c4c5f89720f5cd38c9ada4b17db4da493c8a742e139b7986786df20ca5bd",
+    "bc6901dfd27ab6e53a0668f7a1ab569946d561b1417992e43c1e56a67f723c5f",
+    "3a76f23341008f24fb447f70828b7bdc8310df29d91ef85d8e6807bebccdf92d",
+    "c960bbc64db5753c8fcd361d4cf74ff3a967d027437213475213f8c5210cb685",
+    "eaed139b3a948ba1b85f11eb4d45db961441f4ec710c99e840edd92b3535638e",
+    "6c170a8d3caf878d2be02271add36ae3b14b67fd82f143232e1b1062739f38d9",
+    "333df978d209a3363ff4a6fda1162e46b8039b14898e92e7f86661b20763c3a9",
+    "d968c40493e5753abdaf5c163b46b1eaf8472fb9f8a0acd154e54e5f7ac1a921",
+    "174ea11a22a7c83e9618d8795a94f90d20de131d72082fe510a9e976f1afb85c",
+    "9af86cf060b1573abe6d7dce18d5f04ec545220c1d2b33ecb7bfeb9d10da9341",
+    "6c1cdba44d8cd5a241882bfd57ffc237153622640638a9c2736e5321390a109d",
+    "fc2d440bb3c0451c0e730ae25f9cd21e95e3eaaef3064cc6bede275b8afa226f",
+    "ccc412a0018de1aa9581d39507149bf30ee1e626f065b166f5f5541a5186c4fe",
+    "176412b3e199e6c4ecaf0c6b49ffba5d72c83ed81ad1c7ef1ba14b88fbd8ccd6",
+    "ba4ef5f4f2b96673112b9aa69635fd96c7c0078d4d29baaed6e7d690dd5763fb",
+    "c53cbd17f68d7c84e282b2f478395c103d4a6c5bbd596e40606a410bac28822e",
+    "40d775056ff060d82bd371513351e79c30d19f13758ae7aeb2d05016e065df41",
+    "eea30aec5453d2bc3112c02ade9da79316dbf0fd3a36e15f67dc82fe9fbdf845",
+    "2baf78846b4d1e86b4c03778b0405651bda2fb7bf216e1113a59422c9e908edf",
+    "4f6d10d88e7cefaa58bc7f9e91deaf9d779a34710bdf30cf82e890d581a47481",
+    "b186c10faa5455d1267fae7567c1dfc7d1f0fd8c6358dab54e898f37927f3c6a",
+    "c0770b0dc3bf79a5ea78d2115e55f27fa97398ebaf4d9b0482772fcc9aa44d39",
+    "f797246fe76cd5b36a85124c1d97f87616e3cd63da301d62f4686cc3c7fa0249",
+    "1f06548c9ca535b6fbc56f190a0961d607f51795b2a1ba4301cbd1fe04370a08",
+    "b49e7db07fa4ab970d21834d0772da76b3fdbcd4cd5a9e04b88f04513c37ff2f",
+    "d1779fccacc7fc9eeadc160ac11b40fec45709a74f4822af53408fe68bf319f8",
+    "671155a9deb8ee0fe212497bcd5d77e8a1acb0e6e2b694fbb39bbf0e36cd8ad3",
+    "6c22311a04178baea35e8fb4a5c20f28ff8cfc606c661bdc955ce6b026895f07",
+    "6fabda34bbd2b935f01d25d4abe4ed40588717f7e688b3c736e255c57ac5bbc2",
+    "12f2e8a8babf30dfdd1f5525a0517fd53a8851b9c2682b1f2cae9a7d6ddc4203",
+    "0e415ac803a93caf62e413a8c1716af903260579dc8f3659e4ee90a535ececf4",
+    "67cd89cff0a5143c2c869d4caee7691fa5fc35d3684aae240a4c1c5a0262ef42",
+    "40106cf3ba07e5e6a0eb9caa5c0626db1f59914ea2fb3c23b168eb6b2f649013",
+    "6d747df68fbc0e06227fa151397cef0ce4db6368da72e826ed4b646923636038",
+    "5a37a58abd48880bc527db60759bd0f1c5243afcb1cc3c736bc1c4bd8796fa98",
+    "4d71b68367cef705b708dde8c0c752103b40563edfbc162610519f9a6c61e6d9",
+    "c978dafe8df05f60e4ede10ac1d04e3f7068ed456b8edaebf98afb32ef0fad72",
+    "9c2e2759171c996a2dfe5cfdb9cb5d432c82ccc12093c9f8cf11fbc62aa07a05",
+    "c2e243d26df543c0e8edf7c0b204bb2fa00b1185a90d0dec92be19d88dc8df69",
+    "abc1858fe223facb776b387d1069bf096bce68768b1c9f22847f0d1ad079cb73",
+    "7990044290052292a6f58ba22a328c209aae53ace664e9d205a44a3c303187a9",
+    "46fb98f32a4d70822c14ab5ce978de398161e66d0aa2894fb9d12383f18e29aa",
+    "2ac3850d2be5bb562b057329ae3b11fd608416daddcfc162666ad6fe29c48623",
+    "ea8d5e5d8b911b4c9869157f79f05eb74f97a1a5574d1e623e429a3bd5c18a0d",
+    "7cc236559ae480117ca805367d43a91e0f67d05e3f4cad3dab46c1782a212dfa",
+    "65b7402d6f0fb907631cabb6a23f02a4800c346069836902d72b558fcba4828c",
+    "345768021f3b7dadfcf13a75c9cba6f8838053d802ed6c947fb3118f147435d0",
+    "0cab637f09d21b401b7c099053280ece225386bdae037ea7baddc958abc0b22c",
+    "d66a0806675d29f8045eb070368c9f6c5408336972410a6ed05b936524efc32c",
+    "b0c5c54cf914f2bc2128993fa5d95c471caca7a446e9a3633ae6f798dac506e0",
+    "7310409ebd91471671ac8b2d06b20823db84e18ef9f9daee05ec59347fff7268",
+    "c5143aef9e088b816452a55d0b2c35526a55b60f08dd9202124966cd93c475d7",
+    "9af2fba373c8254959328b86df55461dc6d6751328eb85fa8d821e9947a23264",
+    "d1ba036ad798cb4d903bb21213879aa3e15b8e43298d8ab41cd71e90257820fb",
+    "e22d3a5ae3f20486bbfec27aa57cca7cd599a9016c0fbd20af24c1570eb82006",
+    "f21994adb02461a59ea8f0582a1dd321a9ac94ccd208c13fa82d57f0ba2fc7c9",
+    "9d38bf9daa8c01a6942269665cb37b270bfc7cc28dc044a80c5b89813afcc693",
+    "859b878caf561813bbc6319510d385c6011b3de71e865e48cc7e55789abaa1f4",
+    "fbfcf442882253294a558791cd67406245da287a66446c69e9ce3bd1afe8682e",
+    "5dae12c2385ae54d0038f3bf588bc47715a1d907f16bf204e5920d70fb3c414c",
+    "6edaef5c0c5f559e85cb3c362f8415717866a8499ab5c1df0c1e4aefe39ce8f3",
+    "434a3a8fa67b42afddb02ce4e3fa4cbf6821d411d891560b0c0d5e59d735a28c",
+    "4f984e7ee7c97a46e7e611ac716c0635e65acae62208264e93950c29b65ea04f",
+    "0fe9929d77d5e056a185a354d42bd72bf049b7ead18cf0704a4d161534450d10",
+    "58d9a5a215eb6cc6a4e28a06e52271389ad15b66171bf9808da6d706e7bf479f",
+    "bc76e2ba01368bbc4d8a36f807572afec7ad3c5c41197d0f92bf46d281c29828",
+    "e5778b4fe99c325988817739b195f33f17e8e882564f52eb59667ced7b8e2aa2",
+    "1b4bc09fa27b2b90f357af7105b02980e6c81d8116119c0952daeebc7b7b359f",
+    "3055cb3e47ffd1cbfad2c1be5f07c5988623f7e6166450b064e6e10c9bc63b8f",
+    "8b74299d7cc5181f3a7c1a3368830782487e6f2fe28f9a284d461f074ebdd1aa",
+    "6bb82afd7280fae7a460b8721aaa115c3266ceed413797e02498a7afb3755f28",
+    "6299b0678d872735120d25b75dd89b8a94992d5fe51f82df75c2bf93433d07e7",
+    "1aa391a26777e30ba1ef1e767969ad32f0d830848116cdf2f7d5fa7c78ff4328",
+    "76a2fc5e9aeb863caff928c745be80021dcfc6000d6b22c3e6849f045d907dc1",
+    "838783f5682de35ee3e2caad094443e6dac4c02d3c8043755dfeecf2de39b09f",
+    "117a8917e4a75e7f63b45045f5ffaf8e2dda184296ae1e9e789286753123d857",
+    "a58bc03f571eaa94ccf93976533642b530550231db26b03d68bbb635bed97372",
+    "f6ebddc7d0a45680b68f977a088512856791a44e57d44ed1113e5ca4ff71a62b",
+    "3636eeac2b39dab97774626bee0cb6c461d2dbd484ee1c702194dd1ba8ce770e",
+    "ff0a9bd47595e11f8827d770c45efd8c65a7222f153312d8777f33c58b2a97a0",
+    "2ff18671976bdd6787ecb9c7764e73d2eebe50f447f6acfc0833caadd09291cd",
+    "b6eb6392e9517383d739ffde2c13b96b20f459eb0b9d0366414d7343f7560963",
+    "00d114a9da12cb653e2c35243d5d4b1fd624cc2d24ad817c2d8c2c3274817d39",
+    "c47313cd0b473caa469b60473192fe5bef900cfeff75949610b4479bb1890675",
+    "d5df881c04681fc7d897f98ef4207d52cea82f82424b2d399517dc86b296df75",
+    "3331d720c77fffb068f558a95aa0cacc8d8525ac5d7b86b71f0079ce8f9c448d",
+    "395c46ed3b7fae4feea57191daadc56d675f8e641b1e743b4a6bdcb9da3663a1",
+    "eda91eb5b5e4906b8f791300b7053abc903c63e859bf337a03540b2b348ebb05",
+    "45e9454b44245e4654404888b9533caca691e12d154198d70dfb8a90b6853bce",
+    "2d0b78ccad20531969b647b59ba3aba52147ebc6a612dfa34c1897c96ec4ea5a",
+    "4600a0dc8a60c78fb527cfe701c2dc6b5b42a87ffdcc14b0384f5a0cde877abd",
+    "fd2a2c3ed9801b91faae49933462050902558c99f64ff2a0aedf5acf16a7e225",
+    "93653f3ecbe78054231417d9f45f39b86acba4911e7db0158cec7e70fe5318ed",
+    "55355ee679c8d10a6c18ba9f901bb90497dcd8efe060322e602b1e483249dadb",
+    "3ceedc457c45411709e15b8a5e60d318409b9993928312ee56f4954304be1424",
+    "b900affe30cd64409fbd393ab146851dcb5e3ed410ebc4445f474527c8ecc510",
+    "c91ed89b2b0a808157e3ff96b7a34bd409395197302959dfa106fe6880459298",
+    "494170af382d5c6118b623efc7a210a80c6bf61efaa0e834939617602942c1f1",
+    "082d585dc89e99421728d4fb2cf4b45885b2b1d2e272234f284dde84f901bbab",
+    "f716b00d1c5693e57a536349d2698e0b71cc9c53fb3412378b6af9115802f492",
+    "b4550b198c0b585dbba229f9c2281108af4ce793907299415cf354cbccd8e010",
+    "282ff74e28cff3d79685740c2fc2e6e0775c56b6663a125a7cd9ee339bbde174",
+    "0cd5660d11f63086b5742e73d9b0b18f19461338d3698b8d0f3526ac03c293aa"
+  ],
+  "tasks": [
+    {
+      "task_id": 20,
+      "prompt": "\n\ndef is_woodall(x):\n    'Write a function to check if the given number is woodball or not.'\n    ",
+      "reference": "def is_woodall(x): \n\tif (x % 2 == 0): \n\t\treturn False\n\tif (x == 1): \n\t\treturn True\n\tx = x + 1 \n\tp = 0\n\twhile (x % 2 == 0): \n\t\tx = x/2\n\t\tp = p + 1\n\t\tif (p == x): \n\t\t\treturn True\n\treturn False",
+      "tests": [
+        "assert is_woodall(383) == True",
+        "assert is_woodall(254) == False",
+        "assert is_woodall(200) == False"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 307,
+      "prompt": "from copy import deepcopy\n\ndef colon_tuplex(tuplex, m, n):\n    'Write a function to get a colon of a tuple.'\n    ",
+      "reference": "from copy import deepcopy\ndef colon_tuplex(tuplex,m,n):\n  tuplex_colon = deepcopy(tuplex)\n  tuplex_colon[m].append(n)\n  return tuplex_colon",
+      "tests": [
+        "assert colon_tuplex((\"HELLO\", 5, [], True) ,2,50)==(\"HELLO\", 5, [50], True)",
+        "assert colon_tuplex((\"HELLO\", 5, [], True) ,2,100)==((\"HELLO\", 5, [100],True))",
+        "assert colon_tuplex((\"HELLO\", 5, [], True) ,2,500)==(\"HELLO\", 5, [500], True)"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 226,
+      "prompt": "\n\ndef odd_values_string(str):\n    'Write a python function to remove the characters which have odd index values of a given string.'\n    ",
+      "reference": "def odd_values_string(str):\n  result = \"\" \n  for i in range(len(str)):\n    if i % 2 == 0:\n      result = result + str[i]\n  return result",
+      "tests": [
+        "assert odd_values_string('abcdef') == 'ace'",
+        "assert odd_values_string('python') == 'pto'",
+        "assert odd_values_string('data') == 'dt'",
+        "assert odd_values_string('lambs') == 'lms'"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 415,
+      "prompt": "\n\ndef max_Product(arr):\n    'Write a python function to find a pair with highest product from a given array of integers.'\n    ",
+      "reference": "def max_Product(arr): \n    arr_len = len(arr) \n    if (arr_len < 2): \n        return (\"No pairs exists\")           \n    x = arr[0]; y = arr[1]      \n    for i in range(0,arr_len): \n        for j in range(i + 1,arr_len): \n            if (arr[i] * arr[j] > x * y): \n                x = arr[i]; y = arr[j] \n    return x,y    ",
+      "tests": [
+        "assert max_Product([1,2,3,4,7,0,8,4]) == (7,8)",
+        "assert max_Product([0,-1,-2,-4,5,0,-6]) == (-4,-6)",
+        "assert max_Product([1,2,3]) == (2,3)"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 230,
+      "prompt": "\n\ndef replace_blank(str1, char):\n    'Write a function that takes in a string and character, replaces blank spaces in the string with the character, and returns the string.'\n    ",
+      "reference": "def replace_blank(str1,char):\n str2 = str1.replace(' ', char)\n return str2",
+      "tests": [
+        "assert replace_blank(\"hello people\",'@')==(\"hello@people\")",
+        "assert replace_blank(\"python program language\",'$')==(\"python$program$language\")",
+        "assert replace_blank(\"blank space\",\"-\")==(\"blank-space\")"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 394,
+      "prompt": "\n\ndef check_distinct(test_tup):\n    'Write a function to check if given tuple contains no duplicates.'\n    ",
+      "reference": "def check_distinct(test_tup):\n  res = True\n  temp = set()\n  for ele in test_tup:\n    if ele in temp:\n      res = False\n      break\n    temp.add(ele)\n  return res ",
+      "tests": [
+        "assert check_distinct((1, 4, 5, 6, 1, 4)) == False",
+        "assert check_distinct((1, 4, 5, 6)) == True",
+        "assert check_distinct((2, 3, 4, 5, 6)) == True"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 429,
+      "prompt": "\n\ndef and_tuples(test_tup1, test_tup2):\n    'Write a function to extract the elementwise and tuples from the given two tuples.'\n    ",
+      "reference": "def and_tuples(test_tup1, test_tup2):\n  res = tuple(ele1 & ele2 for ele1, ele2 in zip(test_tup1, test_tup2))\n  return (res) ",
+      "tests": [
+        "assert and_tuples((10, 4, 6, 9), (5, 2, 3, 3)) == (0, 0, 2, 1)",
+        "assert and_tuples((1, 2, 3, 4), (5, 6, 7, 8)) == (1, 2, 3, 0)",
+        "assert and_tuples((8, 9, 11, 12), (7, 13, 14, 17)) == (0, 9, 10, 0)"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 108,
+      "prompt": "import heapq\n\ndef merge_sorted_list(num1, num2, num3):\n    'Write a function to merge three lists into a single sorted list.'\n    ",
+      "reference": "import heapq\ndef merge_sorted_list(num1,num2,num3):\n  num1=sorted(num1)\n  num2=sorted(num2)\n  num3=sorted(num3)\n  result = heapq.merge(num1,num2,num3)\n  return list(result)",
+      "tests": [
+        "assert merge_sorted_list([25, 24, 15, 4, 5, 29, 110],[19, 20, 11, 56, 25, 233, 154],[24, 26, 54, 48])==[4, 5, 11, 15, 19, 20, 24, 24, 25, 25, 26, 29, 48, 54, 56, 110, 154, 233]",
+        "assert merge_sorted_list([1, 3, 5, 6, 8, 9], [2, 5, 7, 11], [1, 4, 7, 8, 12])==[1, 1, 2, 3, 4, 5, 5, 6, 7, 7, 8, 8, 9, 11, 12]",
+        "assert merge_sorted_list([18, 14, 10, 9, 8, 7, 9, 3, 2, 4, 1],[25, 35, 22, 85, 14, 65, 75, 25, 58],[12, 74, 9, 50, 61, 41])==[1, 2, 3, 4, 7, 8, 9, 9, 9, 10, 12, 14, 14, 18, 22, 25, 25, 35, 41, 50, 58, 61, 65, 74, 75, 85]"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 397,
+      "prompt": "\n\ndef median_numbers(a, b, c):\n    'Write a function to find the median of three numbers.'\n    ",
+      "reference": "def median_numbers(a,b,c):\n if a > b:\n    if a < c:\n        median = a\n    elif b > c:\n        median = b\n    else:\n        median = c\n else:\n    if a > c:\n        median = a\n    elif b < c:\n        median = b\n    else:\n        median = c\n return median",
+      "tests": [
+        "assert median_numbers(25,55,65)==55.0",
+        "assert median_numbers(20,10,30)==20.0",
+        "assert median_numbers(15,45,75)==45.0"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 120,
+      "prompt": "\n\ndef max_product_tuple(list1):\n    'Write a function to find the maximum absolute product between numbers in pairs of tuples within a given list.'\n    ",
+      "reference": "def max_product_tuple(list1):\n    result_max = max([abs(x * y) for x, y in list1] )\n    return result_max",
+      "tests": [
+        "assert max_product_tuple([(2, 7), (2, 6), (1, 8), (4, 9)] )==36",
+        "assert max_product_tuple([(10,20), (15,2), (5,10)] )==200",
+        "assert max_product_tuple([(11,44), (10,15), (20,5), (12, 9)] )==484"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 451,
+      "prompt": "import re\n\ndef remove_whitespaces(text1):\n    'Write a function to remove all whitespaces from the given string.'\n    ",
+      "reference": "import re\ndef remove_whitespaces(text1):\n  return (re.sub(r'\\s+', '',text1))",
+      "tests": [
+        "assert remove_whitespaces(' Google    Flutter ') == 'GoogleFlutter'",
+        "assert remove_whitespaces(' Google    Dart ') == 'GoogleDart'",
+        "assert remove_whitespaces(' iOS    Swift ') == 'iOSSwift'"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 454,
+      "prompt": "import re\n\ndef text_match_wordz(text):\n    \"Write a function that matches a word containing 'z'.\"\n    ",
+      "reference": "import re\ndef text_match_wordz(text):\n        patterns = '\\w*z.\\w*'\n        if re.search(patterns,  text):\n                return True\n        else:\n                return False",
+      "tests": [
+        "assert text_match_wordz(\"pythonz.\")==True",
+        "assert text_match_wordz(\"xyz.\")==True",
+        "assert text_match_wordz(\"  lang  .\")==False"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 472,
+      "prompt": "\n\ndef check_Consecutive(l):\n    'Write a python function to check whether the given list contains consecutive numbers or not.'\n    ",
+      "reference": "def check_Consecutive(l): \n    return sorted(l) == list(range(min(l),max(l)+1)) ",
+      "tests": [
+        "assert check_Consecutive([1,2,3,4,5]) == True",
+        "assert check_Consecutive([1,2,3,5,6]) == False",
+        "assert check_Consecutive([1,2,1]) == False"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 431,
+      "prompt": "\n\ndef common_element(list1, list2):\n    'Write a function that takes two lists and returns true if they have at least one common element.'\n    ",
+      "reference": "def common_element(list1, list2):\n     result = False\n     for x in list1:\n         for y in list2:\n             if x == y:\n                 result = True\n                 return result",
+      "tests": [
+        "assert common_element([1,2,3,4,5], [5,6,7,8,9])==True",
+        "assert common_element([1,2,3,4,5], [6,7,8,9])==None",
+        "assert common_element(['a','b','c'], ['d','b','e'])==True"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 257,
+      "prompt": "\n\ndef swap_numbers(a, b):\n    'Write a function that takes in two numbers and returns a tuple with the second number and then the first number.'\n    ",
+      "reference": "def swap_numbers(a,b):\n temp = a\n a = b\n b = temp\n return (a,b)",
+      "tests": [
+        "assert swap_numbers(10,20)==(20,10)",
+        "assert swap_numbers(15,17)==(17,15)",
+        "assert swap_numbers(100,200)==(200,100)"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 290,
+      "prompt": "\n\ndef max_length(list1):\n    'Write a function to find the list of maximum length in a list of lists.'\n    ",
+      "reference": "def max_length(list1):\n    max_length = max(len(x) for x in  list1 )  \n    max_list = max((x) for x in   list1)\n    return(max_length, max_list)",
+      "tests": [
+        "assert max_length([[0], [1, 3], [5, 7], [9, 11], [13, 15, 17]])==(3, [13, 15, 17])",
+        "assert max_length([[1], [5, 7], [10, 12, 14,15]])==(4, [10, 12, 14,15])",
+        "assert max_length([[5], [15,20,25]])==(3, [15,20,25])"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 237,
+      "prompt": "from collections import Counter\n\ndef check_occurences(test_list):\n    'Write a function that takes in a list of tuples and returns a dictionary mapping each unique tuple to the number of times it occurs in the list.'\n    ",
+      "reference": "from collections import Counter \ndef check_occurences(test_list):\n  res = dict(Counter(tuple(ele) for ele in map(sorted, test_list)))\n  return  (res) ",
+      "tests": [
+        "assert check_occurences([(3, 1), (1, 3), (2, 5), (5, 2), (6, 3)] ) == {(1, 3): 2, (2, 5): 2, (3, 6): 1}",
+        "assert check_occurences([(4, 2), (2, 4), (3, 6), (6, 3), (7, 4)] ) == {(2, 4): 2, (3, 6): 2, (4, 7): 1}",
+        "assert check_occurences([(13, 2), (11, 23), (12, 25), (25, 12), (16, 23)] ) == {(2, 13): 1, (11, 23): 1, (12, 25): 2, (16, 23): 1}"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 297,
+      "prompt": "\n\ndef flatten_list(list1):\n    'Write a function to flatten a given nested list structure.'\n    ",
+      "reference": "def flatten_list(list1):\n    result_list = []\n    if not list1: return result_list\n    stack = [list(list1)]\n    while stack:\n        c_num = stack.pop()\n        next = c_num.pop()\n        if c_num: stack.append(c_num)\n        if isinstance(next, list):\n            if next: stack.append(list(next))\n        else: result_list.append(next)\n    result_list.reverse()\n    return result_list ",
+      "tests": [
+        "assert flatten_list([0, 10, [20, 30], 40, 50, [60, 70, 80], [90, 100, 110, 120]])==[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]",
+        "assert flatten_list([[10, 20], [40], [30, 56, 25], [10, 20], [33], [40]])==[10, 20, 40, 30, 56, 25, 10, 20, 33, 40]",
+        "assert flatten_list([[1,2,3], [4,5,6], [10,11,12], [7,8,9]])==[1, 2, 3, 4, 5, 6, 10, 11, 12, 7, 8, 9]"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 247,
+      "prompt": "\n\ndef lps(str):\n    'Write a function to find the length of the longest palindromic subsequence in the given string.'\n    ",
+      "reference": "def lps(str): \n\tn = len(str) \n\tL = [[0 for x in range(n)] for x in range(n)] \n\tfor i in range(n): \n\t\tL[i][i] = 1\n\tfor cl in range(2, n+1): \n\t\tfor i in range(n-cl+1): \n\t\t\tj = i+cl-1\n\t\t\tif str[i] == str[j] and cl == 2: \n\t\t\t\tL[i][j] = 2\n\t\t\telif str[i] == str[j]: \n\t\t\t\tL[i][j] = L[i+1][j-1] + 2\n\t\t\telse: \n\t\t\t\tL[i][j] = max(L[i][j-1], L[i+1][j]); \n\treturn L[0][n-1]",
+      "tests": [
+        "assert lps(\"TENS FOR TENS\") == 5",
+        "assert lps(\"CARDIO FOR CARDS\") == 7",
+        "assert lps(\"PART OF THE JOURNEY IS PART\") == 9"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 401,
+      "prompt": "\n\ndef add_nested_tuples(test_tup1, test_tup2):\n    'Write a function to perform index wise addition of tuple elements in the given two nested tuples.'\n    ",
+      "reference": "def add_nested_tuples(test_tup1, test_tup2):\n  res = tuple(tuple(a + b for a, b in zip(tup1, tup2))\n   for tup1, tup2 in zip(test_tup1, test_tup2))\n  return (res) ",
+      "tests": [
+        "assert add_nested_tuples(((1, 3), (4, 5), (2, 9), (1, 10)), ((6, 7), (3, 9), (1, 1), (7, 3))) == ((7, 10), (7, 14), (3, 10), (8, 13))",
+        "assert add_nested_tuples(((2, 4), (5, 6), (3, 10), (2, 11)), ((7, 8), (4, 10), (2, 2), (8, 4))) == ((9, 12), (9, 16), (5, 12), (10, 15))",
+        "assert add_nested_tuples(((3, 5), (6, 7), (4, 11), (3, 12)), ((8, 9), (5, 11), (3, 3), (9, 5))) == ((11, 14), (11, 18), (7, 14), (12, 17))"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 283,
+      "prompt": "\n\ndef validate(n):\n    'Write a python function takes in an integer and check whether the frequency of each digit in the integer is less than or equal to the digit itself.'\n    ",
+      "reference": "def validate(n): \n    for i in range(10): \n        temp = n;  \n        count = 0; \n        while (temp): \n            if (temp % 10 == i): \n                count+=1;  \n            if (count > i): \n                return False\n            temp //= 10; \n    return True",
+      "tests": [
+        "assert validate(1234) == True",
+        "assert validate(51241) == False",
+        "assert validate(321) == True"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 391,
+      "prompt": "\n\ndef convert_list_dictionary(l1, l2, l3):\n    'Write a function to convert more than one list to nested dictionary.'\n    ",
+      "reference": "def convert_list_dictionary(l1, l2, l3):\n     result = [{x: {y: z}} for (x, y, z) in zip(l1, l2, l3)]\n     return result",
+      "tests": [
+        "assert convert_list_dictionary([\"S001\", \"S002\", \"S003\", \"S004\"],[\"Adina Park\", \"Leyton Marsh\", \"Duncan Boyle\", \"Saim Richards\"] ,[85, 98, 89, 92])==[{'S001': {'Adina Park': 85}}, {'S002': {'Leyton Marsh': 98}}, {'S003': {'Duncan Boyle': 89}}, {'S004': {'Saim Richards': 92}}]",
+        "assert convert_list_dictionary([\"abc\",\"def\",\"ghi\",\"jkl\"],[\"python\",\"program\",\"language\",\"programs\"],[100,200,300,400])==[{'abc':{'python':100}},{'def':{'program':200}},{'ghi':{'language':300}},{'jkl':{'programs':400}}]",
+        "assert convert_list_dictionary([\"A1\",\"A2\",\"A3\",\"A4\"],[\"java\",\"C\",\"C++\",\"DBMS\"],[10,20,30,40])==[{'A1':{'java':10}},{'A2':{'C':20}},{'A3':{'C++':30}},{'A4':{'DBMS':40}}]"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 305,
+      "prompt": "import re\n\ndef start_withp(words):\n    \"Write a function to return two words from a list of words starting with letter 'p'.\"\n    ",
+      "reference": "import re\ndef start_withp(words):\n for w in words:\n        m = re.match(\"(P\\w+)\\W(P\\w+)\", w)\n        if m:\n            return m.groups()",
+      "tests": [
+        "assert start_withp([\"Python PHP\", \"Java JavaScript\", \"c c++\"])==('Python', 'PHP')",
+        "assert start_withp([\"Python Programming\",\"Java Programming\"])==('Python','Programming')",
+        "assert start_withp([\"Pqrst Pqr\",\"qrstuv\"])==('Pqrst','Pqr')"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 67,
+      "prompt": "\n\ndef bell_number(n):\n    'Write a function to find the number of ways to partition a set of Bell numbers.'\n    ",
+      "reference": "def bell_number(n):   \n    bell = [[0 for i in range(n+1)] for j in range(n+1)] \n    bell[0][0] = 1\n    for i in range(1, n+1): \n        bell[i][0] = bell[i-1][i-1]  \n        for j in range(1, i+1): \n            bell[i][j] = bell[i-1][j-1] + bell[i][j-1]   \n    return bell[n][0] ",
+      "tests": [
+        "assert bell_number(2)==2",
+        "assert bell_number(10)==115975",
+        "assert bell_number(56)==6775685320645824322581483068371419745979053216268760300"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 460,
+      "prompt": "\n\ndef Extract(lst):\n    'Write a python function to get the first element of each sublist.'\n    ",
+      "reference": "def Extract(lst): \n    return [item[0] for item in lst] ",
+      "tests": [
+        "assert Extract([[1, 2], [3, 4, 5], [6, 7, 8, 9]]) == [1, 3, 6]",
+        "assert Extract([[1,2,3],[4, 5]]) == [1,4]",
+        "assert Extract([[9,8,1],[1,2]]) == [9,1]"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 12,
+      "prompt": "\n\ndef sort_matrix(M):\n    'Write a function to sort a given matrix in ascending order according to the sum of its rows.'\n    ",
+      "reference": "def sort_matrix(M):\n    result = sorted(M, key=sum)\n    return result",
+      "tests": [
+        "assert sort_matrix([[1, 2, 3], [2, 4, 5], [1, 1, 1]])==[[1, 1, 1], [1, 2, 3], [2, 4, 5]]",
+        "assert sort_matrix([[1, 2, 3], [-2, 4, -5], [1, -1, 1]])==[[-2, 4, -5], [1, -1, 1], [1, 2, 3]]",
+        "assert sort_matrix([[5,8,9],[6,4,3],[2,1,4]])==[[2, 1, 4], [6, 4, 3], [5, 8, 9]]"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 70,
+      "prompt": "\n\ndef find_equal_tuple(Input):\n    'Write a function to find whether all the given tuples have equal length or not.'\n    ",
+      "reference": "def find_equal_tuple(Input):\n  k = 0 if not Input else len(Input[0])\n  flag = 1\n  for tuple in Input:\n    if len(tuple) != k:\n      flag = 0\n      break\n  return flag\ndef get_equal(Input):\n  return find_equal_tuple(Input) == 1",
+      "tests": [
+        "assert get_equal([(11, 22, 33), (44, 55, 66)]) == True",
+        "assert get_equal([(1, 2, 3), (4, 5, 6, 7)]) == False",
+        "assert get_equal([(1, 2), (3, 4)]) == True"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 277,
+      "prompt": "\n\ndef dict_filter(dict, n):\n    'Write a function that takes in a dictionary and integer n and filters the dictionary to only include entries with values greater than or equal to n.'\n    ",
+      "reference": "def dict_filter(dict,n):\n result = {key:value for (key, value) in dict.items() if value >=n}\n return result",
+      "tests": [
+        "assert dict_filter({'Cierra Vega': 175, 'Alden Cantrell': 180, 'Kierra Gentry': 165, 'Pierre Cox': 190},170)=={'Cierra Vega': 175, 'Alden Cantrell': 180, 'Pierre Cox': 190}",
+        "assert dict_filter({'Cierra Vega': 175, 'Alden Cantrell': 180, 'Kierra Gentry': 165, 'Pierre Cox': 190},180)=={ 'Alden Cantrell': 180, 'Pierre Cox': 190}",
+        "assert dict_filter({'Cierra Vega': 175, 'Alden Cantrell': 180, 'Kierra Gentry': 165, 'Pierre Cox': 190},190)=={ 'Pierre Cox': 190}"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 244,
+      "prompt": "import math\n\ndef next_Perfect_Square(N):\n    'Write a python function to find the next perfect square greater than a given number.'\n    ",
+      "reference": "import math  \ndef next_Perfect_Square(N): \n    nextN = math.floor(math.sqrt(N)) + 1\n    return nextN * nextN ",
+      "tests": [
+        "assert next_Perfect_Square(35) == 36",
+        "assert next_Perfect_Square(6) == 9",
+        "assert next_Perfect_Square(9) == 16"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 19,
+      "prompt": "\n\ndef test_duplicate(arraynums):\n    'Write a function to find whether a given array of integers contains any duplicate element.'\n    ",
+      "reference": "def test_duplicate(arraynums):\n    nums_set = set(arraynums)    \n    return len(arraynums) != len(nums_set)     ",
+      "tests": [
+        "assert test_duplicate(([1,2,3,4,5]))==False",
+        "assert test_duplicate(([1,2,3,4, 4]))==True",
+        "assert test_duplicate([1,1,2,2,3,3,4,4,5])==True"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 72,
+      "prompt": "\n\ndef dif_Square(n):\n    'Write a python function to check whether the given number can be represented as the difference of two squares or not.'\n    ",
+      "reference": "def dif_Square(n): \n    if (n % 4 != 2): \n        return True\n    return False",
+      "tests": [
+        "assert dif_Square(5) == True",
+        "assert dif_Square(10) == False",
+        "assert dif_Square(15) == True"
+      ],
+      "test_imports": []
+    },
+    {
+      "task_id": 457,
+      "prompt": "\n\ndef Find_Min(lst):\n    'Write a python function to find the sublist having minimum length.'\n    ",
+      "reference": "def Find_Min(lst): \n    return min(lst, key=len) ",
+      "tests": [
+        "assert Find_Min([[1],[1,2],[1,2,3]]) == [1]",
+        "assert Find_Min([[1,1],[1,1,1],[1,2,7,8]]) == [1,1]",
+        "assert Find_Min([['x'],['x','y'],['x','y','z']]) == ['x']"
+      ],
+      "test_imports": []
+    }
+  ]
+}
