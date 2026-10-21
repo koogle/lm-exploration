@@ -79,6 +79,41 @@ class ValidationTests(unittest.TestCase):
 
 
 class PersistenceTests(unittest.TestCase):
+    def test_custom_backend_preserves_runtime_and_raw_response(self):
+        c = {**CONFIG, "repeats": 1}
+        response = {
+            "choices": [
+                {
+                    "message": {"content": '{"values":[-1,2,4,7]}'},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"prompt_tokens": 42, "completion_tokens": 20},
+            "completion_tokens_exclude_eos": True,
+        }
+        with tempfile.TemporaryDirectory() as d:
+            store = Store(d, {"config": c})
+            (Path(d) / "validated").mkdir()
+            with patch("runner.request") as http:
+                result = asyncio.run(
+                    trial(
+                        c,
+                        PROMPTS[-2:-1],
+                        store,
+                        1,
+                        0,
+                        "custom",
+                        lambda: None,
+                        request_fn=lambda path, body: response,
+                        runtime_label="synthetic-test-runtime",
+                    )
+                )
+                http.assert_not_called()
+            self.assertEqual(result["accepted"], 1)
+            record = json.loads(next(store.records.glob("*.json")).read_text())
+            self.assertEqual(record["runtime"], "synthetic-test-runtime")
+            self.assertEqual(record["response"], response)
+
     def test_batched_checkpoints_flush_tail_before_validation_and_resume(self):
         c = {
             **CONFIG,

@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--config", type=Path, default=HERE / "config.json")
     parser.add_argument(
         "--backend",
-        choices=["baseline", "megakernel", "kernel-sweep"],
+        choices=["baseline", "megakernel", "kernel-sweep", "kernel-pipeline"],
         default="baseline",
     )
     parser.add_argument("--launch", action="store_true")

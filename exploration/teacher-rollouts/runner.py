@@ -59,7 +59,18 @@ def body(c, prompt, seed, max_tokens=None):
     }
 
 
-async def trial(c, prompts, store, concurrency, round_id, attempt, commit):
+async def trial(
+    c,
+    prompts,
+    store,
+    concurrency,
+    round_id,
+    attempt,
+    commit,
+    request_fn=None,
+    runtime_label=None,
+):
+    request_fn = request_fn or request
     trial_id = f"c{concurrency}-r{round_id}"
     summary_path = store.root / f"{trial_id}.json"
     if summary_path.exists():
@@ -129,7 +140,7 @@ async def trial(c, prompts, store, concurrency, round_id, attempt, commit):
                 "teacher": c["model"],
                 "teacher_revision": c["revision"],
                 "tokenizer_revision": c["revision"],
-                "runtime": c["runtime"],
+                "runtime": runtime_label or c["runtime"],
                 "prompt_id": prompt["id"],
                 "synthetic": True,
                 "trial_id": trial_id,
@@ -146,7 +157,7 @@ async def trial(c, prompts, store, concurrency, round_id, attempt, commit):
             }
             try:
                 response = await asyncio.to_thread(
-                    request, "/v1/chat/completions", payload
+                    request_fn, "/v1/chat/completions", payload
                 )
                 choice = response["choices"][0]
                 record.update(

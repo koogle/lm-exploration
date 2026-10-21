@@ -53,9 +53,17 @@ if BACKEND == "kernel-sweep":
     kernel_image = kernel_image.run_commands(
         "python /experiment/megakernel/build_sweep.py /experiment/megakernel/builds"
     )
-image = (kernel_image if BACKEND in ("megakernel", "kernel-sweep") else image).env(
-    {"ROLLOUT_BACKEND": BACKEND}
-)
+if BACKEND == "kernel-pipeline":
+    kernel_image = kernel_image.run_commands(
+        "nvcc -std=c++20 -O3 -arch=sm_90 -DTARGET_SM=90 --expt-relaxed-constexpr "
+        "--expt-extended-lambda --shared -Xcompiler=-fPIC -DBLOCK_SIZE=512 -DNUM_BLOCKS=132 "
+        "/experiment/megakernel/kernel.cu -o /experiment/megakernel/pipeline.so"
+    )
+image = (
+    kernel_image
+    if BACKEND in ("megakernel", "kernel-sweep", "kernel-pipeline")
+    else image
+).env({"ROLLOUT_BACKEND": BACKEND})
 volume = modal.Volume.from_name(
     "lm-exploration-teacher-rollouts", create_if_missing=True
 )
@@ -82,6 +90,7 @@ def worker(run_id, attempt, manifest, deadline, supervisor_id):
         {
             "megakernel": "megakernel/probe.py",
             "kernel-sweep": "megakernel/sweep.py",
+            "kernel-pipeline": "megakernel/pipeline.py",
         }.get(manifest.get("backend"), "runner.py"),
     )
 
