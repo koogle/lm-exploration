@@ -79,7 +79,7 @@ def main():
     shutil.copyfile(
         artifact_path(args.artifacts, "publication/scholarly-124m-step2-card.md"), out / "README.md"
     )
-    shutil.copyfile(root / "publication/generate_smoke.py", out / "generate.py")
+    shutil.copyfile(root / "publication/generate.py", out / "generate.py")
     shutil.copyfile(args.data_manifest, out / "data-manifest.json")
     assert digest(out / "data-manifest.json") == saved["data_identity"]["manifest_sha256"]
     print(

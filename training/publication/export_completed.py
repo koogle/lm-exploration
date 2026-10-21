@@ -75,7 +75,7 @@ def main():
     )
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
     (out / "requirements.txt").write_text("torch==2.6.0\nsafetensors>=0.4\ntokenizers==0.22.2\n")
-    shutil.copyfile(root / "publication/generate_completed.py", out / "generate.py")
+    shutil.copyfile(root / "publication/generate.py", out / "generate.py")
     for name in ("scholarly-modern-10m-5b-training-audit-20261018.json",):
         shutil.copyfile(artifact_path(args.artifacts, "results/" + name), out / name)
     print(json.dumps({"output": str(out), "parameters": 9849536, "tokens": saved["tokens"]}))

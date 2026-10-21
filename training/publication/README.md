@@ -36,9 +36,26 @@ silently fetch a mutable latest revision. The completed-checkpoint exporter also
 requires `--artifacts`; the smoke exporter takes `--artifacts` and an explicit
 `--training-report` path. Invoke these as `python -m publication.export_completed`
 and `python -m publication.export_ddp_smoke` from `training/` with their other
-required checkpoint, data-manifest and output arguments. These export tools require
-`safetensors` in addition to the corpus environment and only accept trusted
-checkpoints. They do not launch training or maintain an archived-model evaluator.
+required checkpoint, data-manifest and output arguments. Install the corpus and
+research extras for these tools, including safetensors; only use trusted checkpoints. They do not launch training or maintain an archived-model evaluator.
+
+## Standalone inference
+
+Both exporters copy the same `publication/generate.py` into the model bundle as
+`generate.py`. It needs only the bundle's model code, config, safetensors weights,
+tokenizer and published dependencies; it does not import the training project.
+Defaults are 128 new tokens, seed 42, temperature 0.8, top-k 50 and CPU. Use
+`--temperature 0` for greedy decoding or `--top-k 0` for full-vocabulary sampling.
+
+The former smoke script's settings are now explicit rather than a second code path:
+
+```sh
+# Run inside the downloaded/exported model bundle.
+python generate.py --prompt Hello --tokens 32 --seed 42 --temperature 1 --top-k 0
+```
+
+Existing published bundles and archived results are unchanged. Install the corpus
+and research extras for local source-tree tests, including safetensors.
 
 ## New outputs
 
