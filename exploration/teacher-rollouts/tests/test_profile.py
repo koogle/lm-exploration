@@ -1,9 +1,19 @@
 import unittest
 
 from profile_summary import summarize_trace
+from runner import weight_loading_seconds
 
 
 class ProfileTests(unittest.TestCase):
+    def test_loading_log_versions_and_missing_measurement(self):
+        self.assertEqual(
+            weight_loading_seconds("Loading model weights took 4.2 seconds"), 4.2
+        )
+        self.assertEqual(
+            weight_loading_seconds("Loading weights took 7.79 seconds"), 7.79
+        )
+        self.assertIsNone(weight_loading_seconds("Model loading has started"))
+
     def test_overlapping_kernels_copy_and_cpu_ranges(self):
         report = summarize_trace(
             [

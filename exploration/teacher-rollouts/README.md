@@ -62,7 +62,9 @@ and local launcher dependencies are pinned in `requirements.lock`. Runtime packa
 versions, server argv and `nvidia-smi` output are also archived. BF16 weights,
 text-only model loading, one GPU, no prefix caching, no speculative decoding,
 4,096-token context, max 512 output tokens, temperature 0.6/top-p 0.95/top-k 20,
-and thinking disabled are fixed across each sweep. Seeds are sent to vLLM;
+and thinking disabled are the default recipe. The measured follow-up uses
+greedy sampling, top-p 1 and a 128-token cap to match the custom kernel; all
+settings remain fixed within each sweep. Seeds are sent to vLLM;
 bitwise equality across scheduler/batch shapes is **not** promised.
 
 Six explicitly synthetic fixtures cover code, technical answers and JSON. Eight
@@ -115,46 +117,109 @@ profile: preserve its raw records, server log and worker timing as negative evid
 
 ## Findings so far
 
-Full 2026-10-21 status report: [`pr-36/exploration/teacher-rollouts/REPORT.md`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-36/exploration/teacher-rollouts)
-in the private HF dataset `jfrick/lm-exploration-results`.
+Measured on Modal H100, 2026-10-21. The reproducible measured recipe is
+[`config.greedy-batched.json`](config.greedy-batched.json): pinned BF16
+Qwen3.5-9B, vLLM 0.32.0 (PyTorch 2.13.0+cu130, Transformers 5.19.0),
+greedy sampling, top-p 1, 128 output tokens, six synthetic
+prompts × eight repetitions × two rounds. Both configs require explicit budget
+authorization before launch. The default checkpoint policy is now 16 records,
+with the interval and final-flush behavior described above.
 
-- **H100 megakernel smoke gate passed.** All 25 teacher-forced positions matched
-  the reference top token; worst logit normalized RMSE was 1.90%, worst recurrent
-  state error 2.75%, and reset reproducibility passed. Six synthetic greedy
-  outputs matched Transformers eager token-for-token, with 6/6 automatic
-  acceptances (technical answers still require human review) and no truncations.
-  Short checks do not establish long-context correctness.
-- Generation including sequential prefill: **63.51 output tokens/s versus 13.87**
-  for Transformers eager fallback, or 4.58× in this single-pass batch-one test.
-  Extrapolated accepted fixtures/hour: 6,659 versus 1,454. Estimated steady GPU
-  USD/accepted: $0.000593 versus $0.002715. This is not a vLLM comparison.
-  Download/loading took 79.84 s; total probe time including both backends and
-  correctness was 123.24 s (estimated GPU compute $0.1352; actual bill unknown).
-  Peak PyTorch allocated memory was 18.21 GB, not peak whole-device memory.
-- **The vLLM sweep and bottleneck profile remain incomplete.** Image import did
-  not complete before a workspace connection failure terminated the first
-  launcher. A retry shared that unfinished build and failed when cleanup stopped
-  the original app. Neither attempt submitted a GPU worker. Negative evidence is
-  archived in HF folders `baseline-20261022-v1` and `baseline-20261022-v2`.
-  Complete this baseline before claiming aggregate rollout improvements.
-- Detailed smoke results, raw outputs, manifests and prior launch
-  failures are byte-verified in HF folder
-  [`kernel-9b-20261022-v3`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-36/exploration/teacher-rollouts/kernel-9b-20261022-v3).
-- Runtime: vLLM 0.32.0 (`5df63a7`) chosen from source inspection (Qwen3.5
-  architecture, text-only loading, per-request seeds, metrics, Torch profiling).
-  SGLang 0.5.22 also supports Qwen3.5 but is kept as a later matched comparison.
-  Neither choice is a performance claim.
-- Teacher/tokenizer `Qwen/Qwen3.5-9B@c202236`: 32 layers (24 linear, 8 full
-  attention), width 4,096, DeltaNet key/value heads 16/32, BF16.
-- Prior megakernel work does not transfer directly: Luce is hard-coded to
-  Qwen3.5-0.8B (16/16 heads), Mirage targets Qwen3-8B, Megakernels is
-  Llama-oriented. The user subsequently requested an executable 9B port, now implemented under
-  `megakernel/`. Its aggregate batched throughput benefit remains unproven. For rollout optimization, first
-  choose concurrency by pooled accepted examples per GPU second, then profile, and
-  only propose a small kernel experiment if DeltaNet or launch overhead stays a
-  substantial measured fraction at the best batched operating point.
-- CPU validation: 19 unit tests pass; Modal definitions import; ruff passes.
-  NVCC compilation, the H100 smoke gate and fixture generation pass.
+Rates below pool counts over elapsed generation time across both rounds;
+completed and automatically accepted rates are equal (384/384 passed, zero
+truncations or request errors). Generation timing includes raw output persistence.
+
+| Concurrency | Output tokens/s | Accepted fixtures/hour | Estimated steady GPU USD/accepted |
+| ---: | ---: | ---: | ---: |
+| 1 | 84.2 | 8,575 | 0.000461 |
+| 4 | 170.3 | 17,399 | 0.000227 |
+| 16 | 234.1 | 23,847 | 0.000166 |
+| 32 | 291.1 | 29,683 | 0.000133 |
+
+Concurrency 32 was best observed: 28,867 and 30,546 accepted fixtures/hour in the
+two rounds. This is not a general optimum for other workloads. Prompts contained
+45–58 tokens (mean 52.17); outputs 11–70 (trial means 35.21–35.33, including EOS).
+Greedy outputs can differ slightly across batching shapes. These repeated
+fixtures are not distinct training examples; technical acceptances still need
+human review. Do not treat 100% fixture acceptance as general teacher quality.
+
+**Measured pipeline improvement:** the original per-example remote-commit trial
+at concurrency one completed 48 requests in 134.67 seconds, including 121.28
+seconds blocked on persistence (90.1%). Verification took 2.25 ms. After bounded
+checkpoint batching, concurrency-one throughput was 6.68× higher pooled across
+two rounds, with estimated steady GPU cost reduced from $0.003078 to $0.000461
+per accepted fixture. Combining batching with concurrency 32 reached 23.1× the
+initial pipeline throughput and 95.7% lower steady GPU cost. The costly original
+attempt was stopped after preserving its first complete trial and 22 partial
+next-trial records; it is not presented as a completed concurrency sweep.
+
+**Megakernel comparison:** the [eight-build launch sweep](megakernel/README.md)
+completed both rounds. Keep the Luce-derived manual 512-thread/132-block build;
+the best ThunderKittens register-vector variant was within 0.01%, not a meaningful
+speedup. Both 256-thread ThunderKittens builds passed numerical/task checks but
+failed exact reference-completion matching and are excluded from qualification.
+The kernel-only rate of 62.37 non-EOS output tokens/s excludes output persistence.
+A separate matched persistence run qualified the same manual build, then produced
+96/96 accepted fixtures over two rounds at concurrency one: **3,869/hour**, 36.90
+non-EOS output tokens/s, estimated steady GPU cost **$0.001021/accepted**. Both
+pipelines use the same checkpoint policy; vLLM includes HTTP overhead and the
+custom adapter calls CUDA directly. No batched custom decoder is implemented.
+
+**Startup and memory:** vLLM took 114.60 seconds to become ready, with 7.79 seconds
+loading weights within 12.81 seconds for total model loading/allocation;
+these latter two values come from the preserved server log. The original report
+parser missed the new weight-loading log phrase; `loading-times.json` preserves
+the corrected extraction and the parser is fixed for future runs. Total pipeline
+including the profiling replay was 261.76 seconds (worker 263.77, client including
+build/queue 312.57), with estimated pipeline GPU compute $0.2872 and 68,691 MiB
+peak sampled whole-device memory. The kernel persistence run loaded in 14.43
+seconds, took 164.98 seconds including qualification (worker 172.67), and peaked
+at 18,185 MiB; its estimated pipeline GPU compute was $0.1810. vLLM intentionally
+reserves KV-cache memory at 85% utilization. Actual billed costs remain unknown.
+
+**Profile and recommendation:** the concurrency-32 Torch trace contains 1.218
+seconds of observed GPU activity in an 8.666-second device-event span (14.1%).
+Named `nvjet` GEMM kernels account for 83.6% of summed GPU kernel time; named
+DeltaNet kernels 5.9%, with causal convolution another 1.0%. These are summed
+kernel durations, not wall-clock fractions. Mean per-request engine timings at
+concurrency 32 were 117 ms prefill, 376 ms decode and 36 microseconds queue wait;
+concurrent request times overlap and cannot be added into a wall-time breakdown.
+Post-hoc verification took 4.20 ms for those 96 examples. The client was blocked
+on persistence for 10.69 of 11.64 unprofiled generation seconds; GPU work can
+overlap that wait. Focus next on asynchronous/CPU-side output persistence with
+bounded backpressure, then remeasure. These measurements do not justify further
+DeltaNet CUDA work or a full custom megakernel for aggregate rollout throughput.
+Weight-bandwidth saturation was not measured and cannot be inferred from kernel
+names. Retain the working adapted kernel as an experimental batch-one backend.
+
+Limitations: short synthetic prompts, two timing rounds, warm weight caches,
+weak automatic technical-answer checks, and variable remote-checkpoint latency.
+The two pipeline jobs overlapped on separate H100s and shared a Modal volume;
+checkpoint contention may affect absolute rates. Profiling perturbs throughput
+(the separate profiling trial is excluded from ranking). Long-context correctness
+and production qualification remain outstanding.
+
+Detailed artifacts are byte-verified in the private HF dataset
+[`jfrick/lm-exploration-results`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-36/exploration/teacher-rollouts),
+under `pr-36/exploration/teacher-rollouts/`:
+
+- `kernel-sweep-20261021-v1`: all launch settings, correctness, exact-output gates.
+- `kernel-pipeline-20261021-v1`: matched custom-kernel persistence measurements.
+- `baseline-batched-20261021-v6`: full vLLM sweep, metrics, trace and profile summary.
+- `baseline-greedy-20261021-v5`: original persistence bottleneck and partial trial.
+- `baseline-greedy-20261021-v3` and `baseline-greedy-20261021-v4`: pre-GPU setup failures; fixed the Python
+  alias and Modal source-copy ordering without changing the pinned runtime.
+- Earlier smoke/research and failed image-import evidence remain in `REPORT.md`,
+  `kernel-9b-20261022-v3`, `baseline-20261022-v1` and `baseline-20261022-v2`.
+
+Source inspection also verified SGLang 0.5.22 support; it remains an unmeasured
+alternative. Luce's original kernel targets 0.8B; Mirage's cited example targets
+Qwen3-8B. Neither establishes support or performance for this 9B port.
+All apps launched here are stopped with zero tasks. The ledger retains **$17.60**
+in conservative reservations against the **$100** authorized cap; reservations
+are not billed costs. Validation: **21 CPU tests and Ruff pass**, all eight CUDA
+variants compile in the pinned image, and GPU qualifications/results are scoped
+as described above. The PR remains draft and unmerged.
 
 ## Artifacts
 

@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from core import atomic_json
@@ -33,8 +34,8 @@ def main():
         path_in_repo=args.prefix,
         commit_message=f"Archive teacher rollout {root.name}",
     )
-    entries = []
-    for relative, checksum in before.items():
+    def verify(item):
+        relative, checksum = item
         remote = f"{args.prefix.rstrip('/')}/{relative}"
         downloaded = Path(
             hf_hub_download(
@@ -43,7 +44,13 @@ def main():
         )
         if hashlib.sha256(downloaded.read_bytes()).hexdigest() != checksum:
             raise ValueError(f"archive verification failed: {remote}")
-        entries.append({"path": remote, "sha256": checksum})
+        return {"path": remote, "sha256": checksum}
+
+    # Verify independent immutable objects concurrently; only publish a receipt
+    # after every download matches. This avoids serial HEAD/GET latency for runs
+    # with hundreds of individual raw/validated records.
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        entries = list(pool.map(verify, before.items()))
     atomic_json(
         args.index,
         {

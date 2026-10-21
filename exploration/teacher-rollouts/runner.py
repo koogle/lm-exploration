@@ -18,6 +18,11 @@ from core import Store, atomic_json, digest, select_best, summarize, validate
 URL = "http://127.0.0.1:8000"
 
 
+def weight_loading_seconds(log):
+    matches = re.findall(r"Loading (?:model )?weights took ([0-9.]+) seconds", log)
+    return float(matches[-1]) if matches else None
+
+
 def request(path, body=None, timeout=90):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(
@@ -355,12 +360,8 @@ def run(root, attempt, manifest, commit=lambda: None):
         log.close()
         stop.set()
         sampler.join(timeout=6)
-        load_times = re.findall(
-            r"Loading model weights took ([0-9.]+) seconds",
-            (attempt_dir / "server.log").read_text(),
-        )
-        report["model_weight_loading_seconds_from_log"] = (
-            float(load_times[-1]) if load_times else None
+        report["model_weight_loading_seconds_from_log"] = weight_loading_seconds(
+            (attempt_dir / "server.log").read_text()
         )
         report["total_pipeline_seconds"] = time.perf_counter() - start
         report["estimated_attempt_gpu_usd"] = (

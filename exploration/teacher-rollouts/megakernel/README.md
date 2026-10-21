@@ -170,3 +170,26 @@ production-generation costs. The app is stopped with zero tasks.
 Detailed reports, outputs, compiler commands, runtime versions, source hashes,
 launch logs and final app state are in HF dataset `jfrick/lm-exploration-results`,
 folder `pr-36/exploration/teacher-rollouts/kernel-sweep-20261021-v1`.
+
+## Matched durable-output pipeline
+
+`--backend kernel-pipeline` compiles the selected manual 512/132 build with the
+sweep's C++20 flags, runs the full qualification probe, then measures two rounds
+of 48 requests at concurrency one through the same record, checkpoint and
+acceptance implementation as vLLM. The fixed kernel uses greedy generation with
+128 output tokens and a 1,024-token cache; other sampling/limit settings fail
+closed. Its request adapter records the actual CUDA runtime label and non-EOS
+token-count convention. vLLM's usage counts include terminal EOS. Compare accepted
+examples/hour directly; keep the token-count convention explicit.
+
+The measured pipeline includes remote output checkpoints and local writes; the
+kernel-only sweep table above excludes them. vLLM also incurs local HTTP overhead,
+while the kernel adapter calls the decoder directly. Model startup, qualification,
+steady generation, verification, total pipeline time and whole-device memory
+samples are reported separately. No batched custom decoder is claimed.
+
+```sh
+uv run --with-requirements requirements.lock python launch.py \
+  --backend kernel-pipeline --run-id kernel-pipeline-001 --attempt pipeline-001 \
+  --config artifacts/authorized-batched.json --launch
+```
