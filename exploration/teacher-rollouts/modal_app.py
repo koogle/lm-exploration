@@ -30,6 +30,7 @@ image = (
     .add_local_dir(
         HERE,
         "/experiment",
+        copy=True,
         ignore=ignore_source,
     )
 )
