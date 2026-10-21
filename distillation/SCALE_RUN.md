@@ -1,5 +1,10 @@
 # Authorized 500M-token sweep
 
+**Target corrected:** the user subsequently specified 4.5B tokens for the 215.9M
+shared-Qwen model. The [4.5B continuation](BILLION_RUN.md) resumes the completed
+4.5M update in a separate output folder. The original plan below is historical;
+the corpus and both small-student targets remain 500M.
+
 Run `python-distillation-500m-20261021-01` was launched on Modal on 2026-10-21:
 https://modal.com/apps/radiantai/main/ap-ed39mfL1LCi5IGKaCOluxg
 

@@ -77,6 +77,24 @@ class ScaleTests(unittest.TestCase):
             while (item := resumed.next()) is not None:
                 targets.extend(item[1])
             self.assertEqual(targets, [4, 5, 6, 2] * 5)
+            repeating = Stream(root, large=True, repeat=True)
+            for _ in range(5):
+                self.assertEqual(repeating.next()[1], [42, 43, 151643])
+            resumed_repeat = Stream(root, repeating.cursor, large=True, repeat=True)
+            self.assertEqual(resumed_repeat.next(1), ([151643], [42]))
+            self.assertEqual(resumed_repeat.cursor["pass"], 1)
+            self.assertEqual(
+                Stream(root, resumed_repeat.cursor, large=True, repeat=True).next()[1],
+                [43, 151643],
+            )
+            state_path = root / "producer-3" / "progress.json"
+            state = json.loads(state_path.read_text())
+            state["status"] = "running"
+            atomic_json(state_path, state)
+            waiting = Stream(root, large=True, repeat=True)
+            while waiting.next() is not None:
+                pass
+            self.assertEqual(waiting.cursor["pass"], 0)
             qwen = Stream(root, large=True)
             self.assertEqual(qwen.next(2), ([151643, 42], [42, 43]))
             self.assertEqual(

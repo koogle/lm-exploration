@@ -12,11 +12,14 @@ LARGE_PARENT = "qwen4b-shared-50m-20261021-01/step-000007162.pt"
 
 
 class Stream:
-    def __init__(self, root, cursor=None, large=False):
+    def __init__(self, root, cursor=None, large=False, repeat=False):
         self.root, self.large = root, large
         self.chunks = available_chunks(root)
         self.cursor = dict(cursor or {"chunk": 0, "record": 0, "offset": 0})
         self.cache_index, self.cache = -1, None
+        self.repeat = repeat
+        if repeat:
+            self.cursor.setdefault("pass", 0)
 
     def next(self, limit=512):
         while self.cursor["chunk"] < len(self.chunks):
@@ -26,7 +29,7 @@ class Stream:
                 self.cache_index = c
             r, offset = self.cursor["record"], self.cursor["offset"]
             if r >= len(self.cache):
-                self.cursor = {"chunk": c + 1, "record": 0, "offset": 0}
+                self.cursor.update(chunk=c + 1, record=0, offset=0)
                 continue
             ids = self.cache[r]["qwen_ids" if self.large else "ids"]
             if offset >= len(ids):
@@ -37,7 +40,20 @@ class Stream:
             x = [prefix] + y[:-1]
             self.cursor["offset"] += len(y)
             return x, y
+        if self.repeat and self.chunks and corpus_complete(self.root):
+            self.cursor.update(
+                chunk=0, record=0, offset=0, **{"pass": self.cursor["pass"] + 1}
+            )
+            return self.next(limit)
         return None
+
+
+def corpus_complete(root):
+    for worker in range(4):
+        path = Path(root) / f"producer-{worker}" / "progress.json"
+        if not path.exists() or json.loads(path.read_text())["status"] != "completed":
+            return False
+    return True
 
 
 def run(root, name, segment_tokens, commit):
@@ -70,14 +86,22 @@ def run(root, name, segment_tokens, commit):
                 output / package,
                 ignore=shutil.ignore_patterns("__pycache__"),
             )
-    large = name == "existing-216m"
-    target = 4_500_000 if large else 500_000_000
+    extended = name == "shared-qwen-215m-4p5b"
+    large = extended or name == "existing-216m"
+    target = 4_500_000_000 if extended else (4_500_000 if large else 500_000_000)
     latest = output / "latest.pt"
     saved = (
         torch.load(latest, map_location="cpu", weights_only=False)
         if latest.exists()
         else None
     )
+    migrating = extended and saved is None
+    if migrating:
+        saved = torch.load(
+            root / "existing-216m" / "latest.pt", map_location="cpu", weights_only=False
+        )
+        if saved["tokens"] != 4_500_000 or saved["settings"]["target"] != 4_500_000:
+            raise ValueError("Expected completed 4.5M parent")
     if large:
         parent = saved or torch.load(
             Path("/distill") / LARGE_PARENT, map_location="cpu", weights_only=False
@@ -108,7 +132,26 @@ def run(root, name, segment_tokens, commit):
         "initialization": LARGE_PARENT if large else "random seed 42",
         "context": 512,
     }
-    if saved and saved["settings"] != settings:
+    if extended:
+        settings.update(
+            initialization=str(root / "existing-216m" / "latest.pt"),
+            migration_tokens=4_500_000,
+            migration_ramp_tokens=1_000_000,
+            repeat_completed_corpus=True,
+        )
+    if migrating:
+        if saved["settings"]["tokenizer_sha256"] != tokenizer_hash:
+            raise ValueError("Migration tokenizer mismatch")
+        atomic_json(
+            output / "migration.json",
+            {
+                "parent_settings": saved["settings"],
+                "parent_tokens": saved["tokens"],
+                "parent_step": saved["step"],
+                "new_settings": settings,
+            },
+        )
+    if saved and not migrating and saved["settings"] != settings:
         raise ValueError("Resume configuration mismatch")
     model = GPT(config)
     if saved or large:
@@ -122,7 +165,10 @@ def run(root, name, segment_tokens, commit):
         fused=True,
     )
     tokens, step = (saved["tokens"], saved["step"]) if saved else (0, 0)
-    stream = Stream(root, saved["cursor"] if saved else None, large=large)
+    stream = Stream(
+        root, saved["cursor"] if saved else None, large=large, repeat=extended
+    )
+    first_pass_tokens = saved.get("first_pass_tokens", tokens) if saved else 0
     if saved:
         optimizer.load_state_dict(saved["optimizer"])
         torch.set_rng_state(saved["rng"])
@@ -239,6 +285,7 @@ def run(root, name, segment_tokens, commit):
                 "tokens": tokens,
                 "step": step,
                 "cursor": stream.cursor,
+                "first_pass_tokens": first_pass_tokens,
                 "rng": torch.get_rng_state(),
                 "cuda_rng": torch.cuda.get_rng_state(),
             },
@@ -251,6 +298,8 @@ def run(root, name, segment_tokens, commit):
             "target": target,
             "step": step,
             "parameters": sum(p.numel() for p in model.parameters()),
+            "first_pass_tokens": first_pass_tokens,
+            "corpus_pass": stream.cursor.get("pass", 0),
             "status": "completed" if tokens == target else "waiting_for_next_segment",
         }
         atomic_json(output / "progress.json", state)
@@ -263,12 +312,11 @@ def run(root, name, segment_tokens, commit):
     if tokens == 0:
         evaluate(generations=True)
         checkpoint()
-    next_eval = (
-        ((tokens // 1_000_000) + 1) * 1_000_000
-        if large
-        else ((tokens // 10_000_000) + 1) * 10_000_000
-    )
+    eval_interval = 10_000_000 if extended or not large else 1_000_000
+    next_eval = ((tokens // eval_interval) + 1) * eval_interval
     last_checkpoint = tokens
+    if migrating:
+        checkpoint()
     while tokens < stop and time.monotonic() - started < 72000:
         boundary = min(stop, next_eval)
         batches, count = [], 0
@@ -281,6 +329,8 @@ def run(root, name, segment_tokens, commit):
                 if item is None:
                     break
                 batch.append(item)
+                if stream.cursor.get("pass", 0) == 0:
+                    first_pass_tokens += len(item[1])
                 count += len(item[1])
             if batch:
                 batches.append(batch)
@@ -288,6 +338,10 @@ def run(root, name, segment_tokens, commit):
             break
         optimizer.zero_grad(set_to_none=True)
         fraction = min(1.0, (tokens + count) / settings["warmup_tokens"])
+        if extended:
+            fraction = 0.1 + 0.9 * min(
+                1.0, max(0.0, (tokens + count - 4_500_000) / 1_000_000)
+            )
         decay = (
             0.1
             + 0.9 * (1 + math.cos(math.pi * min(1.0, (tokens + count) / target))) / 2
@@ -329,9 +383,9 @@ def run(root, name, segment_tokens, commit):
                 handle.write(json.dumps(metric) + "\n")
             print(json.dumps(metric), flush=True)
         if tokens == next_eval:
-            evaluate(generations=large or tokens % 50_000_000 == 0)
-            next_eval += 1_000_000 if large else 10_000_000
-        if tokens - last_checkpoint >= 2_000_000:
+            evaluate(generations=(large and not extended) or tokens % 50_000_000 == 0)
+            next_eval += eval_interval
+        if tokens - last_checkpoint >= (10_000_000 if extended else 2_000_000):
             checkpoint()
             last_checkpoint = tokens
     evaluate(generations=tokens == target)
