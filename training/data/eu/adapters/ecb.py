@@ -48,6 +48,201 @@ COLLECTIONS = {
     },
     "international_role_euro": {"name": "The international role of the euro", "type_ids": ["143"]},
     "target_annual_reports": {"name": "TARGET Annual Report", "type_ids": ["142"]},
+    "bank_lending_surveys": {"name": "Euro area bank lending survey", "type_ids": ["99"]},
+    "professional_forecaster_surveys": {
+        "name": "ECB Survey of Professional Forecasters",
+        "type_ids": ["158"],
+    },
+    "enterprise_finance_surveys": {
+        "name": "Survey on the Access to Finance of Enterprises in the euro area",
+        "type_ids": ["157"],
+    },
+    "t2s_annual_reports": {"name": "T2S Annual Report", "type_ids": ["159"]},
+    "annual_report_ep_feedback": {
+        "name": "Feedback on the input provided by the European Parliament as part of its resolution on the ECB’s Annual Report",
+        "type_ids": ["402"],
+    },
+    "estr_methodology_reviews": {"name": "€STR Annual Methodology Review", "type_ids": ["246"]},
+    "strategy_review_documents": {"name": "ECB Strategy review", "type_ids": ["249"]},
+    "payments_market_consultations": {
+        "name": "ECB public consultation - payments and markets",
+        "type_ids": ["250"],
+    },
+    "statistics_consultations": {
+        "name": "ECB public consultation - statistics",
+        "type_ids": ["390"],
+    },
+    "consultation_responses": {"name": "Consultation response", "type_ids": ["448"]},
+    "eba_ecb_reports": {"name": "EBA/ECB report", "type_ids": ["425"]},
+    "bpm6_exchange_booklets": {
+        "name": "The exchange of balance of payments, international investment position statistics – BPM6 - booklet",
+        "type_ids": ["458"],
+    },
+    "target_pricing_guides": {"name": "Target services pricing guide", "type_ids": ["329"]},
+    "space_payment_studies": {
+        "name": "Study on the payment attitudes of consumers in the euro area (SPACE)",
+        "type_ids": ["343"],
+    },
+    "company_cash_studies": {
+        "name": "Use of cash by companies in the euro area",
+        "type_ids": ["443"],
+    },
+    "legal_acts": {"name": "ECB Legal act", "type_ids": ["368"]},
+    "governing_council_statements": {
+        "name": "ECB Governing Council statement",
+        "type_ids": ["407"],
+    },
+    "environmental_statements": {"name": "ECB Environmental Statement", "type_ids": ["211"]},
+    "target_services_annual_reports": {
+        "name": "TARGET Services Annual Report",
+        "type_ids": ["462"],
+    },
+    "letters_and_responses": {"name": "Letters and responses", "type_ids": ["456"]},
+    "accounting_conference_programmes": {
+        "name": "ECB Conference on Accounting, Financial Reporting and Corporate Governance",
+        "type_ids": ["168"],
+    },
+    "digital_euro_faqs": {"name": "Digital euro FAQ", "type_ids": ["254"]},
+    "digital_euro_pilot_faqs": {"name": "Digital euro pilot FAQs", "type_ids": ["477"]},
+    "digital_euro_governance": {"name": "ECB Digital Euro Governance", "type_ids": ["281"]},
+    "bank_treasurer_surveys": {"name": "Bank treasurer survey", "type_ids": ["488"]},
+    "estr_error_reports": {"name": "€STR Transparency on errors", "type_ids": ["223"]},
+    "eurosystem_oversight_reports": {"name": "Eurosystem oversight report", "type_ids": ["156"]},
+    "macroprudential_focus": {"name": "ECB Macroprudential Bulletin - Focus", "type_ids": ["282"]},
+    "integrated_reporting_framework_documents": {
+        "name": "Integrated Reporting Framework document",
+        "type_ids": ["447"],
+    },
+    "climate_indicator_releases": {
+        "name": "ECB Climate Change Indicators Statistical Release",
+        "type_ids": ["474"],
+    },
+    "bank_lending_questionnaires": {
+        "name": "Euro area bank lending survey - Questionnaire",
+        "type_ids": ["396"],
+    },
+    "bank_lending_glossaries": {
+        "name": "Euro area bank lending survey - Glossary",
+        "type_ids": ["397"],
+    },
+    "insurance_pension_statistics": {
+        "name": "ECB Euro area insurance corporations and pension funds statistics",
+        "type_ids": ["11"],
+    },
+    "payment_statistics": {"name": "ECB Payment statistics", "type_ids": ["14"]},
+    "credit_terms_surveys": {
+        "name": "ECB Credit terms and conditions survey (SESFOD)",
+        "type_ids": ["454"],
+    },
+    "weekly_financial_statements": {"name": "ECB Weekly financial statement", "type_ids": ["101"]},
+    "monetary_developments": {
+        "name": "ECB Monetary developments in the euro area",
+        "type_ids": ["10"],
+    },
+    "mfi_interest_rate_statistics": {"name": "ECB MFI interest rate statistics", "type_ids": ["8"]},
+    "securities_issues_statistics": {
+        "name": "ECB Euro area securities issues statistics",
+        "type_ids": ["9"],
+    },
+    "balance_of_payments_monthly": {
+        "name": "ECB Balance of payments (monthly)",
+        "type_ids": ["53"],
+    },
+    "investment_fund_statistics": {
+        "name": "ECB Euro area investment fund statistics",
+        "type_ids": ["12"],
+    },
+    "financial_vehicle_statistics": {
+        "name": "ECB Euro area financial vehicle corporation statistics",
+        "type_ids": ["13"],
+    },
+    "balance_of_payments_quarterly": {
+        "name": "ECB Balance of payments (quarterly)",
+        "type_ids": ["56"],
+    },
+    "institutional_sector_accounts": {
+        "name": "ECB Euro area economic and financial developments by institutional sector (full)",
+        "type_ids": ["90"],
+    },
+    "insurance_corporation_statistics": {
+        "name": "ECB Euro area insurance corporations statistics",
+        "type_ids": ["97"],
+    },
+    "pension_fund_statistics": {"name": "Euro area pension fund statistics", "type_ids": ["237"]},
+    "money_market_statistics": {"name": "ECB Euro money market statistics", "type_ids": ["113"]},
+    "weekly_financial_commentaries": {
+        "name": "ECB Weekly financial statement - Commentary",
+        "type_ids": ["21"],
+    },
+    "monetary_policy_statements": {"name": "ECB Monetary policy statement", "type_ids": ["54"]},
+    "market_infrastructure_news": {"name": "MIP News", "type_ids": ["183"]},
+    "consumer_expectation_surveys": {
+        "name": "ECB Consumer Expectation Survey",
+        "type_ids": ["298"],
+    },
+    "macroeconomic_projections": {
+        "name": "ECB Macroeconomic projections for the euro area",
+        "type_ids": ["95"],
+    },
+    "monetary_analyst_surveys": {"name": "ECB Survey of Monetary Analysts", "type_ids": ["199"]},
+    "monetary_analyst_results": {
+        "name": "ECB Survey of Monetary Analysts - Aggregate results",
+        "type_ids": ["268"],
+    },
+    "digital_euro_investigation": {
+        "name": "ECB Digital Euro Investigation Phase document",
+        "type_ids": ["279"],
+    },
+    "digital_euro_preparation": {
+        "name": "ECB Digital Euro Preparation Phase document",
+        "type_ids": ["399"],
+    },
+    "digital_euro_rulebook_preparation": {
+        "name": "Digital Euro Preparation Phase - Scheme Rulebook Development Group documents",
+        "type_ids": ["362"],
+    },
+    "digital_euro_rulebook_investigation": {
+        "name": "Digital Euro Investigation Phase - Scheme Rulebook Development Group documents",
+        "type_ids": ["400"],
+    },
+    "digital_euro_project_documents": {
+        "name": "Digital euro project document",
+        "type_ids": ["471"],
+    },
+    "digital_euro_rulebook_project": {
+        "name": "Digital euro project - Scheme Rulebook Development Group documents",
+        "type_ids": ["472"],
+    },
+    "digital_euro_progress_investigation": {
+        "name": "ECB Digital Euro Investigation Phase - Progress Report",
+        "type_ids": ["406"],
+    },
+    "digital_euro_progress_preparation": {
+        "name": "ECB Digital Euro Preparation Phase - Progress Report",
+        "type_ids": ["408"],
+    },
+    "digital_euro_experiments": {
+        "name": "ECB Digital Euro Experimentation work",
+        "type_ids": ["280"],
+    },
+    "ami_seco_reports": {"name": "AMI-SeCo report", "type_ids": ["236"]},
+    "balance_of_payments_quality": {
+        "name": "Euro area balance of payments and international investment position statistics - Quality report",
+        "type_ids": ["149"],
+    },
+    "financial_accounts_quality": {
+        "name": "Euro area quarterly financial accounts - Quality report",
+        "type_ids": ["150"],
+    },
+    "monetary_statistics_quality": {
+        "name": "Euro area monetary and financial statistics - Quality report",
+        "type_ids": ["207"],
+    },
+    "climate_financial_disclosures": {
+        "name": "Climate-related financial disclosures",
+        "type_ids": ["392"],
+    },
+    "payment_fraud_reports": {"name": "Card fraud report", "type_ids": ["145"]},
     "other_publications": {"name": "ECB Other publication", "type_ids": ["23"]},
     "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
     "occasional_papers": {"name": "ECB Occasional Paper Series", "type_ids": ["3"]},
@@ -294,8 +489,8 @@ def enumerate_report_translations(fetch, limit=1000, seed_limit=100):
 
 # Exact standalone assets verified on 2026-10-16 and 2026-10-17. No blanket prefix rewrite:
 # inventory errors in other historical files need their own verification.
-# Exact PDF identities verified in research/ecb-convergence-links-20261017.json
-# and research/ecb-convergence-recovery-20261018.json.
+# Exact PDF identities verified in research/ecb-convergence-links-20261017.json and
+# research/ecb-convergence-recovery-20261018.json at commit 3d25fa6 (see RESEARCH.md).
 VERIFIED_CONVERGENCE_REPORTS = {
     "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2006en.pdf": {
         "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2006en.pdf",

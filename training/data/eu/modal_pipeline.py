@@ -21,6 +21,7 @@ if ca_bundle and Path(ca_bundle).is_file():
     image = image.add_local_file(ca_bundle, "/root/eu-ca.pem")
 for name in (
     "pipeline.py",
+    "document_queue.py",
     "campaign.py",
     "hf_store.py",
     "eu_corpus.py",
@@ -225,7 +226,9 @@ def main(
     after_campaign: str = "",
     predecessor_wait_seconds: int = 1800,
 ):
-    mapping = json.loads((ROOT / "pipeline_sources.json").read_text())
+    from pipeline import load_mapping
+
+    mapping = load_mapping(ROOT / "pipeline_sources.json")
     if source not in {"both", "ecb", "ema", "eurlex", "commission-press"}:
         raise ValueError("Unknown source")
     if not 1 <= max_documents <= mapping["limits"]["max_documents_per_source"]:
