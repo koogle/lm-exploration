@@ -30,7 +30,7 @@ SETTINGS = {
     "min_lr_ratio": 1.0,
     "checkpoint_every": 1000,
     "evaluate_every": 500,
-    "experimental_data": True,
+    "allow_unreviewed_data": True,
     "prefetch_batches": 4,
     "crop_padding": True,
     "cache_rope": True,

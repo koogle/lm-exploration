@@ -1,0 +1,175 @@
+{
+  "result": {
+    "checkpoint": "/runs/repair-sft-20b-private-patches-20261020-r01/step-000020000.pt",
+    "step": 20000,
+    "answer_tokens": 41579095
+  },
+  "baseline": {
+    "step": 0,
+    "answer_tokens": 0,
+    "validation_loss": 0.7122138555025089,
+    "validation_by_language": {
+      "bash": {
+        "loss": 0.5635168013032773,
+        "answer_tokens": 17204
+      },
+      "c": {
+        "loss": 0.5189607660432796,
+        "answer_tokens": 39814
+      },
+      "cpp": {
+        "loss": 0.4247973711413205,
+        "answer_tokens": 44650
+      },
+      "go": {
+        "loss": 0.6388073235118693,
+        "answer_tokens": 48042
+      },
+      "java": {
+        "loss": 0.5988883412652393,
+        "answer_tokens": 28635
+      },
+      "javascript": {
+        "loss": 0.5791483559914921,
+        "answer_tokens": 32706
+      },
+      "python": {
+        "loss": 0.9960157891523417,
+        "answer_tokens": 49031
+      },
+      "ruby": {
+        "loss": 0.6008335726298308,
+        "answer_tokens": 7184
+      },
+      "rust": {
+        "loss": 0.896474465409564,
+        "answer_tokens": 44529
+      },
+      "swift": {
+        "loss": 1.5292090913840317,
+        "answer_tokens": 6026
+      },
+      "typescript": {
+        "loss": 0.7269749841786682,
+        "answer_tokens": 53498
+      },
+      "zig": {
+        "loss": 0.9388001171679592,
+        "answer_tokens": 31672
+      }
+    },
+    "phase": "baseline"
+  },
+  "final": {
+    "step": 20000,
+    "answer_tokens": 41579095,
+    "validation_loss": 0.5219791581411446,
+    "validation_by_language": {
+      "bash": {
+        "loss": 0.4717719143586113,
+        "answer_tokens": 17204
+      },
+      "c": {
+        "loss": 0.37695822217172575,
+        "answer_tokens": 39814
+      },
+      "cpp": {
+        "loss": 0.31169262766437594,
+        "answer_tokens": 44650
+      },
+      "go": {
+        "loss": 0.47820852700679667,
+        "answer_tokens": 48042
+      },
+      "java": {
+        "loss": 0.45743471430050303,
+        "answer_tokens": 28635
+      },
+      "javascript": {
+        "loss": 0.48672155918990745,
+        "answer_tokens": 32706
+      },
+      "python": {
+        "loss": 0.6599219730654016,
+        "answer_tokens": 49031
+      },
+      "ruby": {
+        "loss": 0.32328475052636024,
+        "answer_tokens": 7184
+      },
+      "rust": {
+        "loss": 0.6103069192113673,
+        "answer_tokens": 44529
+      },
+      "swift": {
+        "loss": 1.3778415713799266,
+        "answer_tokens": 6026
+      },
+      "typescript": {
+        "loss": 0.5476616848325759,
+        "answer_tokens": 53498
+      },
+      "zig": {
+        "loss": 0.6902831892122311,
+        "answer_tokens": 31672
+      }
+    },
+    "phase": "final"
+  },
+  "best_observed": {
+    "step": 15000,
+    "answer_tokens": 31126126,
+    "validation_loss": 0.5192400007831903,
+    "validation_by_language": {
+      "bash": {
+        "loss": 0.4648865815845375,
+        "answer_tokens": 17204
+      },
+      "c": {
+        "loss": 0.3720172470030447,
+        "answer_tokens": 39814
+      },
+      "cpp": {
+        "loss": 0.30882118337765785,
+        "answer_tokens": 44650
+      },
+      "go": {
+        "loss": 0.47247315465766254,
+        "answer_tokens": 48042
+      },
+      "java": {
+        "loss": 0.457445784853207,
+        "answer_tokens": 28635
+      },
+      "javascript": {
+        "loss": 0.4743247141074399,
+        "answer_tokens": 32706
+      },
+      "python": {
+        "loss": 0.6637340049502856,
+        "answer_tokens": 49031
+      },
+      "ruby": {
+        "loss": 0.3347527028988624,
+        "answer_tokens": 7184
+      },
+      "rust": {
+        "loss": 0.6052216485652364,
+        "answer_tokens": 44529
+      },
+      "swift": {
+        "loss": 1.3629797395977752,
+        "answer_tokens": 6026
+      },
+      "typescript": {
+        "loss": 0.5470366443316332,
+        "answer_tokens": 53498
+      },
+      "zig": {
+        "loss": 0.693451500964243,
+        "answer_tokens": 31672
+      }
+    }
+  },
+  "note": "Answer-token loss; executable repair evaluation recorded separately."
+}

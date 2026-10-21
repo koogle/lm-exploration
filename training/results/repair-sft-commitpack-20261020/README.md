@@ -36,7 +36,7 @@ The report records the immutable upstream revision, per-language download hashes
 builder hash and exact generated JSONL hash. Raw third-party code stays on the
 private volume with per-record provenance and license metadata.
 
-## Running training
+## Completed training
 
 [Durable deployed worker](https://modal.com/apps/radiantai/main/deployed/simple-llm-repair-sft-scale);
 submission identity and settings are in [launch.json](launch.json).
@@ -53,18 +53,17 @@ submission identity and settings are in [launch.json](launch.json).
 - Same answer-only loss and exact-resume engine qualified during the pilot;
   this change extends the time bound and adds a volume-backed larger worker.
 
-The [observed progress snapshot](progress.json) confirms 750 completed updates and
-1,478,875 supervised answer tokens. Held-out answer loss decreased from 0.47947 at
-the parent to 0.37466 at step 750, improving in all nine languages. This is an
-intermediate result on the new validation corpus, not directly comparable to the
-arithmetic pilot's loss. Complete-file loss includes unchanged code tokens and
-does not establish repair correctness.
+The [final report](final-summary.json) confirms all 5,000 updates completed with
+9,736,650 supervised answer tokens. Held-out answer loss decreased from 0.47947
+to 0.34446; the final checkpoint also had the lowest observed validation loss.
+The checkpoint is `repair-sft-commitpack-20261020-r01/step-000005000.pt` on the
+private volume. The earlier [progress snapshot](progress.json) is retained as a
+historical observation.
 
-Check the call ID for completion,
-the app logs for progress and volume `metrics.jsonl` for validation. On normal
-completion the worker writes `result.json`, including the actual update count,
-answer-token count and checkpoint. Do not interpret job submission as completion
-or loss improvement as executable repair success.
+These results concern the new validation corpus and are not directly comparable
+to the arithmetic pilot's loss. Complete-file loss includes unchanged code tokens
+and does not establish repair correctness. Generated-code correctness has not
+been evaluated for this checkpoint.
 
 Validation of this change: 15 local tests passed (data contracts, token masking,
 padding, curriculum, repository alias grouping and provenance filters); Ruff and

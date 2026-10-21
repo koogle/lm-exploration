@@ -1,0 +1,18 @@
+{
+  "run_id": "repair-sft-private-patches-20261020-r01",
+  "data_id": "repair-private-patches-20261020-v1",
+  "call_id": "fc-01M5CWZ48E3NQRWM3DXXW43BRV",
+  "status": "completed",
+  "settings": {
+    "steps": 20000,
+    "batch_size": 8,
+    "context": 2048,
+    "lr": 1e-05,
+    "evaluate_every": 500,
+    "save_every": 1000,
+    "max_seconds": 14400
+  },
+  "confirmed_step": 20000,
+  "answer_tokens": 41579095,
+  "checkpoint": "repair-sft-private-patches-20261020-r01/step-000020000.pt"
+}
