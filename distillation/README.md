@@ -94,6 +94,9 @@ Install `modal[api-proxy-support]==1.6.2` and `truststore`. In a managed environ
 run the CLI through Python after `truststore.inject_into_ssl()` (see existing
 training instructions). Local tests additionally use torch, transformers 4.57.1,
 tokenizers 0.22.2 and numpy. GPU dependencies are pinned in the Modal image.
+The curriculum subprocess verifier requires Linux resource-limit semantics. Its
+execution and timeout tests are skipped on other platforms; AST-rejection and
+model tests still run. A macOS test pass is not a Linux sandbox qualification.
 
 ```sh
 python -m unittest discover -s distillation/tests -v
