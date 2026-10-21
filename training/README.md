@@ -24,6 +24,11 @@ includes weights, code, tokenizer, training curves and raw metrics. Final fixed-
 diagnostic validation loss is 1.8708; broader quality and long-context evaluation remain
 pending. Its run, publication and repetition records are [archived on HF](publication/README.md#pr-16).
 
+A [one-pass ECB/EMA continuation](trainer/EU_CONTINUATION.md) of that checkpoint
+trained all 878,610,362 EU targets. The [matched validation](analysis/eu-validation/README.md)
+shows ECB/EMA loss falling and all 12 original categories worsening (Python
+1.559 to 3.994); its outputs are on HF under `pr-25/`.
+
 The [Simple LLM 9.85M / 5B-token experiment](publication/README.md#pr-13)
 is complete and [published on Hugging Face](https://huggingface.co/jfrick/scholarly-code-modern-gpt-10m-5b).
 It processed 4,999,934,057 targets over 72,805 updates. Broader exploratory
