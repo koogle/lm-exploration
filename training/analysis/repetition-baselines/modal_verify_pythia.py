@@ -68,7 +68,7 @@ def verify():
 
 
 @app.local_entrypoint()
-def main():
-    Path(__file__).with_name("pythia-verification.json").write_text(
-        json.dumps(verify.remote(), indent=2)
-    )
+def main(output: str = "../../artifacts/repetition-baselines/pythia-verification.json"):
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(verify.remote(), indent=2))

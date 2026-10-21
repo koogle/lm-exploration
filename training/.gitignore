@@ -1,4 +1,6 @@
 /runs/
+# Downloaded and newly generated experiment artifacts belong on HF datasets.
+/artifacts/
 /data/raw/
 /data/cache/
 __pycache__/

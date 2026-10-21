@@ -134,8 +134,9 @@ def evaluate(spec):
 
 
 @app.local_entrypoint()
-def main():
-    output = Path(__file__).with_name("external-results-bf16.json")
+def main(output: str = "../../artifacts/repetition-baselines/external-results-bf16.json"):
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
     results = []
     for result in evaluate.map(MODELS):
         results.append(result)

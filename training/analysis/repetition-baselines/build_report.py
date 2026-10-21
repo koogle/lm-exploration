@@ -7,8 +7,6 @@ from collections import defaultdict
 from pathlib import Path
 from statistics import mean
 
-HERE = Path(__file__).parent
-
 
 def repetition(seq, n):
     grams = [tuple(seq[i : i + n]) for i in range(max(0, len(seq) - n + 1))]
@@ -31,7 +29,20 @@ def sample_metrics(row):
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "folder",
+        nargs="?",
+        type=Path,
+        default=Path("../../artifacts/repetition-baselines"),
+        help="Folder with external-results*.json and simple-llm-fp32.json; outputs are written beside them",
+    )
+    parser.add_argument(
+        "--repetition",
+        type=Path,
+        default=Path("../../artifacts/repetition"),
+        help="Folder with previous-comparison-20261018.json and low-temperature-20261018.json",
+    )
     parser.add_argument(
         "--bf16", action="store_true", help="Rebuild retained initial BF16 comparison"
     )
@@ -40,7 +51,7 @@ def main():
 
     def output(name):
         p = Path(name)
-        return HERE / (p.stem + suffix + p.suffix)
+        return args.folder / (p.stem + suffix + p.suffix)
 
     data = json.loads(output("external-results.json").read_text())
     for model in data["models"]:
@@ -51,10 +62,10 @@ def main():
             assert len(sample["generation_ids"]) == sample["generated_tokens"]
             assert 1 <= sample["generated_tokens"] <= 128
             assert sample["generated_tokens"] == 128 or sample["ended_with_eos"]
-    previous = json.loads(
-        (HERE.parent / "repetition/previous-comparison-20261018.json").read_text()
-    )["checkpoints"][-1]
-    low = json.loads((HERE.parent / "repetition/low-temperature-20261018.json").read_text())[
+    previous = json.loads((args.repetition / "previous-comparison-20261018.json").read_text())[
+        "checkpoints"
+    ][-1]
+    low = json.loads((args.repetition / "low-temperature-20261018.json").read_text())[
         "checkpoints"
     ][-1]
     desired = {m["name"] for m in data["modes"]}
@@ -62,7 +73,7 @@ def main():
         r for r in low["samples"] if r["mode"] in desired and r["mode"] != "greedy"
     ]
     if not args.bf16:
-        own_raw = json.loads((HERE / "simple-llm-fp32.json").read_text())
+        own_raw = json.loads((args.folder / "simple-llm-fp32.json").read_text())
         checkpoint = own_raw["checkpoints"][0]
         assert own_raw["prompts"] == data["prompts"]
         assert checkpoint["revision"] == previous["revision"]

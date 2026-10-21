@@ -297,14 +297,16 @@ def compare():
 
 
 @app.local_entrypoint()
-def main():
+def main(output: str = "../../artifacts/repetition-baselines/simple-llm-fp32.json"):
     report = compare.remote()
     # Normalize the descriptive note of a reused remote result, never sample data.
     report["note"] = report["note"].replace(
         "No top-k filter or n-gram ban.",
         "Top-k/nucleus filters are identified per mode; no n-gram ban.",
     )
-    Path(__file__).with_name("simple-llm-fp32.json").write_text(json.dumps(report, indent=2) + "\n")
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2) + "\n")
     print(
         json.dumps(
             {

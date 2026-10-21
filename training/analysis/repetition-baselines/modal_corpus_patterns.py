@@ -96,7 +96,9 @@ def audit():
 
 
 @app.local_entrypoint()
-def main():
+def main(output: str = "../../artifacts/repetition-baselines/corpus-patterns.json"):
     result = audit.remote()
-    Path(__file__).with_name("corpus-patterns.json").write_text(json.dumps(result, indent=2))
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(result, indent=2))
     print("audit complete", flush=True)
