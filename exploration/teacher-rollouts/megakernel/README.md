@@ -50,7 +50,7 @@ using `truststore`; TLS verification stays enabled.
 
 `probe.py` loads only the pinned teacher's language weights and untied head,
 compares against Transformers eager inference, and saves results incrementally.
-It checks every layer, full-attention KV cache, every recurrent state and complete
+It checks every layer, full-attention key cache, every recurrent state and complete
 vocabulary logits on teacher-forced short sequences. Preregistered smoke gates:
 logit normalized RMSE <= 0.04, cosine >= 0.999, top-1 agreement >= 95%, and
 recurrent-state normalized RMSE <= 0.08. These tolerances do not establish exact
@@ -66,3 +66,9 @@ as a negative result. No student training is launched.
 See the parent README findings and its linked HF results folder for measurement status.
 Do not interpret the existence of this source or a successful compilation as a
 successful GPU correctness result.
+
+Measured H100 smoke result: all 25 checked next-token predictions agree, all six
+greedy fixture output sequences match, and reset reproducibility passes. Generation
+including sequential prefill was 4.58× faster than Transformers eager fallback
+(63.51 versus 13.87 output tokens/s). See the parent findings for cost, provenance
+and limits; optimized batched performance is a separate question.

@@ -26,5 +26,5 @@ Implementation lives here alongside the reports: [model and decoding code](laten
 
 [Fixed-teacher rollouts](teacher-rollouts/) is a separate, bounded Qwen3.5-9B
 Modal generation benchmark for future distillation. It includes a continuous-batching harness
-and an experimental 9B CUDA megakernel undergoing H100 correctness qualification.
+and an experimental 9B CUDA megakernel with a passing H100 correctness smoke test.
 It does not launch student training.

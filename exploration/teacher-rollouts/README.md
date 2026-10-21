@@ -3,7 +3,7 @@
 Separate experiment for distillation data from **Qwen/Qwen3.5-9B**. No student
 training, pretraining-plan changes or large generation campaign. Includes a
 [Qwen3.5-9B CUDA megakernel](megakernel/) and a separate continuously batched vLLM
-baseline. The CUDA port compiles; GPU correctness qualification is in progress.
+baseline. **The CUDA port compiles and passes its H100 correctness smoke gate.**
 The dated implementation/status report (runtime inspection, prior-research
 reverification, profiling decision rule) is archived on HF; see
 [Findings so far](#findings-so-far).
@@ -112,9 +112,23 @@ profile: preserve its raw records, server log and worker timing as negative evid
 Full 2026-10-21 status report: [`pr-36/exploration/teacher-rollouts/REPORT.md`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-36/exploration/teacher-rollouts)
 in the private HF dataset `jfrick/lm-exploration-results`.
 
-- **H100 correctness probe launched after explicit user authorization.**
-  The CUDA image compiles. Measured correctness and performance results are
-  pending; the vLLM concurrency sweep has not run.
+- **H100 megakernel smoke gate passed.** All 25 teacher-forced positions matched
+  the reference top token; worst logit normalized RMSE was 1.90%, worst recurrent
+  state error 2.75%, and reset reproducibility passed. Six synthetic greedy
+  outputs matched Transformers eager token-for-token, with 6/6 automatic
+  acceptances (technical answers still require human review) and no truncations.
+  Short checks do not establish long-context correctness.
+- Generation including sequential prefill: **63.51 output tokens/s versus 13.87**
+  for Transformers eager fallback, or 4.58× in this single-pass batch-one test.
+  Extrapolated accepted fixtures/hour: 6,659 versus 1,454. Estimated steady GPU
+  USD/accepted: $0.000593 versus $0.002715. This is not a vLLM comparison.
+  Download/loading took 79.84 s; total probe time including both backends and
+  correctness was 123.24 s (estimated GPU compute $0.1352; actual bill unknown).
+  Peak PyTorch allocated memory was 18.21 GB, not peak whole-device memory.
+- The vLLM concurrency sweep is in progress; batched cost and bottleneck findings
+  remain pending. Detailed smoke results, raw outputs, manifests and prior launch
+  failures are byte-verified in HF folder
+  [`kernel-9b-20261022-v3`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-36/exploration/teacher-rollouts/kernel-9b-20261022-v3).
 - Runtime: vLLM 0.32.0 (`5df63a7`) chosen from source inspection (Qwen3.5
   architecture, text-only loading, per-request seeds, metrics, Torch profiling).
   SGLang 0.5.22 also supports Qwen3.5 but is kept as a later matched comparison.
@@ -124,12 +138,12 @@ in the private HF dataset `jfrick/lm-exploration-results`.
 - Prior megakernel work does not transfer directly: Luce is hard-coded to
   Qwen3.5-0.8B (16/16 heads), Mirage targets Qwen3-8B, Megakernels is
   Llama-oriented. The user subsequently requested an executable 9B port, now implemented under
-  `megakernel/`. Its throughput benefit remains unproven. For rollout optimization, first
+  `megakernel/`. Its aggregate batched throughput benefit remains unproven. For rollout optimization, first
   choose concurrency by pooled accepted examples per GPU second, then profile, and
   only propose a small kernel experiment if DeltaNet or launch overhead stays a
   substantial measured fraction at the best batched operating point.
 - CPU validation: 13 unit tests pass; Modal definitions import; ruff passes.
-  NVCC compilation succeeds in the pinned CUDA image.
+  NVCC compilation, the H100 smoke gate and fixture generation pass.
 
 ## Artifacts
 
