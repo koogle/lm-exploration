@@ -142,10 +142,23 @@ in the private HF dataset `jfrick/lm-exploration-results`.
   choose concurrency by pooled accepted examples per GPU second, then profile, and
   only propose a small kernel experiment if DeltaNet or launch overhead stays a
   substantial measured fraction at the best batched operating point.
-- CPU validation: 13 unit tests pass; Modal definitions import; ruff passes.
+- CPU validation: 15 unit tests pass; Modal definitions import; ruff passes.
   NVCC compilation, the H100 smoke gate and fixture generation pass.
 
 ## Artifacts
+
+Summarize an explicit downloaded Torch trace with:
+
+```sh
+python profile_summary.py --trace artifacts/run/trace.json.gz \
+  --output artifacts/run/profile-summary.json
+```
+
+The helper reports kernel/copy durations and the union of observed device
+intervals. Summed durations can overlap; they are not wall-clock fractions.
+Kernel names alone cannot establish weight-bandwidth saturation or attribute
+idle gaps to scheduling. Keep verification timings and prefill/decode metrics
+separate, and retain the raw trace alongside the summary.
 
 The dedicated `lm-exploration-teacher-rollouts` Modal volume is a staging store.
 Git contains source, config, intentional fixtures and this README only; run
