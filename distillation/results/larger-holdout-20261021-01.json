@@ -1,0 +1,39 @@
+{
+  "context": 256,
+  "dtype": "bfloat16",
+  "manifest_sha256": "f0c1e3a62aec45b5db72cc43cde513a6c278c0d1e075489e94a87cbc71b62133",
+  "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+  "window_sha256": "01e7ce717b418c08bb98f277a60e0999a8043a62ba773705e8153f7daded7793",
+  "windows": 1578,
+  "max_documents": 512,
+  "windows_per_document": 8,
+  "results": [
+    {
+      "checkpoint": "/runs/simple-llm-code60-unique-10b-20261020-r01-s04/step-000153342.pt",
+      "ce": 1.7348575060426237,
+      "tokens": 342549,
+      "document_count": 512
+    },
+    {
+      "checkpoint": "/distill/qwen4b-byte-pilot-20261021-02/step-000000500.pt",
+      "ce": 1.8244774308139824,
+      "tokens": 342549,
+      "document_count": 512
+    },
+    {
+      "checkpoint": "/distill/qwen4b-byte-pilot-20261021-02/step-000001000.pt",
+      "ce": 1.8496444914941903,
+      "tokens": 342549,
+      "document_count": 512
+    },
+    {
+      "checkpoint": "/distill/qwen4b-byte-pilot-20261021-02/step-000001133.pt",
+      "ce": 1.862486389605961,
+      "tokens": 342549,
+      "document_count": 512
+    }
+  ],
+  "torch_version": "2.6.0+cu124",
+  "full_report": "lm-exploration-distillation/larger-holdout-20261021-01/report.json",
+  "modal_url": "https://modal.com/apps/radiantai/main/ap-cpfQDPreDFBqnEsU6eDU8W"
+}
