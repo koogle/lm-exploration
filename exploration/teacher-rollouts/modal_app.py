@@ -23,6 +23,9 @@ app = modal.App("lm-exploration-teacher-rollouts")
 image = (
     modal.Image.from_registry(CONFIG["image"])
     .entrypoint([])
+    # The pinned vLLM runtime provides python3 but no unversioned python.
+    # Modal's pip overlay and our worker use the unversioned command.
+    .run_commands("ln -sf /usr/bin/python3 /usr/local/bin/python")
     .pip_install_from_requirements(str(HERE / "requirements.lock"))
     .add_local_dir(
         HERE,
