@@ -113,9 +113,22 @@ modal run --detach -m distributed_training.modal_train \
 ```
 
 The second example is a template, not a launched full run. Snapshot audit and
-capacity gates apply before model allocation. The `pilot: true` override permits
-pending audits only with a target no larger than 5M tokens; it never resets or
-replays exhausted sources. The two-pass source limit remains in force.
+capacity gates apply before model allocation. Set `allow_unreviewed_data: true`
+explicitly to permit snapshots with pending audits; the default is `false`.
+This permission is independent of architecture, token budget and `pilot` mode.
+Pilot mode alone does not permit unreviewed data, and neither flag resets
+exhausted sources or removes the loader's two-pass source limit.
+
+`DistributedConfig` validates general settings, not an architecture allowlist or
+experiment token ceiling. The bounded-pilot policy (at most 5M tokens) lives in
+`run_validation.py` and is enforced by both the Modal launcher and `train()`
+before framework initialization. Direct torchrun execution cannot bypass it.
+Non-pilot architecture dimensions and token budgets are recipe choices, subject
+to model, runtime and corpus-capacity checks. This does not authorize a run.
+
+Recipes now record data permission explicitly. Historical configs and measured
+artifacts are unchanged; exact resume from older checkpoints requires their
+original source and settings because config and source identity are checked.
 
 Supported GPU families are `H100`, `L40S` and `A10G`; `world_size` in the JSON
 chooses the number of GPUs. Global windows must be divisible by
