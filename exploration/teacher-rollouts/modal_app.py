@@ -10,7 +10,7 @@ from pathlib import Path
 
 import modal
 
-from core import atomic_json, validate_config
+from core import atomic_json, supervise_call, validate_config
 
 HERE = Path(__file__).parent if modal.is_local() else Path("/experiment")
 CONFIG = json.loads((HERE / "config.json").read_text())
@@ -41,7 +41,7 @@ volume = modal.Volume.from_name(
     scaledown_window=2,
     volumes={"/runs": volume},
 )
-def worker(run_id, attempt, manifest):
+def worker(run_id, attempt, manifest, deadline, supervisor_id):
     c = manifest["config"]
     validate_config(c)
     if not c["budget_authorized"] or not c["authorization_reference"]:
@@ -49,12 +49,23 @@ def worker(run_id, attempt, manifest):
     for name in (run_id, attempt):
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", name):
             raise ValueError("invalid ID")
+    remaining = min(c["runtime_seconds"], int(deadline - time.time()))
+    if remaining < 60:
+        raise TimeoutError("Insufficient time before launch deadline")
     root = Path("/runs") / run_id
     root.mkdir(parents=True, exist_ok=True)
     path = root / f"input-{attempt}.json"
     if path.exists():
         raise ValueError("attempt already used")
     atomic_json(path, manifest)
+    atomic_json(
+        root / f"supervision-{attempt}.json",
+        {
+            "deadline_unix": deadline,
+            "supervisor_call_id": supervisor_id,
+            "worker_call_id": modal.current_function_call_id(),
+        },
+    )
     volume.commit()
     started = time.monotonic()
     status = "failed"
@@ -66,7 +77,7 @@ def worker(run_id, attempt, manifest):
             start_new_session=True,
         )
         try:
-            returncode = proc.wait(timeout=c["runtime_seconds"] - 45)
+            returncode = proc.wait(timeout=remaining - 45)
         except subprocess.TimeoutExpired:
             status = "timeout"
             os.killpg(proc.pid, signal.SIGKILL)
@@ -82,3 +93,61 @@ def worker(run_id, attempt, manifest):
         )
         volume.commit()
     return json.loads((root / "attempts" / attempt / "report.json").read_text())
+
+
+# A separate, small CPU function remains alive while the GPU call queues/runs.
+control_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install_from_requirements(str(HERE / "requirements.lock"))
+    .add_local_dir(
+        HERE,
+        "/experiment",
+        ignore=["artifacts", ".budget", "__pycache__", ".venv", ".ruff_cache"],
+    )
+)
+supervision = modal.Dict.from_name(
+    "lm-exploration-teacher-rollout-deadlines", create_if_missing=True
+)
+
+
+@app.function(
+    image=control_image,
+    cpu=(0.125, 0.125),
+    memory=(256, 256),
+    timeout=1320,
+    retries=0,
+    max_containers=1,
+    scaledown_window=2,
+)
+def supervisor(run_id, attempt, manifest, deadline):
+    c = manifest["config"]
+    validate_config(c)
+    remaining = min(c["runtime_seconds"], int(deadline - time.time()) - 30)
+    if remaining < 60 or deadline > time.time() + c["runtime_seconds"] + 60:
+        raise TimeoutError("Launch deadline expired or exceeds permitted horizon")
+    supervisor_id = modal.current_function_call_id()
+    key = f"{run_id}/{attempt}"
+    state = {
+        "deadline_unix": deadline,
+        "supervisor_call_id": supervisor_id,
+        "worker_call_id": None,
+        "status": "spawning",
+        "effective_worker_timeout": remaining,
+    }
+    supervision[key] = state
+    call = worker.with_options(timeout=remaining).spawn(
+        run_id, attempt, manifest, deadline, supervisor_id
+    )
+    try:
+        state.update(worker_call_id=call.object_id, status="running")
+        supervision[key] = state
+        report = supervise_call(call, deadline)
+        state["status"] = "completed"
+        report["supervision"] = state
+        return report
+    finally:
+        if state["status"] != "completed":
+            # Also covers failure to persist the ID before entering supervise_call.
+            modal.FunctionCall.from_id(call.object_id).cancel(terminate_containers=True)
+            state["status"] = "cancelled_or_failed"
+        supervision[key] = state

@@ -14,6 +14,7 @@ from core import (
     reserve_budget,
     select_best,
     summarize,
+    supervise_call,
     validate,
     validate_config,
 )
@@ -209,6 +210,21 @@ class BudgetAndMetricsTests(unittest.TestCase):
             self.assertRaisesRegex(ValueError, "No explicit budget authorization"),
         ):
             launch.main()
+
+    def test_remote_deadline_explicitly_cancels_child(self):
+        from unittest.mock import Mock
+
+        call = Mock()
+        call.get.side_effect = TimeoutError("still queued")
+        with self.assertRaises(TimeoutError):
+            supervise_call(call, 100, now=lambda: 90)
+        call.get.assert_called_once_with(timeout=10)
+        call.cancel.assert_called_once_with(terminate_containers=True)
+        expired = Mock()
+        with self.assertRaises(TimeoutError):
+            supervise_call(expired, 100, now=lambda: 101)
+        expired.get.assert_not_called()
+        expired.cancel.assert_called_once_with(terminate_containers=True)
 
     def test_invalid_caps(self):
         for key, value in [

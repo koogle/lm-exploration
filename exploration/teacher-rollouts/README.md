@@ -41,7 +41,14 @@ are never refunded automatically, including failed launches. Keep this ledger
 between attempts and use one launch host. This is not a distributed account-wide
 ledger. Do not launch from another checkout or bypass the entrypoint. No automatic
 retries; `max_containers=1`; worker timeout is at most 1,200 seconds, with a shorter
-subprocess deadline that kills the entire server process group. The model and
+subprocess deadline that kills the entire server process group.
+A separate 0.125-core/256-MiB remote supervisor enforces an absolute deadline
+(launch + configured runtime + 60 seconds), including image setup and queue time.
+It records both call IDs and the deadline in a dedicated Modal Dict and worker
+metadata, bounds the child timeout by remaining time, refuses late starts, and
+explicitly cancels unfinished GPU calls via the Modal API. Its own server timeout
+is 1,320 seconds with no retries. Cancellation is independent of the local client.
+The supervisor adds a small CPU cost covered by the resource-rate ceiling. The model and
 runtime pins cannot be overridden by a launch config. Credentials use normal
 Modal configuration; public teacher weights require no forwarded secret.
 
@@ -111,7 +118,10 @@ uv run --with 'huggingface-hub==0.36.0' python archive.py \
   --prefix teacher-rollouts/baseline-001 --index baseline-001-index.json
 ```
 
-Archive raw and validated records, errors, runtime metadata, metrics, logs and
+Copy the local launch/supervision JSONs into the downloaded run before archiving.
+The dedicated `lm-exploration-teacher-rollout-deadlines` Modal Dict also retains
+supervision state when the local client disconnects. Archive raw and validated
+records, errors, runtime metadata, metrics, logs and
 traces. The exporter verifies each downloaded file at the immutable upload commit
 and writes repository ID/type, revision, paths and SHA256 checksums. Commit only
 that index and concise findings. Do not delete staged artifacts until verification

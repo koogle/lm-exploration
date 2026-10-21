@@ -304,3 +304,18 @@ def select_best(trials, rounds):
                     r["steady_generation_seconds"] for r in rows
                 )
     return max(rates, key=rates.get) if rates else None
+
+
+def supervise_call(call, deadline, now=time.time):
+    """The remote supervisor cancels explicitly; get(timeout) alone is insufficient."""
+    completed = False
+    try:
+        remaining = deadline - now()
+        if remaining <= 0:
+            raise TimeoutError("launch deadline expired")
+        result = call.get(timeout=remaining)
+        completed = True
+        return result
+    finally:
+        if not completed:
+            call.cancel(terminate_containers=True)

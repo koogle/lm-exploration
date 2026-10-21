@@ -5,7 +5,9 @@ bottleneck identified yet.** CPU tests and source inspection establish harness
 behavior and advertised runtime support, not model correctness or H100 performance.
 The repository's prior allocations do not authorize this separate experiment
 (`training/README.md`, Token and compute planning). The default launch is closed
-until an explicit budget is recorded. Requested next step: a $5 campaign, one
+until an explicit budget is recorded. Current root AGENTS.md additionally requires
+a remote launch-deadline supervisor; this implementation includes one with
+persisted call IDs, remaining-time checks and explicit child cancellation. Requested next step: a $5 campaign, one
 H100, at most two 20-minute attempts including startup; no student training.
 
 ## Provenance and runtime decision
@@ -123,9 +125,10 @@ throughput as gates. A full megakernel remains subsequent work.
 
 ## Validation and artifact status
 
-**11 passing CPU unit tests** cover semantic code failures and prohibited code, strict structured
+**12 passing CPU unit tests** cover semantic code failures and prohibited code, strict structured
 output checks, technical rubric limits, corruption/conflict refusal, partial and
-complete resume, cumulative budget exhaustion, and zero-acceptance metric handling.
+complete resume, cumulative budget exhaustion, explicit child cancellation on deadline/queue timeout,
+and zero-acceptance metric handling.
 Modal 1.6.1 definitions import locally. Ruff checks and formatting pass; the dry-run manifest path also passes without
 dispatching a worker. None of these is a GPU/runtime compatibility test.
 

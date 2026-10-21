@@ -47,15 +47,25 @@ def main():
         return
     reserve_budget(c, HERE / ".budget", args.attempt)
     # Import and app startup only after authorization and budget reservation.
-    from modal_app import app, worker
+    from modal_app import app, supervision, supervisor
 
     started = time.monotonic()
-    with app.run():
-        report = worker.with_options(timeout=c["runtime_seconds"]).remote(
-            args.run_id, args.attempt, manifest
-        )
+    deadline = time.time() + c["runtime_seconds"] + 60
     out = HERE / "artifacts" / args.run_id
     out.mkdir(parents=True, exist_ok=True)
+    atomic_json(out / f"{args.attempt}-launch.json", {"deadline_unix": deadline})
+    with app.run():
+        call = supervisor.spawn(args.run_id, args.attempt, manifest, deadline)
+        atomic_json(
+            out / f"{args.attempt}-launch.json",
+            {"deadline_unix": deadline, "supervisor_call_id": call.object_id},
+        )
+        try:
+            report = call.get()
+        finally:
+            state = supervision.get(f"{args.run_id}/{args.attempt}")
+            if state:
+                atomic_json(out / f"{args.attempt}-supervision.json", state)
     report["client_total_seconds_including_build_and_queue"] = (
         time.monotonic() - started
     )
