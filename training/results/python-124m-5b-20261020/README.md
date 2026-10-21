@@ -1,6 +1,15 @@
 # Python 124M / 5B execution record
 
-**Current status (2026-10-21 02:20 UTC): all source acquisition is complete; global merging and exclusions are running. No eight-GPU experiment updates or model publication yet.**
+**Current status (2026-10-21 02:52 UTC): the corpus is frozen; eight-H100 qualification is queued. No eight-GPU optimizer updates or Hugging Face model publication yet.**
+
+The final corpus contains **5,949,619,583 unique usable training targets** after
+filtering, global deduplication and validation exclusions. Every category has
+`max_passes=1`: the requested exact 5B mixture is supported without reuse.
+The retained collected Git snapshots contribute **108,063,930 targets** across
+31,016 complete files/documents, consumed first within their categories.
+Validation contains 192 fixed windows from distinct held-out parents.
+See the [final capacity table](final-capacity.md), [source-origin counts](final-capacity.json),
+and [immutable manifest](final-manifest.json).
 
 All 53 pinned full-Python shards completed, with **5,742,078,521 candidate
 training targets** before global deduplication and exclusions. All 95 documentation
