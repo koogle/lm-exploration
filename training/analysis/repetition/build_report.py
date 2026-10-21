@@ -1,16 +1,26 @@
 """Build a checkpoint comparison report and plot from measured sampling results."""
 
+import argparse
 import json
 from pathlib import Path
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "folder",
+        nargs="?",
+        type=Path,
+        default=Path("../../artifacts/repetition"),
+        help="Folder with the sampling results; the report is written beside them",
+    )
+    folder = parser.parse_args().folder
+
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    folder = Path(__file__).resolve().parent
     data = json.loads((folder / "low-temperature-20261018.json").read_text())
     previous = json.loads((folder / "previous-comparison-20261018.json").read_text())
     old = {c["step"]: c for c in previous["checkpoints"]}
@@ -128,11 +138,11 @@ def main():
         "",
         "## Reproduce",
         "",
-        "Run from this directory with Modal credentials and access to the project output volume:",
+        "Run from `training/analysis/repetition/` in the lm-exploration repository with Modal credentials and access to the project output volume:",
         "",
         "```sh",
         "modal run --detach modal_low_temperature.py",
-        "python build_report.py",
+        "python build_report.py ../../artifacts/repetition",
         "```",
         "",
         "The remote job uses one H100 and a 30-minute hard timeout with no automatic function retry. Checkpoint downloads have four bounded retry attempts, and reruns reuse matching completed checkpoint results from the output volume. It verifies checkpoint weight hashes, model source identity, parameter count and finite parameters. Published checkpoint code is used only from our own pinned revisions. Deploying/importing this file does not launch training. The report builder additionally needs matplotlib.",

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import modal
 
-from modal_scripts.modal_scholarly_pilot import image
+from distributed.image import image
 
 app = modal.App("lm-exploration-gpu-comparison")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -16,7 +16,7 @@ results_volume = modal.Volume.from_name("lm-exploration-training")
 
 @app.function(image=image, cpu=2, memory=4096, timeout=300, retries=0, max_containers=1)
 def qualify():
-    for filename in ("test_100m_modern.py", "test_tied_embeddings.py", "test_scholarly.py"):
+    for filename in ("test_100m_modern.py", "test_tied_embeddings.py", "test_simple_llm.py"):
         subprocess.run(
             ["python", "-m", "unittest", "discover", "-s", "/project/tests", "-p", filename, "-v"],
             check=True,
@@ -44,7 +44,9 @@ def worker(gpu, run_id, provenance):
     output.mkdir(parents=True)
     try:
         result = benchmark(
-            Path("/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001/manifest.json"),
+            Path(
+                "/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001-seekable/manifest.json"
+            ),
             gpu,
             provenance,
         )
@@ -60,14 +62,14 @@ def worker(gpu, run_id, provenance):
 
 
 @app.local_entrypoint()
-def main(run_id: str = "scholarly-124m-gpu-comparison-20261017-01"):
+def main(run_id: str = "simple-llm-124m-gpu-comparison-20261017-01"):
     import re
 
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
         raise ValueError("Invalid run ID")
     files = [
         Path("modal_scripts/modal_gpu_benchmark.py"),
-        Path("modal_scripts/modal_scholarly_pilot.py"),
+        *Path("distributed").glob("*.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
         Path("10m/legacy.py"),
@@ -84,13 +86,15 @@ def main(run_id: str = "scholarly-124m-gpu-comparison-20261017-01"):
         gpu: worker.with_options(gpu=gpu).spawn(gpu, run_id, provenance)
         for gpu in ("L40S", "H100", "A10G")
     }
-    Path("results").mkdir(exist_ok=True)
+    Path("artifacts/results").mkdir(parents=True, exist_ok=True)
     # Keep individual results even if another device fails or is unavailable.
     errors = []
     for gpu, call in calls.items():
         try:
             result = call.get()
-            Path(f"results/{run_id}-{gpu}.json").write_text(json.dumps(result, indent=2) + "\n")
+            Path(f"artifacts/results/{run_id}-{gpu}.json").write_text(
+                json.dumps(result, indent=2) + "\n"
+            )
         except Exception as exc:  # noqa: BLE001 -- collect independent remote failures
             errors.append(f"{gpu}: {exc}")
     if errors:

@@ -19,7 +19,7 @@ For example:
 
 ```sh
 uv run --extra corpus --extra research python -m tokenizer.tokenizer_report \
-  results/tokenizer-learning-curve/<run-id>
+  artifacts/tokenizer-learning-curve/<run-id>
 ```
 
 See the [research guide](research/README.md) for fitting, reporting and publication
@@ -39,10 +39,11 @@ tokenizer = load_frozen()  # verifies the frozen artifact hashes
 assert VOCAB_SIZE == tokenizer.get_vocab_size() == 32768
 ```
 
-The [training plan](../plans/SCHOLARLY_CODE_PRETRAINING.md) records the selection,
-trade-offs, special IDs and retokenization requirements. The frozen version's
-`publication.json` pins its Hub revision. Original scholarly-code-v1 assets remain
-available as an immutable historical version; existing tokenized snapshots cannot
+The [training plan](../plans/SIMPLE_LLM_PRETRAINING.md) records the selection,
+trade-offs, special IDs and retokenization requirements. The frozen version is
+published at `jfrick/scholarly-code-tokenizer`. Original assets now live in
+[`simple-llm-v1/`](simple-llm-v1/) with their bytes and hashes unchanged;
+existing tokenized snapshots cannot
 be reused with the new tokenizer.
 
-Published resource: [jfrick/scholarly-code-tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).
+Published resource: [Simple LLM tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).

@@ -11,7 +11,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from training_data.scholarly import adapt, canonical, stream_rows
+from training_data.simple_llm import adapt, canonical, stream_rows
 from training_data.subword import digest
 
 

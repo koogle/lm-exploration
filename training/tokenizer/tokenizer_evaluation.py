@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 
 from tokenizers import Tokenizer
-from training_data.scholarly import adapt, stream_rows
+from training_data.simple_llm import adapt, stream_rows
 from training_data.subword import digest
 
 from tokenizer.tokenizer_research import CorpusBuilder, evaluate

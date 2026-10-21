@@ -1,7 +1,10 @@
 """Scheduled, count-bounded continuation using a separate durable HF control repo."""
 
+import importlib
 import json
 import os
+import time
+from datetime import datetime
 from pathlib import Path
 
 import modal
@@ -49,7 +52,7 @@ def collect(source_id: str, run_id: str, max_documents: int, work_seconds: int):
     secrets=[secret],
     cpu=0.125,
     memory=512,
-    timeout=14400,
+    timeout=28800,
     max_containers=4,
     retries=0,
 )
@@ -105,7 +108,35 @@ def inspect_call(call_id):
     return {"status": "failed", "child_tree_terminated": True}
 
 
-def source_snapshots(mapping, goal):
+def retry_deferred(state, timestamp=None):
+    """Avoid empty campaigns while all remaining work is waiting to retry."""
+    timestamp = time.time() if timestamp is None else timestamp
+    if state.get("source_retry_after_epoch", 0) > timestamp:
+        return True
+    last = state.get("runs", [])[-1] if state.get("runs") else {}
+    if (
+        last.get("status") != "bounded_complete"
+        or last.get("attempted") != 0
+        or not last.get("remaining_supported_candidates")
+        or not last.get("finished_at")
+    ):
+        return False
+    # A zero-attempt round cannot justify another immediate campaign. Wait for
+    # the earliest persisted retry, with a ten-minute floor to bound write churn.
+    finished = datetime.fromisoformat(last["finished_at"]).timestamp()
+    future = [
+        entry["retry_after_epoch"]
+        for entry in state.get("failures", {}).values()
+        if entry.get("attempts", 0) < 3 and entry.get("retry_after_epoch", 0) > timestamp
+    ]
+    return timestamp < max(finished + 600, min(future) if future else 0)
+
+
+def source_snapshots(mapping, goal, audit_store=None, audit_revision=None):
+    from huggingface_hub.errors import EntryNotFoundError
+
+    from eu_corpus import digest
+    from goal_controller import cached_token_lower_bound
     from hf_store import HFStore
     from pipeline import inventory_expansion_needed
 
@@ -114,6 +145,17 @@ def source_snapshots(mapping, goal):
     for source in goal["config"]["sources"]:
         config = mapping["sources"][source]
         state, revision = HFStore(config["repo_id"]).load()
+        token_cache = None
+        if audit_store is not None and goal["config"].get("target_tokens") is not None:
+            if not audit_revision:
+                raise ValueError("Pinned control revision required for token cache reads")
+            try:
+                token_cache = json.loads(
+                    audit_store._download_bytes(f"tokens/{source}.json", audit_revision)
+                )
+            except EntryNotFoundError:
+                pass
+        tokens = cached_token_lower_bound(state, token_cache, config["repo_id"])
         collections = state["collections"]
         global_limit = mapping.get("limits", {}).get("inventory_limit_per_collection", 100000)
         desired_limit = min(
@@ -123,12 +165,16 @@ def source_snapshots(mapping, goal):
             name not in collections or inventory_expansion_needed(collections[name], desired_limit)
             for name in config["collections"]
         )
-        # Older terminal metrics can precede a later inventory expansion. Only
-        # the latest run may provide an exact remaining count; otherwise use a hint.
+        # Saved eligibility is valid only for the adapter and collections that
+        # measured it. Repairs can make previously exhausted URLs runnable again.
         last = state["runs"][-1] if state["runs"] else {}
         remaining = last.get("remaining_supported_candidates")
-        if remaining is None or set(last.get("collection_weights", {})) != set(
-            config["collections"]
+        adapter = importlib.import_module(config["adapter"])
+        adapter_sha256 = digest(Path(adapter.__file__).read_bytes())
+        if (
+            remaining is None
+            or last.get("adapter_sha256") != adapter_sha256
+            or set(last.get("collection_weights", {})) != set(config["collections"])
         ):
             # Conservative upper bound, only a runnable hint until a worker measures it.
             remaining = max(
@@ -138,9 +184,11 @@ def source_snapshots(mapping, goal):
             )
         result[source] = {
             "metrics": state["metrics"],
+            "exact_tokens_lower_bound": tokens,
             "revision": revision,
             "remaining_supported_candidates": remaining,
             "discovery_pending": discovery_pending,
+            "retry_deferred": not discovery_pending and retry_deferred(state),
             "inventory_complete": not discovery_pending
             and all(
                 collections[name].get("enumeration", {}).get("complete") is True
@@ -166,38 +214,50 @@ def source_snapshots(mapping, goal):
     timeout=600,
     max_containers=1,
     retries=0,
-    schedule=modal.Period(minutes=15) if SCHEDULE_ENABLED else None,
+    schedule=modal.Period(minutes=1) if SCHEDULE_ENABLED else None,
 )
 def tick():
-    from goal_controller import run_tick
     from hf_store import HFStore
 
     config = json.loads(GOAL_CONFIG.read_text())
     mapping = json.loads(GOAL_MAPPING.read_text())
     store = HFStore(config.pop("control_repo"))
-    state, _ = store.load()
-    goal = state.get("collection_goal")
-    if not goal:
-        raise RuntimeError("Initialize durable control state with all active/queued calls first")
-    if goal.get("status") in {"target_reached", "selected_scope_exhausted"}:
-        return {"status": goal["status"], "stored_rows": goal.get("stored_rows")}
-    result = run_tick(
-        store,
-        source_snapshots(mapping, goal),
-        inspect_call,
-        lambda **kwargs: campaign.spawn(**kwargs),
-        config,
+    result = reconcile_tick(
+        store, mapping, config, inspect_call, lambda **kwargs: campaign.spawn(**kwargs)
     )
     return {
         key: result.get(key)
         for key in (
             "status",
             "stored_rows",
+            "exact_tokens_lower_bound",
             "reserved_documents",
             "available_document_budget",
             "sources",
         )
     }
+
+
+def reconcile_tick(store, mapping, config, inspect, spawn):
+    """Settle terminal calls using a second fresh snapshot in the same invocation."""
+    from goal_controller import run_tick
+
+    for _ in range(2):
+        state, revision = store.load()
+        goal = state.get("collection_goal")
+        if not goal:
+            raise RuntimeError(
+                "Initialize durable control state with all active/queued calls first"
+            )
+        result = run_tick(
+            store, source_snapshots(mapping, goal, store, revision), inspect, spawn, config
+        )
+        if not any(
+            job.get("status") == "settling" and job["source_id"] in config["sources"]
+            for job in result["jobs"]
+        ):
+            break
+    return result
 
 
 @app.local_entrypoint()

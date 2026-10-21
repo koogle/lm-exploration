@@ -7,6 +7,8 @@ import statistics
 import time
 from dataclasses import asdict
 
+from training_data.subword import LOSS_IGNORE_INDEX
+
 
 def benchmark(
     manifest,
@@ -73,13 +75,16 @@ def benchmark(
                 full_x, full_y = data.next_batch(effective_windows, "cuda")
             trajectory.update(json.dumps(data.state_dict(), sort_keys=True).encode())
             batches = list(zip(full_x.split(microbatch), full_y.split(microbatch)))
-            count = sum(int((y != -100).sum()) for _, y in batches)
+            count = sum(int((y != LOSS_IGNORE_INDEX).sum()) for _, y in batches)
             optimizer.zero_grad(set_to_none=True)
             total_loss = 0.0
             for x, y in batches:
                 with torch.autocast("cuda", dtype=torch.bfloat16):
                     loss = F.cross_entropy(
-                        model(x).flatten(0, 1), y.flatten(), ignore_index=-100, reduction="sum"
+                        model(x).flatten(0, 1),
+                        y.flatten(),
+                        ignore_index=LOSS_IGNORE_INDEX,
+                        reduction="sum",
                     )
                 total_loss += float(loss.detach())
                 (loss / count).backward()

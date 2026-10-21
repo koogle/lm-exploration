@@ -1,0 +1,427 @@
+{
+  "observed_at": "2026-10-18T06:24:52.108397+00:00",
+  "series": [
+    {
+      "collection_id": "macroprudential_bulletin_articles",
+      "type_id": "96",
+      "official_name": "ECB Macroprudential Bulletin articles",
+      "enumeration": {
+        "strategy": "ECB FOEDB versioned type indexes and publication chunks",
+        "inventory_urls": [
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/12/chunk_0.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_2.json"
+        ],
+        "snapshot_version": "1792213219",
+        "snapshot_hash": "2sP68GoB",
+        "reported_total": 85,
+        "database_total_records": 20162,
+        "publication_records_scanned": 2,
+        "enumerated_count": 1,
+        "complete": false,
+        "limitations": [
+          "English publication database only; explicitly listed translations retained. Other language databases and linked attachments are not enumerated.",
+          "Reported total counts publication records, not language/format URLs.",
+          "HTML preferred over PDF for each publication-language pair.",
+          "Historical PDFs without explicit language suffix are retained with language=und.",
+          "Inventory coverage is not a claim of complete institutional or historical coverage.",
+          "Output limited to 1 URLs; rerun with a larger limit to backfill."
+        ]
+      },
+      "sample": {
+        "source_id": "ecb",
+        "collection_id": "macroprudential_bulletin_articles",
+        "document_id": "6ff964c25e4183c894a8b52228b4a90cf4bb4310b6b5b27ac3ff97bc037709e2",
+        "source_document_id": "47846",
+        "url": "https://www.ecb.europa.eu/press/financial-stability-publications/macroprudential-bulletin/html/ecb.mpbu202604_05.en.html",
+        "title": "Euro stablecoins and their potential effect on sovereign bond markets",
+        "language": "en",
+        "document_type": "macroprudential_bulletin_articles",
+        "format": "html",
+        "published_at": "2026-04-13T08:00:00+00:00",
+        "modified_at": null
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/press/financial-stability-publications/macroprudential-bulletin/html/ecb.mpbu202604_05.en.html",
+        "retrieved_at": "2026-10-18T06:25:02.664009+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/press/financial-stability-publications/macroprudential-bulletin/html/ecb.mpbu202604_05.en.html",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 185292,
+        "raw_sha256": "58584476230cbf3f6bb6684cc9ba153716e4de2cc4acc63166a5e16a195ca8b0",
+        "content_type": "text/html; charset=UTF-8",
+        "etag": "\"myra-b872fad3\"",
+        "last_modified": null
+      },
+      "extracted_characters": 50381,
+      "format": "html",
+      "text_prefix": "Euro stablecoins and their potential effect on sovereign bond markets\nPrepared by Alexandra Born, Claudia Lambert, Beno\u00eet Nguyen, Oscar Soons, David Staunton and Anton van der Kraaij\nPublished as part of the Macroprudential Bulletin 33, April 2026.\nStablecoins denominated in US dollars have attracted considerable attention in the context of their growing influence in US Treasury markets. However, the potential effects of euro-denominated stablecoins on euro area sovereign debt markets have been less explored, partly owing to their currently limited market presence. This article explores how the growth of euro-denominated stablecoins could affect demand for euro area sovereign bonds. By determining the pass-through rate of stablecoin demand to sovereign bond holdings by way of several illustrative examples, we demonstrate how the effect varies based on whether stablecoins are issued by banks or e-money institutions (EMIs), on the composition of stablecoin reserve assets, and on the liqu",
+      "text_sha256": "21f67f31febbd3dcfdc6c8055dad75e3ae31d0846155368ecd909672f9f340e4"
+    },
+    {
+      "collection_id": "financial_integration_reports",
+      "type_id": "140",
+      "official_name": "Financial integration and structure in the euro area",
+      "enumeration": {
+        "strategy": "ECB FOEDB versioned type indexes and publication chunks",
+        "inventory_urls": [
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/58/chunk_0.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_1.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json"
+        ],
+        "snapshot_version": "1792213219",
+        "snapshot_hash": "2sP68GoB",
+        "reported_total": 16,
+        "database_total_records": 20162,
+        "publication_records_scanned": 2,
+        "enumerated_count": 1,
+        "complete": false,
+        "limitations": [
+          "English publication database only; explicitly listed translations retained. Other language databases and linked attachments are not enumerated.",
+          "Reported total counts publication records, not language/format URLs.",
+          "HTML preferred over PDF for each publication-language pair.",
+          "Historical PDFs without explicit language suffix are retained with language=und.",
+          "Inventory coverage is not a claim of complete institutional or historical coverage.",
+          "Output limited to 1 URLs; rerun with a larger limit to backfill."
+        ]
+      },
+      "sample": {
+        "source_id": "ecb",
+        "collection_id": "financial_integration_reports",
+        "document_id": "d5c2264131f327541bfcd3336eabaeeb18be70101d9a6a5d034e972a4533a83a",
+        "source_document_id": "48118",
+        "url": "https://www.ecb.europa.eu/press/fie/html/ecb.fie202605~c4c6cabe93.en.html",
+        "title": "Financial integration and structure in the euro area",
+        "language": "en",
+        "document_type": "financial_integration_reports",
+        "format": "html",
+        "published_at": "2026-05-07T06:00:00+00:00",
+        "modified_at": null
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/press/fie/html/ecb.fie202605~c4c6cabe93.en.html",
+        "retrieved_at": "2026-10-18T06:25:12.901814+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/press/fie/html/ecb.fie202605~c4c6cabe93.en.html",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 311485,
+        "raw_sha256": "3508df8db080bd7f21f03f5974a74f16d76cce5c90cd7906f6840f7ec38c0d51",
+        "content_type": "text/html; charset=UTF-8",
+        "etag": "\"myra-d0c10d84\"",
+        "last_modified": null
+      },
+      "extracted_characters": 147767,
+      "format": "html",
+      "text_prefix": "Financial integration and structure in the euro area\nPreface\nThis is the fourth edition of the biennial report published by the European Central Bank (ECB) on financial integration and structure in the euro area (FISEA). As detailed in the first edition, which was released in March 2020, the report focuses on structural developments in the financial system of the euro area and, in some cases, of the European Union (EU), as well as on related policy issues.[1]\nIt covers (i) developments in financial integration across euro area countries, (ii) changes in financial structure (the mix of financial markets and intermediaries), and (iii) financial development or modernisation (through innovations in the financial system, for example). The preface to the 2020 report defined these three concepts and explained how they relate to Eurosystem tasks and functions.\nThis report focuses on issues that are relevant for policy discussions on the European banking union, the European capital markets unio",
+      "text_sha256": "68125daeb15ad278d21af438492fcb97af6cbe960e4493ff5d3470db945186eb"
+    },
+    {
+      "collection_id": "international_role_euro",
+      "type_id": "143",
+      "official_name": "The international role of the euro",
+      "enumeration": {
+        "strategy": "ECB FOEDB versioned type indexes and publication chunks",
+        "inventory_urls": [
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/60/chunk_0.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_1.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_5.json"
+        ],
+        "snapshot_version": "1792213219",
+        "snapshot_hash": "2sP68GoB",
+        "reported_total": 25,
+        "database_total_records": 20162,
+        "publication_records_scanned": 2,
+        "enumerated_count": 1,
+        "complete": false,
+        "limitations": [
+          "English publication database only; explicitly listed translations retained. Other language databases and linked attachments are not enumerated.",
+          "Reported total counts publication records, not language/format URLs.",
+          "HTML preferred over PDF for each publication-language pair.",
+          "Historical PDFs without explicit language suffix are retained with language=und.",
+          "Inventory coverage is not a claim of complete institutional or historical coverage.",
+          "Output limited to 1 URLs; rerun with a larger limit to backfill."
+        ]
+      },
+      "sample": {
+        "source_id": "ecb",
+        "collection_id": "international_role_euro",
+        "document_id": "3d15aa5e8fbd997fa10b9ff8efcc90561d4b5a82b6b7fcc1de132ca3fc9c5349",
+        "source_document_id": "48573",
+        "url": "https://www.ecb.europa.eu/press/other-publications/ire/html/ecb.ire202606.en.html",
+        "title": "The international role of the euro, June 2026",
+        "language": "en",
+        "document_type": "international_role_euro",
+        "format": "html",
+        "published_at": "2026-06-02T08:00:00+00:00",
+        "modified_at": null
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/press/other-publications/ire/html/ecb.ire202606.en.html",
+        "retrieved_at": "2026-10-18T06:25:27.562574+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/press/other-publications/ire/html/ecb.ire202606.en.html",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 247875,
+        "raw_sha256": "658fa748cdb161806701dd43bf7937a00f515dae59dc8ba4804f04b77000c0f9",
+        "content_type": "text/html; charset=UTF-8",
+        "etag": "\"myra-4e684cc0\"",
+        "last_modified": null
+      },
+      "extracted_characters": 88435,
+      "format": "html",
+      "text_prefix": "The international role of the euro, June 2026\nForeword\nThe international role of the euro grew moderately in 2025, with its share across various indicators of global currency use reaching around 20%. Viewed from a longer-term perspective, the role of the euro has grown gradually but steadily. Since the escalation of geopolitical tensions triggered by Russia\u2019s invasion of Crimea in 2014, the euro\u2019s share has increased by about 1.5 percentage points. Throughout this period, the euro has remained the world\u2019s second most important currency.\nSeveral developments in 2025 were noteworthy. Issuance of international debt denominated in euro reached its highest level since the currency\u2019s inception. The euro became the leading currency in the green and sustainable international bond market. Foreign portfolio inflows to the euro area were significant. And there were signs that the euro behaved like a safe-haven currency during several risk-off events that marked 2025 and early 2026.\nAt the same ti",
+      "text_sha256": "19f4f43e2e625154ad4d22a3b38b1f7e9899c8b86c7ec39c75c48c4cb24242c1"
+    },
+    {
+      "collection_id": "target_annual_reports",
+      "type_id": "142",
+      "official_name": "TARGET Annual Report",
+      "enumeration": {
+        "strategy": "ECB FOEDB versioned type indexes and publication chunks",
+        "inventory_urls": [
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/59/chunk_0.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+          "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_12.json"
+        ],
+        "snapshot_version": "1792213219",
+        "snapshot_hash": "2sP68GoB",
+        "reported_total": 24,
+        "database_total_records": 20162,
+        "publication_records_scanned": 2,
+        "enumerated_count": 1,
+        "complete": false,
+        "limitations": [
+          "English publication database only; explicitly listed translations retained. Other language databases and linked attachments are not enumerated.",
+          "Reported total counts publication records, not language/format URLs.",
+          "HTML preferred over PDF for each publication-language pair.",
+          "Historical PDFs without explicit language suffix are retained with language=und.",
+          "Inventory coverage is not a claim of complete institutional or historical coverage.",
+          "Output limited to 1 URLs; rerun with a larger limit to backfill."
+        ]
+      },
+      "sample": {
+        "source_id": "ecb",
+        "collection_id": "target_annual_reports",
+        "document_id": "d7361c34e864b85a4388c3dbc4271fdbea16b79b59ce84a58f88f5e1ef2690fe",
+        "source_document_id": "40065",
+        "url": "https://www.ecb.europa.eu/press/targetar/html/ecb.targetar2023.en.html",
+        "title": "TARGET Annual Report 2023",
+        "language": "en",
+        "document_type": "target_annual_reports",
+        "format": "html",
+        "published_at": "2024-06-07T09:00:00+00:00",
+        "modified_at": null
+      },
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/press/targetar/html/ecb.targetar2023.en.html",
+        "retrieved_at": "2026-10-18T06:25:42.522008+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/press/targetar/html/ecb.targetar2023.en.html",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 259836,
+        "raw_sha256": "b8bcd89adb6130dcf9623c3d0fe05736fd9316af20ecf68430adbd0cf2c9cdab",
+        "content_type": "text/html; charset=UTF-8",
+        "etag": "\"myra-18f51406\"",
+        "last_modified": null
+      },
+      "extracted_characters": 99532,
+      "format": "html",
+      "text_prefix": "TARGET Annual Report 2023\nIntroduction\nMarket infrastructures, together with markets and institutions, constitute one of the three core components of the financial system. The market infrastructure for payments[1] consists of the set of instruments, networks, rules, procedures and institutions that ensure the circulation of money. Its purpose is to facilitate transactions between economic agents and to support efficient resource allocation in the economy.\nThe Eurosystem has the statutory task of promoting the smooth operation of payment systems. This is crucial for a sound currency, the conduct of monetary policy, market functioning and financial stability. The Eurosystem\u2019s provision of payment settlement facilities is instrumental in carrying out this task.[2]\nTo this end, in 1999 the Eurosystem created the Trans-European Automated Real-time Gross settlement Express Transfer (TARGET) system[3] for the settlement of large-value payments in euro, offering a central bank payment service ",
+      "text_sha256": "d99d8ff9c61dcc4954a33a7324d91cd06a70774501bfacd8bd24618822bad329"
+    }
+  ],
+  "requests": [
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:06.058111+00:00",
+      "sha256": "975335f0022baff4cd7e2373e87a9a5d89fcafbd45f10c80eac71cab87c60003"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:46.889522+00:00",
+      "sha256": "3b2dee73cc1ef1f942ce042aec05e7c58aaf9ec5f272d3a0b187a281adc6f32c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:11.224642+00:00",
+      "sha256": "b5240fb928b094c52a3f14b870c81462b940fe77419ad375cc3a1305cb15622d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/12/chunk_0.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:24:52.109101+00:00",
+      "sha256": "7c27cbd3419cac30cc80663b53da8d45423f76cc09d67c9c3861f82cdde8c7e7"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_2.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:24:57.323767+00:00",
+      "sha256": "de0c9aae0151b02b93db368690370cf330988f26135f4272a05b0f2f93fd4a6f"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/financial-stability-publications/macroprudential-bulletin/html/ecb.mpbu202604_05.en.html",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:25:02.664009+00:00",
+      "sha256": "58584476230cbf3f6bb6684cc9ba153716e4de2cc4acc63166a5e16a195ca8b0"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:06.058111+00:00",
+      "sha256": "975335f0022baff4cd7e2373e87a9a5d89fcafbd45f10c80eac71cab87c60003"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:46.889522+00:00",
+      "sha256": "3b2dee73cc1ef1f942ce042aec05e7c58aaf9ec5f272d3a0b187a281adc6f32c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:11.224642+00:00",
+      "sha256": "b5240fb928b094c52a3f14b870c81462b940fe77419ad375cc3a1305cb15622d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/58/chunk_0.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:25:08.362667+00:00",
+      "sha256": "679a4970f844ee1dd92fb345682ea6b47383ed9cf590a3fa183136de73800686"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_1.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:36:32.558921+00:00",
+      "sha256": "d303974dabffa0cd61c6fb002d5acdfd0dde4f609e9fe340e03f1357b7316885"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:35:07.915101+00:00",
+      "sha256": "1eb9a2ace4b6231e6f1c712ab459f68191bdf72a1a12162c59cf8e21b1c544ea"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/fie/html/ecb.fie202605~c4c6cabe93.en.html",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:25:12.901814+00:00",
+      "sha256": "3508df8db080bd7f21f03f5974a74f16d76cce5c90cd7906f6840f7ec38c0d51"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:06.058111+00:00",
+      "sha256": "975335f0022baff4cd7e2373e87a9a5d89fcafbd45f10c80eac71cab87c60003"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:46.889522+00:00",
+      "sha256": "3b2dee73cc1ef1f942ce042aec05e7c58aaf9ec5f272d3a0b187a281adc6f32c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:11.224642+00:00",
+      "sha256": "b5240fb928b094c52a3f14b870c81462b940fe77419ad375cc3a1305cb15622d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/60/chunk_0.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:25:17.650465+00:00",
+      "sha256": "7e5ba7d329bb05cab0874cdd09c801d320d7e4d038c0f467b06bb9a54bf3f776"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_1.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:36:32.558921+00:00",
+      "sha256": "d303974dabffa0cd61c6fb002d5acdfd0dde4f609e9fe340e03f1357b7316885"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_5.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:25:22.376708+00:00",
+      "sha256": "b01c1f7c400c385af3df29cfcba0c739b4169ec140ba8f1bf4b5812531ba5c1d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/other-publications/ire/html/ecb.ire202606.en.html",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:25:27.562574+00:00",
+      "sha256": "658fa748cdb161806701dd43bf7937a00f515dae59dc8ba4804f04b77000c0f9"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/versions.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:06.058111+00:00",
+      "sha256": "975335f0022baff4cd7e2373e87a9a5d89fcafbd45f10c80eac71cab87c60003"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/metadata.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:46.889522+00:00",
+      "sha256": "3b2dee73cc1ef1f942ce042aec05e7c58aaf9ec5f272d3a0b187a281adc6f32c"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/index.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:34:11.224642+00:00",
+      "sha256": "b5240fb928b094c52a3f14b870c81462b940fe77419ad375cc3a1305cb15622d"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/indexes/type/59/chunk_0.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:25:32.594285+00:00",
+      "sha256": "0d98c632db9e12aacf6f8329da12fc744a49a4d53abeab5a8d39a1d63a18ff66"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_8.json",
+      "cached": true,
+      "retrieved_at": "2026-10-18T05:35:07.915101+00:00",
+      "sha256": "1eb9a2ace4b6231e6f1c712ab459f68191bdf72a1a12162c59cf8e21b1c544ea"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/foedb/dbs/foedb/publications.en/1792213219/2sP68GoB/data/0/chunk_12.json",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:25:37.378240+00:00",
+      "sha256": "a1406bf2cd6c3f3b159b325257ee5fcc51fd8a4b97d0f1bf6b20a2c42ca17ff5"
+    },
+    {
+      "url": "https://www.ecb.europa.eu/press/targetar/html/ecb.targetar2023.en.html",
+      "cached": false,
+      "retrieved_at": "2026-10-18T06:25:42.522008+00:00",
+      "sha256": "b8bcd89adb6130dcf9623c3d0fe05736fd9316af20ecf68430adbd0cf2c9cdab"
+    }
+  ],
+  "catalog_publication_records": 150,
+  "limitations": [
+    "One full-text sample per series; not a census of retrieval success.",
+    "Cached FOEDB receipts retain original retrieval timestamps; new full-text requests retain their live timestamps.",
+    "Catalog records are not uploaded rows or verified tokens.",
+    "Organization-wide exact text deduplication applies; report passage overlap is not measured."
+  ]
+}

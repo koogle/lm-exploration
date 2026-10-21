@@ -14,7 +14,13 @@ ROOT = Path(__file__).resolve().parent
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--interval", type=int, default=600, help="Seconds between attempt starts")
+    parser.add_argument("--initial-delay", type=int, default=0)
     args = parser.parse_args()
+    if args.initial_delay < 0:
+        parser.error("initial-delay must be nonnegative")
+    initial_deadline = time.monotonic() + args.initial_delay
+    while (remaining := initial_deadline - time.monotonic()) > 0:
+        time.sleep(min(30, remaining))
     if args.interval < 60:
         parser.error("interval must be at least 60 seconds")
     artifacts = ROOT / "artifacts"
@@ -24,7 +30,8 @@ def main():
     while True:
         attempt += 1
         started = datetime.now(UTC)
-        deadline = time.monotonic() + args.interval
+        delay = args.interval
+        deadline = time.monotonic() + delay
         try:
             result = subprocess.run(
                 [sys.executable, "backup_code.py"],
@@ -39,6 +46,7 @@ def main():
             transient = success or any(
                 value in detail.lower()
                 for value in (
+                    "429",
                     "503",
                     "502",
                     "504",
@@ -50,13 +58,19 @@ def main():
         except subprocess.TimeoutExpired:
             success, transient = False, True
             detail = "Attempt timed out; retry will use the same commit-addressed paths."
+        if not success and "429" in detail:
+            # Repository commit limits request an hour; never retry sooner.
+            delay = max(delay, 3600)
+            deadline = time.monotonic() + delay
         entry = {
             "attempt": attempt,
             "started_at": started.isoformat(),
             "success": success,
             "next_attempt_at": None
             if success or not transient
-            else (started + timedelta(seconds=args.interval)).isoformat(),
+            else (
+                datetime.now(UTC) + timedelta(seconds=max(0, deadline - time.monotonic()))
+            ).isoformat(),
             "detail": detail,
         }
         with log.open("a") as handle:
