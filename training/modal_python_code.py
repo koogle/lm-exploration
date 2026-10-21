@@ -27,6 +27,7 @@ image = (
     volumes={"/data": volume},
 )
 def shard(filename: str):
+    print(json.dumps({"shard_started": filename}), flush=True)
     import gzip
     import hashlib
     import shutil
@@ -109,6 +110,8 @@ def shard(filename: str):
     volumes={"/data": volume},
 )
 def prepare(max_shards: int = 53):
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     from huggingface_hub import HfApi
     from training_data.python_code_supplement import REPOSITORY, REVISION
 
@@ -122,15 +125,29 @@ def prepare(max_shards: int = 53):
         ),
         reverse=True,
     )
-    results = []
-    for result in shard.map(files[:max_shards], order_outputs=False):
-        results.append(result)
+    volume.reload()
+    root = Path(ROOT)
+    root.mkdir(parents=True, exist_ok=True)
+    calls_path = root / "spawned-calls.json"
+    calls = json.loads(calls_path.read_text()) if calls_path.exists() else {}
+    results, pending = [], []
+    for filename in files[:max_shards]:
+        done = root / filename.removesuffix(".json.gz") / "complete.json"
+        if done.exists():
+            results.append(json.loads(done.read_text()))
+            continue
+        if filename not in calls:
+            calls[filename] = shard.spawn(filename).object_id
+        pending.append(modal.FunctionCall.from_id(calls[filename]))
+    calls_path.write_text(json.dumps(calls, indent=2))
+    volume.commit()
+
+    def report():
         total = sum(
             sum(v["unique_train_targets"] for v in r["categories"].values()) for r in results
         )
         volume.reload()
-        Path(ROOT).mkdir(parents=True, exist_ok=True)
-        Path(ROOT, "summary.json").write_text(
+        (root / "summary.json").write_text(
             json.dumps(
                 {
                     "stage": "prepared_separate_shards",
@@ -145,4 +162,11 @@ def prepare(max_shards: int = 53):
         print(
             json.dumps({"completed_shards": len(results), "candidate_targets": total}), flush=True
         )
+        return total
+
+    total = report()
+    with ThreadPoolExecutor(max_workers=32) as pool:
+        for future in as_completed([pool.submit(call.get) for call in pending]):
+            results.append(future.result())
+            total = report()
     return {"candidate_targets": total, "completed_shards": len(results)}
