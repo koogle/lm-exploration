@@ -87,6 +87,16 @@ class ScaleTests(unittest.TestCase):
                 targets.extend(item[1])
             self.assertEqual(targets, [10, 151643, 11, 151643, 12, 151643, 13, 151643])
             self.assertEqual(stream.cursor["chunk"], 4)
+            # Freeze the original prefix while its producer jobs are still running.
+            immediate = Stream(
+                first,
+                stream.cursor,
+                large=True,
+                continuation=second,
+                initial_chunks=available_chunks(first),
+            )
+            self.assertEqual(immediate.next()[1], [20, 151643])
+
             for worker in range(4):
                 path = first / f"producer-{worker}" / "progress.json"
                 state = json.loads(path.read_text())

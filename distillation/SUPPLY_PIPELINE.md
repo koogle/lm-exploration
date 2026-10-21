@@ -94,3 +94,18 @@ All 24 local distillation tests pass, including distributed target normalization
 dynamic publisher prefix preservation, corruption rejection and archive token-ID,
 checksum and immutable-commit preservation. Ruff checks pass. Live GPU results
 must not be inferred from these CPU tests.
+
+## Observed deployment status, 2026-10-21
+
+The initial prefix was frozen at 103,669,090 Qwen targets. The deployed controller
+reattached four continuation teachers and requested the 8-H100 student; four
+original-corpus teachers remain separate. At the last check the student request
+was still queued, so no eight-GPU throughput or GPU correctness result is claimed.
+Teacher expansion remains conditional on the first measured eight-GPU segment.
+
+The archive committed 11,396,274 targets / 31,006 examples to the private dataset
+`jfrick/python-math-qwen3-distillation-20261021`. The downloaded index's SHA256 was
+verified against the recorded commit. See [the pinned artifact index](dataset-artifact-index.json)
+for the immutable revision/checksum; ongoing archive commits are tracked on the
+run volume. The HF/Xet cache is placed outside the training volume so open log
+files do not prevent the archiver from reloading newly published shards.

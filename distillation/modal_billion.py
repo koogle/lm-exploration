@@ -23,6 +23,7 @@ TARGET = 4_500_000_000
 @app.function(
     image=image,
     secrets=[modal.Secret.from_name("distillation-huggingface")],
+    env={"HF_HOME": "/tmp/hf-dataset-archive", "HF_XET_CACHE": "/tmp/hf-dataset-xet"},
     cpu=2,
     memory=8192,
     timeout=86400,
