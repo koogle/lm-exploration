@@ -1,5 +1,10 @@
 # Fresh teacher generation and student qualification
 
+The [first measured report](results/curriculum-generation-20261021.md) records
+two completed fresh generation batches and the completed one-pass comparison
+of both student sizes. It includes accepted/rejected teacher examples and all
+student checkpoint continuations.
+
 `modal_curriculum.py` actually samples Qwen3-8B with vLLM on one H100. It does
 not reuse the previous code corpus or earlier student generations. Teacher pin:
 `b968826d9c46dd6066d109eabc6255188de91218`. Thinking is disabled, temperature

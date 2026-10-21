@@ -1,0 +1,104 @@
+{
+  "status": "completed",
+  "settings": {
+    "corpus": "/distill/qwen8b-python-curriculum-20261021-02",
+    "corpus_sha256": "b6d20fd904d41ea06e6bf9fd38c132079bc9b6952829fd9d3595d9d5eb87b10d",
+    "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+    "seed": 42,
+    "context": 512,
+    "microbatch": 8,
+    "accumulation": 2,
+    "lr": 0.0003,
+    "objective": "all-token sequence distillation CE, including prompts",
+    "initialization": "random, not a continuation of pretrained weights",
+    "epochs": 1,
+    "unique_train_tokens": 74672,
+    "train_records": 372,
+    "validation_records": 128,
+    "scope": "pipeline qualification; insufficient data to estimate a scaling law"
+  },
+  "students": [
+    {
+      "parameters": 26776960,
+      "tokens": 74672,
+      "steps": 24,
+      "elapsed_seconds": 58.24386491,
+      "evaluations": [
+        {
+          "tokens": 0,
+          "step": 0,
+          "validation_ce": 10.465768644551458,
+          "validation_tokens": 25516,
+          "diagnostic_passes": 0,
+          "diagnostic_tasks": 8
+        },
+        {
+          "tokens": 38567,
+          "step": 12,
+          "validation_ce": 8.09621877112645,
+          "validation_tokens": 25516,
+          "diagnostic_passes": 0,
+          "diagnostic_tasks": 8
+        },
+        {
+          "tokens": 74672,
+          "step": 24,
+          "validation_ce": 7.397155828695721,
+          "validation_tokens": 25516,
+          "diagnostic_passes": 0,
+          "diagnostic_tasks": 8
+        }
+      ],
+      "peak_memory_bytes": 1786952192,
+      "configuration": {
+        "vocab_size": 32768,
+        "block_size": 512,
+        "n_layer": 8,
+        "n_head": 6,
+        "n_embd": 384,
+        "architecture_version": 2
+      }
+    },
+    {
+      "parameters": 48308408,
+      "tokens": 74672,
+      "steps": 24,
+      "elapsed_seconds": 61.36858548400001,
+      "evaluations": [
+        {
+          "tokens": 0,
+          "step": 0,
+          "validation_ce": 10.523071690924322,
+          "validation_tokens": 25516,
+          "diagnostic_passes": 0,
+          "diagnostic_tasks": 8
+        },
+        {
+          "tokens": 38567,
+          "step": 12,
+          "validation_ce": 7.3101158494914955,
+          "validation_tokens": 25516,
+          "diagnostic_passes": 0,
+          "diagnostic_tasks": 8
+        },
+        {
+          "tokens": 74672,
+          "step": 24,
+          "validation_ce": 6.3993648822674984,
+          "validation_tokens": 25516,
+          "diagnostic_passes": 0,
+          "diagnostic_tasks": 8
+        }
+      ],
+      "peak_memory_bytes": 2757523456,
+      "configuration": {
+        "vocab_size": 32768,
+        "block_size": 512,
+        "n_layer": 10,
+        "n_head": 8,
+        "n_embd": 512,
+        "architecture_version": 2
+      }
+    }
+  ]
+}
