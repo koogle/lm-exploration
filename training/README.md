@@ -430,4 +430,5 @@ hook in `../.githooks/` checks staged Python files across the whole repository.
 
 The [fresh-data 5B continuation](trainer/CODE_HEAVY_CONTINUATION.md) doubles coding
 to 60%, excludes all earlier document hashes, and queues eight-H100 training after
-fresh-source capacity checks. See its run record for actual preparation status.
+fresh-source capacity checks. It completed 5B targets; Python validation loss
+reached 1.421 (original 5B: 1.559), while ECB/EMA lost most EU gains. Outputs are on HF under `pr-26/`.
