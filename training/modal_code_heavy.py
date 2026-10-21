@@ -6,7 +6,7 @@ from pathlib import Path
 
 import modal
 
-from modal_distributed_train import validate_paths, worker
+from distributed_training.modal_train import validate_paths, worker
 from modal_eu_continuation import data_volume, image, run_volume, snapshot_path
 
 image = image.add_local_file("modal_eu_continuation.py", "/project/modal_eu_continuation.py")
@@ -42,7 +42,7 @@ SETTINGS = {
 
 
 def mark(folder, stage, **details):
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
 
     atomic_json(folder / "workflow.json", {"stage": stage, "updated_unix": time.time(), **details})
     run_volume.commit()
@@ -65,8 +65,8 @@ def prepare():
     from training_data.fresh_book_pool import FreshBookPoolCorpus
     from training_data.fresh_raw_corpus import initialize_fresh
 
+    from distributed_training.train import atomic_json
     from trainer.continued_pretraining import coding_double_mix, token_targets
-    from trainer.distributed_train import atomic_json
 
     started = time.monotonic()
     destination = snapshot_path(SNAPSHOT)
@@ -145,8 +145,8 @@ def prepare():
 def initialize(run_id):
     import torch
 
+    from distributed_training.config import DistributedConfig
     from trainer.continued_pretraining import migrate_phase
-    from trainer.distributed_config import DistributedConfig
 
     torch.set_num_threads(4)
     folder = Path("/runs") / (run_id + "-seed")

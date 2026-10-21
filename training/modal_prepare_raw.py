@@ -5,9 +5,9 @@ from pathlib import Path
 
 import modal
 
-from modal_prepare_scholarly import image
+from modal_scripts.modal_prepare_simple_llm import image
 
-image = image.add_local_file("modal_prepare_scholarly.py", "/project/modal_prepare_scholarly.py")
+image = image.add_local_dir("modal_scripts", "/project/modal_scripts")
 
 app = modal.App("lm-exploration-small-5b-preparation")
 volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -24,7 +24,7 @@ volume = modal.Volume.from_name("lm-exploration-mixture-data")
 )
 def prepare(version, target_tokens=5_000_000_000):
     from training_data.raw_corpus import RawCorpus
-    from training_data.scholarly import load_recipe
+    from training_data.simple_llm import load_recipe
 
     recipe = load_recipe("/project/tokenizer/recipe-v1.json")
     folder = Path("/data/scholarly-code") / version

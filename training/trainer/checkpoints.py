@@ -45,7 +45,7 @@ def validate_resume(checkpoint, config, fingerprint, steps):
     def model_settings(record):
         settings = dict(record["model"])
         name = record.get("model_name", "100m").removeprefix("model_")
-        if name == "100m":
+        if name in ("10m", "100m"):
             settings.setdefault("architecture_version", 1)
         return settings
 

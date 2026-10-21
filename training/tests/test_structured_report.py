@@ -1,6 +1,6 @@
 import unittest
 
-from structured_tokenizer_report import paired
+from tokenizer.structured_tokenizer_report import paired
 
 
 class StructuredReportTests(unittest.TestCase):

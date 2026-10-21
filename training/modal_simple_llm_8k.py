@@ -23,14 +23,13 @@ image = (
     .add_local_dir("100m", "/project/model_100m")
     .add_local_dir("10m", "/project/model_10m")
     .add_local_dir("trainer", "/project/trainer")
+    .add_local_dir("distributed_training", "/project/distributed_training")
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer")
     .add_local_dir("tests", "/project/tests")
     .add_local_file("generate.py", "/project/generate.py")
-    .add_local_file("modal_scholarly_pilot.py", "/project/modal_scholarly_pilot.py")
-    .add_local_file("modal_distributed_train.py", "/project/modal_distributed_train.py")
     .add_local_dir("publication", "/project/publication")
-    .add_local_file("recipes/distributed/h100x8-8k-5b.json", "/project/settings.json")
+    .add_local_file("distributed_training/recipes/h100x8-8k-5b.json", "/project/settings.json")
 )
 app = modal.App("simple-llm-124m-8k-5b")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -40,7 +39,7 @@ SNAPSHOT = "scholarly-small-5b-raw-20261017/snapshots/scholarly-modern-10m-5b-20
 
 
 def record(run_id, stage, **details):
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
 
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -64,7 +63,7 @@ def train_segment(run_id, snapshot, settings, provenance, resume="", max_steps=N
     import torch
     from torch.nn.attention import SDPBackend, sdpa_kernel
 
-    from modal_distributed_train import worker
+    from distributed_training.modal_train import worker
 
     if torch.cuda.device_count() != 8:
         raise RuntimeError("Expected eight visible GPUs")
@@ -103,7 +102,7 @@ def publish_progress(run_id):
 
     from huggingface_hub import HfApi
 
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
     from trainer.hub_checkpoint import export_checkpoint
 
     api = HfApi()
@@ -168,7 +167,7 @@ def publish_progress(run_id):
     volumes={"/runs": run_volume},
 )
 def continue_training(run_id, settings, provenance, previous=None, first_segment=0):
-    from trainer.workflow import check_progress, check_resume
+    from distributed_training.workflow import check_progress, check_resume
 
     resume = str(Path(previous["final_checkpoint"]).relative_to("/runs")) if previous else ""
     try:
@@ -238,8 +237,8 @@ def continue_training(run_id, settings, provenance, previous=None, first_segment
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def start(run_id, provenance):
-    from modal_distributed_train import validate_paths
-    from trainer.distributed_config import DistributedConfig
+    from distributed_training.config import DistributedConfig
+    from distributed_training.modal_train import validate_paths
 
     validate_paths(run_id, SNAPSHOT, "")
     folder = Path("/runs") / run_id

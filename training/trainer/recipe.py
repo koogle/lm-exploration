@@ -22,7 +22,10 @@ ModelName = Literal["10m", "100m"]
 DatasetName = Literal["tiny-shakespeare", "shakespeare-complete"]
 GpuName = Literal["T4", "L4", "A10G", "L40S", "A100", "A100-80GB", "H100", "H200", "B200"]
 
-MODELS = {"10m": model_10m, "100m": model_100m}
+MODELS = {
+    "10m": model_10m,
+    "100m": model_100m,
+}
 DATASETS = {
     "tiny-shakespeare": fetch_tinyshakespeare,
     "shakespeare-complete": fetch_shakespeare_complete,

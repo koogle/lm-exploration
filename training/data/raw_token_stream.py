@@ -142,12 +142,22 @@ class RawTokenMixture(TokenMixture):
             raise
 
     def state_dict(self):
+        # Raw-document cursors are not the seekable token-shard cursor schema.
         return {
-            **super().state_dict(),
+            **self.identity,
+            "positions": dict(self.positions),
+            "loss_token_exposures": dict(self.exposures),
             "raw_cursors": {k: dict(v) for k, v in self.cursors.items()},
         }
 
     def load_state_dict(self, state):
+        if any(state.get(k) != v for k, v in self.identity.items()):
+            raise ValueError("Checkpoint data identity mismatch")
+        for key in ("positions", "loss_token_exposures"):
+            if set(state[key]) != set(self.sources) or any(
+                type(v) is not int or v < 0 for v in state[key].values()
+            ):
+                raise ValueError("Invalid raw data cursor")
         cursors = state["raw_cursors"]
         if set(cursors) != set(self.sources):
             raise ValueError("Raw source cursor mismatch")
@@ -161,7 +171,11 @@ class RawTokenMixture(TokenMixture):
                 or not isinstance(cursor["hash"], str)
             ):
                 raise ValueError("Invalid raw cursor")
-        super().load_state_dict(state)
+        for iterator in self.iterators.values():
+            iterator.close()
+        self.iterators.clear()
+        self.positions = dict(state["positions"])
+        self.exposures = dict(state["loss_token_exposures"])
         self.cursors = {k: dict(v) for k, v in cursors.items()}
 
     def close(self):

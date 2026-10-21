@@ -27,12 +27,11 @@ image = (
     .add_local_dir("100m", "/project/model_100m")
     .add_local_dir("10m", "/project/model_10m")
     .add_local_dir("trainer", "/project/trainer")
+    .add_local_dir("distributed_training", "/project/distributed_training")
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer")
     .add_local_dir("tests", "/project/tests")
     .add_local_file("generate.py", "/project/generate.py")
-    .add_local_file("modal_scholarly_pilot.py", "/project/modal_scholarly_pilot.py")
-    .add_local_file("modal_distributed_train.py", "/project/modal_distributed_train.py")
 )
 app = modal.App("lm-exploration-overlapped-training")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -43,7 +42,7 @@ run_volume = modal.Volume.from_name("lm-exploration-training")
     image=image, cpu=2, memory=4096, timeout=120, retries=0, volumes={"/data": data_volume}
 )
 def initialize(run_id):
-    from training_data.scholarly import SPLIT_VERSION, load_recipe
+    from training_data.simple_llm import SPLIT_VERSION, load_recipe
     from training_data.subword import TOKENIZER_SHA256
 
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", run_id):
@@ -81,7 +80,7 @@ def initialize(run_id):
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def worker(run_id, snapshot, settings, provenance, resume="", max_steps=None, max_seconds=3000):
-    from modal_distributed_train import worker as existing_worker
+    from distributed_training.modal_train import worker as existing_worker
 
     return existing_worker.local(
         run_id, snapshot, settings, provenance, resume, max_seconds, max_steps
@@ -98,7 +97,7 @@ def main(
     max_seconds: int = 3000,
     max_steps: int = 0,
 ):
-    from trainer.distributed_config import DistributedConfig
+    from distributed_training.config import DistributedConfig
 
     cfg = DistributedConfig(**json.loads(Path(config).read_text()))
     if not cfg.prefetch_batches:
@@ -113,6 +112,7 @@ def main(
         Path(__file__),
         *Path("data").glob("*.py"),
         *Path("trainer").glob("*.py"),
+        *Path("distributed_training").glob("*.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
     ]
