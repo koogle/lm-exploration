@@ -89,3 +89,10 @@ Fresh means newly sampled records consumed once, not 4.5B distinct vocabulary
 items or a guarantee of semantic uniqueness. Exact full-record deduplication is
 within each producer; cross-producer and semantic duplicates remain possible.
 Generation still checks syntax rather than independently verifying correctness.
+
+Launch verification: all four continuation producers published shards (over 490K
+accepted Qwen tokens in the first observed snapshot), the persisted training
+request has `repeat_completed_corpus: false`, and live optimizer updates resumed
+through 24,060,054 tokens. The original corpus supervisor was also restored as a
+deployed background call (`fc-01M5FNMC6Y60B93361KYQ8FD7Y`), reattaching its persisted
+producer calls so the initial corpus can finish and unblock the continuation.
