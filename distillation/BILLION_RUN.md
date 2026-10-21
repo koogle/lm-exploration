@@ -42,7 +42,8 @@ parameters. Generalization must be judged on held-out execution tasks.
 Launch once from the repository root:
 
 ```sh
-modal run --detach -m distillation.modal_billion
+modal deploy -m distillation.modal_billion
+python -c 'import modal; print(modal.Function.from_name("lm-distillation-215m-4p5b", "supervise").spawn().object_id)' 
 ```
 
 Inspect `supervisor.json` for running/waiting/failed state and active function
@@ -53,3 +54,13 @@ corpus and two small-student jobs continue under their existing supervisor.
 Validation before launch: all 19 distillation tests passed, including exact
 partial-record resume, Qwen EOS alignment, no repetition of an unfinished
 corpus, and resume across a completed-corpus pass boundary. Ruff checks passed.
+
+## Supervisor recovery
+
+On 2026-10-21 the initial run-app supervisor was cancelled at 14:47 UTC after
+saving 21,639,566 targets (3,923 steps). Validation CE was 1.55013, versus
+1.62070 at 4.5M. This was an orchestration interruption, not a validation stop.
+The app was subsequently deployed and the supervisor spawned through its deployed
+function (`fc-01M5FN8X0CWRTD15M2EPVXGGCS`) to resume the existing checkpoint.
+Use the deployed launch above for persistent background work.
+Deployment: https://modal.com/apps/radiantai/main/deployed/lm-distillation-215m-4p5b
