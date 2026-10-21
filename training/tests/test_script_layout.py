@@ -30,6 +30,8 @@ class ScriptLayoutTests(unittest.TestCase):
             "workflows.config": "workflows/config.py",
             "workflows.checks": "workflows/checks.py",
             "distributed.modal_prep_benchmark": "distributed/modal_prep_benchmark.py",
+            "sampling.modal_sample": "analysis/sampling/modal_sample.py",
+            "sampling.report": "analysis/sampling/report.py",
         }
         for name, relative in expected.items():
             with self.subTest(module=name):
@@ -47,6 +49,7 @@ class ScriptLayoutTests(unittest.TestCase):
             *(ROOT / "modal_scripts").glob("modal_*.py"),
             *(ROOT / "distributed").glob("*.py"),
             *(ROOT / "workflows").glob("*.py"),
+            ROOT / "analysis/sampling/modal_sample.py",
         ]
         for path in paths:
             tree = ast.parse(path.read_text())

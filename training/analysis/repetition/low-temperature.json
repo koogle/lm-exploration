@@ -1,0 +1,46 @@
+{
+  "name": "low-temperature",
+  "note": "Bounded ten-prompt repetition diagnostic at low top-k temperatures, not a quality benchmark.",
+  "precision": "bf16-autocast",
+  "max_new_tokens": 128,
+  "prompts": [
+    {"text": "The solar system consists of", "group": "prose"},
+    {"text": "In mathematics, a prime number is", "group": "prose"},
+    {"text": "The purpose of an experiment is to", "group": "prose"},
+    {"text": "Once upon a time,", "group": "prose"},
+    {"text": "def add(a, b):\n    ", "group": "python"},
+    {"text": "def factorial(n):\n    ", "group": "python"},
+    {"text": "import json\n\ndef read_config(path):\n    ", "group": "python"},
+    {"text": "The capital of France is", "group": "prose"},
+    {"text": "2 + 2 =", "group": "prose"},
+    {"text": "A language model predicts", "group": "prose"}
+  ],
+  "modes": [
+    {"name": "greedy", "temperature": 0.0, "seed_offsets": [1000]},
+    {"name": "topk50_t0.1_seed1000", "temperature": 0.1, "top_k": 50, "seed_offsets": [1000]},
+    {"name": "topk50_t0.1_seed2000", "temperature": 0.1, "top_k": 50, "seed_offsets": [2000]},
+    {"name": "topk50_t0.2_seed1000", "temperature": 0.2, "top_k": 50, "seed_offsets": [1000]},
+    {"name": "topk50_t0.2_seed2000", "temperature": 0.2, "top_k": 50, "seed_offsets": [2000]},
+    {"name": "topk50_t0.4_seed1000", "temperature": 0.4, "top_k": 50, "seed_offsets": [1000]},
+    {"name": "topk50_t0.4_seed2000", "temperature": 0.4, "top_k": 50, "seed_offsets": [2000]}
+  ],
+  "models": [
+    {
+      "kind": "checkpoint",
+      "name": "simple-llm-124m",
+      "repo": "jfrick/scholarly-code-modern-gpt-124m-step2",
+      "source_revision": "38df193c2cc2c5463e4bb20a5c6a4998f58b3af0",
+      "model_source_sha256": "96bd95eb51ff5b2aa3d4cd9fc07073a6d21dc9003b36bbe9461fa5780a76882d",
+      "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+      "parameters": 124389632,
+      "prefix_token_ids": [1],
+      "eos_token_id": 2,
+      "checkpoints": [
+        {"step": 1000, "revision": "cdf3f3636fa7226a13a300bb18290b069fe82a29"},
+        {"step": 16000, "revision": "6da1f3d69a55883edbfd4bcf30b1c53f184bd515"},
+        {"step": 32000, "revision": "3b338c7a595cea4530028fa5527457a22c034dd2"},
+        {"step": 64227, "revision": "38df193c2cc2c5463e4bb20a5c6a4998f58b3af0"}
+      ]
+    }
+  ]
+}

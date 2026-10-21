@@ -1,0 +1,245 @@
+"""Run one sampling recipe on one Modal H100. No training or model-repository writes.
+
+Run from training/:
+    modal run --detach -m sampling.modal_sample --recipe <recipe.json> [--output <result.json>]
+
+One function call per launch, a 30-minute hard timeout and no retries. The call refuses new
+work once 24 hours have passed since launch, including time spent queued. Completed runs are
+saved to the output volume after each model and reused by an identical rerun.
+"""
+
+import json
+import time
+from pathlib import Path
+
+import modal
+
+LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
+TIMEOUT_SECONDS = 30 * 60
+
+
+def image(*packages):
+    return (
+        modal.Image.debian_slim(python_version="3.12")
+        .pip_install("torch==2.6.0", "numpy", *packages)
+        .env({"PYTHONPATH": "/project"})
+        .add_local_dir("analysis/sampling", "/project/sampling")
+    )
+
+
+# Own checkpoints load their model code from the pinned revision, never from this checkout.
+checkpoint_image = image(
+    "pydantic>=2.11,<3", "tokenizers==0.22.2", "huggingface-hub==1.33.0", "safetensors>=0.4"
+)
+transformers_image = image("transformers==4.51.3", "huggingface-hub==0.30.2", "safetensors")
+app = modal.App("sampling-recipe")
+volume = modal.Volume.from_name("lm-exploration-training")
+limits = {
+    "gpu": "H100",
+    "cpu": 4,
+    "timeout": TIMEOUT_SECONDS,
+    "retries": 0,
+    "max_containers": 1,
+    "volumes": {"/runs": volume},
+}
+
+
+def sha256(path):
+    import hashlib
+
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def download(*args, **kwargs):
+    """snapshot_download with four bounded attempts for transient failures."""
+    from huggingface_hub import snapshot_download
+    from huggingface_hub.errors import HfHubHTTPError
+
+    transient = (OSError, HfHubHTTPError)
+    try:
+        import httpx
+
+        transient += (httpx.TransportError,)
+    except ImportError:
+        pass
+    for attempt in range(4):
+        try:
+            return Path(snapshot_download(*args, **kwargs))
+        except transient as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if isinstance(exc, HfHubHTTPError) and status not in (429, 500, 502, 503, 504):
+                raise
+            if attempt == 3:
+                raise
+            print(f"Retrying download after {type(exc).__name__}", flush=True)
+            time.sleep(2**attempt)
+    raise RuntimeError("Unreachable download state")
+
+
+def open_checkpoints(spec, done):
+    """Yield hash-verified checkpoints of our own published model."""
+    import sys
+    from types import SimpleNamespace
+
+    import torch
+    from safetensors.torch import load_file
+    from tokenizers import Tokenizer
+
+    source = download(
+        spec["repo"],
+        revision=spec["source_revision"],
+        allow_patterns=[
+            "config.json",
+            "provenance.json",
+            "tokenizer/tokenizer.json",
+            "model_100m/*.py",
+            "model_10m/*.py",
+        ],
+    )
+    source_hash = sha256(source / "model_100m/model.py")
+    tokenizer_hash = sha256(source / "tokenizer/tokenizer.json")
+    identity = json.loads((source / "provenance.json").read_text())
+    assert source_hash == identity["source_sha256"]["model"] == spec["model_source_sha256"]
+    assert tokenizer_hash == spec["tokenizer_sha256"]
+    # Our own previously published, hash-verified code, not the current repository architecture.
+    sys.path.insert(0, str(source))
+    from model_100m.model import GPT, ModelConfig
+
+    model = GPT(ModelConfig(**json.loads((source / "config.json").read_text()))).cuda().eval()
+    tokenizer = Tokenizer.from_file(str(source / "tokenizer/tokenizer.json"))
+    wrapped = SimpleNamespace(
+        forward=model,
+        encode=lambda p: [
+            *spec["prefix_token_ids"],
+            *tokenizer.encode(p, add_special_tokens=False).ids,
+        ],
+        decode=lambda ids: tokenizer.decode(ids, skip_special_tokens=True),
+        eos_token_id=spec["eos_token_id"],
+        device="cuda",
+    )
+    for checkpoint in spec["checkpoints"]:
+        name = f"{spec['name']}-step{checkpoint['step']}"
+        if name in done:
+            continue
+        folder = download(
+            spec["repo"],
+            revision=checkpoint["revision"],
+            allow_patterns=["model.safetensors", "provenance.json"],
+        )
+        provenance = json.loads((folder / "provenance.json").read_text())
+        assert provenance["step"] == checkpoint["step"]
+        assert provenance["source_sha256"]["model"] == source_hash
+        assert sha256(folder / "model.safetensors") == provenance["weights_sha256"]
+        model.load_state_dict(load_file(str(folder / "model.safetensors")), strict=True)
+        assert all(torch.isfinite(p).all() for p in model.parameters())
+        assert sum(p.numel() for p in model.parameters()) == spec["parameters"]
+        info = {
+            "name": name,
+            "kind": "checkpoint",
+            "repo": spec["repo"],
+            "revision": checkpoint["revision"],
+            "step": checkpoint["step"],
+            "trained_tokens": provenance["tokens"],
+            "parameters": spec["parameters"],
+            "weights_sha256": provenance["weights_sha256"],
+            "model_source_sha256": source_hash,
+            "tokenizer_sha256": tokenizer_hash,
+        }
+        print(json.dumps(info), flush=True)
+        yield info, wrapped
+
+
+def open_transformers(spec, done):
+    """Yield one Hugging Face Transformers model at a pinned commit, without remote code."""
+    from types import SimpleNamespace
+
+    import torch
+    import transformers
+    from huggingface_hub import HfApi
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    if spec["name"] in done:
+        return
+    repo, revision = spec["repo"], spec["revision"]
+    assert HfApi().model_info(repo, revision=revision).sha == revision
+    tokenizer = AutoTokenizer.from_pretrained(repo, revision=revision, trust_remote_code=False)
+    model = AutoModelForCausalLM.from_pretrained(
+        repo,
+        revision=revision,
+        torch_dtype=torch.float32,
+        attn_implementation="eager",
+        trust_remote_code=False,
+    )
+    model = model.cuda().eval()
+    parameters = sum(p.numel() for p in model.parameters())
+    assert parameters == spec.get("parameters", parameters)
+    assert all(torch.isfinite(p).all() for p in model.parameters())
+    prefix = spec.get("prefix_token_ids", [])
+    info = {
+        "name": spec["name"],
+        "kind": "transformers",
+        "repo": repo,
+        "revision": revision,
+        "trained_tokens": spec.get("trained_tokens"),
+        "parameters": parameters,
+        "transformers_version": transformers.__version__,
+    }
+    print(json.dumps(info), flush=True)
+    yield (
+        info,
+        SimpleNamespace(
+            forward=lambda tokens: model(tokens).logits,
+            encode=lambda p: [*prefix, *tokenizer.encode(p, add_special_tokens=True)],
+            decode=lambda ids: tokenizer.decode(ids, skip_special_tokens=True),
+            eos_token_id=tokenizer.eos_token_id,
+            device="cuda",
+        ),
+    )
+
+
+def run(recipe, deadline, open_runs):
+    import torch
+
+    from sampling.sampler import check_deadline, run_recipe
+
+    check_deadline(deadline)
+    torch.set_num_threads(4)
+    path = Path("/runs/sampling") / f"{recipe['name']}.json"
+    existing = json.loads(path.read_text()) if path.exists() else None
+
+    def save(report):
+        report["device"] = torch.cuda.get_device_name()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        partial = path.with_suffix(".partial")
+        partial.write_text(json.dumps(report, indent=2) + "\n")
+        partial.replace(path)
+        volume.commit()
+
+    report = run_recipe(recipe, open_runs, deadline, existing, save)
+    report["device"] = torch.cuda.get_device_name()
+    return report
+
+
+@app.function(image=checkpoint_image, memory=8192, **limits)
+def sample_checkpoints(recipe, deadline):
+    return run(recipe, deadline, open_checkpoints)
+
+
+@app.function(image=transformers_image, memory=12288, **limits)
+def sample_transformers(recipe, deadline):
+    return run(recipe, deadline, open_transformers)
+
+
+@app.local_entrypoint()
+def main(recipe: str, output: str = ""):
+    from sampling.recipe import load_recipe
+
+    spec = load_recipe(recipe)
+    deadline = time.time() + LAUNCH_LIMIT_SECONDS
+    kind = spec["models"][0]["kind"]
+    function = sample_checkpoints if kind == "checkpoint" else sample_transformers
+    report = function.remote(spec, deadline)
+    path = Path(output or f"artifacts/sampling/{spec['name']}.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps({"output": str(path), "models": len(report["models"])}))

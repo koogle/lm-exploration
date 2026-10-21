@@ -1,19 +1,28 @@
-"""Read-only bounded corpus-pattern audit; no training or publication."""
+"""Read-only bounded corpus-pattern audit; no training or publication.
+
+Run from training/: modal run analysis/repetition-baselines/modal_corpus_patterns.py
+CPU only, 10-minute hard timeout, no retries; refuses to start 24 hours after launch.
+"""
 
 import json
+import time
 from pathlib import Path
 
 import modal
 
 app = modal.App("simple-llm-corpus-patterns")
-image = modal.Image.debian_slim(python_version="3.12").pip_install(
-    "tokenizers==0.22.2", "huggingface-hub==0.30.2"
+LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
+image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install("tokenizers==0.22.2", "huggingface-hub==0.30.2")
+    .env({"PYTHONPATH": "/project"})
+    .add_local_dir("analysis/sampling", "/project/sampling")
 )
 volume = modal.Volume.from_name("lm-exploration-mixture-data")
 
 
 @app.function(image=image, cpu=4, memory=8192, timeout=600, retries=0, volumes={"/data": volume})
-def audit():
+def audit(deadline):
     import hashlib
     import re
     import sqlite3
@@ -22,8 +31,11 @@ def audit():
     from statistics import mean
 
     from huggingface_hub import hf_hub_download
+    from sampling.metrics import repetition
     from tokenizers import Tokenizer
 
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing the audit")
     base = Path(
         "/data/scholarly-code/scholarly-small-5b-raw-20261017/snapshots/scholarly-modern-10m-5b-20261017"
     )
@@ -36,10 +48,6 @@ def audit():
     assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == manifest["tokenizer_sha256"]
     tokenizer = Tokenizer.from_file(path)
     db = sqlite3.connect(f"{(base / 'raw.sqlite').as_uri()}?mode=ro&immutable=1", uri=True)
-
-    def repetition(seq, n=4):
-        grams = [tuple(seq[i : i + n]) for i in range(max(0, len(seq) - n + 1))]
-        return 1 - len(set(grams)) / len(grams) if grams else 0
 
     result = {}
     line_document_counts = Counter()
@@ -64,8 +72,8 @@ def audit():
                     "hash": key,
                     "parent": parent,
                     "tokens": len(ids),
-                    "full_document_token_rep4": repetition(ids),
-                    "window128_token_rep4": mean(repetition(w) for w in windows)
+                    "full_document_token_rep4": repetition(ids, 4),
+                    "window128_token_rep4": mean(repetition(w, 4) for w in windows)
                     if windows
                     else None,
                     "duplicate_line_fraction": (sum(v - 1 for v in counts.values()) / len(lines))
@@ -96,8 +104,8 @@ def audit():
 
 
 @app.local_entrypoint()
-def main(output: str = "../../artifacts/repetition-baselines/corpus-patterns.json"):
-    result = audit.remote()
+def main(output: str = "artifacts/repetition-baselines/corpus-patterns.json"):
+    result = audit.remote(time.time() + LAUNCH_LIMIT_SECONDS)
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, indent=2))
