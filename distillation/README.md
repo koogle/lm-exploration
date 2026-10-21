@@ -147,3 +147,26 @@ unbatched implementation prioritizes correctness; batching teacher windows and
 student accumulation will likely be necessary for economical scale. Confirm
 selected code-only capacity after exclusions. The whole snapshot's ~9.7B code
 counter is not a promise that this single database supplies 5B eligible tokens.
+
+## Larger held-out checkpoint comparison
+
+```sh
+modal run --detach -m distillation.modal_evaluate --run-id UNIQUE_EVALUATION_ID
+```
+
+This evaluates the parent and the three saved pilot checkpoints on an identical
+sample: up to 512 validation documents, at most eight 256-token windows per
+document (up to 1,048,576 targets). Documents follow deterministic content-hash
+order. Reports retain the exact window/token hash and per-document loss sums
+for paired comparisons. This is a larger evaluation sample, not longer training;
+it does not create new training checkpoints. Same-tokenizer CE comparisons are
+required; a shared-Qwen-tokenizer run needs its own fixed evaluation encoding.
+
+For the shared-tokenizer follow-up, proposed training milestones are 1M, 10M and
+100M student tokens, then 1B/5B if the learning curves support scaling. Compare
+against a CE-only control starting from the same resized embedding table and
+backbone. Keep data order, token exposure, optimizer and evaluation sample fixed.
+Report code loss, teacher KL and coding-task correctness. The tokenizer change
+requires a fresh baseline; old-tokenizer token CE cannot be compared directly
+with Qwen-tokenizer token CE. These milestones are a proposed follow-up, not
+runs already launched by the evaluation command above.
