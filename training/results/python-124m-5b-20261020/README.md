@@ -1,6 +1,6 @@
 # Python 124M / 5B execution record
 
-**Current status (2026-10-21 02:52 UTC): the corpus is frozen; eight-H100 qualification is queued. No eight-GPU optimizer updates or Hugging Face model publication yet.**
+**Current status (2026-10-21 03:14 UTC): the corpus is frozen; eight-H100 qualification is queued. No eight-GPU optimizer updates or Hugging Face model publication yet.**
 
 The final corpus contains **5,949,619,583 unique usable training targets** after
 filtering, global deduplication and validation exclusions. Every category has
@@ -15,8 +15,14 @@ All 53 pinned full-Python shards completed, with **5,742,078,521 candidate
 training targets** before global deduplication and exclusions. All 95 documentation
 shards completed with **617,694,542 candidate targets**. The existing-source census
 also completed normally; no early stop was used. See [acquisition totals](acquisition.json).
-The finalizer now merges these sources and freezes only sufficient measured
-capacity. Training remains behind that check and eight-GPU qualification.
+The finalizer completed the global merge and froze the sufficient measured
+capacity. Training remains behind eight-GPU qualification.
+
+The detached qualification call is `fc-01M5E6S46XR9X2H8CH7JWH1820`; the
+detached controller is `fc-01M5E6S52WN7SZ9C9B0CQSWX85`. Modal currently reports
+one queued training input, zero runners and zero running inputs. The controller
+waits for two real optimizer updates and a checkpoint, then tests restoration
+before continuing to 5B. No scheduling failure reason has been provided.
 
 The paragraphs below preserve preparation history and diagnostic evidence.
 
@@ -61,7 +67,7 @@ checkpoint/restore qualification, an early evaluation boundary around 50M target
 regular 250M-target checkpoints, isolated executable evaluation, fixed greedy and
 sampled generations, and separate Hugging Face publication with remote/final
 weight hash verification. Worker time limits resume from complete checkpoints.
-These later stages remain unexecuted until the corpus snapshot is sufficient.
+These later stages remain unexecuted while Modal has not allocated the eight-H100 worker.
 [Training workflow](https://modal.com/apps/radiantai/main/deployed/simple-llm-python-training).
 [Full Python code supplement](https://modal.com/apps/radiantai/main/deployed/simple-llm-python-code-supplement).
 
