@@ -1,0 +1,30 @@
+{
+  "run_id": "qwen4b-shared-50m-20261021-01",
+  "status": "launched",
+  "recorded_at": "2026-10-21T07:30:46.425935+00:00",
+  "target_tokens": 50000000,
+  "teacher": "Qwen/Qwen3-4B-Base",
+  "teacher_revision": "906bfd4b4dc7f14ee4320094d8b41684abff8539",
+  "student_parameters": 215910656,
+  "gpu": "H100",
+  "objective": "0.5 code CE + 0.5 full-vocabulary forward KL, shared Qwen tokenizer",
+  "early_stop_on_validation_regression": false,
+  "validation_milestones_tokens": [
+    1000000,
+    5000000,
+    10000000,
+    15000000,
+    20000000,
+    25000000,
+    30000000,
+    35000000,
+    40000000,
+    45000000,
+    50000000
+  ],
+  "source_commit": "677cd1b",
+  "modal_url": "https://modal.com/apps/radiantai/main/ap-w93Qf7RB744zVukEwcPzjY",
+  "artifact_volume": "lm-exploration-distillation",
+  "latest_checkpoint_pointer": "qwen4b-shared-50m-20261021-01/latest.json",
+  "note": "Launch record only. Does not claim 50M tokens completed. GPU smoke result is recorded separately."
+}
