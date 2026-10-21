@@ -85,8 +85,14 @@ completed examples. Every rejected output retains reasons.
 
 Each record contains prompt ID/text, seed and full sampling request, teacher and
 tokenizer revisions, runtime, manifest hash, output, raw response, finish reason,
-actual usage token counts, request duration and validation. Raw records are saved
-and Modal-volume committed incrementally before validation. Validated records are
+actual usage token counts, request duration and validation. Raw records are fsynced locally immediately and Modal-volume committed before
+validation. `checkpoint_every=1` preserves the original per-example protocol.
+The batched experiment uses 16 records per remote checkpoint, with a 5-second
+interval checked on each request completion, plus a mandatory final partial-batch
+flush. This is not a background five-second durability guarantee: an in-flight
+request can delay the time-triggered checkpoint until it completes. Interrupted
+uncommitted outputs can be recomputed on resume under their stable IDs. Count,
+interval and actual raw-checkpoint count are recorded per trial. Validated records are
 separate. CPU verification is outside generation timing; its duration and output
 persistence duration are reported separately. Generation throughput includes HTTP
 and durable-output overhead, so it measures this generator rather than isolated
@@ -147,7 +153,7 @@ in the private HF dataset `jfrick/lm-exploration-results`.
   choose concurrency by pooled accepted examples per GPU second, then profile, and
   only propose a small kernel experiment if DeltaNet or launch overhead stays a
   substantial measured fraction at the best batched operating point.
-- CPU validation: 17 unit tests pass; Modal definitions import; ruff passes.
+- CPU validation: 19 unit tests pass; Modal definitions import; ruff passes.
   NVCC compilation, the H100 smoke gate and fixture generation pass.
 
 ## Artifacts

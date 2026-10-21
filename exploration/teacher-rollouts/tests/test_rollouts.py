@@ -79,6 +79,76 @@ class ValidationTests(unittest.TestCase):
 
 
 class PersistenceTests(unittest.TestCase):
+    def test_batched_checkpoints_flush_tail_before_validation_and_resume(self):
+        c = {
+            **CONFIG,
+            "repeats": 1,
+            "checkpoint_every": 3,
+            "checkpoint_interval_seconds": 30,
+        }
+        with tempfile.TemporaryDirectory() as d:
+            store = Store(d, {"config": c})
+            validated = Path(d) / "validated"
+            validated.mkdir()
+            snapshots = []
+
+            def commit():
+                snapshots.append(
+                    (
+                        len(list(store.records.glob("*.json"))),
+                        len(list(validated.glob("*.json"))),
+                    )
+                )
+
+            with patch("runner.request", side_effect=TimeoutError("fixture")):
+                result = asyncio.run(trial(c, PROMPTS[:5], store, 1, 0, "a", commit))
+            self.assertEqual(snapshots, [(3, 0), (5, 0), (5, 5)])
+            self.assertEqual(result["raw_checkpoint_count"], 2)
+            (Path(d) / "c1-r0.json").unlink()
+            with patch("runner.request") as request:
+                resumed = asyncio.run(trial(c, PROMPTS[:5], store, 1, 0, "b", commit))
+                request.assert_not_called()
+            self.assertEqual(resumed["raw_checkpoint_count"], 0)
+            self.assertIsNone(resumed["accepted_examples_per_hour"])
+            self.assertEqual(len(list(store.records.glob("*.json"))), 5)
+
+    def test_checkpoint_interval_is_checked_on_completion(self):
+        c = {
+            **CONFIG,
+            "repeats": 1,
+            "checkpoint_every": 48,
+            "checkpoint_interval_seconds": 1,
+        }
+        clock = [0.0]
+
+        def respond(*args):
+            clock[0] += 2
+            raise TimeoutError("fixture")
+
+        with tempfile.TemporaryDirectory() as d:
+            store = Store(d, {"config": c})
+            (Path(d) / "validated").mkdir()
+            snapshots = []
+            with (
+                patch("runner.request", side_effect=respond),
+                patch("runner.time.perf_counter", side_effect=lambda: clock[0]),
+            ):
+                result = asyncio.run(
+                    trial(
+                        c,
+                        PROMPTS[:2],
+                        store,
+                        1,
+                        0,
+                        "a",
+                        lambda: snapshots.append(
+                            len(list(store.records.glob("*.json")))
+                        ),
+                    )
+                )
+            self.assertEqual(snapshots, [1, 2, 2])
+            self.assertEqual(result["raw_checkpoint_count"], 2)
+
     def test_conflict_and_corruption_fail_closed(self):
         with tempfile.TemporaryDirectory() as d:
             store = Store(d, {"revision": "abc"})

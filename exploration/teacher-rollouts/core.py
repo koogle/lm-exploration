@@ -41,6 +41,18 @@ def validate_config(c):
         raise ValueError("concurrency")
     if len(set(c["concurrency"])) != len(c["concurrency"]):
         raise ValueError("duplicate concurrency")
+    if (
+        type(c.get("checkpoint_every", 1)) is not int
+        or not 1 <= c.get("checkpoint_every", 1) <= 48
+    ):
+        raise ValueError("checkpoint_every")
+    interval = c.get("checkpoint_interval_seconds", 5)
+    if (
+        type(interval) not in (int, float)
+        or not math.isfinite(interval)
+        or not 1 <= interval <= 30
+    ):
+        raise ValueError("checkpoint_interval_seconds")
     for key in [
         "gpu_usd_per_hour",
         "resource_usd_per_hour_ceiling",

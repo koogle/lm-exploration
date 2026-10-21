@@ -73,6 +73,29 @@ async def trial(c, prompts, store, concurrency, round_id, attempt, commit):
     resumed = False
     jobs = []
     persistence_seconds = 0.0
+    pending_checkpoint = 0
+    last_checkpoint = time.perf_counter()
+    checkpoint_count = 0
+
+    def checkpoint(force=False):
+        nonlocal \
+            pending_checkpoint, \
+            last_checkpoint, \
+            checkpoint_count, \
+            persistence_seconds
+        if pending_checkpoint and (
+            force
+            or pending_checkpoint >= c.get("checkpoint_every", 1)
+            or time.perf_counter() - last_checkpoint
+            >= c.get("checkpoint_interval_seconds", 5)
+        ):
+            before_commit = time.perf_counter()
+            commit()
+            persistence_seconds += time.perf_counter() - before_commit
+            checkpoint_count += 1
+            pending_checkpoint = 0
+            last_checkpoint = time.perf_counter()
+
     for repeat in range(c["repeats"]):
         for prompt in prompts:
             seed = c["seed"] + repeat  # identical across concurrency and rounds
@@ -93,7 +116,7 @@ async def trial(c, prompts, store, concurrency, round_id, attempt, commit):
                 jobs.append((prompt, seed, key))
 
     async def one(prompt, seed, key):
-        nonlocal persistence_seconds
+        nonlocal persistence_seconds, pending_checkpoint
         async with sem:
             started = time.perf_counter()
             payload = body(c, prompt, seed)
@@ -136,15 +159,19 @@ async def trial(c, prompts, store, concurrency, round_id, attempt, commit):
             except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:
                 record["error"] = f"{type(exc).__name__}: {exc}"
             record["request_seconds"] = time.perf_counter() - started
-            # Raw output is durable before verification. Separate files remain immutable.
+            # Each immutable record is fsynced locally immediately. Remote checkpoints
+            # are bounded by count, and time checked on each request completion.
             t = time.perf_counter()
             store.put(record)
-            commit()
             persistence_seconds += time.perf_counter() - t
+            pending_checkpoint += 1
+            checkpoint()
             records.append(record)
 
     before = time.perf_counter()
     await asyncio.gather(*(one(*job) for job in jobs))
+    # Persist the partial final batch before validation or reporting throughput.
+    checkpoint(force=True)
     generation_seconds = max(time.perf_counter() - before, 1e-9)
     # Keep verification outside the generation timing and GPU scheduler queue.
     for r in records:
@@ -163,6 +190,9 @@ async def trial(c, prompts, store, concurrency, round_id, attempt, commit):
         resumed=resumed,
         attempt=attempt,
         persistence_seconds=persistence_seconds,
+        raw_checkpoint_count=checkpoint_count,
+        checkpoint_every=c.get("checkpoint_every", 1),
+        checkpoint_interval_seconds=c.get("checkpoint_interval_seconds", 5),
         timing_scope="HTTP dispatch through durable raw output; excludes post-hoc validation",
     )
     if resumed:

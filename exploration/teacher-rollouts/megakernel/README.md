@@ -92,7 +92,8 @@ statistically reliable production throughput estimates.
 The ThunderKittens variant uses its register-vector multiply/add/reduction
 operations in QKV and gating projections. It is a limited change to the adapted
 Luce kernel, not a tensor-core implementation or a full ThunderKittens rewrite.
-No speedup or GPU correctness result is claimed for this variant yet. Both
+The measured sweep below qualifies the 512-thread variants on the short probe;
+the 256-thread variants fail the exact-completion gate. No speedup is established. Both
 variants use C++20 and the same optimization flags; dependency revision and
 archive SHA-256 are pinned in `build_sweep.py`. The downloaded MIT license is
 retained alongside the headers in the build image. See [NOTICE.md](NOTICE.md).
@@ -121,4 +122,51 @@ CPU validation: 17 tests and Ruff pass; all eight variants compile locally.
 Local CUDA compilation is a build diagnostic only; the workspace uses GCC 14 and newer glibc, requiring temporary
 `noexcept` compatibility declarations in the downloaded CUDA 12.8 math headers.
 Those local compiler changes are not part of the Modal image or kernel source.
-The pinned Ubuntu 22.04 image must build the variants unmodified before GPU runs.
+All eight subsequently built unmodified in the pinned Ubuntu 22.04 Modal image
+and completed the H100 sweep.
+
+
+## Measured launch sweep (2026-10-21)
+
+Eight builds, two rounds in forward/reverse order, one H100 per job, pinned BF16
+teacher, six synthetic prompts, greedy generation capped at 128 output tokens.
+All builds passed the numerical/state/reset gates and 25/25 teacher-forced top-1
+checks in both rounds. These are repeated checks of the same 25 positions, not
+400 independent samples. Worst logit NRMSE across trials was 1.916%, minimum
+cosine 0.999817, and worst recurrent-state NRMSE 2.927%.
+
+| Projection | Threads / requested blocks | Mean output tokens/s | Exact fixture tokens, both rounds |
+| --- | --- | ---: | --- |
+| Manual | 256 / 66 | 42.83 | pass |
+| Manual | 256 / 132 | 56.54 | pass |
+| Manual | 512 / 66 | 53.49 | pass |
+| Manual | 512 / 132 | 62.37 | pass |
+| ThunderKittens | 256 / 66 | excluded | fail |
+| ThunderKittens | 256 / 132 | excluded | fail |
+| ThunderKittens | 512 / 66 | 53.42 | pass |
+| ThunderKittens | 512 / 132 | 62.37 | pass |
+
+The two excluded builds produced different wording for the cache-hit explanation
+while retaining the correct answer, 80%, and passing all automatic task checks.
+Their raw measurements and rejection from the strict comparison are preserved.
+Do not describe them as exact-reference-qualified builds.
+
+Keep the original manual 512/132 configuration. Its mean generation time was
+3.303 seconds for six examples (206 non-EOS output tokens), including sequential
+prefill: about 6,540 automatically accepted fixtures/hour and estimated steady
+GPU cost $0.000604/accepted fixture. The best ThunderKittens configuration differs
+by less than 0.01%; two short rounds do not support a speedup claim. All fixture
+outputs passed automatic checks, with zero truncation; technical answers retain
+the human-review requirement. Prompt lengths were 45–58 (mean 52.17), outputs
+10–69 (mean 34.33). Task verification took about 0.65 ms per six-example trial.
+
+Teacher loading from the warm cache took 15.06 seconds. Whole sweep pipeline:
+716.48 seconds; worker: 721.55 seconds; client including build/queue: 838.34 seconds.
+Estimated worker GPU compute was $0.7915; actual billing remains unknown. Peak
+PyTorch allocation was 18.21 GB, not total device memory. These times include all
+16 correctness probes and eager-reference comparisons; they are not steady
+production-generation costs. The app is stopped with zero tasks.
+
+Detailed reports, outputs, compiler commands, runtime versions, source hashes,
+launch logs and final app state are in HF dataset `jfrick/lm-exploration-results`,
+folder `pr-36/exploration/teacher-rollouts/kernel-sweep-20261021-v1`.

@@ -25,5 +25,7 @@
   "attempt_usd_cap": 2.5,
   "campaign_usd_cap": 100,
   "budget_authorized": false,
-  "authorization_reference": ""
+  "authorization_reference": "",
+  "checkpoint_every": 1,
+  "checkpoint_interval_seconds": 5
 }
