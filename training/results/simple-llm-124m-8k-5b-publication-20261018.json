@@ -1,0 +1,23 @@
+{
+  "run_id": "simple-llm-124m-8k-5b-20261018",
+  "completed_tokens": 4999981176,
+  "optimizer_updates": 64227,
+  "context": 8192,
+  "parameters": 124389632,
+  "gpu_count": 8,
+  "gpu": "H100 80GB",
+  "worker_session_hours": 7.6695260796569436,
+  "diagnostic_validation_loss": 1.8707872297786696,
+  "metric_updates_contiguous": true,
+  "all_recorded_metrics_finite": true,
+  "exact_resume_validation_boundaries": true,
+  "per_source_two_pass_limit_verified": true,
+  "weights_sha256": "0a2d3cb3bcfe7c66a3acce41a76a5e63f3238ca0b9930d3190f11fe5f8dfb70f",
+  "weights_revision": "38df193c2cc2c5463e4bb20a5c6a4998f58b3af0",
+  "validation_note": "One fixed window per source; exploratory diagnostic, not a broader held-out or downstream evaluation.",
+  "repo_id": "jfrick/scholarly-code-modern-gpt-124m-step2",
+  "publication_revision": "2c8a078d3510349746abfe32b322898babb26e0a",
+  "published_utc": "2026-10-18T16:00:17.576698+00:00",
+  "published_card_verified": true,
+  "published_weight_sha256_verified": true
+}
