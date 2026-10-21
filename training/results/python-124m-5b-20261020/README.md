@@ -13,6 +13,12 @@ After 23 complete shards, the remaining fixed 53-shard preparation was moved
 to a 32-worker CPU pool with unordered completion reporting. This reduces
 preparation latency without changing sources, filters or GPU allocation.
 The dependent training controller still waits for preparation; it is not GPU training.
+One unfinished shard was preempted by Modal (not rejected by a data check).
+Training attempt selection now resumes a preempted worker from its latest complete
+checkpoint into a new immutable attempt directory; a completed input retry returns
+its existing report. Two recovery tests cover partial-checkpoint exclusion and
+completed-input idempotence. Published curves exclude uncheckpointed discarded
+updates from interrupted attempts. Actual eight-GPU execution remains pending.
 
 Documentation preparation completed all 95 shards with **617,694,542 candidate
 training targets**, before global exclusions. The full 5.3M-file pinned CodeParrot

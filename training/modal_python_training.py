@@ -151,16 +151,19 @@ def train_segment(
 
     import torch
 
+    from trainer.python_workflow import segment_attempt
+
     started = time.monotonic()
+    run_volume.reload()
+    output, resume, completed = segment_attempt("/runs", RUN, index, resume)
+    if completed is not None:
+        return completed
     if torch.cuda.device_count() != 8:
         raise ValueError("Expected eight H100s")
     source = Path(SNAPSHOT)
     local = Path("/tmp/python-snapshot")
     if not (local / "manifest.json").exists():
         shutil.copytree(source, local)
-    output = Path("/runs") / f"{RUN}-s{index:03d}"
-    if output.exists():
-        raise ValueError("Refuse to overwrite training segment")
     output.mkdir()
     for package in ("model_100m", "model_10m", "trainer", "training_data"):
         shutil.copytree(
@@ -393,12 +396,23 @@ def publish(checkpoint: str, evaluation_path: str):
     metrics, validation = [], []
     reports = []
     for folder in sorted(Path("/runs").glob(RUN + "-s*")):
+        report_path, latest_path = folder / "report.json", folder / "latest.json"
+        if report_path.exists():
+            report = json.loads(report_path.read_text())
+            reports.append(report)
+            committed_step = report["steps"]
+        elif latest_path.exists():
+            committed_step = json.loads(latest_path.read_text())["step"]
+        else:
+            continue
+        # Exclude uncheckpointed updates discarded after worker preemption.
         for name, rows in [("metrics.jsonl", metrics), ("validation.jsonl", validation)]:
             file = folder / name
             if file.exists():
-                rows.extend(json.loads(line) for line in file.read_text().splitlines())
-        if (folder / "report.json").exists():
-            reports.append(json.loads((folder / "report.json").read_text()))
+                for line in file.read_text().splitlines():
+                    row = json.loads(line)
+                    if row["step"] <= committed_step:
+                        rows.append(row)
     for name, rows in [("metrics.jsonl", metrics), ("validation.jsonl", validation)]:
         (output / name).write_text("".join(json.dumps(row) + "\n" for row in rows))
     evaluations = output / "evaluations"
@@ -637,6 +651,19 @@ def start(finalization_call_id: str, qualification_call_id: str):
                 raise ValueError("Eight-GPU qualification did not produce optimizer updates")
             if latest:
                 a, b = latest["final_validation"], result["initial_validation"]
+                if result["resume_from"] != resume:
+                    # A preempted worker may have saved a newer complete checkpoint.
+                    history = Path(result["resume_from"]).parent / "validation.jsonl"
+                    matches = [
+                        json.loads(line)
+                        for line in history.read_text().splitlines()
+                        if json.loads(line)["tokens"] == b["tokens"]
+                    ]
+                    if not matches:
+                        raise ValueError(
+                            "Recovered qualification checkpoint lacks validation evidence"
+                        )
+                    a = matches[-1]
                 if a["tokens"] != b["tokens"] or any(
                     not math.isclose(
                         a["per_source"][k], b["per_source"][k], rel_tol=0, abs_tol=1e-6
