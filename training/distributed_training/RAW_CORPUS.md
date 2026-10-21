@@ -16,8 +16,8 @@ particular workflow in `distributed_training/run_validation.py`, not restriction
 on the shared `DistributedConfig` or on permission to use unreviewed data.
 
 Run project commands from `training/`. The active recipe is
-`recipes/scholarly-modern-10m-5b.json`; the qualification recipe is
-`recipes/scholarly-modern-10m-qualification.json`. Importing or deploying the
+`distributed_training/recipes/scholarly-modern-10m-5b.json`; the qualification recipe
+is `distributed_training/recipes/scholarly-modern-10m-qualification.json`. Importing or deploying the
 module does not launch training: `prepare_and_launch.spawn(...)` is an explicit
 operation requiring approved resources and a fresh run ID. Reuse an existing data
 version only when the preparation identity matches.
