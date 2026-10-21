@@ -100,7 +100,6 @@ def run(root, worker, deadline, backend, batch_size, max_batches=0):
         engine = Decoder(
             model, head, "/experiment/megakernel/kernel.so", max_seq_len=4096
         )
-        batch_size = 1
     tokenizer_path = folder / "tokenizer"
     tokenizer.save_pretrained(tokenizer_path)
     tokenizer_sha = hashlib.sha256(
@@ -147,17 +146,19 @@ def run(root, worker, deadline, backend, batch_size, max_batches=0):
                     }
                 )
         else:
-            result = trajectory(
-                engine,
-                prompt_ids[0],
-                max_tokens=1024,
-                eos_ids=[tokenizer.eos_token_id],
-                seed=7341 + worker * 10000000 + indices[0],
-            )
-            result["text"] = tokenizer.decode(
-                result["token_ids"], skip_special_tokens=True
-            )
-            rows = [result]
+            rows = []
+            for i, pids in zip(indices, prompt_ids, strict=True):
+                result = trajectory(
+                    engine,
+                    pids,
+                    max_tokens=1024,
+                    eos_ids=[tokenizer.eos_token_id],
+                    seed=7341 + worker * 10000000 + i,
+                )
+                result["text"] = tokenizer.decode(
+                    result["token_ids"], skip_special_tokens=True
+                )
+                rows.append(result)
         for i, prompt, pids, row in zip(
             indices, prompts, prompt_ids, rows, strict=True
         ):
