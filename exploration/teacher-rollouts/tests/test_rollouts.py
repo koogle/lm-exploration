@@ -198,10 +198,17 @@ class BudgetAndMetricsTests(unittest.TestCase):
 
     def test_launch_rejects_before_modal_import(self):
         import launch
-        with patch.object(sys, 'argv', ['launch.py', '--run-id', 'test', '--attempt', 'test', '--launch']):
-            with patch.dict(sys.modules, {'modal_app': None}):
-                with self.assertRaisesRegex(ValueError, 'No explicit budget authorization'):
-                    launch.main()
+
+        with (
+            patch.object(
+                sys,
+                "argv",
+                ["launch.py", "--run-id", "test", "--attempt", "test", "--launch"],
+            ),
+            patch.dict(sys.modules, {"modal_app": None}),
+            self.assertRaisesRegex(ValueError, "No explicit budget authorization"),
+        ):
+            launch.main()
 
     def test_invalid_caps(self):
         for key, value in [
