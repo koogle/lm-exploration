@@ -1,8 +1,0 @@
-{
-  "returncode": 0,
-  "stdout": "",
-  "stderr": "test_corruption_and_unrequested_candidate_rejected (test_tokenizer_research.LearningCurveTests.test_corruption_and_unrequested_candidate_rejected) ... ok\ntest_cross_split_duplicate_quarantine (test_tokenizer_research.LearningCurveTests.test_cross_split_duplicate_quarantine) ... ok\ntest_interrupted_uncommitted_batch_replays_from_durable_cursor (test_tokenizer_research.LearningCurveTests.test_interrupted_uncommitted_batch_replays_from_durable_cursor) ... ok\ntest_nested_utf8_samples_and_shared_evaluation (test_tokenizer_research.LearningCurveTests.test_nested_utf8_samples_and_shared_evaluation) ... ok\ntest_resume_and_identity_guard (test_tokenizer_research.LearningCurveTests.test_resume_and_identity_guard) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.915s\n\nOK\n",
-  "execution": "modal-cpu",
-  "cpu": 2,
-  "memory_mib": 4096
-}

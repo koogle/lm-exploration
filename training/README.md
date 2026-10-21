@@ -22,7 +22,7 @@ training exposures, 64,227 updates, and 7.67 recorded worker-hours on eight H100
 The [published final model](https://huggingface.co/jfrick/scholarly-code-modern-gpt-124m-step2)
 includes weights, code, tokenizer, training curves and raw metrics. Final fixed-window
 diagnostic validation loss is 1.8708; broader quality and long-context evaluation remain
-pending. See the [publication record](results/simple-llm-124m-8k-5b-publication-20261018.json).
+pending. Its run, publication and repetition records are [archived on HF](publication/README.md#pr-16).
 
 The [Simple LLM 9.85M / 5B-token experiment](publication/README.md#pr-13)
 is complete and [published on Hugging Face](https://huggingface.co/jfrick/scholarly-code-modern-gpt-10m-5b).
@@ -30,8 +30,8 @@ It processed 4,999,934,057 targets over 72,805 updates. Broader exploratory
 validation loss is 2.6926 nats/token; generated samples remain repetitive and
 factually weak. The model card includes all examples, per-source evaluation,
 training curve, code/tokenizer and provenance. Generated reports and cards added by
-PR #13 are stored in the pinned HF **dataset** documented in the
-[artifact index and download guide](publication/README.md), not in this repository.
+PR #13 are stored in the HF **dataset** `jfrick/lm-exploration-results`
+([details](publication/README.md#historical-evidence)), not in this repository.
 The remaining sections retain
 historical plans and earlier experiment state.
 
@@ -57,9 +57,9 @@ notes and illustrative token budgets below for this experiment.
 
 The [streaming preparation guide](data/SIMPLE_LLM_STREAMING.md) now provides
 bounded upstream ingestion, immutable token snapshots, a Modal CPU entrypoint,
-and a resumable token-mixture loader. Its snapshots remain pending corpus audits. A [bounded 124.4M subword pilot](results/simple-llm-124m-pilot-20261016-01.md)
+and a resumable token-mixture loader. Its snapshots remain pending corpus audits. A [bounded 124.4M subword pilot](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-124m-pilot-20261016-01.md)
 has now completed 600 updates / 4.08M tokens on Modal; substantial pretraining
-has not been launched. The [measured GPU comparison](results/simple-llm-124m-gpu-comparison-20261017.md)
+has not been launched. The [measured GPU comparison](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-124m-gpu-comparison-20261017.md)
 compares one, two and three A10, L40S and H100 GPUs with matched global batches.
 Those measurements used the SDPA implementation now used by the modern model.
 Three H100s are the recommended configuration when elapsed time is the priority.
@@ -108,7 +108,7 @@ RoPE, SwiGLU and tied embeddings. Its historical vanilla architecture has a [tra
 The selected update is 1,800 (validation loss 1.54483 nats/character); the later
 4,000-update head overfit and was not published.
 Its L4 jobs, dedicated volume and bounded allocation are separate from latent-workspace.
-See the owning guide and `results/shakespeare-10m-*.json` for executed results.
+See the owning guide; executed results are in the HF dataset `jfrick/lm-exploration-results` under `training/results/`.
 
 ## Training runs on Modal
 
@@ -170,7 +170,7 @@ gradient descent, start with [the XOR example](examples/README.md).
   Tiny Shakespeare is a learning benchmark, not a selected research corpus.
 - Run artifacts live on the `lm-exploration-training` Modal volume under `<run-id>/`.
   Each save writes a new `checkpoints/step-NNNNNN.pt`; nothing is overwritten.
-  Reports are copied to `results/<run-id>.json`.
+  Reports are copied to the ignored `artifacts/results/<run-id>.json`.
 
 `training/` is a uv-managed project with `pyproject.toml`, `uv.lock` and a Python
 3.12 pin. It has its own ignored `.venv`; the latent-workspace environment is

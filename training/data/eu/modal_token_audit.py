@@ -11,7 +11,7 @@ if modal.is_local():
     from modal_pipeline import image as base_image
 
     image = base_image
-    for name in ("token_audit.py", "audit_schedule.py", "goal_pipeline_sources.json"):
+    for name in ("token_audit.py", "audit_schedule.py", "pipeline_sources.json"):
         image = image.add_local_file(Path(__file__).with_name(name), f"/root/eu/{name}")
 
 
@@ -103,7 +103,7 @@ def scheduled_tick():
         state["collection_goal"]["status"],
         lambda source: audit.spawn(source, 3000, 1500),
         inspect_audit,
-        max_pairs=48,
+        max_pairs=96,
     )
 
 

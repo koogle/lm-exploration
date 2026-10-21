@@ -19,7 +19,10 @@ def task_for(source, pages):
         "seed_urls": source["seed_urls"],
         "allowed_hosts": source["allowed_hosts"],
         "suggested_request_budget": pages,
-        "report_paths": [f"research/{source['id']}.md", f"research/{source['id']}.json"],
+        "report_paths": [
+            f"artifacts/research/{source['id']}.md",
+            f"artifacts/research/{source['id']}.json",
+        ],
         "instructions": (
             "Read AGENTS.md and README.md. Investigate this collection with bounded public "
             "requests. Find native full text, inventories, pagination, language versions and "

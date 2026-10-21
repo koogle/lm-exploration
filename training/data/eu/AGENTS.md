@@ -12,10 +12,10 @@ Use bounded requests and respect per-host limits and robots exclusions. Preserve
 negative findings rather than guessing endpoints or treating an empty crawl as
 proof that a collection has no data.
 
-Write source findings to research/<source-id>.md and research/<source-id>.json.
-Keep downloaded bodies, extracted documents, Parquet and large manifests under
-ignored artifacts/. Source reports and reproducible code belong in Git; bulk
-corpus content does not. Retain source notices as metadata during discovery.
+Write working notes and evidence JSON under ignored artifacts/research/, then fold
+concise findings and negative results into RESEARCH.md. Keep downloaded bodies,
+extracted documents, Parquet and large manifests under ignored artifacts/.
+Generated evidence belongs on HF, not Git; reproducible code belongs in Git. Retain source notices as metadata during discovery.
 Do not infer publication eligibility from public access.
 
 Prefer original XML/HTML/TXT, then document containers and text-bearing PDFs.

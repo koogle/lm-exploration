@@ -1,7 +1,7 @@
 # Eight-H100 training optimization experiments
 
 These opt-in execution settings are stacked on PR #16. Defaults retain the
-uncropped eager dense-loss path. Do not deploy `modal_simple_llm_8k.py` to evaluate
+uncropped eager dense-loss path. Do not deploy `modal_scripts/modal_simple_llm_8k.py` to evaluate
 these changes: the active 5B-token application retains its original source image.
 
 The canonical implementation uses the shared decoder in `10m/model.py`, re-exported
@@ -28,7 +28,7 @@ the isolated benchmark app and spawn its controller:
 
 ```sh
 uv run python -c 'import truststore; truststore.inject_into_ssl(); import runpy; runpy.run_module("modal", run_name="__main__")' \
-  deploy modal_training_optimizations.py
+  deploy -m modal_scripts.modal_training_optimizations
 ```
 
 Then use the authenticated SDK to call
@@ -67,6 +67,10 @@ but records whole-session wall time and peak memory including startup/evaluation
 Compilation may recompile beyond warmup; its costs remain in those measurements.
 Results and failed variants are retained in the dedicated volume prefix. Raw
 metrics, source snapshots, checkpoints, provenance and logs accompany each run.
+Summaries, reports, rank summaries, launch records and qualification logs from the
+`opt100m-*` runs are archived in the HF dataset `jfrick/lm-exploration-results`
+under `pr-17/training/results/`. New local summaries go to the ignored
+`artifacts/pr-17/results/`.
 
 ## Single-GPU path
 
@@ -80,7 +84,7 @@ cost, or inter-rank imbalance. Those require the separate eight-GPU suite.
 Only one single-GPU experiment runs at a time; the active 5B app is untouched.
 
 For the independent single-GPU deployment, deploy
-`modal_single_gpu_optimizations.py`, then spawn
+`modal_scripts/modal_single_gpu_optimizations.py` (`-m modal_scripts.modal_single_gpu_optimizations`), then spawn
 `modal.Function.from_name("simple-llm-single-gpu-optimizations", "run_suite").spawn(prefix, provenance)`.
 This is the current launch route: `opt100m-1gpu-20261018-b`. It avoids the older
 eight-GPU controller's deployed signature. The initial single-GPU submission
@@ -88,7 +92,7 @@ failed before GPU allocation with an unexpected-keyword error and has no results
 
 ## Eight-GPU finalist comparison
 
-`modal_eight_gpu_finalists.py` runs exactly three variants: cropped/cached-RoPE
+`modal_scripts/modal_eight_gpu_finalists.py` runs exactly three variants: cropped/cached-RoPE
 microbatch 4 eager, microbatch 4 compiled, and microbatch 2 compiled. Each uses
 eight H100s, global batch 32 and a 100M nonpadding-token ceiling. It runs the
 12-case CUDA qualification on all eight ranks, including an empty rank, before

@@ -48,25 +48,49 @@ def test_saved_zero_requires_current_adapter(monkeypatch, saved_adapter, complet
     assert state == original
 
 
-def node(status, children=()):
-    return SimpleNamespace(status=SimpleNamespace(name=status), children=list(children))
+def node(status, children=(), call_id="call"):
+    return SimpleNamespace(
+        status=SimpleNamespace(name=status), children=list(children), function_call_id=call_id
+    )
 
 
 def test_failed_supervisor_with_live_child_is_not_safe(monkeypatch):
-    call = SimpleNamespace(get_call_graph=lambda: [node("FAILURE", [node("PENDING")])])
+    call = SimpleNamespace(
+        get_call_graph=lambda: [node("FAILURE", [node("PENDING", call_id="worker")])]
+    )
     monkeypatch.setattr(modal_goal.modal.FunctionCall, "from_id", lambda _: call)
     assert modal_goal.inspect_call("call") == {"status": "running", "child_tree_terminated": False}
 
 
 def test_completed_call_checks_result_not_only_rpc_success(monkeypatch):
     call = SimpleNamespace(
-        get_call_graph=lambda: [node("SUCCESS", [node("TERMINATED")])],
+        get_call_graph=lambda: [node("SUCCESS", [node("TERMINATED", call_id="worker")])],
         get=lambda timeout: {"status": "ambiguous"},
     )
     monkeypatch.setattr(modal_goal.modal.FunctionCall, "from_id", lambda _: call)
     result = modal_goal.inspect_call("call")
     assert result["status"] == "failed"
     assert result["child_tree_terminated"] is True
+
+
+def test_completed_campaign_ignores_active_sibling(monkeypatch):
+    target = node("SUCCESS", [node("SUCCESS", call_id="worker")])
+    ancestor = node("SUCCESS", [target, node("PENDING", call_id="sibling")], call_id="tick")
+    call = SimpleNamespace(
+        get_call_graph=lambda: [ancestor], get=lambda timeout: {"status": "complete"}
+    )
+    monkeypatch.setattr(modal_goal.modal.FunctionCall, "from_id", lambda _: call)
+    assert modal_goal.inspect_call("call") == {
+        "status": "complete",
+        "child_tree_terminated": True,
+        "result": {"status": "complete"},
+    }
+
+
+def test_missing_target_cannot_release_writer(monkeypatch):
+    call = SimpleNamespace(get_call_graph=lambda: [node("SUCCESS", call_id="other")])
+    monkeypatch.setattr(modal_goal.modal.FunctionCall, "from_id", lambda _: call)
+    assert modal_goal.inspect_call("call") == {"status": "unknown", "child_tree_terminated": False}
 
 
 def test_new_collections_are_discovery_work_not_exhaustion(monkeypatch):

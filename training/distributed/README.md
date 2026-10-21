@@ -12,7 +12,7 @@ launcher, shared image and GPU checks live in this package. The actual training
 loop, evaluation and checkpointing live in [`../trainer/`](../trainer/README.md). Training settings live in [`../workflows/model_configs/`](../workflows/model_configs/README.md);
 preparation and continuation live in [`../workflows/`](../workflows/README.md).
 The duplicate `modal_simple-llm_pilot.py` / `trainer/subword_pilot.py`
-path has been removed; historical pilot results remain in `results/` and its
+path has been removed; historical pilot results are in the HF dataset `jfrick/lm-exploration-results` and its
 implementation remains in Git history. Historical character recipes are retained
 for provenance; their loop and launcher have been removed.
 
@@ -246,6 +246,16 @@ have not been measured. Old gzip snapshots need one-time conversion for new runs
 old checkpoints require their original code and snapshot. The active loop now lives in `trainer/loop.py`; resume continues to enforce
 source hashes. Historical checkpoints require compatible original code and settings.
 
+## Overlapped data preparation
+
+[`modal_streaming_train.py`](../modal_streaming_train.py) starts training from an
+initial upstream prefix instead of preparing the full corpus first: a rank-zero
+producer thread fetches pinned source shards, tokenizes them into global batches
+and keeps up to `prefetch_batches` (1–64; 0 keeps the synchronous path) ready
+while the GPUs train. Checkpoints save only the acknowledged optimizer cursor, so
+a restart discards and rebuilds speculative batches; live manifests require
+`allow_unreviewed_data`. CUDA equivalence and throughput have not been measured.
+
 ## Eight-GPU experiment
 
 The dedicated [eight-H100 / 8K / 5B workflow](SIMPLE_LLM_8K.md) uses the frozen raw
@@ -291,6 +301,6 @@ resume/audit rejection. Floating model/optimizer tensors use FP32 tolerances
 reduction order can change low bits across fresh jobs.
 
 Measured run evidence is recorded in
-[`results/simple-llm-ddp-support-20261017.md`](../results/simple-llm-ddp-support-20261017.md).
+[`simple-llm-ddp-support-20261017.md`](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-ddp-support-20261017.md).
 Those GPU measurements predate the seekable snapshot format. The format change
 has local loader/conversion/resume checks; a new CUDA qualification has not been run.
