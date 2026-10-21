@@ -34,14 +34,15 @@ image = (
     .add_local_dir("100m", "/project/model_100m")
     .add_local_dir("10m", "/project/model_10m")
     .add_local_dir("trainer", "/project/trainer")
-    .add_local_dir("distributed_training", "/project/distributed_training")
+    .add_local_dir("distributed", "/project/distributed")
+    .add_local_dir("workflows", "/project/workflows")
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer/structured-code-v1", "/project/tokenizer/structured-code-v1")
     .add_local_dir("tests", "/project/tests")
     .add_local_dir("publication", "/project/publication")
     .add_local_dir("evaluation", "/project/evaluation")
     .add_local_file(
-        "distributed_training/recipes/python-124m-muon-5b.json", "/project/settings.json"
+        "workflows/model_configs/historical/python-124m-muon-5b.json", "/project/settings.json"
     )
 )
 sandbox_image = modal.Image.debian_slim(python_version="3.12")
@@ -56,7 +57,7 @@ def invoke(function, *args, **kwargs):
 
 
 def record(stage, **details):
-    from distributed_training.train import atomic_json
+    from trainer.loop import atomic_json
 
     folder = Path("/runs") / RUN
     folder.mkdir(parents=True, exist_ok=True)
@@ -76,8 +77,8 @@ def qualify():
     from torch.nn import functional as F
     from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, PAD_TOKEN_ID, load_frozen
 
-    from distributed_training.config import DistributedConfig
-    from distributed_training.optimizers import make_optimizer
+    from distributed.config import DistributedConfig
+    from trainer.optimizers import make_optimizer
     from trainer.python_evaluation import generate
 
     torch.manual_seed(42)
@@ -183,7 +184,7 @@ def train_segment(
     if not (local / "manifest.json").exists():
         shutil.copytree(source, local)
     output.mkdir()
-    for package in ("model_100m", "model_10m", "trainer", "distributed_training", "training_data"):
+    for package in ("model_100m", "model_10m", "trainer", "distributed", "training_data"):
         shutil.copytree(
             Path("/project") / package,
             output / "source" / package,
@@ -199,7 +200,7 @@ def train_segment(
         "--standalone",
         "--nproc_per_node=8",
         "-m",
-        "distributed_training.train",
+        "trainer.loop",
         "--config",
         str(output / "request.json"),
         "--manifest",

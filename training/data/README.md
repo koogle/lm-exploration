@@ -5,7 +5,8 @@ extraction project with ten source candidates, bounded crawlers, agent research
 notes and Parquet export. Its artifacts are not registered training inputs.
 
 For the new frozen-tokenizer corpus, use the separate
-[Simple LLM streaming pipeline](SIMPLE_LLM_STREAMING.md). Its local preparation
+[Simple LLM streaming pipeline](SIMPLE_LLM_STREAMING.md) and
+[raw-corpus preparation guide](RAW_CORPUS.md). Its local preparation
 CLI lives in [`prepare_simple_llm.py`](prepare_simple_llm.py); run
 `uv run lm-prepare-simple-llm --help` (or
 `uv run python -m training_data.prepare_simple_llm --help`) from `training/`.
@@ -14,17 +15,17 @@ The corresponding CPU Modal launcher lives in
 
 `datasets.json` records each dataset's source, license review and eligibility;
 [`registry.py`](registry.py) validates it with pydantic.
-Paths in it are relative to this `data/` directory. [Recipes](../recipes/README.md)
-select a dataset by `id` from the `DATASETS` table in `trainer/recipe.py`, which maps
-it to its fetch module. Raw text is never baked into the Modal image: each worker
-runs that module, which downloads and verifies the file.
+Paths in it are relative to this `data/` directory. Historical character
+[recipes](../workflows/README.md) select a dataset by `id` from the retained
+`DATASETS` table in `trainer/recipe.py`. Their training loop and launcher have
+been removed; active training consumes the prepared snapshots described above.
 
 
 ## Registered datasets
 
 Both registered datasets are character-level Shakespeare learning corpora for
 exercising training, checkpointing and sampling. Their text is not committed to
-Git. Modal workers fetch them automatically; to inspect them locally, run from
+Git. To inspect them locally, run from
 `training/`:
 
 ```sh
@@ -54,8 +55,8 @@ language capability. Research corpus choices and language mixtures remain undeci
    text file to its `DESTINATION` under `raw/` and verifies a pinned SHA-256 (see
    the existing fetchers).
    `raw/` and `cache/` are ignored by Git and excluded from the Modal image. The
-   trainer reads the whole file into RAM; this is not a large-corpus ingestion
-   system. Use enough text for the trainer's context window and held-out split.
+   historical character loader reads the whole file into RAM; this is not the
+   active snapshot preparation pipeline.
 3. Add an object to the `datasets` array in `datasets.json` with all required fields:
 
    | Field | Meaning |
@@ -70,10 +71,9 @@ language capability. Research corpus choices and language mixtures remain undeci
    | `training_eligible` | Boolean; `true` only after the above review for the intended use |
 
    Do not add an undecided candidate source as an eligible entry.
-4. Add the `id` to `DatasetName` and `DATASETS` in `trainer/recipe.py`, mapped to
-   the fetch module. Recipes refuse datasets that are not `training_eligible`. Reference the `id` from a recipe and launch a `--smoke` run. The trainer
-   fingerprints the exact bytes it trained on in each run's `config.json` and
-   checkpoints.
+4. Validate the registry entry locally. The retained historical recipe schema
+   only recognizes the original Shakespeare IDs; there is no character-training
+   launcher. For current training inputs, use the snapshot preparation guides above.
 
 Dataset definitions and fetching scripts are tracked; `raw/`, `cache/` and
 `../runs/` are not. Each research dataset needs its own evidence; this README is not a license

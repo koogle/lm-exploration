@@ -1,0 +1,6 @@
+{
+  "mode": "snapshot",
+  "root": "scholarly-code",
+  "loader": "token_shards",
+  "snapshot": "APPROVED_VERSION/snapshots/APPROVED_SNAPSHOT"
+}

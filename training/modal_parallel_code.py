@@ -77,7 +77,7 @@ def partition(worker, identity, target):
 def merge():
     from training_data.parallel_code_merge import merge_partitions
 
-    from distributed_training.train import atomic_json
+    from trainer.loop import atomic_json
 
     data_volume.reload()
     result = merge_partitions(
@@ -101,7 +101,7 @@ def merge():
 )
 def collect(audit_round=0):
     """Stage >8.8B pre-merge targets so final global dedup has room to remove clones."""
-    from distributed_training.train import atomic_json
+    from trainer.loop import atomic_json
 
     identity = exclusions.remote()
     # A child committed this directory after the coordinator mounted its volume.

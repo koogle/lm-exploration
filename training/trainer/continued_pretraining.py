@@ -57,7 +57,7 @@ def migrate_phase(parent_path, output, manifest_path, config, phase_request):
     from training_data.raw_token_stream import RawTokenMixture
     from training_data.subword import TOKENIZER_SHA256, digest
 
-    from distributed_training.train import source_hashes
+    from trainer.loop import source_hashes
 
     parent_path, output = Path(parent_path), Path(output)
     if output.exists():

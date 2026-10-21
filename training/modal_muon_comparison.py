@@ -7,7 +7,7 @@ from pathlib import Path
 
 import modal
 
-from distributed_training.modal_train import validate_paths, worker
+from distributed.modal_train import validate_paths, worker
 from modal_simple_llm_8k import SNAPSHOT, data_volume, image, run_volume
 
 image = image.add_local_file("modal_simple_llm_8k.py", "/project/modal_simple_llm_8k.py")
@@ -56,9 +56,13 @@ def run_arm(run_id, settings, provenance):
             timeout=600,
         )
     # Both arms start from the same seed and cursor; never load an old AdamW model.
-    first = worker.local(run_id + "-start", SNAPSHOT, settings, provenance, "", 900, 2)
+    first = worker.local(
+        run_id + "-start", SNAPSHOT, settings, provenance, "", 900, 2, dataset_root="scholarly-code"
+    )
     resume = str(Path(first["final_checkpoint"]).relative_to("/runs"))
-    report = worker.local(run_id, SNAPSHOT, settings, provenance, resume, 3600, None)
+    report = worker.local(
+        run_id, SNAPSHOT, settings, provenance, resume, 3600, None, dataset_root="scholarly-code"
+    )
     if first["final_validation"] != report["initial_validation"]:
         raise RuntimeError("Fresh-process restore changed validation")
     rows = [
@@ -84,7 +88,7 @@ def run_arm(run_id, settings, provenance):
 def main(prefix: str):
     validate_paths(prefix + "-adamw-start", SNAPSHOT, "")
     settings = json.loads(
-        Path("distributed_training/recipes/h100x8-muon-comparison.json").read_text()
+        Path("workflows/model_configs/historical/h100x8-muon-comparison.json").read_text()
     )
     provenance = {
         "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
