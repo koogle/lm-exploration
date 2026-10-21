@@ -421,6 +421,11 @@ def publish(checkpoint: str, evaluation_path: str):
         axis.set_title(title)
         axis.set_xlabel("Training targets")
     figure.tight_layout()
+    axes[1, 0].plot(
+        tokens, [row["optimizer_lrs"][0] for row in metrics], linewidth=0.7, label="Muon"
+    )
+    axes[1, 0].set_title("Auxiliary and Muon learning rates")
+    axes[1, 0].legend()
     figure.savefig(output / "training-curves.png", dpi=160)
     plt.close(figure)
     figure, axis = plt.subplots(figsize=(10, 5))
@@ -532,6 +537,22 @@ Code and execution evidence: https://github.com/koogle/lm-exploration/pull/30 .
         commit_message=f"{RUN}: {progress['tokens']} training targets",
     )
     remote = api.model_info(REPO, revision=commit.oid, files_metadata=True)
+    expected_files = {
+        str(p.relative_to(output))
+        for p in output.rglob("*")
+        if p.is_file() and ".cache" not in p.parts
+    }
+    remote_files = {s.rfilename for s in remote.siblings}
+    if expected_files - remote_files:
+        raise ValueError(
+            "Publication omitted artifacts: " + str(sorted(expected_files - remote_files))
+        )
+    artifact_hashes = {}
+    for name in ["config.json", "tokenizer/tokenizer.json", "evaluation.json", "README.md"]:
+        downloaded = hf_hub_download(REPO, name, revision=commit.oid)
+        if digest(downloaded) != digest(output / name):
+            raise ValueError("Uploaded artifact hash mismatch: " + name)
+        artifact_hashes[name] = digest(downloaded)
     weight = next(s for s in remote.siblings if s.rfilename == "model.safetensors")
     local_sha = digest(output / "model.safetensors")
     if weight.lfs is None or weight.lfs.sha256 != local_sha:
@@ -550,6 +571,7 @@ Code and execution evidence: https://github.com/koogle/lm-exploration/pull/30 .
         "weights_sha256": local_sha,
         "remote_lfs_hash_verified": True,
         "download_hash_verified": progress["tokens"] == 5_000_000_000,
+        "verified_artifact_hashes": artifact_hashes,
     }
     Path("/runs", RUN, "publication.json").write_text(json.dumps(result, indent=2))
     run_volume.commit()
