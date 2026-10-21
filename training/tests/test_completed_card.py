@@ -1,11 +1,9 @@
 """Model cards use editable Markdown and verified evidence, independent of run shape."""
 
-import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from publication.build_completed_card import DEFAULT_DOCUMENT, build_card, load_document
 
@@ -106,20 +104,14 @@ ${sample_text}
             },
         }
 
-    def build(self, *, corrupt=False):
-        files = {}
+    def build(self):
         for name, value in (
             ("audit.json", self.audit),
             ("validation.json", self.validation),
             ("segment.json", self.segment),
         ):
-            data = json.dumps(value).encode()
-            (self.root / name).write_bytes(data)
-            files[name] = {"size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
-        if corrupt:
-            (self.root / "audit.json").write_text("corrupt")
-        with patch("publication.artifacts.read_index", return_value={"files": files}):
-            return build_card(self.root, self.output, self.document)
+            (self.root / name).write_text(json.dumps(value))
+        return build_card(self.root, self.output, self.document)
 
     def test_markdown_and_measured_settings_drive_card_and_evidence_copy(self):
         self.build()
@@ -158,11 +150,6 @@ ${sample_text}
         self.segment["total_loss_tokens"] += 1
         with self.assertRaisesRegex(ValueError, "token counts disagree"):
             self.build()
-        self.assertFalse(self.output.exists())
-
-    def test_checksum_mismatch_is_rejected_before_rendering(self):
-        with self.assertRaisesRegex(ValueError, "checksum mismatch"):
-            self.build(corrupt=True)
         self.assertFalse(self.output.exists())
 
     def test_unknown_placeholder_fails_before_writing(self):

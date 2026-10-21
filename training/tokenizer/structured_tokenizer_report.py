@@ -12,7 +12,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from tokenizer.structured_tokenizer import CATEGORIES
 
-ROOT = Path("results/tokenizer-structured/structured-code-v1")
+ROOT = Path("artifacts/tokenizer-structured/structured-code-v1")
 VOCABS = (16384, 32768, 50000)
 
 
@@ -46,7 +46,7 @@ def generate():
     fits = json.loads((ROOT / "focused-fits.json").read_text())
     baseline = json.loads(
         Path(
-            "results/tokenizer-learning-curve/learning-curve-20261016-v2/measurements.json"
+            "artifacts/tokenizer-learning-curve/learning-curve-20261016-v2/measurements.json"
         ).read_text()
     )
     broad = {(r["size_mib"], r["requested_vocab_size"]): r for r in baseline}

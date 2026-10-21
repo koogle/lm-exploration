@@ -27,7 +27,10 @@ def canonical(value):
 
 
 def load_recipe(path):
-    recipe = json.loads(Path(path).read_text())
+    return validate_recipe(json.loads(Path(path).read_text()))
+
+
+def validate_recipe(recipe):
     sources = recipe["sources"]
     if sum(s["weight_percent"] for s in sources) != 100:
         raise ValueError("Source weights must sum to 100")
