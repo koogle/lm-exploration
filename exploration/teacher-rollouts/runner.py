@@ -197,6 +197,8 @@ def run(root, attempt, manifest, commit=lambda: None):
         c["model"],
         "--revision",
         c["revision"],
+        "--download-dir",
+        "/runs/teacher-hf-cache",
         "--tokenizer-revision",
         c["revision"],
         "--dtype",
@@ -243,7 +245,11 @@ def run(root, attempt, manifest, commit=lambda: None):
         cmd,
         stdout=log,
         stderr=subprocess.STDOUT,
-        env={**os.environ, "VLLM_SERVER_DEV_MODE": "1"},
+        env={
+            **os.environ,
+            "VLLM_SERVER_DEV_MODE": "1",
+            "HF_HUB_CACHE": "/runs/teacher-hf-cache",
+        },
     )
     report = {"status": "starting", "startup_to_ready_seconds": None, "trials": []}
     try:

@@ -63,6 +63,6 @@ Actual outputs, finish reasons, validation, token counts and costs are retained.
 An unsuccessful correctness gate stops generation benchmarking and is preserved
 as a negative result. No student training is launched.
 
-See the parent report and immutable artifact index for actual measurement status.
+See the parent README findings and its linked HF results folder for measurement status.
 Do not interpret the existence of this source or a successful compilation as a
 successful GPU correctness result.

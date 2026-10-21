@@ -25,5 +25,6 @@ Implementation lives here alongside the reports: [model and decoding code](laten
 [configs](latent-workspace/configs/) and [tests](latent-workspace/tests/).
 
 [Fixed-teacher rollouts](teacher-rollouts/) is a separate, bounded Qwen3.5-9B
-Modal generation benchmark for future distillation. The harness is implemented;
-GPU measurements await an explicit budget. It does not launch student training.
+Modal generation benchmark for future distillation. It includes a continuous-batching harness
+and an experimental 9B CUDA megakernel undergoing H100 correctness qualification.
+It does not launch student training.

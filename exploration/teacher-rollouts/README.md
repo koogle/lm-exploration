@@ -1,8 +1,9 @@
 # Fixed-teacher rollouts on Modal
 
 Separate experiment for distillation data from **Qwen/Qwen3.5-9B**. No student
-training, pretraining-plan changes, custom kernels or large generation campaign.
-**Implemented and CPU-tested; GPU benchmark and profile pending budget approval.**
+training, pretraining-plan changes or large generation campaign. Includes a
+[Qwen3.5-9B CUDA megakernel](megakernel/) and a separate continuously batched vLLM
+baseline. The CUDA port compiles; GPU correctness qualification is in progress.
 The dated implementation/status report (runtime inspection, prior-research
 reverification, profiling decision rule) is archived on HF; see
 [Findings so far](#findings-so-far).
@@ -111,9 +112,9 @@ profile: preserve its raw records, server log and worker timing as negative evid
 Full 2026-10-21 status report: [`pr-36/exploration/teacher-rollouts/REPORT.md`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-36/exploration/teacher-rollouts)
 in the private HF dataset `jfrick/lm-exploration-results`.
 
-- **No GPU job launched; no throughput, cost, memory or bottleneck measured.**
-  Every metric (tokens/s, accepted examples/hour, $/accepted, startup, peak memory,
-  prefill/decode/DeltaNet breakdown) is pending an authorized H100 run.
+- **H100 correctness probe launched after explicit user authorization.**
+  The CUDA image compiles. Measured correctness and performance results are
+  pending; the vLLM concurrency sweep has not run.
 - Runtime: vLLM 0.32.0 (`5df63a7`) chosen from source inspection (Qwen3.5
   architecture, text-only loading, per-request seeds, metrics, Torch profiling).
   SGLang 0.5.22 also supports Qwen3.5 but is kept as a later matched comparison.
@@ -122,12 +123,13 @@ in the private HF dataset `jfrick/lm-exploration-results`.
   attention), width 4,096, DeltaNet key/value heads 16/32, BF16.
 - Prior megakernel work does not transfer directly: Luce is hard-coded to
   Qwen3.5-0.8B (16/16 heads), Mirage targets Qwen3-8B, Megakernels is
-  Llama-oriented. **No custom CUDA work is justified by measurements yet**; first
+  Llama-oriented. The user subsequently requested an executable 9B port, now implemented under
+  `megakernel/`. Its throughput benefit remains unproven. For rollout optimization, first
   choose concurrency by pooled accepted examples per GPU second, then profile, and
   only propose a small kernel experiment if DeltaNet or launch overhead stays a
   substantial measured fraction at the best batched operating point.
-- CPU validation: 12 unit tests pass; Modal definitions import; ruff passes.
-  Build and GPU execution remain unverified.
+- CPU validation: 13 unit tests pass; Modal definitions import; ruff passes.
+  NVCC compilation succeeds in the pinned CUDA image.
 
 ## Artifacts
 
@@ -152,5 +154,4 @@ records, errors, runtime metadata, metrics, logs and traces, including failed ru
 and profiles. The exporter verifies each downloaded file at the immutable upload
 commit and writes a local checksum receipt to the ignored `artifacts/` dir; do not
 commit it. Update the findings above with concise results (negative ones too).
-Do not delete staged artifacts until verification succeeds. No run has been
-uploaded yet.
+Do not delete staged artifacts until verification succeeds. Run publication status is recorded in the findings above.
