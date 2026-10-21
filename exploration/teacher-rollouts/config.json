@@ -11,14 +11,19 @@
   "top_p": 0.95,
   "top_k": 20,
   "seed": 7341,
-  "concurrency": [1, 4, 16, 32],
+  "concurrency": [
+    1,
+    4,
+    16,
+    32
+  ],
   "repeats": 8,
   "rounds": 2,
   "runtime_seconds": 1200,
   "gpu_usd_per_hour": 3.9492,
   "resource_usd_per_hour_ceiling": 6.0,
   "attempt_usd_cap": 2.5,
-  "campaign_usd_cap": 5.0,
+  "campaign_usd_cap": 100,
   "budget_authorized": false,
   "authorization_reference": ""
 }

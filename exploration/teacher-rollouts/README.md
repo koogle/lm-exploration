@@ -27,12 +27,13 @@ ceiling. Do not change these fields merely to make the launch work.
   --config artifacts/authorized.json --launch
 ```
 
-The proposed campaign cap is **$5**, at most two reservations of **$2.10** each:
+The user has authorized a **$100 total campaign cap**, including prior
+reservations. Keep individual attempts bounded at **$2.10** compute reservation:
 one H100, four CPU cores, 32 GiB host memory, 20 minutes per attempt, plus a
 60-second shutdown reserve at a conservative **$6/resource-hour** ceiling.
 $3.9492/GPU-hour comes from the public [Modal pricing](https://modal.com/pricing)
 rate of $0.001097/second inspected 2026-10-21; workspace billing may differ.
-The remaining $0.80 is a reserve for build/storage overhead; confirm that this
+Remaining campaign headroom covers build/storage overhead; confirm that this
 covers the actual Modal workspace prices before approval/launch. Runtime and
 reservation controls cap configured compute exposure, not the provider invoice.
 There is no API here that imposes an account-wide billing cap. If the verified
@@ -146,7 +147,7 @@ in the private HF dataset `jfrick/lm-exploration-results`.
   choose concurrency by pooled accepted examples per GPU second, then profile, and
   only propose a small kernel experiment if DeltaNet or launch overhead stays a
   substantial measured fraction at the best batched operating point.
-- CPU validation: 15 unit tests pass; Modal definitions import; ruff passes.
+- CPU validation: 17 unit tests pass; Modal definitions import; ruff passes.
   NVCC compilation, the H100 smoke gate and fixture generation pass.
 
 ## Artifacts

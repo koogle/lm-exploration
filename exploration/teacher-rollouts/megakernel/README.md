@@ -110,12 +110,12 @@ uv run --with-requirements requirements.lock python launch.py \
   --config artifacts/authorized-sweep.json --launch
 ```
 
-The configuration must explicitly authorize budget; the current $5 campaign is
-fully reserved. Proposed next campaign increment: at most $5 additional, two
-single-H100 jobs (kernel sweep and vLLM concurrency sweep), at most 1,200 seconds
-each, $2.10 reserved per job plus $0.80 held for overhead. Do not launch using
-this proposal alone. The batched baseline still needs measured results; kernel
-launch geometry is not request concurrency. No new GPU sweep has been run.
+The user authorized a $100 total campaign cap, including prior reservations.
+Use the ignored authorized configuration and the existing ledger; preserve the
+1,200-second GPU job cap and independent supervisor. Start with one kernel sweep
+and one vLLM concurrency sweep; launch geometry is not request concurrency.
+The previous $5 campaign remains reserved. No automatic retries or student
+training are authorized by this experiment.
 
 CPU validation: 17 tests and Ruff pass; all eight variants compile locally.
 Local CUDA compilation is a build diagnostic only; the workspace uses GCC 14 and newer glibc, requiring temporary
