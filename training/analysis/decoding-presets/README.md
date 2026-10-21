@@ -114,52 +114,57 @@ indentation and normal language.
 
 Repetition is `1 - unique_generated_token_4grams / all_generated_token_4grams`,
 averaged equally across completions, excluding prompt tokens. The summary also
-splits prose/math from Python prompts and reports repeated raw and normalized
-(lowercased, whitespace-collapsed) character 16-grams over the first 256
-characters, plus EOS counts and completion lengths. Neither metric establishes
+splits prose/math from Python prompts. It reports word 4-grams and normalized
+(lowercased, whitespace-collapsed) character 16-grams, plus EOS counts and completion
+lengths. Neither metric establishes
 relevance, correctness, fluency or executable code.
 
 ## Reproduce
 
-Run from this directory with Modal credentials and access to the existing
-`lm-exploration-training` output volume. Outputs go to the ignored
-`training/artifacts/decoding-presets/` by default (`--output` overrides). Matching
-completed results are reused from the output volume.
+The two recipes here run on the [generic toolkit](../sampling/README.md):
+[`decoding-presets.json`](decoding-presets.json) for the sweep and
+[`precision-fp32.json`](precision-fp32.json) for the FP32 check. Run them from `training/`
+with Modal credentials and the `lm-exploration-training` volume. Each launch uses one H100,
+a 30-minute hard timeout and no retries. The image pins PyTorch 2.6.0 and tokenizers 0.22.2.
 
 ```sh
-modal run --detach modal_decoding.py
-modal run --detach modal_precision.py
+modal run --detach -m sampling.modal_sample --recipe analysis/decoding-presets/decoding-presets.json \
+  --output artifacts/decoding-presets/decoding-presets.json
+modal run --detach -m sampling.modal_sample --recipe analysis/decoding-presets/precision-fp32.json \
+  --output artifacts/decoding-presets/precision-fp32.json
 ```
 
-Each job uses one H100, four requested CPUs, 8 GiB RAM, a 30-minute hard timeout
-and no automatic function retries; downloads have four bounded retry attempts. The
-remote image pins PyTorch 2.6.0 and tokenizers 0.22.2. The sweep uses FP32 weights
-with BF16 autocast; the precision job uses full FP32.
-
-The report builders use only the Python standard library and take explicit input
-folders; they write their tables, summaries and completion dump beside the raw
-JSONs. They also need `previous-comparison-20261018.json` and
-`low-temperature-20261018.json` from the repetition study (published in
-`jfrick/scholarly-code-modern-gpt-124m-step2` under `analysis/repetition/`):
+To rebuild the tables, download the raw outputs archived in
+[`jfrick/lm-exploration-results`, folder `pr-20/training/analysis/decoding-presets/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-20/training/analysis/decoding-presets).
+The two repetition-study files come from that study's
+[archive](../repetition/README.md#archived-outputs).
 
 ```sh
-python build_report.py ../../artifacts/decoding-presets \
-  --previous ../../artifacts/repetition/previous-comparison-20261018.json
-python build_precision_report.py ../../artifacts/decoding-presets \
-  --repetition ../../artifacts/repetition
+uv run hf download jfrick/lm-exploration-results --repo-type dataset \
+  --local-dir artifacts/hf \
+  --include 'pr-20/training/analysis/decoding-presets/*.json'
+P=artifacts/hf/pr-20/training/analysis/decoding-presets R=artifacts/hf/analysis/repetition
+uv run python -m sampling.report $P/decoding-presets-20261018.json \
+  --reference $R/previous-comparison-20261018.json \
+  --recipe analysis/decoding-presets/decoding-presets.json \
+  --group-by mode --group-by mode,prompt_group --output-dir artifacts/decoding-presets/sweep
+uv run python -m sampling.report $P/own-precision-fp32-20261018.json \
+  --reference $P/decoding-presets-20261018.json --reference $R/low-temperature-20261018.json \
+  --reference $R/previous-comparison-20261018.json --output-dir artifacts/decoding-presets/fp32
 ```
 
-To rebuild the archived reports, download `decoding-presets-20261018.json` and
-`own-precision-fp32-20261018.json` from the HF folder above into
-`../../artifacts/decoding-presets/`. Rebuilding from the archived raw JSONs
-reproduces the archived summaries, tables and completion dump byte for byte.
+These commands reproduce the following archived values exactly:
 
-For a local environment whose outbound proxy uses the system CA store, the
-equivalent launch command used here is (TLS verification stays enabled):
+- every per-preset mean token repetition, including the prose/Python split;
+- completion, EOS and Python-completion counts, and mean completion lengths;
+- all 20 baseline reproducibility pairs (20 identical);
+- every FP32 comparison value: per-mode BF16/FP32 means, token-identical counts, and
+  per-sample first-divergence positions.
 
-```sh
-python -c 'import truststore; truststore.inject_into_ssl(); from modal.__main__ import main; main()' run --detach modal_decoding.py
-```
+The archived summary's normalized character 16-gram value over the first 256 characters
+included completions shorter than 256 characters. The toolkit's `char_rep16_first256` leaves
+those out and reports its coverage, so its values differ. The tables above do not use that
+metric.
 
 ## Execution
 

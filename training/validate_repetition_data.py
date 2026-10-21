@@ -7,13 +7,9 @@ import zlib
 from pathlib import Path
 
 import numpy as np
+from sampling.metrics import repetition
 from training_data.raw_token_stream import RawTokenMixture
 from training_data.subword import load_frozen
-
-
-def repetition(ids, n=4):
-    grams = [tuple(ids[i : i + n]) for i in range(max(0, len(ids) - n + 1))]
-    return 1 - len(set(grams)) / len(grams) if grams else 0
 
 
 def audit(manifest_path):
@@ -68,7 +64,7 @@ def audit(manifest_path):
         for key, raw in rows:
             text = zlib.decompress(raw).decode()
             ids = tok.encode(text, add_special_tokens=False).ids
-            value = repetition(ids)
+            value = repetition(ids, 4)
             values.append(value)
             examples.append(
                 {
