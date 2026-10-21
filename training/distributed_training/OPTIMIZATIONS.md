@@ -4,6 +4,10 @@ These opt-in execution settings are stacked on PR #16. Defaults retain the
 uncropped eager dense-loss path. Do not deploy `modal_simple_llm_8k.py` to evaluate
 these changes: the active 5B-token application retains its original source image.
 
+The canonical implementation uses the shared decoder in `10m/model.py`, re-exported
+by `100m/model.py`. Historical benchmark artifacts describe their recorded source,
+not a new hardware qualification of this package reconciliation.
+
 - `crop_padding`: trim each microbatch after its last nonignored label, retaining
   the entire causal prefix and interior masks. Fully ignored microbatches retain
   one position and contribute zero gradients while joining DDP collectives.
