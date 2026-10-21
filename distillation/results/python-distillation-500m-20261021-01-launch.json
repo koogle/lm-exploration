@@ -1,0 +1,104 @@
+{
+  "observed_at": "2026-10-21T13:45:38.993267+00:00",
+  "run_id": "python-distillation-500m-20261021-01",
+  "accepted_corpus_tokens": 1953968,
+  "accepted_records": 5324,
+  "teacher_generated_tokens": 2214783,
+  "attempts": 5632,
+  "rejected": 308,
+  "supervisor": {
+    "ready_training_tokens": 1511730,
+    "students": {
+      "fresh-27m": {
+        "tokens": 0,
+        "target": 500000000
+      },
+      "fresh-48m": {
+        "tokens": 0,
+        "target": 500000000
+      },
+      "existing-216m": {
+        "tokens": 0,
+        "target": 4500000
+      }
+    },
+    "active_jobs": [
+      "producer-0",
+      "producer-1",
+      "producer-2",
+      "producer-3"
+    ],
+    "failures": [],
+    "elapsed_seconds": 236.915612605
+  },
+  "plan": {
+    "corpus_target_tokens": 500000000,
+    "producer_workers": 4,
+    "students": {
+      "fresh-27m": 500000000,
+      "fresh-48m": 500000000,
+      "existing-216m": 4500000
+    },
+    "large_parent": "qwen4b-shared-50m-20261021-01/step-000007162.pt",
+    "policy": "No validation-based early stop; finite token targets; durable segment resume",
+    "verification": "teacher-generated problems/code/explanations; syntax checked, semantics unverified"
+  },
+  "producers": [
+    {
+      "next_index": 1664,
+      "tokens": 572901,
+      "accepted_records": 1570,
+      "attempts": 1664,
+      "rejected": 94,
+      "teacher_tokens": 654770,
+      "worker": 0,
+      "target": 125000000,
+      "status": "running",
+      "generation_seconds": 198.75078320699998,
+      "verification": "syntax and format only; semantics and explanations unverified",
+      "published_chunks": 13
+    },
+    {
+      "next_index": 1792,
+      "tokens": 620545,
+      "accepted_records": 1691,
+      "attempts": 1792,
+      "rejected": 101,
+      "teacher_tokens": 704279,
+      "worker": 1,
+      "target": 125000000,
+      "status": "running",
+      "generation_seconds": 202.835819645,
+      "verification": "syntax and format only; semantics and explanations unverified",
+      "published_chunks": 14
+    },
+    {
+      "next_index": 1024,
+      "tokens": 357313,
+      "accepted_records": 974,
+      "attempts": 1024,
+      "rejected": 50,
+      "teacher_tokens": 401118,
+      "worker": 2,
+      "target": 125000000,
+      "status": "running",
+      "generation_seconds": 182.16666481599998,
+      "verification": "syntax and format only; semantics and explanations unverified",
+      "published_chunks": 8
+    },
+    {
+      "next_index": 1152,
+      "tokens": 403209,
+      "accepted_records": 1089,
+      "attempts": 1152,
+      "rejected": 63,
+      "teacher_tokens": 454616,
+      "worker": 3,
+      "target": 125000000,
+      "status": "running",
+      "generation_seconds": 192.279555695,
+      "verification": "syntax and format only; semantics and explanations unverified",
+      "published_chunks": 9
+    }
+  ]
+}

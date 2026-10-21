@@ -10,6 +10,38 @@ from distillation.scale_train import Stream
 
 
 class ScaleTests(unittest.TestCase):
+    def test_publication_preserves_consumed_prefix(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for worker in range(4):
+                folder = root / f"producer-{worker}"
+                folder.mkdir()
+                chunks = [
+                    {"file": f"{i}.gz", "tokens": 100}
+                    for i in range(2 if worker == 0 else 1)
+                ]
+                atomic_json(
+                    folder / "progress.json", {"status": "running", "chunks": chunks}
+                )
+            initial = available_chunks(root)
+            self.assertEqual(
+                [(w, i) for w, i, _ in initial],
+                [(0, 0), (1, 0), (2, 0), (3, 0), (0, 1)],
+            )
+            for worker in range(1, 4):
+                atomic_json(
+                    root / f"producer-{worker}" / "progress.json",
+                    {
+                        "status": "running",
+                        "chunks": [
+                            {"file": f"{i}.gz", "tokens": 100} for i in range(2)
+                        ],
+                    },
+                )
+            extended = available_chunks(root)
+            self.assertEqual(extended[: len(initial)], initial)
+            self.assertEqual(len(extended), 8)
+
     def test_stream_partial_cursor_and_completed_uneven_producers(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

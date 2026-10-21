@@ -84,6 +84,17 @@ supervisors for the same run. The dedicated distillation volume stores:
 - Model `progress.json`, `metrics.jsonl`, `validation.jsonl`, checkpoint
   generations, and weights-only snapshots at completed segment boundaries.
 
+Read the current status without modifying jobs:
+
+```sh
+python -m distillation.scale_status python-distillation-500m-20261021-01
+```
+
+The snapshot distinguishes total accepted corpus tokens from the deterministic
+prefix currently consumable by students; one slower producer can hold back that
+prefix while the others continue publishing. Producer totals are live reads,
+not a single atomic cross-worker snapshot.
+
 At most four teacher and three student H100 workers can run concurrently.
 The CPU supervisor waits for published data. Fresh students start at 5M available
 tokens and run segments of up to 10M; the existing student starts at 6M original
