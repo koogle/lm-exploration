@@ -52,7 +52,7 @@ def generate_checkpoint(checkpoint, output, label, commit=lambda: None, max_new_
         load_frozen,
     )
 
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
 
     torch.set_num_threads(4)
     torch.backends.cuda.matmul.allow_tf32 = False

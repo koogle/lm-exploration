@@ -10,7 +10,7 @@ import time
 import zlib
 from pathlib import Path
 
-from .scholarly import SPLIT_VERSION, adapt, canonical, stream_rows
+from .simple_llm import SPLIT_VERSION, adapt, canonical, stream_rows
 from .subword import FIRST_CONTENT_TOKEN_ID, TOKENIZER_SHA256, digest, load_frozen
 
 
@@ -39,7 +39,7 @@ class RawCorpus:
                 "tokenizer": TOKENIZER_SHA256,
                 "split": SPLIT_VERSION,
                 "implementation_sha256": digest(__file__),
-                "adapter_sha256": digest(Path(__file__).with_name("scholarly.py")),
+                "adapter_sha256": digest(Path(__file__).with_name("simple_llm.py")),
                 "tokenizer_loader_sha256": digest(Path(__file__).with_name("subword.py")),
             }
         )

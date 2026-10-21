@@ -7,7 +7,7 @@ import torch
 from training_data.export_raw import export_raw
 from training_data.raw_corpus import RawCorpus
 from training_data.raw_token_stream import RawTokenMixture
-from training_data.scholarly import adapt
+from training_data.simple_llm import adapt
 
 
 class RawTokenStreamTests(unittest.TestCase):

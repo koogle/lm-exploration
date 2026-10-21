@@ -1,0 +1,212 @@
+{
+  "source_id": "ema",
+  "method": "Offline enumeration of complete previously captured official inventory; no fresh EMA requests.",
+  "inventory_url": "https://www.ema.europa.eu/en/documents/report/documents-output-epar_documents_json-report_en.json",
+  "sha256": "44ef8e0cb70bc011c2037fa4d78252d3354bdf3ebf924cd9d00b1095efb0157a",
+  "bytes": 29222731,
+  "inventory_timestamp": "2026-10-16T05:49:58Z",
+  "collections": {
+    "epar_product_information": {
+      "enumeration": {
+        "strategy": "complete JSON inventory; type partition; expand translations; latest first",
+        "inventory_urls": [
+          "https://www.ema.europa.eu/en/documents/report/documents-output-epar_documents_json-report_en.json"
+        ],
+        "inventory_provenance": {
+          "url": "https://www.ema.europa.eu/en/documents/report/documents-output-epar_documents_json-report_en.json",
+          "cached": true
+        },
+        "inventory_timestamp": "2026-10-16T05:49:58Z",
+        "reported_total": 20266,
+        "inventory_records": 20266,
+        "matching_inventory_records": 2219,
+        "available_document_language_records": 55214,
+        "enumerated_count": 55214,
+        "selection_limit": 100000,
+        "unselected_count": 0,
+        "selection_truncated": false,
+        "document_type_filter": [
+          "product-information"
+        ],
+        "overlaps_collections": [
+          "epar_documents"
+        ],
+        "skipped_urls": 72,
+        "complete": false,
+        "limitations": [
+          "Coverage is the published inventory, not all EMA websites or historical deletions.",
+          "Newest modified/published records first; bounded pilot is not a representative sample.",
+          "Inventory metadata is not full text; download and extract each document separately.",
+          "This targeted series overlaps epar_documents; do not collect both without ID deduplication.",
+          "Skipped 72 missing or unsupported document URLs."
+        ]
+      },
+      "languages": {
+        "sv": 2203,
+        "sl": 2203,
+        "sk": 2205,
+        "ro": 2201,
+        "pt": 2208,
+        "pl": 2205,
+        "no": 2157,
+        "nl": 2208,
+        "mt": 2203,
+        "lv": 2204,
+        "lt": 2207,
+        "it": 2209,
+        "is": 2156,
+        "hu": 2208,
+        "hr": 2103,
+        "fr": 2210,
+        "fi": 2210,
+        "et": 2208,
+        "es": 2211,
+        "en": 2219,
+        "el": 2211,
+        "de": 2210,
+        "da": 2211,
+        "cs": 2208,
+        "bg": 2202,
+        "ga": 234
+      },
+      "formats": {
+        "pdf": 55211,
+        "html": 3
+      }
+    },
+    "epar_overviews": {
+      "enumeration": {
+        "strategy": "complete JSON inventory; type partition; expand translations; latest first",
+        "inventory_urls": [
+          "https://www.ema.europa.eu/en/documents/report/documents-output-epar_documents_json-report_en.json"
+        ],
+        "inventory_provenance": {
+          "url": "https://www.ema.europa.eu/en/documents/report/documents-output-epar_documents_json-report_en.json",
+          "cached": true
+        },
+        "inventory_timestamp": "2026-10-16T05:49:58Z",
+        "reported_total": 20266,
+        "inventory_records": 20266,
+        "matching_inventory_records": 2224,
+        "available_document_language_records": 50656,
+        "enumerated_count": 50656,
+        "selection_limit": 100000,
+        "unselected_count": 0,
+        "selection_truncated": false,
+        "document_type_filter": [
+          "overview"
+        ],
+        "overlaps_collections": [
+          "epar_documents"
+        ],
+        "skipped_urls": 0,
+        "complete": true,
+        "limitations": [
+          "Coverage is the published inventory, not all EMA websites or historical deletions.",
+          "Newest modified/published records first; bounded pilot is not a representative sample.",
+          "Inventory metadata is not full text; download and extract each document separately.",
+          "This targeted series overlaps epar_documents; do not collect both without ID deduplication."
+        ]
+      },
+      "languages": {
+        "sv": 2181,
+        "sl": 2186,
+        "sk": 2186,
+        "ro": 2177,
+        "pt": 2187,
+        "pl": 2189,
+        "nl": 2190,
+        "mt": 2176,
+        "lv": 2188,
+        "lt": 2187,
+        "it": 2190,
+        "hu": 2188,
+        "fr": 2189,
+        "fi": 2189,
+        "et": 2183,
+        "es": 2188,
+        "en": 2224,
+        "el": 2186,
+        "de": 2186,
+        "da": 2186,
+        "cs": 2188,
+        "bg": 2177,
+        "hr": 1852,
+        "no": 229,
+        "is": 231,
+        "ga": 223
+      },
+      "formats": {
+        "pdf": 50497,
+        "html": 159
+      }
+    },
+    "epar_assessment_reports": {
+      "enumeration": {
+        "strategy": "complete JSON inventory; type partition; expand translations; latest first",
+        "inventory_urls": [
+          "https://www.ema.europa.eu/en/documents/report/documents-output-epar_documents_json-report_en.json"
+        ],
+        "inventory_provenance": {
+          "url": "https://www.ema.europa.eu/en/documents/report/documents-output-epar_documents_json-report_en.json",
+          "cached": true
+        },
+        "inventory_timestamp": "2026-10-16T05:49:58Z",
+        "reported_total": 20266,
+        "inventory_records": 20266,
+        "matching_inventory_records": 1796,
+        "available_document_language_records": 1891,
+        "enumerated_count": 1891,
+        "selection_limit": 100000,
+        "unselected_count": 0,
+        "selection_truncated": false,
+        "document_type_filter": [
+          "assessment-report"
+        ],
+        "overlaps_collections": [
+          "epar_documents"
+        ],
+        "skipped_urls": 0,
+        "complete": true,
+        "limitations": [
+          "Coverage is the published inventory, not all EMA websites or historical deletions.",
+          "Newest modified/published records first; bounded pilot is not a representative sample.",
+          "Inventory metadata is not full text; download and extract each document separately.",
+          "This targeted series overlaps epar_documents; do not collect both without ID deduplication."
+        ]
+      },
+      "languages": {
+        "en": 1796,
+        "sv": 4,
+        "sl": 4,
+        "sk": 4,
+        "ro": 4,
+        "pt": 4,
+        "pl": 4,
+        "no": 3,
+        "nl": 4,
+        "mt": 4,
+        "lv": 4,
+        "lt": 4,
+        "it": 4,
+        "is": 3,
+        "hu": 4,
+        "hr": 3,
+        "ga": 2,
+        "fr": 4,
+        "fi": 4,
+        "et": 4,
+        "es": 4,
+        "el": 4,
+        "de": 4,
+        "da": 4,
+        "cs": 4,
+        "bg": 4
+      },
+      "formats": {
+        "pdf": 1876,
+        "html": 15
+      }
+    }
+  }
+}

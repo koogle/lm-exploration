@@ -16,7 +16,7 @@ from pathlib import Path
 
 from .cached_shards import CachedShards
 from .persistent_stream import PersistentStream
-from .scholarly import SPLIT_VERSION, adapt, load_recipe
+from .simple_llm import SPLIT_VERSION, adapt, load_recipe
 from .subword import (
     BOS_TOKEN_ID,
     EOS_TOKEN_ID,
@@ -46,7 +46,7 @@ class LiveTokenMixture(TokenMixture):
         ):
             raise ValueError("Expected live manifest and supported split")
         if not allow_unreviewed:
-            raise ValueError("Live data requires the explicit experimental-data setting")
+            raise ValueError("Live data requires allow_unreviewed_data")
         if (
             self.manifest.get("tokenizer_sha256") != TOKENIZER_SHA256
             or self.manifest.get("max_passes") != 2

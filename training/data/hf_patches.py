@@ -8,7 +8,7 @@ import zlib
 from pathlib import Path
 
 from .overnight_corpus import LICENSES, SCHEMA
-from .scholarly import SPLIT_VERSION, canonical
+from .simple_llm import SPLIT_VERSION, canonical
 from .subword import FIRST_CONTENT_TOKEN_ID, TOKENIZER_SHA256, load_frozen
 
 

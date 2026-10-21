@@ -4,7 +4,7 @@ import gzip
 import json
 from pathlib import Path
 
-from .scholarly import MAX_LINE_BYTES, stream_rows
+from .simple_llm import MAX_LINE_BYTES, stream_rows
 
 
 class CachedShards:

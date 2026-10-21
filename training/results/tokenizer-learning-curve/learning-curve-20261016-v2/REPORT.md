@@ -18,7 +18,7 @@
 
 ## Experimental design
 
-- All 12 pinned source inventories from the scholarly/code plan are eligible; the experiment samples them rather than claiming to process every upstream record.
+- All 12 pinned source inventories from the Simple LLM plan are eligible; the experiment samples them rather than claiming to process every upstream record.
 - Nested per-source UTF-8 byte prefixes: 64, 128, 256, 512, 1,024 and 2,048 MiB. 16K means 16,384 entries, 32K means 32,768, and 50K means exactly 50,000.
 - Source weights follow the plan, applied to bytes for tokenizer fitting. This is distinct from the eventual model-training token mixture.
 - Shared 32 MiB evaluation corpus; parent-level train/evaluation/test separation before chunking. Test parents are excluded. The final evaluation caps each document and parent at 16 KiB to broaden coverage; fitting data are unchanged.
@@ -132,7 +132,7 @@ Token-level language-model perplexity is not compared here. Downstream evaluatio
 
 ## Reproduction and evidence
 
-- Published tokenizer variants: [jfrick/scholarly-code-tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).
+- Published tokenizer variants: [Simple LLM tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).
 - `measurements.json` contains compact metrics, per-source comparisons, fragmentation probes and raw-result hashes. Full parent totals and candidate tokenizers remain on the Modal results volume.
 - `corpus-manifest.json` records source pins, sampling settings, corpus hashes and collection decisions; `evaluation-corpus-manifest.json` pins the broader held-out corpus. `modal-smoke.json` records remote test execution.
 - Run `python tokenizer_report.py <results-folder>` to regenerate this report and Matplotlib PNG/SVG/PDF figures from downloaded raw result JSONs.

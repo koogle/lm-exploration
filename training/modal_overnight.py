@@ -7,7 +7,7 @@ from pathlib import Path
 
 import modal
 
-from modal_distributed_train import validate_paths, worker
+from distributed_training.modal_train import validate_paths, worker
 from modal_eu_continuation import data_volume, run_volume
 
 image = (
@@ -27,13 +27,12 @@ image = (
     .add_local_dir("100m", "/project/model_100m")
     .add_local_dir("10m", "/project/model_10m")
     .add_local_dir("trainer", "/project/trainer")
+    .add_local_dir("distributed_training", "/project/distributed_training")
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer")
     .add_local_dir("tests", "/project/tests")
     .add_local_dir("publication", "/project/publication")
     .add_local_file("generate.py", "/project/generate.py")
-    .add_local_file("modal_scholarly_pilot.py", "/project/modal_scholarly_pilot.py")
-    .add_local_file("modal_distributed_train.py", "/project/modal_distributed_train.py")
 )
 image = image.add_local_file(
     "modal_eu_continuation.py", "/project/modal_eu_continuation.py"
@@ -50,6 +49,7 @@ PARENT = "simple-llm-code60-fresh-5b-20261019-r02-s02/step-000066065.pt"
 SNAPSHOT = VERSION + "/snapshots/code60-onepass-10b"
 TARGET = 10_000_000_000
 SETTINGS = {
+    "optimizer": "adamw",
     "world_size": 8,
     "global_windows": 32,
     "microbatch": 2,
@@ -72,7 +72,7 @@ SETTINGS = {
 
 
 def mark(run_id, stage, **details):
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
 
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -96,8 +96,8 @@ def prepare_original():
     from training_data.original_refresh import fork_original
     from training_data.overnight_snapshot import weights_from
 
+    from distributed_training.train import atomic_json
     from trainer.continued_pretraining import token_targets
-    from trainer.distributed_train import atomic_json
 
     class Refresh(FreshRawCorpus):
         def report(self, target):
@@ -269,7 +269,7 @@ def freeze_snapshot(audit_round=0):
 )
 def start_prepared_run(run_id, provenance):
     """User-authorized experimental launch without the remaining corpus audit."""
-    from training_data.prepared_snapshot import build
+    from training_data.prepared_reference import build
     from training_data.raw_token_stream import RawTokenMixture
 
     from trainer.representative_validation import load_heldout
@@ -315,9 +315,9 @@ def start_prepared_run(run_id, provenance):
 def initialize(run_id):
     import torch
 
+    from distributed_training.config import DistributedConfig
+    from distributed_training.run_validation import validate_overnight_run
     from trainer.continued_pretraining import migrate_phase
-    from trainer.distributed_config import DistributedConfig
-    from trainer.run_validation import validate_overnight_run
 
     config = DistributedConfig(**SETTINGS, target_tokens=TARGET)
     validate_overnight_run(config)
@@ -354,8 +354,8 @@ def initialize(run_id):
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def segment(run_id, provenance, resume, max_steps=None):
-    from trainer.distributed_config import DistributedConfig
-    from trainer.run_validation import validate_overnight_run
+    from distributed_training.config import DistributedConfig
+    from distributed_training.run_validation import validate_overnight_run
 
     config = DistributedConfig(**SETTINGS, target_tokens=TARGET)
     validate_overnight_run(config)
@@ -560,7 +560,7 @@ def finish(run_id, checkpoint):
 
     from huggingface_hub import HfApi, hf_hub_download
 
-    from trainer.distributed_train import atomic_json
+    from distributed_training.train import atomic_json
 
     folder = Path("/runs") / run_id
     results = {}
