@@ -44,6 +44,14 @@ image = (
 sandbox_image = modal.Image.debian_slim(python_version="3.12")
 
 
+def invoke(function, *args, **kwargs):
+    call = function.spawn(*args, **kwargs)
+    print(
+        json.dumps({"child_function": function.object_id, "child_call": call.object_id}), flush=True
+    )
+    return call.get()
+
+
 def record(stage, **details):
     from trainer.distributed_train import atomic_json
 
@@ -143,7 +151,7 @@ def qualify():
     image=image,
     gpu="H100:8",
     cpu=32,
-    memory=131072,
+    memory=65536,
     timeout=25200,
     retries=0,
     max_containers=1,
@@ -623,7 +631,7 @@ Code and execution evidence: https://github.com/koogle/lm-exploration/pull/30 .
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
 )
-def start(finalization_call_id: str, qualification_call_id: str):
+def start(finalization_call_id: str, qualification_call_id: str, initial_update_call_id: str = ""):
     import math
 
     from training_data.python_experiment import TARGETS
@@ -649,10 +657,19 @@ def start(finalization_call_id: str, qualification_call_id: str):
         raise
     if not checked.get("passed"):
         raise ValueError("Qualification did not pass")
+    if initial_update_call_id:
+        record("eight_gpu_qualification", initial_update_call=initial_update_call_id, tokens=0)
+        try:
+            first = modal.FunctionCall.from_id(initial_update_call_id).get()
+            if first["session_steps"] != 2 or first["total_loss_tokens"] <= 0:
+                raise ValueError("Initial eight-GPU qualification did not complete two updates")
+        except Exception as exc:
+            record("eight_gpu_qualification_failed", error=f"{type(exc).__name__}: {exc}")
+            raise
     record("checking_isolated_evaluator")
     harness = Path("/runs", RUN, "execution-harness.json")
     if not harness.exists() or json.loads(harness.read_text()).get("execution_pass_rate") != 1.0:
-        execution_checks.remote()
+        invoke(execution_checks)
     run_volume.reload()
     reports = []
     for folder in sorted(Path("/runs").glob(RUN + "-s*")):
@@ -666,7 +683,7 @@ def start(finalization_call_id: str, qualification_call_id: str):
     try:
         while len(reports) < 2:
             record("eight_gpu_qualification", segment=index, tokens=tokens)
-            result = train_segment.remote(index, resume, max_steps=2)
+            result = invoke(train_segment, index, resume, max_steps=2)
             run_volume.reload()
             if result["session_steps"] != 2 or result["total_loss_tokens"] <= tokens:
                 raise ValueError("Eight-GPU qualification did not produce optimizer updates")
@@ -715,7 +732,7 @@ def start(finalization_call_id: str, qualification_call_id: str):
                     next_evaluation_target=milestone,
                     segment=index,
                 )
-                result = train_segment.remote(index, resume, stop_tokens=milestone)
+                result = invoke(train_segment, index, resume, stop_tokens=milestone)
                 run_volume.reload()
                 if result["total_loss_tokens"] <= tokens or result["stop_reason"] in (
                     "data_error",
@@ -729,10 +746,10 @@ def start(finalization_call_id: str, qualification_call_id: str):
                 resume, tokens = result["final_checkpoint"], result["total_loss_tokens"]
                 index += 1
             record("evaluating", tokens=tokens, steps=latest["steps"], checkpoint=resume)
-            generated = generations.remote(resume)
-            evaluated = execution_checks.remote(generated)
+            generated = invoke(generations, resume)
+            evaluated = invoke(execution_checks, generated)
             try:
-                published = publish.remote(resume, evaluated)
+                published = invoke(publish, resume, evaluated)
             except ValueError:
                 raise
             except Exception as exc:
@@ -752,9 +769,9 @@ def start(finalization_call_id: str, qualification_call_id: str):
         if tokens != 5_000_000_000 or latest["loss_token_exposures"] != TARGETS:
             raise ValueError("Final exact token/category budgets were not met")
         if "published" not in locals():
-            generated = generations.remote(resume)
-            evaluated = execution_checks.remote(generated)
-            published = publish.remote(resume, evaluated)
+            generated = invoke(generations, resume)
+            evaluated = invoke(execution_checks, generated)
+            published = invoke(publish, resume, evaluated)
         return record(
             "complete",
             tokens=tokens,
