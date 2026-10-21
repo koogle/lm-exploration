@@ -8,11 +8,25 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from distillation.dataset_archive import archive
-from distillation.dataset_pipeline import publish_chunks, teacher_count
+from distillation.dataset_pipeline import phase_goal, publish_chunks, teacher_count
 from distillation.scale_data import atomic_json, available_chunks
 
 
 class DatasetPipelineTests(unittest.TestCase):
+    def test_phase_boundaries_preserve_total_budget(self):
+        self.assertEqual(
+            phase_goal(61_646_516, 4_500_000_000, 1_000_000_000), 1_000_000_000
+        )
+        self.assertEqual(
+            phase_goal(1_000_000_000, 4_500_000_000, 1_000_000_000), 2_000_000_000
+        )
+        self.assertEqual(
+            phase_goal(4_000_000_000, 4_500_000_000, 1_000_000_000), 4_500_000_000
+        )
+        self.assertEqual(
+            phase_goal(4_500_000_000, 4_500_000_000, 1_000_000_000), 4_500_000_000
+        )
+
     def test_sizing_and_dynamic_publish_preserve_prefix(self):
         self.assertEqual(teacher_count(100000, 2500), 50)
         with self.assertRaises(ValueError):

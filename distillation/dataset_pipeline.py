@@ -59,3 +59,10 @@ def freeze_initial_prefix(root, name, continuation):
 
 def plan_hash(plan):
     return hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
+
+
+def phase_goal(trained_tokens, target, phase_tokens):
+    """Next absolute boundary: preserve the existing cursor and final target."""
+    if phase_tokens <= 0 or trained_tokens < 0 or target <= 0:
+        raise ValueError("Invalid phase budget")
+    return min(target, (trained_tokens // phase_tokens + 1) * phase_tokens)

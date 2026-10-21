@@ -1,3 +1,36 @@
+# Phased generation and training
+
+The active policy now generates and archives data before student training. The
+first milestone is **1B total accepted Qwen tokens**, including the frozen initial
+103,669,090-token prefix and existing fresh continuation. It is not an additional
+1B on top of that data. The existing 61.65M-token checkpoint remains the resume
+point. Data is consumed once, with no intentional replay.
+
+`supervise_phased` requests up to **256 single-H100 teachers**, the app's configured
+ceiling, not a verified workspace quota or guaranteed allocation. Each new call
+produces about 1M accepted tokens; the final wave limits outstanding calls by the
+remaining budget. Existing calls finish normally. In-flight batches can overshoot
+a milestone; the tail is preserved for the following phase. Once teachers drain,
+the controller waits until all published tokens are archived on HF before
+requesting an 8-H100 student. It trains in checkpointed segments capped at the
+absolute phase boundary, preserving the original 4.5B learning-rate horizon.
+
+After training reaches 1B, the controller generates to 2B, then 3B, 4B and finally
+4.5B, alternating generation and training. The existing original-corpus sweep is
+separate; its later data is outside the frozen student prefix. Actual teacher
+allocation and eight-GPU throughput must be measured, not inferred from requests.
+
+Entry points: deploy `distillation.modal_billion`, stop the previous supervisor
+and its queued student, call `configure_phased`, then spawn `supervise_phased`.
+Do not run both supervisors concurrently. Archive uses the same private HF
+dataset and records immutable commits/checksums. Short final archive parts are
+flushed when the controller reaches `archiving_phase`.
+
+The 25 CPU tests pass, including phase boundaries, distributed target accounting,
+append-only publication and archive integrity. These do not qualify an 8-GPU run.
+
+## Previous streaming policy and evidence
+
 # Eight-GPU student with a throughput-sized teacher pool
 
 The 215,910,656-parameter shared-Qwen student retains its 4.5B fresh-token target.

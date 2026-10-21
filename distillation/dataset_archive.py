@@ -51,6 +51,11 @@ def archive(root, name, fresh_root, commit, reload_volume, seconds=82000):
         tail = ordered[start : start + 128]
         if not tail or (
             len(tail) < 64
+            and not (
+                (output / "supervisor.json").exists()
+                and json.loads((output / "supervisor.json").read_text()).get("status")
+                == "archiving_phase"
+            )
             and index["parts"]
             and progress["tokens"] < progress["target"]
         ):

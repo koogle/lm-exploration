@@ -6,7 +6,8 @@ the existing 215.9M shared-tokenizer model (corrected from the initial 4.5M
 request). The large run now uses a single pass over newly generated data, with
 an expanded Qwen-counted continuation corpus; repeated passes are disabled.
 The [current execution pipeline](SUPPLY_PIPELINE.md) configures eight-GPU student
-training, a throughput-sized teacher pool and a reusable private dataset archive.
+training after archived 1B-token generation phases, up to 256 requested teacher
+GPUs, and a reusable private dataset archive.
 Earlier sections retain pilot history.
 
 For the next Python/math curriculum experiment, see the

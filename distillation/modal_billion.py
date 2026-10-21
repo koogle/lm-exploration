@@ -93,7 +93,7 @@ def configure_supply():
     max_containers=256,
     volumes={"/distill": volume},
 )
-def fresh_producer(worker):
+def fresh_producer(worker, segment_tokens=10_000_000):
     from distillation.scale_data import generate
 
     # Upper bound: consumed old data also counts toward training's 4.5B target.
@@ -105,7 +105,7 @@ def fresh_producer(worker):
         target=1_125_000_000,
         token_kind="qwen",
         index_offset=100_000_000,
-        segment_tokens=10_000_000,
+        segment_tokens=segment_tokens,
     )
 
 
@@ -144,7 +144,7 @@ def prepare_unique_policy():
     max_containers=1,
     volumes={"/distill": volume},
 )
-def train():
+def train(segment_tokens=50_000_000):
     import subprocess
     import sys
 
@@ -162,7 +162,7 @@ def train():
             "--name",
             NAME,
             "--segment-tokens",
-            "50000000",
+            str(segment_tokens),
         ],
         check=True,
         timeout=80000,
@@ -369,3 +369,160 @@ def supervise():
 @app.local_entrypoint()
 def main():
     print(json.dumps(supervise.remote(), indent=2))
+
+
+@app.function(
+    image=image,
+    cpu=1,
+    memory=4096,
+    timeout=86400,
+    retries=2,
+    max_containers=1,
+    volumes={"/distill": volume},
+)
+def supervise_phased():
+    """Generate, drain teachers, archive, then train; repeat without corpus replay."""
+    import math
+
+    from distillation.dataset_pipeline import phase_goal, publish_chunks
+    from distillation.scale_data import atomic_json
+
+    root = Path("/distill") / CORPUS
+    output = root / NAME
+    fresh = Path("/distill") / FRESH_CORPUS
+    state_path = output / "supervisor.json"
+    volume.reload()
+    state = json.loads(state_path.read_text())
+    supply = json.loads((output / "supply-plan.json").read_text())
+    workers = supply["workers"]
+    generation = {
+        k: modal.FunctionCall.from_id(v)
+        for k, v in state.get("generation_calls", {}).items()
+    }
+    call = (
+        modal.FunctionCall.from_id(state["call_id"]) if state.get("call_id") else None
+    )
+    archive_call = (
+        modal.FunctionCall.from_id(state["archive_call"])
+        if state.get("archive_call")
+        else None
+    )
+    started = time.monotonic()
+
+    def save():
+        state["generation_calls"] = {k: c.object_id for k, c in generation.items()}
+        state["call_id"] = call.object_id if call else None
+        state["archive_call"] = archive_call.object_id if archive_call else None
+        atomic_json(state_path, state)
+        volume.commit()
+
+    while time.monotonic() - started < 82000:
+        volume.reload()
+        progress = json.loads((output / "progress.json").read_text())
+        goal = phase_goal(progress["tokens"], TARGET, supply["phase_tokens"])
+        manifest = publish_chunks(fresh, workers)
+        ready = supply["initial_qwen_tokens"] + manifest["qwen_tokens"]
+        for key in list(generation):
+            try:
+                generation[key].get(timeout=0)
+            except TimeoutError:
+                continue
+            except Exception as error:
+                # Durable producer progress permits a restart without replay.
+                logger.exception("Teacher failed; resuming durable progress")
+                state["last_producer_error"] = str(error)
+            del generation[key]
+        if archive_call:
+            try:
+                archive_call.get(timeout=0)
+            except TimeoutError:
+                pass
+            except Exception as error:
+                logger.exception("Archive failed; resuming durable upload")
+                state["archive_error"] = str(error)
+                archive_call = None
+            else:
+                archive_call = None
+                state.pop("archive_error", None)
+        if archive_call is None:
+            archive_call = archive_dataset.spawn()
+        archived_path = output / "dataset-archive.json"
+        archived = (
+            json.loads(archived_path.read_text()) if archived_path.exists() else {}
+        )
+        if call:
+            try:
+                result = call.get(timeout=0)
+            except TimeoutError:
+                pass
+            except Exception as error:
+                state.update(status="failed", error=str(error))
+                save()
+                raise
+            else:
+                progress = result
+                call = None
+                goal = phase_goal(progress["tokens"], TARGET, supply["phase_tokens"])
+        state.update(
+            progress=progress,
+            phase_goal=goal,
+            teacher_workers=workers,
+            ready_qwen_tokens=ready,
+            archived_qwen_tokens=archived.get("qwen_tokens", 0),
+            buffer_tokens=ready - progress["tokens"],
+            policy="Generate and archive 1B-token phases, then train once; no replay",
+        )
+        if progress["tokens"] >= TARGET:
+            state["status"] = "completed"
+            save()
+            return state
+        if ready < goal:
+            state["status"] = "generating_phase"
+            # One million accepted targets per call; reserve in-flight work to
+            # bound the last wave. Existing 10M calls finish without cancellation.
+            slots = min(workers, math.ceil((goal - ready) / 1_000_000))
+            for worker in range(workers):
+                if len(generation) >= slots:
+                    break
+                key = str(worker)
+                if key not in generation:
+                    generation[key] = fresh_producer.spawn(
+                        worker, segment_tokens=1_000_000
+                    )
+                    save()
+        elif generation:
+            state["status"] = "draining_teachers"
+        elif archived.get("qwen_tokens", 0) < ready:
+            # Flush the final short archive part before releasing student work.
+            state["status"] = "archiving_phase"
+        else:
+            state["status"] = "training_phase"
+            if call is None:
+                state["start_tokens"] = progress["tokens"]
+                call = train.spawn(
+                    segment_tokens=min(50_000_000, goal - progress["tokens"])
+                )
+        save()
+        time.sleep(30)
+    continuation = supervise_phased.spawn()
+    return {"status": "continued", "call_id": continuation.object_id}
+
+
+@app.function(
+    image=image, cpu=1, memory=2048, timeout=300, volumes={"/distill": volume}
+)
+def configure_phased():
+    """Invoke after stopping the previous supervisor and queued student calls."""
+    from distillation.scale_data import atomic_json
+
+    volume.reload()
+    output = Path("/distill") / CORPUS / NAME
+    supply = json.loads((output / "supply-plan.json").read_text())
+    supply.update(workers=256, phase_tokens=1_000_000_000, mode="generate_then_train")
+    atomic_json(output / "supply-plan.json", supply)
+    state = json.loads((output / "supervisor.json").read_text())
+    state.update(call_id=None, status="generating_phase", teacher_workers=256)
+    state.pop("archive_error", None)
+    atomic_json(output / "supervisor.json", state)
+    volume.commit()
+    return supply
