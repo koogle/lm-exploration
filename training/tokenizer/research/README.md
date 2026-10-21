@@ -2,7 +2,7 @@
 
 Compare 64, 128, 256, 512, 1,024 and 2,048 MiB of fitting text at 16,384,
 32,768 and 50,000 vocabulary entries: 18 fresh candidates. The specification is
-`learning-curve-v1.json`. Existing frozen `scholarly-code-v1` assets never change.
+`learning-curve-v1.json`. Existing frozen `simple-llm-v1` assets never change.
 
 ## Corpus
 
@@ -17,7 +17,7 @@ weights apply to UTF-8 bytes. Each size takes nested per-source prefixes of the
 frozen text. UTF-8 boundaries can leave at most three bytes unused per source.
 This is one sampling seed, not a measurement of variance across training samples.
 
-Parent hashing uses `scholarly-parent-v2`: 80% fitting, 10% evaluation, 10% excluded
+Parent hashing uses `simple-llm-parent-v2`: 80% fitting, 10% evaluation, 10% excluded
 test. A fixed, source-weighted 32 MiB evaluation corpus serves all candidates.
 The original tokenizer's collector split was not retained, so its historical
 metrics are not mixed into this matched experiment; 64 MiB candidates are new.
@@ -71,12 +71,13 @@ Storage:
 - `lm-exploration-mixture-data:/tokenizer-research/<run-id>/`: staging and `frozen/`.
 - `lm-exploration-training:/tokenizer-research/<run-id>/<MiB>mib-<vocab>/`:
   `tokenizer.json` and full `result.json`, including parent-level totals.
-- `results/tokenizer-learning-curve/<run-id>/`: downloaded measurements and report.
+- `artifacts/tokenizer-learning-curve/<run-id>/` (ignored): downloaded measurements and report.
+  Published outputs live in `jfrick/scholarly-code-tokenizer` under `research/`.
 
 ## Report
 
 ```sh
-uv run python -m tokenizer.tokenizer_report results/tokenizer-learning-curve/<run-id>
+uv run python -m tokenizer.tokenizer_report artifacts/tokenizer-learning-curve/<run-id>
 ```
 
 Generates `REPORT.md`, `research-report.pdf`, compact `measurements.json`, and
@@ -108,7 +109,7 @@ uv run modal run --detach modal_scripts/modal_tokenizer_evaluation.py \
 # After collection and all 18 fits have finished:
 uv run modal run --detach modal_scripts/modal_tokenizer_evaluation.py \
   --run-id learning-curve-20261016-v2 --phase evaluate
-uv run python -m tokenizer.tokenizer_report results/tokenizer-learning-curve/learning-curve-20261016-v2
+uv run python -m tokenizer.tokenizer_report artifacts/tokenizer-learning-curve/learning-curve-20261016-v2
 ```
 
 Collection has four CPU/16 GiB requests and hard caps and a two-hour timeout.
@@ -123,7 +124,7 @@ evaluation throughput is measured in the new two-CPU rescoring workers.
 ## Hugging Face publication
 
 All 18 measured candidates are packaged in
-[`jfrick/scholarly-code-tokenizer`](https://huggingface.co/jfrick/scholarly-code-tokenizer).
+[Simple LLM tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).
 The original default was 2 GiB / 32K. The user subsequently selected the
 code-focused `structured-code-v1` 32K tokenizer as the default. Its frozen assets
 and Hub revision are in `../structured-code-v1/`. Each alternative
@@ -135,8 +136,8 @@ After downloading candidate `tokenizer.json` files into
 
 ```sh
 uv run python -m tokenizer.package_tokenizer_research \
-  results/tokenizer-learning-curve/learning-curve-20261016-v2 \
-  <artifacts> <new-publication-folder> --repo-id jfrick/scholarly-code-tokenizer
+  artifacts/tokenizer-learning-curve/learning-curve-20261016-v2 \
+  <artifacts> <new-publication-folder> --repo-id jfrick/simple-llm-tokenizer
 ```
 
 Packaging verifies all candidate hashes and the shared audited evaluation manifest.
@@ -155,17 +156,17 @@ uv run --isolated --no-project --with transformers==4.57.6 \
 # Or check the published repository at its immutable commit:
 uv run --isolated --no-project --with transformers==4.57.6 \
   --with tokenizers==0.22.2 python tokenizer/verify_tokenizer_publication.py \
-  jfrick/scholarly-code-tokenizer --revision <commit-sha>
+  jfrick/simple-llm-tokenizer --revision <commit-sha>
 ```
 
 ## JSON, code, diffs and tool calls
 
-The [structured-output follow-up](../../results/tokenizer-structured/structured-code-v1/REPORT.md)
+The [structured-output follow-up](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/tokenizer-structured/structured-code-v1/REPORT.md)
 scores all 18 original candidates and three fresh 64 MiB code-focused fits at
 16K/32K/50K. It uses 512 disjoint held-out Python parents to construct each of four
 workloads. JSON, patches and tool formats are controlled generated fixtures, not
 independent production traces. The focused mixture is 40/20/20/20 by UTF-8 bytes;
-all new candidates are also checked on the original scholarly mixture.
+all new candidates are also checked on the original simple LLM mixture.
 
 Run `modal run --detach modal_scripts/modal_structured_tokenizer.py`, then
 `uv run python -m tokenizer.structured_tokenizer_report` from `training/`. The Modal entrypoint

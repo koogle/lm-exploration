@@ -1,0 +1,17 @@
+{
+  "data_loader": "live",
+  "world_size": 3,
+  "global_windows": 48,
+  "microbatch": 8,
+  "context": 2048,
+  "target_tokens": 5000000000,
+  "warmup_tokens": 20000000,
+  "peak_lr": 0.0003,
+  "checkpoint_every": 500,
+  "evaluate_every": 500,
+  "allow_unreviewed_data": true,
+  "prefetch_batches": 16,
+  "n_layer": 8,
+  "n_head": 3,
+  "n_embd": 192
+}

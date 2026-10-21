@@ -8,13 +8,13 @@ The caller must enforce a 3,600-second timeout on each remote collection worker.
 from __future__ import annotations
 
 import copy
-import json
 import time
 from pathlib import Path
 
 from huggingface_hub.errors import HfHubHTTPError
 
 from hf_store import COMPONENT, HFStore
+from pipeline import load_mapping
 
 ROOT = Path(__file__).resolve().parent
 TERMINAL_RUNS = {"bounded_complete", "paused_rate_limit"}
@@ -38,7 +38,7 @@ def run_campaign(
     clock=time.time,
     sleep=time.sleep,
 ):
-    """Run at most three remote rounds, preserving claims/results in source HF state.
+    """Run a configured bounded number of remote rounds, preserving claims/results in source HF state.
 
     ``collect_callable(run_id, max_documents, work_seconds)`` is synchronous and
     should call a separate Modal worker's ``.remote`` method. Alternatively supply
@@ -49,13 +49,16 @@ def run_campaign(
     """
     if (spawn_callable is None) != (call_loader is None):
         raise ValueError("spawn_callable and call_loader must be provided together")
-    mapping = json.loads(Path(mapping_path or ROOT / "pipeline_sources.json").read_text())
+    mapping = load_mapping(mapping_path)
     config = mapping["sources"][source_id]
     limits = mapping["limits"]
     if not COMPONENT.fullmatch(campaign_id):
         raise ValueError("Invalid campaign ID")
-    if not 1 <= rounds <= 3:
-        raise ValueError("Campaigns allow one to three rounds")
+    max_rounds = config.get("max_campaign_rounds", 3)
+    if type(max_rounds) is not int or not 1 <= max_rounds <= 6:
+        raise ValueError("Configured campaign round limit must be one through six")
+    if type(rounds) is not int or not 1 <= rounds <= max_rounds:
+        raise ValueError("Campaign rounds exceed the source bound")
     if not 1 <= max_documents <= limits["max_documents_per_source"]:
         raise ValueError("Document limit exceeds configured bound")
     if not 1 <= work_seconds <= limits["work_seconds"]:
@@ -141,7 +144,7 @@ def run_campaign(
             "status": "planned",
             "started_at_epoch": clock(),
             "deadline_epoch": invocation_started
-            + 4 * 3600
+            + max(4, rounds + 1) * 3600
             + (predecessor_wait_seconds if after_campaign else 0),
             "rounds": [
                 {"run_id": f"{campaign_id}-round-{i + 1}", "status": "planned"}
@@ -248,7 +251,7 @@ def wait_for_dispatch(
     if not 0 < timeout_seconds <= 120:
         raise ValueError("Dispatch gate timeout must be in (0, 120] seconds")
     if store is None:
-        mapping = json.loads(Path(mapping_path or ROOT / "pipeline_sources.json").read_text())
+        mapping = load_mapping(mapping_path)
         store = HFStore(mapping["sources"][source_id]["repo_id"])
     deadline = clock() + timeout_seconds
     while True:

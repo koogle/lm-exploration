@@ -26,6 +26,224 @@ COLLECTIONS = {
     "annual_report_translations": {"name": "ECB Annual Report translations", "type_ids": ["132"]},
     "annual_reports": {"name": "ECB Annual Report", "type_ids": ["132"]},
     "convergence_reports": {"name": "ECB Convergence Report", "type_ids": ["22"]},
+    "financial_stability_reviews": {"name": "ECB Financial Stability Review", "type_ids": ["137"]},
+    "statistics_papers": {"name": "ECB Statistics Paper Series", "type_ids": ["5"]},
+    "research_bulletins": {"name": "ECB Research Bulletin", "type_ids": ["61"]},
+    "legal_working_papers": {"name": "ECB Legal Working Paper Series", "type_ids": ["4"]},
+    "discussion_papers": {"name": "ECB Discussion Paper Series", "type_ids": ["377"]},
+    "central_banking_proceedings": {
+        "name": "ECB Forum on Central Banking - Conference proceedings",
+        "type_ids": ["155"],
+    },
+    "legal_conference_proceedings": {"name": "Legal conference proceedings", "type_ids": ["450"]},
+    "letters_to_meps": {"name": "ECB Letters to MEPs", "type_ids": ["18"]},
+    "ecb_blog": {"name": "The ECB Blog", "type_ids": ["226"]},
+    "macroprudential_bulletin_articles": {
+        "name": "ECB Macroprudential Bulletin articles",
+        "type_ids": ["96"],
+    },
+    "financial_integration_reports": {
+        "name": "Financial integration and structure in the euro area",
+        "type_ids": ["140"],
+    },
+    "international_role_euro": {"name": "The international role of the euro", "type_ids": ["143"]},
+    "target_annual_reports": {"name": "TARGET Annual Report", "type_ids": ["142"]},
+    "bank_lending_surveys": {"name": "Euro area bank lending survey", "type_ids": ["99"]},
+    "professional_forecaster_surveys": {
+        "name": "ECB Survey of Professional Forecasters",
+        "type_ids": ["158"],
+    },
+    "enterprise_finance_surveys": {
+        "name": "Survey on the Access to Finance of Enterprises in the euro area",
+        "type_ids": ["157"],
+    },
+    "t2s_annual_reports": {"name": "T2S Annual Report", "type_ids": ["159"]},
+    "annual_report_ep_feedback": {
+        "name": "Feedback on the input provided by the European Parliament as part of its resolution on the ECB’s Annual Report",
+        "type_ids": ["402"],
+    },
+    "estr_methodology_reviews": {"name": "€STR Annual Methodology Review", "type_ids": ["246"]},
+    "strategy_review_documents": {"name": "ECB Strategy review", "type_ids": ["249"]},
+    "payments_market_consultations": {
+        "name": "ECB public consultation - payments and markets",
+        "type_ids": ["250"],
+    },
+    "statistics_consultations": {
+        "name": "ECB public consultation - statistics",
+        "type_ids": ["390"],
+    },
+    "consultation_responses": {"name": "Consultation response", "type_ids": ["448"]},
+    "eba_ecb_reports": {"name": "EBA/ECB report", "type_ids": ["425"]},
+    "bpm6_exchange_booklets": {
+        "name": "The exchange of balance of payments, international investment position statistics – BPM6 - booklet",
+        "type_ids": ["458"],
+    },
+    "target_pricing_guides": {"name": "Target services pricing guide", "type_ids": ["329"]},
+    "space_payment_studies": {
+        "name": "Study on the payment attitudes of consumers in the euro area (SPACE)",
+        "type_ids": ["343"],
+    },
+    "company_cash_studies": {
+        "name": "Use of cash by companies in the euro area",
+        "type_ids": ["443"],
+    },
+    "legal_acts": {"name": "ECB Legal act", "type_ids": ["368"]},
+    "governing_council_statements": {
+        "name": "ECB Governing Council statement",
+        "type_ids": ["407"],
+    },
+    "environmental_statements": {"name": "ECB Environmental Statement", "type_ids": ["211"]},
+    "target_services_annual_reports": {
+        "name": "TARGET Services Annual Report",
+        "type_ids": ["462"],
+    },
+    "letters_and_responses": {"name": "Letters and responses", "type_ids": ["456"]},
+    "accounting_conference_programmes": {
+        "name": "ECB Conference on Accounting, Financial Reporting and Corporate Governance",
+        "type_ids": ["168"],
+    },
+    "digital_euro_faqs": {"name": "Digital euro FAQ", "type_ids": ["254"]},
+    "digital_euro_pilot_faqs": {"name": "Digital euro pilot FAQs", "type_ids": ["477"]},
+    "digital_euro_governance": {"name": "ECB Digital Euro Governance", "type_ids": ["281"]},
+    "bank_treasurer_surveys": {"name": "Bank treasurer survey", "type_ids": ["488"]},
+    "estr_error_reports": {"name": "€STR Transparency on errors", "type_ids": ["223"]},
+    "eurosystem_oversight_reports": {"name": "Eurosystem oversight report", "type_ids": ["156"]},
+    "macroprudential_focus": {"name": "ECB Macroprudential Bulletin - Focus", "type_ids": ["282"]},
+    "integrated_reporting_framework_documents": {
+        "name": "Integrated Reporting Framework document",
+        "type_ids": ["447"],
+    },
+    "climate_indicator_releases": {
+        "name": "ECB Climate Change Indicators Statistical Release",
+        "type_ids": ["474"],
+    },
+    "bank_lending_questionnaires": {
+        "name": "Euro area bank lending survey - Questionnaire",
+        "type_ids": ["396"],
+    },
+    "bank_lending_glossaries": {
+        "name": "Euro area bank lending survey - Glossary",
+        "type_ids": ["397"],
+    },
+    "insurance_pension_statistics": {
+        "name": "ECB Euro area insurance corporations and pension funds statistics",
+        "type_ids": ["11"],
+    },
+    "payment_statistics": {"name": "ECB Payment statistics", "type_ids": ["14"]},
+    "credit_terms_surveys": {
+        "name": "ECB Credit terms and conditions survey (SESFOD)",
+        "type_ids": ["454"],
+    },
+    "weekly_financial_statements": {"name": "ECB Weekly financial statement", "type_ids": ["101"]},
+    "monetary_developments": {
+        "name": "ECB Monetary developments in the euro area",
+        "type_ids": ["10"],
+    },
+    "mfi_interest_rate_statistics": {"name": "ECB MFI interest rate statistics", "type_ids": ["8"]},
+    "securities_issues_statistics": {
+        "name": "ECB Euro area securities issues statistics",
+        "type_ids": ["9"],
+    },
+    "balance_of_payments_monthly": {
+        "name": "ECB Balance of payments (monthly)",
+        "type_ids": ["53"],
+    },
+    "investment_fund_statistics": {
+        "name": "ECB Euro area investment fund statistics",
+        "type_ids": ["12"],
+    },
+    "financial_vehicle_statistics": {
+        "name": "ECB Euro area financial vehicle corporation statistics",
+        "type_ids": ["13"],
+    },
+    "balance_of_payments_quarterly": {
+        "name": "ECB Balance of payments (quarterly)",
+        "type_ids": ["56"],
+    },
+    "institutional_sector_accounts": {
+        "name": "ECB Euro area economic and financial developments by institutional sector (full)",
+        "type_ids": ["90"],
+    },
+    "insurance_corporation_statistics": {
+        "name": "ECB Euro area insurance corporations statistics",
+        "type_ids": ["97"],
+    },
+    "pension_fund_statistics": {"name": "Euro area pension fund statistics", "type_ids": ["237"]},
+    "money_market_statistics": {"name": "ECB Euro money market statistics", "type_ids": ["113"]},
+    "weekly_financial_commentaries": {
+        "name": "ECB Weekly financial statement - Commentary",
+        "type_ids": ["21"],
+    },
+    "monetary_policy_statements": {"name": "ECB Monetary policy statement", "type_ids": ["54"]},
+    "market_infrastructure_news": {"name": "MIP News", "type_ids": ["183"]},
+    "consumer_expectation_surveys": {
+        "name": "ECB Consumer Expectation Survey",
+        "type_ids": ["298"],
+    },
+    "macroeconomic_projections": {
+        "name": "ECB Macroeconomic projections for the euro area",
+        "type_ids": ["95"],
+    },
+    "monetary_analyst_surveys": {"name": "ECB Survey of Monetary Analysts", "type_ids": ["199"]},
+    "monetary_analyst_results": {
+        "name": "ECB Survey of Monetary Analysts - Aggregate results",
+        "type_ids": ["268"],
+    },
+    "digital_euro_investigation": {
+        "name": "ECB Digital Euro Investigation Phase document",
+        "type_ids": ["279"],
+    },
+    "digital_euro_preparation": {
+        "name": "ECB Digital Euro Preparation Phase document",
+        "type_ids": ["399"],
+    },
+    "digital_euro_rulebook_preparation": {
+        "name": "Digital Euro Preparation Phase - Scheme Rulebook Development Group documents",
+        "type_ids": ["362"],
+    },
+    "digital_euro_rulebook_investigation": {
+        "name": "Digital Euro Investigation Phase - Scheme Rulebook Development Group documents",
+        "type_ids": ["400"],
+    },
+    "digital_euro_project_documents": {
+        "name": "Digital euro project document",
+        "type_ids": ["471"],
+    },
+    "digital_euro_rulebook_project": {
+        "name": "Digital euro project - Scheme Rulebook Development Group documents",
+        "type_ids": ["472"],
+    },
+    "digital_euro_progress_investigation": {
+        "name": "ECB Digital Euro Investigation Phase - Progress Report",
+        "type_ids": ["406"],
+    },
+    "digital_euro_progress_preparation": {
+        "name": "ECB Digital Euro Preparation Phase - Progress Report",
+        "type_ids": ["408"],
+    },
+    "digital_euro_experiments": {
+        "name": "ECB Digital Euro Experimentation work",
+        "type_ids": ["280"],
+    },
+    "ami_seco_reports": {"name": "AMI-SeCo report", "type_ids": ["236"]},
+    "balance_of_payments_quality": {
+        "name": "Euro area balance of payments and international investment position statistics - Quality report",
+        "type_ids": ["149"],
+    },
+    "financial_accounts_quality": {
+        "name": "Euro area quarterly financial accounts - Quality report",
+        "type_ids": ["150"],
+    },
+    "monetary_statistics_quality": {
+        "name": "Euro area monetary and financial statistics - Quality report",
+        "type_ids": ["207"],
+    },
+    "climate_financial_disclosures": {
+        "name": "Climate-related financial disclosures",
+        "type_ids": ["392"],
+    },
+    "payment_fraud_reports": {"name": "Card fraud report", "type_ids": ["145"]},
+    "other_publications": {"name": "ECB Other publication", "type_ids": ["23"]},
     "working_papers": {"name": "ECB Working Paper Series", "type_ids": ["2"]},
     "occasional_papers": {"name": "ECB Occasional Paper Series", "type_ids": ["3"]},
     "economic_bulletin_articles": {"name": "ECB Economic Bulletin articles", "type_ids": ["24"]},
@@ -271,7 +489,8 @@ def enumerate_report_translations(fetch, limit=1000, seed_limit=100):
 
 # Exact standalone assets verified on 2026-10-16 and 2026-10-17. No blanket prefix rewrite:
 # inventory errors in other historical files need their own verification.
-# Exact PDF identities verified in research/ecb-convergence-links-20261017.json.
+# Exact PDF identities verified in research/ecb-convergence-links-20261017.json and
+# research/ecb-convergence-recovery-20261018.json at commit 3d25fa6 (see RESEARCH.md).
 VERIFIED_CONVERGENCE_REPORTS = {
     "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2006en.pdf": {
         "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2006en.pdf",
@@ -284,6 +503,46 @@ VERIFIED_CONVERGENCE_REPORTS = {
     "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200705en.pdf": {
         "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200705en.pdf",
         "sha256": "22076668ff99886ef0f7d15656fea2dc2bf17471a3242a4e6af53ffdcf646cdb",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201406en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201406en.pdf",
+        "sha256": "835e6e7a2b6be752cd30edf203a2e491d30186d0077b3765a48ca8203e9118bb",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201306en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201306en.pdf",
+        "sha256": "0a6661e268e9c3ef13c0385a889fd2f14203464c993dc650d23212559f9a09df",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201205en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201205en.pdf",
+        "sha256": "e404dd7cd3a74d8293f57dc9d6cac8a21eae26777c58312026086ed935c85c60",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr201005en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr201005en.pdf",
+        "sha256": "0efc3e444cdb3df81aa4f453ddfdc21a3baae53109a0aaf2cba167aa74fc1fe0",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200805en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200805en.pdf",
+        "sha256": "9dbef8fa49e4d83b288a3abd058c70b2495072d447c97ad45839e8dc61ad625b",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr200612en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr200612en.pdf",
+        "sha256": "e21450a2e02ebcdb9ffe973183199c6b38e21b93b3adf2fbf8c308f52092fea0",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2004en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2004en.pdf",
+        "sha256": "c119426c76f9c91c32eaee1e60ed6b4eaafc56eddcb26999b64436ae37d904cb",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr2002en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr2002en.pdf",
+        "sha256": "58e4ca92b1a005a04283bab6f63b94f7bdeb98c0c1da805b6ae0bec94359a155",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr1998en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr1998en.pdf",
+        "sha256": "b5f2cf6cf0f7cd8b6242d1e2e72528ff2b46b65622a989b321204bf6397e54dc",
+    },
+    "https://www.ecb.europa.eu/press/other-publications/convergence/pdf/cr1996en.pdf": {
+        "url": "https://www.ecb.europa.eu/pub/pdf/conrep/cr1996en.pdf",
+        "sha256": "d1128bc796dfad2dfd35662a265801ab149ff67b3450f38d2ca3f645a22cae5f",
     },
 }
 
@@ -317,6 +576,7 @@ MONTHLY_ARTICLE_FILENAMES = [
         ),
         r"art[1-9]\d*_mb(?P<issue>\d{6})\.en\.pdf",
         r"p{1,2}(?P<start>\d{1,3})[-_](?P<end>\d{1,3})_?mb(?P<issue>\d{6})en\.pdf",
+        r"p\.(?P<start>\d{1,3})_(?P<end>\d{1,3})_mb(?P<issue>1999\d{2})en\.pdf",
         (
             r"mb(?P<issue>\d{6})(?:en)?_(?:pp)?(?P<start>\d{1,3})-"
             r"(?P<end>\d{1,3})en\.pdf"
@@ -347,6 +607,64 @@ def _inferred_monthly_article_url(record):
     return None
 
 
+def _inferred_bulletin_article_url(record):
+    """Propose a same-basename standalone article; response title checks still apply."""
+    if record.get("collection_id") != "economic_bulletin_articles":
+        return None
+    path = re.fullmatch(
+        r"https://www\.ecb\.europa\.eu/press/economic-bulletin/articles/"
+        r"(?P<year>\d{4})/pdf/(?P<name>[^/]+)",
+        record["url"],
+    )
+    if not path or not 2015 <= int(path["year"]) <= 2018:
+        return None
+    for pattern in (
+        r"eb(?P<issue>\d{6})_article(?P<article>\d{2})\.en\.pdf",
+        r"art(?P<article>\d{2})_eb(?P<issue>\d{6})\.en\.pdf",
+        r"(?:ecb\.)?ebart(?P<issue>\d{6})_(?P<article>\d{2})\.en\.pdf",
+    ):
+        match = re.fullmatch(pattern, path["name"])
+        if (
+            match
+            and match["issue"][:4] == path["year"]
+            and 1 <= int(match["issue"][4:]) <= 8
+            and int(match["article"]) > 0
+        ):
+            return BASE + "/pub/pdf/other/" + path["name"]
+    return None
+
+
+def _inferred_bulletin_box_url(record):
+    """Propose one historical asset; filename matching alone never validates it."""
+    if record.get("collection_id") != "economic_bulletin_boxes":
+        return None
+    path = re.fullmatch(
+        r"https://www\.ecb\.europa\.eu/press/economic-bulletin/focus/"
+        r"(?P<year>\d{4})/pdf/(?P<name>[^/]+)",
+        record["url"],
+    )
+    if not path or not 1999 <= int(path["year"]) <= 2018:
+        return None
+    match = re.fullmatch(
+        r"(?P<family>mb|eb|ebbox|ecb\.ebbox)(?P<issue>\d{6})_"
+        r"(?P<kind>focus|box)?(?P<box>\d{2})\.en\.pdf",
+        path["name"],
+    )
+    if not match or match["issue"][:4] != path["year"] or int(match["box"]) < 1:
+        return None
+    # Samples from every year 1999–2011 passed the same opening-title check.
+    # Earlier negative samples remain rejected by that check, not by year alone.
+    if int(path["year"]) < 2014 and match["family"] != "mb":
+        return None
+    allowed = {"mb": {"focus"}, "eb": {"focus", "box"}, "ebbox": {""}, "ecb.ebbox": {""}}
+    if (match["kind"] or "") not in allowed[match["family"]]:
+        return None
+    maximum = 12 if match["family"] == "mb" else 8
+    if not 1 <= int(match["issue"][4:]) <= maximum:
+        return None
+    return BASE + "/pub/pdf/other/" + path["name"]
+
+
 def alternate_document_urls(record):
     """Return one bounded candidate after primary 404; validate inferred PDF bodies.
 
@@ -356,10 +674,15 @@ def alternate_document_urls(record):
     if record.get("collection_id") == "convergence_reports":
         verified = VERIFIED_CONVERGENCE_REPORTS.get(record["url"])
         return [verified["url"]] if verified else []
+    if record.get("collection_id") == "economic_bulletin_boxes":
+        target = _inferred_bulletin_box_url(record)
+        return [target] if target else []
     if record.get("collection_id") != "economic_bulletin_articles":
         return []
-    target = VERIFIED_HISTORICAL_ARTICLES.get(record["url"]) or _inferred_monthly_article_url(
-        record
+    target = (
+        VERIFIED_HISTORICAL_ARTICLES.get(record["url"])
+        or _inferred_monthly_article_url(record)
+        or _inferred_bulletin_article_url(record)
     )
     return [target] if target else []
 
@@ -371,9 +694,11 @@ def _normalize_title(text):
 def validate_alternate(record, data):
     """Reject inferred PDF replacements unless their opening pages contain the title.
 
-    Three convergence replacements must match verified PDF SHA-256 hashes.
+    Historical convergence replacements must match verified PDF SHA-256 hashes.
     Thirteen article mappings have recorded identity evidence; other article URLs
-    must pass the strict Monthly Bulletin rule and conservative title check.
+    must pass strict historical filename rules and conservative title checks.
+    Inferred standalone boxes are restricted to 1999–2018 and at most 20 pages;
+    before 2014 only Monthly Bulletin filenames qualify.
     This check does not turn PDF metadata or a full issue into an article.
     """
     if record.get("collection_id") == "convergence_reports":
@@ -386,8 +711,12 @@ def validate_alternate(record, data):
         and record["url"] in VERIFIED_HISTORICAL_ARTICLES
     ):
         return
-    if not _inferred_monthly_article_url(record):
-        raise ValueError("ECB alternate is outside the supported historical article rule")
+    if not (
+        _inferred_monthly_article_url(record)
+        or _inferred_bulletin_article_url(record)
+        or _inferred_bulletin_box_url(record)
+    ):
+        raise ValueError("ECB alternate is outside the supported historical article or box rule")
     title = record.get("title") or ""
     normalized = _normalize_title(title)
     if len(normalized) < 12 or len(re.findall(r"[a-zA-Z]+", title)) < 3:
@@ -396,6 +725,8 @@ def validate_alternate(record, data):
         raise ValueError("ECB alternate response is not a PDF")
     try:
         reader = PdfReader(io.BytesIO(data))
+        if record.get("collection_id") == "economic_bulletin_boxes" and len(reader.pages) > 20:
+            raise ValueError("ECB box alternate is too long for the supported standalone-box rule")
         opening = "\n".join(page.extract_text() or "" for page in reader.pages[:2])
     except Exception as error:
         raise ValueError("ECB alternate PDF opening pages could not be extracted") from error

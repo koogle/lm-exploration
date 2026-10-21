@@ -18,6 +18,9 @@ EPAR_SERIES = {
     "epar_product_information": "product-information",
     "epar_overviews": "overview",
     "epar_assessment_reports": "assessment-report",
+    "epar_variation_reports": "variation-report",
+    "epar_scientific_discussions": "scientific-discussion",
+    "epar_scientific_discussion_variations": "scientific-discussion-variation",
 }
 COLLECTIONS = {
     "news": {

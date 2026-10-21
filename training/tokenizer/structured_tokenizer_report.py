@@ -12,7 +12,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from tokenizer.structured_tokenizer import CATEGORIES
 
-ROOT = Path("results/tokenizer-structured/structured-code-v1")
+ROOT = Path("artifacts/tokenizer-structured/structured-code-v1")
 VOCABS = (16384, 32768, 50000)
 
 
@@ -46,7 +46,7 @@ def generate():
     fits = json.loads((ROOT / "focused-fits.json").read_text())
     baseline = json.loads(
         Path(
-            "results/tokenizer-learning-curve/learning-curve-20261016-v2/measurements.json"
+            "artifacts/tokenizer-learning-curve/learning-curve-20261016-v2/measurements.json"
         ).read_text()
     )
     broad = {(r["size_mib"], r["requested_vocab_size"]): r for r in baseline}
@@ -206,7 +206,7 @@ def generate():
     ax.set_xticks(range(3), [f"{v:,}" for v in VOCABS])
     ax.set(
         xlabel="Vocabulary",
-        ylabel="Extra tokens on scholarly mixture (%) ↓",
+        ylabel="Extra tokens on simple LLM mixture (%) ↓",
         title="Cost of code-focused fitting on the original 12-source evaluation",
     )
     ax.legend()
@@ -229,7 +229,7 @@ def generate():
         "- Same byte-level BPE, pretokenization, full byte alphabet, four special tokens, min frequency 2 and maximum learned token length 32 as the original experiment. No 120K experiment.",
         "- Paired 95% intervals use 1,000 bootstrap samples of source parents. They quantify variation within this fixture set, not production generalization or training-seed variance.",
         f"- Actual fitting bytes: {sum(manifest['actual_bytes'].values()):,}; fitting source parents: {manifest['fitting_parents']:,}.",
-        "- All 21 structured evaluations passed exact round-trip and zero-UNK checks. The three new fits were also evaluated on the original shared 32 MiB scholarly mixture.",
+        "- All 21 structured evaluations passed exact round-trip and zero-UNK checks. The three new fits were also evaluated on the original shared 32 MiB simple LLM mixture.",
         "",
         "## Focused fits versus matched 64 MiB originals",
         "",
@@ -335,7 +335,7 @@ def generate():
                 for c in CATEGORIES
             )
             + ".",
-            f"On the original scholarly mixture, the focused 32K tokenizer uses {next(r['token_change_percent'] for r in general if r['vocab'] == 32768 and r['baseline_size_mib'] == 64):.2f}% more tokens than the original 64 MiB / 32K fit.",
+            f"On the original simple LLM mixture, the focused 32K tokenizer uses {next(r['token_change_percent'] for r in general if r['vocab'] == 32768 and r['baseline_size_mib'] == 64):.2f}% more tokens than the original 64 MiB / 32K fit.",
             "Caution: JSON, patches and tool calls are generated fixtures, with shared templates across disjoint source parents. This tests encoding efficiency, not production tool-call quality or model correctness. Existing published default is unchanged.",
             "Full tables, methods and limitations are in REPORT.md; machine-readable results, paired intervals and artifact hashes accompany this PDF.",
         ]

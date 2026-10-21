@@ -75,7 +75,28 @@ RECORD_SCHEMA = pa.schema(
     + [("characters", pa.int64()), ("words", pa.int64())]
 )
 COMPONENT = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,100}$")
-RAW_PATH = re.compile(r"^raw/[a-f0-9]{64}\.gz$")
+RAW_PATH = re.compile(
+    r"^(?:raw/[a-f0-9]{64}|raw-v2/(?P<prefix>[a-f0-9]{2})/(?P=prefix)[a-f0-9]{62})\.gz$"
+)
+RAW_HASH = re.compile(r"^[a-f0-9]{64}$")
+
+
+def raw_blob_path(raw_hash):
+    """New blobs use a separate partitioned root; the legacy raw/ root may be full."""
+    if not isinstance(raw_hash, str) or not RAW_HASH.fullmatch(raw_hash):
+        raise ValueError(f"Invalid raw hash: {raw_hash!r}")
+    return f"raw-v2/{raw_hash[:2]}/{raw_hash}.gz"
+
+
+def resolve_raw_blob_path(state, raw_hash):
+    """Resolve record raw_sha256 through durable metrics, preserving legacy blobs."""
+    partitioned = raw_blob_path(raw_hash)
+    legacy = f"raw/{raw_hash}.gz"
+    if legacy in state.get("raw_blob_metrics", {}):
+        return legacy
+    return partitioned
+
+
 INVENTORY_PATH = re.compile(
     r"^inventories/(?:[a-zA-Z0-9][a-zA-Z0-9_-]{0,100}/)?[a-zA-Z0-9][a-zA-Z0-9_.-]{0,180}\.json$"
 )
@@ -197,7 +218,11 @@ def dataset_card(state):
             "",
             "`state/progress.json` records completed work, failures, collection mappings and runs.",
             "Each progress update is committed atomically with its corresponding Parquet shards.",
-            "Raw source snapshots live under `raw/`; discovery inventories under `inventories/`.",
+            (
+                "Raw snapshots live under legacy `raw/` and partitioned `raw-v2/`; "
+                "`state/progress.json` raw_blob_metrics resolves record hashes to stored paths. "
+                "Discovery inventories live under `inventories/`."
+            ),
             "",
             (
                 f"Stored shards: {len(state['shards'])}. "
@@ -288,6 +313,23 @@ class HFStore:
         )
         return Path(local).read_bytes()
 
+    def _raw_blob_size(self, state, raw_hash, revision, sizes=None):
+        """Locate either historical layout at one revision; absence never means zero."""
+        preferred = resolve_raw_blob_path(state, raw_hash)
+        paths = list(dict.fromkeys([preferred, f"raw/{raw_hash}.gz", raw_blob_path(raw_hash)]))
+        # Metadata may establish the exact path without downloading the raw body.
+        for path in paths:
+            if sizes is not None and path in sizes:
+                size = sizes[path]
+                return path, size if size is not None else len(self._download_bytes(path, revision))
+        for index, path in enumerate(paths):
+            try:
+                return path, len(self._download_bytes(path, revision))
+            except EntryNotFoundError:
+                if index == len(paths) - 1:
+                    raise
+        raise AssertionError("unreachable")
+
     def migrate_metrics(self, state, revision):
         """Backfill historical metrics locally from pinned files; caller persists them.
 
@@ -310,9 +352,8 @@ class HFStore:
                 files_metadata=True,
             )
             sizes = {
-                sibling.rfilename: sibling.size
+                sibling.rfilename: getattr(sibling, "size", None)
                 for sibling in (getattr(info, "siblings", None) or [])
-                if getattr(sibling, "size", None) is not None
             }
         for shard in migrated["shards"]:
             body = self._download_bytes(shard["path"], revision)
@@ -324,13 +365,9 @@ class HFStore:
                 raw_hash = row.get("raw_sha256")
                 if not raw_hash:
                     continue
-                path = f"raw/{raw_hash}.gz"
-                if not RAW_PATH.fullmatch(path):
-                    raise ValueError(f"Invalid historical raw hash: {raw_hash!r}")
+                path = resolve_raw_blob_path(migrated, raw_hash)
                 if path not in migrated["raw_blob_metrics"]:
-                    size = sizes.get(path)
-                    if size is None:
-                        size = len(self._download_bytes(path, revision))
+                    path, size = self._raw_blob_size(state, raw_hash, revision, sizes)
                     migrated["raw_blob_metrics"][path] = {
                         "bytes": size,
                         "shard_path": shard["path"],
@@ -396,11 +433,18 @@ class HFStore:
         for path, body in (raw_files or {}).items():
             if not RAW_PATH.fullmatch(path) or not isinstance(body, bytes):
                 raise ValueError(f"Invalid raw file: {path!r}")
+            raw_hash = path.rsplit("/", 1)[-1][:-3]
+            path = resolve_raw_blob_path(next_state, raw_hash)
             previous = next_state["raw_blob_metrics"].get(path)
             if previous and previous["bytes"] != len(body):
                 raise ValueError(f"Raw blob size changed for immutable path: {path}")
-            if not previous:
-                next_state["raw_blob_metrics"][path] = {"bytes": len(body), "shard_path": None}
+            if previous:
+                # The same raw hash already has a durable or pending blob. Never
+                # upload a second representation/path for it on retry.
+                if path in additions and additions[path] != body:
+                    raise ValueError(f"Conflicting raw bodies for immutable path: {path}")
+                continue
+            next_state["raw_blob_metrics"][path] = {"bytes": len(body), "shard_path": None}
             additions[path] = body
         # Link raw bytes to the first newly created shard referencing each blob.
         for shard in next_state["shards"]:
@@ -409,11 +453,12 @@ class HFStore:
             for row in groups[(shard["collection_id"], shard["format"])]:
                 if not row.get("raw_sha256"):
                     continue
-                path = f"raw/{row['raw_sha256']}.gz"
+                path = resolve_raw_blob_path(next_state, row["raw_sha256"])
                 blob = next_state["raw_blob_metrics"].get(path)
                 if blob is None:
                     # Caller may reference a previously uploaded source blob.
-                    blob = {"bytes": len(self._download_bytes(path, revision)), "shard_path": None}
+                    path, size = self._raw_blob_size(next_state, row["raw_sha256"], revision)
+                    blob = {"bytes": size, "shard_path": None}
                     next_state["raw_blob_metrics"][path] = blob
                 if blob["shard_path"] is None:
                     blob["shard_path"] = shard["path"]

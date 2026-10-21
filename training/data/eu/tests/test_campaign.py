@@ -14,7 +14,7 @@ class Store:
         self.revision = 0
 
     def ensure(self, private):
-        assert private is False  # Document repositories are now public.
+        assert private is True  # Owner restored private document repositories.
 
     def load(self):
         return copy.deepcopy(self.state), self.revision
@@ -100,7 +100,7 @@ def test_long_cooldown_stops_without_dispatch():
 def test_round_limit_validated_before_creation():
     store = Store()
     with pytest.raises(ValueError):
-        run_campaign("ema", "pilot", None, rounds=4, store=store)
+        run_campaign("ema", "pilot", None, rounds=7, store=store)
     assert "campaigns" not in store.state
 
 
@@ -311,3 +311,27 @@ def test_campaign_stops_when_only_unsupported_or_exhausted_items_remain():
     result = run_campaign("ema", "no-more-supported", collect, store=store)
     assert result["status"] == "complete"
     assert len(calls) == 1
+
+
+def test_six_round_source_campaign_has_time_to_finish_and_preserves_worker_results(tmp_path):
+    import json
+    from pathlib import Path
+
+    mapping = json.loads(Path("pipeline_sources.json").read_text())
+    mapping["sources"]["ema"]["max_campaign_rounds"] = 6
+    path = tmp_path / "mapping.json"
+    path.write_text(json.dumps(mapping))
+    store, epoch, calls = Store(), [1000], []
+
+    def collect(run_id, maximum, seconds):
+        calls.append(run_id)
+        epoch[0] += 3001
+        return {"run_id": run_id, "status": "bounded_complete", "pending_candidates": 100}
+
+    result = run_campaign(
+        "ema", "larger", collect, rounds=6, mapping_path=path, store=store, clock=lambda: epoch[0]
+    )
+    assert result["status"] == "complete"
+    assert len(calls) == 6
+    assert all(r["status"] == "complete" for r in result["rounds"])
+    assert result["deadline_epoch"] == 1000 + 7 * 3600

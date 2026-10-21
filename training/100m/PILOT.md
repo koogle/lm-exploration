@@ -1,17 +1,23 @@
-# Scholarly/code subword pilot
+# Simple LLM subword pilot (historical)
 
-`modal_scripts/modal_scholarly_pilot.py` connects the merged modern 100M-family model to the
+The duplicate pilot launcher and loop described below have been removed. Use
+[`../distributed/`](../distributed/README.md) for new runs,
+including one GPU. The commands/settings below document the measured historical
+experiment, not an available entrypoint or settings identical to the current
+trainer. Its code remains in Git history; its checkpoints require that code.
+
+`modal_scripts/modal_simple-llm_pilot.py` connects the merged modern 100M-family model to the
 frozen 32K tokenizer and `TokenMixture`. It preserves the merged 14×768 shape
 (124,389,632 unique parameters), with context increased to 1,024. This is a
 bounded execution/learning pilot, not the planned 20B-token run.
 
-From `training/`, first prepare a fresh snapshot with `modal_scripts/modal_prepare_scholarly.py`.
+From `training/`, first prepare a fresh snapshot with `modal_scripts/modal_prepare_simple_llm.py`.
 Then:
 
 ```sh
-modal run --detach modal_scripts/modal_scholarly_pilot.py \
-  --run-id scholarly-124m-pilot-20261016-01 \
-  --snapshot scholarly-124m-20261016/snapshots/pilot-001
+modal run --detach modal_scripts/modal_simple-llm_pilot.py \
+  --run-id simple-llm-124m-pilot-20261016-01 \
+  --snapshot simple-llm-124m-20261016/snapshots/pilot-001
 ```
 
 One L40S worker, four CPUs, 16 GiB host RAM, no retries, and a 30-minute hard
@@ -32,7 +38,7 @@ The GPU worker verifies tiny-set fitting, then reloads the actual step-10
 checkpoint and checks identical next-batch IDs, labels and logits. Checkpoints
 include optimizer/RNG/data state, source hashes, model settings, token counts and
 manifest/tokenizer identities. Checkpoints and logs use fresh paths on
-`lm-exploration-training/<run-id>/`; the final report is also copied to `results/`.
+`lm-exploration-training/<run-id>/`; the final report is also copied to the ignored `artifacts/results/`.
 This pilot checkpoint format is separate from the character-only `lm-generate`
 format. Cross-job resume and generation CLI integration remain future work.
 
@@ -55,8 +61,8 @@ proxy settings and TLS verification enabled.
 
 ## First measured run
 
-[The 2026-10-16 report](../results/scholarly-124m-pilot-20261016-01.md) records
+[The 2026-10-16 report](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-124m-pilot-20261016-01.md) records
 600 updates / 4,078,340 tokens, weighted pilot validation loss 10.5811 → 6.0272,
 23 passing qualification tests, and a successful checkpoint/data reload.
-The final checkpoint is `lm-exploration-training/scholarly-124m-pilot-20261016-01/step-000600.pt`.
+The final checkpoint is `lm-exploration-training/simple-llm-124m-pilot-20261016-01/step-000600.pt`.
 Samples remain incoherent; full corpus audits and substantial training are pending.

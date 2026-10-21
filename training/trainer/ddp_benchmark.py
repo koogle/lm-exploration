@@ -11,6 +11,8 @@ from contextlib import nullcontext
 from datetime import timedelta
 from pathlib import Path
 
+from training_data.subword import LOSS_IGNORE_INDEX
+
 
 def trial(manifest, microbatch, timed_steps, output, benchmark_replay=False):
     import torch
@@ -34,11 +36,11 @@ def trial(manifest, microbatch, timed_steps, output, benchmark_replay=False):
         full_x = torch.randint(4, 64, (6, 16), generator=generator).cuda()
         full_y = torch.randint(4, 64, (6, 16), generator=generator).cuda()
         for i in range(6):
-            full_y[i, 10 + i :] = -100
-        count = int((full_y != -100).sum())
+            full_y[i, 10 + i :] = LOSS_IGNORE_INDEX
+        count = int((full_y != LOSS_IGNORE_INDEX).sum())
         x, y = full_x.chunk(world)[rank], full_y.chunk(world)[rank]
         loss = F.cross_entropy(
-            tiny_ddp(x).flatten(0, 1), y.flatten(), ignore_index=-100, reduction="sum"
+            tiny_ddp(x).flatten(0, 1), y.flatten(), ignore_index=LOSS_IGNORE_INDEX, reduction="sum"
         )
         (loss * world / count).backward()
         if rank == 0:
@@ -46,7 +48,7 @@ def trial(manifest, microbatch, timed_steps, output, benchmark_replay=False):
                 F.cross_entropy(
                     reference(full_x).flatten(0, 1),
                     full_y.flatten(),
-                    ignore_index=-100,
+                    ignore_index=LOSS_IGNORE_INDEX,
                     reduction="sum",
                 )
                 / count
@@ -99,7 +101,7 @@ def trial(manifest, microbatch, timed_steps, output, benchmark_replay=False):
                     full_x, full_y = data.next_batch(global_windows, "cuda")
                 trajectory.update(json.dumps(data.state_dict(), sort_keys=True).encode())
                 xs, ys = list(full_x.chunk(world)), list(full_y.chunk(world))
-                global_count = (full_y != -100).sum()
+                global_count = (full_y != LOSS_IGNORE_INDEX).sum()
             else:
                 xs = ys = None
                 global_count = torch.zeros((), dtype=torch.int64, device="cuda")
@@ -117,7 +119,10 @@ def trial(manifest, microbatch, timed_steps, output, benchmark_replay=False):
                 with sync:
                     with torch.autocast("cuda", dtype=torch.bfloat16):
                         loss = F.cross_entropy(
-                            ddp(mx).flatten(0, 1), my.flatten(), ignore_index=-100, reduction="sum"
+                            ddp(mx).flatten(0, 1),
+                            my.flatten(),
+                            ignore_index=LOSS_IGNORE_INDEX,
+                            reduction="sum",
                         )
                     local_loss += loss.detach()
                     # DDP averages rank gradients; normalize by global loss tokens, not windows.

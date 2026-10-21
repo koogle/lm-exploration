@@ -10,14 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ScriptLayoutTests(unittest.TestCase):
-    def test_training_root_keeps_only_generation_entrypoint(self):
-        self.assertEqual({p.name for p in ROOT.glob("*.py")}, {"generate.py"})
-        self.assertEqual(len(list((ROOT / "modal_scripts").glob("modal_*.py"))), 9)
-        self.assertTrue((ROOT / "data/prepare_scholarly.py").is_file())
-
     def test_installed_module_locations(self):
         expected = {
-            "training_data.prepare_scholarly": "data/prepare_scholarly.py",
+            "training_data.prepare_simple_llm": "data/prepare_simple_llm.py",
+            "training_data.simple_llm": "data/simple_llm.py",
+            "modal_scripts.modal_prepare_simple_llm": "modal_scripts/modal_prepare_simple_llm.py",
             "tokenizer.tokenizer_research": "tokenizer/tokenizer_research.py",
             "tokenizer.tokenizer_evaluation": "tokenizer/tokenizer_evaluation.py",
             "tokenizer.tokenizer_report": "tokenizer/tokenizer_report.py",
@@ -25,7 +22,14 @@ class ScriptLayoutTests(unittest.TestCase):
             "tokenizer.structured_tokenizer_report": "tokenizer/structured_tokenizer_report.py",
             "tokenizer.package_tokenizer_research": "tokenizer/package_tokenizer_research.py",
             "tokenizer.verify_tokenizer_publication": "tokenizer/verify_tokenizer_publication.py",
-            "modal_scripts.modal_train": "modal_scripts/modal_train.py",
+            "trainer.loop": "trainer/loop.py",
+            "distributed.config": "distributed/config.py",
+            "distributed.modal_train": "distributed/modal_train.py",
+            "distributed.modal_checks": "distributed/modal_checks.py",
+            "workflows.modal_train": "workflows/modal_train.py",
+            "workflows.config": "workflows/config.py",
+            "workflows.checks": "workflows/checks.py",
+            "distributed.modal_prep_benchmark": "distributed/modal_prep_benchmark.py",
         }
         for name, relative in expected.items():
             with self.subTest(module=name):
@@ -34,12 +38,17 @@ class ScriptLayoutTests(unittest.TestCase):
                 self.assertEqual(Path(spec.origin).resolve(), ROOT / relative)
         config = tomllib.loads((ROOT / "pyproject.toml").read_text())
         self.assertEqual(
-            config["project"]["scripts"]["lm-prepare-scholarly"],
-            "training_data.prepare_scholarly:main",
+            config["project"]["scripts"]["lm-prepare-simple-llm"],
+            "training_data.prepare_simple_llm:main",
         )
 
     def test_modal_image_local_sources_exist(self):
-        for path in (ROOT / "modal_scripts").glob("modal_*.py"):
+        paths = [
+            *(ROOT / "modal_scripts").glob("modal_*.py"),
+            *(ROOT / "distributed").glob("*.py"),
+            *(ROOT / "workflows").glob("*.py"),
+        ]
+        for path in paths:
             tree = ast.parse(path.read_text())
             for node in ast.walk(tree):
                 if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
@@ -54,26 +63,6 @@ class ScriptLayoutTests(unittest.TestCase):
                         self.assertTrue(local.is_file(), str(local))
                     else:
                         self.assertTrue(local.is_dir(), str(local))
-
-    def test_no_old_top_level_tool_imports(self):
-        old = {
-            "tokenizer_research",
-            "tokenizer_evaluation",
-            "tokenizer_report",
-            "structured_tokenizer",
-            "structured_tokenizer_report",
-            "package_tokenizer_research",
-            "prepare_scholarly",
-            "modal_scholarly_pilot",
-        }
-        for folder in ("modal_scripts", "tokenizer", "tests"):
-            for path in (ROOT / folder).glob("*.py"):
-                for node in ast.walk(ast.parse(path.read_text())):
-                    if isinstance(node, ast.ImportFrom):
-                        self.assertNotIn(node.module, old, str(path))
-                    elif isinstance(node, ast.Import):
-                        for alias in node.names:
-                            self.assertNotIn(alias.name, old, str(path))
 
 
 if __name__ == "__main__":

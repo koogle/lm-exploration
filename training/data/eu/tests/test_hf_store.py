@@ -8,7 +8,7 @@ import pyarrow.parquet as pq
 import pytest
 from huggingface_hub.errors import EntryNotFoundError
 
-from hf_store import RECORD_SCHEMA, HFStore, empty_state
+from hf_store import RECORD_SCHEMA, HFStore, empty_state, raw_blob_path, resolve_raw_blob_path
 
 
 class FakeAPI:
@@ -172,7 +172,7 @@ def test_inventory_and_raw_snapshot_in_same_commit(tmp_path):
     store = HFStore("owner/ecb", api)
     state, revision = store.load()
     inventory_path = "inventories/speeches/" + "a" * 64 + ".json"
-    raw_path = "raw/" + "b" * 64 + ".gz"
+    raw_path = raw_blob_path("b" * 64)
     inventory = {"items": [{"url": "https://example.org/document"}]}
     revision = store.commit(
         state,
@@ -191,7 +191,7 @@ def test_metrics_accumulate_unicode_bytes_restart_and_duplicate_retry(tmp_path):
     store = HFStore("owner/ecb", api)
     state, revision = store.load()
     first = record() | {"text": "Grüße 世界", "raw_sha256": "c" * 64}
-    raw_path = "raw/" + "c" * 64 + ".gz"
+    raw_path = raw_blob_path("c" * 64)
     revision = store.commit(state, revision, [first], raw_files={raw_path: b"first-raw"})
     first_metrics = copy.deepcopy(state["metrics"])
     assert first_metrics["rows"] == 1
@@ -218,7 +218,7 @@ def test_metric_backfill_pinned_historical_shard_and_source(tmp_path):
     api = FakeAPI(tmp_path)
     store = HFStore("owner/ecb", api)
     state, revision = store.load()
-    raw_path = "raw/" + "d" * 64 + ".gz"
+    raw_path = raw_blob_path("d" * 64)
     revision = store.commit(
         state,
         revision,
@@ -262,7 +262,7 @@ def test_missing_historical_raw_never_fabricates_zero_metrics(tmp_path):
     api = FakeAPI(tmp_path)
     store = HFStore("owner/ecb", api)
     state, revision = store.load()
-    path = "raw/" + "e" * 64 + ".gz"
+    path = raw_blob_path("e" * 64)
     revision = store.commit(
         state, revision, [record() | {"raw_sha256": "e" * 64}], raw_files={path: b"raw"}
     )
@@ -300,7 +300,7 @@ def test_backfill_downloads_raw_when_metadata_has_no_size(tmp_path):
     api = FakeAPI(tmp_path)
     store = HFStore("owner/ecb", api)
     state, revision = store.load()
-    raw_path = "raw/" + "f" * 64 + ".gz"
+    raw_path = raw_blob_path("f" * 64)
     revision = store.commit(
         state,
         revision,
@@ -531,3 +531,132 @@ def test_busy_repository_retries_only_with_unchanged_parent(tmp_path, monkeypatc
         assert sleeps == [5]
         assert len(api.commits) == 1
         assert state["metrics"]["rows"] == 1
+
+
+def seed_legacy_blob(store, api, raw_hash="a" * 64):
+    state, revision = store.load()
+    new_path = raw_blob_path(raw_hash)
+    revision = store.commit(
+        state, revision, [record() | {"raw_sha256": raw_hash}], raw_files={new_path: b"legacy-body"}
+    )
+    legacy = f"raw/{raw_hash}.gz"
+    # Model a repository created by the old writer, without rewriting its shards.
+    api.files[legacy] = api.files.pop(new_path)
+    state["raw_blob_metrics"][legacy] = state["raw_blob_metrics"].pop(new_path)
+    api.files["state/progress.json"] = json.dumps(state).encode()
+    return state, revision, legacy
+
+
+def test_mixed_layout_preserves_legacy_and_does_not_reupload_same_hash(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision, legacy = seed_legacy_blob(store, api)
+    new_hash = "b" * 64
+    revision = store.commit(
+        state,
+        revision,
+        [
+            record() | {"id": "same-raw", "collection_id": "news", "raw_sha256": "a" * 64},
+            record() | {"id": "new-raw", "collection_id": "news", "raw_sha256": new_hash},
+        ],
+        raw_files={raw_blob_path("a" * 64): b"legacy-body", raw_blob_path(new_hash): b"new-body"},
+    )
+    assert resolve_raw_blob_path(state, "a" * 64) == legacy
+    assert legacy in api.files
+    assert raw_blob_path("a" * 64) not in api.files
+    assert legacy not in api.commits[-1]
+    assert raw_blob_path(new_hash) in api.commits[-1]
+    assert state["metrics"]["stored_raw_gzip_bytes"] == len(b"legacy-bodynew-body")
+    assert state["collection_metrics"]["news"]["stored_raw_gzip_bytes"] == len(b"new-body")
+    before = copy.deepcopy(state["metrics"])
+    store.commit(state, revision, [], raw_files={raw_blob_path(new_hash): b"new-body"})
+    assert raw_blob_path(new_hash) not in api.commits[-1]
+    assert state["metrics"] == before
+
+
+def test_new_legacy_input_is_normalized_and_duplicate_aliases_are_collapsed(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    raw_hash = "a" * 64
+    store.commit(
+        state,
+        revision,
+        [record() | {"raw_sha256": raw_hash}],
+        raw_files={f"raw/{raw_hash}.gz": b"body", raw_blob_path(raw_hash): b"body"},
+    )
+    assert f"raw/{raw_hash}.gz" not in api.files
+    assert raw_blob_path(raw_hash) in api.files
+    assert list(state["raw_blob_metrics"]) == [raw_blob_path(raw_hash)]
+    assert state["metrics"]["stored_raw_gzip_bytes"] == 4
+
+
+@pytest.mark.parametrize(
+    "path", ["raw-v2/bb/" + "a" * 64 + ".gz", "raw/aa/" + "a" * 64 + ".gz", "raw-v2/../x.gz"]
+)
+def test_bad_partition_prefix_is_rejected_before_upload(tmp_path, path):
+    api = FakeAPI(tmp_path)
+    with pytest.raises(ValueError, match="Invalid raw file"):
+        HFStore("owner/ecb", api).commit(empty_state(), api.sha, [], raw_files={path: b"body"})
+    assert not api.commits
+
+
+def test_metric_migration_mixed_layout_uses_pinned_paths_and_unique_raw_bytes(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision, legacy = seed_legacy_blob(store, api)
+    partitioned = raw_blob_path("b" * 64)
+    revision = store.commit(
+        state,
+        revision,
+        [
+            record() | {"id": "another", "collection_id": "news", "raw_sha256": "a" * 64},
+            record() | {"id": "new", "collection_id": "news", "raw_sha256": "b" * 64},
+        ],
+        raw_files={partitioned: b"new-body"},
+    )
+    expected = copy.deepcopy(state["metrics"])
+    for name in ("metrics_version", "metrics", "collection_metrics", "raw_blob_metrics"):
+        state.pop(name)
+    api.downloads.clear()
+    store.migrate_metrics(state, revision)
+    assert state["metrics"] == expected
+    assert set(state["raw_blob_metrics"]) == {legacy, partitioned}
+    assert legacy not in api.downloads and partitioned not in api.downloads
+    assert api.metadata_requests[-1]["revision"] == revision
+
+
+def test_legacy_migration_without_metadata_falls_back_to_pinned_flat_path(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision, legacy = seed_legacy_blob(store, api)
+    for name in ("metrics_version", "metrics", "collection_metrics", "raw_blob_metrics"):
+        state.pop(name)
+    api.repo_info = lambda **kwargs: SimpleNamespace(sha=api.sha, siblings=None)
+    api.downloads.clear()
+    store.migrate_metrics(state, revision)
+    assert legacy in api.downloads
+    assert set(state["raw_blob_metrics"]) == {legacy}
+    assert state["metrics"]["stored_raw_gzip_bytes"] == len(b"legacy-body")
+
+
+def test_staged_raw_is_linked_by_later_parquet_commit_without_double_count(tmp_path):
+    api = FakeAPI(tmp_path)
+    store = HFStore("owner/ecb", api)
+    state, revision = store.load()
+    raw_hash = "a" * 64
+    path = raw_blob_path(raw_hash)
+    state["download_queue"] = {"queued": {"raw_path": path}}
+    revision = store.commit(state, revision, [], raw_files={path: b"queued-original"})
+    assert state["metrics"]["rows"] == 0
+    assert state["metrics"]["stored_raw_gzip_bytes"] == len(b"queued-original")
+    assert state["raw_blob_metrics"][path]["shard_path"] is None
+    del state["download_queue"]["queued"]
+    revision = store.commit(state, revision, [record() | {"raw_sha256": raw_hash}])
+    assert path not in api.commits[-1]
+    assert state["metrics"]["rows"] == 1
+    assert state["metrics"]["stored_raw_gzip_bytes"] == len(b"queued-original")
+    assert state["raw_blob_metrics"][path]["shard_path"] == state["shards"][0]["path"]
+    assert state["download_queue"] == {}
+    loaded, loaded_revision = store.load()
+    assert loaded_revision == revision and loaded == state

@@ -1,76 +1,73 @@
 {
   "schema_version": 1,
   "owner": "jfrick",
-  "private": false,
+  "private": true,
   "sources": {
     "ecb": {
       "repo_id": "jfrick/eu-ecb",
       "adapter": "adapters.ecb",
-      "collections": [
-        "working_papers",
-        "occasional_papers",
-        "economic_bulletin_articles",
-        "economic_bulletin_boxes",
-        "speeches",
-        "press_releases",
-        "interviews",
-        "meeting_accounts",
-        "decisions"
-      ],
       "description": "European Central Bank publication collections; FOEDB inventory enumerated separately from native document text.",
       "collection_weights": {
         "working_papers": 5,
         "occasional_papers": 3,
-        "economic_bulletin_articles": 1,
-        "economic_bulletin_boxes": 1,
-        "speeches": 1,
-        "press_releases": 1,
-        "interviews": 1,
-        "meeting_accounts": 1,
-        "decisions": 1
+        "annual_reports": 3,
+        "convergence_reports": 3,
+        "annual_report_translations": 2,
+        "financial_stability_reviews": 3,
+        "statistics_papers": 3,
+        "research_bulletins": 2,
+        "legal_working_papers": 3,
+        "discussion_papers": 3,
+        "central_banking_proceedings": 3,
+        "legal_conference_proceedings": 3,
+        "macroprudential_bulletin_articles": 3,
+        "financial_integration_reports": 3,
+        "international_role_euro": 3,
+        "target_annual_reports": 3,
+        "other_publications": 3,
+        "bank_lending_surveys": 3,
+        "professional_forecaster_surveys": 3,
+        "enterprise_finance_surveys": 3,
+        "t2s_annual_reports": 3
       }
     },
     "ema": {
       "repo_id": "jfrick/eu-ema",
       "adapter": "adapters.ema",
-      "collections": [
-        "epar_overviews",
-        "epar_product_information",
-        "epar_assessment_reports",
-        "news",
-        "scientific_guidelines",
-        "committee_documents"
-      ],
       "description": "European Medicines Agency news, scientific guidelines and committee documents, enumerated from official JSON inventories.",
+      "exclude_collections": [
+        "epar_documents"
+      ],
       "collection_weights": {
         "epar_assessment_reports": 6,
-        "epar_product_information": 6,
-        "epar_overviews": 1,
-        "news": 1,
-        "scientific_guidelines": 1,
-        "committee_documents": 1
-      }
+        "epar_product_information": 20,
+        "non_epar_documents": 2,
+        "epar_variation_reports": 3,
+        "epar_scientific_discussions": 3,
+        "epar_scientific_discussion_variations": 3
+      },
+      "max_campaign_rounds": 6
     },
     "eurlex": {
       "repo_id": "jfrick/eu-eurlex",
       "adapter": "adapters.eurlex",
+      "description": "Official CELLAR sector-3 multilingual native XHTML; bounded year inventories, not exhaustive EU law coverage.",
       "collections": [
         "legislation_2024",
-        "legislation_2023"
+        "legislation_2023",
+        "legislation_2022",
+        "legislation_2021",
+        "legislation_2020",
+        "legislation_2025",
+        "legislation_2026"
       ],
-      "inventory_limit_per_collection": 5000,
-      "description": "Official CELLAR sector-3 multilingual native XHTML; bounded year inventories, not exhaustive EU law coverage."
+      "inventory_limit_per_collection": 10000
     },
     "commission-press": {
       "repo_id": "jfrick/eu-commission-press",
       "adapter": "adapters.commission_press",
-      "collections": [
-        "releases_en",
-        "releases_fr",
-        "releases_de"
-      ],
-      "inventory_limit_per_collection": 2000,
-      "description": "Official Press Corner full-document JSON htmlContent, strict language validation, excluding eTranslation."
+      "description": "Official Press Corner full-document JSON htmlContent, strict language validation, excluding eTranslation.",
+      "inventory_limit_per_collection": 2000
     }
   },
   "limits": {

@@ -197,13 +197,24 @@ def test_inferred_rule_exclusions(path):
     )
 
 
-def test_inferred_pdf_requires_title_in_first_two_pages(monkeypatch):
+@pytest.mark.parametrize(
+    "path",
+    [
+        "2012/pdf/art2_mb201201en_pp75-86en.pdf",
+        "1999/pdf/p.11_16_mb199901en.pdf",
+        "2015/pdf/eb201506_article01.en.pdf",
+        "2015/pdf/art01_eb201502.en.pdf",
+        "2017/pdf/ebart201705_01.en.pdf",
+        "2018/pdf/ecb.ebart201803_01.en.pdf",
+    ],
+)
+def test_inferred_pdf_requires_title_in_first_two_pages(monkeypatch, path):
     from types import SimpleNamespace
 
     from adapters import ecb
 
     candidate = {
-        "url": "https://www.ecb.europa.eu/press/economic-bulletin/articles/2012/pdf/art2_mb201201en_pp75-86en.pdf",
+        "url": "https://www.ecb.europa.eu/press/economic-bulletin/articles/" + path,
         "collection_id": "economic_bulletin_articles",
         "title": "The euro-area credit market",
     }
@@ -232,6 +243,89 @@ def test_inferred_pdf_requires_title_in_first_two_pages(monkeypatch):
     [
         ("annual_reports", "132"),
         ("convergence_reports", "22"),
+        ("financial_stability_reviews", "137"),
+        ("statistics_papers", "5"),
+        ("research_bulletins", "61"),
+        ("legal_working_papers", "4"),
+        ("discussion_papers", "377"),
+        ("central_banking_proceedings", "155"),
+        ("legal_conference_proceedings", "450"),
+        ("letters_to_meps", "18"),
+        ("ecb_blog", "226"),
+        ("macroprudential_bulletin_articles", "96"),
+        ("financial_integration_reports", "140"),
+        ("international_role_euro", "143"),
+        ("target_annual_reports", "142"),
+        ("other_publications", "23"),
+        ("weekly_financial_commentaries", "21"),
+        ("monetary_policy_statements", "54"),
+        ("market_infrastructure_news", "183"),
+        ("consumer_expectation_surveys", "298"),
+        ("macroeconomic_projections", "95"),
+        ("monetary_analyst_surveys", "199"),
+        ("monetary_analyst_results", "268"),
+        ("digital_euro_investigation", "279"),
+        ("digital_euro_preparation", "399"),
+        ("digital_euro_rulebook_preparation", "362"),
+        ("digital_euro_rulebook_investigation", "400"),
+        ("digital_euro_project_documents", "471"),
+        ("digital_euro_rulebook_project", "472"),
+        ("digital_euro_progress_investigation", "406"),
+        ("digital_euro_progress_preparation", "408"),
+        ("digital_euro_experiments", "280"),
+        ("ami_seco_reports", "236"),
+        ("balance_of_payments_quality", "149"),
+        ("financial_accounts_quality", "150"),
+        ("monetary_statistics_quality", "207"),
+        ("climate_financial_disclosures", "392"),
+        ("payment_fraud_reports", "145"),
+        ("annual_report_ep_feedback", "402"),
+        ("estr_methodology_reviews", "246"),
+        ("strategy_review_documents", "249"),
+        ("payments_market_consultations", "250"),
+        ("statistics_consultations", "390"),
+        ("consultation_responses", "448"),
+        ("eba_ecb_reports", "425"),
+        ("bpm6_exchange_booklets", "458"),
+        ("target_pricing_guides", "329"),
+        ("space_payment_studies", "343"),
+        ("company_cash_studies", "443"),
+        ("legal_acts", "368"),
+        ("governing_council_statements", "407"),
+        ("environmental_statements", "211"),
+        ("target_services_annual_reports", "462"),
+        ("letters_and_responses", "456"),
+        ("accounting_conference_programmes", "168"),
+        ("digital_euro_faqs", "254"),
+        ("digital_euro_pilot_faqs", "477"),
+        ("digital_euro_governance", "281"),
+        ("bank_treasurer_surveys", "488"),
+        ("estr_error_reports", "223"),
+        ("eurosystem_oversight_reports", "156"),
+        ("macroprudential_focus", "282"),
+        ("integrated_reporting_framework_documents", "447"),
+        ("climate_indicator_releases", "474"),
+        ("bank_lending_questionnaires", "396"),
+        ("bank_lending_glossaries", "397"),
+        ("insurance_pension_statistics", "11"),
+        ("payment_statistics", "14"),
+        ("credit_terms_surveys", "454"),
+        ("weekly_financial_statements", "101"),
+        ("monetary_developments", "10"),
+        ("mfi_interest_rate_statistics", "8"),
+        ("securities_issues_statistics", "9"),
+        ("balance_of_payments_monthly", "53"),
+        ("investment_fund_statistics", "12"),
+        ("financial_vehicle_statistics", "13"),
+        ("balance_of_payments_quarterly", "56"),
+        ("institutional_sector_accounts", "90"),
+        ("insurance_corporation_statistics", "97"),
+        ("pension_fund_statistics", "237"),
+        ("money_market_statistics", "113"),
+        ("bank_lending_surveys", "99"),
+        ("professional_forecaster_surveys", "158"),
+        ("enterprise_finance_surveys", "157"),
+        ("t2s_annual_reports", "159"),
     ],
 )
 def test_full_report_types_keep_native_text_and_distinct_translations(collection_id, type_id):
@@ -374,3 +468,164 @@ def test_convergence_alternates_are_exact_and_hash_pinned(monkeypatch):
         },
     )
     ecb.validate_alternate(record, body)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "mb199912_focus09.en.pdf",
+        "mb200512_focus09.en.pdf",
+        "mb201012_focus07.en.pdf",
+        "mb201112_focus13.en.pdf",
+        "mb201212_focus08.en.pdf",
+        "mb201312_focus07.en.pdf",
+        "mb201404_focus03.en.pdf",
+        "eb201505_focus04.en.pdf",
+        "eb201607_box02.en.pdf",
+        "ebbox201802_06.en.pdf",
+        "ecb.ebbox201803_01.en.pdf",
+    ],
+)
+def test_box_recovery_preserves_recognized_basename(name):
+    import re
+
+    from adapters.ecb import alternate_document_urls
+
+    year = re.search(r"(?:19|20)\d{2}", name)[0]
+    record = {
+        "collection_id": "economic_bulletin_boxes",
+        "url": f"https://www.ecb.europa.eu/press/economic-bulletin/focus/{year}/pdf/{name}",
+    }
+    assert alternate_document_urls(record) == [f"https://www.ecb.europa.eu/pub/pdf/other/{name}"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "1998/pdf/mb199812_focus13.en.pdf",
+        "2000/pdf/eb200002_box02.en.pdf",
+        "2005/pdf/mb200413_focus03.en.pdf",
+        "2012/pdf/eb201202_box02.en.pdf",
+        "2013/pdf/ebbox201302_01.en.pdf",
+        "2012/pdf/mb201312_focus07.en.pdf",
+        "2015/pdf/mb201404_focus03.en.pdf",
+        "2014/pdf/mb201413_focus03.en.pdf",
+        "2015/pdf/eb201509_box02.en.pdf",
+        "2018/pdf/ebbox201802_00.en.pdf",
+        "2020/pdf/ebbox202002_01.en.pdf",
+        "2014/pdf/mb201404.en.pdf",
+    ],
+)
+def test_box_recovery_rejects_out_of_scope_names(path):
+    from adapters.ecb import alternate_document_urls
+
+    record = {
+        "collection_id": "economic_bulletin_boxes",
+        "url": f"https://www.ecb.europa.eu/press/economic-bulletin/focus/{path}",
+    }
+    assert alternate_document_urls(record) == []
+
+
+@pytest.mark.parametrize("year", [1999, 2005, 2011, 2012, 2013, 2014])
+def test_box_recovery_requires_title_and_rejects_full_issue(monkeypatch, year):
+    from types import SimpleNamespace
+
+    import adapters.ecb as adapter
+
+    record = {
+        "collection_id": "economic_bulletin_boxes",
+        "title": "A verified historical box title",
+        "url": f"https://www.ecb.europa.eu/press/economic-bulletin/focus/{year}/pdf/mb{year}04_focus03.en.pdf",
+    }
+    page = SimpleNamespace(extract_text=lambda: record["title"])
+    monkeypatch.setattr(adapter, "PdfReader", lambda _: SimpleNamespace(pages=[page]))
+    adapter.validate_alternate(record, b"%PDF-fixture")
+    with pytest.raises(ValueError, match="title mismatch"):
+        adapter.validate_alternate(
+            {**record, "title": "A completely different official title"}, b"%PDF-fixture"
+        )
+    with pytest.raises(ValueError, match="not a PDF"):
+        adapter.validate_alternate(record, b"HTML response")
+    monkeypatch.setattr(adapter, "PdfReader", lambda _: SimpleNamespace(pages=[page] * 21))
+    with pytest.raises(ValueError):
+        adapter.validate_alternate(record, b"%PDF-fixture")
+
+
+def test_older_box_expansion_keeps_observed_2011_title_mismatch_rejected(monkeypatch):
+    from types import SimpleNamespace
+
+    from adapters import ecb
+
+    record = {
+        "collection_id": "economic_bulletin_boxes",
+        "url": "https://www.ecb.europa.eu/press/economic-bulletin/focus/2011/pdf/mb201112_focus13.en.pdf",
+        "title": "Eurosystem staff macroeconomic projections for the euro area: technical assumptions "
+        "about interest rates, exchange rates, commodity prices and fiscal policies",
+    }
+    page = SimpleNamespace(
+        extract_text=lambda: (
+            "Technical assumptions about interest rates, "
+            "exchange rates, commodity prices and fiscal policies"
+        )
+    )
+    monkeypatch.setattr(ecb, "PdfReader", lambda _: SimpleNamespace(pages=[page]))
+    assert ecb.alternate_document_urls(record)
+    with pytest.raises(ValueError, match="title mismatch"):
+        ecb.validate_alternate(record, b"%PDF-fixture")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "1999/pdf/p.11_16_mb199901en.pdf",
+        "1999/pdf/p.29_43_mb199905en.pdf",
+        "2015/pdf/eb201506_article01.en.pdf",
+        "2015/pdf/art01_eb201502.en.pdf",
+        "2016/pdf/eb201608_article02.en.pdf",
+        "2017/pdf/ebart201705_01.en.pdf",
+        "2018/pdf/ecb.ebart201803_01.en.pdf",
+    ],
+)
+def test_additional_standalone_article_filenames_keep_candidate_identity(path):
+    from adapters.ecb import alternate_document_urls
+
+    candidate = {
+        "url": "https://www.ecb.europa.eu/press/economic-bulletin/articles/" + path,
+        "collection_id": "economic_bulletin_articles",
+        "document_id": "original-id",
+    }
+    original = dict(candidate)
+    assert alternate_document_urls(candidate) == [
+        "https://www.ecb.europa.eu/pub/pdf/other/" + path.rsplit("/", 1)[1]
+    ]
+    assert candidate == original
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "2000/pdf/p.11_16_mb200001en.pdf",  # dotted family verified only for 1999
+        "1999/pdf/p.16_11_mb199901en.pdf",  # reversed page range
+        "1999/pdf/p.0_16_mb199901en.pdf",  # zero page
+        "2014/pdf/eb201406_article01.en.pdf",  # before Economic Bulletin
+        "2019/pdf/ecb.ebart201903_01.en.pdf",  # outside verified historical range
+        "2015/pdf/eb201606_article01.en.pdf",  # year mismatch
+        "2015/pdf/eb201509_article01.en.pdf",  # invalid issue
+        "2015/pdf/art00_eb201502.en.pdf",  # zero article
+        "2017/pdf/ebart201705_00.en.pdf",  # zero article
+        "2017/pdf/ebart201700_01.en.pdf",  # zero issue
+        "2015/pdf/eb201506.en.pdf",  # whole issue
+        "2015/pdf/eb201501_focus04.en.pdf",  # a box, not an article filename
+        "2015/pdf/eb201506_article01.en.pdf?download=1",
+        "2015/pdf/../eb201506_article01.en.pdf",
+    ],
+)
+def test_additional_article_rules_reject_ambiguous_or_malformed_names(path):
+    from adapters.ecb import alternate_document_urls
+
+    assert not alternate_document_urls(
+        {
+            "url": "https://www.ecb.europa.eu/press/economic-bulletin/articles/" + path,
+            "collection_id": "economic_bulletin_articles",
+        }
+    )

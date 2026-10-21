@@ -12,33 +12,22 @@ adapters. Existing EUR-Lex/OPUS corpora are overlap baselines, not evidence that
 institutional long tail has been collected. No claim of novelty or overall token
 volume is established by this pilot.
 
+Findings, measured totals, coverage tables and negative results are in
+[RESEARCH.md](RESEARCH.md).
+
 ## Implemented now
 
 - Ten collection candidates in [sources.json](sources.json), ordered by priority.
-- Five source investigations with live HTTP evidence in [research/](research/).
 - A bounded collector for HTML/XHTML, selected full-document XML, TXT and
-  text-bearing PDF, plus HTML/RSS/Atom/sitemap discovery.
-- A repeatable loop over a slice of the registry, raw-response provenance, explicit
-  failures, exact-text deduplication and Zstandard-compressed Parquet export.
-- Portable per-source agent task briefs, with separate report paths so research
-  agents can work in parallel and the parent can integrate their findings.
-- ECB and EMA collection adapters, durable Hugging Face checkpoints, and bounded
-  CPU workers on Modal. Source-to-repository mappings live in code.
+  text-bearing PDF, plus HTML/RSS/Atom/sitemap discovery (`pilot.py`, `eu_corpus.py`).
+- ECB, EMA, Eur-Lex and Commission press adapters, durable Hugging Face
+  checkpoints and bounded CPU workers on Modal (`pipeline.py`, `modal_pipeline.py`).
+- A durable download queue (`document_queue.py`) separating paced downloads from
+  parsing inside each worker.
+- A scheduled goal controller (`modal_goal.py`) and token audits (`modal_token_audit.py`).
 
-The [first measured pilot](research/pilot-2026-10-16.md) produced **14 unique
-documents, 491,330 characters and 76,499 whitespace words** from four of the five
-investigated sources. Commission Press Corner needs a full-text adapter. These
-are small-sample observations, not a token forecast.
-
-The research agents in the initial implementation were delegated by the coding
-assistant. `pilot.py` itself is a deterministic collection loop: it does not invoke
-an LLM or a browser autonomously. Task briefs are inputs to an agent host such as
-Codex, not an invented agent API. `pipeline.py` runs the integrated ECB/EMA adapters
-and uploads atomic checkpoints to Hugging Face; `modal_pipeline.py` runs those
-workers remotely. Neither harness autonomously invokes an LLM. Autonomous adapter
-repair, scheduled refresh, ASR, OCR and near-deduplication remain future stages.
-The implementation below is not itself evidence of a successful cloud run; record
-measured run outcomes separately.
+No harness invokes an LLM or browser autonomously. Autonomous adapter repair, ASR,
+OCR and near-deduplication remain future stages.
 
 ## Ten starting collections
 
@@ -103,31 +92,38 @@ JSON inventories. ETags and Last-Modified values are recorded but conditional HT
 requests are not implemented. The ECB/EMA pipeline below adds explicit inventory
 adapters and durable resume; its behavior differs from these original commands.
 
-## ECB/EMA durable collection pipeline
+## Durable collection pipeline
 
-[pipeline_sources.json](pipeline_sources.json) is the authoritative organization →
-HF repository → adapter → collection mapping. Document repositories are created public following the owner's publication request;
-existing repository visibility is preserved. Current destinations and configs:
+[pipeline_sources.json](pipeline_sources.json) is the single organization → HF
+repository → adapter mapping used by manual runs, the goal controller and token
+audits. A source's collections default to its adapter's `COLLECTIONS` registry
+minus `exclude_collections`; list `collections` explicitly only to select a subset
+(Eur-Lex years). `collection_weights` lists only weights other than 1.
+`pipeline.load_mapping` resolves the defaults. Repositories are created private.
 
-| Source | Hugging Face repository | Collection configs |
-| --- | --- | --- |
-| ECB | `jfrick/eu-ecb` | `speeches`, `press_releases`, `interviews`, `meeting_accounts`, `decisions` |
-| EMA | `jfrick/eu-ema` | `news`, `scientific_guidelines`, `committee_documents` |
+`pipeline.py` enumerates and saves each collection, then interleaves candidates
+round-robin by weight so one large collection does not consume the budget. The
+limit is **1,000 attempted documents per organization per round**, including
+failures; inventory requests are additional. A worker gets 3,000 work seconds, a
+3,600-second Modal timeout, one CPU and 2 GiB memory.
 
-The ECB adapter resolves the versioned FOEDB inventory used by its publications
-website, enumerates type indexes, and prefers HTML over PDF for each explicitly
-listed language. It does not enumerate all other language databases or linked
-attachments. The EMA adapter reads official JSON inventories, partitions records
-by document category, and expands listed translations. Inventory completeness is
-reported relative to these selected interfaces, not the whole institution.
+### Download queue
 
-`pipeline.py` enumerates and saves each collection, then interleaves candidate
-lists round-robin so one large collection does not consume the entire budget.
-The limit is **1,000 attempted documents per organization per round**,
-including failed downloads/extractions. Inventory requests are additional. A source
-worker gets 3,000 seconds of work time and a 3,600-second Modal timeout; a request
-already in progress can run beyond the work deadline. Each worker uses one CPU and
-2 GiB memory, with no GPU. These are upper bounds, not promised yields.
+Every source runs documents through `document_queue.py`:
+
+1. One paced downloader thread fetches the next batch (20 items) into a local
+   spool. It never writes HF and stops at the first HTTP 429.
+2. The sole writer commits the gzip originals plus `download_queue` entries, then
+   starts the next download and parses the staged batch.
+3. Parsed Parquet, the dedup index and queue removal commit atomically.
+4. On restart, staged bodies are parsed before any new download (no refetch).
+
+Parse failures keep the staged body and retry after 300 s × attempt, up to three
+attempts; exhausted items leave the queue and keep `raw_path` in their failure
+record. An unreadable staged body is recorded as a failure and dropped from the
+queue so a later worker downloads it again. At most one batch is downloaded
+speculatively; an interrupted run reserves one batch against its budget.
+`status.py` reports queue depth separately from parsed documents.
 
 ### Run, resume, and refresh
 
@@ -171,9 +167,9 @@ to one container each, and HF compare-and-swap protects against overlapping writ
 | HF path | Contents |
 | --- | --- |
 | `data/<collection>/<format>/part-<hash>.parquet` | Extracted text, stable schema, document/revision IDs and provenance |
-| `state/progress.json` | Completed items, failures, retry times, dedup index, collection inventory paths, source mapping and run summaries |
+| `state/progress.json` | Completed items, failures, retry times, dedup index, download queue, inventory paths, source mapping and run summaries |
 | `inventories/<collection>/<hash>.json` | Enumerated document-language candidates and coverage evidence |
-| `raw/<sha256>.gz` | Compressed original bodies for successfully retained documents |
+| `raw-v2/<prefix>/<sha256>.gz` | Compressed original bodies, staged before parsing; legacy `raw/<sha256>.gz` files are retained |
 | `README.md` | Collection configs, stored row counts and unreviewed/mixed source-term status |
 
 Collection configs use `data/<collection>/**/*.parquet` as their `train` split;
@@ -217,13 +213,14 @@ measurements or evidence of dataset novelty.
 
 ## Research-agent workflow
 
-1. Parent selects a registry slice and assigns one collection per task. Read the
-   existing source report first; keep agents on separate report files.
+1. Parent selects a registry slice and assigns one collection per task. Read
+   RESEARCH.md first; keep agents on separate report files.
 2. Agent inspects the institution and its linked collections, feeds, public APIs,
    pagination, language alternatives and attachments. Use bounded live probes.
-3. Agent writes `research/<id>.md` and `.json`: tested URLs, UTC timestamps, HTTP
-   statuses/content types, full-text evidence, recommended source configuration,
+3. Agent writes `artifacts/research/<id>.md` and `.json` (ignored): tested URLs,
+   UTC timestamps, HTTP statuses, full-text evidence, recommended configuration
    and unresolved gaps. Raw material stays in `artifacts/source-probes/<id>/`.
+   The parent folds concise findings into RESEARCH.md.
 4. Parent reviews and integrates source rules or a collection adapter, runs the
    bounded pilot, and examines extracted bodies rather than trusting HTTP 200.
 5. Use failures and uncovered collections to assign the next investigation.
@@ -327,325 +324,69 @@ Modal detached local entrypoints only guarantee survival of their last triggered
 function after disconnection; keep the two-source coordinator alive. If either
 worker stops, rerun with a new run ID to resume from its HF checkpoint.
 
-### First Modal pilot: 16 October 2026
+## Campaigns and the goal controller
 
-The [checkpoint report](research/modal-pilot-2026-10-16.json) records actual HF
-readback: 20 ECB rows and 139 EMA rows passed shard, text-hash, unique-ID and
-progress-reference checks. ECB was still running at that snapshot. EMA was
-stopped after persistent HTTP 429 responses; 500 attempts (139 successes,
-361 failures) were durably recorded, with possible additional uncommitted work.
-The initial implementation continued after 429s; that behavior is now fixed.
-Future runs stop on the first 429, atomically save pending work, honor Retry-After
-(or a 15-minute fallback), and refuse restarts during the durable source cooldown.
-EMA now has a five-second minimum request interval. The fix passed offline tests;
-a corrected live EMA run has not yet been attempted.
-
-The selected inventories contain 6,752 ECB and 11,864 EMA document-language URLs.
-Those are candidate counts, not extracted-document or token totals. Some document
-footers and related links remain in extracted text. Token counting requires the
-OpenAI vocabulary file; its download was denied by this environment proxy (403).
-
-## Running totals and expanded collection campaigns
-
-Every HF commit now records exact `metrics` and `collection_metrics`: stored rows,
-Unicode characters, whitespace words, UTF-8 text bytes, Parquet file bytes, and
-compressed original-file bytes. `metrics_history` retains timestamped growth
-checkpoints. HF dataset cards show current totals and a per-collection table;
-`uv run status.py both` reports both organizations and combined totals without
-redownloading corpus files. Historical rows are backfilled from pinned Parquet
-and HF object-size metadata before counters are enabled. These are stored-data
-counts, not token counts, network traffic, or total HF repository billing size.
-Shared raw blobs count once; inventories, progress and Git history are excluded.
-
-Added collections:
-
-| Organization | Collection IDs | Observed inventory |
-| --- | --- | --- |
-| ECB | `working_papers`, `occasional_papers`, `economic_bulletin_articles`, `economic_bulletin_boxes` | 6,032 publication records in the observed snapshot |
-| EMA | `epar_overviews`, `epar_product_information`, `epar_assessment_reports` | 50,656 / 55,214 / 1,891 accepted PDF language URLs |
-
-EMA EPAR collections include 26 languages. They are scheduled instead of the
-umbrella EPAR collection to avoid overlapping collection lists. Historic ECB PDFs
-without a language suffix are retained as `und`, not assumed English. See
-[ECB expansion](research/ecb-expansion.md) and [EMA expansion](research/ema-expansion.md).
-
-Launch each source separately so a detached local entrypoint has one durable
-supervisor call. Each campaign allows at most three rounds of 1,000 attempted
-documents; each collection worker has a 3,600-second hard timeout and 3,000-second
-work budget. Supervisors have a four-hour deadline and low CPU allocation. They
-respect the saved source cooldown before another round, and stop if a crashed
-supervisor cannot determine whether a claimed worker already ran. Plans, claims,
-round results and metrics live in HF `state/progress.json` under `campaigns`.
+Launch each source separately with a unique run ID; never start a second writer
+for an active source. A campaign runs at most three rounds (EMA six), respects
+the saved source cooldown, and persists each child `call_id` before the worker
+starts so a restarted supervisor reattaches instead of dispatching again.
 
 ```sh
 uv run python modal_cli.py run --detach modal_pipeline.py --source ecb \
   --run-id ecb-expansion-001 --rounds 3
+# Wait for a predecessor campaign (default 30 min, at most 3 h).
 uv run python modal_cli.py run --detach modal_pipeline.py --source ema \
-  --run-id ema-expansion-001 --rounds 3
-uv run status.py both
-```
-
-EMA requests now have a ten-second minimum interval; ECB uses five seconds.
-A 429 ends the current round immediately. There is no indefinite or recurring schedule: campaigns stop at their bounds and preserve
-all committed progress for the next authorized continuation.
-
-Logical round IDs also enforce the original wall-time and attempt budgets across
-platform restarts. An interrupted attempt reserves one uncommitted batch against
-its limit; replaying a completed round returns its saved result without new source
-requests. This prevents a restart from silently granting another full allowance.
-
-### Continuation recovery: 16 October 2026
-
-Network access recovered and both three-round expansion campaigns were launched
-on Modal. The [recovery record](research/continuation-recovery-2026-10-16.json)
-contains call IDs, durable campaign claims and a verified baseline: **903 rows,
-16,940,394 characters, 2,572,438 whitespace words, 17,019,084 UTF-8 text bytes,
-9,712,532 Parquet bytes and 104,038,873 compressed-original bytes**. Both pinned
-repository audits passed, including independent checks of the new counters.
-These are baseline counts while collection continues; consult HF dataset cards
-or `uv run status.py both` for current totals.
-
-### Supervisor recovery
-
-New Modal campaigns persist each child `call_id` before the worker starts loading
-its progress. A restarted supervisor can reattach to that same call without
-launching a replacement writer. The worker waits briefly for that durable claim;
-metadata conflicts use bounded retries with fresh HF state. A dispatch whose call
-ID was never saved still stops as ambiguous. Confirm the original child has failed
-or stopped before starting a new campaign for that organization.
-
-### Queue a bounded continuation
-
-For a single source, a multi-round campaign can take
-`--after-campaign PREVIOUS_CAMPAIGN_ID`. Its supervisor waits read-only for up
-to 30 minutes by default for that campaign's `complete` status before claiming new work.
-A missing, ambiguous, failed, or timed-out predecessor prevents collection.
-Use `--predecessor-wait-seconds` to set a bounded wait up to three hours.
-The wait allowance is added to the four-hour campaign deadline; Modal enforces
-a seven-hour outer timeout. Worker rounds retain their original bounds. The local
-launch record and compute reservation include the dependency; the new HF
-campaign plan is written only after the predecessor completes. This is a
-finite continuation, not a recurring schedule or a general distributed lock.
-Launch only one successor per source.
-
-The [additional collection record](research/continuation-more-2026-10-16.json)
-captures the 2,866-document / 182,334,783-character checkpoint and the next
-three-round ECB supervisor. EMA's existing three-round campaign continues.
-
-## Sustained expansion: 17 October 2026
-
-The latest adapters share download limits, durable HF storage, raw provenance,
-text deduplication, and resumable Modal workers:
-
-| Source argument | HF repository | Initial collection scope |
-| --- | --- | --- |
-| `ecb` | `jfrick/eu-ecb` | Nine research, bulletin and press collections |
-| `ema` | `jfrick/eu-ema` | Six EPAR, news, guidance and committee collections |
-| `eurlex` | `jfrick/eu-eurlex` | CELLAR native multilingual XHTML, legislation years 2023/2024 |
-| `commission-press` | `jfrick/eu-commission-press` | Original English/French/German Press Corner full text |
-
-`uv run status.py all` includes all mapped organizations. `both` retains
-its original ECB/EMA meaning. Launch new sources individually with the same
-`modal_cli.py run --detach modal_pipeline.py --source SOURCE --rounds 3`
-interface and a unique run ID. Never start a second writer for an active source.
-
-New workers filter completed candidates before weighted fair scheduling.
-EMA gives six slots each to assessment reports and product information, and one
-to each remaining collection. Assessments currently skew English; product
-information preserves multilingual coverage. ECB gives five slots to working
-papers, three to occasional papers, and one to each other collection.
-These weights prioritize observed text yield without dropping collections or
-increasing per-host request rates. They take effect only in newly launched images.
-
-EMA's supported-format check also applies to saved inventories, including valid
-Drupal `.pdf-N` filenames. Unsupported containers remain recorded as uncovered
-candidates and do not consume download attempts. A newly verified ECB alternate
-can be tried once even if the original 404 exhausted its retry budget. Inferred
-Monthly Bulletin replacements require matching the inventory title in the first
-two PDF pages; filename inference alone is not accepted as identity proof.
-
-CELLAR uses official SPARQL keyset pagination and actual XHTML item URLs, with
-5,000-item initial caps per year. Metadata is never stored as document text.
-Press Corner uses its official search and JSON document API: only validated
-`htmlContent` and official quote fields become text. Raw JSON remains the
-stored original, with transformation metadata beside the fetch provenance.
-Language fallback and machine translation are rejected at enumeration and
-extraction. Its 131,142 search total counts document families/fallbacks, not
-131,142 native documents in each language. Initial search scans are bounded to
-5,000 rows per language and remain explicitly incomplete.
-
-See [EMA yield](research/ema-yield-20261017.md),
-[ECB link recovery](research/ecb-historical-links.md),
-[CELLAR verification](research/eurlex-scale-20261017.md), and
-[Press Corner verification](research/commission-press-scale-20261017.md).
-
-Transient HF read failures (network errors and HTTP 502/503/504) use at most
-three attempts. A transient commit error is accepted as success only when a
-fresh pinned head contains exactly the intended progress bytes. Retries retain
-the original parent revision; a different writer's state is never overwritten.
-HTTP 403/404/409/429 reads are not retried by this storage layer. A commit-only
-exception handles HF's explicit “another commit operation is in progress” 409: it
-rechecks HEAD and retries only the unchanged-parent write, up to three attempts
-with 5/10-second pauses. Ordinary stale-parent conflicts still propagate.
-
-A source can finish its supported inventory while still retaining unsupported or
-retry-exhausted candidates. Runs therefore report both `pending_candidates`
-(coverage gaps) and `remaining_supported_candidates` (future runnable work).
-Campaign completion uses the latter where available, without claiming website
-exhaustion.
-
-### Recovery and four active sources
-
-On 17 October, connectivity recovered and all four sources started new
-three-round campaigns. CELLAR's preceding campaign completed with 2,997 stored
-documents and 133,282,988 characters. Old ECB/EMA worker termination was checked
-on Modal and stale HF campaign markers were reconciled before replacements
-launched. The [recovery snapshot](research/resumed-four-sources-2026-10-17.json)
-records call IDs, pinned repository revisions and 7,592 stored rows across all
-sources as collection resumed. This is a timestamped snapshot, not a final
-campaign result. New campaigns use weighted scheduling, supported-format
-filtering, strict fallback validation and transient HF commit recovery.
-
-### Automatic continuation toward 100,000 documents
-
-The explicit collection goal is configured in `collection_goal.json`. The current
-scope counts stored documents from ECB and EMA only, following the owner's
-request to focus on these organizations; “EMR” is interpreted as EMA. Existing
-EUR-Lex/Commission batches may finish, but the controller allocates no successors
-to them. This is not a claim that 100,000 ECB/EMA documents exist.
-
-`modal_goal.py` deploys `lm-exploration-eu-100k`: a single scheduled controller
-checks fresh source metrics every 15 minutes. It launches bounded three-round
-campaigns, with at most 1,000 attempts and 3,000 work seconds per round, and
-one active campaign per source. The eight existing running/queued campaigns were
-registered before activation. `goal_pipeline_sources.json` adds five further
-CELLAR year inventories for subsequent workers; existing worker images retain
-their original configuration. Existing incomplete inventories also expand when
-the configured selection limit increases; prior candidates and immutable inventory
-artifacts are retained. The attempted limit is saved to avoid repeating an adapter
-scan that cannot grow further.
-
-The private dataset [jfrick/eu-corpus-control](https://huggingface.co/datasets/jfrick/eu-corpus-control)
-stores claims, Modal call IDs, reservations, observations and source totals in
-`state/progress.json`. Corpus Parquet remains in the separate organization repos.
-CAS claims prevent two ticks dispatching the same work. An uncertain dispatch
-blocks its source for reconciliation. Failed supervisors cannot release their
-reservation while a child is still active. Finished reservations settle for one
-extra tick so final uploads are included before allocating more work.
-
-No new work is allocated after reaching 100,000 stored rows. There is also a
-150-campaign ceiling (including registered campaigns); reaching it is a blocked
-budget state, not success. Incomplete discovery, unsupported formats and failed
-URLs remain coverage gaps: finishing a saved inventory never means an entire
-institution's website has been exhausted. Automatic adapter repair is not
-implemented. The first successful live checks observed 8,975 then 8,995 stored
-documents; see [activation evidence](research/100k-goal-2026-10-17.json).
-
-```sh
-# Inspect current corpus totals; this does not download all Parquet.
+  --run-id ema-next-001 --rounds 3 --after-campaign PREVIOUS_CAMPAIGN_ID
 uv run status.py all
-# Deploy the scheduled controller (requires initialized control state).
-uv run python modal_cli.py deploy modal_goal.py
 ```
 
-To halt future dispatch, stop the `lm-exploration-eu-100k` deployed app in Modal.
-Existing campaigns in other apps must be stopped separately if collection must
-cease immediately. Reconcile their terminal call trees before resuming; never
-clear unresolved claims just to force another launch. All raw artifacts and
-local compute reservations remain excluded from Git.
-
-### ECB/EMA expansion and token-goal checks
-
-Future goal workers include EMA's `non_epar_documents` collection with scheduling
-weight 2. The [verified inventory and extraction samples](research/ema-extra-collections-20261017.md)
-identify 104,799 supported language-level candidates outside the existing document
-partitions. The worker selects at most 100,000 of these; candidates and extraction
-samples are not counted as stored corpus documents.
-
-Use `uv run status.py both --mapping goal_pipeline_sources.json` to include the
-expanded collection breakdown. The separate billion-token research objective is
-not a completed milestone: exact `o200k_base` counts require its vocabulary download,
-which the environment proxy still denied on 17 October. Character/byte/word totals
-continue to be recorded; estimates must not be used to declare the token goal met.
-The owner's subsequent 100,000-document operational limit remains in force.
-
-The future mapping also adds verified ECB annual reports (36 eligible URLs) and
-convergence reports (20), each with weight 3. See the
-[ECB sample evidence](research/ecb-extra-collections-2026-10-17.md). Annual Report
-2025 links 24 language versions not represented by its English inventory; those
-links are discovery evidence, not additional downloaded documents.
-
-Deployment of these additions was blocked on 17 October by a Modal API upstream
-connection failure, alongside Hugging Face HTTP 503 failures. The last confirmed
-stored count was 6,370 ECB/EMA documents at 08:58 UTC. Existing remote workers
-were not stopped, but their later state could not be verified. The expanded
-mapping is ready locally and must be deployed after connectivity recovers.
-The new full-Parquet audit was interrupted during a stalled Xet download and is
-not a passed audit. See the [continuation record](research/ecb-ema-expansion-blocked-20261017.json).
-
-### Fresh Modal recovery app
-
-The same harness accepts `EU_MODAL_APP_NAME` and `EU_GOAL_SCHEDULE`. A recovery
-run uses the existing HF control state and reservations, so an unresolved or
-active source still blocks another writer. Disable its schedule while testing;
-creating a new app is not evidence that the existing workers have stopped.
+`modal_goal.py` deploys `lm-exploration-eu-100k`, a one-minute controller driven by
+[collection_goal.json](collection_goal.json). It launches bounded ECB/EMA
+campaigns, one active campaign per source, with CAS claims, reservations and call
+IDs in the private `jfrick/eu-corpus-control` repository. An uncertain dispatch
+blocks its source until reconciled; three consecutive failures stop dispatch
+until an explicit `acknowledge_recovery`. A zero-attempt round with remaining
+items imposes a ten-minute backoff. The 150-campaign ceiling is a blocked budget
+state, not success.
 
 ```sh
+uv run python modal_cli.py deploy modal_goal.py
+# Recovery app with the schedule disabled; it shares control state and claims.
 EU_MODAL_APP_NAME=lm-exploration-eu-recovery-20261017 EU_GOAL_SCHEDULE=0 \
   uv run python modal_cli.py run --detach modal_goal.py
 ```
 
-The app identity and schedule setting are carried into each function environment so
-remote module hydration uses the same settings. The default app and 15-minute
-schedule remain unchanged when these variables are absent.
+To halt dispatch, stop the deployed app; stop campaigns in other apps separately
+and reconcile their terminal call trees before resuming. Never clear unresolved
+claims to force a launch.
 
-Recovery succeeded at 09:37 UTC on 17 October: the fresh app completed a real
-controller tick and confirmed 6,889 stored ECB/EMA documents, with both sources
-already active. Both the fresh manual app and original scheduled app were deployed
-with the expanded mappings. Prior outage records remain historical evidence;
-see [successful recovery](research/modal-recovery-success-20261017.json).
-The recovery packaging fix passes app settings through function environments,
-without adding image build steps after mounted files.
+## Token audits
 
-### Hugging Face code backups
+`token_audit.py` counts `o200k_base` tokens per stored text (no separators or EOS)
+at a pinned revision, verifying each shard's row count and record digest, and
+caches per-shard results in `tokens/<source>.json` in the control repo.
+`modal_token_audit.scheduled_tick` runs hourly within the 96-pair budget, with
+a 1,500-second work budget, 2-second pacing per uncached shard and HTTP 429
+cooldowns.
 
-Run `uv run backup_code.py` after committing changes. It uploads the committed
-`training/data/eu` subtree to the private control repository under
-`code/<git-commit>.tar.gz`, with a JSON manifest listing files and the SHA-256
-checksum. It then downloads the pinned uploaded archive and verifies its hash.
-Only these code paths are written; collection checkpoints and corpus Parquet are
-not replaced. Ignored artifacts and uncommitted edits are excluded. This provides
-a second code/research backup alongside GitHub, but is not a full Git-history backup.
+```sh
+uv run python modal_cli.py deploy modal_token_audit.py
+uv run python modal_cli.py run --detach modal_token_audit.py --source ecb --max-shards 3000
+uv run status.py both --cached-tokens
+```
 
-For an immediate backup attempt followed by retries every ten minutes until a
-verified upload succeeds, run `uv run retry_backup.py --interval 600`. The loop
-records attempts and the next retry time in ignored
-`artifacts/hf-code-backup-retries.jsonl`, then saves the verified upload receipt.
-It stops on success or a non-transient error requiring code/configuration repair.
+`--cached-tokens` matches cached counts to current shards by hash, path and row
+count without downloading Parquet; missing caches are reported, not zeroed.
 
+## HF storage behaviour and code backups
 
-### Public document datasets
+Transient HF reads (network errors, 502/503/504) get at most three attempts. A
+transient commit error counts as success only if a fresh pinned head contains
+exactly the intended progress bytes; HF's "another commit in progress" 409 is
+retried up to three times on the unchanged parent. Stale-parent conflicts
+(409/412) abort rather than overwrite another writer.
 
-The owner authorized public visibility for `jfrick/eu-ecb`, `jfrick/eu-ema`,
-`jfrick/eu-eurlex` and `jfrick/eu-commission-press`. Both source mappings now create
-future document repositories as public. Existing workers preserve repository
-visibility when resuming. The separate `jfrick/eu-corpus-control` repository and
-its code backups remain private. Publication does not imply complete website
-coverage; source notices and per-document provenance remain in the corpus.
-
-
-### Annual-report translations and historical convergence reports
-
-The scheduled ECB mapping now follows explicit language-version links on English
-annual-report pages, bounded to 100 seed pages. It accepts only links matching
-the same report path and identifier, preserving report relationships and discovery
-URLs. The 2025 page supplied 23 non-English candidates; live German and French
-samples yielded over 360,000 characters each. These probes are discovery evidence,
-not additional uploaded-document counts. See the [translation investigation](research/ecb-report-translations-2026-10-17.md).
-
-Three broken convergence-report URLs have exact replacement mappings for 2000,
-May 2006 and May 2007. A replacement is accepted only after a primary 404 and a
-match against its verified PDF SHA-256. The original inventory identity remains
-unchanged. See the [retrieval evidence](research/ecb-convergence-links-20261017.md).
-These additions passed the full 195-test suite before deployment; neither implies
-complete historical or multilingual coverage.
+`uv run backup_code.py` uploads the committed `training/data/eu` subtree to the
+control repo as `code/<git-commit>.tar.gz` with a checksummed manifest and
+verifies the upload. `uv run retry_backup.py --interval 600` retries until a
+verified upload succeeds.

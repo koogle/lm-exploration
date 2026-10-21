@@ -8,7 +8,7 @@ from pathlib import Path
 
 import modal
 
-from modal_scripts.modal_scholarly_pilot import image
+from distributed.image import image
 
 app = modal.App("lm-exploration-multigpu-comparison")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -30,7 +30,9 @@ def worker(gpu, world, run_id, provenance, sustained_steps):
 
     output = Path("/runs") / run_id / f"{gpu}x{world}"
     output.mkdir(parents=True, exist_ok=False)
-    manifest = "/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001/manifest.json"
+    manifest = (
+        "/data/scholarly-code/scholarly-124m-20261016/snapshots/pilot-001-seekable/manifest.json"
+    )
     rows = []
     start = time.monotonic()
 
@@ -122,7 +124,7 @@ def worker(gpu, world, run_id, provenance, sustained_steps):
 
 @app.local_entrypoint()
 def main(
-    run_id: str = "scholarly-124m-gpu-comparison-20261017-01",
+    run_id: str = "simple-llm-124m-gpu-comparison-20261017-01",
     gpus: str = "H100",
     sustained_steps: int = 30,
 ):
@@ -135,10 +137,10 @@ def main(
         raise ValueError("GPUs must be a comma-separated subset of H100,L40S,A10G")
     if not 1 <= sustained_steps <= 100:
         raise ValueError("Sustained steps must be in 1..100 for the bounded pilot buffer")
-    Path("results").mkdir(exist_ok=True)
+    Path("artifacts/results").mkdir(parents=True, exist_ok=True)
     files = [
         Path("modal_scripts/modal_multi_gpu_benchmark.py"),
-        Path("modal_scripts/modal_scholarly_pilot.py"),
+        *Path("distributed").glob("*.py"),
         Path("trainer/ddp_benchmark.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
@@ -159,7 +161,7 @@ def main(
     for (gpu, world), call in calls.items():
         try:
             result = call.get()
-            Path(f"results/{run_id}-{gpu}x{world}.json").write_text(
+            Path(f"artifacts/results/{run_id}-{gpu}x{world}.json").write_text(
                 json.dumps(result, indent=2) + "\n"
             )
         except Exception as exc:  # noqa: BLE001 -- retain results from independent remote trials
