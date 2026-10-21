@@ -27,7 +27,8 @@ image = (
     .add_local_dir("100m", "/project/model_100m")
     .add_local_dir("10m", "/project/model_10m")
     .add_local_dir("trainer", "/project/trainer")
-    .add_local_dir("distributed_training", "/project/distributed_training")
+    .add_local_dir("distributed", "/project/distributed")
+    .add_local_dir("workflows", "/project/workflows")
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer")
     .add_local_dir("tests", "/project/tests")
@@ -80,10 +81,17 @@ def initialize(run_id):
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def worker(run_id, snapshot, settings, provenance, resume="", max_steps=None, max_seconds=3000):
-    from distributed_training.modal_train import worker as existing_worker
+    from distributed.modal_train import worker as existing_worker
 
     return existing_worker.local(
-        run_id, snapshot, settings, provenance, resume, max_seconds, max_steps
+        run_id,
+        snapshot,
+        settings,
+        provenance,
+        resume,
+        max_seconds,
+        max_steps,
+        dataset_root="scholarly-code",
     )
 
 
@@ -97,7 +105,7 @@ def main(
     max_seconds: int = 3000,
     max_steps: int = 0,
 ):
-    from distributed_training.config import DistributedConfig
+    from distributed.config import DistributedConfig
 
     cfg = DistributedConfig(**json.loads(Path(config).read_text()))
     if not cfg.prefetch_batches:
@@ -112,7 +120,7 @@ def main(
         Path(__file__),
         *Path("data").glob("*.py"),
         *Path("trainer").glob("*.py"),
-        *Path("distributed_training").glob("*.py"),
+        *Path("distributed").glob("*.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
     ]

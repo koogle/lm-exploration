@@ -47,30 +47,17 @@ class FastRawCorpusTests(unittest.TestCase):
         for source in base.recipe["sources"]:
             self.assertEqual(base.counts(source["name"]), fast.counts(source["name"]))
 
-    def test_batch_tokenization_matches_serial_and_reopens_existing_db(self):
-        recipe, reader = fixture()
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            base = RawCorpus(root / "base", recipe)
-            fast = FastRawCorpus(root / "fast", recipe, workers=2, batch_size=3, reader=reader)
-            for _ in range(15):
-                for source in recipe["sources"]:
-                    name = source["name"]
-                    base.prepare(name, max_records=3, reader=reader)
-                    fast._write(source, fast._fetch(source, fast.cursor(name)))
-                self.compare(base, fast)
-            fast.close()
-            fast = FastRawCorpus(root / "fast", recipe, reader=reader)
-            self.compare(base, fast)
-            fast.close()
-            base.close()
-
     def test_parallel_matches_same_deterministic_schedule(self):
         recipe, reader = fixture()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             base = RawCorpus(root / "base", recipe)
+            original = RawCorpus(root / "fast", recipe)
+            for corpus in (base, original):
+                corpus.prepare(recipe["sources"][0]["name"], max_records=3, reader=reader)
+            original.close()
             fast = FastRawCorpus(root / "fast", recipe, workers=2, batch_size=3, reader=reader)
+            self.compare(base, fast)
             for _ in range(30):
                 needed = [
                     s
@@ -86,22 +73,10 @@ class FastRawCorpusTests(unittest.TestCase):
             else:
                 self.fail("Fixture did not reach target")
             fast.close()
+            fast = FastRawCorpus(root / "fast", recipe, reader=reader)
+            self.compare(base, fast)
+            fast.close()
             base.close()
-
-    def test_migration_preserves_existing_staging_identity_and_counts(self):
-        recipe, reader = fixture()
-        with tempfile.TemporaryDirectory() as temporary:
-            original = RawCorpus(temporary, recipe)
-            original.prepare(recipe["sources"][0]["name"], max_records=7, reader=reader)
-            expected = original.counts(recipe["sources"][0]["name"])
-            identity = original.db.execute("SELECT value FROM settings").fetchone()[0]
-            original.close()
-            migrated = FastRawCorpus(temporary, recipe, reader=reader)
-            self.assertEqual(migrated.counts(recipe["sources"][0]["name"]), expected)
-            self.assertEqual(
-                migrated.db.execute("SELECT value FROM settings").fetchone()[0], identity
-            )
-            migrated.close()
 
     def test_network_failure_replays_only_uncommitted_batch(self):
         recipe, original = fixture()

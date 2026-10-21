@@ -251,7 +251,7 @@ def migrate_checkpoint(parent_path, output, manifest_path, config):
     from model_100m.model import GPT, ModelConfig
     from training_data.raw_token_stream import RawTokenMixture
 
-    from distributed_training.train import source_hashes
+    from trainer.loop import source_hashes
 
     parent_path, output = Path(parent_path), Path(output)
     if output.exists():

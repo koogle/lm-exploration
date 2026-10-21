@@ -9,7 +9,8 @@ The [100M model](../100m/README.md) uses this same implementation at larger dime
 There are no separate RMSNorm/RoPE/SwiGLU model folders or recipe choices.
 Their untrained single-factor experiments remain in Git history.
 
-New recipes select `model="10m"` and default to `architecture_version=2`.
+The model defaults to `architecture_version=2`. Historical character recipes
+select `model="10m"`; current subword recipes specify dimensions directly.
 All active configuration, projection, block, initialization and forward code lives
 in `model.py`; modern classes do not inherit from the old architecture.
 The [legacy implementation](legacy.py) is explicitly the old code, retained only
@@ -35,24 +36,18 @@ Tiny Shakespeare. This is a learning benchmark, not an instruction-following
 assistant. A contiguous 90/10 train/validation split prevents windows crossing
 the boundary; vocabulary is drawn from the whole corpus. There is no sealed test.
 
-## Bounded Modal training
+## Historical bounded Modal training
 
-Run from `training/`, using a Python environment with Modal's API proxy support.
-The Modal image explicitly pins PyTorch 2.6.0, safetensors 0.8.0 and tqdm 4.70.1,
-independently of the newer version selected by the local training project's lock.
-The executed versions and source hashes are saved in every run's config.
+The character training loop and generic character recipe launcher have been removed.
+Current training uses [`trainer/loop.py`](../trainer/loop.py) through the
+[distributed launcher](../distributed/README.md). Historical character checkpoints
+remain readable by `lm-generate`; the published inference bundle is unchanged.
 
-The published runs used the former `modal_shakespeare.py` (commit `ec5ebd1`). The
-same training settings are now the [`shakespeare-10m` recipe](../recipes/shakespeare-10m.json),
-which defaults to the modern architecture, not the published vanilla definition.
-For historical architecture reproduction, set `model_overrides` to
-`{"architecture_version": 1}`. Launch with the generic
-[recipe launcher](../recipes/README.md) (use a new run ID):
-
-```bash
-uv run --with 'modal[api-proxy-support]==1.6.1' modal run modal_scripts/modal_train.py \
-  --recipe recipes/shakespeare-10m.json --run-id shakespeare-10m-smoke-02 --smoke
-```
+The published runs used the former `modal_shakespeare.py` (commit `ec5ebd1`).
+The [`shakespeare-10m` recipe](../workflows/model_configs/historical/shakespeare-10m.json) preserves training
+settings but defaults to the modern architecture. The historical published
+architecture uses `architecture_version: 1`. Reproducing that training run requires
+its original source; this is not a supported current training command.
 
 The original runs used app `lm-exploration-shakespeare-10m` and volume
 `lm-exploration-training`. The smoke worker has a 120-second hard timeout; the
