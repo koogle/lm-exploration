@@ -92,6 +92,8 @@ only after observing several sizes and budgets with stable optimization and
 repeat seeds near the apparent optimum. This estimates useful generalization
 per parameter; it does not establish a literal information-storage capacity.
 
-Status: parameter calculator implemented; synthetic curriculum generation and
-the scaling sweep described here are proposed, not launched. The completed 50M
-distillation run and its negative coding examples remain the measured baseline.
+Status: parameter calculator and [fresh curriculum qualification](CURRICULUM.md)
+implemented. Fresh generation has run; the full token-budget scaling sweep above
+remains a separate experiment, not something the calculator launches. The
+completed 50M distillation run and its negative coding examples remain the
+pretrained baseline.
