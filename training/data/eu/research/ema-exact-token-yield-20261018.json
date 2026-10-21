@@ -1,0 +1,119 @@
+{
+  "observed_at": "2026-10-18T06:08:49.950480+00:00",
+  "source_revision": "7d4dbd2625a9bdc3ed74ddd8be14e1904b31c20d",
+  "control_revision": "946ab877c014d462ff4d0e4026709c58cc65456a",
+  "collections": [
+    {
+      "collection": "committee_documents",
+      "candidates": 5177,
+      "completed_candidates": 574,
+      "stored_rows": 573,
+      "audited_rows": 570,
+      "verified_tokens": 5375008,
+      "duplicates": 1,
+      "tokens_per_completed_candidate_lower_bound": 9364.1
+    },
+    {
+      "collection": "epar_assessment_reports",
+      "candidates": 1891,
+      "completed_candidates": 1888,
+      "stored_rows": 1726,
+      "audited_rows": 1726,
+      "verified_tokens": 96781806,
+      "duplicates": 162,
+      "tokens_per_completed_candidate_lower_bound": 51261.5
+    },
+    {
+      "collection": "epar_overviews",
+      "candidates": 50656,
+      "completed_candidates": 645,
+      "stored_rows": 645,
+      "audited_rows": 641,
+      "verified_tokens": 1511894,
+      "duplicates": 0,
+      "tokens_per_completed_candidate_lower_bound": 2344.0
+    },
+    {
+      "collection": "epar_product_information",
+      "candidates": 55216,
+      "completed_candidates": 2606,
+      "stored_rows": 2605,
+      "audited_rows": 2586,
+      "verified_tokens": 115951856,
+      "duplicates": 1,
+      "tokens_per_completed_candidate_lower_bound": 44494.2
+    },
+    {
+      "collection": "epar_scientific_discussion_variations",
+      "candidates": 191,
+      "completed_candidates": 191,
+      "stored_rows": 181,
+      "audited_rows": 181,
+      "verified_tokens": 2362456,
+      "duplicates": 10,
+      "tokens_per_completed_candidate_lower_bound": 12368.9
+    },
+    {
+      "collection": "epar_scientific_discussions",
+      "candidates": 529,
+      "completed_candidates": 442,
+      "stored_rows": 341,
+      "audited_rows": 330,
+      "verified_tokens": 7568660,
+      "duplicates": 101,
+      "tokens_per_completed_candidate_lower_bound": 17123.7
+    },
+    {
+      "collection": "epar_variation_reports",
+      "candidates": 3404,
+      "completed_candidates": 423,
+      "stored_rows": 373,
+      "audited_rows": 363,
+      "verified_tokens": 11053406,
+      "duplicates": 50,
+      "tokens_per_completed_candidate_lower_bound": 26131.0
+    },
+    {
+      "collection": "news",
+      "candidates": 3894,
+      "completed_candidates": 625,
+      "stored_rows": 620,
+      "audited_rows": 617,
+      "verified_tokens": 678169,
+      "duplicates": 5,
+      "tokens_per_completed_candidate_lower_bound": 1085.1
+    },
+    {
+      "collection": "non_epar_documents",
+      "candidates": 100000,
+      "completed_candidates": 546,
+      "stored_rows": 544,
+      "audited_rows": 538,
+      "verified_tokens": 2725107,
+      "duplicates": 2,
+      "tokens_per_completed_candidate_lower_bound": 4991.0
+    },
+    {
+      "collection": "scientific_guidelines",
+      "candidates": 2793,
+      "completed_candidates": 623,
+      "stored_rows": 621,
+      "audited_rows": 618,
+      "verified_tokens": 6166238,
+      "duplicates": 2,
+      "tokens_per_completed_candidate_lower_bound": 9897.7
+    }
+  ],
+  "method": "Read-only pinned corpus and exact o200k_base cache. Only shard hash/path/rows matches contribute. Tokens per completed candidate divide matching audited tokens by all completed candidates at the current source revision, including duplicates; newer unaudited completions make this conservative. Historical yield is not a forecast.",
+  "decision": {
+    "collection": "epar_product_information",
+    "previous_weight": 6,
+    "new_weight": 20,
+    "retained": "All other weights, ten-second source pacing, per-round attempt/time limits, source reservations, private visibility, campaign and audit caps."
+  },
+  "limitations": [
+    "Historical average yield may change with document order, language and text duplication.",
+    "The count is verified tokens but not a novelty or independent-facts measure.",
+    "No projected future tokens count toward the goal."
+  ]
+}

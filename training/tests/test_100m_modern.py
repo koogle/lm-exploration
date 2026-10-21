@@ -5,7 +5,7 @@ import unittest
 from dataclasses import asdict
 
 import torch
-from model_10m import model as vanilla
+from model_10m import legacy as vanilla
 from model_100m import model
 from torch.nn import functional as F
 

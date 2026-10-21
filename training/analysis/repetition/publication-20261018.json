@@ -1,0 +1,11 @@
+{
+  "repo_id": "jfrick/scholarly-code-modern-gpt-124m-step2",
+  "publication_revision": "0c966646c305b75a00374536051aa94d0295ca6d",
+  "published_utc": "2026-10-18T16:38:06.582891+00:00",
+  "model_step": 64227,
+  "model_tokens": 4999981176,
+  "weights_sha256": "0a2d3cb3bcfe7c66a3acce41a76a5e63f3238ca0b9930d3190f11fe5f8dfb70f",
+  "weights_unchanged_verified": true,
+  "published_card_verified": true,
+  "new_generation_samples": 280
+}
