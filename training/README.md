@@ -46,6 +46,9 @@ understand how architecture and data affect them, then add instruction tuning,
 reasoning and reinforcement learning. Use Modal for training and local Apple
 hardware for development and eventual inference.
 
+[Training references](references/README.md) collect source-backed research notes
+and proposed experiments, starting with Mirendil, Recursive and Flapping Airplanes.
+
 ## Direction and scope
 
 The user's goals are:
