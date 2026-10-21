@@ -5,7 +5,7 @@ from pathlib import Path
 
 import torch
 from training_data.live_stream import LiveTokenMixture, SplitConflict
-from training_data.scholarly import SPLIT_VERSION, adapt
+from training_data.simple_llm import SPLIT_VERSION, adapt
 from training_data.subword import TOKENIZER_SHA256
 
 

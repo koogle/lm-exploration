@@ -5,7 +5,7 @@ A recipe is one JSON file that is validated by the pydantic `Recipe` model in
 
 | Key | Meaning |
 | --- | --- |
-| `model` | `"10m"` or `"100m"`: a key of `MODELS`. New [100M models](../100m/README.md) use tied embeddings. |
+| `model` | `"10m"` or `"100m"`: a key of `MODELS`. Both sizes use RMSNorm, RoPE, SwiGLU and tied embeddings. |
 | `dataset` | `"tiny-shakespeare"` or `"shakespeare-complete"`: a key of `DATASETS` |
 | `training` | `TrainConfig` fields: `steps`, `batch_size`, `lr`, `seed` and eval/log/checkpoint cadence |
 | `model_overrides` | Optional `ModelConfig` overrides (e.g. `block_size`, `n_layer`). `vocab_size` always comes from the dataset |
@@ -23,9 +23,9 @@ training limit and a 180-second worker timeout.
 Run from `training/`. Each run needs a new run ID.
 
 ```bash
-uv run --with 'modal[api-proxy-support]==1.6.1' modal run modal_train.py \
+uv run --with 'modal[api-proxy-support]==1.6.1' modal run modal_scripts/modal_train.py \
   --recipe recipes/shakespeare-complete-10m.json --run-id shakespeare-complete-10m-smoke-01 --smoke
-uv run --with 'modal[api-proxy-support]==1.6.1' modal run --detach modal_train.py \
+uv run --with 'modal[api-proxy-support]==1.6.1' modal run --detach modal_scripts/modal_train.py \
   --recipe recipes/shakespeare-complete-10m.json --run-id shakespeare-complete-10m-train-01
 ```
 
@@ -50,8 +50,10 @@ with an approved cap:
 
 ## Recipes
 
-- `shakespeare-10m.json`: the settings of the published `shakespeare-10m-train-01`
-  run (executed with the former `modal_shakespeare.py`, commit `ec5ebd1`).
+- `shakespeare-10m.json`: modern 10M with the training settings of the published
+  vanilla `shakespeare-10m-train-01` run (former `modal_shakespeare.py`, commit
+  `ec5ebd1`). It does not reproduce the published architecture unless
+  `model_overrides` is set to `{"architecture_version": 1}`.
 - `shakespeare-complete-10m.json`: the same architecture and settings on Complete
   Shakespeare. **Not yet run.**
 
@@ -63,7 +65,7 @@ dataset. It is still fixed to a character tokenizer, one dataset per run (no
 mixtures), a contiguous 90/10 split, FP32 AdamW with fixed betas, weight decay and
 clipping, no learning-rate schedule, and one GPU.
 
-`100m` uses the [modern architecture](../100m/README.md) by default: RMSNorm,
+`10m` and `100m` use the [shared modern architecture](../10m/README.md) by default: RMSNorm,
 RoPE, SwiGLU and tied embeddings. No separate tied/untied model selection is
 needed. Older checkpoints without a version load through the version-1 legacy
 compatibility path; new checkpoints record the version and cannot resume across

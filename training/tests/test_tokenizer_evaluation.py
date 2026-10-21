@@ -4,11 +4,11 @@ import unittest
 from pathlib import Path
 
 from test_tokenizer_research import ROOT, fixture
-from training_data.scholarly import adapt
+from training_data.simple_llm import adapt
 from training_data.subword import digest
 
-from tokenizer_evaluation import EvaluationBuilder, rescore
-from tokenizer_research import records, train_candidate
+from tokenizer.tokenizer_evaluation import EvaluationBuilder, rescore
+from tokenizer.tokenizer_research import records, train_candidate
 
 
 class EvaluationTests(unittest.TestCase):
@@ -59,7 +59,7 @@ class EvaluationTests(unittest.TestCase):
                 candidate,
                 1 / 128,
                 512,
-                ROOT / "tokenizer/scholarly-code-v1/config.json",
+                ROOT / "tokenizer/simple-llm-v1/config.json",
             )
             evaluation = EvaluationBuilder(root / "evaluation", root / "original")
             try:

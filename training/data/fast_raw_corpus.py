@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .persistent_stream import PersistentStream
 from .raw_corpus import RawCorpus
-from .scholarly import adapt, canonical, stream_rows
+from .simple_llm import adapt, canonical, stream_rows
 from .subword import FIRST_CONTENT_TOKEN_ID
 
 

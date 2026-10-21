@@ -1,0 +1,87 @@
+{
+  "observed_at": "2026-10-18T06:33:47.646290+00:00",
+  "type_id": "23",
+  "catalog_name": "ECB Other publication",
+  "samples": [
+    {
+      "source_document_id": "51627",
+      "title": "MoU on information sharing in support of non-bank payment service providers access to central bank operated payment systems",
+      "url": "https://www.ecb.europa.eu/pub/pdf/other/ecb.2026-10-16_MoU.en.pdf",
+      "language": "en",
+      "format": "pdf",
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/pub/pdf/other/ecb.2026-10-16_MoU.en.pdf",
+        "retrieved_at": "2026-10-18T06:33:47.646551+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/pub/pdf/other/ecb.2026-10-16_MoU.en.pdf",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 340228,
+        "raw_sha256": "01698dd2b4927c7471beb7192c07bfa257dceb946c509c88419746a731759dbc",
+        "content_type": "application/pdf",
+        "etag": null,
+        "last_modified": "Fri, 16 Oct 2026 10:54:14 GMT"
+      },
+      "characters": 34804,
+      "kind": "pdf",
+      "text_prefix": "1\nDecember 2025\nUpdated in July 2026\nMemorandum of Understanding on the cooperation framework for information sharing\nbetween national supervisory authorities and national central banks\nin support of the access of non-bank payment service providers\nto central bank operated payment systems\nThis Memorandum of Understanding is made\nBETWEEN\nThe European Banking Authority (EBA), with its headquarters at 20 avenue Andr\u00e9 Prothin, 92400 Courbevoie,\nFRANCE,\nAND\nThe European Central Bank (ECB), with its headquarters at Sonnemannstrasse 20, 60314 Frankfurt am Main,\nGERMANY,\nAND\nNationale Bank van Belgi\u00eb/Banque Nationale de Belgique, with its headquarters at 14 Boulevard de Berlaimont,\n1000 Brussels, BELGIUM,\nAND\n\u0411\u044a\u043b\u0433\u0430\u0440\u0441\u043a\u0430 \u043d\u0430\u0440\u043e\u0434\u043d\u0430 \u0431\u0430\u043d\u043a\u0430 (Bulgarian National Bank), with its headquarters at 1, Knyaz Alexander \u0406 Sq.,\n1000 Sofia, BULGARIA,\nAND\n\u010cesk\u00e1 n\u00e1rodn\u00ed banka, with its headquarters at Na P\u0159\u00edkop\u011b 864/28, 115 03 Prague 1, CZECH REPUBLIC,\nAND\nFinanstilsynet, with its headquarters at Strandgade 29, 1401 Copenhagen, DENMARK,\nAND\nDanmarks Nationalbank, with its headquarters at Langelinie All\u00e9 47, 2100 Copenhagen, DENMARK,\nAND\n2\nBundesanstalt f\u00fcr Finanzdienstleistungsaufsicht, with its headquarters at",
+      "text_sha256": "debd590c468c1923b9b64b7c1a9e29841a4a68bef7f293075015c3dfefef804f"
+    },
+    {
+      "source_document_id": "50695",
+      "title": "Government finance statistics guide",
+      "url": "https://www.ecb.europa.eu/pub/pdf/other/ecb.governmentfinancestatisticsguide2607.en.pdf",
+      "language": "en",
+      "format": "pdf",
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/pub/pdf/other/ecb.governmentfinancestatisticsguide2607.en.pdf",
+        "retrieved_at": "2026-10-18T06:33:54.011159+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/pub/pdf/other/ecb.governmentfinancestatisticsguide2607.en.pdf",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 904271,
+        "raw_sha256": "860f6344a5f6c18d28c0bd591e6f6552e77142f4ea2a052c43a1632b4f18d63f",
+        "content_type": "application/pdf",
+        "etag": null,
+        "last_modified": "Wed, 29 Jul 2026 14:39:41 GMT"
+      },
+      "characters": 182361,
+      "kind": "pdf",
+      "text_prefix": "Government finance\nstatistics guide\nJuly 2026\n1\nContents\n1 Introduction 3\n1.1 Latest update of the Guide 3\n1.2 Context and purpose 3\n1.3 Methodological framework 4\n1.4 ECB publications and other uses of GFS 7\n1.5 Structure of the Guide 7\n2 Government revenue, expenditure and deficit/surplus (Table 1a) 9\n2.1 Introduction to Table 1a 9\n2.2 Table 1a: format and contents 10\n2.3 Line-by-line analysis of Table 1a 11\n3 Non-financial transactions with the European institutions and\nbodies (Table 1b) 23\n3.1 Introduction to Table 1b 23\n3.2 Table 1b: format and contents 23\n3.3 Line-by-line analysis of Table 1b 25\n4 Government consumption expenditure and other non-financial\ncategories (Table 1c) 31\n4.1 Introduction to Table 1c 31\n4.2 Table 1c: Format and contents 32\n4.3 Line-by-line analysis of Table 1c 33\n5 Government deficit-debt adjustment (Table 2a) 37\n5.1 Introduction to Table 2a 37\n5.2 Table 2a: Format and contents 40\n5.3 Line-by-line analysis of Table 2a 42\nBreakdown by instrument 43\nBreakdown by instrument 48\nBreakdown by currency 52\n2\n6 Government debt (Table 3a) 60\n6.1 Introduction to Table 3a 60\n6.2 Table 3a: Format and contents 63\n6.3 Line-by-line analysis of Table 3a 64\nBreakdown b",
+      "text_sha256": "7ccf96c8c862c1b8ef317158ad583f6651847d581905c486902bdea51f8bb393"
+    },
+    {
+      "source_document_id": "1335",
+      "title": "Financial statistics for a global economy - Proceedings of the 3rd ECB conference on statistics",
+      "url": "https://www.ecb.europa.eu/pub/pdf/other/financialstatisticsglobaleconomy2007en.pdf",
+      "language": "und",
+      "format": "pdf",
+      "fetch": {
+        "source_id": "ecb",
+        "url": "https://www.ecb.europa.eu/pub/pdf/other/financialstatisticsglobaleconomy2007en.pdf",
+        "retrieved_at": "2026-10-18T06:34:00.633624+00:00",
+        "robots_request": false,
+        "final_url": "https://www.ecb.europa.eu/pub/pdf/other/financialstatisticsglobaleconomy2007en.pdf",
+        "http_status": 200,
+        "retry_after": null,
+        "status": "fetched",
+        "bytes": 2186320,
+        "raw_sha256": "7879f250cf7805ce24c500f56d060cfac6dce4a9359e4a11bcd833daff430f2a",
+        "content_type": "application/pdf",
+        "etag": null,
+        "last_modified": "Wed, 14 Feb 2007 10:55:46 GMT"
+      },
+      "characters": 352419,
+      "kind": "pdf",
+      "text_prefix": "FINANCIAL STATISTICS\nFOR A GLOBAL ECONOMY\nEUROPEAN CENTRAL BANK FINANCIAL STATISTICS FOR A GLOBAL ECONOMY\nTHIRD ECB CONFERENCE\nON STATISTICS\n4 and 5 May 2006\nFINANCIAL STATISTICS\nFOR A GLOBAL ECONOMY\nTHIRD ECB CONFERENCE\nON STATISTICS\n4 and 5 May 2006\nPublished by:\n\u00a9 European Central Bank, 2007\nAddress\nKaiserstrasse 29\nD-60311 Frankfurt am Main\nGermany\nPostel address\nPostfach 16 03 19\nD-60066 Frankfurt am Main\nGermany\nTelephone\n+49 69 1344 0\nInternet\nhttp://www.ecb.int\nFax\n+49 69 1344 6000\nTelex\n411 144 ecb d\nAll rights reserved. Reproduction for\neducational and non-commercial purposes\nis permitted provided that the source is\nacknowledged.\nISBN 978-92-899-0052-2 (print)\nISBN 978-92-899-0053-9 (online)\nCONTENTS\nFOREWORD BY JEAN-CLAUDE TRICHET 5\nSUMMARY OF CONTRIBUTIONS\nBY STEVEN KEUNING AND LAURA VAJANNE 7\nCONFERENCE PROGRAMME 16\nOPENING REMARKS BY JOS\u00c9 MANUEL GONZ\u00c1LEZ-P\u00c1RAMO 19\n1 ARE FINANCIAL STATISTICS GOOD ENOUGH\nTO CAPTURE GLOBALISATION?\nErkki Liikanen 27\nNouriel Roubini 29\nMarc-Olivier Strauss-Kahn 35\nComments by Simon Briscoe 49\nDiscussion summary 53\n2 CHALLENGES FOR NATIONAL DATA COLLECTION\nIN A GLOBAL WORLD\nHenk J. Brouwer 57\nHein G. M. Blocks 63\nComments by Lucrezia Reichl",
+      "text_sha256": "c1290b30a35d340d34800ab4f388f6fa2cb92d2bcc349f169239d8564cdd6d87"
+    }
+  ],
+  "catalog_reported_total": 772,
+  "selection": "Three non-random cached-catalog samples: a recent MoU, a statistics guide and older conference proceedings. No yield projection."
+}

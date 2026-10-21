@@ -1,0 +1,22 @@
+{
+  "observed_at": "2026-10-17T07:42:11.766688+00:00",
+  "call_id": "fc-01M54CZ34KXZDG14ZGHJ9CB979",
+  "result": {
+    "status": "collecting",
+    "stored_rows": 5315,
+    "reserved_documents": 12000,
+    "available_document_budget": 82685,
+    "sources": {
+      "ecb": "active_or_unresolved",
+      "ema": "active_or_unresolved"
+    }
+  },
+  "starting_snapshot": {
+    "characters": 336644762,
+    "parquet_bytes": 132855673,
+    "rows": 5296,
+    "stored_raw_gzip_bytes": 4179647940,
+    "text_utf8_bytes": 344264209,
+    "words": 51246143
+  }
+}
