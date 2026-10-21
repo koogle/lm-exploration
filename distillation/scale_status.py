@@ -26,6 +26,18 @@ def snapshot(run_id):
     with ThreadPoolExecutor(max_workers=6) as executor:
         records = dict(executor.map(read, names))
     producers = [records[f"producer-{i}/progress.json"] for i in range(4)]
+    supervisor = records["status.json"]
+    for name, progress in supervisor["students"].items():
+        progress["execution_state"] = (
+            "running"
+            if name in supervisor["active_jobs"]
+            else "completed"
+            if progress["tokens"] >= progress["target"]
+            else "waiting"
+        )
+        progress["token_count_kind"] = (
+            "last durable checkpoint; live updates can be ahead"
+        )
     result = {
         "observed_at": datetime.now(UTC).isoformat(),
         "run_id": run_id,
@@ -34,7 +46,7 @@ def snapshot(run_id):
         "teacher_generated_tokens": sum(p["teacher_tokens"] for p in producers),
         "attempts": sum(p["attempts"] for p in producers),
         "rejected": sum(p["rejected"] for p in producers),
-        "supervisor": records["status.json"],
+        "supervisor": supervisor,
         "plan": records["plan.json"],
         "producers": producers,
     }

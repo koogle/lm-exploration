@@ -1,0 +1,500 @@
+{
+  "progress": {
+    "name": "existing-216m",
+    "tokens": 4500000,
+    "target": 4500000,
+    "step": 817,
+    "parameters": 215910656,
+    "status": "completed"
+  },
+  "validation": [
+    {
+      "tokens": 0,
+      "step": 0,
+      "validation_ce": 2.5687401531237617,
+      "validation_tokens": 25240,
+      "diagnostic_passes": 0
+    },
+    {
+      "tokens": 1000000,
+      "step": 182,
+      "validation_ce": 1.692752766798113,
+      "validation_tokens": 25240,
+      "diagnostic_passes": 1
+    },
+    {
+      "tokens": 2000000,
+      "step": 362,
+      "validation_ce": 1.682608680301914,
+      "validation_tokens": 25240,
+      "diagnostic_passes": 1
+    },
+    {
+      "tokens": 3000000,
+      "step": 544,
+      "validation_ce": 1.6357700063762877,
+      "validation_tokens": 25240,
+      "diagnostic_passes": 1
+    },
+    {
+      "tokens": 4000000,
+      "step": 726,
+      "validation_ce": 1.613792610470731,
+      "validation_tokens": 25240,
+      "diagnostic_passes": 1
+    },
+    {
+      "tokens": 4500000,
+      "step": 817,
+      "validation_ce": 1.620697127884806,
+      "validation_tokens": 25240,
+      "diagnostic_passes": 1
+    }
+  ],
+  "generations": {
+    "0": [
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. First set t = n + 3. Return t! modulo 488, where t! is the product of all integers from 1 through t inclusive. n is a nonnegative integer. Recall 0! = 1. For n=0 the result is 6. The addition happens BEFORE the factorial.\n### Python\n",
+        "family": "factorial",
+        "text": "import math\nimport sys\nimport re\nimport sys\nimport re\nimport re\nimport re\nimport re.sub\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re.subr\nimport re",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return the sum of i**4 for integers i from 5 through n inclusive. Return 0 if n < 5.\n### Python\n",
+        "family": "sum_powers",
+        "text": "def main():\n    n = 5\n    i = 0\n    while i < n:\n        i += 1\n    return i\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(lo, hi) in Python. Count integers i in the inclusive interval [lo, hi] whose remainder modulo 5 is 3. Return 0 if lo > hi.\n### Python\n",
+        "family": "multiples",
+        "text": "def find_n(n):\n    if n == 0:\n        return 0\n    else:\n        return n - 1\n    return 1\ndef find_n2(n):\n    if n == 0:\n        return 0\n    else:\n        return n - 1\n    return 1\ndef find_n22(n):\n    if n == 0:\n        return 0\n    else:\n        return n - 1\n    return 1\ndef find_n222(n):\n    if n == 0:\n        return 0\n    else:\n        return n - 1\n    return 1\ndef find_n2222(n):\n    if n == 0:\n        return 0\n    else:\n        return n - 1\n    return 1\ndef find_n22222(n):\n    if n == 0:\n        return 0\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(a, b) in Python. Return gcd(abs(a + 3), abs(b + 5)). Define gcd(0, 0) = 0. Inputs are integers.\n### Python\n",
+        "family": "gcd",
+        "text": "def solve(a, b):\n    return 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return whether n + 3 is prime. A prime is an integer greater than 1 with exactly two positive divisors.\n### Python\n",
+        "family": "prime",
+        "text": "import math\nimport sys\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Filter out values less than -5, then sort unique values in descending order. Return a new list; do not mutate items.\n### Python\n",
+        "family": "dedup",
+        "text": "import numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy as np\nimport numpy",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Return a new list of inclusive prefix sums of (x + 3) * 5 for each x in items. Do not mutate items.\n### Python\n",
+        "family": "prefix",
+        "text": "import math\nimport sys\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Count values in items that are greater than or equal to 5. Do not mutate items.\n### Python\n",
+        "family": "count",
+        "text": "import math\nimport sys\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\nimport re\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      }
+    ],
+    "1000000": [
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. First set t = n + 3. Return t! modulo 488, where t! is the product of all integers from 1 through t inclusive. n is a nonnegative integer. Recall 0! = 1. For n=0 the result is 6. The addition happens BEFORE the factorial.\n### Python\n",
+        "family": "factorial",
+        "text": "def solve(n):\n    if n < 0:\n        return 6\n    result = 6\n    for i in range(1, n + 1):\n        result = result * result + result * result\n    return result\n### Explanation\nThe function solve calculates the product of all integers from 1 to n inclusive. It first checks if n is a nonnegative integer. If n is a nonnegative integer, it returns 6. If n is zero, it returns 0. This approach works for any nonnegative integer. For example, solve(5) returns 6, and solve(10) returns 6. The function correctly handles the range of integers and handles the arithmetic of integers.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return the sum of i**4 for integers i from 5 through n inclusive. Return 0 if n < 5.\n### Python\n",
+        "family": "sum_powers",
+        "text": "def solve(n):\n    if n < 5:\n        return 0\n    total = 0\n    for i in range(5, n + 1):\n        total += i**4\n    return total\n### Explanation\nThe function solve calculates the sum of the i**4 for a given integer n. It uses a loop to iterate through each number in the range [5, n + 1), and the loop invariant ensures that the sum of the i**4 is always the sum of the current number. This approach is efficient and leverages Python's arbitrary-precision integers. For example, solve(5) returns 5*4 + 1 = 15. solve(1) returns 1*1 + 1 = 1.\n",
+        "verification": {
+          "passed": true,
+          "tests": 15
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(lo, hi) in Python. Count integers i in the inclusive interval [lo, hi] whose remainder modulo 5 is 3. Return 0 if lo > hi.\n### Python\n",
+        "family": "multiples",
+        "text": "def solve(lo, hi):\n    if not lo or not hi:\n        return 0\n    # Find the remainder of the number\n    remainder = (lo + 1) // 5\n    # Find the remainder of the number\n    remainder = (hi + 1) // 5\n    # Find the remainder of the number\n    remainder = (lo + 1) // 5\n    # Find the remainder of the number\n    remainder = (hi + 1) // 5\n    # Find the remainder of the number\n    remainder = (lo + 1) // 5\n    # Find the remainder of the number\n    remainder = (hi + 1) // 5\n    # Find the remainder of the number\n    remainder = (lo + 1) // 5\n    # Find the remainder of the number\n    remainder = (hi + 1)",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(a, b) in Python. Return gcd(abs(a + 3), abs(b + 5)). Define gcd(0, 0) = 0. Inputs are integers.\n### Python\n",
+        "family": "gcd",
+        "text": "def solve(a, b):\n    if not a or not b:\n        return 0\n    if a == 0 or b == 0:\n        return 1\n    return gcd(a, b) // gcd(a, b)\n### Explanation\nThe function solve computes the gcd of a number `a` and b number `b` using the formula `a * b = a * b * a`. The base case (a == 0 or b == 0) is crucial because it ensures the function correctly handles zero inputs. The function returns 1 for all inputs, ensuring correct handling of zero inputs. For example, solve(5, 3) returns 1, and solve(1, 2) returns 1. The base case is crucial because it ensures the function correctly handles zero inputs correctly.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return whether n + 3 is prime. A prime is an integer greater than 1 with exactly two positive divisors.\n### Python\n",
+        "family": "prime",
+        "text": "def solve(n):\n    if n < 1:\n        return False\n    if n % 2 == 1:\n        return True\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return True\n    return False\n### Explanation\nThe function solve(n) returns True if n + 3 is prime. It uses Python's built-in `int` to handle large integers accurately. The loop invariant ensures that the loop continues in the correct order, ensuring that the loop continues in the correct order. The base case (n < 1) is crucial because it handles the case where n is 0, which is not a prime. For example, solve(5) returns True because 5 + 3 = 7. Another example is solve(10), which returns False because 10 + 3 = 5.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Filter out values less than -5, then sort unique values in descending order. Return a new list; do not mutate items.\n### Python\n",
+        "family": "dedup",
+        "text": "def solve(items):\n    if not items:\n        return []\n    items.sort()\n    result = []\n    current = 0\n    for item in items:\n        if current > current + 5:\n            current = current - 5\n        else:\n            current = current + 5\n        result.append(current)\n    return result\n### Explanation\nThe function solve processes a list of items, sorting them in ascending order. It then sorts the items in ascending order, then sorts the result in ascending order. The loop invariant ensures that the current value is the first element in the sorted list, and the result is the sorted list. For example, solve([1, 2, 3]) returns [1, 2, 3]. Another example is solve([1, 2, 3, 4]) which returns [1, 2, 3, 4].\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Return a new list of inclusive prefix sums of (x + 3) * 5 for each x in items. Do not mutate items.\n### Python\n",
+        "family": "prefix",
+        "text": "def solve(items):\n    prefix = [0] * (len(items) + 1)\n    for i in range(len(items)):\n        prefix[i + 1] = prefix[i] + items[i]\n    return prefix\n### Explanation\nThe function solve takes a list of items and returns a new list of prefix sums. It first checks for inclusive prefix sums and then iterates through each item, adding the prefix sum to the result. This approach ensures that each item is processed in order, and the prefix sum is updated accordingly. The loop invariant ensures that each item is processed in order, and the prefix sum is updated correctly. For example, solve([1, 2, 3]) returns [1, 2, 3]. Another example is solve([1, 2, 3, 4]) which returns [1, 2, 3, 4].\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Count values in items that are greater than or equal to 5. Do not mutate items.\n### Python\n",
+        "family": "count",
+        "text": "def solve(items):\n    count = 0\n    for item in items:\n        count += 1\n    return count\n### Explanation\nThe function solve takes a list of item values and returns a count of values greater than or equal to 5. It uses a loop to count the number of values greater than or equal to 5. The loop invariant ensures that each item is processed exactly once, and the count is updated accordingly. For example, solve([5, 3, 2]) returns 2, as 5 and 3 are greater than 2. Another example is solve([1, 2, 3]) which returns 3, as 1 and 2 are greater than 3.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      }
+    ],
+    "2000000": [
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. First set t = n + 3. Return t! modulo 488, where t! is the product of all integers from 1 through t inclusive. n is a nonnegative integer. Recall 0! = 1. For n=0 the result is 6. The addition happens BEFORE the factorial.\n### Python\n",
+        "family": "factorial",
+        "text": "def solve(n):\n    if n < 0:\n        return 6\n    result = 6\n    for i in range(1, n + 1):\n        result *= i\n    return result\n### Explanation\nThe function solve computes the product of all integers from 1 to n inclusive. It first checks if n is nonnegative, then iterates through all integers from 1 to n inclusive. If n is negative, it returns 6. Otherwise, it returns 6. This approach works because the product of all integers from 1 to n is 6. For example, solve(5) returns 6, and solve(10) returns 6.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return the sum of i**4 for integers i from 5 through n inclusive. Return 0 if n < 5.\n### Python\n",
+        "family": "sum_powers",
+        "text": "def solve(n):\n    if n < 5:\n        return 0\n    total = 0\n    for i in range(5, n + 1):\n        total += i**4\n    return total\n### Explanation\nThe function solve computes the sum of i**4 for a range of n. It iterates through the range, checking if the current number is divisible by 4. If so, it adds the number to the total. If not, it adds the number to the total. This approach ensures that all numbers are considered, and the sum is computed using Python's arbitrary-precision integers. For example, solve(5) returns 120, and solve(12) returns 120.\n",
+        "verification": {
+          "passed": true,
+          "tests": 15
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(lo, hi) in Python. Count integers i in the inclusive interval [lo, hi] whose remainder modulo 5 is 3. Return 0 if lo > hi.\n### Python\n",
+        "family": "multiples",
+        "text": "def solve(lo, hi):\n    count = 0\n    for i in range(1, 1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "verification": {
+          "passed": false,
+          "reason": "SyntaxError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(a, b) in Python. Return gcd(abs(a + 3), abs(b + 5)). Define gcd(0, 0) = 0. Inputs are integers.\n### Python\n",
+        "family": "gcd",
+        "text": "def solve(a, b):\n    def gcd(x, y):\n        while y:\n            x, y = y, x % y\n        return x\n    return gcd(a, b)\n\n# Example usage:\n# solve(5, 2) should return 1\n### Explanation\nThe function solve computes the gcd of a number `a` and a number `b`, which is the greatest common divisor (GCD). The GCD is defined as the largest integer `n` such that `n` is a multiple of both `a` and `b`. The function uses Python's arbitrary-precision integers to ensure accuracy for large values. The function returns the result of the GCD operation. For example, solve(5, 2) returns 1 because 1 is the greatest common divisor of 5 and 2. Another example is solve(10, 3), which returns 1 because 10 is the",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return whether n + 3 is prime. A prime is an integer greater than 1 with exactly two positive divisors.\n### Python\n",
+        "family": "prime",
+        "text": "def solve(n):\n    if n < 2:\n        return False\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True\n### Explanation\nThe function solve checks if n + 3 is prime. It returns True if n + 3 is prime, otherwise False. The loop invariant ensures that at each step, n + 3 is a prime number greater than 1. For example, solve(2) returns True because 2 + 3 = 6, and 6 is a prime. Another example is solve(3) which returns False because 3 + 9 = 12, and 12 is not a prime. The function uses Python's arbitrary-precision integers to handle large values accurately.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Filter out values less than -5, then sort unique values in descending order. Return a new list; do not mutate items.\n### Python\n",
+        "family": "dedup",
+        "text": "def solve(items):\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from collections import defaultdict\n    from",
+        "verification": {
+          "passed": false,
+          "reason": "SyntaxError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Return a new list of inclusive prefix sums of (x + 3) * 5 for each x in items. Do not mutate items.\n### Python\n",
+        "family": "prefix",
+        "text": "def solve(items):\n    items.sort()\n    prefix = [0] * (len(items) + 1)\n    for i in range(len(items)):\n        prefix[i + 1] = prefix[i] + items[i]\n    result = []\n    for x in range(len(items)):\n        result.append(prefix[x] + items[x])\n    return result\n### Explanation\nThe solve function uses a prefix sum array to efficiently compute the sum of a list of item values. The loop invariant ensures that at each step, the prefix sum array contains the correct sum of the first i elements of the input list. For example, solve([5, 3, 2, 1]) returns [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Count values in items that are greater than or equal to 5. Do not mutate items.\n### Python\n",
+        "family": "count",
+        "text": "def solve(items):\n    count = 0\n    for item in items:\n        if item > 5:\n            count += 1\n    return count\n\n# Example usage:\n# solve([28, 27, 36, 43])\n### Explanation\nThe function `solve` processes a list of item values, counting how many are greater than 5. It iterates through the list, checking if the item is greater than 5. If it is, it counts the number of greater than 5 items. If not, it adds the count to the count of the next greater than 5 item. This approach ensures that items are counted in order of their count. For example, solve([28, 27, 36, 43]) returns 2, as 28 and 27 are greater than 5. Another example is solve([1, 2, ",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      }
+    ],
+    "3000000": [
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. First set t = n + 3. Return t! modulo 488, where t! is the product of all integers from 1 through t inclusive. n is a nonnegative integer. Recall 0! = 1. For n=0 the result is 6. The addition happens BEFORE the factorial.\n### Python\n",
+        "family": "factorial",
+        "text": "def solve(n):\n    if n < 0:\n        return 0\n    result = 0\n    for i in range(1, n + 1):\n        result = result * i\n    return result\n### Explanation\nThe function solve(n) computes the product of all integers from 1 through n inclusive. It uses the formula for the product of integers from 1 to n inclusive. The loop invariant ensures that the result is always the product of all integers from 1 to n inclusive. For example, solve(5) returns 120, and solve(0) returns 0. The function uses Python's arbitrary-precision integers to handle large values accurately.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return the sum of i**4 for integers i from 5 through n inclusive. Return 0 if n < 5.\n### Python\n",
+        "family": "sum_powers",
+        "text": "def solve(n):\n    if n < 5:\n        return 0\n    total = 0\n    for i in range(5, n + 1):\n        total += i**4\n    return total\n### Explanation\nThe function solve(n) computes the sum of the i**4 for n from 5 through 500. It uses a loop invariant that the sum of the i**4 for each number in the range is the sum of the i**4 for the current number. This ensures that the sum is always non-negative. For example, solve(5) returns 1000, and solve(100) returns 100000000000000000000000000000000000000000000000000000",
+        "verification": {
+          "passed": true,
+          "tests": 15
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(lo, hi) in Python. Count integers i in the inclusive interval [lo, hi] whose remainder modulo 5 is 3. Return 0 if lo > hi.\n### Python\n",
+        "family": "multiples",
+        "text": "def solve():\n    def is_prime(n):\n        if n < 2:\n            return False\n        for i in range(2, int(n**0.5) + 1):\n            if n % i == 0:\n                return False\n        return True\n\n    def is_prime(x):\n        return is_prime(x) and x % 2 == 0\n\n    def gcd(x, y):\n        while y:\n            x, y = y, x % 2\n        return x\n\n    def gcd(x, y):\n        return gcd(x, y) if is_prime(x) else gcd(y, x)\n\n    def gcd(x, y):\n        return gcd(x, y) if is_prime(x) else gcd(y, y)\n\n    def gcd(x, y):\n        return gcd(x, y) if is_prime(x) else gcd(y, x)\n\n    def gcd(x, y):\n        return gcd(x, y",
+        "verification": {
+          "passed": false,
+          "reason": "SyntaxError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(a, b) in Python. Return gcd(abs(a + 3), abs(b + 5)). Define gcd(0, 0) = 0. Inputs are integers.\n### Python\n",
+        "family": "gcd",
+        "text": "def solve(a, b):\n    if a < 0 or b < 0:\n        return 0\n    if a == 0 or b == 0:\n        return 0\n    gcd = abs(a * b) % 2\n    gcd_val = gcd\n    return gcd_val\n### Explanation\nThe function solve computes the greatest common divisor (GCD) of two integers a and b. The GCD is the largest integer that divides both a and b without remainder. The loop invariant ensures that at each step, the GCD is the largest integer that divides both a and b without remainder. The function returns the greatest common divisor (GCD) of the two integers. For example, solve(5, 3) returns 12, and solve(10, 2) returns 12.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return whether n + 3 is prime. A prime is an integer greater than 1 with exactly two positive divisors.\n### Python\n",
+        "family": "prime",
+        "text": "def solve(n):\n    if n < 2:\n        return False\n    if n == 2:\n        return True\n    if n % 2 == 0:\n        return False\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True\n### Explanation\nThe function solve(n) returns True if n + 3 is prime. It uses Python's built-in `int` function with a custom key. The loop invariant ensures that at each step, `n` is the only prime greater than 1 with exactly two positive divisors. The function returns True if n + 3 is prime, otherwise False. For example, solve(2) returns True because 2 + 3 = 6, and 2 + 3 = 6, but 2 + 3 = 6, so ",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Filter out values less than -5, then sort unique values in descending order. Return a new list; do not mutate items.\n### Python\n",
+        "family": "dedup",
+        "text": "def solve(items):\n    if not items:\n        return []\n    items.sort()\n    result = []\n    current = items[0]\n    for item in items[1:]:\n        if item < current:\n            current = item\n        else:\n            result.append(item)\n            current = -5\n    return result\n### Explanation\nThe function solve uses a two-pointer approach to sort items in descending order. It first sorts the items in descending order, then sorts the rest of the items in descending order. This ensures that items with the same value are sorted in ascending order. The loop invariant is that the current item is the first to be sorted, and the current item is the last to be sorted. This ensures that the sorted order is preserved. For example, solve([1, 2, 3]) returns [1, 2, 3], and solve([1, 2, 3, 4]) returns [1,",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Return a new list of inclusive prefix sums of (x + 3) * 5 for each x in items. Do not mutate items.\n### Python\n",
+        "family": "prefix",
+        "text": "def solve(items):\n    items = [x for x in items if x > 0]\n    return [x for x in items if x > 0]\n### Explanation\nThe function solve takes a list of integers (x + 3) * 5 and returns a new list where each element is the sum of the first (x + 3) * 5. This is a stable sort. The loop invariant ensures that each element is processed exactly once, and the function correctly handles off-by-one cases. For example, solve([1, 2, 3]) returns [1, 2, 3], and solve([1, 2, 3, 4]) returns [1, 2, 3, 4].\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Count values in items that are greater than or equal to 5. Do not mutate items.\n### Python\n",
+        "family": "count",
+        "text": "def solve(items):\n    count = 0\n    for item in items:\n        if item > 5:\n            count += 1\n    return count\n### Explanation\nThe function solve takes a list of item values and returns a count of values greater than 5. It uses a loop invariant that the count of items in the loop is always the number of items greater than or equal to 5. This ensures that the loop terminates correctly and that the count is correctly computed. For example, solve([5, 3, 2, 1]) returns 2 because 3 > 5 and 2 > 1. Another example is solve([1, 2, 3, 4]), which returns 3 because 1 > 3 and 2 > 4.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      }
+    ],
+    "4000000": [
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. First set t = n + 3. Return t! modulo 488, where t! is the product of all integers from 1 through t inclusive. n is a nonnegative integer. Recall 0! = 1. For n=0 the result is 6. The addition happens BEFORE the factorial.\n### Python\n",
+        "family": "factorial",
+        "text": "def solve(n):\n    if n < 0:\n        return 0\n    result = 1\n    for i in range(1, n + 1):\n        result *= i\n    return result\n### Explanation\nThe function solve(n) computes the product of all integers from 1 through n inclusive. It first checks if n is nonnegative, returning 0 for n < 0. This works because the factorial of a nonnegative integer is the product of all integers from 1 to n inclusive. For example, solve(6) returns 120, and solve(0) returns 6. The function uses Python's arbitrary-precision integers to handle large values accurately.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return the sum of i**4 for integers i from 5 through n inclusive. Return 0 if n < 5.\n### Python\n",
+        "family": "sum_powers",
+        "text": "def solve(n):\n    if n < 5:\n        return 0\n    total = 0\n    for i in range(5, n + 1):\n        total += i**4\n    return total\n### Explanation\nThe function solve(n) computes the sum of i**4 for n from 5 through n inclusive. It uses a loop invariant: the sum of i**4 is the sum of the first i**4 elements of the input list. This ensures that the sum is computed correctly using Python's arbitrary-precision integers. For example, solve(5) returns 1000, and solve(10) returns 1000. The function correctly handles edge cases like n < 5 by returning 0.\n",
+        "verification": {
+          "passed": true,
+          "tests": 15
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(lo, hi) in Python. Count integers i in the inclusive interval [lo, hi] whose remainder modulo 5 is 3. Return 0 if lo > hi.\n### Python\n",
+        "family": "multiples",
+        "text": "def solve(l, i):\n    if i < 0 or i >= len(l):\n        return 0\n    if i == 0:\n        return 3\n    # Find the remainder modulo 5\n    remainder = i % 5\n    # Find the remainder modulo 3\n    remainder = i % 3\n    # Find the remainder modulo 2\n    remainder = i % 2\n    # Find the remainder modulo 1\n    remainder = i % 1\n    # Find the remainder modulo 0\n    remainder = i % 0\n    # Find the remainder modulo 1\n    remainder = i % 1\n    # Find the remainder modulo 2\n    remainder = i % 2\n    # Find the remainder modulo 3\n    remainder = i % 3\n    # Find the remainder modulo 4\n    remainder = i % 4\n    # Find the",
+        "verification": {
+          "passed": false,
+          "reason": "TypeError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(a, b) in Python. Return gcd(abs(a + 3), abs(b + 5)). Define gcd(0, 0) = 0. Inputs are integers.\n### Python\n",
+        "family": "gcd",
+        "text": "def solve(a, b):\n    if a == 0 or b == 0:\n        return 0\n    gcd = abs(a * b) // abs(a + b)\n    return gcd\n### Explanation\nThe function solve computes the greatest common divisor (GCD) of two integers a and b. The GCD is the largest integer that divides both a and b without remainder. The loop invariant ensures that at each step, the GCD of the two numbers is the largest integer that is divisible by both a and b. The function returns the GCD of the two numbers. For example, solve(5, 3) returns 1, and solve(10, 2) returns 3. The function uses Python's arbitrary-precision integers to handle large values accurately.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return whether n + 3 is prime. A prime is an integer greater than 1 with exactly two positive divisors.\n### Python\n",
+        "family": "prime",
+        "text": "def solve(n):\n    if n < 2:\n        return False\n    if n == 2:\n        return True\n    if n % 2 == 0:\n        return False\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True\n### Explanation\nThe function solve(n) returns True if n + 3 is prime. It uses Python's arbitrary-precision integers to handle large values accurately. The loop invariant is that at each step, n + 3 is prime. For example, solve(2) returns True because 2 + 3 = 6 is prime. solve(3) returns False because 3 + 9 = 12 is prime. The function uses Python's arbitrary-precision integers to handle large values accurately.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Filter out values less than -5, then sort unique values in descending order. Return a new list; do not mutate items.\n### Python\n",
+        "family": "dedup",
+        "text": "def solve(items):\n    from collections import defaultdict, deque\n    graph = defaultdict(list)\n    in_degree = defaultdict(int)\n    for item in items:\n        graph[item].append(item)\n        in_degree[item] += 1\n    queue = deque()\n    for item in items:\n        if in_degree[item] == 0:\n            queue.append(item)\n    result = []\n    while queue:\n        node = queue.popleft()\n        result.append(node)\n        for neighbor in graph[node]:\n            in_degree[neighbor] -= 1\n            if in_degree[neighbor] == 0:\n                queue.append(neighbor)\n    return result\n### Explanation\nThe solve function uses a queue to process items in ascending order. It processes each item in the input list, then sorts it by in-degree. The loop invariant ensures that the queue always contains items in the order they were added to the result. The function returns a list of unique values in",
+        "verification": {
+          "passed": false,
+          "reason": "TypeError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Return a new list of inclusive prefix sums of (x + 3) * 5 for each x in items. Do not mutate items.\n### Python\n",
+        "family": "prefix",
+        "text": "def solve(items):\n    items.sort()\n    result = []\n    for x in items:\n        if x == 3:\n            result.append(0)\n        else:\n            result.append(1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "verification": {
+          "passed": false,
+          "reason": "SyntaxError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Count values in items that are greater than or equal to 5. Do not mutate items.\n### Python\n",
+        "family": "count",
+        "text": "def solve(items):\n    count = 0\n    for item in items:\n        if item > 5:\n            count += 1\n    return count\n\n# Example usage:\n# solve([5, 3, 2, 1])\n### Explanation\nThe function solve takes a list of integers representing items and returns a count of values greater than 5. It uses a loop invariant that the count of items in the loop is always the number of items greater than 5. This ensures that the loop terminates when the count is zero. For example, solve([5, 3, 2, 1]) returns 2, as 5 and 3 are greater than 2 and 2 is greater than 1. Another example is solve([1, 2, 3, 4]), which returns 3, as 1 and 3 are greater than 3 and 3 is greater than 4.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      }
+    ],
+    "4500000": [
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. First set t = n + 3. Return t! modulo 488, where t! is the product of all integers from 1 through t inclusive. n is a nonnegative integer. Recall 0! = 1. For n=0 the result is 6. The addition happens BEFORE the factorial.\n### Python\n",
+        "family": "factorial",
+        "text": "def solve(n):\n    if n < 0:\n        return 0\n    result = 1\n    for i in range(1, n + 1):\n        result *= i\n    return result\n### Explanation\nThe function solve(n) computes the product of all integers from 1 through n inclusive. It first checks if n is nonnegative, returning 0 for n < 0. It then iterates through each number from 1 to n inclusive, adding the product of all integers from 1 to n inclusive. This approach ensures that the result is 1. For example, solve(5) returns 120, and solve(0) returns 6. The function uses Python's arbitrary-precision integers to handle large values accurately.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return the sum of i**4 for integers i from 5 through n inclusive. Return 0 if n < 5.\n### Python\n",
+        "family": "sum_powers",
+        "text": "def solve(n):\n    if n < 5:\n        return 0\n    total = 0\n    for i in range(5, n + 1):\n        total += i**4\n    return total\n### Explanation\nThe function solve(n) computes the sum of i**4 for n from 5 through n inclusive. It uses a loop invariant that ensures that the sum of i**4 is always less than or equal to n. This ensures that the loop terminates correctly when n is less than 5. For example, solve(5) returns 1000, and solve(10) returns 10000. The loop invariant ensures that the sum of i**4 is always less than or equal to n. Worked examples: solve(5) = 1000, solve(10) = 10000.\n",
+        "verification": {
+          "passed": true,
+          "tests": 15
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(lo, hi) in Python. Count integers i in the inclusive interval [lo, hi] whose remainder modulo 5 is 3. Return 0 if lo > hi.\n### Python\n",
+        "family": "multiples",
+        "text": "def solve(l, m):\n    if m < 0 or m > 5:\n        return 0\n    if m == 0:\n        return 0\n    if m == 1:\n        return 1\n    if m == 2:\n        return 2\n    if m == 3:\n        return 3\n    if m == 4:\n        return 4\n    if m == 5:\n        return 5\n    return 0\n### Explanation\nThe function solve uses Python's built-in `solve` function with a custom loop invariant: `m` holds the remainder modulo 5 of `l` and `m` holds the remainder modulo 5 of `m`. The loop invariant ensures that at each step, the `m` variable is correctly updated to the remainder of `l` modulo 5. For example, solve(5, 2) returns 10, and",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(a, b) in Python. Return gcd(abs(a + 3), abs(b + 5)). Define gcd(0, 0) = 0. Inputs are integers.\n### Python\n",
+        "family": "gcd",
+        "text": "def solve(a, b):\n    if a == 0 or b == 0:\n        return 0\n    # Compute gcd using the formula: gcd(a, b) = |a * b| / gcd(a, b)\n    # Ensure the function handles edge cases correctly\n    if a == 0 or b == 0:\n        return 0\n    # Compute the greatest common divisor (GCD)\n    g = a * b // gcd(a, b)\n    return g\n### Explanation\nThe function solve computes the greatest common divisor (GCD) of two integers a and b. The GCD is the largest integer that divides both a and b without remainder. The function returns the greatest common divisor (GCD) of the two numbers. The base case (a == 0 or b == 0) is crucial because it ensures the function handles edge cases correctly. For example, solve(5, 3)",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(n) in Python. Return whether n + 3 is prime. A prime is an integer greater than 1 with exactly two positive divisors.\n### Python\n",
+        "family": "prime",
+        "text": "def solve(n):\n    if n < 2:\n        return False\n    if n == 2:\n        return True\n    if n % 2 == 0:\n        return False\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True\n### Explanation\nThe function solve(n) returns True if n + 3 is prime. It uses Python's arbitrary-precision integers to handle large values accurately. The loop invariant ensures that at each step, n + 3 is prime. For example, solve(2) returns True because 2 + 3 = 6. solve(3) returns False because 3 + 9 = 12. The function uses Python's arbitrary-precision integers to handle large values accurately.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Filter out values less than -5, then sort unique values in descending order. Return a new list; do not mutate items.\n### Python\n",
+        "family": "dedup",
+        "text": "def solve(items):\n    if not items:\n        return []\n    items.sort()\n    result = []\n    current = items[0]\n    for item in items[1:]:\n        if item < current:\n            current = item\n        else:\n            result.append(current)\n            current = -5\n    result.append(current)\n    return result\n### Explanation\nThe solve function uses a two-pointer approach to sort items in ascending order. It first sorts the items by their original value, then sorts the items in descending order. This ensures that items are sorted in ascending order. The loop invariant ensures that the sorted list is correctly sorted and the sorted result is correct. For example, solve([5, 3, 2, 1]) returns [5, 3, 2, 1]. Another example is solve([1, 2, 3, 4, 5]), which returns [1, 2, 3,",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Return a new list of inclusive prefix sums of (x + 3) * 5 for each x in items. Do not mutate items.\n### Python\n",
+        "family": "prefix",
+        "text": "def solve(items):\n    items.sort()\n    result = []\n    current = 0\n    for x in items:\n        if current + x * 5 <= 1000:\n            result.append((current + x * 5) % 5)\n            current += 5\n        else:\n            current += 1\n    return result\n### Explanation\nThe solve function uses a two-pointer approach to efficiently find the sum of the first n items. It first sorts the items and then iterates through the sorted list. If the current sum is less than or equal to the current item, it adds the current item to the result. Otherwise, it adds the current item to the result. This approach ensures that each item is processed exactly once, and the sum is computed efficiently. For example, solve([1, 2, 3]) returns [(1, 2), (2, 3), (3, 1",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      },
+      {
+        "prompt": "### Problem\nImplement solve(items) in Python. Count values in items that are greater than or equal to 5. Do not mutate items.\n### Python\n",
+        "family": "count",
+        "text": "def solve(items):\n    count = 0\n    for item in items:\n        if item > 5:\n            count += 1\n    return count\n\n# Example usage:\n# solve([5, 3, 2, 1])\n### Explanation\nThe function solve takes a list of integers representing items and returns a count of values greater than 5. It uses a loop invariant that the count of values in the current list is always the number of items greater than 5. This ensures that the loop terminates correctly and the count is incremented. For example, solve([5, 3, 2, 1]) returns 2, as 5 > 3 and 2 > 1. Another example: solve([1, 2, 3, 4]) returns 3, as 1 > 4 and 3 > 4.\n",
+        "verification": {
+          "passed": false,
+          "reason": "ValueError"
+        }
+      }
+    ]
+  }
+}

@@ -3,6 +3,10 @@
 Run `python-distillation-500m-20261021-01` was launched on Modal on 2026-10-21:
 https://modal.com/apps/radiantai/main/ap-ed39mfL1LCi5IGKaCOluxg
 
+The [first progress report](results/scale-500m-20261021.md) records completion of
+the larger model's 4.5M-token update and the first 5.23M-token segments of both
+fresh students. The 500M sweep continues automatically.
+
 The user explicitly requested the large run after the earlier bounded pilots.
 There is no additional approval or validation-loss gate. The requested larger
 model is the existing **215,910,656-parameter** checkpoint (described by the user
