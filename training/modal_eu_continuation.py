@@ -284,7 +284,7 @@ def start(run_id, snapshot, provenance, *, compile_model=True):
         "min_lr_ratio": 1.0,
         "checkpoint_every": 500,
         "evaluate_every": 250,
-        "experimental_data": True,
+        "allow_unreviewed_data": True,
         "prefetch_batches": 4,
         "crop_padding": True,
         "cache_rope": True,
