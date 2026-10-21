@@ -23,3 +23,7 @@ Implementation lives here alongside the reports: [model and decoding code](laten
 [J-space study](latent-workspace/jspace_study.py),
 [Modal J-space runner](latent-workspace/modal_jspace_study.py),
 [configs](latent-workspace/configs/) and [tests](latent-workspace/tests/).
+
+[Fixed-teacher rollouts](teacher-rollouts/) is a separate, bounded Qwen3.5-9B
+Modal generation benchmark for future distillation. The harness is implemented;
+GPU measurements await an explicit budget. It does not launch student training.
