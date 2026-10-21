@@ -9,8 +9,10 @@ The repaired worker explicitly rejects parser resource exhaustion, closes every
 connection in `finally`, builds each shard on local disk, and publishes its
 completion marker only after copying the closed database. Completed shards are
 reused; incomplete shards are rebuilt. The regression check passes.
-Resumed source call: `fc-01M5E1TW1CXC2EKM962BAHSZ1G`; dependent training controller:
-`fc-01M5E1TXGAHSCBPSWT0XGH669D` (waiting, not GPU training).
+After 23 complete shards, the remaining fixed 53-shard preparation was moved
+to a 32-worker CPU pool with unordered completion reporting. This reduces
+preparation latency without changing sources, filters or GPU allocation.
+The dependent training controller still waits for preparation; it is not GPU training.
 
 Documentation preparation completed all 95 shards with **617,694,542 candidate
 training targets**, before global exclusions. The full 5.3M-file pinned CodeParrot

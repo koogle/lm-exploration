@@ -23,7 +23,7 @@ image = (
     memory=8192,
     timeout=3600,
     retries=1,
-    max_containers=8,
+    max_containers=32,
     volumes={"/data": volume},
 )
 def shard(filename: str):
@@ -123,8 +123,8 @@ def prepare(max_shards: int = 53):
         reverse=True,
     )
     results = []
-    for start in range(0, min(max_shards, len(files)), 8):
-        results.extend(shard.map(files[start : min(start + 8, max_shards)]))
+    for result in shard.map(files[:max_shards], order_outputs=False):
+        results.append(result)
         total = sum(
             sum(v["unique_train_targets"] for v in r["categories"].values()) for r in results
         )
