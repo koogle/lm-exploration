@@ -10,6 +10,7 @@ from training_data.subword import TOKENIZER_SHA256, digest
 
 from trainer.distributed_config import DistributedConfig
 from trainer.representative_validation import load_heldout
+from trainer.run_validation import validate_overnight_run
 
 
 class OvernightGateTests(unittest.TestCase):
@@ -76,16 +77,21 @@ class OvernightGateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "checksum"):
                 load_heldout(path, None)
 
-    def test_ten_billion_scoped_to_124m(self):
-        config = DistributedConfig(target_tokens=10_000_000_000, experimental_data=True)
-        self.assertEqual(config.target_tokens, 10_000_000_000)
-        with self.assertRaises(ValueError):
-            DistributedConfig(target_tokens=10_000_000_001, experimental_data=True)
-        with self.assertRaises(ValueError):
-            DistributedConfig(
-                n_layer=8,
-                n_head=3,
-                n_embd=192,
-                target_tokens=10_000_000_000,
-                experimental_data=True,
-            )
+    def test_ten_billion_limit_belongs_to_overnight_run(self):
+        settings = {
+            "world_size": 8,
+            "microbatch": 2,
+            "target_tokens": 10_000_000_000,
+            "allow_unreviewed_data": True,
+        }
+        validate_overnight_run(DistributedConfig(**settings))
+        for change in (
+            {"target_tokens": 10_000_000_001},
+            {"n_layer": 8, "n_head": 3, "n_embd": 192},
+            {"world_size": 3},
+            {"pilot": True},
+        ):
+            # General settings are valid; only this experiment rejects them.
+            config = DistributedConfig(**{**settings, **change})
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                validate_overnight_run(config)
