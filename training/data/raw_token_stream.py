@@ -28,8 +28,9 @@ class RawTokenMixture(TokenMixture):
             raise ValueError("Unexpected raw manifest format")
         if context < 1 or split not in ("train", "validation"):
             raise ValueError("Invalid context or split")
-        if not self.manifest["training_ready"] and not allow_unreviewed:
-            raise ValueError("Raw corpus has pending audits")
+        from .review import require_data_review
+
+        require_data_review(self.manifest["training_ready"], allow_unreviewed)
         if (
             self.manifest["tokenizer_sha256"] != TOKENIZER_SHA256
             or self.manifest["max_passes"] != 2

@@ -65,6 +65,10 @@ def backward_batch(ddp, x, y, count, microbatch, world, *, bf16=True):
 
 
 def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=None, commit=None):
+    from .run_validation import validate_run
+
+    validate_run(config)
+
     import numpy as np
     import torch
     import torch.distributed as dist
@@ -126,7 +130,7 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
             data = TokenMixture(
                 manifest,
                 context=config.context,
-                allow_unreviewed=(config.pilot or config.experimental_data),
+                allow_unreviewed=config.allow_unreviewed_data,
             )
             if not config.pilot:
                 capacity = min(
@@ -139,7 +143,7 @@ def train(config, manifest, output, *, resume=None, max_seconds=3000, max_steps=
                 manifest,
                 context=config.context,
                 split="validation",
-                allow_unreviewed=(config.pilot or config.experimental_data),
+                allow_unreviewed=config.allow_unreviewed_data,
             )
             return data.identity
 
