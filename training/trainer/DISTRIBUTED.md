@@ -49,9 +49,33 @@ modal run --detach modal_distributed_train.py \
 ```
 
 The second example is a template, not a launched full run. Snapshot audit and
-capacity gates apply before model allocation. The `pilot: true` override permits
-pending audits only with a target no larger than 5M tokens; it never resets or
-replays exhausted sources. The two-pass source limit remains in force.
+capacity gates apply before model allocation. Set `allow_unreviewed_data: true`
+explicitly to permit data with pending audits; it defaults to `false` and is
+independent of architecture, token budget and `pilot`. Pilot mode alone does not
+permit unreviewed data. The distributed launcher still limits pilot runs to 5M
+tokens through explicit run validation. Neither flag resets exhausted sources or
+removes the loader's two-pass source limit.
+
+`DistributedConfig` validates general settings (types, positive dimensions,
+even integral RoPE head dimensions, batches and optimizer/schedule consistency),
+not an experiment architecture allowlist or token ceiling. Launcher policies live
+in `run_validation.py`: the generic launcher applies the pilot limit, while every
+entrypoint of `modal_small_5b.py` additionally requires the modern 9.85M architecture,
+three GPUs and a non-pilot target no larger than 5B tokens. Those workflow checks
+run before corpus preparation, continuation scheduling or training invocation.
+The overnight continuation additionally validates its 124M architecture, eight GPUs
+and non-pilot target no larger than 10B at checkpoint initialization and segment
+execution. These experiment policies do not constrain shared config construction.
+The data opt-in remains independent of these policies. The canonical `train()`
+entrypoint also enforces the pilot limit before framework initialization, so direct
+torchrun execution cannot bypass it. Preparation and loaders share the same review
+gate: reused reviewed snapshots need no override, while new or pending-audit
+snapshots require explicit permission before upstream ingestion or GPU scheduling.
+
+This replaces the former experiment-scoped `experimental_data` setting. Update
+active recipes to the new key. Historical result/config artifacts are unchanged;
+exact resume from those checkpoints requires their original source and settings,
+not this refactored trainer.
 
 Supported GPU families are `H100`, `L40S` and `A10G`; `world_size` in the JSON
 chooses the number of GPUs. Global windows must be divisible by
@@ -137,6 +161,7 @@ have not been measured.
 
 ```sh
 python -m unittest discover -s tests -p test_distributed_config.py -v
+python -m unittest discover -s tests -p test_run_validation.py -v
 modal run --detach modal_distributed_checks.py --run-id UNIQUE_CHECK_RUN_ID
 ```
 

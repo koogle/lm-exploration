@@ -59,7 +59,7 @@ SETTINGS = {
     "min_lr_ratio": 1.0,
     "checkpoint_every": 2000,
     "evaluate_every": 2000,
-    "experimental_data": True,
+    "allow_unreviewed_data": True,
     "prefetch_batches": 4,
     "crop_padding": True,
     "cache_rope": True,
@@ -317,7 +317,10 @@ def initialize(run_id):
 
     from trainer.continued_pretraining import migrate_phase
     from trainer.distributed_config import DistributedConfig
+    from trainer.run_validation import validate_overnight_run
 
+    config = DistributedConfig(**SETTINGS, target_tokens=TARGET)
+    validate_overnight_run(config)
     torch.set_num_threads(4)
     manifest = Path("/data/scholarly-code") / SNAPSHOT / "manifest.json"
     if not json.loads(manifest.read_text()).get("readiness_gate_passed"):
@@ -326,7 +329,7 @@ def initialize(run_id):
         Path("/runs") / PARENT,
         Path("/runs") / (run_id + "-seed/step-000000000.pt"),
         manifest,
-        DistributedConfig(**SETTINGS, target_tokens=TARGET),
+        config,
         {
             "target_tokens": TARGET,
             "code_share": 60,
@@ -351,6 +354,11 @@ def initialize(run_id):
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def segment(run_id, provenance, resume, max_steps=None):
+    from trainer.distributed_config import DistributedConfig
+    from trainer.run_validation import validate_overnight_run
+
+    config = DistributedConfig(**SETTINGS, target_tokens=TARGET)
+    validate_overnight_run(config)
     import torch
 
     if torch.cuda.device_count() != 8:
@@ -358,7 +366,7 @@ def segment(run_id, provenance, resume, max_steps=None):
     return worker.local(
         run_id,
         SNAPSHOT,
-        {**SETTINGS, "target_tokens": TARGET},
+        config.as_dict(),
         provenance,
         resume,
         18000,

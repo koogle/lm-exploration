@@ -12,6 +12,7 @@
   "checkpoint_every": 500,
   "evaluate_every": 500,
   "pilot": true,
+  "allow_unreviewed_data": true,
   "n_layer": 8,
   "n_head": 3,
   "n_embd": 192

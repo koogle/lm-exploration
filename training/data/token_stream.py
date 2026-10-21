@@ -33,8 +33,9 @@ class TokenMixture:
             raise ValueError("Invalid context or split")
         if self.manifest["tokenizer_sha256"] != TOKENIZER_SHA256:
             raise ValueError("Tokenizer identity mismatch")
-        if not self.manifest["training_ready"] and not allow_unreviewed:
-            raise ValueError("Preparation snapshot has pending audits; pilot override required")
+        from .review import require_data_review
+
+        require_data_review(self.manifest["training_ready"], allow_unreviewed)
         if self.manifest["max_passes"] != 2:
             raise ValueError("Unexpected repetition policy")
         self.context, self.split = context, split
