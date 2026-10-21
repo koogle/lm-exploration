@@ -364,3 +364,25 @@ The sampled held-out artifact contains 192 windows. At the observed handoff Moda
 reported the eight-H100 segment queued (one backlog, no runner yet); no optimizer
 updates are claimed at this point. The audit and its old CPU waiter were cancelled.
 The deployed executable source is `4569e84`; this note only records the handoff.
+
+## Results: final 20.879B repetition diagnostic
+
+The 10B phase finished at step 153,342 (9,999,963,390 phase targets,
+20,878,526,009 lifetime targets). A matched FP32 repetition check against the
+10.879B parent (same prompts and seeds, 256 new tokens, no repetition penalty,
+50 completions per checkpoint) is a small diagnostic, not a capability benchmark:
+
+| Decoding | Parent repeated 4-grams | New repeated 4-grams | Parent long loops | New long loops |
+|---|---:|---:|---:|---:|
+| Greedy | 81.6% | 82.8% | 8/10 | 8/10 |
+| T=0.2, k=10 | 77.0% | 84.6% | 13/20 | 17/20 |
+| T=0.8, k=50 | 23.5% | 25.5% | 0/20 | 2/20 |
+
+Negative result: the additional 10B targets did not reduce repetition; greedy stays
+highly repetitive and low-temperature sampling produced more long loops. The T=0.8
+difference is not statistically reliable. Better held-out loss did not predict less
+free-generation repetition, and the comparison does not isolate data, objective or
+capacity as the cause. The report and per-category aggregates are archived in
+[`jfrick/lm-exploration-results` / `pr-27/training/analysis/overnight-repetition/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-27/training/analysis/overnight-repetition)
+(HF commit `7b9a230004c163b8994458c26eb2b1074d03c7d7`). Raw samples remain in the
+private HF model under `evaluation/repetition-20261020/` and on the private Modal volume.

@@ -40,8 +40,8 @@ def run_tick(cache, goal_status, spawn_callable, inspect_callable, max_pairs=48,
     call ID after a claim is intentionally unresolved forever, requiring manual
     reconciliation rather than a potentially duplicate spawn.
     """
-    if type(max_pairs) is not int or not 1 <= max_pairs <= 48:
-        raise ValueError("max_pairs must be an integer in [1, 48]")
+    if type(max_pairs) is not int or not 1 <= max_pairs <= 96:
+        raise ValueError("max_pairs must be an integer in [1, 96]")
     state = cache.load()
     if state is None:
         state = initial_state()
