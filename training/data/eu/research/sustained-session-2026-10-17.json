@@ -1,0 +1,154 @@
+{
+  "observed_at": "2026-10-17T04:40:00.696444+00:00",
+  "last_verified_snapshot": {
+    "observed_at": "2026-10-17T04:32:44.482885+00:00",
+    "combined_metrics": {
+      "characters": 270185905,
+      "parquet_bytes": 108034797,
+      "rows": 4575,
+      "stored_raw_gzip_bytes": 3134465914,
+      "text_utf8_bytes": 276674494,
+      "words": 41029031
+    },
+    "sources": [
+      {
+        "source_id": "ecb",
+        "repo_id": "jfrick/eu-ecb",
+        "revision": "3d179d7167c5b01f0e4f2b6eb29d79583ce1c7ef",
+        "metrics": {
+          "characters": 155555690,
+          "parquet_bytes": 70207768,
+          "rows": 3233,
+          "stored_raw_gzip_bytes": 1987558776,
+          "text_utf8_bytes": 157328835,
+          "words": 24340487
+        }
+      },
+      {
+        "source_id": "ema",
+        "repo_id": "jfrick/eu-ema",
+        "revision": "7c502b9dc2ddc7fd362d8fc649594d6f03c7397d",
+        "metrics": {
+          "characters": 112077428,
+          "parquet_bytes": 37100946,
+          "rows": 1322,
+          "stored_raw_gzip_bytes": 1146119277,
+          "text_utf8_bytes": 116276250,
+          "words": 16354055
+        }
+      },
+      {
+        "source_id": "eurlex",
+        "repo_id": "jfrick/eu-eurlex",
+        "revision": "0c3519077ce6a2a3b9a5eef7c91bb54478f1267c",
+        "metrics": {
+          "characters": 2552787,
+          "parquet_bytes": 726083,
+          "rows": 20,
+          "stored_raw_gzip_bytes": 787861,
+          "text_utf8_bytes": 3069409,
+          "words": 334489
+        }
+      }
+    ]
+  },
+  "launches": {
+    "ecb-long-20261017-0427": {
+      "run_id": "ecb-long-20261017-0427",
+      "rounds": 3,
+      "after_campaign": "",
+      "calls": {
+        "ecb": "fc-01M541R93D577DME540DVV89PE"
+      },
+      "datasets": {
+        "ecb": "jfrick/eu-ecb"
+      }
+    },
+    "ema-long-20261017-0427": {
+      "run_id": "ema-long-20261017-0427",
+      "rounds": 3,
+      "after_campaign": "",
+      "calls": {
+        "ema": "fc-01M541RA0WVHT9M2JXXXW5QBET"
+      },
+      "datasets": {
+        "ema": "jfrick/eu-ema"
+      }
+    },
+    "eurlex-long-20261017-0433": {
+      "run_id": "eurlex-long-20261017-0433",
+      "rounds": 3,
+      "after_campaign": "",
+      "calls": {
+        "eurlex": "fc-01M5421E7977YHK4MBE7AKAHMQ"
+      },
+      "datasets": {
+        "eurlex": "jfrick/eu-eurlex"
+      }
+    },
+    "ecb-yield-20261017": {
+      "run_id": "ecb-yield-20261017",
+      "rounds": 3,
+      "after_campaign": "ecb-long-20261017-0427",
+      "predecessor_wait_seconds": 10800,
+      "calls": {
+        "ecb": "fc-01M5424G5Q234X0XEXTRZEVV0N"
+      },
+      "datasets": {
+        "ecb": "jfrick/eu-ecb"
+      }
+    },
+    "ema-yield-20261017": {
+      "run_id": "ema-yield-20261017",
+      "rounds": 3,
+      "after_campaign": "ema-long-20261017-0427",
+      "predecessor_wait_seconds": 10800,
+      "calls": {
+        "ema": "fc-01M5424KFZRKN62BPY2QQW3W4T"
+      },
+      "datasets": {
+        "ema": "jfrick/eu-ema"
+      }
+    }
+  },
+  "operator_upgrade": {
+    "reason": "Initial ECB resumed at broken-link backlog (60 attempts/60 failures) before corrected weighted scheduling/fallbacks; upgrade both organization workers.",
+    "confirmed_terminal_modal_calls": {
+      "ecb": {
+        "supervisor": "fc-01M541R93D577DME540DVV89PE",
+        "child": "fc-01M541REQFFRFGM579ASZCXWR2",
+        "status": "TERMINATED"
+      },
+      "ema": {
+        "supervisor": "fc-01M541RA0WVHT9M2JXXXW5QBET",
+        "supervisor_status": "FAILURE",
+        "child": "fc-01M541RJYE8FPQTMJG4J5PFYP5",
+        "child_status": "TERMINATED"
+      }
+    },
+    "queued_successors_cancelled": [
+      "fc-01M5424G5Q234X0XEXTRZEVV0N",
+      "fc-01M5424KFZRKN62BPY2QQW3W4T"
+    ],
+    "hf_reconciliation": "Not completed: repeated HTTP503 on repo/progress reads. HF may still show old running markers; consult confirmed Modal termination evidence before next continuation."
+  },
+  "new_launches_blocked": [
+    "ecb-optimized-20261017",
+    "ema-optimized-20261017",
+    "commission-long-20261017"
+  ],
+  "blocker": "Managed outbound tunnel repeatedly returns HTTP503/upstream connect error for Hugging Face and Modal app creation, despite ready configuration observations. No security-policy bypass attempted.",
+  "eurlex_status": "Started and first20 documents verified stored; latest runtime status unavailable after connectivity failure.",
+  "validation": {
+    "offline_tests_passed": 153,
+    "lint": "passed",
+    "full_hf_audit": "incomplete; source errors RuntimeError and HfHubHTTPError; not claimed passed",
+    "exact_tokens": null
+  },
+  "next_steps": [
+    "Restore ordinary network connectivity; read current HF and Modal state.",
+    "Reconcile terminated ECB/EMA campaign markers using fresh CAS state.",
+    "Launch new corrected ECB/EMA campaigns and first Commission Press Corner campaign (new IDs only if earlier dispatch evidence exists).",
+    "Check EUR-Lex call before any replacement writer."
+  ]
+}

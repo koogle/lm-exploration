@@ -5,9 +5,8 @@ from pathlib import Path
 
 import modal
 
-from modal_scholarly_pilot import image
+from distributed_training.image import image
 
-image = image.add_local_file("modal_scholarly_pilot.py", "/project/modal_scholarly_pilot.py")
 app = modal.App("lm-exploration-validate-modern-10m")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
 run_volume = modal.Volume.from_name("lm-exploration-training")

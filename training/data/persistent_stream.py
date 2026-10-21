@@ -2,7 +2,7 @@
 
 import json
 
-from .scholarly import stream_rows
+from .simple_llm import stream_rows
 
 
 class PersistentStream:

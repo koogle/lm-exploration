@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "request_id": "additional-10000-20261018T083859Z",
+  "recorded_at": "2026-10-18T08:42:18.638187+00:00",
+  "baseline_observed_at": "2026-10-18T08:38:59.385172+00:00",
+  "additional_documents": 10000,
+  "baseline_total_rows": 20703,
+  "target_total_rows": 30703,
+  "sources": [
+    {
+      "source_id": "ecb",
+      "repo_id": "jfrick/eu-ecb",
+      "revision": "722c74b0412052205a903403808e467b38e803aa",
+      "baseline_rows": 11671
+    },
+    {
+      "source_id": "ema",
+      "repo_id": "jfrick/eu-ema",
+      "revision": "071fd503b404cd6e844cd0c3f11d848e99ab2de1",
+      "baseline_rows": 9032
+    }
+  ],
+  "control_repo": "jfrick/eu-corpus-control",
+  "control_path": "milestones/additional-10000-20261018T083859Z.json",
+  "counting_rule": "Increase in unique persisted document rows across the pinned ECB and EMA baselines; inventory entries, failed attempts and exact-content duplicates do not count.",
+  "relationship_to_token_goal": "Additional document milestone within the existing one-billion-token goal and existing operational limits."
+}

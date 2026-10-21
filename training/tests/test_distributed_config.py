@@ -1,6 +1,6 @@
 import unittest
 
-from trainer.distributed_config import DistributedConfig, validate_resume
+from distributed_training.config import DistributedConfig, DistributedRuntime, validate_resume
 
 
 class DistributedConfigTests(unittest.TestCase):
@@ -85,6 +85,49 @@ class DistributedConfigTests(unittest.TestCase):
                 validate_resume(
                     {**saved, field: value}, config, {"hash": "x"}, {"model": "y"}, "2.6"
                 )
+
+    def test_runtime_resolves_torchrun_launch_details(self):
+        runtime = DistributedRuntime.from_torchrun(
+            {
+                "RANK": "1",
+                "LOCAL_RANK": "1",
+                "WORLD_SIZE": "3",
+                "MASTER_ADDR": "localhost",
+                "MASTER_PORT": "29500",
+            }
+        )
+        self.assertEqual(runtime, DistributedRuntime(1, 1, 3, "localhost", 29500))
+        self.assertEqual(runtime.init_method, "tcp://localhost:29500")
+
+    def test_runtime_rejects_incomplete_or_invalid_launch(self):
+        with self.assertRaisesRegex(ValueError, "Missing torchrun launch variable: RANK"):
+            DistributedRuntime.from_torchrun({})
+        for fields in (
+            {"rank": 3},
+            {"local_rank": 3},
+            {"local_rank": 1},
+            {"world_size": 0},
+            {"world_size": True},
+            {"master_addr": ""},
+            {"master_addr": "tcp://localhost"},
+            {"master_port": 0},
+            {"master_port": 65536},
+        ):
+            with self.subTest(fields=fields), self.assertRaises(ValueError):
+                DistributedRuntime(
+                    **{
+                        "rank": 0,
+                        "local_rank": 0,
+                        "world_size": 3,
+                        "master_addr": "localhost",
+                        "master_port": 29500,
+                        **fields,
+                    }
+                )
+
+    def test_runtime_supports_explicit_ipv6_endpoint(self):
+        runtime = DistributedRuntime(0, 0, 1, "::1", 29500)
+        self.assertEqual(runtime.init_method, "tcp://[::1]:29500")
 
 
 if __name__ == "__main__":
