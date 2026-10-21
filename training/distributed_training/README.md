@@ -120,11 +120,10 @@ Pilot mode alone does not permit unreviewed data, and neither flag resets
 exhausted sources or removes the loader's two-pass source limit.
 
 `DistributedConfig` validates general settings, not an architecture allowlist or
-experiment token ceiling. The bounded-pilot policy (at most 5M tokens) lives in
-`run_validation.py` and is enforced by both the Modal launcher and `train()`
-before framework initialization. Direct torchrun execution cannot bypass it.
-Non-pilot architecture dimensions and token budgets are recipe choices, subject
-to model, runtime and corpus-capacity checks. This does not authorize a run.
+experiment token ceiling. Architecture dimensions and token budgets are recipe
+choices; pilot mode has no separate token ceiling. Model/runtime compatibility
+and the loader's two-pass source limit still apply. Non-pilot runs also check
+mixture capacity before model allocation. This does not authorize a run.
 
 Recipes now record data permission explicitly. Historical configs and measured
 artifacts are unchanged; exact resume from older checkpoints requires their

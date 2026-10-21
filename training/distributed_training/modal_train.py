@@ -13,7 +13,6 @@ import modal
 
 from distributed_training.config import DistributedConfig
 from distributed_training.image import image
-from distributed_training.run_validation import validate_run
 
 app = modal.App("lm-exploration-distributed-training")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -44,7 +43,6 @@ def validate_paths(run_id, snapshot, resume):
 def worker(run_id, snapshot, settings, provenance, resume="", max_seconds=3000, max_steps=None):
     validate_paths(run_id, snapshot, resume)
     config = DistributedConfig(**settings)
-    validate_run(config)
     if not 1 <= max_seconds <= 3000 or (max_steps is not None and max_steps < 1):
         raise ValueError("Invalid session limits")
     output = Path("/runs") / run_id
@@ -131,7 +129,6 @@ def main(
 ):
     validate_paths(run_id, snapshot, resume)
     settings = DistributedConfig(**json.loads(Path(config).read_text()))
-    validate_run(settings)
     if gpu not in {"H100", "L40S", "A10G"}:
         raise ValueError("Supported GPU families: H100, L40S, A10G")
     if not 1 <= max_seconds <= 3000 or max_steps < 0:
