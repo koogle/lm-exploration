@@ -226,6 +226,16 @@ have not been measured. Old gzip snapshots need one-time conversion for new runs
 old checkpoints require their original code and snapshot. The active loop now lives in `trainer/loop.py`; resume continues to enforce
 source hashes. Historical checkpoints require compatible original code and settings.
 
+## Overlapped data preparation
+
+[`modal_streaming_train.py`](../modal_streaming_train.py) starts training from an
+initial upstream prefix instead of preparing the full corpus first: a rank-zero
+producer thread fetches pinned source shards, tokenizes them into global batches
+and keeps up to `prefetch_batches` (1–64; 0 keeps the synchronous path) ready
+while the GPUs train. Checkpoints save only the acknowledged optimizer cursor, so
+a restart discards and rebuilds speculative batches; live manifests require
+`allow_unreviewed_data`. CUDA equivalence and throughput have not been measured.
+
 ## Raw-corpus experiments
 
 The [raw-corpus preparation guide](../data/RAW_CORPUS.md) covers reusable SQLite snapshots,

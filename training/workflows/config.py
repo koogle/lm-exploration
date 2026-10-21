@@ -86,7 +86,7 @@ class DatasetConfig:
     def __post_init__(self):
         if not isinstance(self.root, str) or not re.fullmatch(r"[a-zA-Z0-9_-]+", self.root):
             raise ValueError("Dataset root must name one directory on the data volume")
-        if self.loader not in ("raw", "token_shards"):
+        if self.loader not in ("raw", "token_shards", "live"):
             raise ValueError("Unsupported dataset loader")
         if self.mode == "prepare_raw":
             relative_json(self.recipe)
