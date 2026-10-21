@@ -4,7 +4,7 @@ The authorized experiment starts the modern 124,389,632-parameter model from ran
 initialization at context 8,192 on eight H100 80GB GPUs on one Modal host. This is
 separate from the completed 9.85M / 5B run; its weights are not continued here.
 
-`recipes/distributed/h100x8-8k-5b.json` fixes the schedule and batch: 32 document-local
+`workflows/model_configs/historical/h100x8-8k-5b.json` fixes the schedule and batch: 32 document-local
 windows, microbatch one per GPU, four accumulation rounds, 20M-token warmup, peak
 learning rate 3e-4, 5B cumulative nonpadding target ceiling. Short documents are
 padded. A full optimizer batch may finish slightly below the ceiling.
