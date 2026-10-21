@@ -51,4 +51,42 @@ uv run --extra corpus python -m publication.artifacts --output artifacts/pr-13
 
 `artifact_path()` verifies local bytes before use. It never silently fetches a
 mutable revision. Existing model repositories and Modal volumes are unchanged.
-The experiment-specific card builder and exporters are no longer maintained.
+The former experiment-specific exporters have been replaced by the generic export
+function above. Card rendering is independent of weight export.
+
+## Model-card source
+
+[`cards/completed.md`](cards/completed.md) is the editable source document, not a
+generated card. Its TOML front matter (between `+++` lines) selects the pinned
+audit, validation and training-segment artifacts, baseline report key/label and
+number of displayed samples. The Markdown body owns the publication prose and
+`${field}` placeholders. `--document` selects another source document; the
+completed document above is the default.
+
+The renderer derives dimensions, parameter/update/token counts, batch accumulation,
+learning-rate settings, runtime versions, exposure shares, evaluation counts,
+losses, diagnostic loss, checkpoint path and sample text from verified reports.
+It handles the listed segment count rather than assuming three segments. Edit
+Markdown to change the wording, sections or examples shown; no Python prose edits
+are needed. Unknown placeholders, failed checksums, failed verification flags and
+inconsistent run identities/counts fail before writing output.
+
+Historical reports omitted settings that were fixed in their trainer. Those
+values are documented explicitly in the Markdown's `historical_training` table;
+recorded training config values take precedence. Architecture/tokenizer details
+and evaluation limitations absent from structured reports remain authored prose
+in this experiment's Markdown. Do not infer historical settings from current
+recipe defaults or reuse those descriptions for a different architecture without
+review. The original archived cards and reports remain unchanged.
+
+Rebuild the Markdown card and copy its verified evidence into an ignored output directory:
+
+```sh
+uv run --extra corpus python -m publication.build_completed_card \
+  --artifacts artifacts/pr-13 --output artifacts/pr-13/rebuilt-card \
+  --document publication/cards/completed.md
+```
+
+The checked-in Markdown is authored source. Generated `README.md` files and copied
+result JSONs belong in the HF artifact archive, not Git. Rendering does not publish
+or upload anything and does not modify the original pinned evidence.
