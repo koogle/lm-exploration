@@ -100,10 +100,6 @@ def train(
     stop_tokens=None,
     commit=None,
 ):
-    from .run_validation import validate_run
-
-    validate_run(config)
-
     import numpy as np
     import torch
     import torch.distributed as dist

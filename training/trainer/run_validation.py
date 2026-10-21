@@ -3,12 +3,6 @@
 from .distributed_config import DistributedConfig
 
 
-def validate_run(config: DistributedConfig) -> None:
-    """Retain the bounded pilot policy independently of data review status."""
-    if config.pilot and config.target_tokens > 5_000_000:
-        raise ValueError("Pilot runs are limited to 5M tokens")
-
-
 def validate_overnight_run(config: DistributedConfig) -> None:
     """Validate the dedicated eight-H100 124M / 10B continuation."""
     if (config.n_layer, config.n_head, config.n_embd) != (14, 12, 768):
