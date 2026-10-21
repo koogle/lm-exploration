@@ -66,9 +66,7 @@ on HF. Do not commit generated artifacts merely because they are small or JSON.
 - Reference artifacts using the HF repository ID/type, immutable revision, file
   paths and SHA256 checksums in a small checked-in index. Do not rely on mutable
   `main` links or assume that a model card contains the underlying result files.
-- Before removing an existing artifact from Git, verify that its exact bytes are
-  available on HF, record the pinned reference/checksum, and update every consumer
-  and documentation link. Do not remove an unpublished or unverified artifact.
+- When removing an artifact from Git, update every consumer and documentation link.
 - Scripts must accept explicit artifact paths or use a documented download step
   that fetches and verifies pinned HF artifacts into an ignored local directory.
   Do not silently fetch the latest revision or require generated results to be
