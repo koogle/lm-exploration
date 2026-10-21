@@ -221,3 +221,19 @@ source exhaustion, nonfinite loss/gradients, a termination signal or the operati
 time limit (82,000 seconds cooperative; 24 hours hard). No automatic retries or
 unbounded job chaining. The 16,384-token GPU smoke uses the same architecture,
 objective and batching before launching the full request.
+
+## Checkpoint generations
+
+[Matched code continuations](results/shared-checkpoint-generations-20261021-01.md)
+compare 0M (after tokenizer conversion), 1M, 5M, 10M, 25M and 50M on three identical
+Python prompts. Native FP32, greedy decoding, up to 128 new tokens; decoded text,
+raw IDs and stop reasons are retained. Reproduce with:
+
+```sh
+modal run --detach -m distillation.modal_generations --output-id UNIQUE_OUTPUT_ID
+```
+
+These are qualitative examples, not a coding benchmark. The initial addition
+return becomes correct, while the factorial and deduplication examples remain
+incorrect and many continuations repeat definitions. No generated code was
+executed for this comparison.
