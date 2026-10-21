@@ -8,13 +8,13 @@ The caller must enforce a 3,600-second timeout on each remote collection worker.
 from __future__ import annotations
 
 import copy
-import json
 import time
 from pathlib import Path
 
 from huggingface_hub.errors import HfHubHTTPError
 
 from hf_store import COMPONENT, HFStore
+from pipeline import load_mapping
 
 ROOT = Path(__file__).resolve().parent
 TERMINAL_RUNS = {"bounded_complete", "paused_rate_limit"}
@@ -49,7 +49,7 @@ def run_campaign(
     """
     if (spawn_callable is None) != (call_loader is None):
         raise ValueError("spawn_callable and call_loader must be provided together")
-    mapping = json.loads(Path(mapping_path or ROOT / "pipeline_sources.json").read_text())
+    mapping = load_mapping(mapping_path)
     config = mapping["sources"][source_id]
     limits = mapping["limits"]
     if not COMPONENT.fullmatch(campaign_id):
@@ -251,7 +251,7 @@ def wait_for_dispatch(
     if not 0 < timeout_seconds <= 120:
         raise ValueError("Dispatch gate timeout must be in (0, 120] seconds")
     if store is None:
-        mapping = json.loads(Path(mapping_path or ROOT / "pipeline_sources.json").read_text())
+        mapping = load_mapping(mapping_path)
         store = HFStore(mapping["sources"][source_id]["repo_id"])
     deadline = clock() + timeout_seconds
     while True:

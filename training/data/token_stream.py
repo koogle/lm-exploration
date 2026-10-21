@@ -40,7 +40,7 @@ class TokenMixture:
                 "python -m training_data.token_shards convert MANIFEST NEW_DIRECTORY"
             )
         if not self.manifest["training_ready"] and not allow_unreviewed:
-            raise ValueError("Preparation snapshot has pending audits; pilot override required")
+            raise ValueError("Dataset has pending audits; allow_unreviewed_data required")
         if self.manifest["max_passes"] != 2:
             raise ValueError("Unexpected repetition policy")
         self.context, self.split = context, split
@@ -180,6 +180,11 @@ class TokenMixture:
             "cursors": copy.deepcopy(self.cursors),
             "loss_token_exposures": dict(self.exposures),
         }
+
+    def close(self):
+        for iterator in self.iterators.values():
+            iterator.close()
+        self.iterators.clear()
 
     def load_state_dict(self, state):
         if any(state.get(k) != v for k, v in self.identity.items()):

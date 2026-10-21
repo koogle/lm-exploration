@@ -7,7 +7,7 @@ from pathlib import Path
 
 import modal
 
-from distributed_training.image import image
+from distributed.image import image
 
 app = modal.App("lm-exploration-gpu-comparison")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
@@ -69,7 +69,7 @@ def main(run_id: str = "simple-llm-124m-gpu-comparison-20261017-01"):
         raise ValueError("Invalid run ID")
     files = [
         Path("modal_scripts/modal_gpu_benchmark.py"),
-        *Path("distributed_training").glob("*.py"),
+        *Path("distributed").glob("*.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
         Path("10m/legacy.py"),

@@ -10,7 +10,7 @@ from pathlib import Path
 import modal
 
 ROOT = Path(__file__).resolve().parent
-GOAL_MAPPING = Path("/root/eu/goal_pipeline_sources.json")
+GOAL_MAPPING = Path("/root/eu/pipeline_sources.json")
 GOAL_CONFIG = Path("/root/eu/collection_goal.json")
 APP_NAME = os.environ.get("EU_MODAL_APP_NAME", "lm-exploration-eu-100k")
 SCHEDULE_ENABLED = os.environ.get("EU_GOAL_SCHEDULE", "1") == "1"
@@ -24,7 +24,7 @@ if modal.is_local():
     from modal_pipeline import image as base_image
 
     image = base_image
-    for name in ("goal_controller.py", "goal_pipeline_sources.json", "collection_goal.json"):
+    for name in ("goal_controller.py", "collection_goal.json"):
         image = image.add_local_file(ROOT / name, f"/root/eu/{name}")
 
 
@@ -86,11 +86,17 @@ def inspect_call(call_id):
         for child in node.children:
             yield from flatten(child)
 
-    nodes = [node for root in roots for node in flatten(root)]
+    # Modal may return the shared ancestor and sibling campaigns too. Only the
+    # requested call and its descendants determine whether this writer stopped.
+    matches = [node for root in roots for node in flatten(root) if node.function_call_id == call_id]
+    if len(matches) != 1:
+        return {"status": "unknown", "child_tree_terminated": False}
+    target = matches[0]
+    nodes = list(flatten(target))
     terminal = all(node.status.name in {"SUCCESS", "FAILURE", "TERMINATED"} for node in nodes)
     if not terminal:
         return {"status": "running", "child_tree_terminated": False}
-    if roots[0].status.name == "SUCCESS":
+    if target.status.name == "SUCCESS":
         try:
             result = call.get(timeout=0)
         except Exception as error:  # noqa: BLE001 - preserve uncertainty after terminal graph check
@@ -218,9 +224,10 @@ def source_snapshots(mapping, goal, audit_store=None, audit_revision=None):
 )
 def tick():
     from hf_store import HFStore
+    from pipeline import load_mapping
 
     config = json.loads(GOAL_CONFIG.read_text())
-    mapping = json.loads(GOAL_MAPPING.read_text())
+    mapping = load_mapping(GOAL_MAPPING)
     store = HFStore(config.pop("control_repo"))
     result = reconcile_tick(
         store, mapping, config, inspect_call, lambda **kwargs: campaign.spawn(**kwargs)

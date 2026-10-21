@@ -10,7 +10,7 @@ import torch
 from training_data.subword import TOKENIZER_SHA256
 from training_data.token_shards import FORMAT, file_entry, write_shard
 
-from distributed_training.config import DistributedConfig
+from distributed.config import DistributedConfig
 
 
 def fixture(root, documents=60):
@@ -74,7 +74,7 @@ def check_equal(a, b, floating_tolerance=False):
 def checks(output):
     output = Path(output)
     output.mkdir(exist_ok=False, parents=True)
-    from distributed_training.train import source_hashes
+    from trainer.loop import source_hashes
 
     summary = {
         "source_sha256": source_hashes(),
@@ -100,7 +100,7 @@ def checks(output):
                 "--standalone",
                 f"--nproc_per_node={config.world_size}",
                 "-m",
-                "distributed_training.train",
+                "trainer.loop",
                 "--config",
                 str(settings),
                 "--manifest",

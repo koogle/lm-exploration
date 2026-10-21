@@ -17,6 +17,17 @@ jobs. Human-readable reports use the new labels; consult their accompanying JSON
 for exact original artifact locations and provenance. Example version/run labels
 are illustrative; use the actual prepared snapshot version when launching a job.
 
+The [modern 9.85M / 5B-token experiment](publication/README.md#pr-13)
+is complete and [published on Hugging Face](https://huggingface.co/jfrick/scholarly-code-modern-gpt-10m-5b).
+It processed 4,999,934,057 targets over 72,805 updates. Broader exploratory
+validation loss is 2.6926 nats/token; generated samples remain repetitive and
+factually weak. The model card includes all examples, per-source evaluation,
+training curve, code/tokenizer and provenance. Generated reports and cards added by
+PR #13 are stored in the pinned HF **dataset** documented in the
+[artifact index and download guide](publication/README.md), not in this repository.
+The remaining sections retain
+historical plans and earlier experiment state.
+
 ## Current handoff — 2026-10-16
 
 Start with the [Simple LLM pretraining plan](plans/SIMPLE_LLM_PRETRAINING.md).
@@ -33,7 +44,7 @@ has not been launched. The [measured GPU comparison](results/simple-llm-124m-gpu
 compares one, two and three A10, L40S and H100 GPUs with matched global batches.
 Those measurements used the SDPA implementation now used by the modern model.
 Three H100s are the recommended configuration when elapsed time is the priority.
-[Distributed subword training](distributed_training/README.md) now exposes one/two/three-GPU
+[Distributed subword training](distributed/README.md) now exposes one/two/three-GPU
 training and explicit checkpoint/resume across Modal jobs. Full corpus readiness
 and substantial pretraining remain separate.
 
@@ -45,6 +56,9 @@ A personal learning project: train small language models from random initializat
 understand how architecture and data affect them, then add instruction tuning,
 reasoning and reinforcement learning. Use Modal for training and local Apple
 hardware for development and eventual inference.
+
+[Training references](references/README.md) collect source-backed research notes
+and proposed experiments, starting with Mirendil, Recursive and Flapping Airplanes.
 
 ## Direction and scope
 
@@ -70,7 +84,7 @@ research effort, with its own resources and budget.
 
 ## Shakespeare 10M publication
 
-The [10M model and bounded Modal workflow](10m/README.md) now default to RMSNorm,
+The [10M model](10m/README.md) defaults to RMSNorm,
 RoPE, SwiGLU and tied embeddings. Its historical vanilla architecture has a [trained public model](https://huggingface.co/jfrick/shakespeare-vanilla-gpt-10m) with its complete definition and tokenizer.
 The selected update is 1,800 (validation loss 1.54483 nats/character); the later
 4,000-update head overfit and was not published.
@@ -79,26 +93,30 @@ See the owning guide and `results/shakespeare-10m-*.json` for executed results.
 
 ## Training runs on Modal
 
-![One Modal worker launches one process per GPU with torchrun. Rank zero reads shared input files and scatters the batch; DDP synchronizes gradients before each replica updates its weights.](distributed_training/images/distributed-training.png)
+![One Modal worker launches one process per GPU with torchrun. Rank zero reads shared input files and scatters the batch; DDP synchronizes gradients before each replica updates its weights.](distributed/images/distributed-training.png)
 
 The diagram shows the three-GPU subword trainer. The Modal API starts the worker;
 inside it, a supervised `torchrun` subprocess launches one Python process per GPU.
 Rank zero reads the shared corpus on `/data`; corpus files are not copied per run
 or per GPU. Each GPU holds a full model and optimizer replica. At checkpoint
 boundaries, rank zero saves to `/runs`; resuming requires an explicit new job.
-See the [distributed training guide](distributed_training/README.md) for launch commands,
+See the [distributed training guide](distributed/README.md) for launch commands,
 microbatch accumulation and checkpoint details.
 
 The [historical bounded Simple LLM pilot](100m/PILOT.md) connected the modern
 124.4M model to the frozen 32K tokenizer and token-mixture loader. Its duplicate
 single-GPU implementation has been removed. All current subword training uses
-[`distributed_training/`](distributed_training/README.md), including one GPU;
-the older recipes below remain character-only.
+[`trainer/loop.py`](trainer/loop.py), including one GPU.
+[`distributed/`](distributed/README.md) supplies launch support and configuration;
+the older character loop has been removed.
 
 All training runs on Modal GPU workers; there is no CPU or MPS training path.
-A JSON [recipe](recipes/README.md) names the architecture, registered dataset,
-training settings and GPU limits:
-`modal run modal_scripts/modal_train.py --recipe recipes/<name>.json --run-id <id> [--smoke]`.
+[`workflows/`](workflows/README.md) owns model configs, dataset selections and execution settings.
+Historical character configs are retained under `workflows/model_configs/historical/`. Use
+`modal run -m workflows.modal_train --workflow workflows/<name>.json --run-id <id>`
+for subword training. [`workflows/`](workflows/README.md) owns preparation,
+qualification and continuation across sessions. Historical character recipes remain for provenance; their loop and launcher have
+been removed.
 Local commands validate recipes and sample from downloaded checkpoints only.
 
 ## Current state
@@ -113,13 +131,16 @@ gradient descent, start with [the XOR example](examples/README.md).
   124,389,632 parameters with the frozen 32K tokenizer. The consolidated
   [`10m/model.py`](10m/model.py) owns the shared implementation at 6 layers,
   width 384 and 6 heads; historical vanilla checkpoints use a legacy-only path.
-- [`modal_scripts/`](modal_scripts/README.md), including [`modal_train.py`](modal_scripts/modal_train.py) and [`recipes/`](recipes/README.md): the character-level
-  recipe launcher. Current subword training lives in
-  [`distributed_training/`](distributed_training/README.md).
+- [`modal_scripts/`](modal_scripts/README.md): corpus, tokenizer and benchmark
+  launchers. Training launch support and runtime configuration live in
+  [`distributed/`](distributed/README.md); settings live in [`workflows/`](workflows/README.md).
 - [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a
   prompt, and reads the architecture, configuration and tokenizer from the checkpoint.
-- [`trainer/`](trainer/README.md): training configuration, core loop/evaluation,
-  checkpoint loading/saving, run provenance, recipes and shared sampling.
+- [`trainer/`](trainer/README.md): the active training loop, evaluation,
+  checkpoint loading/saving, run provenance and shared sampling. Historical
+  character-recipe schemas and checkpoint loading remain for compatibility.
+- [`workflows/`](workflows/README.md): preparation and continuation controllers,
+  workflow configuration and compatibility/progress checks.
 - [`data/loading.py`](data/loading.py): character tokenization, text loading,
   deterministic splits and batching.
 - [`data/`](data/README.md): curated dataset definitions, fetching and preparation
@@ -155,9 +176,9 @@ given. It samples from the full softmax; temperature and top-k are not implement
 
 The subword pilot measured actual-model throughput; broad model quality and
 production-corpus throughput remain unverified. Shakespeare is
-a learning corpus, not evidence of broad language capability. The trainer still
-contains checkpoint resume, but no launcher exposes it yet. It reads text into
-RAM and is deliberately not a large-corpus system.
+a learning corpus, not evidence of broad language capability. The active trainer
+uses prepared mixture snapshots and exposes explicit cross-job resume; the legacy
+character loop has been removed.
 
 The local Run Board (`ui.py`), `lm-train` CLI and `lm-checks` CPU test suite were
 removed when training moved to Modal only; they remain in Git history before

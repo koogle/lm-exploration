@@ -170,7 +170,7 @@ def run_audit(source_id, corpus, cache_store, encoding, max_shards=100, work_sec
 def audit_source(
     source_id, max_shards=100, work_seconds=600, control_repo="jfrick/eu-corpus-control"
 ):
-    mapping = json.loads(Path(__file__).with_name("goal_pipeline_sources.json").read_text())
+    mapping = json.loads(Path(__file__).with_name("pipeline_sources.json").read_text())
     repo_id = mapping["sources"][source_id]["repo_id"]
     if control_repo == repo_id:
         raise ValueError("Token audit cache must be separate from the corpus repository")
