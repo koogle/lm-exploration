@@ -57,3 +57,34 @@ retains the previous $5 reservations and reserves each bounded H100 attempt befo
 launch; no failed launch is automatically refunded. The user explicitly authorized
 this follow-up and an eight-hour teacher campaign, superseding the earlier pilot
 scope. Failed attempts and actual GPU execution remain distinguished.
+
+## Batch and fusion follow-up
+
+`megakernel/batch_probe.py` is a partial-batching prototype: independent cache and
+recurrent state per lane, sequential fused transformer calls, and one shared
+batched vocabulary projection. It is not a batched transformer. On the October 22
+H100 probe, batches 4/8/16/32 matched the original logits exactly and improved the
+short teacher-forced decode measurement by 1.091/1.106/1.114/1.118x respectively.
+Batch-one's first timing contains warmup overhead and is not evidence of a gain.
+These short measurements do not qualify a new free-running production backend.
+
+The original matched fixture benchmark completed all 288 vLLM requests, with all
+288 accepted. Concurrency 8 measured 24.08 and 24.52 saved tokens/s, compared with
+16.08 in the kernel's completed round; its second round was preempted. Per-record
+volume commits dominated these measurements. Full outputs and negative attempts
+are archived under `jfrick/lm-exploration-results/qwen35-buffered-targets/`.
+
+`qualify_campaign` now compares actual curriculum generation with batch-level
+writes, preserving native token IDs and top-64 targets. vLLM sweeps 1/4/8/16/32
+and the reverse order; the kernel uses two sequential 32-example trials. Each
+trial uses the same prompt indices. Benchmark repeats remain isolated from the
+fresh production corpus. The two H100 test children share a 30-minute absolute
+deadline, enforced by a separate remote CPU supervisor. Earlier canaries failed
+container imports; enabling source inclusion and the explicit `/experiment`
+module path fixed deployment. Those attempts are not timing results.
+
+`launch_campaign.py` requires two complete curriculum trials per candidate,
+reference/target correctness and the executable vLLM fixtures, records measured
+rates and report hashes, and only then launches the chosen backend. The
+production window is eight hours, with a 256-worker ceiling and an additional
+absolute launch-to-shutdown bound. Its default invocation is a dry run.

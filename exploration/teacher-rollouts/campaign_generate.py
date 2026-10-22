@@ -130,6 +130,7 @@ def run(root, worker, deadline, backend, batch_size, max_batches=0, sweep=False)
             tokenizer.apply_chat_template(
                 [{"role": "user", "content": p}],
                 tokenize=True,
+                return_dict=False,
                 add_generation_prompt=True,
                 enable_thinking=False,
             )

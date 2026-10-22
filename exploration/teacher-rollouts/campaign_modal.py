@@ -136,7 +136,10 @@ def supervise(run_id, config):
     if path.exists():
         raise ValueError("Campaign already exists; do not duplicate teachers")
     start = time.time()
-    deadline = start + 8 * 3600
+    # Keep queue time plus archive drain inside the repository's 24-hour cap.
+    deadline = min(start + 8 * 3600, config["launched_at"] + 23 * 3600)
+    if deadline <= start:
+        raise TimeoutError("Campaign launch expired while queued")
     state = {
         **config,
         "started_at": start,
