@@ -299,7 +299,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def launch_snapshot(run_id, bundle, provenance, resume=""):
-    from training_data.mixture import open_mixture
+    from training_data.mixture import check_capacity, open_mixture
 
     from workflows.checks import validate_paths
     from workflows.config import resolve_payload
@@ -318,15 +318,7 @@ def launch_snapshot(run_id, bundle, provenance, resume=""):
     )
     try:
         if not config.pilot:
-            capacity = min(
-                mixture.manifest["max_passes"]
-                * s["splits"]["train"]["loss_tokens"]
-                * 100
-                / s["weight_percent"]
-                for s in mixture.sources.values()
-            )
-            if config.target_tokens > capacity:
-                raise ValueError("Snapshot cannot support target mixture within two passes")
+            check_capacity(mixture, config.target_tokens)
     finally:
         mixture.close()
     validation = open_mixture(

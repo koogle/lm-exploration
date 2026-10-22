@@ -130,11 +130,11 @@ capacity gates apply before model allocation. Set `allow_unreviewed_data: true`
 explicitly to permit snapshots with pending audits; the default is `false`.
 This permission is independent of architecture, token budget and `pilot` mode.
 Pilot mode alone does not permit unreviewed data, and neither flag resets
-exhausted sources or removes the loader's two-pass source limit.
+exhausted sources or removes the loader's per-source pass caps.
 
 `DistributedConfig` validates general settings, not an architecture allowlist or
 experiment token ceiling. Architecture dimensions come from the model config and token budgets from the workflow; pilot mode has no separate token ceiling. Model/runtime compatibility
-and the loader's two-pass source limit still apply. Non-pilot runs also check
+and the loader's per-source pass caps still apply. Non-pilot runs also check
 mixture capacity before model allocation. This does not authorize a run.
 
 Recipes now record data permission explicitly. Historical configs and measured

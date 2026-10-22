@@ -9,6 +9,7 @@ from training_data.mixture import open_mixture
 from training_data.raw_corpus import RawCorpus
 from training_data.raw_token_stream import RawTokenMixture
 from training_data.simple_llm import adapt
+from training_data.subword import LOSS_IGNORE_INDEX
 
 
 class Encoding:
@@ -98,9 +99,12 @@ class RawTokenStreamTests(unittest.TestCase):
             actual = b.next_batch(5)
             self.assertTrue(all(torch.equal(x, y) for x, y in zip(expected, actual)))
             self.assertEqual(a.state_dict(), b.state_dict())
+            # The final partial batch is padded; afterwards the cursor no longer moves.
+            _, last = b.next_batch(100000)
+            self.assertTrue((last[-1] == LOSS_IGNORE_INDEX).all())
             saved = b.state_dict()
             with self.assertRaises(StopIteration):
-                b.next_batch(100000)
+                b.next_batch(4)
             self.assertEqual(saved, b.state_dict())
             a.close()
             b.close()
@@ -113,3 +117,20 @@ class RawTokenStreamTests(unittest.TestCase):
                     break
             self.assertEqual(total, counts["train"] * 2)
             c.close()
+
+            # Exported pass caps and exact targets bound one full read of the source.
+            once = export_raw(
+                root,
+                root / "once",
+                max_passes={"fineweb_edu": 1},
+                target_tokens=counts["train"],
+            )
+            entry = once["sources"]["fineweb_edu"]
+            self.assertEqual((entry["max_passes"], entry["target_tokens"]), (1, counts["train"]))
+            d = RawTokenMixture(root / "once/manifest.json", context=8, allow_unreviewed=True)
+            _, y = d.next_batch(100000)
+            self.assertEqual(int((y != LOSS_IGNORE_INDEX).sum()), counts["train"])
+            d.close()
+            with self.assertRaisesRegex(ValueError, "unknown source"):
+                export_raw(root, root / "bad", max_passes={"missing": 1})
+            self.assertFalse((root / "bad").exists())

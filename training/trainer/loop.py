@@ -13,7 +13,7 @@ from datetime import timedelta
 from itertools import islice
 from pathlib import Path
 
-from training_data.mixture import open_mixture
+from training_data.mixture import check_capacity, open_mixture
 from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, LOSS_IGNORE_INDEX, VOCAB_SIZE
 
 from distributed.config import DistributedConfig, DistributedRuntime, validate_resume
@@ -246,15 +246,7 @@ def train(
             else:
                 data = make_data()
             if not config.pilot and config.data_loader != "live":
-                capacity = min(
-                    data.manifest["max_passes"]
-                    * s["splits"]["train"]["loss_tokens"]
-                    * 100
-                    / s["weight_percent"]
-                    for s in data.sources.values()
-                )
-                if config.target_tokens > capacity:
-                    raise ValueError("Snapshot cannot support target mixture within two passes")
+                check_capacity(data, config.target_tokens)
             validation = open_mixture(
                 manifest,
                 loader=config.data_loader,
