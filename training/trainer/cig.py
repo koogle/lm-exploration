@@ -8,6 +8,7 @@ import math
 
 import torch
 from torch.nn import functional as F
+from training_data.subword import LOSS_IGNORE_INDEX
 
 
 def information_ratio(conditional_nll, task_free_nll):
@@ -26,12 +27,18 @@ def weights(nll, information, proximity=0.3):
 
 
 def weighted_loss(logits, targets, information, proximity=0.3):
+    """Sum of weighted answer-token NLL and the answer-token count.
+
+    Prompt and padding targets are LOSS_IGNORE_INDEX, so their NLL is exactly zero.
+    """
     nll = F.cross_entropy(
-        logits.float().flatten(0, 1), targets.flatten(), ignore_index=-100, reduction="none"
+        logits.float().flatten(0, 1),
+        targets.flatten(),
+        ignore_index=LOSS_IGNORE_INDEX,
+        reduction="none",
     ).view_as(targets)
-    mask = targets != -100
     weight = weights(nll, information, proximity)
-    return (nll * weight * mask).sum(), mask.sum()
+    return (nll * weight).sum(), (targets != LOSS_IGNORE_INDEX).sum()
 
 
 @torch.inference_mode()
@@ -49,19 +56,23 @@ def reference_cache(model, splits, raw_rows, tokenizer, context):
     for row in splits["train"]:
         blank = dict(by_id[row["id"]], instruction="", broken="")
         task_free = encode(blank, tokenizer, context)
-        scores = []
+        # The two prompts differ in length, so answers sit at different offsets;
+        # compare them through each encoding's own answer mask.
+        scores, answers = [], []
         for encoded in (row, task_free):
             x = torch.tensor([encoded["x"]], device="cuda")
             y = torch.tensor(encoded["y"], device="cuda")
+            answer = y != LOSS_IGNORE_INDEX
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 logits = model(x)[0].float()
-            nll = F.cross_entropy(logits, y, ignore_index=-100, reduction="none")
-            scores.append(nll[y != -100])
-        full_targets = [t for t in row["y"] if t != -100]
-        if full_targets != [t for t in task_free["y"] if t != -100]:
+            nll = F.cross_entropy(logits, y, ignore_index=LOSS_IGNORE_INDEX, reduction="none")
+            scores.append(nll[answer])
+            answers.append((answer, y[answer]))
+        (row_answer, row_targets), (_, task_free_targets) = answers
+        if not torch.equal(row_targets, task_free_targets):
             raise ValueError("Task-free scoring changed answer-token alignment")
         c = torch.zeros(len(row["y"]), device="cuda")
-        c[torch.tensor(row["y"], device="cuda") != -100] = information_ratio(*scores)
+        c[row_answer] = information_ratio(*scores)
         cache[row["id"]] = c.cpu()
     model.train()
     return cache

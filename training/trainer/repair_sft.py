@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from training_data.repair_sft import FORMAT, prepare
-from training_data.subword import TOKENIZER_SHA256, digest, load_frozen
+from training_data.subword import LOSS_IGNORE_INDEX, TOKENIZER_SHA256, digest, load_frozen
 
 
 @dataclass(frozen=True)
@@ -49,9 +49,11 @@ class Settings:
             raise ValueError("SFT capped at four hours per invocation")
 
 
-# Trainer source of the recorded 200-update CIG/SFT pilots (PR #29). `extend=True` may migrate
-# checkpoints written by this reviewed predecessor or by identical current source only.
+# Sources of the recorded 200-update CIG/SFT pilots (PR #29). `extend=True` may migrate
+# checkpoints written by these reviewed predecessors or by identical current source only.
 PILOT_TRAINER_SHA256 = "b2b8ceebde172b280fcb5ec7ddbb86e5df53c80ad9406087be9704d3e869656b"
+PILOT_CIG_SHA256 = "fc241179be318316f05ad2d37a41eb32f19f33f31293a29c7c2229a8f070152d"
+REVIEWED_SOURCES = {"trainer": PILOT_TRAINER_SHA256, "cig": PILOT_CIG_SHA256}
 
 
 def validate_resume_identity(saved, current, step, extend=False):
@@ -67,10 +69,11 @@ def validate_resume_identity(saved, current, step, extend=False):
     adjusted = copy.deepcopy(saved)
     for key in ("steps", "save_every", "evaluate_every", "max_seconds"):
         adjusted["settings"][key] = current["settings"][key]
-    previous = adjusted["source_sha256"]["trainer"]
-    if previous not in (PILOT_TRAINER_SHA256, current["source_sha256"]["trainer"]):
-        raise ValueError("Unreviewed trainer source migration")
-    adjusted["source_sha256"]["trainer"] = current["source_sha256"]["trainer"]
+    for name, reviewed in REVIEWED_SOURCES.items():
+        previous = adjusted["source_sha256"][name]
+        if previous not in (reviewed, current["source_sha256"][name]):
+            raise ValueError(f"Unreviewed {name} source migration")
+        adjusted["source_sha256"][name] = current["source_sha256"][name]
     if adjusted != current:
         raise ValueError("Extension changed model/data/objective/optimizer identity")
 
@@ -80,7 +83,7 @@ def collate(rows, device):
 
     width = max(len(row["x"]) for row in rows)
     x = torch.zeros((len(rows), width), dtype=torch.long, device=device)
-    y = torch.full_like(x, -100)
+    y = torch.full_like(x, LOSS_IGNORE_INDEX)
     for i, row in enumerate(rows):
         x[i, : len(row["x"])] = torch.tensor(row["x"], device=device)
         y[i, : len(row["y"])] = torch.tensor(row["y"], device=device)
@@ -215,7 +218,9 @@ def train(
             json.dumps(
                 {
                     "positive_tokens": values.numel(),
-                    "answer_tokens": sum(sum(t != -100 for t in r["y"]) for r in splits["train"]),
+                    "answer_tokens": sum(
+                        sum(t != LOSS_IGNORE_INDEX for t in r["y"]) for r in splits["train"]
+                    ),
                     "mean_positive_information": values.mean().item() if values.numel() else 0.0,
                 },
                 indent=2,
@@ -233,9 +238,9 @@ def train(
                     information[i, : len(row["y"])] = cache[row["id"]].to("cuda")
                 return cig.weighted_loss(logits, y, information, settings.cig_proximity)
             value = F.cross_entropy(
-                logits.flatten(0, 1), y.flatten(), ignore_index=-100, reduction="sum"
+                logits.flatten(0, 1), y.flatten(), ignore_index=LOSS_IGNORE_INDEX, reduction="sum"
             )
-        return value, (y != -100).sum()
+        return value, (y != LOSS_IGNORE_INDEX).sum()
 
     def evaluate():
         model.eval()
