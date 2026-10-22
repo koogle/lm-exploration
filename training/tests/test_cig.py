@@ -48,6 +48,15 @@ class CIGTests(unittest.TestCase):
         )
         torch.testing.assert_close(value / count, expected)
 
+    def test_ignored_targets_contribute_nothing(self):
+        logits = torch.randn(1, 3, 4, requires_grad=True)
+        y = torch.tensor([[-100, 2, -100]])
+        value, count = weighted_loss(logits, y, torch.ones(1, 3))
+        (grad,) = torch.autograd.grad(value, logits)
+        self.assertEqual(count, 1)
+        self.assertTrue(torch.equal(grad[0, 0], torch.zeros(4)))
+        self.assertTrue(torch.equal(grad[0, 2], torch.zeros(4)))
+
 
 if __name__ == "__main__":
     unittest.main()

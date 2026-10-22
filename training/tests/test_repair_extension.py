@@ -2,7 +2,12 @@ import copy
 import unittest
 from dataclasses import asdict
 
-from trainer.repair_sft import PILOT_TRAINER_SHA256, Settings, validate_resume_identity
+from trainer.repair_sft import (
+    PILOT_CIG_SHA256,
+    PILOT_TRAINER_SHA256,
+    Settings,
+    validate_resume_identity,
+)
 
 
 class ExtensionTests(unittest.TestCase):
@@ -49,6 +54,15 @@ class ExtensionTests(unittest.TestCase):
             changed["source_sha256"][field] = "unreviewed"
             with self.subTest(field=field), self.assertRaises(ValueError):
                 validate_resume_identity(changed, self.new, 200, extend=True)
+
+    def test_reviewed_cig_source_migration(self):
+        old = copy.deepcopy(self.old)
+        old["source_sha256"]["cig"] = PILOT_CIG_SHA256
+        new = copy.deepcopy(self.new)
+        new["source_sha256"]["cig"] = "current-reviewed-cig"
+        validate_resume_identity(old, new, 200, extend=True)
+        with self.assertRaises(ValueError):
+            validate_resume_identity(old, new, 200)
 
 
 if __name__ == "__main__":
