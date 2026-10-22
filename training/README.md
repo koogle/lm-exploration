@@ -145,11 +145,10 @@ gradient descent, start with [the XOR example](examples/README.md).
 
 - [`100m/model.py`](100m/model.py): **architecture only**. The [updated model](100m/README.md)
   uses RMSNorm, RoPE and SwiGLU at 14 layers, width 768, 12 attention heads and
-  context 256. Version 1 preserves the historical vanilla blocks for old
-  checkpoints. New 100M models tie input/output embeddings by default and have
+  context 256. New 100M models tie input/output embeddings by default and have
   124,389,632 parameters with the frozen 32K tokenizer. The consolidated
   [`10m/model.py`](10m/model.py) owns the shared implementation at 6 layers,
-  width 384 and 6 heads; historical vanilla checkpoints use a legacy-only path.
+  width 384 and 6 heads.
 - [`analysis/sampling/`](analysis/sampling/README.md): recipe-driven sampling
   launcher, repetition metrics and report CLI. Study folders under `analysis/` hold only
   recipes and findings.

@@ -75,20 +75,19 @@ The result JSON has `recipe`, `precision`, TF32 flags, `torch_version`, `device`
 
 ```sh
 uv run python -m sampling.report RESULT.json [MORE.json ...] --output-dir DIR \
-  [--reference EARLIER.json ...] [--group-by mode] [--group-by decoding] \
-  [--recipe RECIPE.json] [--paired]
+  [--reference EARLIER.json ...] [--group-by mode] [--group-by decoding] [--paired]
 ```
 
 The report writes `summary.json`, `metrics-table.md` and `completions.md` to
-`--output-dir`. It also reads the earlier per-study format (`checkpoints[]`, with settings
-in top-level `modes`).
+`--output-dir`. It reads only the launcher format above. Archived results in the earlier
+per-study format (`checkpoints[]`, with settings in top-level `modes`) need the report as
+of revision `1e06fb8`.
 
 - `--group-by` takes comma-separated sample fields, such as `mode`, `temperature`,
   `prompt_group` or `seed`. `decoding` stands for temperature, top-k, top-p and penalty.
   Each `--group-by` produces one table. Rows are always split by run.
 - `--reference` matches samples by revision, prompt, seed and decoding settings, then
   counts token-identical completions and records the first divergent position.
-- `--recipe` applies that recipe's prompt groups to inputs that lack them.
 - `--paired` averages the prefix metrics only over prompt/seed pairs eligible in every run.
 
 Per-sample metrics (`metrics.py`):

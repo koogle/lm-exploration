@@ -1,17 +1,12 @@
-"""Modern 100M block formulas and compatibility; no training jobs."""
+"""Modern 100M block formulas; no training jobs."""
 
-import copy
 import unittest
-from dataclasses import asdict
 
 import torch
-from model_10m import legacy as vanilla
 from model_100m import model
 from torch.nn import functional as F
 
-from generate import load_model
-from trainer.checkpoints import validate_resume
-from trainer.recipe import Recipe
+from trainer.gpu_benchmark import explicit_causal_attention
 
 
 def complex_rotary(x, offset=0):
@@ -32,7 +27,6 @@ class Modern100MTests(unittest.TestCase):
         self.assertEqual(
             (config.n_layer, config.n_embd, config.n_head, config.block_size), (14, 768, 12, 256)
         )
-        self.assertEqual(config.architecture_version, 2)
         with torch.device("meta"):
             instance = model.GPT(config)
         self.assertFalse(hasattr(instance, "position_embedding"))
@@ -105,7 +99,7 @@ class Modern100MTests(unittest.TestCase):
             torch.randn(2, 3, 17, 8, dtype=torch.float64, requires_grad=True) for _ in range(3)
         ]
         actual = model.causal_attention(q, k, v)
-        expected = vanilla.causal_attention(q, k, v)
+        expected = explicit_causal_attention(q, k, v)
         torch.testing.assert_close(actual, expected, rtol=1e-10, atol=1e-10)
         upstream = torch.randn_like(actual)
         actual_grad = torch.autograd.grad(actual, (q, k, v), upstream)
@@ -142,67 +136,8 @@ class Modern100MTests(unittest.TestCase):
         for length in (0, 9):
             with self.assertRaises(ValueError):
                 instance(torch.zeros(1, length, dtype=torch.long))
-        for version in (0, 3, True):
-            with self.assertRaises(ValueError):
-                model.ModelConfig(11, architecture_version=version)
         with self.assertRaises(ValueError):
             model.ModelConfig(11, n_embd=18, n_head=6)
-        self.assertEqual(
-            model.ModelConfig(11, n_embd=18, n_head=6, architecture_version=1).n_embd, 18
-        )
-
-    def test_old_checkpoints_keep_legacy_blocks_with_exact_logits(self):
-        settings = asdict(self.config)
-        del settings["architecture_version"]
-        tokens = torch.randint(11, (1, 8))
-        original = vanilla.GPT(vanilla.ModelConfig(**settings))
-        for name in (None, "100m", "model_100m"):
-            config = {"model": settings}
-            if name is not None:
-                config["model_name"] = name
-            reference = copy.deepcopy(original)
-            restored = load_model({"config": config, "model": reference.state_dict()})
-            self.assertEqual(restored.config.architecture_version, 1)
-            self.assertIsInstance(restored.final_norm, torch.nn.LayerNorm)
-            self.assertTrue(hasattr(restored, "position_embedding"))
-            self.assertIsNot(restored.lm_head.weight, restored.token_embedding.weight)
-            torch.testing.assert_close(restored(tokens), reference(tokens), rtol=0, atol=0)
-        with torch.device("meta"):
-            old = model.GPT(model.ModelConfig(32768, architecture_version=1))
-        self.assertEqual(sum(p.numel() for p in old.parameters()), 149_760_000)
-
-    def test_recipe_version_and_resume_compatibility(self):
-        recipe = Recipe(model="100m", dataset="tiny-shakespeare", training={})
-        self.assertEqual(recipe.build_model_config(11).architecture_version, 2)
-        legacy_recipe = recipe.model_copy(update={"model_overrides": {"architecture_version": 1}})
-        self.assertEqual(legacy_recipe.build_model_config(11).architecture_version, 1)
-        training = {
-            "batch_size": 2,
-            "lr": 0.001,
-            "seed": 42,
-            "device": "cuda",
-            "dtype": "float32",
-            "optimizer": "AdamW",
-            "betas": [0.9, 0.95],
-            "weight_decay": 0.1,
-            "gradient_clip_norm": 1.0,
-        }
-        settings = asdict(self.config)
-        settings["architecture_version"] = 1
-        current = {
-            "model_name": "model_100m",
-            "model": settings,
-            "tokenizer": {"type": "fixture"},
-            "training": training,
-        }
-        old = copy.deepcopy(current)
-        del old["model"]["architecture_version"]
-        checkpoint = {"config": old, "step": 1, "dataset_fingerprint": {"sha256": "fixture"}}
-        validate_resume(checkpoint, current, checkpoint["dataset_fingerprint"], 2)
-        modern = copy.deepcopy(current)
-        modern["model"]["architecture_version"] = 2
-        with self.assertRaisesRegex(ValueError, "identical"):
-            validate_resume(checkpoint, modern, checkpoint["dataset_fingerprint"], 2)
 
 
 if __name__ == "__main__":

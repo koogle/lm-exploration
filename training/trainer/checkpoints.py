@@ -22,21 +22,12 @@ def load_checkpoint(path):
 
 def validate_resume(checkpoint, config, fingerprint, steps):
     old = checkpoint["config"]
-
-    def model_settings(record):
-        settings = dict(record["model"])
-        name = record.get("model_name", "100m").removeprefix("model_")
-        if name in ("10m", "100m"):
-            settings.setdefault("architecture_version", 1)
-        return settings
-
     compatible = (
         checkpoint["dataset_fingerprint"] == fingerprint
-        and model_settings(old) == model_settings(config)
+        and old["model"] == config["model"]
         and old["tokenizer"] == config["tokenizer"]
         # Matching dimensions alone do not identify the architecture/optimizer layout.
-        and old.get("model_name", "100m").removeprefix("model_")
-        == config.get("model_name", "100m").removeprefix("model_")
+        and old["model_name"] == config["model_name"]
     )
     fixed = (
         "batch_size",

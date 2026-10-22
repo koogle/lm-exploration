@@ -144,7 +144,6 @@ def main(
         Path("trainer/ddp_benchmark.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
-        Path("10m/legacy.py"),
         *Path("data").glob("*.py"),
     ]
     provenance = {
