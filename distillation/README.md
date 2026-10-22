@@ -24,9 +24,10 @@ work around that mismatch, and none produced a better model:
   500M-token sweep was stopped short with at most 1/8 diagnostic tasks solved, and the
   planned Qwen3.5 teacher brings yet another native tokenizer.
 
-Lesson: choose a teacher whose tokenizer the student shares, or train the student on the
-teacher's tokenizer from the start. Treat any need for cross-tokenizer alignment as a
-reason to stop and redesign, not to add alignment code.
+Lesson: standardise on one teacher model and its tokenizer before distilling, and train
+the student on that tokenizer from the start, or at least pick a teacher whose tokenizer
+the student already shares. Do not handle cross-tokenizer KL divergence; treat any need
+for alignment code as a reason to stop and redesign.
 
 ## Archive
 
