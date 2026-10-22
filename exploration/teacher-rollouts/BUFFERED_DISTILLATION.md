@@ -162,3 +162,15 @@ new fixed deadline of **2026-10-22 18:07:00 UTC**, superseding the original dead
 Guardian call: `fc-01M5HHME95SB028S89NH0H6NQD`. The same campaign/dataset paths are
 used; trajectories continue from each producer's saved index. Further kernel
 experimentation must not redeploy or interrupt this active campaign.
+
+### Continuation toward 5B fresh tokens
+
+The user increased the cumulative generation target to 5 billion fresh output
+ tokens and explicitly requested parallel vLLM generation. The first completed
+window saved 322,522,448 generated tokens (247,617,420 JSON/syntax-accepted)
+on the Modal volume. Only 39,286,782 generated tokens reached HF before its
+256-commits/hour rate limit stopped the archiver. The archiver now spaces commits
+and retries HTTP 429 using the same batch, without advancing the durable index
+until the upload succeeds. Existing bounded eight-hour windows and independent
+shutdown remain in force; a single continuation does not complete the 5B target.
+The 5B target counts generated output tokens, not repeated training exposures.

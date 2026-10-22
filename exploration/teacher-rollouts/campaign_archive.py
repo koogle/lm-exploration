@@ -11,6 +11,7 @@ from core import atomic_json
 def archive(root, workers, deadline):
     import modal
     from huggingface_hub import CommitOperationAdd, HfApi
+    from huggingface_hub.errors import HfHubHTTPError
 
     volume = modal.Volume.from_name("lm-exploration-teacher-rollouts")
     api = HfApi()
@@ -108,12 +109,23 @@ for audit. The old Qwen3-8B corpus remains separate.
                         )
                     )
             index["tokenizer_archived"] = True
-        commit = api.create_commit(
-            repo_id=repo,
-            repo_type="dataset",
-            operations=operations,
-            commit_message=f"Archive {index['generated_tokens']} teacher targets",
-        )
+        while True:
+            if time.time() >= deadline + 3600:
+                return {"status": "archive_deadline", "repo_id": repo}
+            try:
+                commit = api.create_commit(
+                    repo_id=repo,
+                    repo_type="dataset",
+                    operations=operations,
+                    commit_message=f"Archive {index['generated_tokens']} teacher targets",
+                )
+                break
+            except HfHubHTTPError as error:
+                if error.response is None or error.response.status_code != 429:
+                    raise
+                # Retry the same immutable batch; never advance the durable index
+                # before its commit succeeds. The absolute deadline still applies.
+                time.sleep(min(60, max(0, deadline + 3600 - time.time())))
         atomic_json(index_path, index)
         atomic_json(
             root / "archive-progress.json",
@@ -128,4 +140,6 @@ for audit. The old Qwen3-8B corpus remains separate.
             },
         )
         volume.commit()
+        # Stay below HF's 256 commits/hour, leaving headroom for other jobs.
+        time.sleep(min(20, max(0, deadline + 3600 - time.time())))
     return {"status": "archive_deadline", "repo_id": repo}
