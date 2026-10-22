@@ -1,7 +1,7 @@
 # Raw-corpus preparation
 
 The shared [distributed trainer](../distributed/README.md) accepts seekable
-token snapshots and `raw-text-v1` SQLite snapshots (including historical `scholarly-raw-v1`). Raw snapshots store compressed
+token snapshots and `raw-text-v1` SQLite snapshots. Raw snapshots store compressed
 document text; `training_data.raw_token_stream.RawTokenMixture` tokenizes document-local
 windows as requested. It retains token-weighted scheduling, padding rules, a per-source
 pass cap (two by default) and resumable raw-document cursors. Seekable token shards remain the
