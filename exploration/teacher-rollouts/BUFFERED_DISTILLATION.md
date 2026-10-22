@@ -141,3 +141,24 @@ Qualification reports are in `jfrick/lm-exploration-results`, folder
 The gates establish numerical/storage integrity and measured throughput; they do
 not establish semantic correctness of every generated exercise. Only complete,
 format/syntax-accepted records contribute to the reported usable token rate.
+
+## Interrupted controller and continuation
+
+The initial controller stopped at 06:13:02 UTC after about 405 seconds. Its
+unconditional finally block cancelled teachers, and a restarted invocation then
+rejected the existing campaign. The dataset retained 3,137,643 generated tokens,
+including 2,403,082 format/syntax-accepted tokens, all archived.
+
+The corrected controller adopts saved call IDs on restart and cancels teachers
+only at the fixed deadline. `maintain_campaign` independently watches and
+restores the controller, preserving the same deadline across restarts, and
+cancels outstanding queued/running calls at expiration. Explicit continuation
+keeps worker progress and archive indexes. Tests simulate interruption without
+cancelling teachers, adoption without deadline extension, and deadline cleanup.
+27 CPU tests and Ruff pass. No live worker was interrupted to test recovery.
+
+The unused 28,395 seconds were resumed under epoch `resume-20261022-01`, with a
+new fixed deadline of **2026-10-22 18:07:00 UTC**, superseding the original deadline.
+Guardian call: `fc-01M5HHME95SB028S89NH0H6NQD`. The same campaign/dataset paths are
+used; trajectories continue from each producer's saved index. Further kernel
+experimentation must not redeploy or interrupt this active campaign.
