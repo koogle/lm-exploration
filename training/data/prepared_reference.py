@@ -120,7 +120,7 @@ def build(destination, weights, databases, *, target, context=2048, parents_per_
         "excluded_parents": sorted({row["parent"] for row in heldout}),
     }
     # Count exactly what training will read: the same view, after exclusions.
-    counter = sqlite3.connect(":memory:")
+    counter = sqlite3.connect(":memory:", uri=True)  # ATTACH takes read-only URIs.
     try:
         attach_prepared(counter, references)
         train = dict(
