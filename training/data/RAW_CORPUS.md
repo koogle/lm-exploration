@@ -98,7 +98,8 @@ immutable `raw.sqlite` databases without copying their text. The snapshot holds 
 `raw.sqlite`, a manifest with the databases' absolute paths and sizes and the mapping of
 their stored source names onto mixture sources, and a frozen held-out set
 ([`heldout.py`](heldout.py)). The held-out set samples up to 16 validation parents per
-stored source, in hash order. `RawTokenMixture` attaches the databases read-only and hides
+stored source, in hash order; train on these snapshots with `heldout: "frozen"` in the
+config. `RawTokenMixture` attaches the databases read-only and hides
 the sampled held-out documents and every document that shares their parent, across all
 databases. Training capacity is counted through that same view and must cover the target
 within two passes; a document hash may appear in only one database. There is no global
