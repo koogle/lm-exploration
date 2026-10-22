@@ -15,13 +15,29 @@ from distillation.shared import (
     token_losses,
     transfer_embeddings,
 )
-from distillation.train import DATABASE, MANIFEST, PARENT, REVISION, TEACHER
 
-TARGET = 50_000_000
 MILESTONES = [1_000_000, 5_000_000, 10_000_000, 25_000_000, 50_000_000]
 
 
-def run(output, commit, target_tokens=TARGET, max_seconds=82000, resume=""):
+def run(
+    output,
+    commit,
+    *,
+    teacher_repo,
+    revision,
+    parent,
+    manifest,
+    database,
+    target_tokens,
+    max_seconds,
+    resume="",
+    parents="/runs",
+    runs="/distill",
+):
+    """Shared-tokenizer KL from `parents/parent` (or resume `runs/resume`) into `output`.
+
+    Validation and checkpoints also happen at the fixed MILESTONES below the target.
+    """
     import torch
     import torch.nn.functional as F
     from model_100m.model import GPT, ModelConfig
@@ -33,16 +49,16 @@ def run(output, commit, target_tokens=TARGET, max_seconds=82000, resume=""):
     torch.set_num_threads(4)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)
-    tokenizer = AutoTokenizer.from_pretrained(TEACHER, revision=REVISION)
+    tokenizer = AutoTokenizer.from_pretrained(teacher_repo, revision=revision)
     frozen = load_frozen()
     tokenizer_hash = hashlib.sha256(
         tokenizer.backend_tokenizer.to_str().encode()
     ).hexdigest()
     settings = {
-        "teacher": TEACHER,
-        "revision": REVISION,
+        "teacher": teacher_repo,
+        "revision": revision,
         "tokenizer_sha256": tokenizer_hash,
-        "manifest_sha256": hashlib.sha256(Path(MANIFEST).read_bytes()).hexdigest(),
+        "manifest_sha256": hashlib.sha256(Path(manifest).read_bytes()).hexdigest(),
         "context": 512,
         "microbatch": 4,
         "accumulation": 4,
@@ -52,7 +68,7 @@ def run(output, commit, target_tokens=TARGET, max_seconds=82000, resume=""):
         "embedding_lr": 1e-4,
         "warmup_tokens": 1_000_000,
         "target_tokens": target_tokens,
-        "parent": PARENT,
+        "parent": parent,
         "seed": 42,
     }
     sources = {
@@ -66,7 +82,7 @@ def run(output, commit, target_tokens=TARGET, max_seconds=82000, resume=""):
             output / "source" / folder,
             ignore=shutil.ignore_patterns("__pycache__", "artifacts"),
         )
-    shutil.copyfile(MANIFEST, output / "data-manifest.json")
+    shutil.copyfile(manifest, output / "data-manifest.json")
     tokenizer.save_pretrained(output / "tokenizer")
     (output / "request.json").write_text(
         json.dumps(
@@ -79,8 +95,8 @@ def run(output, commit, target_tokens=TARGET, max_seconds=82000, resume=""):
     commit()
     teacher = (
         AutoModelForCausalLM.from_pretrained(
-            TEACHER,
-            revision=REVISION,
+            teacher_repo,
+            revision=revision,
             torch_dtype=torch.bfloat16,
             attn_implementation="sdpa",
         )
@@ -93,7 +109,7 @@ def run(output, commit, target_tokens=TARGET, max_seconds=82000, resume=""):
         vocab_size=teacher.config.vocab_size, block_size=settings["context"]
     )
     student = GPT(config)
-    checkpoint_input = ("/distill/" + resume) if resume else ("/runs/" + PARENT)
+    checkpoint_input = f"{runs}/{resume}" if resume else f"{parents}/{parent}"
     saved = torch.load(checkpoint_input, map_location="cpu", weights_only=False)
     if resume:
         if saved["settings"] != settings or saved["source_sha256"] != sources:
@@ -146,8 +162,8 @@ def run(output, commit, target_tokens=TARGET, max_seconds=82000, resume=""):
         torch.set_rng_state(saved["rng"])
         torch.cuda.set_rng_state(saved["cuda_rng"])
     data = SharedCodeWindows(
-        MANIFEST,
-        DATABASE,
+        manifest,
+        database,
         tokenizer,
         context=settings["context"],
         frozen_tokenizer=frozen,
@@ -156,8 +172,8 @@ def run(output, commit, target_tokens=TARGET, max_seconds=82000, resume=""):
     )
     del saved
     validation = SharedCodeWindows(
-        MANIFEST,
-        DATABASE,
+        manifest,
+        database,
         tokenizer,
         context=settings["context"],
         split="validation",

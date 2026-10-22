@@ -27,19 +27,26 @@ def select_windows(data, max_documents=512, windows_per_document=8):
     return windows
 
 
-def compare(checkpoints):
+def compare(
+    checkpoints,
+    manifest,
+    database,
+    context=256,
+    max_documents=512,
+    windows_per_document=8,
+):
+    """Token CE of frozen-tokenizer checkpoints on one fixed validation window sample."""
     import torch
     import torch.nn.functional as F
     from model_100m.model import GPT, ModelConfig
     from training_data.subword import TOKENIZER_SHA256, load_frozen
 
     from distillation.data import CodeWindows
-    from distillation.train import DATABASE, MANIFEST
 
     data = CodeWindows(
-        MANIFEST, DATABASE, load_frozen(), context=256, split="validation"
+        manifest, database, load_frozen(), context=context, split="validation"
     )
-    windows = select_windows(data)
+    windows = select_windows(data, max_documents, windows_per_document)
     identity = hashlib.sha256(
         json.dumps(windows, separators=(",", ":")).encode()
     ).hexdigest()
@@ -51,13 +58,13 @@ def compare(checkpoints):
             tokenizer_hash = saved["settings"]["tokenizer_sha256"]
         elif saved.get("format") == "scholarly-ddp-v1":
             config = {k: saved["config"][k] for k in ("n_layer", "n_head", "n_embd")}
-            config.update(vocab_size=32768, block_size=256)
+            config.update(vocab_size=32768, block_size=context)
             tokenizer_hash = saved["data_identity"]["tokenizer_sha256"]
         else:
             raise ValueError("Unsupported checkpoint format")
         if tokenizer_hash != TOKENIZER_SHA256:
             raise ValueError("Cannot compare token CE across different tokenizers")
-        config["block_size"] = 256
+        config["block_size"] = context
         model = GPT(ModelConfig(**config)).cuda().eval()
         model.load_state_dict(saved["model"], strict=True)
         del saved
@@ -85,14 +92,14 @@ def compare(checkpoints):
         del model
         torch.cuda.empty_cache()
     return {
-        "context": 256,
+        "context": context,
         "dtype": "bfloat16",
         "manifest_sha256": data.identity,
         "tokenizer_sha256": TOKENIZER_SHA256,
         "window_sha256": identity,
         "windows": len(windows),
-        "max_documents": 512,
-        "windows_per_document": 8,
+        "max_documents": max_documents,
+        "windows_per_document": windows_per_document,
         "results": results,
         "torch_version": str(torch.__version__),
     }

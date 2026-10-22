@@ -8,6 +8,9 @@ import random
 import time
 from pathlib import Path
 
+# Generation teacher of the stopped 500M sweep and the phased continuation (PR #31).
+TEACHER = "Qwen/Qwen3-8B"
+REVISION = "b968826d9c46dd6066d109eabc6255188de91218"
 TOPICS = (
     "factorials and products",
     "binomial coefficients and Pascal's triangle",
@@ -151,8 +154,6 @@ def generate(
     from training_data.subword import load_frozen
     from transformers import AutoTokenizer
     from vllm import LLM, SamplingParams
-
-    from distillation.modal_curriculum import REVISION, TEACHER
 
     output = Path(root) / f"producer-{worker}"
     output.mkdir(parents=True, exist_ok=True)

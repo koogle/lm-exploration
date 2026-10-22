@@ -15,14 +15,27 @@ from distillation.alignment import (
 )
 from distillation.data import CodeWindows
 
-TEACHER = "Qwen/Qwen3-4B-Base"
-REVISION = "906bfd4b4dc7f14ee4320094d8b41684abff8539"
-PARENT = "simple-llm-code60-unique-10b-20261020-r01-s04/step-000153342.pt"
-MANIFEST = "/data/scholarly-code/readiness-20261020-v2/snapshots/code60-onepass-10b/manifest.json"
-DATABASE = "/data/scholarly-code/readiness-20261020-v2/multilingual/raw.sqlite"
 
+def run(
+    output,
+    commit,
+    *,
+    teacher_repo,
+    revision,
+    parent,
+    manifest,
+    database,
+    target_tokens,
+    max_seconds,
+    resume="",
+    parents="/runs",
+    runs="/distill",
+):
+    """Train from `parents/parent` (or resume `runs/resume`) into `output`.
 
-def run(output, commit, target_tokens=262144, max_seconds=1200, resume=""):
+    `manifest` and `database` are absolute paths of a code snapshot inventory and its
+    code-only SQLite database. The teacher is a Hugging Face repo pinned to `revision`.
+    """
     import torch
     import torch.nn.functional as F
     from model_100m.model import GPT, ModelConfig
@@ -35,15 +48,15 @@ def run(output, commit, target_tokens=262144, max_seconds=1200, resume=""):
     torch.manual_seed(42)
     context = 256
     settings = {
-        "teacher": TEACHER,
-        "revision": REVISION,
+        "teacher": teacher_repo,
+        "revision": revision,
         "context": context,
         "alpha": 0.5,
         "lr": 1e-5,
         "temperature": 1.0,
         "tokenizer_sha256": TOKENIZER_SHA256,
-        "database": DATABASE,
-        "manifest_sha256": hashlib.sha256(Path(MANIFEST).read_bytes()).hexdigest(),
+        "database": str(database),
+        "manifest_sha256": hashlib.sha256(Path(manifest).read_bytes()).hexdigest(),
     }
     source_hashes = {
         str(p.relative_to("/project")): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -57,7 +70,7 @@ def run(output, commit, target_tokens=262144, max_seconds=1200, resume=""):
                 source_sha256=source_hashes,
                 target_tokens=target_tokens,
                 max_seconds=max_seconds,
-                parent=PARENT,
+                parent=parent,
                 resume=resume,
             ),
             indent=2,
@@ -69,15 +82,15 @@ def run(output, commit, target_tokens=262144, max_seconds=1200, resume=""):
             output / "source" / folder,
             ignore=shutil.ignore_patterns("__pycache__"),
         )
-    shutil.copyfile(MANIFEST, output / "data-manifest.json")
+    shutil.copyfile(manifest, output / "data-manifest.json")
     commit()
     tokenizer = load_frozen()
     student_pieces, student_buckets = vocabulary(tokenizer.to_str(), 32768)
-    teacher_tokenizer = AutoTokenizer.from_pretrained(TEACHER, revision=REVISION)
+    teacher_tokenizer = AutoTokenizer.from_pretrained(teacher_repo, revision=revision)
     teacher = (
         AutoModelForCausalLM.from_pretrained(
-            TEACHER,
-            revision=REVISION,
+            teacher_repo,
+            revision=revision,
             torch_dtype=torch.bfloat16,
             attn_implementation="sdpa",
         )
@@ -97,7 +110,7 @@ def run(output, commit, target_tokens=262144, max_seconds=1200, resume=""):
         weight_decay=0.1,
         fused=True,
     )
-    checkpoint_input = ("/distill/" + resume) if resume else ("/runs/" + PARENT)
+    checkpoint_input = f"{runs}/{resume}" if resume else f"{parents}/{parent}"
     saved = torch.load(checkpoint_input, map_location="cpu", weights_only=False)
     if resume:
         if saved["settings"] != settings or saved["source_sha256"] != source_hashes:
@@ -124,9 +137,9 @@ def run(output, commit, target_tokens=262144, max_seconds=1200, resume=""):
         torch.set_rng_state(saved["rng"])
         torch.cuda.set_rng_state(saved["cuda_rng"])
     data = CodeWindows(
-        MANIFEST, DATABASE, tokenizer, context, state=saved["data"] if resume else None
+        manifest, database, tokenizer, context, state=saved["data"] if resume else None
     )
-    validation = CodeWindows(MANIFEST, DATABASE, tokenizer, context, split="validation")
+    validation = CodeWindows(manifest, database, tokenizer, context, split="validation")
     validation_windows = []
     for _ in range(16):
         try:
@@ -180,7 +193,7 @@ def run(output, commit, target_tokens=262144, max_seconds=1200, resume=""):
                 "skipped": skipped,
                 "rng": torch.get_rng_state(),
                 "cuda_rng": torch.cuda.get_rng_state(),
-                "parent": resume or PARENT,
+                "parent": resume or parent,
                 "parent_sha256": parent_hash.hexdigest(),
             },
             temp,
@@ -267,7 +280,7 @@ def run(output, commit, target_tokens=262144, max_seconds=1200, resume=""):
     elapsed = time.monotonic() - training_started
     report = dict(
         settings,
-        parent=resume or PARENT,
+        parent=resume or parent,
         parent_sha256=parent_hash.hexdigest(),
         initial_validation=initial_validation,
         final_validation=evaluate(),
