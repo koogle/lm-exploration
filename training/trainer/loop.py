@@ -13,7 +13,6 @@ from datetime import timedelta
 from itertools import islice
 from pathlib import Path
 
-from training_data.heldout import load_heldout
 from training_data.mixture import open_mixture
 from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, LOSS_IGNORE_INDEX, VOCAB_SIZE
 
@@ -367,6 +366,8 @@ def train(
         frozen_heldout = "heldout" in json.loads(manifest.read_text())
         if rank == 0:
             if frozen_heldout:
+                from training_data.heldout import load_heldout
+
                 # The snapshot's frozen, stratified evaluation set.
                 heldout = primary(lambda: load_heldout(manifest, config.context))
             else:
