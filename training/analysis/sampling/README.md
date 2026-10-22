@@ -31,6 +31,9 @@ generated outputs belong on Hugging Face. uv installs this folder as `sampling`.
 }
 ```
 
+- `prompt_file` (optional): a task file relative to the recipe, such as
+  [`evaluation/python-tasks.json`](../../evaluation/README.md). Its `tasks[].prompt` entries
+  are appended to `prompts` under `prompt_group` (default `tasks`) when the recipe loads.
 - `precision`: `bf16-autocast` (FP32 weights, BF16 autocast, PyTorch TF32 defaults) or
   `fp32` (FP32 forward, CUDA matmul/cuDNN TF32 off, highest matmul precision).
 - Each sample is seeded with `torch.manual_seed(seed_offset + prompt_index)`.

@@ -10,7 +10,20 @@ MODE_DEFAULTS = {"temperature": 0.0, "top_k": 0, "top_p": 1.0, "repetition_penal
 
 
 def load_recipe(path):
-    recipe = json.loads(Path(path).read_text())
+    """Load and validate a recipe; resolve `prompt_file` into prompts.
+
+    `prompt_file` names a task file (relative to the recipe) whose `tasks[].prompt`
+    entries are appended to `prompts` under `prompt_group` (default "tasks").
+    """
+    path = Path(path)
+    recipe = json.loads(path.read_text())
+    if "prompt_file" in recipe:
+        tasks = json.loads((path.parent / recipe["prompt_file"]).read_text())["tasks"]
+        group = recipe.get("prompt_group", "tasks")
+        recipe["prompts"] = [
+            *recipe.get("prompts", []),
+            *({"text": task["prompt"], "group": group} for task in tasks),
+        ]
     validate(recipe)
     return recipe
 
