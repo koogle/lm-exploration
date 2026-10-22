@@ -24,17 +24,6 @@ commands. No training behavior or checkpoint compatibility checks were relaxed b
 moving the loop; source identity must still match for exact resume. Use original
 source and settings for historical runs.
 
-`gpu_benchmark.py` and `ddp_benchmark.py` are bounded throughput experiments,
-separate from the training loop. `sampling.py` supports local generation.
-`recipe.py`, `config.py` and `checkpoints.py` retain historical character-recipe
-validation and format-1 checkpoint interpretation for existing models and the
-[`lm-generate` CLI](../generate.py). The character training loop, checkpoint writer
-and Modal recipe launcher have been removed. Historical Shakespeare recipe files,
-architecture compatibility and measured evidence are preserved.
-
-Muon/AdamW implementation lives in `optimizers.py`; see the
-[matched comparison](../distributed/MUON_COMPARISON.md) for measured context.
-
 ## Evaluation during training
 
 Every evaluation row in `validation.jsonl` (and `initial_validation`/`final_validation` in
@@ -47,3 +36,16 @@ checksum, tokenizer and coverage ([`data/heldout.py`](../data/heldout.py) writes
 loads it). `--stop-tokens N` ends a session at N targets with stop reason
 `evaluation_boundary` and leaves the schedule on `target_tokens`, so the checkpoint
 resumes the same run.
+
+## Other modules
+
+`gpu_benchmark.py` and `ddp_benchmark.py` are bounded throughput experiments,
+separate from the training loop. `sampling.py` supports local generation.
+`recipe.py`, `config.py` and `checkpoints.py` retain historical character-recipe
+validation and format-1 checkpoint interpretation for existing models and the
+[`lm-generate` CLI](../generate.py). The character training loop, checkpoint writer
+and Modal recipe launcher have been removed. Historical Shakespeare recipe files,
+architecture compatibility and measured evidence are preserved.
+
+Muon/AdamW implementation lives in `optimizers.py`; see the
+[matched comparison](../distributed/MUON_COMPARISON.md) for measured context.
