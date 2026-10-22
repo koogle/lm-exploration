@@ -22,7 +22,6 @@ def project_image(*packages, env=None):
         .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
         .add_local_dir("tokenizer", "/project/tokenizer")
         .add_local_dir("tests", "/project/tests")
-        .add_local_file("generate.py", "/project/generate.py")
     )
 
 

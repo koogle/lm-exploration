@@ -123,30 +123,9 @@ snapshot or when checking its integrity:
 python -m training_data.token_shards verify /path/to/snapshot/manifest.json
 ```
 
-Existing gzip snapshots must be converted once into a **new** directory:
-
-```sh
-python -m training_data.token_shards convert \
-  /path/to/pilot-001/manifest.json /path/to/pilot-001-seekable
-
-# On the existing Modal data volume, without downloading the corpus:
-modal run modal_prepare_simple_llm.py \
-  --version simple-llm-124m-20261016 --snapshot pilot-001-seekable \
-  --convert-from pilot-001
-```
-
-Conversion verifies the old checksums, preserves audit status and provenance,
-writes the new manifest last, and leaves the original snapshot untouched. It
-performs no upstream ingestion or training. The Modal conversion uses the existing
-bounded CPU resources and a 30-minute timeout; retain partial outputs for inspection
-and choose a new destination if retrying a failed conversion.
-
-Use the converted snapshot for new runs. Existing checkpoints retain their original
-manifest/source identities and must resume with their original code and snapshot;
-they cannot be resumed against the converted snapshot. No live snapshot conversion
-or GPU qualification of this format is implied by the local tests.
-The GPU comparison/confirmation launchers now expect `pilot-001-seekable` on the
-data volume; run the conversion above before using them with this code.
+The loader reads only this seekable format (schema 2). Snapshots in the earlier gzip
+format (schema 1) are not readable; the one-time converter was last present at
+revision `5083671`.
 
 ## Gates before substantial training
 

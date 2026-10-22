@@ -1,17 +1,10 @@
 """Consolidated 10M architecture and shared formulas."""
 
-import json
 import unittest
-from dataclasses import asdict
-from pathlib import Path
 
 import test_100m_modern as shared_tests
 import torch
 from model_10m import model
-
-from distributed.config import DistributedConfig
-from generate import load_model
-from trainer.recipe import MODELS, load_recipe
 
 
 class Modern10MTests(unittest.TestCase):
@@ -48,28 +41,13 @@ class Modern10MTests(unittest.TestCase):
         self.assertFalse(hasattr(instance, "position_embedding"))
         self.assertEqual(instance.blocks[0].mlp.hidden_width, 1024)
         instance = model.GPT(self.config)
-        restored = load_model(
-            {
-                "config": {"model_name": "model_10m", "model": asdict(self.config)},
-                "model": instance.state_dict(),
-            }
-        )
+        restored = model.GPT(self.config)
+        restored.load_state_dict(instance.state_dict())
         self.assertIs(restored.lm_head.weight, restored.token_embedding.weight)
         tokens = torch.randint(11, (2, 8))
         torch.testing.assert_close(instance(tokens), restored(tokens), rtol=0, atol=0)
         instance(tokens).sum().backward()
         self.assertTrue(torch.isfinite(instance.token_embedding.weight.grad).all())
-
-    def test_only_two_model_choices_and_all_recipes_validate(self):
-        self.assertEqual(set(MODELS), {"10m", "100m"})
-        for path in Path("workflows/model_configs/historical").glob("*.json"):
-            with self.subTest(recipe=path.name):
-                settings = json.loads(path.read_text())
-                if "dataset" in settings:
-                    recipe = load_recipe(path)
-                    self.assertIsInstance(recipe.build_model_config(65), model.ModelConfig)
-                else:
-                    DistributedConfig(**settings)
 
 
 if __name__ == "__main__":

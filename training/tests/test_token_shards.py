@@ -1,7 +1,6 @@
 """Real-file cursor and format checks; no GPU startup emulation."""
 
 import copy
-import gzip
 import hashlib
 import json
 import struct
@@ -16,12 +15,10 @@ from training_data.token_shards import (
     FORMAT,
     HEADER,
     MAGIC,
-    convert_snapshot,
     file_entry,
     verify_snapshot,
     write_shard,
 )
-from training_data.token_stream import TokenMixture
 
 
 class SeekableTokenTests(unittest.TestCase):
@@ -168,43 +165,6 @@ class SeekableTokenTests(unittest.TestCase):
             handle.write(b"extra")
         with self.assertRaisesRegex(ValueError, "size mismatch"):
             self.loader()
-
-    def test_conversion_preserves_windows_provenance_and_original(self):
-        legacy = copy.deepcopy(self.manifest)
-        legacy.pop("token_format")
-        legacy["schema"] = 1
-        path = self.root / "legacy.jsonl.gz"
-        with gzip.open(path, "wt") as handle:
-            for row in self.rows:
-                handle.write(json.dumps(row) + "\n")
-        for split in legacy["sources"]["fixture"]["splits"].values():
-            split["shards"] = [file_entry(path)]
-        # Use separate files for each split, as a real export does.
-        validation = self.root / "validation.jsonl.gz"
-        validation.write_bytes(path.read_bytes())
-        legacy["sources"]["fixture"]["splits"]["validation"]["shards"] = [file_entry(validation)]
-        self.path.write_text(json.dumps(legacy))
-        before = digest(self.path), digest(path)
-        with self.assertRaisesRegex(ValueError, "convert legacy snapshots"):
-            self.loader()
-        destination = self.root / "converted"
-        converted = convert_snapshot(self.path, destination)
-        self.assertEqual((digest(self.path), digest(path)), before)
-        self.assertFalse(converted["training_ready"])
-        verify_snapshot(destination / "manifest.json")
-        restored = TokenMixture(destination / "manifest.json", context=4, allow_unreviewed=True)
-        self.assertEqual(list(restored.blocks("fixture")), list(self.expected(4, 2)))
-        with gzip.open(destination / "legacy.provenance.jsonl.gz", "rt") as handle:
-            metadata = [json.loads(line) for line in handle]
-        self.assertEqual(
-            metadata,
-            [
-                {**{k: v for k, v in row.items() if k != "ids"}, "content_tokens": len(row["ids"])}
-                for row in self.rows
-            ],
-        )
-        with self.assertRaises(FileExistsError):
-            convert_snapshot(self.path, destination)
 
 
 if __name__ == "__main__":

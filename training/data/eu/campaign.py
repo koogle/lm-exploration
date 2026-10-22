@@ -173,12 +173,7 @@ def run_campaign(
                 entry["metrics"] = copy.deepcopy(state.get("metrics", {}))
                 entry["finished_at_epoch"] = clock()
                 save(state, revision, f"Reconcile campaign round {run_id}")
-                if (
-                    terminal.get(
-                        "remaining_supported_candidates", terminal.get("pending_candidates")
-                    )
-                    == 0
-                ):
+                if terminal.get("remaining_supported_candidates") == 0:
                     return finish("complete")
                 break
             if entry["status"] == "running" or matching:
@@ -191,10 +186,7 @@ def run_campaign(
                 result = call_loader(entry["call_id"]).get(timeout=remaining)
                 if not record_result(index, run_id, result):
                     return finish("ambiguous")
-                if (
-                    result.get("remaining_supported_candidates", result.get("pending_candidates"))
-                    == 0
-                ):
+                if result.get("remaining_supported_candidates") == 0:
                     return finish("complete")
                 break
             remaining = campaign["deadline_epoch"] - clock()
@@ -227,7 +219,7 @@ def run_campaign(
                 result = call.get(timeout=remaining)
             if not record_result(index, run_id, result):
                 return finish("ambiguous")
-            if result.get("remaining_supported_candidates", result.get("pending_candidates")) == 0:
+            if result.get("remaining_supported_candidates") == 0:
                 return finish("complete")
             break
     return finish("complete")
@@ -246,7 +238,7 @@ def wait_for_dispatch(
     """Gate a spawned worker until its supervisor has durably recorded the call ID.
 
     Call before run_source loads state, to prevent its first checkpoint racing the
-    supervisor's call-ID commit. Legacy/direct runs without the flag pass through.
+    supervisor's call-ID commit. Direct runs without the flag pass through.
     """
     if not 0 < timeout_seconds <= 120:
         raise ValueError("Dispatch gate timeout must be in (0, 120] seconds")

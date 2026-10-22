@@ -103,7 +103,7 @@ INVENTORY_PATH = re.compile(
 
 
 def empty_state():
-    return {
+    state = {
         "schema_version": 1,
         "completed": {},
         "failures": {},
@@ -111,7 +111,10 @@ def empty_state():
         "runs": [],
         "shards": [],
         "text_index": {},
+        "raw_blob_metrics": {},
     }
+    aggregate_metrics(state)
+    return state
 
 
 def json_bytes(value):
@@ -313,15 +316,10 @@ class HFStore:
         )
         return Path(local).read_bytes()
 
-    def _raw_blob_size(self, state, raw_hash, revision, sizes=None):
-        """Locate either historical layout at one revision; absence never means zero."""
+    def _raw_blob_size(self, state, raw_hash, revision):
+        """Locate either raw layout at one revision; absence never means zero."""
         preferred = resolve_raw_blob_path(state, raw_hash)
         paths = list(dict.fromkeys([preferred, f"raw/{raw_hash}.gz", raw_blob_path(raw_hash)]))
-        # Metadata may establish the exact path without downloading the raw body.
-        for path in paths:
-            if sizes is not None and path in sizes:
-                size = sizes[path]
-                return path, size if size is not None else len(self._download_bytes(path, revision))
         for index, path in enumerate(paths):
             try:
                 return path, len(self._download_bytes(path, revision))
@@ -329,55 +327,6 @@ class HFStore:
                 if index == len(paths) - 1:
                     raise
         raise AssertionError("unreachable")
-
-    def migrate_metrics(self, state, revision):
-        """Backfill historical metrics locally from pinned files; caller persists them.
-
-        Missing/corrupt source files fail loudly, never report fabricated zero totals.
-        No caller state changes until every historical shard has been measured.
-        """
-        if state.get("metrics_version") == 1:
-            return state
-        migrated = copy.deepcopy(state)
-        migrated["raw_blob_metrics"] = {}
-        # HF metadata reports stored LFS/object lengths without fetching each blob.
-        # Pin this lookup to the same revision as the measured Parquet files.
-        sizes = {}
-        if migrated["shards"]:
-            info = retry_read(
-                self.api.repo_info,
-                repo_id=self.repo_id,
-                repo_type="dataset",
-                revision=revision,
-                files_metadata=True,
-            )
-            sizes = {
-                sibling.rfilename: getattr(sibling, "size", None)
-                for sibling in (getattr(info, "siblings", None) or [])
-            }
-        for shard in migrated["shards"]:
-            body = self._download_bytes(shard["path"], revision)
-            rows = pq.read_table(io.BytesIO(body)).to_pylist()
-            metrics = text_metrics(rows, len(body))
-            if metrics["rows"] != shard["rows"]:
-                raise ValueError(f"Historical shard row count mismatch: {shard['path']}")
-            for row in rows:
-                raw_hash = row.get("raw_sha256")
-                if not raw_hash:
-                    continue
-                path = resolve_raw_blob_path(migrated, raw_hash)
-                if path not in migrated["raw_blob_metrics"]:
-                    path, size = self._raw_blob_size(state, raw_hash, revision, sizes)
-                    migrated["raw_blob_metrics"][path] = {
-                        "bytes": size,
-                        "shard_path": shard["path"],
-                    }
-                    metrics["stored_raw_gzip_bytes"] += size
-            shard["metrics"] = metrics
-        aggregate_metrics(migrated)
-        state.clear()
-        state.update(migrated)
-        return state
 
     def commit(
         self,
@@ -391,7 +340,6 @@ class HFStore:
         if not revision:
             raise ValueError("A loaded HEAD revision is required for compare-and-swap")
         next_state = copy.deepcopy(state)
-        self.migrate_metrics(next_state, revision)
         groups = defaultdict(list)
         seen = set()
         for record in records:

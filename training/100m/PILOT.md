@@ -39,8 +39,7 @@ checkpoint and checks identical next-batch IDs, labels and logits. Checkpoints
 include optimizer/RNG/data state, source hashes, model settings, token counts and
 manifest/tokenizer identities. Checkpoints and logs use fresh paths on
 `lm-exploration-training/<run-id>/`; the final report is also copied to the ignored `artifacts/results/`.
-This pilot checkpoint format is separate from the character-only `lm-generate`
-format. Cross-job resume and generation CLI integration remain future work.
+Cross-job resume and generation CLI integration remain future work.
 
 Validation uses one fixed document-local window per source, reporting each source
 and the token-mixture-weighted mean. This small provisional validation sample is
