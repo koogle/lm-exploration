@@ -20,7 +20,7 @@ automatically, and no checkpoint is published.
   (default 0.3). Weighted losses divide by the supervised-token count, not the weight
   sum. Validation always uses ordinary cross-entropy, so both objectives are comparable.
 
-Experiment recipes and findings live with the experiments, not here.
+Recorded runs, their settings and findings are in [EXPERIMENTS.md](EXPERIMENTS.md).
 
 ## Data format
 
