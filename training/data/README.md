@@ -13,6 +13,9 @@ CLI lives in [`prepare_simple_llm.py`](prepare_simple_llm.py); run
 The corresponding CPU Modal launcher lives in
 [`../modal_scripts/modal_prepare_simple_llm.py`](../modal_scripts/modal_prepare_simple_llm.py).
 
+To add permissive multilingual code to a raw corpus and audit it before training, see
+[multilingual code collection and readiness audit](CODE_CORPUS.md).
+
 `datasets.json` records each dataset's source, license review and eligibility;
 [`registry.py`](registry.py) validates it with pydantic.
 Paths in it are relative to this `data/` directory. Historical character
