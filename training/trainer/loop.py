@@ -78,6 +78,21 @@ def validation_blocks(data, windows_per_source):
     return heldout
 
 
+def heldout_blocks(config, manifest, validation):
+    """The evaluation set `config.heldout` names; never a silent fallback."""
+    frozen = "heldout" in json.loads(Path(manifest).read_text())
+    if config.heldout == "frozen":
+        if not frozen:
+            raise ValueError("heldout is frozen but the snapshot manifest has no heldout entry")
+        from training_data.heldout import load_heldout
+
+        return load_heldout(manifest, config.context)
+    if frozen:
+        raise ValueError("The snapshot ships a frozen held-out set; set heldout to frozen")
+    # Diagnostics derived from our validation split, not capability evaluation.
+    return validation_blocks(validation, config.validation_windows_per_source)
+
+
 def make_optimizer(model, config, *, fused=True):
     from trainer.optimizers import make_optimizer as create_optimizer
 
@@ -363,18 +378,8 @@ def train(
         last_saved = None
         final_checkpoint = None
         heldout = None
-        frozen_heldout = "heldout" in json.loads(manifest.read_text())
         if rank == 0:
-            if frozen_heldout:
-                from training_data.heldout import load_heldout
-
-                # The snapshot's frozen, stratified evaluation set.
-                heldout = primary(lambda: load_heldout(manifest, config.context))
-            else:
-                # The first validation windows: diagnostics, not capability evaluation.
-                heldout = primary(
-                    lambda: validation_blocks(validation, config.validation_windows_per_source)
-                )
+            heldout = primary(lambda: heldout_blocks(config, manifest, validation))
         else:
             primary(lambda: None)
 
@@ -594,7 +599,7 @@ def train(
                 loss_token_exposures=data.exposures,
                 validation_note=(
                     "frozen stratified held-out set from the snapshot manifest"
-                    if frozen_heldout
+                    if config.heldout == "frozen"
                     else f"{config.validation_windows_per_source} fixed windows/source; "
                     "diagnostic only"
                 ),

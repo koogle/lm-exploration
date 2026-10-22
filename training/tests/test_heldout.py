@@ -8,7 +8,7 @@ from training_data.heldout import load_heldout, write_heldout
 from training_data.subword import TOKENIZER_SHA256
 
 from distributed.config import DistributedConfig, DistributedRuntime
-from trainer.loop import evaluate_sources, train
+from trainer.loop import evaluate_sources, heldout_blocks, train
 
 
 def snapshot(folder, rows, sources=("code", "web")):
@@ -78,6 +78,27 @@ class HeldoutTests(unittest.TestCase):
         self.assertEqual(stats["windows"], 3)
         code = (stats["per_stratum"]["code/python"] * 3 + stats["per_stratum"]["code/rust"] * 2) / 5
         self.assertAlmostEqual(stats["per_source"]["code"], code, places=6)
+
+    def test_config_selects_the_heldout_set_explicitly(self):
+        class Validation:
+            sources = ("code", "web")
+
+            def blocks(self, name):
+                yield from ({"source": name, "window": i} for i in range(3))
+
+        derived = DistributedConfig(heldout="derived", validation_windows_per_source=2)
+        frozen = DistributedConfig(heldout="frozen", context=4)
+        with tempfile.TemporaryDirectory() as folder:
+            plain = Path(folder) / "plain.json"
+            plain.write_text(json.dumps({"sources": {"code": {}, "web": {}}}))
+            blocks = heldout_blocks(derived, plain, Validation())
+            self.assertEqual([b["window"] for b in blocks["web"]], [0, 1])
+            with self.assertRaisesRegex(ValueError, "no heldout entry"):
+                heldout_blocks(frozen, plain, Validation())
+            path, _ = snapshot(folder, ROWS)
+            self.assertEqual(len(heldout_blocks(frozen, path, None)["code"]), 2)
+            with self.assertRaisesRegex(ValueError, "set heldout to frozen"):
+                heldout_blocks(derived, path, Validation())
 
     def test_stop_tokens_must_lie_within_the_target(self):
         config = DistributedConfig(

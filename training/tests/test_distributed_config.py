@@ -39,6 +39,7 @@ class DistributedConfigTests(unittest.TestCase):
             {"gradient_clip_norm": 0},
             {"gradient_clip_norm": float("inf")},
             {"validation_windows_per_source": 0},
+            {"heldout": "first_windows"},
             {"validation_windows_per_source": True},
             {"log_every": 0},
         ):
