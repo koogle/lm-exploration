@@ -144,7 +144,7 @@ def run(root, worker, deadline, backend, batch_size, max_batches=0, sweep=False)
                     temperature=0.6,
                     top_p=0.95,
                     top_k=20,
-                    max_tokens=1024,
+                    max_tokens=2048,
                     logprobs=64,
                     seed=7341 + worker * 10000000 + i,
                 )
@@ -169,7 +169,7 @@ def run(root, worker, deadline, backend, batch_size, max_batches=0, sweep=False)
                 result = trajectory(
                     engine,
                     pids,
-                    max_tokens=1024,
+                    max_tokens=2048,
                     eos_ids=[tokenizer.eos_token_id],
                     seed=7341 + worker * 10000000 + i,
                 )
