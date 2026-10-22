@@ -30,6 +30,7 @@ def source_hashes():
     import training_data.live_stream
     import training_data.mixture
     import training_data.prefetch
+    import training_data.prepared_reference
     import training_data.raw_token_stream
     import training_data.subword
     import training_data.token_shards
@@ -49,6 +50,7 @@ def source_hashes():
         "raw_loader": Path(training_data.raw_token_stream.__file__),
         "heldout_loader": Path(training_data.heldout.__file__),
         "prefetch": Path(training_data.prefetch.__file__),
+        "prepared_reference": Path(training_data.prepared_reference.__file__),
         "live_loader": Path(training_data.live_stream.__file__),
         "token_shards": Path(training_data.token_shards.__file__),
         "tokenizer": Path(training_data.subword.__file__),
