@@ -1,7 +1,8 @@
 # Repair SFT and CIG-SFT experiments (October 20, 2026)
 
-These runs used the code and launchers in [README.md](README.md). Each run is
-recorded as a recipe in [`recipes/`](recipes/). All are single-seed 124M runs.
+These runs used the code and launchers in [README.md](README.md). This is a
+closed experiment: its run settings are recorded below, not kept as active
+recipes. All are single-seed 124M runs.
 **No run produced a single correct executable repair.** Lower teacher-forced
 loss did not translate into passing code.
 
@@ -10,8 +11,25 @@ loss did not translate into passing code.
 124M / 10.879B-token checkpoint of pretraining PR #26, which was not merged. The
 repeat started from `simple-llm-code60-unique-10b-20261020-r01-s04/step-000153342.pt`,
 the 20.879B-token checkpoint of an unmerged continuation run whose pretraining
-included private code. The recipes keep these parents as provenance. Pass
-`--parent` (and a fresh `--run-id`) to repeat a recipe from another base.
+included private code.
+
+## Recorded runs
+
+All runs used LR 1e-5, seed 42 and `cig_proximity` 0.3. Steps are the total target;
+the CIG long runs resumed each pilot arm's `step-000000200.pt` with `extend`.
+
+| Run | Run ID | Data | GPU | Steps | Batch × context | Eval / save every | `max_seconds` | Objective | Call ID |
+| --- | --- | --- | --- | ---: | --- | --- | ---: | --- | --- |
+| arithmetic pilot | `repair-sft-multilang-20261020-r01` | local curriculum | L40S | 200 | 4 × 1024 | 50 / 50 | 1,200 | sft | not recorded |
+| CommitPackFT | `repair-sft-commitpack-20261020-r01` | volume `repair-commitpack-20261020-v1` | H100 | 5,000 | 8 × 2048 | 250 / 250 | 14,400 | sft | `fc-01M5CDKX26XA7DHT7EZEGTE2E3` |
+| private patches | `repair-sft-private-patches-20261020-r01` | volume `repair-private-patches-20261020-v1` | H100 | 20,000 | 8 × 2048 | 500 / 1,000 | 14,400 | sft | `fc-01M5CWZ48E3NQRWM3DXXW43BRV` |
+| private patches, 20.879B base | `repair-sft-20b-private-patches-20261020-r01` | same volume | H100 | 20,000 | 8 × 2048 | 500 / 1,000 | 14,400 | sft | `fc-01M5DJMJ4S692FC2304JSBPWAA` |
+| CIG pilot, SFT arm | `cig-repair-20261020-r01-sft` | local curriculum | L40S | 200 | 4 × 1024 | 50 / 200 | 1,200 | sft | not recorded |
+| CIG pilot, CIG arm | `cig-repair-20261020-r01-cig` | local curriculum | L40S | 200 | 4 × 1024 | 50 / 200 | 1,200 | cig | not recorded |
+| CIG long, SFT arm | `cig-repair-long-20261020-r01-sft` | local curriculum | L40S | 5,000 | 4 × 1024 | 500 / 1,000 | 3,000 | sft | `fc-01M5CWAE05977DRG7799ACV7HR` |
+| CIG long, CIG arm | `cig-repair-long-20261020-r01-cig` | local curriculum | L40S | 5,000 | 4 × 1024 | 500 / 1,000 | 3,000 | cig | `fc-01M5CWAFA32BJPS6DP22CNGHHX` |
+
+The local curriculum is `artifacts/sft/repairs.jsonl` from the curriculum builder.
 
 ## Results
 
@@ -34,12 +52,12 @@ Losses from different datasets are not comparable with each other. The executabl
 diagnostic is the same 18 held-out arithmetic tasks (two families × nine
 languages, seven cases each), decoded greedily.
 
-| Recipe | Data (train / validation) | Updates | Held-out loss | Executable repairs |
+| Run | Data (train / validation) | Updates | Held-out loss | Executable repairs |
 | --- | --- | ---: | --- | --- |
-| `arithmetic-pilot` | curriculum 576 / 36, 9 languages | 200 | 0.86136 → **1.30722** (worse in all 9 languages) | 0/18 before and after; EOS and runnable 0/18 → 18/18 |
-| `commitpack` | CommitPackFT 37,388 / 561, 9 languages | 5,000 | 0.47947 → 0.34446 | not evaluated |
-| `private-patches` | private excerpts + replay 79,441 / 1,617, 12 languages | 20,000 | 0.83449 → 0.56741 | 0/18; 6/18 reach output comparison, 15/18 EOS |
-| `private-patches-20b-base` | same 79,441 / 1,617 | 20,000 | 0.712214 → 0.521979 | 0/18; 10/18 reach output comparison, 12/18 EOS |
+| arithmetic pilot | curriculum 576 / 36, 9 languages | 200 | 0.86136 → **1.30722** (worse in all 9 languages) | 0/18 before and after; EOS and runnable 0/18 → 18/18 |
+| CommitPackFT | CommitPackFT 37,388 / 561, 9 languages | 5,000 | 0.47947 → 0.34446 | not evaluated |
+| private patches | private excerpts + replay 79,441 / 1,617, 12 languages | 20,000 | 0.83449 → 0.56741 | 0/18; 6/18 reach output comparison, 15/18 EOS |
+| private patches, 20.879B base | same 79,441 / 1,617 | 20,000 | 0.712214 → 0.521979 | 0/18; 10/18 reach output comparison, 12/18 EOS |
 
 - The 20.879B-token base alone also scores 0/18, with 3/18 reaching output
   comparison and 1/18 EOS. The 10.879B base scores 0/18 with 0/18 EOS. Its best
@@ -55,9 +73,9 @@ languages, seven cases each), decoded greedily.
 
 ### CIG-SFT versus ordinary SFT
 
-`cig-pilot-{sft,cig}` train both objectives for 200 updates on the arithmetic
+The CIG pilot arms train both objectives for 200 updates on the arithmetic
 curriculum: batch 4, LR 1e-5, seed 42, lambda 0.3, identical answer tokens (21,531).
-`cig-long-{sft,cig}` extend each arm's own step-200 checkpoint to 5,000 updates
+The CIG long arms extend each arm's own step-200 checkpoint to 5,000 updates
 (530,091 answer tokens each). Held-out ordinary cross-entropy starts at 0.861365:
 
 | Step | Ordinary SFT | CIG-SFT |
@@ -78,8 +96,10 @@ curriculum: batch 4, LR 1e-5, seed 42, lambda 0.3, identical answer tokens (21,5
 
 ## Reproduce
 
-From `training/`. Run IDs in the recipes are the recorded ones and already exist on
-the volume, so pass fresh `--run-id` / `--data-id` values.
+From `training/`. To repeat a run, write a recipe in the format of
+[README.md](README.md#train) with the settings above in an ignored local path such as
+`artifacts/sft/`. The recorded run and data IDs already exist on the volume, so use
+fresh ones.
 
 ```sh
 # Data
@@ -94,11 +114,11 @@ modal run --detach -m modal_scripts.modal_sft_data::private_patches \
   --reserved <commitpack-id>,<pilot-run-id>,<private-id> --replay <commitpack-id> --full
 
 # Training (example: arithmetic pilot from a chosen base)
-modal run -m modal_scripts.modal_sft_train::qualify --recipe sft/recipes/arithmetic-pilot.json \
+modal run -m modal_scripts.modal_sft_train::qualify --recipe artifacts/sft/arithmetic-pilot.json \
   --run-prefix <fresh-prefix> --parent <run>/step-NNNNNNNNN.pt
-modal run -m modal_scripts.modal_sft_train --recipe sft/recipes/arithmetic-pilot.json \
+modal run -m modal_scripts.modal_sft_train --recipe artifacts/sft/arithmetic-pilot.json \
   --run-id <fresh-run-id> --parent <run>/step-NNNNNNNNN.pt
-# Volume-backed recipes take --data-id; CIG long recipes take --resume <new pilot run>/step-000000200.pt.
+# Volume-backed runs take --data-id; CIG long runs resume <new pilot run>/step-000000200.pt with "extend": true.
 
 # Executable diagnostic
 modal run -m modal_scripts.modal_sft_eval --dataset artifacts/sft/repairs.jsonl \
@@ -111,7 +131,7 @@ reserved the CommitPack data and the arithmetic pilot run, and replayed CommitPa
 The recorded launchers chained the full-snapshot preparation into training
 automatically. The generic launchers keep preparation and training as separate
 launches. The recorded CIG extension qualification used evaluation every 200
-updates. `qualify --steps 202` with `cig-long-*.json` keeps the recipe's cadence;
+updates. `qualify --steps 202` with a CIG long recipe keeps its cadence;
 the cadence does not affect the exactness check.
 
 The private-patch manifests name the two private HF source collections at pinned
