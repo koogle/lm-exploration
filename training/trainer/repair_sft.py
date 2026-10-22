@@ -49,15 +49,8 @@ class Settings:
             raise ValueError("SFT capped at four hours per invocation")
 
 
-# Sources of the recorded 200-update CIG/SFT pilots (PR #29). `extend=True` may migrate
-# checkpoints written by these reviewed predecessors or by identical current source only.
-PILOT_TRAINER_SHA256 = "b2b8ceebde172b280fcb5ec7ddbb86e5df53c80ad9406087be9704d3e869656b"
-PILOT_CIG_SHA256 = "fc241179be318316f05ad2d37a41eb32f19f33f31293a29c7c2229a8f070152d"
-REVIEWED_SOURCES = {"trainer": PILOT_TRAINER_SHA256, "cig": PILOT_CIG_SHA256}
-
-
 def validate_resume_identity(saved, current, step, extend=False):
-    """Permit explicit run-length extensions only; retain all learning/data identity."""
+    """Permit explicit run-length extensions only; retain all learning/data/source identity."""
     import copy
 
     if not extend:
@@ -69,13 +62,8 @@ def validate_resume_identity(saved, current, step, extend=False):
     adjusted = copy.deepcopy(saved)
     for key in ("steps", "save_every", "evaluate_every", "max_seconds"):
         adjusted["settings"][key] = current["settings"][key]
-    for name, reviewed in REVIEWED_SOURCES.items():
-        previous = adjusted["source_sha256"][name]
-        if previous not in (reviewed, current["source_sha256"][name]):
-            raise ValueError(f"Unreviewed {name} source migration")
-        adjusted["source_sha256"][name] = current["source_sha256"][name]
     if adjusted != current:
-        raise ValueError("Extension changed model/data/objective/optimizer identity")
+        raise ValueError("Extension changed source/model/data/objective/optimizer identity")
 
 
 def collate(rows, device):

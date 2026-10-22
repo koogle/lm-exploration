@@ -9,18 +9,16 @@ The [100M model](../100m/README.md) uses this same implementation at larger dime
 There are no separate RMSNorm/RoPE/SwiGLU model folders or recipe choices.
 Their untrained single-factor experiments remain in Git history.
 
-The model defaults to `architecture_version=2`. Historical character recipes
-select `model="10m"`; current subword recipes specify dimensions directly.
-All active configuration, projection, block, initialization and forward code lives
-in `model.py`; modern classes do not inherit from the old architecture.
-The [legacy implementation](legacy.py) is explicitly the old code, retained only
-for historical checkpoint compatibility: version 1 uses LayerNorm, learned positions, GELU and
-untied embeddings (**10,795,776 parameters**). Checkpoints without version
-metadata load as version 1; resuming across versions is rejected. The public
-vanilla bundle and historical results below have not been changed. No training
-or quality comparison has been run for the consolidated modern 10M architecture.
-Removing inherited legacy construction changes fresh seeded initializations, but
-not the initialization distribution, checkpoint keys or loaded-weight computation.
+Historical character recipes select `model="10m"`; current subword recipes specify
+dimensions directly. All configuration, projection, block, initialization and forward
+code lives in `model.py`. No training or quality comparison has been run for the
+consolidated modern 10M architecture.
+
+The published Shakespeare model below used the earlier vanilla architecture (LayerNorm,
+learned positions, GELU, untied embeddings; **10,795,776 parameters**). That code was
+removed from this checkout; the public bundle ships its own `model.py` and
+`generate.py`, and the last revision with the in-repo implementation is `1e06fb8`
+(`training/10m/legacy.py`).
 
 From `training/`, verify with:
 
@@ -40,14 +38,13 @@ the boundary; vocabulary is drawn from the whole corpus. There is no sealed test
 
 The character training loop and generic character recipe launcher have been removed.
 Current training uses [`trainer/loop.py`](../trainer/loop.py) through the
-[distributed launcher](../distributed/README.md). Historical character checkpoints
-remain readable by `lm-generate`; the published inference bundle is unchanged.
+[distributed launcher](../distributed/README.md). The published inference bundle is
+unchanged.
 
 The published runs used the former `modal_shakespeare.py` (commit `ec5ebd1`).
 The [`shakespeare-10m` recipe](../workflows/model_configs/historical/shakespeare-10m.json) preserves training
-settings but defaults to the modern architecture. The historical published
-architecture uses `architecture_version: 1`. Reproducing that training run requires
-its original source; this is not a supported current training command.
+settings but builds the modern architecture. Reproducing the published training run
+requires its original source; this is not a supported current training command.
 
 The original runs used app `lm-exploration-shakespeare-10m` and volume
 `lm-exploration-training`. The smoke worker has a 120-second hard timeout; the

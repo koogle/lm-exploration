@@ -29,8 +29,8 @@ separate from the training loop. `sampling.py` supports local generation.
 `recipe.py`, `config.py` and `checkpoints.py` retain historical character-recipe
 validation and format-1 checkpoint interpretation for existing models and the
 [`lm-generate` CLI](../generate.py). The character training loop, checkpoint writer
-and Modal recipe launcher have been removed. Historical Shakespeare recipe files,
-architecture compatibility and measured evidence are preserved.
+and Modal recipe launcher have been removed. Historical Shakespeare recipe files
+and measured evidence are preserved.
 
 Muon/AdamW implementation lives in `optimizers.py`; see the
 [matched comparison](../distributed/MUON_COMPARISON.md) for measured context.

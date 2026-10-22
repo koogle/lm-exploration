@@ -108,7 +108,7 @@ recipe on one L40S or H100. A recipe is JSON
 limit, at most 14,400), `objective` (`sft` or `cig`) and `cig_proximity`. `resume`
 continues from an SFT checkpoint with identical identity. Adding `"extend": true`
 also permits a larger step target and new cadence/time limit, but no change to
-learning, data, model or objective; lineage goes to `continuation.json`.
+learning, data, model, objective or trainer source; lineage goes to `continuation.json`.
 
 ```sh
 # Exact resume qualification: uninterrupted run vs. stop, fresh-container restore, continue.

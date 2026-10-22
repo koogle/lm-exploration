@@ -9,7 +9,7 @@ import torch
 from model_100m.model import GPT, ModelConfig
 from sampling import report
 from sampling.metrics import normalize, repetition, sample_metrics
-from sampling.recipe import load_recipe, validate
+from sampling.recipe import MODE_DEFAULTS, load_recipe, validate
 from sampling.sampler import generate, next_token, run_recipe, sample_model
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -145,6 +145,8 @@ class ReportTests(unittest.TestCase):
                 "generated_tokens": len(ids),
                 "ended_with_eos": ids[-1] == 2,
                 "completion": "x " * len(ids),
+                "prompt_group": "",
+                **MODE_DEFAULTS,
                 **settings,
             }
 
@@ -161,30 +163,29 @@ class ReportTests(unittest.TestCase):
                 }
             ]
         }
-        # Earlier per-study format: settings come from top-level modes.
-        legacy = {
-            "modes": [{"name": "sampled_08", "temperature": 0.8, "top_k": 50}],
-            "checkpoints": [
+        # Greedy matches regardless of its recorded top-k; sampled modes match by settings.
+        earlier = {
+            "models": [
                 {
-                    "step": 7,
+                    "name": "old",
                     "revision": "r",
                     "samples": [
-                        sample("greedy", 1, [5, 5, 5, 5, 5]),
-                        sample("sampled_08", 1, [5, 6, 7, 8, 2]),
-                        sample("sampled_08", 2, [5, 6, 0, 0, 0]),
+                        sample("greedy", 1, [5, 5, 5, 5, 5], top_k=50),
+                        sample("sampled_08", 1, [5, 6, 7, 8, 2], temperature=0.8, top_k=50),
+                        sample("sampled_08", 2, [5, 6, 0, 0, 0], temperature=0.8, top_k=50),
                     ],
                 }
-            ],
+            ]
         }
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
             (folder / "current.json").write_text(json.dumps(current))
-            (folder / "legacy.json").write_text(json.dumps(legacy))
+            (folder / "earlier.json").write_text(json.dumps(earlier))
             report.main(
                 [
                     str(folder / "current.json"),
                     "--reference",
-                    str(folder / "legacy.json"),
+                    str(folder / "earlier.json"),
                     "--group-by",
                     "decoding",
                     "--output-dir",

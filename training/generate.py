@@ -25,14 +25,9 @@ def build_parser():
 def load_model(checkpoint):
     from trainer.recipe import MODELS
 
-    # model_name is the package (model_10m); older checkpoints have "100m" or nothing (100m).
-    name = checkpoint["config"].get("model_name", "100m").removeprefix("model_")
-    architecture = MODELS[name]
-    settings = dict(checkpoint["config"]["model"])
-    if name in ("10m", "100m"):
-        # Checkpoints before the modern architecture updates used vanilla blocks.
-        settings.setdefault("architecture_version", 1)
-    model = architecture.GPT(architecture.ModelConfig(**settings))
+    # model_name is the package, e.g. model_10m.
+    architecture = MODELS[checkpoint["config"]["model_name"].removeprefix("model_")]
+    model = architecture.GPT(architecture.ModelConfig(**checkpoint["config"]["model"]))
     model.load_state_dict(checkpoint["model"])
     return model
 

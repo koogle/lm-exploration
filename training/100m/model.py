@@ -1,7 +1,4 @@
-"""100M-family configuration of the shared modern decoder.
-
-Version 1 retains historical vanilla checkpoint compatibility.
-"""
+"""100M-family configuration of the shared modern decoder."""
 
 from dataclasses import dataclass
 
