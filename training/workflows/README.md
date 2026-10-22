@@ -80,6 +80,14 @@ To resume a stopped checkpoint explicitly, select its prepared snapshot dataset
 and launch with a fresh run ID and `--resume OLD_RUN/step-NNNNNNNNN.pt`.
 The trainer still requires identical settings, source, dataset and PyTorch version.
 
+To continue pretraining on new data or with a new schedule, select the new phase's
+snapshot dataset and model config and launch with a fresh run ID and
+`--phase-from OLD_RUN/step-NNNNNNNNN.pt`. The launcher first runs `seed_phase` (CPU,
+one-hour timeout, no retries) in the training image. It writes
+`RUN_ID-seed/step-000000000.pt` with the parent's weights, optimizer state and RNG, then
+trains from that seed. The lineage is recorded in `RUN_ID/workflow.json`. See
+[continued pretraining](../trainer/README.md#continued-pretraining) for what carries over.
+
 Interrupted preparation can use `--resume-preparation` with its original run ID,
 version and identical resolved selection, provided training has not begun.
 Historical recipe files are retained under `model_configs/historical/`; the old

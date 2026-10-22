@@ -34,3 +34,31 @@ and measured evidence are preserved.
 
 Muon/AdamW implementation lives in `optimizers.py`; see the
 [matched comparison](../distributed/MUON_COMPARISON.md) for measured context.
+
+## Continued pretraining
+
+[`continued_pretraining.py`](continued_pretraining.py) starts a new data phase from a
+checkpoint of this trainer. It writes a seed checkpoint that the loop resumes like any
+other. What the seed keeps and resets:
+
+| Kept from the parent | Reset or taken from the new config |
+| --- | --- |
+| Weights | Data cursors and exposures (new snapshot) |
+| Complete optimizer state, as saved: AdamW `exp_avg`, `exp_avg_sq` and `step`; for Muon, momentum buffers plus the auxiliary AdamW state | `step` and `tokens` (0), so warmup and cosine decay restart over the new `target_tokens` |
+| Every rank's Python, NumPy, CPU and CUDA RNG state | Optimizer hyperparameters (weight decay, betas, Muon momentum and LR ratio) |
+| | `config`, `source_sha256`, `torch_version` and `data_identity` |
+
+The parent must use the same architecture, world size and optimizer as the new config,
+the frozen tokenizer, and finite weights and optimizer state. The seed path must not
+exist. `lineage` records the parent checkpoint and hash, its step, config, data and
+source identity, and `parent_tokens`, the lifetime targets before this phase. Later
+checkpoints keep the lineage, and `report.json` adds `lifetime_loss_tokens`.
+
+Through the workflow launcher, `--phase-from OLD_RUN/step-NNNNNNNNN.pt` seeds the new
+phase in the training image and then trains it (see [workflows](../workflows/README.md)).
+Locally, with the PyTorch build of the training image:
+
+```sh
+uv run python -m trainer.continued_pretraining --parent OLD/step-000123456.pt \
+  --output NEW-seed/step-000000000.pt --manifest SNAPSHOT/manifest.json --config phase.json
+```

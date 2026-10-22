@@ -171,8 +171,11 @@ class DistributedRuntime:
         return f"tcp://{host}:{self.master_port}"
 
 
+CHECKPOINT_FORMAT = "scholarly-ddp-v1"
+
+
 def validate_resume(saved, config, identity, source_hashes, torch_version):
-    if saved.get("format") != "scholarly-ddp-v1":
+    if saved.get("format") != CHECKPOINT_FORMAT:
         raise ValueError(
             "Unsupported checkpoint format; pilot/character checkpoints cannot resume here"
         )
