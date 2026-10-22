@@ -2,10 +2,9 @@
 
 Run from training/:
     uv run python -m sampling.report RESULT.json [...] --output-dir DIR \
-        [--reference REFERENCE.json ...] [--group-by mode] [--recipe RECIPE.json] [--paired]
+        [--reference REFERENCE.json ...] [--group-by mode] [--paired]
 
-Reads launcher results (`models[]`) and the earlier per-study format (`checkpoints[]`, with
-decoding settings in top-level `modes`). Writes summary.json, metrics-table.md and
+Reads launcher results (`models[]`). Writes summary.json, metrics-table.md and
 completions.md. Makes no model calls and no quality judgements.
 """
 
@@ -18,42 +17,35 @@ from pathlib import Path
 from statistics import mean
 
 from sampling.metrics import sample_metrics
-from sampling.recipe import MODE_DEFAULTS, prompts
+from sampling.recipe import MODE_DEFAULTS
 
 DECODING = tuple(MODE_DEFAULTS)
 METRICS = ("token_rep4", "word_rep4", "char_rep16")
 PREFIX_METRICS = ("char_rep16_first128", "char_rep16_first256", "word_rep4_first32")
 
 
-def decoding(sample, mode):
-    """Decoding settings from the sample, else its named mode; greedy ignores filters."""
-    mode = {**mode, "repetition_penalty": mode.get("repetition_penalty", mode.get("penalty"))}
-    values = {}
-    for key, default in MODE_DEFAULTS.items():
-        value = sample.get(key, mode.get(key))
-        values[key] = type(default)(default if value is None else value)
+def decoding(sample):
+    """Decoding settings recorded on the sample; greedy ignores filters."""
+    values = {key: sample[key] for key in DECODING}
     if values["temperature"] == 0:
         values.update(top_k=0, top_p=1.0)
     return values
 
 
-def load(path, groups):
+def load(path):
     """Flat sample rows with run label, decoding settings, prompt group and metrics."""
-    data = json.loads(Path(path).read_text())
-    modes = {m["name"]: m for m in data.get("modes") or data.get("recipe", {}).get("modes", [])}
     rows = []
-    for run in data.get("models") or data["checkpoints"]:
-        label = run.get("name") or f"step-{run['step']}"
+    for run in json.loads(Path(path).read_text())["models"]:
         for sample in run["samples"]:
             rows.append(
                 {
-                    "run": label,
-                    "revision": run.get("revision"),
+                    "run": run["name"],
+                    "revision": run["revision"],
                     "prompt": sample["prompt"],
-                    "prompt_group": groups.get(sample["prompt"], sample.get("prompt_group", "")),
+                    "prompt_group": sample["prompt_group"],
                     "mode": sample["mode"],
                     "seed": sample["seed"],
-                    **decoding(sample, modes.get(sample["mode"], {})),
+                    **decoding(sample),
                     "generated_tokens": sample["generated_tokens"],
                     "ended_with_eos": sample["ended_with_eos"],
                     "generation_ids": sample["generation_ids"],
@@ -207,18 +199,14 @@ def main(argv=None):
         help="Comma-separated sample fields per table (repeatable); 'decoding' expands to "
         f"{','.join(DECODING)}. Default: mode",
     )
-    parser.add_argument("--recipe", type=Path, help="Recipe whose prompt groups apply to inputs")
     parser.add_argument(
         "--paired",
         action="store_true",
         help="Average prefix metrics only over prompt/seed keys eligible in every run",
     )
     args = parser.parse_args(argv)
-    groups = {}
-    if args.recipe:
-        groups = dict(prompts(json.loads(args.recipe.read_text())))
-    rows = [row for path in args.results for row in load(path, groups)]
-    references = [row for path in args.reference for row in load(path, groups)]
+    rows = [row for path in args.results for row in load(path)]
+    references = [row for path in args.reference for row in load(path)]
     comparisons = compare(rows, references)
     tables = []
     for spec in args.group_by or ["mode"]:

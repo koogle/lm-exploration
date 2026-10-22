@@ -19,6 +19,15 @@ provenance and negative results. Run project commands from the documented workin
 directory. A repository consolidation does not require GPU training or deployment.
 Keep credentials and local checkpoints out of Git.
 
+## No backward compatibility
+
+This repository only moves forward. Code serves the current configs, architectures,
+optimizers and data formats. Do not add or keep compatibility paths for old checkpoints,
+result schemas, source hashes or launchers (legacy loaders, allowlists of old hashes,
+format fallbacks, version switches). Old artifacts stay on HF with their provenance;
+if one is needed later, write the compatibility code then, for that one use. Safety and
+correctness checks against the current format stay.
+
 ## Modal job runtime
 
 Every Modal job launched by an agent must stop automatically within 24 hours

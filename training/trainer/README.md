@@ -28,12 +28,16 @@ source and settings for historical runs.
 
 Every evaluation row in `validation.jsonl` (and `initial_validation`/`final_validation` in
 `report.json`) has `per_source` and `weighted_loss`, plus `per_stratum` losses,
-`target_counts`, `stratum_target_counts` and `windows`. By default the trainer evaluates
-the first `validation_windows_per_source` validation windows of each source. A snapshot
-whose manifest has a `heldout` entry is evaluated on that frozen set instead: fixed
-windows labelled with a source and a stratum such as `code/python/tests`, checked by
-checksum, tokenizer and coverage ([`data/heldout.py`](../data/heldout.py) writes and
-loads it). `--stop-tokens N` ends a session at N targets with stop reason
+`target_counts`, `stratum_target_counts` and `windows`. The config's `heldout` setting
+chooses the evaluation set explicitly:
+
+- `derived` (default): the first `validation_windows_per_source` windows of each source's
+  validation split in our snapshot. Diagnostics, not capability evaluation.
+- `frozen`: the file the snapshot manifest's `heldout` entry names. Fixed windows labelled
+  with a source and a stratum such as `code/python/tests`, checked by checksum, tokenizer
+  and coverage ([`data/heldout.py`](../data/heldout.py) writes and loads it).
+
+A mismatch between the setting and the manifest fails instead of falling back. `--stop-tokens N` ends a session at N targets with stop reason
 `evaluation_boundary` and leaves the schedule on `target_tokens`, so the checkpoint
 resumes the same run.
 
@@ -44,8 +48,36 @@ separate from the training loop. `sampling.py` supports local generation.
 `recipe.py`, `config.py` and `checkpoints.py` retain historical character-recipe
 validation and format-1 checkpoint interpretation for existing models and the
 [`lm-generate` CLI](../generate.py). The character training loop, checkpoint writer
-and Modal recipe launcher have been removed. Historical Shakespeare recipe files,
-architecture compatibility and measured evidence are preserved.
+and Modal recipe launcher have been removed. Historical Shakespeare recipe files
+and measured evidence are preserved.
 
 Muon/AdamW implementation lives in `optimizers.py`; see the
 [matched comparison](../distributed/MUON_COMPARISON.md) for measured context.
+
+## Continued pretraining
+
+[`continued_pretraining.py`](continued_pretraining.py) starts a new data phase from a
+checkpoint of this trainer. It writes a seed checkpoint that the loop resumes like any
+other. What the seed keeps and resets:
+
+| Kept from the parent | Reset or taken from the new config |
+| --- | --- |
+| Weights | Data cursors and exposures (new snapshot) |
+| Complete optimizer state, as saved: AdamW `exp_avg`, `exp_avg_sq` and `step`; for Muon, momentum buffers plus the auxiliary AdamW state | `step` and `tokens` (0), so warmup and cosine decay restart over the new `target_tokens` |
+| Every rank's Python, NumPy, CPU and CUDA RNG state | Optimizer hyperparameters (weight decay, betas, Muon momentum and LR ratio) |
+| | `config`, `source_sha256`, `torch_version` and `data_identity` |
+
+The parent must use the same architecture, world size and optimizer as the new config,
+the frozen tokenizer, and finite weights and optimizer state. The seed path must not
+exist. `lineage` records the parent checkpoint and hash, its step, config, data and
+source identity, and `parent_tokens`, the lifetime targets before this phase. Later
+checkpoints keep the lineage, and `report.json` adds `lifetime_loss_tokens`.
+
+Through the workflow launcher, `--phase-from OLD_RUN/step-NNNNNNNNN.pt` seeds the new
+phase in the training image and then trains it (see [workflows](../workflows/README.md)).
+Locally, with the PyTorch build of the training image:
+
+```sh
+uv run python -m trainer.continued_pretraining --parent OLD/step-000123456.pt \
+  --output NEW-seed/step-000000000.pt --manifest SNAPSHOT/manifest.json --config phase.json
+```

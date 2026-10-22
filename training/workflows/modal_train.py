@@ -290,6 +290,29 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
 
 
 @app.function(
+    image=gpu_image,
+    cpu=4,
+    memory=32768,
+    timeout=3600,
+    retries=0,
+    max_containers=1,
+    volumes={"/data": data_volume, "/runs": run_volume},
+)
+def seed_phase(parent, seed, manifest, bundle, note=""):
+    """Write a continued-pretraining seed in the training image (same PyTorch build)."""
+    from trainer.continued_pretraining import migrate_phase
+    from workflows.config import resolve_payload
+
+    _, _, config = resolve_payload(bundle)
+    try:
+        return migrate_phase(
+            Path("/runs") / parent, Path("/runs") / seed, Path(manifest), config, note=note
+        )
+    finally:
+        run_volume.commit()
+
+
+@app.function(
     image=cpu_image,
     cpu=1,
     memory=2048,
@@ -298,7 +321,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
 )
-def launch_snapshot(run_id, bundle, provenance, resume=""):
+def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
     from training_data.mixture import open_mixture
 
     from workflows.checks import validate_paths
@@ -307,7 +330,9 @@ def launch_snapshot(run_id, bundle, provenance, resume=""):
     _, dataset, config = resolve_payload(bundle)
     if dataset.mode != "snapshot":
         raise ValueError("Snapshot launch requires a snapshot dataset config")
-    validate_paths(run_id + "-s00", dataset.snapshot, resume)
+    validate_paths(run_id + "-s00", dataset.snapshot, resume or phase_from)
+    if resume and phase_from:
+        raise ValueError("Choose either an exact resume or a new phase, not both")
     manifest_path = Path("/data") / dataset.root / dataset.snapshot / "manifest.json"
     # Validate format, tokenizer, data review and capacity before any GPU scheduling.
     mixture = open_mixture(
@@ -318,15 +343,9 @@ def launch_snapshot(run_id, bundle, provenance, resume=""):
     )
     try:
         if not config.pilot:
-            capacity = min(
-                mixture.manifest["max_passes"]
-                * s["splits"]["train"]["loss_tokens"]
-                * 100
-                / s["weight_percent"]
-                for s in mixture.sources.values()
-            )
-            if config.target_tokens > capacity:
-                raise ValueError("Snapshot cannot support target mixture within two passes")
+            from training_data.mixture import check_capacity
+
+            check_capacity(mixture, config.target_tokens)
     finally:
         mixture.close()
     validation = open_mixture(
@@ -346,6 +365,14 @@ def launch_snapshot(run_id, bundle, provenance, resume=""):
         "pending_data_audits": manifest.get("pending", []),
     }
     record(run_id, "data_reused", snapshot=dataset.snapshot, provenance=provenance)
+    if phase_from:
+        # A fresh seed run ID keeps the parent run untouched and passes resume path checks.
+        resume = f"{run_id}-seed/step-000000000.pt"
+        validate_paths(run_id + "-s00", dataset.snapshot, resume)
+        lineage = seed_phase.remote(
+            phase_from, resume, str(manifest_path), bundle, note=f"workflow run {run_id}"
+        )
+        record(run_id, "phase_seeded", seed=resume, parent=phase_from, lineage=lineage)
     call = continue_training.spawn(
         run_id,
         dataset.snapshot,
@@ -365,6 +392,7 @@ def main(
     dataset_config: str = "",
     resume_preparation: bool = False,
     resume: str = "",
+    phase_from: str = "",
 ):
     import subprocess
 
@@ -376,16 +404,16 @@ def main(
     snapshot = (
         f"{version}/snapshots/{run_id}" if dataset.mode == "prepare_raw" else dataset.snapshot
     )
-    validate_paths(run_id + "-s00", snapshot, resume)
+    validate_paths(run_id + "-s00", snapshot, resume or phase_from)
     provenance = {
         "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         "resolved_workflow": bundle,
     }
     if dataset.mode == "prepare_raw":
-        if resume:
+        if resume or phase_from:
             raise ValueError("Checkpoint resume requires a prepared snapshot dataset")
         print(prepare_and_launch.remote(run_id, version, bundle, provenance, resume_preparation))
     else:
         if version or resume_preparation:
             raise ValueError("Snapshot datasets do not use version or resume_preparation")
-        print(launch_snapshot.remote(run_id, bundle, provenance, resume))
+        print(launch_snapshot.remote(run_id, bundle, provenance, resume, phase_from))

@@ -166,19 +166,3 @@ def test_drupal_pdf_collision_suffixes_are_retained(suffix):
     )
     assert result["records"][0]["format"] == "pdf"
     assert result["enumeration"]["complete"]
-
-
-@pytest.mark.parametrize(
-    "url,supported",
-    [
-        ("https://www.ema.europa.eu/en/news/a-story", True),
-        ("https://www.ema.europa.eu/fr/documents/overview/a.pdf-0", True),
-        ("https://www.ema.europa.eu/en/documents/minutes/a.xlsx", False),
-        ("https://www.ema.europa.eu/en/documents/minutes/a.docx", False),
-        ("https://www.ema.europa.eu/en/documents/minutes/a.zip", False),
-        ("https://www.ema.europa.eu/en/documents/minutes/unknown", False),
-        ("https://invalid.example/a.pdf", False),
-    ],
-)
-def test_old_manifest_supported_record_ignores_legacy_format(url, supported):
-    assert ema.supported_record({"url": url, "format": "html"}) is supported

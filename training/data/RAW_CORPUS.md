@@ -3,11 +3,33 @@
 The shared [distributed trainer](../distributed/README.md) accepts seekable
 token snapshots and `raw-text-v1` SQLite snapshots (including historical `scholarly-raw-v1`). Raw snapshots store compressed
 document text; `training_data.raw_token_stream.RawTokenMixture` tokenizes document-local
-windows as requested. It retains token-weighted scheduling, padding rules, a two-pass
-source limit and resumable raw-document cursors. Seekable token shards remain the
+windows as requested. It retains token-weighted scheduling, padding rules, a per-source
+pass cap (two by default) and resumable raw-document cursors. Seekable token shards remain the
 default prepared format; the two loader cursor schemas are distinct. Select
 `loader: "raw"` or `"token_shards"` in the workflow's dataset config. A mismatched
 manifest is rejected, never used to switch implementations implicitly.
+
+## Pass caps and exact source targets
+
+A raw manifest source may set `max_passes: 1` to read it at most once (the default and
+maximum is two) and `target_tokens` to train exactly that many of its targets. Targets
+must be set for every source, fit within each source's pass cap and sum to the run's
+`target_tokens`; the scheduler skips a source once its target is met and masks the excess
+targets of its last window. When every target is met or a source runs out of passes, the
+final partial batch is padded rather than dropped, so every drawn target is trained once.
+The trainer and `workflows.modal_train` check capacity against these caps before
+allocating GPUs.
+
+Set both when freezing a staging database (from `training/`):
+
+```sh
+uv run python -m training_data.export_raw --folder STAGING --destination SNAPSHOT \
+  --one-pass code --target-tokens 5000000000
+```
+
+`--target-tokens` splits the total by the recipe weights with largest-remainder rounding
+(`raw_token_stream.token_targets`), so the per-source targets sum exactly to it. A
+single-pass continuation is every source with `--one-pass`.
 
 ## Explicit small-model workflow
 

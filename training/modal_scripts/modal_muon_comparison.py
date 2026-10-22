@@ -56,9 +56,13 @@ def run_arm(run_id, settings, provenance):
             timeout=600,
         )
     # Both arms start from the same seed and cursor; never load an old AdamW model.
-    first = worker.local(run_id + "-start", SNAPSHOT, settings, provenance, "", 900, 2)
+    first = worker.local(
+        run_id + "-start", SNAPSHOT, settings, provenance, "", 900, 2, dataset_root="scholarly-code"
+    )
     resume = str(Path(first["final_checkpoint"]).relative_to("/runs"))
-    report = worker.local(run_id, SNAPSHOT, settings, provenance, resume, 3600, None)
+    report = worker.local(
+        run_id, SNAPSHOT, settings, provenance, resume, 3600, None, dataset_root="scholarly-code"
+    )
     if first["final_validation"] != report["initial_validation"]:
         raise RuntimeError("Fresh-process restore changed validation")
     rows = [

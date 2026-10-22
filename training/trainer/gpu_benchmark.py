@@ -3,11 +3,21 @@
 import gc
 import hashlib
 import json
+import math
 import statistics
 import time
 from dataclasses import asdict
 
 from training_data.subword import LOSS_IGNORE_INDEX
+
+
+def explicit_causal_attention(query, key, value):
+    """Masked-softmax reference for the SDPA kernel check."""
+    import torch
+
+    scores = query @ key.transpose(-2, -1) / math.sqrt(query.size(-1))
+    mask = torch.ones(query.size(-2), key.size(-2), device=query.device, dtype=torch.bool).tril()
+    return scores.masked_fill(~mask, float("-inf")).softmax(dim=-1) @ value
 
 
 def benchmark(
@@ -19,7 +29,6 @@ def benchmark(
     benchmark_replay=False,
 ):
     import torch
-    from model_10m import legacy as reference
     from model_100m import model as modern
     from torch.nn import functional as F
     from training_data.token_stream import TokenMixture
@@ -32,7 +41,7 @@ def benchmark(
         for _ in range(3)
     ]
     actual = modern.causal_attention(*tensors)
-    expected = reference.causal_attention(*tensors)
+    expected = explicit_causal_attention(*tensors)
     torch.testing.assert_close(actual, expected, atol=0.02, rtol=0.05)
     upstream = torch.randn_like(actual)
     for a, b in zip(

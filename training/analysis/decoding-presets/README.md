@@ -137,7 +137,9 @@ modal run --detach -m sampling.modal_sample --recipe analysis/decoding-presets/p
 To rebuild the tables, download the raw outputs archived in
 [`jfrick/lm-exploration-results`, folder `pr-20/training/analysis/decoding-presets/`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-20/training/analysis/decoding-presets).
 The two repetition-study files come from that study's
-[archive](../repetition/README.md#archived-outputs).
+[archive](../repetition/README.md#archived-outputs). These inputs use the earlier
+per-study result format, which the current report no longer reads; run the commands
+from a checkout of revision `1e06fb8`.
 
 ```sh
 uv run hf download jfrick/lm-exploration-results --repo-type dataset \

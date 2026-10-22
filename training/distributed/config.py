@@ -27,6 +27,9 @@ class DistributedConfig:
     adam_beta2: float = 0.95
     gradient_clip_norm: float = 1.0
     data_loader: str = "token_shards"
+    # Evaluation set: "derived" takes `validation_windows_per_source` windows of each
+    # source's validation split; "frozen" uses the snapshot manifest's `heldout` file.
+    heldout: str = "derived"
     validation_windows_per_source: int = 1
     log_every: int = 10
     seed: int = 42
@@ -70,6 +73,8 @@ class DistributedConfig:
             raise ValueError("allow_unreviewed_data must be boolean")
         if type(self.prefetch_batches) is not int or not 0 <= self.prefetch_batches <= 64:
             raise ValueError("prefetch_batches must be an integer from 0 to 64")
+        if self.heldout not in ("derived", "frozen"):
+            raise ValueError("heldout must be derived or frozen")
         if self.data_loader not in ("token_shards", "raw", "live"):
             raise ValueError("data_loader must be token_shards, raw or live")
         if self.world_size not in (1, 2, 3, 8):
@@ -171,8 +176,11 @@ class DistributedRuntime:
         return f"tcp://{host}:{self.master_port}"
 
 
+CHECKPOINT_FORMAT = "scholarly-ddp-v1"
+
+
 def validate_resume(saved, config, identity, source_hashes, torch_version):
-    if saved.get("format") != "scholarly-ddp-v1":
+    if saved.get("format") != CHECKPOINT_FORMAT:
         raise ValueError(
             "Unsupported checkpoint format; pilot/character checkpoints cannot resume here"
         )

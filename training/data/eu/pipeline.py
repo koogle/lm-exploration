@@ -369,16 +369,11 @@ def run_source(
         inventory_cache.clear()
         collector.max_bytes = bounds["max_document_bytes"]
         # Filter before scheduling so completed prefixes cannot consume weight slots.
-        supports = getattr(adapter, "supported_record", lambda _: True)
-        active_run()["unsupported_candidates"] = sum(
-            not supports(record) for group in collection_records for record in group
-        )
         eligible = [
             [
                 record
                 for record in group
-                if supports(record)
-                and pending(
+                if pending(
                     record, state, max_attempts=bounds["max_attempts_per_item"], adapter=adapter
                 )
             ]
@@ -399,7 +394,6 @@ def run_source(
             source=source,
             adapter=adapter,
             candidates=round_robin(eligible, weights),
-            supports=supports,
             config=config,
             bounds=bounds,
             maximum=remaining_documents,
@@ -414,8 +408,7 @@ def run_source(
             item_key(r) not in state["completed"] for group in collection_records for r in group
         )
         active_run()["remaining_supported_candidates"] = sum(
-            supports(r)
-            and pending(
+            pending(
                 r,
                 state,
                 timestamp=float("inf"),
