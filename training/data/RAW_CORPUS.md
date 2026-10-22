@@ -68,3 +68,26 @@ The [pinned dataset archive](../publication/README.md#pr-13) contains the exact
 benchmark reports, completed-run evaluation, samples and negative results.
 Historical identifiers and bytes are preserved there; no archived-code loading or
 historical-only evaluation entrypoint is maintained in the active package.
+
+## Snapshots that reference prepared databases
+
+[`prepared_reference.py`](prepared_reference.py) builds a snapshot from completed,
+immutable `raw.sqlite` databases without copying their text. The snapshot holds an empty
+`raw.sqlite`, a manifest with the databases' absolute paths and sizes and the mapping of
+their stored source names onto mixture sources, and a frozen held-out set
+([`heldout.py`](heldout.py)). The held-out set samples up to 16 validation parents per
+stored source, in hash order. `RawTokenMixture` attaches the databases read-only and hides
+the sampled held-out documents and every document that shares their parent, across all
+databases. Training capacity is counted through that same view and must cover the target
+within two passes; a document hash may appear in only one database. There is no global
+audit, and the external files are checked by size, not checksum.
+
+From `training/`, where the databases are mounted at the paths training will use:
+
+```sh
+uv run python -m training_data.prepared_reference --spec spec.json --destination SNAPSHOT
+```
+
+with `spec.json` like `{"weights": {"code": 60, "books": 40}, "target": 10000000000,
+"context": 2048, "databases": [{"path": "/data/code/raw.sqlite", "sources": {"code": "code"}}]}`.
+Use the training context, so held-out windows fit it.
