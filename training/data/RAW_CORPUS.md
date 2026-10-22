@@ -47,6 +47,23 @@ is verified before reuse; corrupt compatible snapshots fail explicitly.
 A match records `data_reused` and uses the same snapshot without redownloading,
 refiltering, recounting or copying it. Pending audit flags remain in the manifest.
 
+## Fresh-only snapshots for continued pretraining
+
+[`fresh_raw_corpus.py`](fresh_raw_corpus.py) prepares a snapshot of documents the parent
+snapshot never contained. It does three things:
+
+- **Clone:** `initialize_fresh(STAGING, PARENT/manifest.json, [other databases])` clones
+  the parent's database, so every upstream cursor continues where the parent stopped. It
+  records all prior hashes, held-out ones included, as an exclusion ledger, and returns
+  the parent recipe.
+- **Prepare:** `FreshRawCorpus(STAGING, recipe, weights).prepare_parallel(target)` takes
+  the new phase's mix in `weights`. It runs until each source has enough fresh training
+  targets for its share of `target` within two passes. A source whose upstream runs out
+  first fails explicitly.
+- **Export:** `export(SNAPSHOT, target)` freezes the fresh training documents plus every
+  validation document, so evaluation stays comparable with the parent. The manifest
+  records the exclusion inputs. Prior documents and conflicts never count as capacity.
+
 ## Implementation and measured scope
 
 - `PersistentStream` keeps the upstream connection and decompressor open across
