@@ -113,3 +113,31 @@ hashes, qualified commit and production source hashes enter the campaign manifes
 HF files, tokenizer and indexes are namespaced by campaign, so another run cannot
 overwrite the same producer/chunk names. Final controller state is archived after
 the generation deadline and drain period.
+
+## Selected backend and launched campaign
+
+The 2,048-token curriculum comparison selects vLLM, batch 32. Its two complete
+32-example trials measured 904.83 and 839.47 accepted tokens/s, pooled **871.62**;
+53/64 examples passed JSON/syntax checks. The fused kernel's two sequential
+32-example trials measured 97.74 and 97.91, pooled **97.82**, with 54/64 accepted.
+The selected vLLM path is **8.91x** faster on this accepted-token/durable-write
+metric. First-pass vLLM batches 1/4/8/16 measured 76.83/217.46/364.56/640.81.
+After both batch-32 trials beat every smaller first-pass rate, remaining slower
+repeat trials were cancelled; this is not a complete ten-trial sweep. Partial
+results and the early-stop decision are preserved. The partial-head prototype
+remains experimental and is not the production backend.
+
+Production run `qwen35-python-math-8h-20261022-01` started at 2026-10-22 06:06:17
+UTC and has an automatic generation deadline of **14:06:17 UTC**. The deployed
+app is `lm-qwen35-distillation-teachers`; controller call
+`fc-01M5H3F88C8E7S3Z8FZAWA927D`. The configuration requests 256 H100 workers; this is
+a ceiling, not evidence of actual allocation. Data, native tokenizer and sparse
+targets go to private HF dataset `jfrick/qwen35-python-math-trajectories-20261022`,
+under campaign-specific `data/` and `runs/` paths, as well as the Modal volume.
+Qualification reports are in `jfrick/lm-exploration-results`, folder
+`qwen35-buffered-targets/qwen35-batch-qualification-20261022-04*`.
+
+23 CPU tests, Ruff, the pinned-tokenizer check and H100 target payload audits pass.
+The gates establish numerical/storage integrity and measured throughput; they do
+not establish semantic correctness of every generated exercise. Only complete,
+format/syntax-accepted records contribute to the reported usable token rate.
