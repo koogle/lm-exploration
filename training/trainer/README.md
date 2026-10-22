@@ -24,6 +24,25 @@ commands. No training behavior or checkpoint compatibility checks were relaxed b
 moving the loop; source identity must still match for exact resume. Use original
 source and settings for historical runs.
 
+## Evaluation during training
+
+Every evaluation row in `validation.jsonl` (and `initial_validation`/`final_validation` in
+`report.json`) has `per_source` and `weighted_loss`, plus `per_stratum` losses,
+`target_counts`, `stratum_target_counts` and `windows`. The config's `heldout` setting
+chooses the evaluation set explicitly:
+
+- `derived` (default): the first `validation_windows_per_source` windows of each source's
+  validation split in our snapshot. Diagnostics, not capability evaluation.
+- `frozen`: the file the snapshot manifest's `heldout` entry names. Fixed windows labelled
+  with a source and a stratum such as `code/python/tests`, checked by checksum, tokenizer
+  and coverage ([`data/heldout.py`](../data/heldout.py) writes and loads it).
+
+A mismatch between the setting and the manifest fails instead of falling back. `--stop-tokens N` ends a session at N targets with stop reason
+`evaluation_boundary` and leaves the schedule on `target_tokens`, so the checkpoint
+resumes the same run.
+
+## Other modules
+
 `gpu_benchmark.py` and `ddp_benchmark.py` are bounded throughput experiments,
 separate from the training loop. `sampling.py` supports local generation.
 `recipe.py`, `config.py` and `checkpoints.py` retain historical character-recipe

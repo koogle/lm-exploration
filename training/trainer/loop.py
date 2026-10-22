@@ -26,6 +26,7 @@ from distributed.config import (
 
 def source_hashes():
     import model_100m.model
+    import training_data.heldout
     import training_data.live_stream
     import training_data.mixture
     import training_data.prefetch
@@ -46,6 +47,7 @@ def source_hashes():
         "loader": Path(training_data.token_stream.__file__),
         "loader_selection": Path(training_data.mixture.__file__),
         "raw_loader": Path(training_data.raw_token_stream.__file__),
+        "heldout_loader": Path(training_data.heldout.__file__),
         "prefetch": Path(training_data.prefetch.__file__),
         "live_loader": Path(training_data.live_stream.__file__),
         "token_shards": Path(training_data.token_shards.__file__),
@@ -76,6 +78,21 @@ def validation_blocks(data, windows_per_source):
     return heldout
 
 
+def heldout_blocks(config, manifest, validation):
+    """The evaluation set `config.heldout` names; never a silent fallback."""
+    frozen = "heldout" in json.loads(Path(manifest).read_text())
+    if config.heldout == "frozen":
+        if not frozen:
+            raise ValueError("heldout is frozen but the snapshot manifest has no heldout entry")
+        from training_data.heldout import load_heldout
+
+        return load_heldout(manifest, config.context)
+    if frozen:
+        raise ValueError("The snapshot ships a frozen held-out set; set heldout to frozen")
+    # Diagnostics derived from our validation split, not capability evaluation.
+    return validation_blocks(validation, config.validation_windows_per_source)
+
+
 def make_optimizer(model, config, *, fused=True):
     from trainer.optimizers import make_optimizer as create_optimizer
 
@@ -83,11 +100,14 @@ def make_optimizer(model, config, *, fused=True):
 
 
 def evaluate_sources(model, heldout, *, device="cuda", bf16=True):
-    """Mean loss per valid target, including unequal-length validation windows."""
+    """Mean loss per valid target by source and by stratum, for unequal-length windows.
+
+    A block's `stratum` defaults to its source.
+    """
     import torch
     from torch.nn import functional as F
 
-    losses = {}
+    losses, counts, stratum_sums, stratum_counts = {}, {}, {}, {}
     with torch.no_grad():
         for name, blocks in heldout.items():
             summed_loss = loss_tokens = 0
@@ -103,8 +123,18 @@ def evaluate_sources(model, heldout, *, device="cuda", bf16=True):
                     )
                 summed_loss += float(loss)
                 loss_tokens += block["loss_tokens"]
+                stratum = block.get("stratum", name)
+                stratum_sums[stratum] = stratum_sums.get(stratum, 0.0) + float(loss)
+                stratum_counts[stratum] = stratum_counts.get(stratum, 0) + block["loss_tokens"]
             losses[name] = summed_loss / loss_tokens
-    return losses
+            counts[name] = loss_tokens
+    return {
+        "per_source": losses,
+        "target_counts": counts,
+        "per_stratum": {k: total / stratum_counts[k] for k, total in stratum_sums.items()},
+        "stratum_target_counts": stratum_counts,
+        "windows": sum(len(blocks) for blocks in heldout.values()),
+    }
 
 
 def crop_trailing_padding(x, y):
@@ -162,8 +192,14 @@ def train(
     resume=None,
     max_seconds=3000,
     max_steps=None,
+    stop_tokens=None,
     commit=None,
 ):
+    """Train until `config.target_tokens`; `stop_tokens` ends the session earlier.
+
+    `stop_tokens` is an evaluation boundary: the schedule still runs to the target, so a
+    later resume continues the same run.
+    """
     import numpy as np
     import torch
     import torch.distributed as dist
@@ -172,6 +208,8 @@ def train(
 
     if not 1 <= max_seconds <= 82800 or (max_steps is not None and max_steps < 1):
         raise ValueError("Session limits must be positive; maximum session length is 82800 seconds")
+    if stop_tokens is not None and not 0 < stop_tokens <= config.target_tokens:
+        raise ValueError("stop_tokens must be within the token target")
     rank, world = runtime.rank, runtime.world_size
     if world != config.world_size:
         raise ValueError("torchrun world size differs from configuration")
@@ -341,10 +379,7 @@ def train(
         final_checkpoint = None
         heldout = None
         if rank == 0:
-            # A fixed small validation set: diagnostics, not capability evaluation.
-            heldout = primary(
-                lambda: validation_blocks(validation, config.validation_windows_per_source)
-            )
+            heldout = primary(lambda: heldout_blocks(config, manifest, validation))
         else:
             primary(lambda: None)
 
@@ -356,13 +391,14 @@ def train(
         def evaluate():
             model.eval()
             try:
-                losses = evaluate_sources(model, heldout)
+                stats = evaluate_sources(model, heldout)
             finally:
                 model.train()
+            losses = stats["per_source"]
             return {
                 "step": step,
                 "tokens": tokens,
-                "per_source": losses,
+                **stats,
                 "weighted_loss": sum(
                     losses[n] * data.sources[n]["weight_percent"] / 100 for n in losses
                 ),
@@ -416,6 +452,9 @@ def train(
         reason = "token_limit"
         data_error = None
         while tokens < config.target_tokens:
+            if stop_tokens is not None and tokens >= stop_tokens:
+                reason = "evaluation_boundary"
+                break
             flag = torch.tensor(int(stopped), device="cuda")
             dist.all_reduce(flag, op=dist.ReduceOp.MAX)
             if int(flag):
@@ -559,7 +598,10 @@ def train(
                 final_validation=final_validation,
                 loss_token_exposures=data.exposures,
                 validation_note=(
-                    f"{config.validation_windows_per_source} fixed windows/source; diagnostic only"
+                    "frozen stratified held-out set from the snapshot manifest"
+                    if config.heldout == "frozen"
+                    else f"{config.validation_windows_per_source} fixed windows/source; "
+                    "diagnostic only"
                 ),
                 prefetch=data.stats() if config.prefetch_batches else None,
             )
@@ -585,6 +627,7 @@ if __name__ == "__main__":
     parser.add_argument("--resume")
     parser.add_argument("--max-seconds", type=int, default=3000)
     parser.add_argument("--max-steps", type=int)
+    parser.add_argument("--stop-tokens", type=int, help="Stop at this many targets")
     parser.add_argument("--volume-name")
     args = parser.parse_args()
     runtime = DistributedRuntime.from_torchrun(os.environ)
@@ -601,5 +644,6 @@ if __name__ == "__main__":
         resume=args.resume,
         max_seconds=args.max_seconds,
         max_steps=args.max_steps,
+        stop_tokens=args.stop_tokens,
         commit=commit,
     )

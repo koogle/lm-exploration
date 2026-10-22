@@ -103,7 +103,10 @@ class TrainingMathTests(unittest.TestCase):
                 {"input_ids": [1, 2, 3], "labels": [2, 3, 4], "loss_tokens": 3},
                 {"input_ids": [5, 0, 0], "labels": [6, -100, -100], "loss_tokens": 1},
             ]
-            loss = evaluate_sources(model, {"source": blocks}, device="cpu", bf16=False)["source"]
+            stats = evaluate_sources(model, {"source": blocks}, device="cpu", bf16=False)
+            loss = stats["per_source"]["source"]
+            self.assertEqual(stats["per_stratum"], stats["per_source"])
+            self.assertEqual(stats["target_counts"], {"source": 4})
             expected = F.cross_entropy(
                 model(torch.tensor([1, 2, 3, 5])), torch.tensor([2, 3, 4, 6])
             )
