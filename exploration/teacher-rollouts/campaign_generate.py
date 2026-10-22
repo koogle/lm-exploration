@@ -48,7 +48,7 @@ def sparse(logprobs, ids):
     return result
 
 
-def run(root, worker, deadline, backend, batch_size, max_batches=0):
+def run(root, worker, deadline, backend, batch_size, max_batches=0, sweep=False):
     import modal
 
     volume = modal.Volume.from_name("lm-exploration-teacher-rollouts")
@@ -97,6 +97,11 @@ def run(root, worker, deadline, backend, batch_size, max_batches=0):
         from megakernel.targets import trajectory
 
         model, head, tokenizer = load_teacher("/runs/teacher-hf-cache")
+        if sweep:
+            from megakernel.batch_probe import qualify
+
+            qualify(model, head, tokenizer, folder / "batch-head-probe.json")
+            volume.commit()
         engine = Decoder(
             model, head, "/experiment/megakernel/kernel.so", max_seq_len=4096
         )
@@ -106,8 +111,20 @@ def run(root, worker, deadline, backend, batch_size, max_batches=0):
         (tokenizer_path / "tokenizer.json").read_bytes()
     ).hexdigest()
     batches = 0
+    schedule = []
+    if sweep:
+        sizes = [1, 4, 8, 16, 32, 32, 16, 8, 4, 1] if backend == "vllm" else [32, 32]
+        for trial, size in enumerate(sizes):
+            for offset in range(0, 32, size):
+                schedule.append((trial, size, list(range(offset, offset + size))))
+        state["trials"] = {}
     while time.time() < deadline - 30:
-        indices = list(range(state["next_index"], state["next_index"] + batch_size))
+        if sweep:
+            if batches >= len(schedule):
+                break
+            trial, size, indices = schedule[batches]
+        else:
+            indices = list(range(state["next_index"], state["next_index"] + batch_size))
         prompts = [specification(worker, i) for i in indices]
         prompt_ids = [
             tokenizer.apply_chat_template(
@@ -213,6 +230,29 @@ def run(root, worker, deadline, backend, batch_size, max_batches=0):
         )
         atomic_json(progress, state)
         volume.commit()
+        if sweep:
+            measured = state["trials"].setdefault(
+                str(trial),
+                {
+                    "batch_size": size,
+                    "records": 0,
+                    "accepted_records": 0,
+                    "generated_tokens": 0,
+                    "accepted_tokens": 0,
+                    "durable_seconds": 0.0,
+                },
+            )
+            measured["records"] += len(rows)
+            measured["accepted_records"] += sum(r["accepted"] for r in rows)
+            measured["generated_tokens"] += generated
+            measured["accepted_tokens"] += kept
+            measured["durable_seconds"] += time.monotonic() - before
+            measured["accepted_tokens_per_second"] = (
+                measured["accepted_tokens"] / measured["durable_seconds"]
+            )
+            measured["complete"] = measured["records"] == 32
+            atomic_json(progress, state)
+            volume.commit()
         print(json.dumps({k: v for k, v in state.items() if k != "chunks"}), flush=True)
         batches += 1
         if max_batches and batches >= max_batches:
@@ -230,4 +270,5 @@ if __name__ == "__main__":
         sys.argv[4],
         int(sys.argv[5]),
         int(sys.argv[6]) if len(sys.argv) > 6 else 0,
+        len(sys.argv) > 7 and sys.argv[7] == "sweep",
     )

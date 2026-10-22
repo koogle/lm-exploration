@@ -11,13 +11,15 @@ from pathlib import Path
 
 import modal
 
+sys.path.insert(0, str(Path(__file__).parent if modal.is_local() else Path("/experiment")))
+
 from core import atomic_json, ignore_source
 from modal_app import control_image, image, kernel_image, volume
 
-app = modal.App("lm-qwen35-distillation-teachers", include_source=False)
+app = modal.App("lm-qwen35-distillation-teachers")
 
 
-def execute(run_id, worker, deadline, backend, batch_size, max_batches=0):
+def execute(run_id, worker, deadline, backend, batch_size, max_batches=0, sweep=False):
     if time.time() >= deadline:
         return {"status": "deadline"}
     proc = subprocess.Popen(
@@ -30,6 +32,7 @@ def execute(run_id, worker, deadline, backend, batch_size, max_batches=0):
             backend,
             str(batch_size),
             str(max_batches),
+            "sweep" if sweep else "production",
         ],
         start_new_session=True,
     )
@@ -60,8 +63,8 @@ def execute(run_id, worker, deadline, backend, batch_size, max_batches=0):
     scaledown_window=2,
     volumes={"/runs": volume},
 )
-def vllm_teacher(run_id, worker, deadline, batch_size, max_batches=0):
-    return execute(run_id, worker, deadline, "vllm", batch_size, max_batches)
+def vllm_teacher(run_id, worker, deadline, batch_size, max_batches=0, sweep=False):
+    return execute(run_id, worker, deadline, "vllm", batch_size, max_batches, sweep)
 
 
 @app.function(
@@ -77,8 +80,10 @@ def vllm_teacher(run_id, worker, deadline, batch_size, max_batches=0):
     scaledown_window=2,
     volumes={"/runs": volume},
 )
-def kernel_teacher(run_id, worker, deadline, batch_size, max_batches=0):
-    return execute(run_id, worker, deadline, "megakernel", batch_size, max_batches)
+def kernel_teacher(run_id, worker, deadline, batch_size, max_batches=0, sweep=False):
+    return execute(
+        run_id, worker, deadline, "megakernel", batch_size, max_batches, sweep
+    )
 
 
 archive_image = (
@@ -178,5 +183,54 @@ def supervise(run_id, config):
             status="generation_window_completed", calls={}, stopped_at=time.time()
         )
         atomic_json(path, state)
+        volume.commit()
+    return state
+
+
+@app.function(
+    image=control_image,
+    cpu=0.25,
+    memory=512,
+    timeout=1900,
+    retries=0,
+    max_containers=1,
+    volumes={"/runs": volume},
+)
+def qualify_campaign(run_id, deadline):
+    """Independent cancellation of both benchmark children, including queued work."""
+    if time.time() >= deadline:
+        raise TimeoutError("Qualification deadline expired")
+    root = Path("/runs") / run_id
+    root.mkdir(parents=True, exist_ok=True)
+    calls = {}
+    state = {"deadline": deadline, "calls": {}, "results": {}}
+    try:
+        for backend, function in [
+            ("vllm", vllm_teacher),
+            ("megakernel", kernel_teacher),
+        ]:
+            call = function.spawn(run_id + "-" + backend, 0, deadline, 32, 0, True)
+            calls[backend] = call
+            state["calls"][backend] = call.object_id
+            atomic_json(root / "qualification.json", state)
+            volume.commit()
+        while calls and time.time() < deadline:
+            for backend, call in list(calls.items()):
+                try:
+                    state["results"][backend] = call.get(timeout=0)
+                except TimeoutError:
+                    continue
+                except Exception as error:
+                    logging.getLogger(__name__).exception("Qualification worker failed")
+                    state["results"][backend] = {"error": str(error)}
+                del calls[backend]
+                atomic_json(root / "qualification.json", state)
+                volume.commit()
+            time.sleep(5)
+    finally:
+        for call in calls.values():
+            call.cancel(terminate_containers=True)
+        state["status"] = "deadline" if calls else "completed"
+        atomic_json(root / "qualification.json", state)
         volume.commit()
     return state
