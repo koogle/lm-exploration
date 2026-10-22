@@ -70,7 +70,7 @@ class TiedEmbeddingTests(unittest.TestCase):
         tokens = torch.randint(self.config.vocab_size, (2, 8))
         torch.testing.assert_close(model(tokens), reloaded(tokens), rtol=0, atol=0)
 
-    def test_rejects_cross_architecture_resume_and_keeps_legacy_names(self):
+    def test_rejects_cross_architecture_resume(self):
         training = {
             "batch_size": 2,
             "lr": 0.001,
@@ -97,11 +97,6 @@ class TiedEmbeddingTests(unittest.TestCase):
             validate_resume(checkpoint, different, fingerprint, 3)
         with self.assertRaisesRegex(ValueError, "identical"):
             validate_resume({**checkpoint, "config": different}, config, fingerprint, 3)
-        legacy = copy.deepcopy(config)
-        legacy["model_name"] = "100m"
-        validate_resume({**checkpoint, "config": legacy}, config, fingerprint, 3)
-        del legacy["model_name"]
-        validate_resume({**checkpoint, "config": legacy}, config, fingerprint, 3)
 
     def test_frozen_tokenizer_forward_backward_and_parameter_counts(self):
         tokenizer = load_frozen()

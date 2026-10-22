@@ -113,7 +113,6 @@ def main(run_id: str = "simple-llm-124m-h100-confirmation-20261017-01"):
         Path("trainer/gpu_benchmark.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
-        Path("10m/legacy.py"),
         *Path("data").glob("*.py"),
     ]
     provenance = {

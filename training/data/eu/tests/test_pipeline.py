@@ -455,21 +455,6 @@ def test_verified_alternate_retry_does_not_loop_or_bypass_cooldown(harness):
     assert not pipeline.pending(record, store.state, timestamp=1001, adapter=h.adapter)
 
 
-def test_unsupported_saved_inventory_is_preserved_without_fetch(harness):
-    h = harness
-    unsupported = h.candidate("spreadsheet")
-    supported = h.candidate("report")
-    h.inventories.update({"a": [unsupported, supported], "b": []})
-    h.adapter.supported_record = lambda record: record["document_id"] != "spreadsheet"
-    store = DurableStore()
-    result = h.run(store)
-    assert result["unsupported_candidates"] == 1
-    assert result["pending_candidates"] == 1
-    assert result["remaining_supported_candidates"] == 0
-    assert h.fetched == [supported["url"]]
-    assert pipeline.item_key(unsupported) not in store.state["completed"]
-
-
 def test_json_html_adapter_preserves_original_raw_hash(harness):
     h = harness
     candidate = h.candidate("api-document")

@@ -52,7 +52,9 @@ modal run --detach -m sampling.modal_sample --recipe analysis/repetition/low-tem
   --output artifacts/repetition/low-temperature.json
 ```
 
-To rebuild the table from the archived raw inputs:
+To rebuild the table from the archived raw inputs, which use the earlier per-study result
+format that the current report no longer reads, run these commands from a checkout of
+revision `1e06fb8`:
 
 ```sh
 uv run hf download jfrick/scholarly-code-modern-gpt-124m-step2 \

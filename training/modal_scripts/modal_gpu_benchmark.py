@@ -72,7 +72,6 @@ def main(run_id: str = "simple-llm-124m-gpu-comparison-20261017-01"):
         *Path("distributed").glob("*.py"),
         Path("100m/model.py"),
         Path("10m/model.py"),
-        Path("10m/legacy.py"),
         Path("trainer/gpu_benchmark.py"),
         *Path("data").glob("*.py"),
         *Path("tests").glob("test_100m*.py"),

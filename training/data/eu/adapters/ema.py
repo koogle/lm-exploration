@@ -97,12 +97,6 @@ def _supported_format(url):
     return suffix if suffix in SUPPORTED_DOCUMENT_FORMATS else None
 
 
-def supported_record(record):
-    """Filter old manifests by URL, not their legacy incorrect `format=html` metadata."""
-    url = _url(record.get("url"))
-    return bool(url and _supported_format(url))
-
-
 def _included(collection_id, item):
     kind = item.get("type", "")
     if collection_id in EPAR_SERIES:
