@@ -343,15 +343,9 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
     )
     try:
         if not config.pilot:
-            capacity = min(
-                mixture.manifest["max_passes"]
-                * s["splits"]["train"]["loss_tokens"]
-                * 100
-                / s["weight_percent"]
-                for s in mixture.sources.values()
-            )
-            if config.target_tokens > capacity:
-                raise ValueError("Snapshot cannot support target mixture within two passes")
+            from training_data.mixture import check_capacity
+
+            check_capacity(mixture, config.target_tokens)
     finally:
         mixture.close()
     validation = open_mixture(
