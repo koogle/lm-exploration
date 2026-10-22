@@ -32,6 +32,11 @@ class ScriptLayoutTests(unittest.TestCase):
             "distributed.modal_prep_benchmark": "distributed/modal_prep_benchmark.py",
             "sampling.modal_sample": "analysis/sampling/modal_sample.py",
             "sampling.report": "analysis/sampling/report.py",
+            "modal_scripts.modal_sft_train": "modal_scripts/modal_sft_train.py",
+            "modal_scripts.modal_sft_eval": "modal_scripts/modal_sft_eval.py",
+            "modal_scripts.modal_sft_data": "modal_scripts/modal_sft_data.py",
+            "trainer.repair_sft": "trainer/repair_sft.py",
+            "trainer.sft_recipe": "trainer/sft_recipe.py",
         }
         for name, relative in expected.items():
             with self.subTest(module=name):

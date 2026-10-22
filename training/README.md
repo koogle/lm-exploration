@@ -153,6 +153,8 @@ gradient descent, start with [the XOR example](examples/README.md).
 - [`analysis/sampling/`](analysis/sampling/README.md): recipe-driven sampling
   launcher, repetition metrics and report CLI. Study folders under `analysis/` hold only
   recipes and findings.
+- [`sft/`](sft/README.md): code-repair SFT and CIG-SFT from a pretraining checkpoint,
+  with data builders, recipe-driven Modal launchers and an executable repair diagnostic.
 - [`modal_scripts/`](modal_scripts/README.md): corpus, tokenizer and benchmark
   launchers. Training launch support and runtime configuration live in
   [`distributed/`](distributed/README.md); settings live in [`workflows/`](workflows/README.md).
@@ -351,6 +353,8 @@ The proposed SFT volumes were 10–100M instruction tokens and 10–200M reasoni
 tokens. These are exploratory ranges, not requirements. RL is budgeted through
 rollout generation and optimization compute, not a fixed static corpus size.
 Start RL when the model already generates some successful solutions.
+
+Code-repair SFT and CIG-SFT are implemented in [`sft/`](sft/README.md).
 
 Compare base, instruction-SFT, reasoning-SFT and SFT-plus-RL checkpoints. Include
 an additional-SFT control with comparable compute. Track pass@1/correctness,
