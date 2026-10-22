@@ -299,7 +299,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def launch_snapshot(run_id, bundle, provenance, resume=""):
-    from training_data.mixture import check_capacity, open_mixture
+    from training_data.mixture import open_mixture
 
     from workflows.checks import validate_paths
     from workflows.config import resolve_payload
@@ -318,6 +318,8 @@ def launch_snapshot(run_id, bundle, provenance, resume=""):
     )
     try:
         if not config.pilot:
+            from training_data.mixture import check_capacity
+
             check_capacity(mixture, config.target_tokens)
     finally:
         mixture.close()
