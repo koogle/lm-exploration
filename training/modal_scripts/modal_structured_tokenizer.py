@@ -130,7 +130,7 @@ def evaluate_candidate(family, size, vocab):
 
 @app.local_entrypoint()
 def main():
-    out = Path("results/tokenizer-structured") / RUN
+    out = Path("artifacts/tokenizer-structured") / RUN
     out.mkdir(parents=True, exist_ok=True)
     manifest = prepare.remote()
     (out / "corpus-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

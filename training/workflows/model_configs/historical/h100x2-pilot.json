@@ -16,6 +16,7 @@
   "n_layer": 14,
   "n_head": 12,
   "n_embd": 768,
+  "optimizer": "adamw",
   "data_loader": "token_shards",
   "adam_beta1": 0.9,
   "adam_beta2": 0.95,

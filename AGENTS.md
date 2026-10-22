@@ -53,8 +53,7 @@ and [Sandbox API](https://modal.com/docs/reference/modal.Sandbox).
 
 Git is the source of truth for executable logic, training/evaluation/preparation
 and publication scripts, recipes/configuration, tests and small test fixtures.
-Keep concise plans, run instructions, experiment summaries and artifact indexes
-in Git. Hugging Face (HF) is the durable store for experiment outputs and design
+Keep concise plans, run instructions and experiment summaries in Git. Hugging Face (HF) is the durable store for experiment outputs and design
 artifacts: checkpoints, generated result JSONs, detailed metrics/audits, evaluation
 outputs, samples, plots, reports, UI mockups and design exports. Reusable UI code
 and design-generation logic belong in Git; their published previews/exports belong
@@ -63,16 +62,16 @@ on HF. Do not commit generated artifacts merely because they are small or JSON.
 - Preserve provenance and negative results in the HF archive, with concise findings
   and links in the owning folder's documentation. Do not replace measured evidence
   with an unsupported summary or discard failed experiments.
-- Reference artifacts using the HF repository ID/type, immutable revision, file
-  paths and SHA256 checksums in a small checked-in index. Do not rely on mutable
-  `main` links or assume that a model card contains the underlying result files.
+- Do not keep per-file artifact indexes (paths, revisions, checksums) in Git for
+  completed experiments; the HF repository and its commit history are the record.
+  Docs name the HF repository and folder. Pin revisions only while an experiment
+  is in progress and a script depends on exact inputs.
 - Before removing an existing artifact from Git, verify that its exact bytes are
-  available on HF, record the pinned reference/checksum, and update every consumer
-  and documentation link. Do not remove an unpublished or unverified artifact.
-- Scripts must accept explicit artifact paths or use a documented download step
-  that fetches and verifies pinned HF artifacts into an ignored local directory.
-  Do not silently fetch the latest revision or require generated results to be
-  checked into Git for evaluation, publication or report rebuilding.
+  available on HF and update every consumer and documentation link. Do not remove
+  an unpublished or unverified artifact.
+- Scripts take explicit artifact paths (downloaded into an ignored local directory).
+  Do not require generated results to be checked into Git for evaluation,
+  publication or report rebuilding.
 - Keep active recipes/configs and small intentional test fixtures in Git; JSON is
   not itself an artifact classification. Never publish credentials, private data
   or unsafe checkpoint contents as part of an artifact migration.
@@ -80,5 +79,14 @@ on HF. Do not commit generated artifacts merely because they are small or JSON.
 This policy does not itself migrate existing files or authorize uploads, training
 or deployment. Perform migrations explicitly, preserving existing experiment
 identifiers and provenance.
+
+## Reports
+
+Building reports by concatenating strings in code (`lines += [...]`, f-string
+tables, prose in `print`/`write_text`) is a red flag; avoid it. Scripts emit
+structured results (JSON/CSV); render tables with a library or a checked-in
+template. Write findings and narrative by hand in the owning folder's
+docs, not in generator code. Prefer reusing or extending shared tooling over a new
+per-study report builder.
 
 See [migration notes](docs/consolidation.md) for imported histories and source PRs.

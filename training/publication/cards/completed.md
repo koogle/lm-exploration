@@ -21,6 +21,7 @@ validation_windows_per_source = 1
 ---
 language: en
 library_name: pytorch
+model_name: Simple LLM 10M
 tags:
 - causal-lm
 - from-scratch
@@ -28,7 +29,7 @@ tags:
 - experimental
 - base-model
 ---
-# Scholarly/code modern GPT — ${parameters} parameters, ${target_tokens}-token experiment
+# Simple LLM 10M — ${parameters} parameters, ${target_tokens}-token experiment
 
 A **base language model trained from random initialization**, with **${parameters} parameters**, **${trained_tokens} next-token training exposures** and **${updates} optimizer updates**. It is not instruction-tuned. Generated samples contain repetition, invented terminology and factual errors; the model is a small research artifact rather than a reliable assistant.
 

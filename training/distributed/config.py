@@ -10,9 +10,16 @@ class DistributedConfig:
     world_size: int = 3
     global_windows: int = 48
     microbatch: int = 16
+    crop_padding: bool = False
+    loss_chunk_size: int = 0
+    compile_model: bool = False
+    cache_rope: bool = False
     context: int = 2048
     target_tokens: int = 20_000_000_000
     warmup_tokens: int = 20_000_000
+    optimizer: str = "muon"
+    muon_lr: float = 0.02
+    muon_momentum: float = 0.95
     peak_lr: float = 3e-4
     min_lr_ratio: float = 0.1
     weight_decay: float = 0.1
@@ -50,6 +57,11 @@ class DistributedConfig:
         ):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"{name} must be a positive integer")
+        for name in ("crop_padding", "compile_model", "cache_rope"):
+            if type(getattr(self, name)) is not bool:
+                raise ValueError(f"{name} must be boolean")
+        if type(self.loss_chunk_size) is not int or self.loss_chunk_size < 0:
+            raise ValueError("loss_chunk_size must be a nonnegative integer")
         if type(self.seed) is not int or not 0 <= self.seed < 2**32:
             raise ValueError("seed must be a 32-bit unsigned integer")
         if type(self.pilot) is not bool:
@@ -60,15 +72,19 @@ class DistributedConfig:
             raise ValueError("prefetch_batches must be an integer from 0 to 64")
         if self.data_loader not in ("token_shards", "raw", "live"):
             raise ValueError("data_loader must be token_shards, raw or live")
-        if self.world_size not in (1, 2, 3):
-            raise ValueError("Supported GPU counts: 1, 2, 3")
+        if self.world_size not in (1, 2, 3, 8):
+            raise ValueError("Supported GPU counts: 1, 2, 3, 8")
         if self.global_windows % (self.world_size * self.microbatch):
             raise ValueError("Global windows must divide into whole per-GPU microbatches")
         if self.n_embd % self.n_head or (self.n_embd // self.n_head) % 2:
             raise ValueError("RoPE requires an even integral head dimension")
         if self.warmup_tokens >= self.target_tokens:
             raise ValueError("Warmup must end before the token target")
+        if self.optimizer not in ("adamw", "muon"):
+            raise ValueError("optimizer must be adamw or muon")
         for name in (
+            "muon_lr",
+            "muon_momentum",
             "peak_lr",
             "min_lr_ratio",
             "weight_decay",
@@ -85,6 +101,8 @@ class DistributedConfig:
                 raise ValueError(f"Invalid {name}")
         if self.peak_lr <= 0 or not 0 <= self.min_lr_ratio <= 1 or self.weight_decay < 0:
             raise ValueError("Invalid optimizer settings")
+        if self.muon_lr <= 0 or not 0 <= self.muon_momentum < 1:
+            raise ValueError("Invalid Muon settings")
         if not 0 <= self.adam_beta1 < 1 or not 0 <= self.adam_beta2 < 1:
             raise ValueError("Adam betas must be in [0, 1)")
         if self.gradient_clip_norm <= 0:

@@ -1,6 +1,6 @@
 # Resumable subword training on multiple Modal GPUs
 
-`distributed/modal_train.py` supplies the worker that runs selected models on **one, two or three
+`distributed/modal_train.py` supplies the worker that runs selected models on **one, two, three or eight
 GPUs on one host**, using PyTorch NCCL DistributedDataParallel. It trains a shared
 model with synchronized gradients through [`trainer/loop.py`](../trainer/loop.py).
 The legacy character loop has been removed; throughput-only benchmarks remain separate.
@@ -12,7 +12,7 @@ launcher, shared image and GPU checks live in this package. The actual training
 loop, evaluation and checkpointing live in [`../trainer/`](../trainer/README.md). Training settings live in [`../workflows/model_configs/`](../workflows/model_configs/README.md);
 preparation and continuation live in [`../workflows/`](../workflows/README.md).
 The duplicate `modal_simple-llm_pilot.py` / `trainer/subword_pilot.py`
-path has been removed; historical pilot results remain in `results/` and its
+path has been removed; historical pilot results are in the HF dataset `jfrick/lm-exploration-results` and its
 implementation remains in Git history. Historical character recipes are retained
 for provenance; their loop and launcher have been removed.
 
@@ -89,6 +89,25 @@ with the same world size and compatible configuration, data and source identity.
 There is no automatic job chain; hard termination can lose updates after the last
 committed checkpoint.
 
+## Optimizer default
+
+New `DistributedConfig` settings default to `optimizer="muon"`: Muon updates
+hidden matrices, while fused AdamW updates the tied embedding/output table,
+biases and norms. Set `optimizer="adamw"` to use AdamW for every parameter.
+`muon_lr=0.02` and `muon_momentum=0.95` configure Muon; `peak_lr=0.0003`
+configures the AdamW companion. Both share the token-based warmup/cosine factor.
+
+For new eight-H100 runs, use `workflows/model_configs/historical/h100x8-muon-8k-5b.json`.
+It combines Muon with microbatch 2, cropping, cached RoPE and model compilation.
+The 5B ceiling is a configuration, not an automatically launched run or a measured
+5B result. The [100M-token comparison](MUON_COMPARISON.md#measured-results-run-prefix-muon-124m-100mt-20261019-b)
+supports this default; longer-run quality remains unmeasured. See the
+[comparison guide](MUON_COMPARISON.md) for the bounded experiment.
+
+Historical recipes explicitly select AdamW to preserve their experiment meaning.
+Resume requires the saved optimizer/config/source; changing the default does not
+convert AdamW checkpoint state into Muon. The character trainer remains separate.
+
 ## Start a job
 
 Run from `training/`, with Modal credentials and prepared data on
@@ -164,8 +183,9 @@ Rank zero constructs one deterministic token-weighted global batch and scatters
 it. Gradients accumulate with `no_sync()` before the final microbatch. DDP's rank
 averaging is compensated by `world_size / global_nonpadding_tokens`, so padded
 windows and unequal valid-token counts across ranks do not bias the objective.
-The trainer uses BF16 autocast, FP32 parameters, causal SDPA, fused AdamW
-(betas 0.9/0.95), gradient clipping at 1 and a token-based warmup/cosine schedule.
+The trainer uses BF16 autocast, FP32 parameters, causal SDPA, the selected optimizer,
+gradient clipping at 1 and a token-based warmup/cosine schedule. The AdamW component
+uses betas 0.9/0.95.
 The supplied schedule is a configurable starting point, not a quality-qualified
 20B experiment. Learning rate is calculated at the end-token count of each update.
 
@@ -236,6 +256,12 @@ while the GPUs train. Checkpoints save only the acknowledged optimizer cursor, s
 a restart discards and rebuilds speculative batches; live manifests require
 `allow_unreviewed_data`. CUDA equivalence and throughput have not been measured.
 
+## Eight-GPU experiment
+
+The dedicated [eight-H100 / 8K / 5B workflow](SIMPLE_LLM_8K.md) uses the frozen raw
+snapshot and publishes inference checkpoints to HF. Its recipe and resource bounds
+are explicit; eight-GPU performance requires separate qualification.
+
 ## Raw-corpus experiments
 
 The [raw-corpus preparation guide](../data/RAW_CORPUS.md) covers reusable SQLite snapshots,
@@ -274,6 +300,6 @@ resume/audit rejection. Floating model/optimizer tensors use FP32 tolerances
 reduction order can change low bits across fresh jobs.
 
 Measured run evidence is recorded in
-[`results/simple-llm-ddp-support-20261017.md`](../results/simple-llm-ddp-support-20261017.md).
+[`simple-llm-ddp-support-20261017.md`](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-ddp-support-20261017.md).
 Those GPU measurements predate the seekable snapshot format. The format change
 has local loader/conversion/resume checks; a new CUDA qualification has not been run.
