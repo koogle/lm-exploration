@@ -24,6 +24,10 @@ includes weights, code, tokenizer, training curves and raw metrics. Final fixed-
 diagnostic validation loss is 1.8708; broader quality and long-context evaluation remain
 pending. Its run, publication and repetition records are [archived on HF](publication/README.md#pr-16).
 
+Later continuations of that model (ECB/EMA, 60%-coding 5B, multilingual 10B) and
+a Python-focused Muon run did not produce usable models; see
+[what didn't work](NEGATIVE_RESULTS.md) for numbers, kept features and HF archives.
+
 The [Simple LLM 9.85M / 5B-token experiment](publication/README.md#pr-13)
 is complete and [published on Hugging Face](https://huggingface.co/jfrick/scholarly-code-modern-gpt-10m-5b).
 It processed 4,999,934,057 targets over 72,805 updates. Broader exploratory
