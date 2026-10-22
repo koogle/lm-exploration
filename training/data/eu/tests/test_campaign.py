@@ -39,7 +39,11 @@ def test_rounds_reload_worker_state_and_wait_cooldown():
         assert store.state["campaigns"]["pilot"]["rounds"][len(calls)]["status"] == "running"
         calls.append(run_id)
         store.state["completed"][run_id] = {"status": "extracted"}
-        result = {"run_id": run_id, "status": "paused_rate_limit", "pending_candidates": 5}
+        result = {
+            "run_id": run_id,
+            "status": "paused_rate_limit",
+            "remaining_supported_candidates": 5,
+        }
         store.state["runs"].append(result)
         store.state["source_retry_after_epoch"] = epoch[0] + 125
         store.state["metrics"] = {"rows": len(calls)}
@@ -77,7 +81,7 @@ def test_terminal_worker_reconciles_after_lost_response():
 
     def crash(run_id, *_):
         store.state["runs"].append(
-            {"run_id": run_id, "status": "bounded_complete", "pending_candidates": 0}
+            {"run_id": run_id, "status": "bounded_complete", "remaining_supported_candidates": 0}
         )
         store.revision += 1
         raise RuntimeError("lost response")
@@ -109,7 +113,11 @@ def test_spawned_call_reattached_without_duplicate_dispatch():
 
     store = Store()
     spawned, loaded = [], []
-    result = {"run_id": "pilot-round-1", "status": "bounded_complete", "pending_candidates": 0}
+    result = {
+        "run_id": "pilot-round-1",
+        "status": "bounded_complete",
+        "remaining_supported_candidates": 0,
+    }
 
     def lost_response(**kwargs):
         entry = store.state["campaigns"]["pilot"]["rounds"][0]
@@ -208,7 +216,7 @@ def test_call_id_cas_retry_reloads_state_without_respawning():
             get=lambda **kwargs: {
                 "run_id": run_id,
                 "status": "bounded_complete",
-                "pending_candidates": 0,
+                "remaining_supported_candidates": 0,
             },
         )
 
@@ -326,7 +334,11 @@ def test_six_round_source_campaign_has_time_to_finish_and_preserves_worker_resul
     def collect(run_id, maximum, seconds):
         calls.append(run_id)
         epoch[0] += 3001
-        return {"run_id": run_id, "status": "bounded_complete", "pending_candidates": 100}
+        return {
+            "run_id": run_id,
+            "status": "bounded_complete",
+            "remaining_supported_candidates": 100,
+        }
 
     result = run_campaign(
         "ema", "larger", collect, rounds=6, mapping_path=path, store=store, clock=lambda: epoch[0]

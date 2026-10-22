@@ -1,4 +1,4 @@
-"""Seekable uint16 token records and explicit snapshot verification/conversion.
+"""Seekable uint16 token records and explicit snapshot verification.
 
 Each record has a uint32 content-token count, a 32-byte document hash, then
 little-endian uint16 content tokens. BOS/EOS remain virtual loader boundaries.
@@ -8,7 +8,6 @@ Provenance is stored separately; training never parses it or decompresses it.
 import argparse
 import gzip
 import json
-import shutil
 import struct
 from pathlib import Path
 
@@ -80,47 +79,13 @@ def verify_snapshot(manifest_path):
     return manifest
 
 
-def convert_snapshot(manifest_path, destination):
-    """Verify and convert a legacy gzip snapshot once, preserving its original."""
-    manifest_path, destination = Path(manifest_path), Path(destination)
-    manifest = json.loads(manifest_path.read_text())
-    if manifest.get("token_format") is not None or manifest.get("schema", 1) != 1:
-        raise ValueError("Conversion requires a legacy schema-1 gzip snapshot")
-    manifest = verify_snapshot(manifest_path)
-    destination.mkdir(parents=True, exist_ok=False)
-    for source in manifest["sources"].values():
-        for split in source["splits"].values():
-            converted = []
-            for shard in split["shards"]:
-                path = snapshot_file(manifest_path.parent, shard)
-                if not path.name.endswith(".jsonl.gz"):
-                    raise ValueError("Expected a legacy .jsonl.gz shard")
-                target = destination / (path.name.removesuffix(".jsonl.gz") + ".tokens")
-                with gzip.open(path, "rt") as handle:
-                    converted.append(write_shard(target, (json.loads(line) for line in handle)))
-            split["shards"] = converted
-    audit = snapshot_file(manifest_path.parent, manifest["audit"])
-    shutil.copyfile(audit, destination / audit.name)
-    manifest["audit"] = file_entry(destination / audit.name)
-    manifest.update(schema=2, token_format=FORMAT, converted_from_sha256=digest(manifest_path))
-    # Publish the manifest last; incomplete conversions cannot be used as snapshots.
-    (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    return manifest
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     verify = subparsers.add_parser("verify")
     verify.add_argument("manifest")
-    convert = subparsers.add_parser("convert")
-    convert.add_argument("manifest")
-    convert.add_argument("destination")
     args = parser.parse_args()
-    if args.command == "verify":
-        verify_snapshot(args.manifest)
-    else:
-        convert_snapshot(args.manifest, args.destination)
+    verify_snapshot(args.manifest)
 
 
 if __name__ == "__main__":

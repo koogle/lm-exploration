@@ -35,10 +35,7 @@ class TokenMixture:
         if self.manifest["tokenizer_sha256"] != TOKENIZER_SHA256:
             raise ValueError("Tokenizer identity mismatch")
         if self.manifest.get("token_format") != FORMAT or self.manifest.get("schema") != 2:
-            raise ValueError(
-                "Seekable token snapshot required; convert legacy snapshots with "
-                "python -m training_data.token_shards convert MANIFEST NEW_DIRECTORY"
-            )
+            raise ValueError(f"Seekable token snapshot required: schema 2, {FORMAT}")
         if not self.manifest["training_ready"] and not allow_unreviewed:
             raise ValueError("Dataset has pending audits; allow_unreviewed_data required")
         if self.manifest["max_passes"] != 2:

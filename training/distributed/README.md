@@ -79,7 +79,7 @@ its own cursor and output directory. The launcher copies source, tokenizer asset
 and the manifest for provenance, not the corpus. Training checks file sizes and
 manifest identity at startup, then seeks directly into binary token shards using
 the saved pass/shard/document/token cursor. Full-file checksum verification is an
-explicit preparation/transfer operation; see [snapshot conversion and verification](../data/SIMPLE_LLM_STREAMING.md#seekable-snapshots-and-verification).
+explicit preparation/transfer operation; see [snapshot verification](../data/SIMPLE_LLM_STREAMING.md#seekable-snapshots-and-verification).
 
 Rank zero also owns logging and diagnostic validation. At checkpoint boundaries,
 all ranks contribute their RNG state; rank zero saves the shared model/optimizer,
@@ -106,7 +106,7 @@ supports this default; longer-run quality remains unmeasured. See the
 
 Historical recipes explicitly select AdamW to preserve their experiment meaning.
 Resume requires the saved optimizer/config/source; changing the default does not
-convert AdamW checkpoint state into Muon. The character trainer remains separate.
+convert AdamW checkpoint state into Muon.
 
 ## Start a job
 
@@ -115,8 +115,7 @@ Run from `training/`, with Modal credentials and prepared data on
 one validated trainer request. See the [workflow guide](../workflows/README.md).
 
 ```sh
-# First convert the existing gzip pilot using the linked conversion instructions.
-# Bounded smoke run against that converted snapshot; creates a checkpoint.
+# Bounded smoke run against the seekable pilot snapshot; creates a checkpoint.
 modal run --detach -m workflows.modal_train \
   --workflow workflows/h100x2-pilot.json --run-id my-ddp-pilot-01
 
@@ -242,8 +241,7 @@ startup, configured intervals and the end. This is a diagnostic, not production
 capability evaluation or automatic best-checkpoint selection. Full-scale corpus
 preparation/audits remain separate work. Seekable token shards remove compressed
 cursor replay; full-corpus restart latency, throughput and multi-day reliability
-have not been measured. Old gzip snapshots need one-time conversion for new runs;
-old checkpoints require their original code and snapshot. The active loop now lives in `trainer/loop.py`; resume continues to enforce
+have not been measured. Old checkpoints require their original code and snapshot. The active loop now lives in `trainer/loop.py`; resume continues to enforce
 source hashes. Historical checkpoints require compatible original code and settings.
 
 ## Overlapped data preparation
@@ -302,4 +300,4 @@ reduction order can change low bits across fresh jobs.
 Measured run evidence is recorded in
 [`simple-llm-ddp-support-20261017.md`](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-ddp-support-20261017.md).
 Those GPU measurements predate the seekable snapshot format. The format change
-has local loader/conversion/resume checks; a new CUDA qualification has not been run.
+has local loader/resume checks; a new CUDA qualification has not been run.
