@@ -40,6 +40,15 @@ def archive(root, workers, deadline):
                     )
         if not pending:
             if time.time() > deadline + 60:
+                final = root / "campaign.json"
+                if final.exists():
+                    api.upload_file(
+                        repo_id=repo,
+                        repo_type="dataset",
+                        path_or_fileobj=str(final),
+                        path_in_repo=f"runs/{root.name}/campaign.json",
+                        commit_message="Record final generation window state",
+                    )
                 return {"status": "archived", "repo_id": repo, **index}
             time.sleep(30)
             continue

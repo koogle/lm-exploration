@@ -101,3 +101,15 @@ uses 2,048 for both backends. Invalid and truncated outputs are retained with
 accepted=false; neither syntax checks nor the teacher's explanations establish
 semantic correctness. The tokenizer call explicitly requests return_dict=false,
 validated locally against the pinned tokenizer (187 integer IDs for prompt 0).
+
+The production ranking uses accepted tokens divided by durable-output seconds,
+pooled across two complete trials. Acceptance fractions are reported separately;
+rejected outputs contribute zero usable tokens. A candidate with zero accepted
+examples in either round is excluded. This avoids optimizing raw token counts
+or treating an arbitrary acceptance fraction as a throughput objective. Before
+launch, an actual selected-backend shard must pass SHA256, token/target length,
+top-64/selected-probability and residual-mass integrity checks. The source report
+hashes, qualified commit and production source hashes enter the campaign manifest.
+HF files, tokenizer and indexes are namespaced by campaign, so another run cannot
+overwrite the same producer/chunk names. Final controller state is archived after
+the generation deadline and drain period.
