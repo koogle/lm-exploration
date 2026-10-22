@@ -13,10 +13,15 @@ from datetime import timedelta
 from itertools import islice
 from pathlib import Path
 
-from training_data.mixture import open_mixture
+from training_data.mixture import check_capacity, open_mixture
 from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, LOSS_IGNORE_INDEX, VOCAB_SIZE
 
-from distributed.config import DistributedConfig, DistributedRuntime, validate_resume
+from distributed.config import (
+    CHECKPOINT_FORMAT,
+    DistributedConfig,
+    DistributedRuntime,
+    validate_resume,
+)
 
 
 def source_hashes():
@@ -269,15 +274,7 @@ def train(
             else:
                 data = make_data()
             if not config.pilot and config.data_loader != "live":
-                capacity = min(
-                    data.manifest["max_passes"]
-                    * s["splits"]["train"]["loss_tokens"]
-                    * 100
-                    / s["weight_percent"]
-                    for s in data.sources.values()
-                )
-                if config.target_tokens > capacity:
-                    raise ValueError("Snapshot cannot support target mixture within two passes")
+                check_capacity(data, config.target_tokens)
             validation = open_mixture(
                 manifest,
                 loader=config.data_loader,
@@ -312,7 +309,7 @@ def train(
 
         optimizer = make_optimizer(model, config)
         metadata = {
-            "format": "scholarly-ddp-v1",
+            "format": CHECKPOINT_FORMAT,
             "config": config.as_dict(),
             "architecture": {"module": ModelConfig.__module__, "config": asdict(model_config)},
             "special_tokens": {"bos": BOS_TOKEN_ID, "eos": EOS_TOKEN_ID},
@@ -333,6 +330,9 @@ def train(
                 validate_resume(
                     saved, config, identity, metadata["source_sha256"], str(torch.__version__)
                 )
+                if "lineage" in saved:
+                    # A continued-pretraining phase keeps its parent lineage in every checkpoint.
+                    metadata["lineage"] = saved["lineage"]
                 model.load_state_dict(saved["model"])
                 optimizer.load_state_dict(saved["optimizer"])
                 step, tokens = saved["step"], saved["tokens"]
@@ -583,6 +583,7 @@ def train(
                 steps=step,
                 session_steps=step - start_step,
                 total_loss_tokens=tokens,
+                lifetime_loss_tokens=metadata.get("lineage", {}).get("parent_tokens", 0) + tokens,
                 session_loss_tokens=tokens - start_tokens,
                 stop_reason=reason,
                 data_error=data_error,

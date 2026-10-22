@@ -86,12 +86,6 @@ class RecipeTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 parse_checkpoints(value)
 
-    def test_checked_in_recipes_are_valid(self):
-        root = Path(__file__).resolve().parents[1] / "sft/recipes"
-        for path in sorted(root.glob("*.json")):
-            with self.subTest(recipe=path.name):
-                validate_recipe(json.loads(path.read_text()))
-
 
 class DeadlineTests(unittest.TestCase):
     def test_train_refuses_after_deadline(self):

@@ -113,7 +113,9 @@ the HF folder above into `artifacts/repetition-baselines/`, and
 `previous-comparison-20261018.json` and `low-temperature-20261018.json` from `analysis/repetition/`
 in the model repository `jfrick/scholarly-code-modern-gpt-124m-step2` into
 `artifacts/repetition/`. Then, from `training/`, select our final-checkpoint BF16 rows for the
-shared decoders and build both reports:
+shared decoders and build both reports. The BF16 inputs use the earlier per-study result
+format, which the current report no longer reads; run the commands from a checkout of
+revision `1e06fb8`:
 
 ```sh
 jq '.checkpoints |= [last | .samples |= map(select(.mode | IN("greedy", "sampled_08_seed1", "sampled_08_seed2", "sampled_10_topp95")))]' \

@@ -72,6 +72,31 @@ class ScriptLayoutTests(unittest.TestCase):
                     else:
                         self.assertTrue(local.is_dir(), str(local))
 
+    def test_training_worker_callers_pass_dataset_root(self):
+        """distributed.modal_train.worker takes dataset_root as a required keyword."""
+        for path in sorted(ROOT.rglob("*.py")):
+            if ".venv" in path.parts:
+                continue
+            tree = ast.parse(path.read_text())
+            imported = any(
+                isinstance(node, ast.ImportFrom)
+                and node.module == "distributed.modal_train"
+                and any(alias.name == "worker" and not alias.asname for alias in node.names)
+                for node in ast.walk(tree)
+            )
+            if not imported:
+                continue
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "worker"
+                    and node.func.attr in ("local", "remote", "spawn")
+                ):
+                    with self.subTest(script=str(path.relative_to(ROOT)), line=node.lineno):
+                        self.assertIn("dataset_root", [k.arg for k in node.keywords])
+
 
 if __name__ == "__main__":
     unittest.main()

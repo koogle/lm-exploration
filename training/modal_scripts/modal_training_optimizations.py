@@ -47,9 +47,13 @@ def benchmark(run_id, settings, provenance, qualify=False):
         if result.returncode:
             raise RuntimeError((result.stdout + result.stderr)[-6000:])
     # Fresh-job restore exercises model/optimizer/RNG/cursor state for every variant.
-    first = worker.local(run_id + "-start", SNAPSHOT, settings, provenance, "", 600, 2)
+    first = worker.local(
+        run_id + "-start", SNAPSHOT, settings, provenance, "", 600, 2, dataset_root="scholarly-code"
+    )
     resume = str(Path(first["final_checkpoint"]).relative_to("/runs"))
-    report = worker.local(run_id, SNAPSHOT, settings, provenance, resume, 3600, None)
+    report = worker.local(
+        run_id, SNAPSHOT, settings, provenance, resume, 3600, None, dataset_root="scholarly-code"
+    )
     if first["final_validation"] != dict(report["initial_validation"]):
         raise RuntimeError("Fresh-process resume validation mismatch")
     rows = [

@@ -8,7 +8,6 @@ the architecture-merge verification described below remains separate.
 default. There is one `100m` model choice, keeping 14 layers, width 768, 12 ordinary
 attention heads (head dimension 64) and context 256. The implementation is shared
 with the consolidated [10M model](../10m/README.md); only the default dimensions differ.
-Historical vanilla checkpoints retain a version-1 compatibility implementation.
 
 | Component | Current default |
 | --- | --- |
@@ -88,12 +87,9 @@ model = GPT(ModelConfig(vocab_size=32768))
 assert model.lm_head.weight is model.token_embedding.weight
 ```
 
-Recipes continue to select `model="100m"`; no tying flag is needed. New checkpoints
-record `architecture_version=2`. A small version-1 compatibility path reuses the
-original vanilla implementation to load historical 100M checkpoints, preserving
-their original untied weights and exact logits. Missing version metadata means
-legacy; the loader does not silently tie or modernize old weights. Resume across
-architecture versions is rejected. This is not a second modern model variant.
+Recipes continue to select `model="100m"`; no tying flag is needed. Historical
+vanilla 100M checkpoints (LayerNorm, learned positions, GELU, untied embeddings) are
+not loadable by the current code; the last revision that could load them is `1e06fb8`.
 
 The general recipe trainer and generation CLI remain character-only. The separate
 [subword pilot](PILOT.md) integrates the frozen BPE tokenizer and mixture loader.

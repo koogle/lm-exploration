@@ -184,7 +184,6 @@ def run_queued_documents(
     source,
     adapter,
     candidates,
-    supports,
     config,
     bounds,
     maximum,
@@ -205,7 +204,6 @@ def run_queued_documents(
         key
         for key, entry in queue.items()
         if entry["candidate"]["collection_id"] in config["collections"]
-        and supports(entry["candidate"])
         and pending(
             entry["candidate"], state, max_attempts=bounds["max_attempts_per_item"], adapter=adapter
         )
