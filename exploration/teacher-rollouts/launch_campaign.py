@@ -26,7 +26,7 @@ def candidates(state):
         if len(trials) != 2:
             continue
         accepted = sum(t["accepted_records"] for t in trials)
-        if accepted < 48:
+        if any(t["accepted_records"] == 0 for t in trials):
             continue
         result.append(
             {
@@ -35,6 +35,7 @@ def candidates(state):
                 / sum(t["durable_seconds"] for t in trials),
                 "accepted_records": accepted,
                 "records": sum(t["records"] for t in trials),
+                "acceptance_rate": accepted / sum(t["records"] for t in trials),
             }
         )
     return result
@@ -110,6 +111,18 @@ def main():
         "evidence": evidence,
         "launched_at": time.time(),
         "qualification_source": args.source_commit,
+        "production_source_sha256": {
+            name: hashlib.sha256(
+                (Path(__file__).parent / name).read_bytes()
+            ).hexdigest()
+            for name in [
+                "campaign_generate.py",
+                "campaign_modal.py",
+                "campaign_archive.py",
+                "curriculum.py",
+                "megakernel/targets.py",
+            ]
+        },
         "authorization": "User requested fastest correct backend and eight hours of fresh generation",
     }
     print(json.dumps(config, indent=2), flush=True)

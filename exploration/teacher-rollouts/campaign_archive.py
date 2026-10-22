@@ -33,7 +33,7 @@ def archive(root, workers, deadline):
                 continue
             state = json.loads(path.read_text())
             for chunk in state["chunks"]:
-                remote = f"data/producer-{worker}/{chunk['file']}"
+                remote = f"data/{root.name}/producer-{worker}/{chunk['file']}"
                 if remote not in seen:
                     pending.append(
                         (root / f"producer-{worker}" / chunk["file"], remote, chunk)
@@ -56,7 +56,9 @@ def archive(root, workers, deadline):
                 index[key] += chunk[key]
         data = (json.dumps(index, indent=2) + "\n").encode()
         operations.append(
-            CommitOperationAdd(path_in_repo="index.json", path_or_fileobj=data)
+            CommitOperationAdd(
+                path_in_repo=f"runs/{root.name}/index.json", path_or_fileobj=data
+            )
         )
         card = b"""---
 configs:
@@ -71,7 +73,7 @@ Native pinned Qwen3.5-9B prompt/output token IDs and raw top-64 log probabilitie
 selected-token log probability and residual probability mass. Top-k is not
 renormalized. Filter accepted=true for JSON/syntax-checked examples; semantic
 correctness is not established. Benchmark fixtures are excluded. These token IDs
-are incompatible with the old shared-Qwen student vocabulary. Use index.json at
+are incompatible with the old shared-Qwen student vocabulary. Use runs/<campaign>/index.json at
 an immutable commit for SHA256 hashes. Generated data includes rejected outputs
 for audit. The old Qwen3-8B corpus remains separate.
 """
@@ -82,7 +84,8 @@ for audit. The old Qwen3-8B corpus remains separate.
         if manifest.exists():
             operations.append(
                 CommitOperationAdd(
-                    path_in_repo="campaign.json", path_or_fileobj=str(manifest)
+                    path_in_repo=f"runs/{root.name}/campaign.json",
+                    path_or_fileobj=str(manifest),
                 )
             )
         tokenizers = list(root.glob("producer-*/tokenizer/tokenizer.json"))
@@ -91,7 +94,7 @@ for audit. The old Qwen3-8B corpus remains separate.
                 if path.is_file():
                     operations.append(
                         CommitOperationAdd(
-                            path_in_repo="tokenizer/" + path.name,
+                            path_in_repo=f"runs/{root.name}/tokenizer/" + path.name,
                             path_or_fileobj=str(path),
                         )
                     )

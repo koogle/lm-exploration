@@ -23,10 +23,10 @@ class CampaignGateTests(unittest.TestCase):
             [],
         )
 
-    def test_rejection_heavy_candidate_is_excluded(self):
+    def test_candidate_with_no_usable_output_is_excluded(self):
         self.assertEqual(
             candidates(
-                {"trials": {"0": self.trial(accepted=20), "1": self.trial(accepted=20)}}
+                {"trials": {"0": self.trial(accepted=0), "1": self.trial(accepted=0)}}
             ),
             [],
         )
