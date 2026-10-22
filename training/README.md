@@ -24,6 +24,10 @@ includes weights, code, tokenizer, training curves and raw metrics. Final fixed-
 diagnostic validation loss is 1.8708; broader quality and long-context evaluation remain
 pending. Its run, publication and repetition records are [archived on HF](publication/README.md#pr-16).
 
+Later continuations of that model (ECB/EMA, 60%-coding 5B, multilingual 10B) and
+a Python-focused Muon run did not produce usable models; see
+[what didn't work](NEGATIVE_RESULTS.md) for numbers, kept features and HF archives.
+
 The [Simple LLM 9.85M / 5B-token experiment](publication/README.md#pr-13)
 is complete and [published on Hugging Face](https://huggingface.co/jfrick/scholarly-code-modern-gpt-10m-5b).
 It processed 4,999,934,057 targets over 72,805 updates. Broader exploratory
@@ -134,9 +138,8 @@ All training runs on Modal GPU workers; there is no CPU or MPS training path.
 Historical character configs are retained under `workflows/model_configs/historical/`. Use
 `modal run -m workflows.modal_train --workflow workflows/<name>.json --run-id <id>`
 for subword training. [`workflows/`](workflows/README.md) owns preparation,
-qualification and continuation across sessions. Historical character recipes remain for provenance; their loop and launcher have
-been removed.
-Local commands validate recipes and sample from downloaded checkpoints only.
+qualification and continuation across sessions. Historical character recipes remain for provenance; their loop, launcher,
+checkpoint loader and `lm-generate` CLI have been removed (last present at revision `5083671`).
 
 ## Current state
 
@@ -157,15 +160,10 @@ gradient descent, start with [the XOR example](examples/README.md).
 - [`modal_scripts/`](modal_scripts/README.md): corpus, tokenizer and benchmark
   launchers. Training launch support and runtime configuration live in
   [`distributed/`](distributed/README.md); settings live in [`workflows/`](workflows/README.md).
-- [`generate.py`](generate.py): model-agnostic `lm-generate`; takes a checkpoint and a
-  prompt, and reads the architecture, configuration and tokenizer from the checkpoint.
 - [`trainer/`](trainer/README.md): the active training loop, evaluation,
-  checkpoint loading/saving, run provenance and shared sampling. Historical
-  character-recipe schemas and checkpoint loading remain for compatibility.
+  checkpoint saving/restore, optimizers and repair SFT.
 - [`workflows/`](workflows/README.md): preparation and continuation controllers,
   workflow configuration and compatibility/progress checks.
-- [`data/loading.py`](data/loading.py): character tokenization, text loading,
-  deterministic splits and batching.
 - [`data/`](data/README.md): curated dataset definitions, fetching and preparation
   scripts; `lm-prepare-simple-llm` runs `training_data.prepare_simple_llm`.
 - [`tokenizer/`](tokenizer/README.md): frozen tokenizer assets plus research,
@@ -185,17 +183,10 @@ Run from `training/`:
 
 ```sh
 uv sync --locked
-
-# Download a run's selected checkpoint, then sample from it locally.
-uv run --with 'modal[api-proxy-support]==1.6.1' modal volume get \
-  lm-exploration-training <run-id>/best.pt runs/<run-id>-best.pt
-uv run lm-generate --checkpoint runs/<run-id>-best.pt --prompt 'ROMEO:' --max-new-tokens 300
 ```
 
-`lm-generate` reads the architecture, model configuration and tokenizer from the
-checkpoint and prints each character as it is sampled. It runs on CPU by default
-(`--device mps` is optional) and seeds from the training seed unless `--seed` is
-given. It samples from the full softmax; temperature and top-k are not implemented.
+Sample from a trained subword model through an exported bundle; see
+[`publication/`](publication/README.md).
 
 The subword pilot measured actual-model throughput; broad model quality and
 production-corpus throughput remain unverified. Shakespeare is

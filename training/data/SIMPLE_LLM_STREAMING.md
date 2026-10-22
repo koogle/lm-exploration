@@ -123,8 +123,9 @@ snapshot or when checking its integrity:
 python -m training_data.token_shards verify /path/to/snapshot/manifest.json
 ```
 
-Only seekable schema-2 snapshots load. The gzip-to-seekable converter was removed;
-older gzip snapshots stay on the data volume and in the HF archive.
+The loader reads only this seekable format (schema 2). Snapshots in the earlier gzip
+format (schema 1) are not readable; the one-time converter was last present at
+revision `5083671`.
 
 ## Gates before substantial training
 

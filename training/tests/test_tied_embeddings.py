@@ -1,20 +1,13 @@
 """Embedding-sharing correctness checks; no data downloads or training jobs."""
 
 import copy
-import hashlib
 import io
 import unittest
-from dataclasses import asdict
-from pathlib import Path
 
 import torch
 from model_100m import model as variant
 from torch.nn import functional as F
-from training_data.subword import TOKENIZER_SHA256, VOCAB_SIZE, load_frozen
-
-from generate import load_model
-from trainer.checkpoints import runtime_provenance, validate_resume
-from trainer.recipe import MODELS, Recipe
+from training_data.subword import VOCAB_SIZE, load_frozen
 
 
 class TiedEmbeddingTests(unittest.TestCase):
@@ -58,45 +51,14 @@ class TiedEmbeddingTests(unittest.TestCase):
 
     def test_checkpoint_roundtrip_preserves_alias_and_logits(self):
         model = variant.GPT(self.config)
-        payload = {
-            "config": {"model_name": "model_100m", "model": asdict(self.config)},
-            "model": model.state_dict(),
-        }
         stream = io.BytesIO()
-        torch.save(payload, stream)
+        torch.save(model.state_dict(), stream)
         stream.seek(0)
-        reloaded = load_model(torch.load(stream, weights_only=True))
+        reloaded = variant.GPT(self.config)
+        reloaded.load_state_dict(torch.load(stream, weights_only=True))
         self.assertIs(reloaded.lm_head.weight, reloaded.token_embedding.weight)
         tokens = torch.randint(self.config.vocab_size, (2, 8))
         torch.testing.assert_close(model(tokens), reloaded(tokens), rtol=0, atol=0)
-
-    def test_rejects_cross_architecture_resume(self):
-        training = {
-            "batch_size": 2,
-            "lr": 0.001,
-            "seed": 42,
-            "device": "cuda",
-            "dtype": "float32",
-            "optimizer": "AdamW",
-            "betas": [0.9, 0.95],
-            "weight_decay": 0.1,
-            "gradient_clip_norm": 1.0,
-        }
-        config = {
-            "model_name": "model_100m",
-            "model": asdict(self.config),
-            "tokenizer": {"sha256": TOKENIZER_SHA256},
-            "training": training,
-        }
-        checkpoint = {"config": config, "dataset_fingerprint": {"sha256": "fixture"}, "step": 2}
-        fingerprint = checkpoint["dataset_fingerprint"]
-        validate_resume(checkpoint, config, fingerprint, 3)
-        different = copy.deepcopy(config)
-        different["model_name"] = "model_10m"
-        with self.assertRaisesRegex(ValueError, "identical"):
-            validate_resume(checkpoint, different, fingerprint, 3)
-        with self.assertRaisesRegex(ValueError, "identical"):
-            validate_resume({**checkpoint, "config": different}, config, fingerprint, 3)
 
     def test_frozen_tokenizer_forward_backward_and_parameter_counts(self):
         tokenizer = load_frozen()
@@ -118,17 +80,6 @@ class TiedEmbeddingTests(unittest.TestCase):
         # state_dict names both uses; parameters() counts the shared matrix once.
         named_tensor_count = sum(p.numel() for p in tied.state_dict().values())
         self.assertEqual(named_tensor_count - tied_count, VOCAB_SIZE * 768)
-
-    def test_registration_and_inherited_source_provenance(self):
-        self.assertIs(MODELS["100m"], variant)
-        self.assertNotIn("100m_tied", MODELS)
-        recipe = Recipe(model="100m", dataset="tiny-shakespeare", training={})
-        self.assertEqual(recipe.build_model_config(11), variant.ModelConfig(11))
-        sources = runtime_provenance(
-            "cpu", variant.__file__, model_dependencies=variant.MODEL_DEPENDENCIES
-        )["source_hashes"]
-        for name, path in variant.MODEL_DEPENDENCIES.items():
-            self.assertEqual(sources[name], hashlib.sha256(Path(path).read_bytes()).hexdigest())
 
 
 if __name__ == "__main__":

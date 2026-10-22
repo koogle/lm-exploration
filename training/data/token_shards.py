@@ -1,4 +1,4 @@
-"""Seekable uint16 token records and explicit snapshot verification/conversion.
+"""Seekable uint16 token records and explicit snapshot verification.
 
 Each record has a uint32 content-token count, a 32-byte document hash, then
 little-endian uint16 content tokens. BOS/EOS remain virtual loader boundaries.

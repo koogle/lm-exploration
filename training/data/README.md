@@ -15,10 +15,8 @@ The corresponding CPU Modal launcher lives in
 
 `datasets.json` records each dataset's source, license review and eligibility;
 [`registry.py`](registry.py) validates it with pydantic.
-Paths in it are relative to this `data/` directory. Historical character
-[recipes](../workflows/README.md) select a dataset by `id` from the retained
-`DATASETS` table in `trainer/recipe.py`. Their training loop and launcher have
-been removed; active training consumes the prepared snapshots described above.
+Paths in it are relative to this `data/` directory. Active training consumes the
+prepared snapshots described above.
 
 
 ## Registered datasets

@@ -13,5 +13,5 @@ See the [workflow guide](../README.md) for resolution and launch commands.
 `historical/` preserves the former recipe files byte for byte, including the unused
 qualification recipe and Shakespeare configs. These are configuration provenance,
 not active model-only configs: they contain old execution/dataset fields and are
-rejected as model selections. Character recipes retain the old `trainer.recipe`
-schema; character training has been removed and checkpoint loading remains available.
+rejected as model selections. They are not validated against current schemas; the
+character recipe schema and checkpoint loader were removed after revision `5083671`.

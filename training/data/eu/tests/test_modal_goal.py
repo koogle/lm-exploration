@@ -155,7 +155,11 @@ def test_existing_capped_inventory_is_pending_expansion(monkeypatch):
         "runs": [],
         "campaigns": {},
         "collections": {
-            "old": {"candidate_count": 5, "enumeration": {"complete": False, "selection_limit": 5}}
+            "old": {
+                "candidate_count": 5,
+                "enumeration_requested_limit": 5,
+                "enumeration": {"complete": False, "selection_limit": 5},
+            }
         },
     }
     monkeypatch.setattr(

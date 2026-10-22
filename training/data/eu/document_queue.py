@@ -194,7 +194,7 @@ def run_queued_documents(
     run["document_pipeline"] = "durable_download_queue_v1"
     run["document_queue_sha256"] = digest(Path(__file__).read_bytes())
     queue = state.setdefault("download_queue", {})
-    # Entries left behind by an earlier queue version after exhausting parse retries.
+    # A lowered attempt bound can exhaust retained entries; keep only retryable work queued.
     for key in [k for k in queue if exhausted(state, k, bounds["max_attempts_per_item"])]:
         state["failures"][key]["raw_path"] = queue.pop(key)["raw_path"]
     # Queue entries are immutable source revisions, not just URLs. Failed parses

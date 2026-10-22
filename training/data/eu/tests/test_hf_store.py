@@ -214,36 +214,6 @@ def test_metrics_accumulate_unicode_bytes_restart_and_duplicate_retry(tmp_path):
     assert b"Text UTF-8 bytes" in api.files["README.md"]
 
 
-def test_metric_backfill_pinned_historical_shard_and_source(tmp_path):
-    api = FakeAPI(tmp_path)
-    store = HFStore("owner/ecb", api)
-    state, revision = store.load()
-    raw_path = raw_blob_path("d" * 64)
-    revision = store.commit(
-        state,
-        revision,
-        [record() | {"raw_sha256": "d" * 64}],
-        raw_files={raw_path: b"historical-raw"},
-    )
-    expected = copy.deepcopy(state["metrics"])
-    for field in ("metrics_version", "metrics", "collection_metrics", "raw_blob_metrics"):
-        state.pop(field)
-    for shard in state["shards"]:
-        shard.pop("metrics")
-    commits_before = len(api.commits)
-    api.downloads.clear()
-    store.migrate_metrics(state, revision)
-    assert raw_path not in api.downloads
-    assert api.metadata_requests[-1]["revision"] == revision
-    assert state["metrics"] == expected
-    assert state["shards"][0]["metrics"] == expected
-    assert len(api.commits) == commits_before  # Migration itself never writes remotely.
-    # Once migrated, a missing historical download no longer forces rereads.
-    api.files.pop(raw_path)
-    store.migrate_metrics(state, revision)
-    assert state["metrics"] == expected
-
-
 def test_failed_commit_does_not_advance_metrics(tmp_path):
     api = FakeAPI(tmp_path)
     store = HFStore("owner/ecb", api)
@@ -256,22 +226,6 @@ def test_failed_commit_does_not_advance_metrics(tmp_path):
         store.commit(state, revision, [record() | {"id": "doc-2"}])
     assert state == before
     assert api.files == remote
-
-
-def test_missing_historical_raw_never_fabricates_zero_metrics(tmp_path):
-    api = FakeAPI(tmp_path)
-    store = HFStore("owner/ecb", api)
-    state, revision = store.load()
-    path = raw_blob_path("e" * 64)
-    revision = store.commit(
-        state, revision, [record() | {"raw_sha256": "e" * 64}], raw_files={path: b"raw"}
-    )
-    state.pop("metrics_version")
-    before = copy.deepcopy(state)
-    api.files.pop(path)
-    with pytest.raises(EntryNotFoundError):
-        store.migrate_metrics(state, revision)
-    assert state == before
 
 
 def test_metrics_history_tracks_only_committed_growth(tmp_path):
@@ -294,25 +248,6 @@ def test_metrics_history_tracks_only_committed_growth(tmp_path):
     with pytest.raises(RuntimeError):
         store.commit(state, revision, [record() | {"id": "doc-3"}])
     assert state["metrics_history"] == before
-
-
-def test_backfill_downloads_raw_when_metadata_has_no_size(tmp_path):
-    api = FakeAPI(tmp_path)
-    store = HFStore("owner/ecb", api)
-    state, revision = store.load()
-    raw_path = raw_blob_path("f" * 64)
-    revision = store.commit(
-        state,
-        revision,
-        [record() | {"raw_sha256": "f" * 64}],
-        raw_files={raw_path: b"fallback-body"},
-    )
-    state.pop("metrics_version")
-    api.repo_info = lambda **kwargs: SimpleNamespace(sha=api.sha, siblings=None)
-    api.downloads.clear()
-    store.migrate_metrics(state, revision)
-    assert raw_path in api.downloads
-    assert state["metrics"]["stored_raw_gzip_bytes"] == len(b"fallback-body")
 
 
 def http_error(status):
@@ -599,45 +534,6 @@ def test_bad_partition_prefix_is_rejected_before_upload(tmp_path, path):
     with pytest.raises(ValueError, match="Invalid raw file"):
         HFStore("owner/ecb", api).commit(empty_state(), api.sha, [], raw_files={path: b"body"})
     assert not api.commits
-
-
-def test_metric_migration_mixed_layout_uses_pinned_paths_and_unique_raw_bytes(tmp_path):
-    api = FakeAPI(tmp_path)
-    store = HFStore("owner/ecb", api)
-    state, revision, legacy = seed_legacy_blob(store, api)
-    partitioned = raw_blob_path("b" * 64)
-    revision = store.commit(
-        state,
-        revision,
-        [
-            record() | {"id": "another", "collection_id": "news", "raw_sha256": "a" * 64},
-            record() | {"id": "new", "collection_id": "news", "raw_sha256": "b" * 64},
-        ],
-        raw_files={partitioned: b"new-body"},
-    )
-    expected = copy.deepcopy(state["metrics"])
-    for name in ("metrics_version", "metrics", "collection_metrics", "raw_blob_metrics"):
-        state.pop(name)
-    api.downloads.clear()
-    store.migrate_metrics(state, revision)
-    assert state["metrics"] == expected
-    assert set(state["raw_blob_metrics"]) == {legacy, partitioned}
-    assert legacy not in api.downloads and partitioned not in api.downloads
-    assert api.metadata_requests[-1]["revision"] == revision
-
-
-def test_legacy_migration_without_metadata_falls_back_to_pinned_flat_path(tmp_path):
-    api = FakeAPI(tmp_path)
-    store = HFStore("owner/ecb", api)
-    state, revision, legacy = seed_legacy_blob(store, api)
-    for name in ("metrics_version", "metrics", "collection_metrics", "raw_blob_metrics"):
-        state.pop(name)
-    api.repo_info = lambda **kwargs: SimpleNamespace(sha=api.sha, siblings=None)
-    api.downloads.clear()
-    store.migrate_metrics(state, revision)
-    assert legacy in api.downloads
-    assert set(state["raw_blob_metrics"]) == {legacy}
-    assert state["metrics"]["stored_raw_gzip_bytes"] == len(b"legacy-body")
 
 
 def test_staged_raw_is_linked_by_later_parquet_commit_without_double_count(tmp_path):

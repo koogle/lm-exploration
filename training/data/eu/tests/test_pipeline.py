@@ -476,29 +476,53 @@ def test_json_html_adapter_preserves_original_raw_hash(harness):
 
 
 @pytest.mark.parametrize(
-    ("entry", "limit", "expected"),
+    "entry,limit,expected",
     [
         (
-            {"candidate_count": 5000, "enumeration": {"complete": False, "selection_limit": 5000}},
+            {
+                "candidate_count": 1000,
+                "enumeration_requested_limit": 1000,
+                "enumeration": {"complete": False},
+            },
             10000,
             True,
         ),
         (
-            {"candidate_count": 5000, "enumeration": {"complete": False, "selection_limit": 10000}},
+            {
+                "candidate_count": 1000,
+                "enumeration_requested_limit": 10000,
+                "enumeration": {"complete": False},
+            },
             10000,
             False,
         ),
         (
             {
                 "candidate_count": 55000,
-                "enumeration": {"complete": False, "selection_limit": 100000},
+                "enumeration_requested_limit": 100000,
+                "enumeration": {"complete": False},
             },
             100000,
             False,
         ),
-        ({"candidate_count": 5, "enumeration": {"complete": True}}, 10000, False),
-        ({"candidate_count": 5, "enumeration": {"complete": False}}, 10, True),
-        ({"candidate_count": 5, "enumeration": {}}, 10, False),
+        (
+            {
+                "candidate_count": 5,
+                "enumeration_requested_limit": 10,
+                "enumeration": {"complete": True},
+            },
+            10000,
+            False,
+        ),
+        (
+            {
+                "candidate_count": 5,
+                "enumeration_requested_limit": 5,
+                "enumeration": {"complete": False},
+            },
+            10,
+            True,
+        ),
         (
             {
                 "candidate_count": 5,
@@ -530,9 +554,9 @@ def test_expansion_preserves_missing_candidates_provenance_and_dedup(harness):
     store = DurableStore()
     h.run(store, maximum=1)
     previous_path = store.state["collections"]["a"]["inventory_path"]
-    # Simulate an existing legacy inventory selected under a lower bound.
+    # Simulate an inventory selected under a lower bound.
     entry = store.state["collections"]["a"]
-    entry.pop("enumeration_requested_limit")
+    entry["enumeration_requested_limit"] = 2
     entry["enumeration"] = {"complete": False, "selection_limit": 2}
     new = h.candidate("new")
     seen_limits = []

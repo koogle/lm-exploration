@@ -9,8 +9,7 @@ The [100M model](../100m/README.md) uses this same implementation at larger dime
 There are no separate RMSNorm/RoPE/SwiGLU model folders or recipe choices.
 Their untrained single-factor experiments remain in Git history.
 
-Historical character recipes select `model="10m"`; current subword recipes specify
-dimensions directly. All configuration, projection, block, initialization and forward
+Current subword recipes specify dimensions directly. All configuration, projection, block, initialization and forward
 code lives in `model.py`. No training or quality comparison has been run for the
 consolidated modern 10M architecture.
 

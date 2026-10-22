@@ -58,14 +58,11 @@ def inventory_expansion_needed(entry, desired_limit):
 
     Incomplete can also mean unsupported formats or a fixed adapter scan ceiling.
     Remember the requested limit, not just the resulting row count, to avoid
-    retrying such scans on every worker. Legacy adapter selection limits suffice.
+    retrying such scans on every worker.
     """
-    enumeration = entry.get("enumeration", {})
-    if enumeration.get("complete") is not False:
+    if entry["enumeration"].get("complete") is not False:
         return False
-    count = entry.get("candidate_count", 0)
-    requested = entry.get("enumeration_requested_limit", enumeration.get("selection_limit", count))
-    return desired_limit > max(count, requested)
+    return desired_limit > max(entry["candidate_count"], entry["enumeration_requested_limit"])
 
 
 def round_robin(collections, weights=None):

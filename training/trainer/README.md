@@ -44,12 +44,10 @@ resumes the same run.
 ## Other modules
 
 `gpu_benchmark.py` and `ddp_benchmark.py` are bounded throughput experiments,
-separate from the training loop. `sampling.py` supports local generation.
-`recipe.py`, `config.py` and `checkpoints.py` retain historical character-recipe
-validation and format-1 checkpoint interpretation for existing models and the
-[`lm-generate` CLI](../generate.py). The character training loop, checkpoint writer
-and Modal recipe launcher have been removed. Historical Shakespeare recipe files
-and measured evidence are preserved.
+separate from the training loop. The character training loop, its recipe schema,
+format-1 checkpoint loader and the `lm-generate` CLI have been removed (last present
+at revision `5083671`). Historical Shakespeare recipe files and measured evidence are
+preserved.
 
 Muon/AdamW implementation lives in `optimizers.py`; see the
 [matched comparison](../distributed/MUON_COMPARISON.md) for measured context.
