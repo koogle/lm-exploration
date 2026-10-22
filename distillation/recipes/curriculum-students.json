@@ -1,0 +1,15 @@
+{
+  "name": "curriculum-students",
+  "description": "Fresh 26.8M and 48.3M students, one pass over curriculum batch 02.",
+  "kind": "students",
+  "run_id": "python-curriculum-students-20261021-01",
+  "corpus": "qwen8b-python-curriculum-20261021-02",
+  "provenance": {
+    "launcher": "distillation/modal_curriculum_train.py",
+    "note": "Recorded with the per-run launcher at PR #31 commit 6d39610 or earlier, not this recipe; pass --run-id for new runs. Exact resume needs the source archived in the run folder.",
+    "results": [
+      "pr-31/distillation/results/python-curriculum-students-20261021-01.json",
+      "pr-31/distillation/results/python-curriculum-students-20261021-01-generations.json"
+    ]
+  }
+}

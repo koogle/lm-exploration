@@ -1,0 +1,20 @@
+{
+  "name": "curriculum-02",
+  "description": "Second Qwen3-8B curriculum batch after the factorial specification fix.",
+  "kind": "curriculum",
+  "run_id": "qwen8b-python-curriculum-20261021-02",
+  "teacher": {
+    "repo": "Qwen/Qwen3-8B",
+    "revision": "b968826d9c46dd6066d109eabc6255188de91218"
+  },
+  "count": 512,
+  "provenance": {
+    "launcher": "distillation/modal_curriculum.py",
+    "note": "Recorded with the per-run launcher at PR #31 commit 6d39610 or earlier, not this recipe; pass --run-id for new runs. Exact resume needs the source archived in the run folder.",
+    "results": [
+      "pr-31/distillation/results/qwen8b-python-curriculum-20261021-02.json",
+      "pr-31/distillation/results/qwen8b-python-curriculum-20261021-02-samples.json",
+      "pr-31/distillation/results/curriculum-generation-20261021.md"
+    ]
+  }
+}

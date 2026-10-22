@@ -1,0 +1,26 @@
+{
+  "name": "byte-pilot-holdout",
+  "description": "Parent and three byte-pilot checkpoints on one 512-document code holdout.",
+  "kind": "evaluate",
+  "run_id": "larger-holdout-20261021-01",
+  "checkpoints": [
+    "training:simple-llm-code60-unique-10b-20261020-r01-s04/step-000153342.pt",
+    "distillation:qwen4b-byte-pilot-20261021-02/step-000000500.pt",
+    "distillation:qwen4b-byte-pilot-20261021-02/step-000001000.pt",
+    "distillation:qwen4b-byte-pilot-20261021-02/step-000001133.pt"
+  ],
+  "data": {
+    "manifest": "scholarly-code/readiness-20261020-v2/snapshots/code60-onepass-10b/manifest.json",
+    "database": "scholarly-code/readiness-20261020-v2/multilingual/raw.sqlite"
+  },
+  "context": 256,
+  "max_documents": 512,
+  "windows_per_document": 8,
+  "provenance": {
+    "launcher": "distillation/modal_evaluate.py",
+    "note": "Recorded with the per-run launcher at PR #31 commit 6d39610 or earlier, not this recipe; pass --run-id for new runs. Exact resume needs the source archived in the run folder.",
+    "results": [
+      "pr-31/distillation/results/larger-holdout-20261021-01.json"
+    ]
+  }
+}

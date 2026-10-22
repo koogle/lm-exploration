@@ -3,8 +3,10 @@
 Distill a Hugging Face teacher (Qwen3 so far) into the repository's small GPT students
 (`training/100m`). The package holds the objectives, data readers, curriculum generation
 and verification, trainers, evaluation, Llama/vLLM export and a sizing calculator.
-Recorded run recipes, run-specific orchestration and findings belong in
-`distillation/EXPERIMENTS.md` and `distillation/recipes/` (stacked experiments PR).
+Recorded runs and findings: [EXPERIMENTS.md](EXPERIMENTS.md), with one recipe per run in
+[`recipes/`](recipes/). Run-specific orchestration kept for those runs: `modal_scale.py`,
+`scale_train.py` and `scale_status.py` (stopped 500M sweep), `modal_archive_sweep.py`, and
+`modal_billion.py` for the paused [4.5B continuation](BILLION_RUN.md).
 
 | Module | Role |
 | --- | --- |

@@ -1,0 +1,26 @@
+{
+  "name": "shared-50m",
+  "description": "Shared Qwen tokenizer (215.9M student), 0.5 CE + 0.5 full-vocabulary KL, 50M loss-bearing tokens.",
+  "kind": "shared",
+  "run_id": "qwen4b-shared-50m-20261021-01",
+  "teacher": {
+    "repo": "Qwen/Qwen3-4B-Base",
+    "revision": "906bfd4b4dc7f14ee4320094d8b41684abff8539"
+  },
+  "parent": "simple-llm-code60-unique-10b-20261020-r01-s04/step-000153342.pt",
+  "data": {
+    "manifest": "scholarly-code/readiness-20261020-v2/snapshots/code60-onepass-10b/manifest.json",
+    "database": "scholarly-code/readiness-20261020-v2/multilingual/raw.sqlite"
+  },
+  "target_tokens": 50000000,
+  "max_seconds": 82000,
+  "provenance": {
+    "launcher": "distillation/modal_shared.py",
+    "source_commit": "677cd1b",
+    "note": "Recorded with the per-run launcher at PR #31 commit 6d39610 or earlier, not this recipe; pass --run-id for new runs. Exact resume needs the source archived in the run folder.",
+    "results": [
+      "pr-31/distillation/results/qwen4b-shared-50m-20261021-01.json",
+      "pr-31/distillation/results/qwen4b-shared-50m-20261021-01-launch.json"
+    ]
+  }
+}

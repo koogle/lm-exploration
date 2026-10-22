@@ -1,0 +1,44 @@
+{
+  "name": "shared-50m-generations",
+  "description": "Greedy FP32 code continuations from six shared-50M checkpoints on three fixed prompts.",
+  "kind": "generations",
+  "run_id": "shared-checkpoint-generations-20261021-01",
+  "checkpoints": [
+    "qwen4b-shared-50m-20261021-01/step-000000000.pt",
+    "qwen4b-shared-50m-20261021-01/step-000000147.pt",
+    "qwen4b-shared-50m-20261021-01/step-000000715.pt",
+    "qwen4b-shared-50m-20261021-01/step-000001439.pt",
+    "qwen4b-shared-50m-20261021-01/step-000003588.pt",
+    "qwen4b-shared-50m-20261021-01/step-000007162.pt"
+  ],
+  "precision": "fp32",
+  "max_new_tokens": 128,
+  "prompts": [
+    {
+      "text": "def add(a, b):\n    \"\"\"Return the sum of a and b.\"\"\"\n",
+      "group": "add"
+    },
+    {
+      "text": "def unique(items):\n    \"\"\"Return a list with duplicates removed, preserving order.\"\"\"\n",
+      "group": "unique"
+    },
+    {
+      "text": "def factorial(n):\n    \"\"\"Return n factorial for a non-negative integer n.\"\"\"\n",
+      "group": "factorial"
+    }
+  ],
+  "modes": [
+    {
+      "name": "greedy",
+      "temperature": 0
+    }
+  ],
+  "provenance": {
+    "launcher": "distillation/modal_generations.py",
+    "note": "Recorded with the per-run launcher at PR #31 commit 6d39610 or earlier, not this recipe; pass --run-id for new runs. Exact resume needs the source archived in the run folder. The recorded JSON predates the sampling-toolkit result schema.",
+    "results": [
+      "pr-31/distillation/results/shared-checkpoint-generations-20261021-01.json",
+      "pr-31/distillation/results/shared-checkpoint-generations-20261021-01.md"
+    ]
+  }
+}
