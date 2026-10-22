@@ -1,7 +1,9 @@
 # Fixed-teacher rollouts on Modal
 
-Separate experiment for distillation data from **Qwen/Qwen3.5-9B**. No student
-training, pretraining-plan changes or large generation campaign. Includes a
+Separate experiment for distillation data from **Qwen/Qwen3.5-9B**. The
+[buffered distillation follow-up](BUFFERED_DISTILLATION.md) adds a separately
+authorized, correctness-gated eight-hour teacher campaign. Student training and
+pretraining plans remain outside this experiment. Includes a
 [Qwen3.5-9B CUDA megakernel](megakernel/) and a separate continuously batched vLLM
 baseline. **The CUDA port compiles and passes its H100 correctness smoke gate.**
 The initial pre-GPU runtime/research inspection report is archived on HF; see

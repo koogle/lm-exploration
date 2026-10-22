@@ -88,3 +88,16 @@ reference/target correctness and the executable vLLM fixtures, records measured
 rates and report hashes, and only then launches the chosen backend. The
 production window is eight hours, with a 256-worker ceiling and an additional
 absolute launch-to-shutdown bound. Its default invocation is a dry run.
+
+The parent PR #36 was also checked at `8be3c2c`: its eight-build H100 sweep keeps
+the original manual 512-thread/132-block kernel. The best ThunderKittens variant
+showed less than 0.01% difference, so no alternative fused build is promoted here.
+Our CUDA math uses that original configuration. The parent's later checkpoint
+batching work independently identifies the same persistence bottleneck.
+
+The first corrected curriculum attempt exposed truncation at the 1,024-token cap
+(only 2 of its first 6 vLLM records were complete/accepted). The next comparison
+uses 2,048 for both backends. Invalid and truncated outputs are retained with
+accepted=false; neither syntax checks nor the teacher's explanations establish
+semantic correctness. The tokenizer call explicitly requests return_dict=false,
+validated locally against the pinned tokenizer (187 integer IDs for prompt 0).

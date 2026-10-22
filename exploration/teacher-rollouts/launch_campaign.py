@@ -8,6 +8,8 @@ from pathlib import Path
 
 import modal
 
+from audit_targets import audit
+
 
 def read_json(volume, path):
     raw = b"".join(volume.read_file(path))
@@ -42,6 +44,7 @@ def main():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument("--qualification", required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--source-commit", required=True)
     parser.add_argument("--workers", type=int, default=256)
     parser.add_argument("--launch", action="store_true")
     args = parser.parse_args()
@@ -85,6 +88,17 @@ def main():
     ):
         raise ValueError("vLLM executable fixture gate failed")
     evidence["vllm_fixtures"] = {"path": fixture_path, "sha256": digest}
+    # Inspect the actual saved payload before admitting this backend to production.
+    chunk = states[backend]["chunks"][-1]
+    remote = f"{args.qualification}-{backend}/producer-0/{chunk['file']}"
+    folder = Path("artifacts") / args.qualification / "selected-payload"
+    folder.mkdir(parents=True, exist_ok=True)
+    local = folder / chunk["file"]
+    local.write_bytes(b"".join(volume.read_file(remote)))
+    audit_result = audit(local)
+    if audit_result["sha256"] != chunk["sha256"]:
+        raise ValueError("Saved payload SHA256 mismatch")
+    evidence["payload_audit"] = {"path": remote, **audit_result}
     config = {
         "backend": backend,
         "workers": args.workers,
@@ -95,7 +109,7 @@ def main():
         "measured_candidates": best,
         "evidence": evidence,
         "launched_at": time.time(),
-        "qualification_source": "7adb7d1",
+        "qualification_source": args.source_commit,
         "authorization": "User requested fastest correct backend and eight hours of fresh generation",
     }
     print(json.dumps(config, indent=2), flush=True)
