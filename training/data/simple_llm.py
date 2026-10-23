@@ -44,6 +44,8 @@ def validate_recipe(recipe):
             raise ValueError("Unsupported or empty source")
         if source["weight_percent"] <= 0:
             raise ValueError("Weights must be positive")
+        if source.get("split_by", "document") not in ("document", "row"):
+            raise ValueError("split_by must be document or row")
     return recipe
 
 
@@ -90,14 +92,25 @@ def stream_rows(source, shard, start=0):
                         offset += 1
 
 
-def adapt(source, row):
+def adapt(source, row, location=None):
+    """`location` is the row's (shard file, row index) in the pinned upstream revision.
+
+    Sources with `split_by: "row"` have no document IDs (e.g. pre-shuffled ClimbMix);
+    their split is sampled from the location. Exact duplicates in two splits are
+    caught by the preparers' content-hash check.
+    """
     name = source["name"]
     text = row.get("text")
     if not isinstance(text, str) or not text.strip():
         return None, "empty"
     if len(text) > MAX_CHARS:
         return None, "oversize"
-    document = row.get("id") or row.get("url")
+    if source.get("split_by") == "row":
+        if location is None:
+            raise ValueError("Row-sampled sources need the row's shard and index")
+        document = f"{location[0]}:{location[1]}"
+    else:
+        document = row.get("id") or row.get("url")
     parent = document
     if not document:
         return None, "missing_document_or_parent"
@@ -182,7 +195,9 @@ class Stager:
             try:
                 for row_index, row in rows:
                     with self.db:
-                        document, reason = adapt(source, row)
+                        document, reason = adapt(
+                            source, row, (source["files"][shard_index], row_index)
+                        )
                         content_hash = None
                         if document is not None:
                             content_hash = hashlib.sha256(document["text"].encode()).hexdigest()

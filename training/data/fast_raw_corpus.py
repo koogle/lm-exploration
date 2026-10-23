@@ -89,7 +89,7 @@ class FastRawCorpus(RawCorpus):
             rows = stream(source, source["files"][shard_index], start)
             try:
                 for row_index, row in rows:
-                    document, reason = adapt(source, row)
+                    document, reason = adapt(source, row, (source["files"][shard_index], row_index))
                     item = {
                         "row": row_index,
                         "shard": shard_index,

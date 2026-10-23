@@ -45,7 +45,7 @@ def validation_rows(source, shard, start):
     rows = stream_rows(source, shard, start)
     try:
         for index, row in rows:
-            doc, _ = adapt(source, row)
+            doc, _ = adapt(source, row, (shard, index))
             if doc is not None and doc["split"] == "validation":
                 yield index, row
     finally:

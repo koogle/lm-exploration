@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -123,6 +124,36 @@ class CorpusTests(unittest.TestCase):
         self.assertEqual(adapt(self.source, {"text": "hello"})[1], "missing_document_or_parent")
         document, _ = adapt(self.source, {"url": "https://example.org/a", "text": "hello"})
         self.assertEqual(document["parent"], "web:https://example.org/a")
+
+    def test_row_sampled_split_needs_no_document_ids(self):
+        self.source["split_by"] = "row"
+        with self.assertRaisesRegex(ValueError, "shard and index"):
+            adapt(self.source, {"text": "hello"})
+
+        def splits(text):
+            return [
+                adapt(self.source, {"text": text}, ("fixture.parquet", i))[0]["split"]
+                for i in range(10000)
+            ]
+
+        sampled = splits("hello")
+        # The location, not the text, decides the split.
+        self.assertEqual(sampled, splits("other text"))
+        self.assertTrue(900 < sampled.count("validation") < 1100)
+        self.assertTrue(900 < sampled.count("test") < 1100)
+        # The same text at a validation row and a train row is excluded from both.
+        first = sampled.index("validation")
+        second = sampled.index("train")
+        rows = [{"text": f"filler {i}"} for i in range(max(first, second) + 1)]
+        rows[first] = rows[second] = {"text": "Shared passage in two splits."}
+        stage = self.stage(self.root / "stage", rows, limit=len(rows))
+        self.assertEqual(
+            stage.db.execute(
+                "SELECT conflict FROM documents WHERE hash=?",
+                (hashlib.sha256(b"Shared passage in two splits.").hexdigest(),),
+            ).fetchone()[0],
+            1,
+        )
 
     def test_loader_padding_resume_repetition_and_tampering(self):
         rows = [row_for(self.source, "train", "def f(x):\n    return x + 1\n")]

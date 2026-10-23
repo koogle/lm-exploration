@@ -72,7 +72,7 @@ class RawCorpus:
             rows = reader(source, source["files"][shard], cursor[1] if shard == cursor[0] else 0)
             try:
                 for row_index, row in rows:
-                    document, reason = adapt(source, row)
+                    document, reason = adapt(source, row, (source["files"][shard], row_index))
                     with self.db:
                         if document is not None:
                             content = document["text"].encode()
