@@ -113,6 +113,24 @@ class LossTest(unittest.TestCase):
             self.assertAlmostEqual(float(soft[row]), expected, places=5)
             self.assertAlmostEqual(float(entropy[row]), h, places=5)
 
+    def test_chunk_cross_entropy_matches_torch_with_ignored_labels(self):
+        torch.manual_seed(1)
+
+        class Head:
+            lm_head = torch.nn.Linear(8, 13, bias=False)
+
+        features = torch.randn(6, 8)
+        labels = torch.tensor([3, -100, 0, 12, -100, 7])
+        ids = torch.randint(0, 13, (6, 4))
+        lps = torch.log(torch.full((6, 4), 0.2))
+        ce, soft, _ = student.chunk_losses(Head, features, labels, ids, lps)
+        expected = torch.nn.functional.cross_entropy(
+            Head.lm_head(features), labels, ignore_index=-100, reduction="sum"
+        )
+        self.assertAlmostEqual(float(ce), float(expected), places=4)
+        rows, _ = student.soft_cross_entropy(Head.lm_head(features), ids, lps)
+        self.assertAlmostEqual(float(soft), float(rows[labels != -100].sum()), places=4)
+
     def test_kl_is_zero_when_student_matches_teacher(self):
         logits = torch.log(torch.tensor([[0.5, 0.25, 0.125, 0.125]]))
         soft, entropy = student.soft_cross_entropy(

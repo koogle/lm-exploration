@@ -134,24 +134,34 @@ def batches(stream, batch_windows):
             group = []
 
 
-def soft_cross_entropy(logits, top_ids, top_lp):
+def soft_cross_entropy(logits, top_ids, top_lp, lse=None):
     """Cross-entropy against the teacher's {top-K, residual} partition, per row.
 
     Returns (soft CE, teacher partition entropy); their difference is the KL.
-    Duplicate student IDs (several native IDs mapped to UNK) are summed.
+    Duplicate student IDs (several native IDs mapped to one student ID) are
+    summed. Only the K gathered logits and the row log-sum-exp are needed, so
+    no [rows, vocabulary] temporaries are built.
     """
+    if lse is None:
+        lse = torch.logsumexp(logits, -1)
     present = top_ids >= 0
+    ids = top_ids.clamp(min=0)
     p = torch.where(
         present, top_lp.float().exp(), torch.zeros_like(top_lp, dtype=torch.float32)
     )
-    dense = torch.zeros_like(logits).scatter_add_(1, top_ids.clamp(min=0), p)
-    residual = (1 - dense.sum(-1)).clamp(min=0)
-    lse = torch.logsumexp(logits, -1)
-    in_top = dense > 0
-    rest = torch.logsumexp(logits.masked_fill(in_top, -math.inf), -1)
-    soft = -(dense * (logits - lse[:, None])).sum(-1) - residual * (rest - lse)
+    log_q = logits.gather(1, ids) - lse[:, None]
+    same = (
+        (ids[:, :, None] == ids[:, None, :]) & present[:, :, None] & present[:, None, :]
+    )
+    earlier = torch.ones_like(same[0], dtype=torch.bool).tril(-1)
+    first = present & ~(same & earlier).any(-1)  # first slot of each distinct ID
+    grouped = (same * p[:, None, :]).sum(-1)  # teacher mass of each slot's ID
+    q_top = torch.where(first, log_q.exp(), torch.zeros_like(log_q)).sum(-1)
+    residual = (1 - p.sum(-1)).clamp(min=0)
+    log_rest = torch.log1p(-q_top.clamp(max=1 - 1e-6))
+    soft = -(p * log_q).sum(-1) - residual * log_rest
     entropy = (
-        -(dense * dense.clamp(min=1e-30).log()).sum(-1)
+        -torch.where(first, grouped * grouped.clamp(min=1e-30).log(), 0.0).sum(-1)
         - residual * residual.clamp(min=1e-30).log()
     )
     return soft, entropy
@@ -160,9 +170,17 @@ def soft_cross_entropy(logits, top_ids, top_lp):
 def chunk_losses(model, features, labels, top_ids, top_lp):
     logits = model.lm_head(features).float()
     valid = labels != -100
-    ce = F.cross_entropy(logits, labels, ignore_index=-100, reduction="sum")
-    soft, entropy = soft_cross_entropy(logits[valid], top_ids[valid], top_lp[valid])
-    return torch.stack([ce, soft.sum(), entropy.sum()])
+    lse = torch.logsumexp(logits, -1)
+    target = logits.gather(1, labels.clamp(min=0)[:, None])[:, 0]
+    ce = torch.where(valid, lse - target, 0.0).sum()
+    soft, entropy = soft_cross_entropy(logits, top_ids, top_lp, lse)
+    return torch.stack(
+        [
+            ce,
+            torch.where(valid, soft, 0.0).sum(),
+            torch.where(valid, entropy, 0.0).sum(),
+        ]
+    )
 
 
 def losses(model, inputs, labels, top_ids, top_lp):

@@ -50,7 +50,7 @@ TIMEOUTS = {
     "finalize_data": 1800,
     "build_mbpp": 900,
     "teacher_job": 5400,
-    "control_job": 4 * 3600,
+    "control_job": 8 * 3600,
     "student_job": 6 * 3600,
 }
 
@@ -93,7 +93,11 @@ vllm_image = (
     # The pinned vLLM runtime provides python3 but no unversioned python.
     .run_commands("ln -sf /usr/bin/python3 /usr/local/bin/python")
     .pip_install_from_requirements(str(HERE / "vllm-overlay.lock"))
-    .pip_install("flash-linear-attention==0.5.2", extra_options="--no-deps")
+    # flash-linear-attention 0.5 keeps its kernels in fla-core; without it Transformers
+    # silently uses the PyTorch reference loops for the DeltaNet layers.
+    .pip_install(
+        "flash-linear-attention==0.5.2", "fla-core==0.5.2", extra_options="--no-deps"
+    )
     .pip_install("einops==0.8.1")
 )
 vllm_image = with_source(vllm_image)
@@ -296,7 +300,7 @@ def teacher_job(campaign, mode, items):
     retries=0,
     volumes={"/runs": volume},
 )
-def control_job(campaign, settings, items):
+def control_job(campaign, data_campaign, settings, items):
     import subprocess
 
     volume.reload()
@@ -312,7 +316,7 @@ def control_job(campaign, settings, items):
             "python",
             "/validation/control.py",
             str(run / "settings.json"),
-            str(root / "manifest.json"),
+            str(campaign_dir(data_campaign) / "manifest.json"),
             str(run),
         ],
         cwd="/validation",
@@ -714,11 +718,20 @@ def campaign(plan, deadline):
             calls["teacher"] = supervisor.spawn(
                 "teacher:solve", "teacher_job", name, "solve", items
             )
-        control = plan.get("control")
-        if control and f"{control['name']}:tuned" not in results["models"]:
-            calls["control"] = supervisor.spawn(
-                "control", "control_job", name, control, items
-            )
+        # "controls" lists several 0.8B fine-tunes; "control" is the single-run form.
+        controls = plan.get("controls") or (
+            [plan["control"]] if plan.get("control") else []
+        )
+        for control in controls:
+            if f"{control['name']}:tuned" not in results["models"]:
+                calls[f"control:{control['name']}"] = supervisor.spawn(
+                    f"control:{control['name']}",
+                    "control_job",
+                    name,
+                    data_name,
+                    control,
+                    items,
+                )
         for settings in plan["students"]:
             if settings["name"] not in results["models"]:
                 merged = {**plan["student_defaults"], **settings}
@@ -736,14 +749,11 @@ def campaign(plan, deadline):
         def on_result(label, value):
             if label == "teacher":
                 record("teacher", value["results"], {"model": TEACHER})
-            elif label == "control":
+            elif label.startswith("control:"):
+                control = label.split(":", 1)[1]
+                record(f"{control}:base", value["base"]["results"], {"model": CONTROL})
                 record(
-                    f"{control['name']}:base",
-                    value["base"]["results"],
-                    {"model": CONTROL},
-                )
-                record(
-                    f"{control['name']}:tuned",
+                    f"{control}:tuned",
                     value["tuned"]["results"],
                     {"model": CONTROL, "train": value["summary"]},
                 )
@@ -763,6 +773,29 @@ def campaign(plan, deadline):
             supervisor.state["status"] = "failed"
             supervisor.save()
         raise
+
+
+@app.function(
+    image=vllm_image,
+    gpu="H100",
+    cpu=8,
+    memory=65536,
+    timeout=1200,
+    retries=0,
+    volumes={"/runs": volume},
+)
+def control_probe(imports_only=False):
+    """Short throughput and kernel-availability probe for the 0.8B control."""
+    import subprocess
+
+    out = Path("/tmp/control-probe.json")
+    flags = ["--imports-only"] if imports_only else []
+    subprocess.run(
+        ["python", "/validation/control_probe.py", str(out), *flags],
+        cwd="/validation",
+        check=True,
+    )
+    return {} if imports_only else json.loads(out.read_text())
 
 
 SHARD_PATTERNS = [
@@ -887,6 +920,12 @@ def main(launch: bool = False):
 def archive(repo_id: str = "jfrick/qwen35-distillation-shards-20261023"):
     """Upload the plan's prepared shards to a private HF dataset (after the data stage)."""
     print(json.dumps(archive_shards.remote(PLAN["campaign"], repo_id), indent=1))
+
+
+@app.local_entrypoint()
+def probe(imports_only: bool = False):
+    """Run the 20-minute-bounded 0.8B throughput probe."""
+    print(json.dumps(control_probe.remote(imports_only), indent=1))
 
 
 @app.local_entrypoint()
