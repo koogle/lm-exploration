@@ -13,7 +13,7 @@ app = modal.App("lm-exploration-preparation-benchmark")
 
 
 @app.function(image=image, cpu=16, memory=16384, timeout=900, retries=0, max_containers=1)
-def measure():
+def measure(recipe):
     os.environ["RAYON_NUM_THREADS"] = "8"
     from training_data.benchmark_preparation import benchmark
 
@@ -28,13 +28,10 @@ def measure():
     from concurrent.futures import ThreadPoolExecutor
 
     from training_data.cached_shards import CachedShards
-    from training_data.simple_llm import load_recipe
+    from training_data.simple_llm import validate_recipe
 
-    sources = [
-        s
-        for s in load_recipe("/project/tokenizer/recipe-v1.json")["sources"]
-        if s["name"] in ("code_python", "finemath_4plus")
-    ]
+    # The first two recipe sources stand in for the live corpus.
+    sources = validate_recipe(recipe)["sources"][:2]
     for source in sources:
         source["weight_percent"] = 50
 
@@ -42,7 +39,7 @@ def measure():
 
     def collect(source):
         print(f"Sampling {source['name']}", flush=True)
-        rows = CachedShards()(source, source["files"][5 if source["name"] == "code_python" else 0])
+        rows = CachedShards()(source, source["files"][0])
         try:
             return [next(rows)[1] for _ in range(256)]
         finally:
@@ -54,7 +51,7 @@ def measure():
     result["live_sample_fetch_seconds"] = time.perf_counter() - started
     print("Real-source samples downloaded; benchmarking", flush=True)
     for source in sources:
-        source["files"] = [source["files"][5 if source["name"] == "code_python" else 0]]
+        source["files"] = [source["files"][0]]
     result["live_sample"] = benchmark(
         sampled_sources=sources, sampled_rows={s["name"]: r for s, r in zip(sources, samples)}
     )
@@ -63,8 +60,8 @@ def measure():
 
 
 @app.local_entrypoint()
-def main(output: str = "artifacts/unpublished/preparation-speedup.json"):
-    report = measure.remote()
+def main(recipe: str, output: str = "artifacts/unpublished/preparation-speedup.json"):
+    report = measure.remote(json.loads(Path(recipe).read_text()))
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2) + "\n")

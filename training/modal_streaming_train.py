@@ -28,8 +28,8 @@ run_volume = modal.Volume.from_name("lm-exploration-training")
 @app.function(
     image=image, cpu=2, memory=4096, timeout=120, retries=0, volumes={"/data": data_volume}
 )
-def initialize(run_id):
-    from training_data.simple_llm import SPLIT_VERSION, load_recipe
+def initialize(run_id, recipe):
+    from training_data.simple_llm import SPLIT_VERSION, validate_recipe
     from training_data.subword import TOKENIZER_SHA256
 
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", run_id):
@@ -39,7 +39,7 @@ def initialize(run_id):
     folder.mkdir(parents=True, exist_ok=False)
     manifest = {
         "format": "scholarly-live-v1",
-        "recipe": load_recipe("/project/tokenizer/recipe-v1.json"),
+        "recipe": validate_recipe(recipe),
         "tokenizer_sha256": TOKENIZER_SHA256,
         "split_policy": SPLIT_VERSION,
         "max_passes": 2,
@@ -86,6 +86,7 @@ def main(
     config: str,
     run_id: str,
     snapshot: str = "",
+    recipe: str = "",
     gpu: str = "H100",
     resume: str = "",
     max_seconds: int = 3000,
@@ -102,6 +103,8 @@ def main(
         raise ValueError("This review launcher uses bounded sessions <=3000s")
     if resume and not snapshot:
         raise ValueError("Resume must pin its original live manifest")
+    if bool(snapshot) == bool(recipe):
+        raise ValueError("Select either an existing live snapshot or a corpus recipe")
     files = [
         Path(__file__),
         *Path("data").glob("*.py"),
@@ -115,7 +118,7 @@ def main(
         "source_sha256": {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
         "mode": "bounded producer/consumer; checkpoint only acknowledged batches",
     }
-    snapshot = snapshot or initialize.remote(run_id)
+    snapshot = snapshot or initialize.remote(run_id, json.loads(Path(recipe).read_text()))
     report = worker.with_options(gpu=f"{gpu}:{cfg.world_size}", cpu=4 * cfg.world_size).remote(
         run_id, snapshot, cfg.as_dict(), provenance, resume, max_steps or None, max_seconds
     )

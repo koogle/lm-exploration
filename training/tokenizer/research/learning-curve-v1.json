@@ -4,7 +4,7 @@
   "sizes_mib": [64, 128, 256, 512, 1024, 2048],
   "vocab_sizes": [16384, 32768, 50000],
   "evaluation_mib": 32,
-  "source_recipe": "tokenizer/recipe-v1.json",
+  "source_recipe": "tokenizer/simple-llm-v1/recipe.json",
   "split_policy": "scholarly-parent-v2; bucket 0 evaluation, bucket 1 excluded, buckets 2-9 fitting",
   "sampling": "Seeded permutation of every pinned shard per source; source-weighted UTF-8 byte quotas; nested per-source prefixes",
   "max_document_bytes": 65536,

@@ -8,7 +8,7 @@ from training_data.simple_llm import Stager, load_recipe
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--recipe", default="tokenizer/recipe-v1.json")
+    parser.add_argument("--recipe", required=True, help="Corpus recipe JSON")
     parser.add_argument("--output", required=True, help="Versioned persistent staging directory")
     parser.add_argument("--source", action="append", help="Default: all pinned sources")
     parser.add_argument("--max-records-per-source", type=int, default=100)

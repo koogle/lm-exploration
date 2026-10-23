@@ -272,7 +272,6 @@ launchers may impose shorter bounds.
 The [generic controller](../workflows/modal_train.py) accepts an explicit workflow
 path, model config and dataset config. The [workflow guide](../workflows/README.md)
 documents raw preparation, prepared-snapshot selection, qualification and continuation.
-`workflows/small-5b.json` retains the small-model experiment's execution settings.
 The target token count and GPU allocation now belong only to the workflow;
 the dataset owns loader selection and the model config owns architecture/optimizer settings.
 

@@ -1,0 +1,13 @@
+{
+  "id": "test-fixture",
+  "sources": [
+    {
+      "name": "web",
+      "repo": "test/fixture",
+      "revision": "0000000000000000000000000000000000000000",
+      "format": "parquet",
+      "files": ["fixture.parquet"],
+      "weight_percent": 100
+    }
+  ]
+}
