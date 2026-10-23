@@ -1,0 +1,137 @@
+# Pretraining data for a ~125M model: recent literature and releases
+
+Reviewed 2026-10-23, after the 124M continuations and the Python run in
+[what didn't work](../NEGATIVE_RESULTS.md) failed to give usable generations.
+External results are author-reported and were not reproduced here. Licenses and sizes
+are as stated on dataset cards on the review date; check them again before use.
+The proposals at the end are not changes to the [agreed plan](../plans/SIMPLE_LLM_PRETRAINING.md).
+
+## What "20B tokens" meant for our model
+
+The published 124M model saw one 5B mixture. Its 20.9B lifetime targets came from
+three continuations with very different distributions: 0.88B ECB/EMA, 5B at 60% code,
+then 10B of multilingual GitHub code. That is not a single, clean 20B run on a good
+mixture, so it does not show what 20B tokens of good data can do at this size.
+
+Our sources are mostly a 2024 baseline. They are raw `codeparrot-clean` Python,
+FineWeb-Edu capped at 10%, FineMath, peS2o and Common Pile books. Pre-1929 books
+and Gutenberg together are 12% of the mix. The frozen
+[structured-code-v1 tokenizer](../tokenizer/) uses 13.99% more tokens on this mixture
+than the earlier 32K tokenizer. So the same token budget covers less text.
+
+## Calibrating "useful" at 135M
+
+[SmolLM2-135M](https://huggingface.co/HuggingFaceTB/SmolLM2-135M) was trained on
+2T tokens, 100 times our budget, with a curated FineWeb-Edu/DCLM/Stack mixture
+([paper](https://arxiv.org/pdf/2502.02737)). Its base model scores 42.1 HellaSwag,
+43.9 ARC average, 31.5 MMLU (cloze) and 1.4 GSM8K (5-shot). At this size, coherent
+prose and simple completions are realistic. Reliable math or working code is not,
+whatever the data. A "useful" model needs a narrow definition before the next run.
+
+## Web text: curated mixtures beat FineWeb-Edu
+
+- **ClimbMix** ([card](https://huggingface.co/datasets/nvidia/Nemotron-ClimbMix),
+  [CLIMB paper](https://arxiv.org/abs/2504.13161)) is about 400B tokens. It was built
+  by clustering web data into 1,000 topics, removing clusters an advert classifier and
+  an educational-value classifier score low, and mixing the remainder with searched
+  weights. Its license is **CC BY-NC 4.0, research and development only**. It is
+  released GPT-2-tokenized with a detokenization script.
+- In nanochat, switching the GPT-2 speedrun from FineWeb-Edu to ClimbMix cut the
+  time to target from 2h46m to 2h01m. It also allowed depth 24 instead of 26,
+  reaching GPT-2 capability with about 7B tokens
+  ([LOG.md](https://github.com/karpathy/nanochat/blob/master/dev/LOG.md),
+  [announcement](https://x.com/karpathy/status/2029701092347630069)). Karpathy reports
+  that Olmo, FineWeb and DCLM data all regressed against FineWeb-Edu.
+  An NVIDIA researcher reported a +60% improvement after also swapping mid-training
+  data ([post](https://x.com/PavloMolchanov/status/1989090248891171144)); this claim
+  has no paper behind it.
+- **AutoData** ([arXiv 2609.19754](https://arxiv.org/html/2609.19754v1)) searched
+  about 1,200 agent-written selectors over ClimbMix using a roughly 125M proxy model
+  trained on 0.42B tokens. Its best selector beats random sampling on val-bpb up to
+  depth 20, but equals it at depth 24 (0.7065 vs. 0.7055 CORE), and its CORE gains
+  are not significant. A DCLM-style classifier on ClimbMix was the worst arm
+  (0.9954 vs. 0.9484 val-bpb at depth 8). Re-filtering an already curated mixture
+  does little, and can hurt.
+- **Darwin-CC** ([arXiv 2603.14420](https://arxiv.org/html/2603.14420v1)) reports
+  an 18-benchmark average of 44.13, against 42.42 for DCLM and 36.52 for FineWeb-Edu,
+  with a 3B model on 500B tokens. This is self-reported and at a much larger scale.
+
+## Code: filtered and rewritten code beats raw Python
+
+- **Stack-Edu / python-edu**
+  ([SmolLM corpus](https://huggingface.co/datasets/HuggingFaceTB/smollm-corpus),
+  SmolLM2 paper) applies an educational-value classifier to The Stack v2. The corpus
+  stores only `blob_id`s. File contents come from Software Heritage's S3 bucket
+  (about 6 hours on 16 cores, per the card). Each file keeps its Stack v2 license
+  metadata, so our MIT/Apache/BSD/ISC filter can still apply. Our earlier
+  `GatedRepoError` on The Stack needs the terms accepted on HF first.
+- **SwallowCode** ([arXiv 2505.02881](https://arxiv.org/abs/2505.02881)) builds
+  about 16.1B tokens from Stack v2 Python. It keeps files that parse, filters them
+  with Pylint, then rewrites them twice with an LLM. Continued pretraining of
+  Llama-3.1-8B with a 50B budget gains +17.0 HumanEval pass@1 over Stack-Edu.
+  The release carries the **Llama 3.3 Community License**, which is why
+  [Olmo 3](https://arxiv.org/pdf/2512.13961) built its own replica (CraneCode)
+  and pretrained on Stack-Edu.
+- The first two SwallowCode stages (parse check and Pylint score) need no LLM and
+  could be applied to our existing code sources directly.
+
+## Synthetic and rephrased data
+
+- **FinePhrase** ([card](https://huggingface.co/datasets/HuggingFaceFW/finephrase),
+  [arXiv 2604.13977](https://arxiv.org/abs/2604.13977)) is about 486B tokens of
+  FineWeb-Edu rewritten by SmolLM2-1.7B-Instruct as FAQ, math word problem, table
+  and tutorial. Its license is ODC-BY. The paper finds structured formats beat both
+  curated web and earlier synthetic data. Generators above about 1B parameters did
+  not help, and synthetic-only training underperformed mixing with real data.
+- **BeyondWeb** ([arXiv 2508.10975](https://arxiv.org/abs/2508.10975)) reports
+  +2.6 points over Nemotron-Synth across 14 benchmarks. Its data is not released.
+  **REWIRE** ([arXiv 2506.04689](https://arxiv.org/html/2506.04689v2)) rewrites
+  documents a quality filter would discard, instead of dropping them.
+- **SYNTH** ([blog](https://huggingface.co/blog/Pclanglais/synth-data-frontier),
+  [card](https://huggingface.co/datasets/SYNTH-Initiative/SYNTH/blob/main/README.md))
+  is about 75B tokens (Pleias tokenizer) generated from 58,698 Wikipedia articles,
+  with reasoning traces included. Its license is CC-BY-4.0. Pleias trained
+  [Baguettotron](https://huggingface.co/PleIAs/Baguettotron) (321M, 80 layers,
+  200B tokens) and Monad (56M, 64 layers) on SYNTH alone. Pleias reports
+  best-in-class MMLU, GSM8K and HotPotQA scores for the size.
+- **Sutra-10B** ([blog](https://huggingface.co/blog/codelion/scaling-pedagogical-pretraining-10-billion-tokens),
+  2026-03-06) is 10.2B tokens, mostly generated from a concept graph. A 70M model
+  trained on it for three epochs reached a 34.27 average over 10 benchmarks.
+  Seven 1B-token baseline datasets scored within noise of one another (31.42–32.38),
+  and the larger comparison is not token-matched.
+
+Our plan excludes teacher distillation and chose FineWeb-Edu over Cosmopedia.
+Using rephrased data would revise both decisions, so the user needs to decide on it.
+
+## Repetition and data limits
+
+- With a fixed pool of good data, a mixture can repeat it more than single-source
+  training can ([arXiv 2605.12715](https://arxiv.org/html/2605.12715v2), 101M–805M
+  models, more than 2,000 runs). The best repetition count reaches about 15–20,
+  against the usual rule of fewer than 4 epochs. When good data is scarce, a broader
+  quality filter (top 10%) works better than repeating the top 1%: at 30B tokens,
+  Q90–99 reaches loss 2.33 versus 2.80 for Q99–100. Our two-pass limit per source
+  may therefore be more conservative than it needs to be.
+- Repetition loops are more common in smaller, shorter-trained models. Repetitive
+  training text is a suspected but untested cause
+  ([arXiv 2504.01100](https://arxiv.org/abs/2504.01100)). The LZ penalty
+  ([TMLR 2026](https://mlanthology.org/tmlr/2026/ginart2026tmlr-lz/)) reports that
+  frequency and repetition penalties leave up to about 4% degenerate output, while it
+  does not degenerate under greedy decoding. This is a decoding mitigation, not a
+  fix to the model.
+
+## Proposed next steps
+
+These are our inferences, not results.
+
+| Priority | Proposal | Evidence that would decide it |
+| --- | --- | --- |
+| First | Define "useful" for 125M. Candidates: coherent paragraphs, short Python functions that pass simple tests, or JSON/tool format validity. | Choose metrics and pass thresholds before the next run, with SmolLM2-135M as an external reference on the same evaluation. |
+| First | Run a matched data ablation instead of another large run. Train 124M models for about 2B tokens each on: (A) the current mix, (B) ClimbMix only, (C) a SmolLM2-style mix of FineWeb-Edu, DCLM, Stack-Edu Python and FineMath, (D) C with about 30% FinePhrase or SYNTH. | Byte-normalized held-out BPB, a CORE-style benchmark set, our repetition suite and MBPP, all at matched tokens. From the 5B run's 7.67 hours on 8 H100s, each arm is roughly 25 H100-hours. This is an estimate, not a measurement. |
+| First | Replace `codeparrot-clean` with Stack-Edu Python, filtered by our license list, plus a parse check and Pylint threshold. | Python BPB and MBPP pass rate against the current code source at matched tokens. |
+| Next | Measure repetition in each training source with the existing repetition metrics, especially old books and code. | Find which sources have high repeated 4-gram rates or many long loops, and test whether removing them reduces model loops. |
+| Next | Retrain the tokenizer on the mixture we actually train on, or accept the 14% cost explicitly in comparisons. | Bytes per token on each source, and BPB at matched compute. |
+| Later | Reconsider the two-pass limit for small, high-quality sources, using the data-constrained mixture law. | Held-out loss against repetition count r on a 124M proxy. |
+
+ClimbMix is non-commercial. The checkpoints of this personal project are public on HF,
+so a ClimbMix-trained model must keep that license.
