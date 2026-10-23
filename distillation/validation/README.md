@@ -2,8 +2,8 @@
 
 A bounded experiment that answers, before any large student run, whether the
 Qwen3.5-9B Python/math trajectories can teach a small model anything measurable,
-and whether more data or a bigger model helps. **Status: implemented and
-CPU-tested; not yet launched.** No results exist yet.
+and whether more data or a bigger model helps. **Status: campaign
+`distill-validation-20261023-01` ran on 2026-10-23; findings below.**
 
 Data: the private HF dataset `jfrick/qwen35-python-math-trajectories-20261022`
 (native Qwen3.5 token IDs plus the teacher's top-64 log probabilities per
@@ -30,7 +30,7 @@ position). The run pins the dataset commit it reads and records it in its result
    | --- | --- | --- | --- | --- |
    | `trim-small` | 10 × 512 | 16,384 trimmed | 31.5M / 39.9M | 50M, 200M, 500M |
    | `trim-large` | 18 × 832 | 16,384 trimmed | 149.7M / 163.4M | 50M, 200M, 500M |
-   | `full-small` | 10 × 512 | 248,320 native | 31.5M / 158.7M | 500M |
+   | `full-small` | 10 × 512 | 248,320 native | 31.5M / 158.7M | 200M (500M did not fit; see findings) |
 
    Each cell is trained twice: plain cross-entropy (`ce`) and `0.5 · CE + 0.5 ·
    soft CE` against the teacher (`kd`). `full-small` is the "150M total with Qwen's
@@ -128,4 +128,76 @@ sandbox were not exercised before launch.
 
 ## Findings
 
-None yet: the campaign has not been launched.
+Campaign `distill-validation-20261023-01`, dataset revision `5046680`: 547.7M training
+tokens in 536,959 exercises, 11.0M held-out tokens. Greedy pass@1 with 95% Wilson
+intervals; loss is held-out CE per UTF-8 byte. Full outputs: see [Archive](#archive).
+
+| Model | Data | Held-out curriculum (137) | MBPP (427) | CE/byte |
+| --- | ---: | ---: | ---: | ---: |
+| Qwen3.5-9B teacher (ceiling) | – | 83.2% [76.1, 88.5] | 76.8% [72.6, 80.6] | – |
+| Qwen3.5-0.8B-Base, before | – | 10.2% [6.2, 16.4] | 12.9% [10.0, 16.4] | 0.305 |
+| Qwen3.5-0.8B-Base, fine-tuned | 50M | 62.0% [53.7, 69.7] | 41.7% [37.1, 46.4] | 0.171 |
+| trim-small CE | 50M | 8.0% [4.5, 13.8] | 0.2% [0.0, 1.3] | 0.493 |
+| trim-small CE | 200M | 35.0% [27.6, 43.3] | 4.0% [2.5, 6.3] | 0.291 |
+| trim-small CE | 500M | 49.6% [41.4, 57.9] | 9.1% [6.8, 12.2] | 0.241 |
+| trim-small KD | 50M | 5.8% [3.0, 11.1] | 0.7% [0.2, 2.0] | 0.491 |
+| trim-small KD | 200M | 32.8% [25.5, 41.1] | 4.2% [2.7, 6.6] | 0.287 |
+| trim-small KD | 500M | 44.5% [36.5, 52.9] | 5.9% [4.0, 8.5] | 0.235 |
+| trim-large CE | 50M | 9.5% [5.6, 15.6] | 1.9% [1.0, 3.7] | 0.423 |
+| trim-large CE | 200M | 44.5% [36.5, 52.9] | 5.2% [3.4, 7.7] | 0.258 |
+| trim-large CE | 500M | 54.0% [45.7, 62.1] | 11.0% [8.4, 14.3] | 0.212 |
+| trim-large KD | 50M | 10.9% [6.7, 17.3] | 0.9% [0.4, 2.4] | 0.413 |
+| trim-large KD | 200M | 44.5% [36.5, 52.9] | 5.9% [4.0, 8.5] | 0.250 |
+| trim-large KD | 500M | 62.8% [54.4, 70.4] | 13.6% [10.7, 17.2] | 0.204 |
+
+The full-vocabulary 200M students (`full-small-200m-ce`, `-kd`) are still running;
+their rows will be added when they finish.
+
+- **The data teaches the task.** Fine-tuning the pretrained 0.8B control on 50M tokens
+  (about a tenth of the data) raised MBPP from 12.9% to 41.7% and the held-out set from
+  10.2% to 62.0%. Part of the base score is format (297/427 base answers parsed, 406
+  after), but most of the gain is correctness on human-written problems outside the
+  teacher's templates.
+- **From scratch, more data keeps helping; there is no plateau at 500M.** The 31.5M
+  backbone went from 8% to 35% to 50% held-out and from 0.2% to 4% to 9% MBPP at 50M,
+  200M and 500M tokens. These are the first non-zero results of any distillation
+  attempt in this repository (the earlier best was 1/8 diagnostic tasks).
+- **Size helps at equal data.** At 500M tokens the 150M backbone beats the 31.5M one
+  on loss (0.204–0.212 vs 0.235–0.241) and on both sets, although the pass-rate
+  intervals overlap.
+- **KD always lowers loss; its effect on pass rate depends on size.** On the small
+  model KD was neutral or worse (500M MBPP 5.9% vs 9.1%); on the large model at 500M it
+  was the best student (62.8% held-out, 13.6% MBPP vs 54.0% / 11.0% for CE). Intervals
+  overlap, so this is a lead, not a result. KD used α = 0.5 at temperature 1 without
+  tuning.
+- **The from-scratch gap is general knowledge, not data.** The best student reaches
+  63% held-out but only 14% MBPP, against 42% for the 0.8B model fine-tuned on a tenth
+  of the data. Narrow exercises alone do not supply the Python knowledge MBPP needs.
+- **Teacher test agreement is low, and mostly a test problem.** Of 548 held-out
+  exercises with at least three teacher-written tests, the original solution passed
+  all of them in 137 (25%); 380 failures were assertion mismatches. In the cases read
+  by hand the code was right and the expected values (computed by the teacher without
+  thinking) were wrong. Treat 25% as a loose lower bound on data correctness.
+- **Held-out overlap is unresolved.** Held-out problem statements share at most 25% of
+  their word 3-grams with a 1,654-record training sample; one solution-code
+  near-duplicate (5-gram Jaccard ≥ 0.5) in that sample extrapolates to about two per
+  item across the full training set, with a very wide interval. MBPP is the clean
+  generalization measure.
+
+Operational notes, negative ones included:
+
+- The first launch counted unfinished calls as failed (`get(timeout=0)` raises the
+  builtin `TimeoutError`). The second hit HF HTTP 429 at 512 concurrent downloads.
+  Prep now reuses finished shards and runs 16 containers × 2 downloads.
+- The workspace's 10-GPU limit was held by the teacher-generation app; the GPU stages
+  waited about 1.5 hours until it was reduced to 5.
+- The 248K-vocabulary students trained at about 21.8K positions/s against about 170K
+  for the trimmed small model (about 8× slower), so the 500M runs could not finish
+  within the 6-hour job limit. They were cancelled at about 230M positions and
+  replaced by 200M runs.
+- The 0.8B control fine-tune took 143 minutes for 50M tokens; its throughput was not
+  investigated.
+
+## Archive
+
+Shards: private HF dataset `jfrick/qwen35-distillation-shards-20261023`.
