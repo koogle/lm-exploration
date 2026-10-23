@@ -113,7 +113,7 @@ def remaining(deadline, reserve=120):
     memory=24576,
     timeout=TIMEOUTS["prepare_group"],
     retries=0,
-    max_containers=64,
+    max_containers=16,  # HF rate-limits per-file download tokens
     volumes={"/runs": volume},
     secrets=[hf_secret],
 )
@@ -124,10 +124,15 @@ def prepare_group(campaign, name, files, revision, hashes, keep_records):
     from huggingface_hub.utils import HfHubHTTPError
     from prepare import write_shard
 
+    out = campaign_dir(campaign) / "shards" / name
+    done = out / "summary.json"
+    if done.exists() and json.loads(done.read_text())["chunks"] == len(files):
+        return {"name": name, **json.loads(done.read_text())}
     local = Path("/tmp/download") / name
 
     def fetch(path):
-        for attempt in range(8):
+        # HF rate-limits per-file download tokens; wait as long as it asks.
+        for attempt in range(20):
             try:
                 result = hf_hub_download(
                     DATASET,
@@ -138,22 +143,20 @@ def prepare_group(campaign, name, files, revision, hashes, keep_records):
                 )
                 break
             except HfHubHTTPError as error:
-                if attempt == 7 or getattr(error.response, "status_code", None) not in (
-                    429,
-                    500,
-                    502,
-                    503,
-                    504,
-                ):
+                status = getattr(error.response, "status_code", None)
+                if attempt == 19 or status not in (429, 500, 502, 503, 504):
                     raise
-                time.sleep(30 * (attempt + 1))
+                after = (error.response.headers or {}).get("Retry-After", "")
+                time.sleep(
+                    min(300, int(after) if after.isdigit() else 30 * (attempt + 1))
+                )
         if path in hashes and file_sha256(result) != hashes[path]:
             raise ValueError(f"SHA256 mismatch for {path}")
         return result
 
-    with ThreadPoolExecutor(8) as pool:
+    with ThreadPoolExecutor(2) as pool:
         paths = list(pool.map(fetch, files))
-    summary = write_shard(paths, campaign_dir(campaign) / "shards" / name, keep_records)
+    summary = write_shard(paths, out, keep_records)
     volume.commit()
     return {"name": name, **summary}
 
