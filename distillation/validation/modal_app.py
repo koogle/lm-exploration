@@ -12,6 +12,7 @@ Launch (detached; the supervisor survives client disconnection):
     modal run --detach distillation/validation/modal_app.py::main --launch
 """
 
+import hashlib
 import json
 import random
 import sys
@@ -126,7 +127,8 @@ def prepare_group(campaign, name, files, revision, hashes, keep_records):
 
     out = campaign_dir(campaign) / "shards" / name
     done = out / "summary.json"
-    if done.exists() and json.loads(done.read_text())["chunks"] == len(files):
+    members = hashlib.sha256("\n".join([revision, *files]).encode()).hexdigest()
+    if done.exists() and json.loads(done.read_text()).get("members_sha256") == members:
         return {"name": name, **json.loads(done.read_text())}
     local = Path("/tmp/download") / name
 
@@ -157,6 +159,8 @@ def prepare_group(campaign, name, files, revision, hashes, keep_records):
     with ThreadPoolExecutor(2) as pool:
         paths = list(pool.map(fetch, files))
     summary = write_shard(paths, out, keep_records)
+    summary["members_sha256"] = members  # reuse only for the same revision and files
+    atomic_json(done, summary)
     volume.commit()
     return {"name": name, **summary}
 
