@@ -1,0 +1,81 @@
+{
+  "eval_sha256": "71e377e1008755b83876ebab70f509df46974387d270ca218ceb7a7263ade543",
+  "tokenizers": {
+    "climbmix-code-v1": {
+      "tokenizer_sha256": "8d77c172bad41bab8388e2e1351e86f178243167764025c515e2567e11aa1e5b",
+      "sources": {
+        "climbmix": {
+          "bytes": 14743727,
+          "tokens": 3217386,
+          "roundtrip_failures": 0,
+          "bytes_per_token": 4.582517298204194
+        },
+        "code_curated": {
+          "bytes": 3682462,
+          "tokens": 1023424,
+          "roundtrip_failures": 0,
+          "bytes_per_token": 3.598178272153086
+        },
+        "code_mit": {
+          "bytes": 1733957,
+          "tokens": 503413,
+          "roundtrip_failures": 0,
+          "bytes_per_token": 3.4444025084771352
+        }
+      },
+      "digits": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "\u0120+",
+        "\u0120",
+        "6",
+        "7",
+        "8",
+        "\u0120=",
+        "\u0120",
+        "1",
+        "3",
+        "0",
+        "2",
+        "3"
+      ]
+    },
+    "structured-code-v1": {
+      "tokenizer_sha256": "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9",
+      "sources": {
+        "climbmix": {
+          "bytes": 14743727,
+          "tokens": 4022037,
+          "roundtrip_failures": 0,
+          "bytes_per_token": 3.6657362923314727
+        },
+        "code_curated": {
+          "bytes": 3682462,
+          "tokens": 1046393,
+          "roundtrip_failures": 0,
+          "bytes_per_token": 3.519195942633408
+        },
+        "code_mit": {
+          "bytes": 1733957,
+          "tokens": 514537,
+          "roundtrip_failures": 0,
+          "bytes_per_token": 3.3699364671539658
+        }
+      },
+      "digits": [
+        "123",
+        "45",
+        "\u0120+",
+        "\u0120",
+        "678",
+        "\u0120=",
+        "\u0120",
+        "130",
+        "23"
+      ]
+    }
+  }
+}

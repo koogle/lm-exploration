@@ -3,6 +3,7 @@
 import ast
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -10,6 +11,7 @@ from unittest.mock import Mock, patch
 from workflows.config import load_workflow
 
 ROOT = Path(__file__).resolve().parents[1]
+LAUNCH = {"deadline_unix": time.time() + 86400}
 
 
 def controller(name):
@@ -50,6 +52,8 @@ class WorkflowControllerTests(unittest.TestCase):
                 json=json,
                 record=Mock(),
                 data_volume=Mock(),
+                track_call=Mock(),
+                modal=Mock(),
             )
             with (
                 patch("training_data.prepared_snapshot.find_prepared_snapshot", return_value=None),
@@ -63,7 +67,7 @@ class WorkflowControllerTests(unittest.TestCase):
                             **self.bundle,
                             "workflow": {**self.bundle["workflow"], "allow_unreviewed_data": False},
                         },
-                        {},
+                        LAUNCH,
                     )
                 corpus.assert_not_called()
 
@@ -89,13 +93,28 @@ class WorkflowControllerTests(unittest.TestCase):
                     json=json,
                     record=Mock(),
                     continue_training=continuation,
+                    track_call=Mock(),
+                    modal=Mock(),
                 )
+                spawn = continuation.with_options.return_value.spawn
                 if invalid == "none":
-                    launch("run", bundle, {})
-                    continuation.spawn.assert_called_once()
-                    self.assertEqual(continuation.spawn.call_args.args[1], "v1/snapshots/prepared")
-                    self.assertEqual(continuation.spawn.call_args.args[2], bundle)
+                    launch("run", bundle, LAUNCH)
+                    spawn.assert_called_once()
+                    self.assertEqual(spawn.call_args.args[1], "v1/snapshots/prepared")
+                    self.assertEqual(spawn.call_args.args[2], bundle)
+                    # The training chain may not outlive the launch deadline.
+                    timeout = continuation.with_options.call_args.kwargs["timeout"]
+                    self.assertLessEqual(timeout, LAUNCH["deadline_unix"] - time.time() + 1)
                 else:
                     with self.assertRaises(ValueError):
-                        launch("run", bundle, {})
-                    continuation.spawn.assert_not_called()
+                        launch("run", bundle, LAUNCH)
+                    spawn.assert_not_called()
+
+    def test_expired_launch_deadline_refuses_work(self):
+        launch = controller("launch_snapshot")
+        continuation = Mock()
+        launch.__globals__.update(record=Mock(), continue_training=continuation, track_call=Mock())
+        bundle = load_workflow(ROOT / "workflows/h100x1-pilot.json")
+        with self.assertRaisesRegex(RuntimeError, "deadline"):
+            launch("run", bundle, {"deadline_unix": time.time() + 60})
+        continuation.with_options.assert_not_called()

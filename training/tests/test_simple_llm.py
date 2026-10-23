@@ -46,7 +46,7 @@ class CorpusTests(unittest.TestCase):
         return stager
 
     def test_new_vocabulary_ids_and_old_snapshot_rejection(self):
-        stage = self.stage(self.root / "stage", [row_for(self.source, "train", "Ssh")])
+        stage = self.stage(self.root / "stage", [row_for(self.source, "train", "MARY")])
         stage.export(self.root / "export")
         path = self.root / "export/manifest.json"
         loader = TokenMixture(path, context=8, allow_unreviewed=True)

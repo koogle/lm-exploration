@@ -56,7 +56,7 @@ the proposed 8K/16K progression, benchmark requirements and unverified timing ra
 Start with the [Simple LLM pretraining plan](plans/SIMPLE_LLM_PRETRAINING.md).
 It records the replacement dataset mixture (ClimbMix plus a private code dataset,
 chosen 2026-10-23), the approximately 150M-parameter
-goal, 20B-token target with a conditional 50B extension, frozen code-focused 32K tokenizer,
+goal, 20B-token target with a conditional 50B extension, new 32K tokenizer fitted on that mix,
 and next-agent checklist. It supersedes older undecided mixture/tokenizer
 notes and illustrative token budgets below for this experiment.
 

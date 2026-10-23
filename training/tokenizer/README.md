@@ -10,6 +10,7 @@ BPE library. Modal entrypoints live separately in
 | `tokenizer_research.py` | Corpus collection, candidate fitting and evaluation |
 | `tokenizer_evaluation.py` | Broader held-out evaluation without refitting |
 | `tokenizer_report.py` | Learning-curve plots and reports |
+| `mixture_tokenizer.py` | Sample a corpus recipe's training split, fit and compare |
 | `structured_tokenizer.py` | Code/JSON/diff/tool-call workloads and focused fitting |
 | `structured_tokenizer_report.py` | Structured-output comparison report |
 | `package_tokenizer_research.py` | Hash-verified publication packaging |
@@ -29,8 +30,24 @@ this source reorganization. Data-token staging and preparation remain in
 
 ## Default tokenizer
 
-The repository default is `structured-code-v1`: the code-focused 32,768-entry BPE
-trained on approximately 64 MiB on Modal. It was selected for code and tool calling.
+The repository default is `climbmix-code-v1`, a 32,768-entry byte-level BPE fitted
+on 256 MiB sampled from the training split of the
+[`climbmix-code-v1` recipe](../data/recipes/climbmix-code-v1.json): 85% ClimbMix and
+15% code. It keeps the GPT-2-style pre-tokenizer, except that every digit is its
+own token so arithmetic sees one token per digit. Special IDs are unchanged.
+Fit it with `python -m tokenizer.mixture_tokenizer` (see the module docstring).
+
+On 20 MiB of held-out validation text from the same sources (`evaluation.json`):
+
+| Source | `climbmix-code-v1` bytes/token | `structured-code-v1` bytes/token |
+| --- | ---: | ---: |
+| ClimbMix | 4.583 | 3.666 |
+| Curated open-source code | 3.598 | 3.519 |
+| MIT code | 3.444 | 3.370 |
+
+Both tokenizers round-trip every evaluated document exactly. The earlier
+code-focused [`structured-code-v1`](structured-code-v1/) stays frozen for its
+published models; data and checkpoints made with it must be retokenized.
 
 ```python
 from training_data.subword import load_frozen, VOCAB_SIZE, TOKENIZER_SHA256
@@ -39,11 +56,8 @@ tokenizer = load_frozen()  # verifies the frozen artifact hashes
 assert VOCAB_SIZE == tokenizer.get_vocab_size() == 32768
 ```
 
-The [training plan](../plans/SIMPLE_LLM_PRETRAINING.md) records the selection,
-trade-offs, special IDs and retokenization requirements. The frozen version is
-published at `jfrick/scholarly-code-tokenizer`. Original assets now live in
-[`simple-llm-v1/`](simple-llm-v1/) with their bytes and hashes unchanged;
-existing tokenized snapshots cannot
-be reused with the new tokenizer.
-
-Published resource: [Simple LLM tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).
+The [training plan](../plans/SIMPLE_LLM_PRETRAINING.md) records the selection.
+`structured-code-v1` is published at
+[`jfrick/scholarly-code-tokenizer`](https://huggingface.co/jfrick/scholarly-code-tokenizer);
+`climbmix-code-v1` is not yet published. The original assets live in
+[`simple-llm-v1/`](simple-llm-v1/) with their bytes and hashes unchanged.

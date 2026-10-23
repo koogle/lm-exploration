@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-TOKENIZER_SHA256 = "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9"
+TOKENIZER_SHA256 = "8d77c172bad41bab8388e2e1351e86f178243167764025c515e2567e11aa1e5b"
 VOCAB_SIZE = 32768
 
 # Vocabulary IDs fixed by the frozen tokenizer artifact.
@@ -22,7 +22,7 @@ FIRST_CONTENT_TOKEN_ID = 4  # IDs below this are reserved, not document content.
 
 # Loss-label sentinel, NOT a vocabulary ID. PyTorch ignores these targets.
 LOSS_IGNORE_INDEX = -100
-DEFAULT_FOLDER = Path(__file__).resolve().parents[1] / "tokenizer/structured-code-v1"
+DEFAULT_FOLDER = Path(__file__).resolve().parents[1] / "tokenizer/climbmix-code-v1"
 
 
 def digest(path):

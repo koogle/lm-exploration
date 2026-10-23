@@ -1,0 +1,16 @@
+{
+  "format": "huggingface-tokenizers-json",
+  "vocab_size": 32768,
+  "special_tokens": {
+    "<|pad|>": 0,
+    "<|bos|>": 1,
+    "<|eos|>": 2,
+    "<|unk|>": 3
+  },
+  "normalization": null,
+  "pretokenization_regex": "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+  "add_prefix_space": false,
+  "automatic_bos_eos": false,
+  "padding": null,
+  "truncation": null
+}

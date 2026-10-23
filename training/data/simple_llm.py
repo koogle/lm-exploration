@@ -57,11 +57,15 @@ def stream_rows(source, shard, start=0):
     """
     if source["format"] == "json.gz":
         import requests
+        from huggingface_hub import get_token
 
         url = (
             f"https://huggingface.co/datasets/{source['repo']}/resolve/{source['revision']}/{shard}"
         )
-        with requests.get(url, stream=True, timeout=(30, 60)) as response:
+        # Private sources need the HF token; public ones ignore it.
+        token = get_token()
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        with requests.get(url, headers=headers, stream=True, timeout=(30, 60)) as response:
             response.raise_for_status()
             with gzip.GzipFile(fileobj=response.raw) as handle:
                 row_index = 0
