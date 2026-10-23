@@ -14,6 +14,7 @@ Launch (detached; the supervisor survives client disconnection):
 
 import hashlib
 import json
+import os
 import random
 import sys
 import time
@@ -40,7 +41,8 @@ from common import (
     training_order,
 )
 
-PLAN = json.loads((HERE / "plan.json").read_text())
+# Local launches may select another plan, e.g. VALIDATION_PLAN=plan-covering.json.
+PLAN = json.loads((HERE / os.environ.get("VALIDATION_PLAN", "plan.json")).read_text())
 MAX_SECONDS = 24 * 60 * 60
 VLLM_IMAGE = "vllm/vllm-openai@sha256:6ee133356d49ed24cee03dd0cda3d3980279a11c107ce3e752c89e76540f41c9"
 TIMEOUTS = {
@@ -336,12 +338,12 @@ def control_job(campaign, settings, items):
     retries=0,
     volumes={"/runs": volume},
 )
-def student_job(campaign, settings, items, eval_settings, deadline):
+def student_job(campaign, data_campaign, settings, items, eval_settings, deadline):
     from jobs import student_run
 
     volume.reload()
     root = campaign_dir(campaign)
-    manifest = json.loads((root / "manifest.json").read_text())
+    manifest = json.loads((campaign_dir(data_campaign) / "manifest.json").read_text())
     result = student_run(
         settings,
         manifest,
@@ -527,7 +529,16 @@ def campaign(plan, deadline):
     name = plan["campaign"]
     root = campaign_dir(name)
     root.mkdir(parents=True, exist_ok=True)
+    # A follow-up campaign reuses an earlier campaign's shards and evaluation sets.
+    data_name = plan.get("data_campaign", name)
+    data_root = campaign_dir(data_name)
     supervisor = Supervisor(name, deadline)
+
+    def stage(path, compute):
+        if data_name != name and not Path(path).exists():
+            raise RuntimeError(f"{path} missing in data campaign {data_name}")
+        return cached(path, compute)
+
     try:
         # 1. Data: fixed held-out split, fixed training order, nested token budgets.
         def data():
@@ -610,11 +621,11 @@ def campaign(plan, deadline):
                 **{k: v for k, v in manifest.items() if k != "shards"},
             }
 
-        data_summary = cached(root / "stages" / "data.json", data)
+        data_summary = stage(data_root / "stages" / "data.json", data)
 
         # 2. Evaluation sets: MBPP plus teacher-tested held-out curriculum problems.
-        mbpp = cached(
-            root / "stages" / "mbpp.json",
+        mbpp = stage(
+            data_root / "stages" / "mbpp.json",
             lambda: supervisor.wait(
                 {"build_mbpp": supervisor.spawn("build_mbpp", "build_mbpp")}
             )[0]["build_mbpp"],
@@ -622,7 +633,9 @@ def campaign(plan, deadline):
 
         def curriculum():
             records = []
-            for shard in json.loads((root / "manifest.json").read_text())["heldout"]:
+            for shard in json.loads((data_root / "manifest.json").read_text())[
+                "heldout"
+            ]:
                 records += [
                     json.loads(line)
                     for line in (Path(shard) / "records.jsonl").read_text().splitlines()
@@ -661,7 +674,7 @@ def campaign(plan, deadline):
                 },
             }
 
-        curriculum_stage = cached(root / "stages" / "curriculum.json", curriculum)
+        curriculum_stage = stage(data_root / "stages" / "curriculum.json", curriculum)
         items = mbpp + curriculum_stage["items"]
         atomic_json(root / "eval-items.json", items)
         volume.commit()
@@ -697,12 +710,12 @@ def campaign(plan, deadline):
             volume.commit()
 
         calls = {}
-        if "teacher" not in results["models"]:
+        if plan.get("teacher", True) and "teacher" not in results["models"]:
             calls["teacher"] = supervisor.spawn(
                 "teacher:solve", "teacher_job", name, "solve", items
             )
-        control = plan["control"]
-        if f"{control['name']}:tuned" not in results["models"]:
+        control = plan.get("control")
+        if control and f"{control['name']}:tuned" not in results["models"]:
             calls["control"] = supervisor.spawn(
                 "control", "control_job", name, control, items
             )
@@ -713,6 +726,7 @@ def campaign(plan, deadline):
                     f"student:{settings['name']}",
                     "student_job",
                     name,
+                    data_name,
                     merged,
                     items,
                     plan["eval"],

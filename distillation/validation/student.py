@@ -26,15 +26,21 @@ SIZES = {
 
 
 class Vocabulary:
-    """Native Qwen ID <-> student ID mapping for one arm."""
+    """Native Qwen ID <-> student ID mapping for one arm.
 
-    def __init__(self, table, kept, bos):
-        self.table = np.asarray(table, dtype=np.int32)  # native -> student
+    ``table`` maps each native ID to one student ID (UNK when dropped). A covering
+    vocabulary instead spells dropped native IDs as several kept pieces
+    (``pieces``/``offsets``/``lengths``); ``table`` then holds the first piece.
+    """
+
+    def __init__(self, table, kept, bos, pieces=None, offsets=None, lengths=None):
+        self.table = np.asarray(table, dtype=np.int32)  # native -> (first) student ID
         self.native = np.asarray(
             kept, dtype=np.int64
         )  # student -> native (-1: special)
         self.bos = bos
         self.size = self.native.size
+        self.pieces, self.offsets, self.lengths = pieces, offsets, lengths
 
     @classmethod
     def trimmed(cls, table, kept):
@@ -42,11 +48,28 @@ class Vocabulary:
         return cls(table, native, BOS)
 
     @classmethod
+    def covering(cls, kept, pieces, offsets, lengths):
+        native = np.concatenate([[-1, -1, -1], kept]).astype(np.int64)
+        return cls(pieces[offsets], native, BOS, pieces, offsets, lengths)
+
+    @classmethod
     def full(cls, size, bos):
         return cls(np.arange(size, dtype=np.int32), np.arange(size), bos)
 
     def encode(self, native_ids):
+        """One student ID per native ID (first piece for a covering vocabulary)."""
         return self.table[np.asarray(native_ids, dtype=np.int64)]
+
+    def expand(self, native_ids):
+        """Student sequence for native IDs and the index of each piece's native token."""
+        native_ids = np.asarray(native_ids, dtype=np.int64)
+        if self.pieces is None:
+            return self.encode(native_ids), np.arange(native_ids.size)
+        counts = self.lengths[native_ids]
+        source = np.repeat(np.arange(native_ids.size), counts)
+        starts = np.concatenate([[0], np.cumsum(counts)[:-1]])
+        within = np.arange(source.size) - np.repeat(starts, counts)
+        return self.pieces[self.offsets[native_ids][source] + within], source
 
     def decode_native(self, student_ids):
         native = self.native[np.asarray(student_ids, dtype=np.int64)]
@@ -54,19 +77,33 @@ class Vocabulary:
 
 
 def pack_shard(shard, vocab):
-    """Insert BOS before each document and an ignored label after it."""
+    """Insert BOS before each document and an ignored label after it.
+
+    With a covering vocabulary, the first piece of each native token keeps the
+    teacher's top-K (candidates mapped to their first piece); continuation pieces
+    get a one-hot target on the piece itself.
+    """
     tokens = np.load(shard / "tokens.npy")
     offsets = np.load(shard / "offsets.npy")
     top_ids = np.load(shard / "topk_ids.npy")
     top_lp = np.load(shard / "topk_logprobs.npy")
-    starts, ends = offsets[:-1], offsets[1:]
-    student = vocab.encode(tokens)
+    student, source = vocab.expand(tokens)
+    first = np.ones(student.size, dtype=bool)
+    first[1:] = source[1:] != source[:-1]
+    ids = np.full((student.size, top_ids.shape[1]), -1, dtype=np.int32)
+    lps = np.full((student.size, top_ids.shape[1]), -np.inf, dtype=top_lp.dtype)
+    ids[first] = vocab.encode(top_ids)
+    lps[first] = top_lp
+    ids[~first, 0] = student[~first]
+    lps[~first, 0] = 0
+    native = np.where(first, tokens[source], -1)
+    boundaries = np.searchsorted(source, offsets)  # document offsets in pieces
+    starts, ends = boundaries[:-1], boundaries[1:]
     inputs = np.insert(student, starts, vocab.bos)
     labels = np.insert(student.astype(np.int64), ends, -100)
-    mapped = vocab.encode(top_ids)
-    ids = np.insert(mapped, ends, -1, axis=0)
-    lps = np.insert(top_lp, ends, -np.inf, axis=0)
-    native = np.insert(tokens, ends, -1)
+    ids = np.insert(ids, ends, -1, axis=0)
+    lps = np.insert(lps, ends, -np.inf, axis=0)
+    native = np.insert(native, ends, -1)
     return inputs, labels, ids, lps, native
 
 

@@ -376,5 +376,60 @@ class PollTest(unittest.TestCase):
         self.assertEqual(state, "error")
 
 
+class CoveringVocabularyTest(unittest.TestCase):
+    def fake_tokenizer(self):
+        decoder = prepare.byte_decoder()
+        vocab = {char: byte for char, byte in decoder.items()}
+        for index, token in enumerate(["ab", "abc", "Ġsolve", "xyz"], start=256):
+            vocab[token] = index
+        return {
+            "model": {"vocab": vocab},
+            "added_tokens": [{"id": 300, "content": "<|end|>"}],
+        }
+
+    def test_dropped_tokens_are_spelled_from_kept_pieces(self):
+        tokenizer = self.fake_tokenizer()
+        counts = np.zeros(QWEN_VOCAB, dtype=np.int64)
+        counts[[256, 258, 300]] = [9, 5, 7]  # "ab", "Ġsolve", "<|end|>" are frequent
+        kept, pieces, offsets, lengths = prepare.build_covering_vocab(
+            counts, 3 + 256 + 3, tokenizer
+        )
+        self.assertEqual(kept.size, 259)
+        vocab = student.Vocabulary.covering(kept, pieces, offsets, lengths)
+        strings = {i: s for s, i in tokenizer["model"]["vocab"].items()}
+        strings[300] = "<|end|>"
+        for native in (257, 259, 300):  # "abc" and "xyz" were dropped
+            expanded, _ = vocab.expand([native])
+            spelled = "".join(strings[i] for i in vocab.decode_native(expanded))
+            self.assertEqual(spelled, strings[native])
+        self.assertEqual(lengths[257], 2)  # "ab" + "c"
+        self.assertEqual(lengths[256], 1)
+
+    def test_packing_expands_targets_and_document_boundaries(self):
+        tokenizer = self.fake_tokenizer()
+        counts = np.zeros(QWEN_VOCAB, dtype=np.int64)
+        counts[[256, 300]] = [9, 7]
+        kept, pieces, offsets, lengths = prepare.build_covering_vocab(
+            counts, 3 + 256 + 2, tokenizer
+        )
+        vocab = student.Vocabulary.covering(kept, pieces, offsets, lengths)
+        with tempfile.TemporaryDirectory() as tmp:
+            # document 1: "abc" (2 pieces), "ab"; document 2: "xyz" (3 pieces)
+            shard = tiny_shard(tmp, [np.array([257, 256]), np.array([259])])
+            inputs, labels, ids, lps, native = student.pack_shard(Path(shard), vocab)
+        abc, _ = vocab.expand([257])
+        xyz, _ = vocab.expand([259])
+        ab = vocab.encode([256])[0]
+        self.assertEqual(inputs.tolist(), [student.BOS, *abc, ab, student.BOS, *xyz])
+        self.assertEqual(labels.tolist(), [*abc, ab, -100, *xyz, -100])
+        self.assertEqual(native.tolist(), [257, -1, 256, -1, 259, -1, -1, -1])
+        self.assertEqual(ids[1, 0], abc[1])  # continuation piece: one-hot on itself
+        self.assertEqual(float(lps[1, 0]), 0.0)
+        self.assertTrue((ids[1, 1:] == -1).all())
+        self.assertEqual(
+            ids[0, 0], abc[0]
+        )  # teacher's top-1 (the token) maps to its first piece
+
+
 if __name__ == "__main__":
     unittest.main()

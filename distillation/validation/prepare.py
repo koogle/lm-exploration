@@ -88,8 +88,8 @@ def build_vocab(counts, size):
     return table, kept
 
 
-def byte_lengths(tokenizer_json):
-    """UTF-8 byte length of each native token; special tokens count as zero bytes."""
+def byte_decoder():
+    """GPT-2 byte-level alphabet: one printable character per byte value."""
     printable = [*range(ord("!"), ord("~") + 1), *range(ord("¡"), ord("¬") + 1)]
     printable += range(ord("®"), ord("ÿ") + 1)
     decoder, extra = {}, 0
@@ -99,9 +99,71 @@ def byte_lengths(tokenizer_json):
         else:
             decoder[chr(256 + extra)] = byte
             extra += 1
+    return decoder
+
+
+def byte_lengths(tokenizer_json):
+    """UTF-8 byte length of each native token; special tokens count as zero bytes."""
+    decoder = byte_decoder()
     lengths = np.zeros(QWEN_VOCAB, dtype=np.int64)
     for token, index in tokenizer_json["model"]["vocab"].items():
         lengths[index] = sum(1 for char in token if char in decoder)
     for added in tokenizer_json.get("added_tokens", []):
         lengths[added["id"]] = 0
     return lengths
+
+
+def build_covering_vocab(counts, size, tokenizer_json):
+    """Trimmed vocabulary that can still spell every native token.
+
+    Keeps PAD, BOS, UNK, all 256 single-byte tokens and the most frequent native
+    IDs. Every other native token is split by greedy longest match into kept
+    tokens, so rare and unseen words become sequences of familiar pieces instead
+    of UNK. Returns (kept native IDs in student order, flat pieces as student
+    IDs, per-native offsets into pieces, per-native piece counts).
+    """
+    specials = 3
+    strings = dict(tokenizer_json["model"]["vocab"])
+    for added in tokenizer_json.get("added_tokens", []):
+        strings[added["content"]] = added["id"]
+    by_id = {index: token for token, index in strings.items()}
+    decoder = byte_decoder()
+    singles = sorted(strings[char] for char in decoder if char in strings)
+    if len(singles) != 256:
+        raise ValueError(f"expected 256 single-byte tokens, found {len(singles)}")
+    order = [int(i) for i in np.argsort(-counts, kind="stable") if counts[i] > 0]
+    kept = list(singles)
+    chosen = set(kept)
+    for index in order:
+        if len(kept) >= size - specials:
+            break
+        if index not in chosen:
+            kept.append(index)
+            chosen.add(index)
+    student = {native: specials + rank for rank, native in enumerate(kept)}
+    known = {by_id[native]: native for native in kept if native in by_id}
+    longest = max(map(len, known))
+    pieces, offsets, lengths = (
+        [],
+        np.zeros(QWEN_VOCAB, np.int64),
+        np.zeros(QWEN_VOCAB, np.int64),
+    )
+    for native in range(QWEN_VOCAB):
+        offsets[native] = len(pieces)
+        if native in student:
+            split = [student[native]]
+        elif native not in by_id:
+            split = [2]  # unused ID beyond the tokenizer: UNK
+        else:
+            text, split, start = by_id[native], [], 0
+            while start < len(text):
+                for end in range(min(len(text), start + longest), start, -1):
+                    if text[start:end] in known:
+                        split.append(student[known[text[start:end]]])
+                        start = end
+                        break
+                else:
+                    raise ValueError(f"cannot spell native token {native}")
+        pieces.extend(split)
+        lengths[native] = len(split)
+    return np.asarray(kept, np.int64), np.asarray(pieces, np.int32), offsets, lengths

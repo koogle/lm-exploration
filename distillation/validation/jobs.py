@@ -16,6 +16,13 @@ def load_vocab(manifest, kind):
 
     if kind == "full":
         return Vocabulary.full(QWEN_VOCAB, QWEN_ENDOFTEXT)
+    if kind == "covering":
+        from prepare import build_covering_vocab
+
+        counts = sum(np.load(Path(shard) / "counts.npy") for shard in manifest["train"])
+        tokenizer = json.loads(Path(manifest["tokenizer"]).read_text())
+        size = manifest["trimmed_vocab"]
+        return Vocabulary.covering(*build_covering_vocab(counts, size, tokenizer))
     return Vocabulary.trimmed(
         np.load(manifest["vocab_table"]), np.load(manifest["vocab_kept"])
     )
@@ -28,11 +35,11 @@ def complete(model, vocab, tokenizer, items, max_new, batch, device="cuda"):
     eos = int(vocab.encode([IM_END])[0])
     prompts = {
         item["id"]: [vocab.bos]
-        + vocab.encode(
+        + vocab.expand(
             tokenizer.encode(
                 student_prompt(item["problem"]), add_special_tokens=False
             ).ids
-        ).tolist()
+        )[0].tolist()
         for item in items
     }
     order = sorted(prompts, key=lambda key: len(prompts[key]))
