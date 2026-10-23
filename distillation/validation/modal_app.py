@@ -743,6 +743,73 @@ def campaign(plan, deadline):
         raise
 
 
+SHARD_PATTERNS = [
+    "manifest.json",
+    "vocab-*.npy",
+    "byte-lengths.npy",
+    "tokenizer.json",
+    "shards/*/*.npy",
+    "shards/*/summary.json",
+    "shards/*/records.jsonl",
+]
+
+
+@app.function(
+    image=cpu_image,
+    cpu=8,
+    memory=16384,
+    timeout=6 * 3600,
+    retries=0,
+    volumes={"/runs": volume},
+    secrets=[hf_secret],
+)
+def archive_shards(campaign, repo_id):
+    """Upload the prepared shards to a private HF dataset and verify every file."""
+    from huggingface_hub import HfApi
+
+    volume.reload()
+    root = campaign_dir(campaign)
+    if not (root / "stages" / "data.json").exists():
+        raise RuntimeError("data stage has not completed")
+    api = HfApi()
+    api.create_repo(repo_id, repo_type="dataset", private=True, exist_ok=True)
+    api.upload_file(
+        path_or_fileobj=str(HERE / "shards-card.md"),
+        path_in_repo="README.md",
+        repo_id=repo_id,
+        repo_type="dataset",
+    )
+    api.upload_large_folder(
+        repo_id=repo_id,
+        folder_path=str(root),
+        repo_type="dataset",
+        allow_patterns=SHARD_PATTERNS,
+        private=True,
+    )
+    local = {
+        str(path.relative_to(root)): path.stat().st_size
+        for pattern in SHARD_PATTERNS
+        for path in root.glob(pattern)
+    }
+    info = api.dataset_info(repo_id, files_metadata=True)
+    remote = {entry.rfilename: entry.size for entry in info.siblings}
+    mismatched = sorted(
+        name for name, size in local.items() if remote.get(name) != size
+    )
+    receipt = {
+        "repo_id": repo_id,
+        "revision": info.sha,
+        "files": len(local),
+        "bytes": sum(local.values()),
+        "mismatched": mismatched,
+    }
+    atomic_json(root / "shards-archive.json", receipt)
+    volume.commit()
+    if mismatched:
+        raise RuntimeError(f"{len(mismatched)} files differ on HF: {mismatched[:5]}")
+    return receipt
+
+
 FUNCTIONS = {
     "prepare_group": prepare_group,
     "finalize_data": finalize_data,
@@ -792,6 +859,12 @@ def main(launch: bool = False):
         json.dumps(receipt, indent=1)
     )
     print(json.dumps(receipt, indent=1))
+
+
+@app.local_entrypoint()
+def archive(repo_id: str = "jfrick/qwen35-distillation-shards-20261023"):
+    """Upload the plan's prepared shards to a private HF dataset (after the data stage)."""
+    print(json.dumps(archive_shards.remote(PLAN["campaign"], repo_id), indent=1))
 
 
 @app.local_entrypoint()

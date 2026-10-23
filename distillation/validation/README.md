@@ -92,6 +92,18 @@ three 500M-position 150M-scale students dominate), about $40–60 at the public
 $3.95/H100-hour rate. Wall time depends on how many H100s Modal allocates; earlier
 campaigns reached about ten at once.
 
+**Training shards on HF.** After the data stage completes, upload the prepared
+shards (about 50 GB) to a private dataset and verify every file's size:
+
+```sh
+distillation/validation/.venv/bin/modal run distillation/validation/modal_app.py::archive \
+  --repo-id jfrick/qwen35-distillation-shards-20261023
+```
+
+This is a separate app, bounded at 6 hours with no retries, and it does not touch the
+running campaign. The receipt (`shards-archive.json` on the volume) records the HF
+revision. `shards-card.md` becomes the dataset card.
+
 Outputs go to the Modal volume `lm-exploration-distillation-validation` under
 `/<campaign>/`: `manifest.json`, `stages/`, `eval-items.json`, `teacher/`,
 `control/`, `students/<arm>/` (metrics, summary, completions, `model.pt`),
