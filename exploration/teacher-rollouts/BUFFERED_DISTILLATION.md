@@ -191,6 +191,23 @@ semantic correctness or numerical equivalence to another GPU. Rates exclude
 startup and prompt preparation; report wall time separately. This small test
 selects candidates for sustained load validation, not a guaranteed fleet rate.
 
-The initial controller import failed before GPU work; the missing `/experiment`
-module search path was fixed before the second attempt. Benchmark receipts and
+The initial controller import failed; the missing `/experiment` module search
+path was fixed before the second attempt. A redeployment/cancellation race let
+one old L40S batch-32 child start and delay the new batch-128 child. Its persisted
+call was explicitly cancelled after discovering it in the logs. The old attempt
+is excluded from the comparison. Benchmark receipts and
 results belong under `qwen35-buffered-targets/` in the existing HF results repo.
+
+All four 256-example runs completed. H100 batch 32 reached 1,343.7 generated /
+961.0 format-accepted tokens/s; H100 batch 128 reached 1,243.1 / 895.4. L40S
+batch 32 reached 524.7 / 383.9; L40S batch 128 reached 1,153.4 / 882.9.
+All first-shard target-integrity audits passed. L40S needs larger batches to
+approach H100 throughput on this workload; the tested H100 batch-32 configuration
+still leads by 16.5% in generated tokens/s and 8.8% in accepted tokens/s.
+Fleet ETAs are linear projections, not measured scaling results. With the saved
+production corpus at 641.6M generated / 492.8M format-accepted tokens, ten H100s
+at this benchmark rate would need about 7.4 / 14.7 hours to reach the respective
+1B milestones. Ten L40S at batch 128 project to 8.6 / 16.0 hours. Fifty H100s
+would project to 1.5 / 2.9 hours, subject to actual quota, allocation and sustained
+pipeline throughput. All benchmark GPU and controller functions returned to zero
+running inputs and zero backlog after completion; production stayed stopped.
