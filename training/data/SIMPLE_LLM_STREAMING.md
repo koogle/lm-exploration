@@ -83,11 +83,13 @@ data_state = data.state_dict()
 # On resume, construct the same loader and call data.load_state_dict(data_state).
 ```
 
-Windows are document-local, with explicit BOS input and loss-bearing EOS target.
-Long documents use contiguous windows with one token of input/target overlap.
-PAD input is 0 and padded targets are -100. Each content token and EOS receives
-loss exactly once per pass. Documents are not concatenated across parents.
-This sacrifices some packing efficiency for a simple boundary/masking contract.
+The raw loader packs each source's documents, as `BOS ids EOS`, into full windows
+with one token of input/target overlap between consecutive windows. Attention is
+not masked at document boundaries. BOS is an input but never a target, and each
+content token and EOS receives loss exactly once per pass. Only a source's last
+window in a pass is padded (PAD input 0, target -100). Packing replaced
+document-local windows on 2026-10-23: ClimbMix documents average about 600 tokens,
+so document-local 2,048-token windows were about two-thirds padding.
 
 The scheduler selects the source with the lowest cumulative loss tokens divided
 by its weight. Shares converge with a window-sized discrepancy, rather than being
