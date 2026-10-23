@@ -211,3 +211,19 @@ at this benchmark rate would need about 7.4 / 14.7 hours to reach the respective
 would project to 1.5 / 2.9 hours, subject to actual quota, allocation and sustained
 pipeline throughput. All benchmark GPU and controller functions returned to zero
 running inputs and zero backlog after completion; production stayed stopped.
+
+### Maximum-capacity continuation
+
+The user authorized resuming generation with the maximum available parallel GPU
+capacity after the hardware benchmark. Reused the qualified vLLM/H100 batch-32
+configuration, with up to 256 requested producers and the existing independent
+eight-hour shutdown enforcement. The manually stopped prior campaign was recorded
+as stopped before explicit resume; original producer offsets and archive indexes
+are preserved. Launch receipts are archived in the results repository.
+
+The environment API reports no explicit environment GPU override and no spend
+limit block. It does not expose the inherited workspace GPU quota. The resumed
+campaign reached 10 running H100 teachers with additional calls queued, matching
+the earlier measured allocation ceiling. This confirms allocated capacity, not
+a formal account quota or a guarantee of future availability. No plan, quota,
+or billing settings were changed.
