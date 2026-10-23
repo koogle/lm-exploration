@@ -227,3 +227,16 @@ campaign reached 10 running H100 teachers with additional calls queued, matching
 the earlier measured allocation ceiling. This confirms allocated capacity, not
 a formal account quota or a guarantee of future availability. No plan, quota,
 or billing settings were changed.
+
+### Reduction to five H100 teachers
+
+At the user's request to free GPUs for other jobs, cancelled the previous guardian
+and controller, cancelled all 251 producer calls outside IDs 0–4 (including queued
+calls), and preserved the five selected teacher calls. Applied a live Modal
+function autoscaler hard cap of five containers and changed the persisted active
+producer count to five before starting the replacement guardian/controller. The
+original deadline is unchanged. The existing archive call continues scanning all
+256 historical producer IDs; `dataset_workers=256` records that coverage, while
+`workers=5` is now the active count. Status totals must include historical producers,
+not just IDs below the active count. Capacity-change receipts are archived in HF.
+No teacher inference source or deployed images changed for this reduction.
