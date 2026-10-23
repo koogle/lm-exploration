@@ -174,3 +174,23 @@ and retries HTTP 429 using the same batch, without advancing the durable index
 until the upload succeeds. Existing bounded eight-hour windows and independent
 shutdown remain in force; a single continuation does not complete the 5B target.
 The 5B target counts generated output tokens, not repeated training exposures.
+
+### L40S elapsed-time benchmark
+
+`hardware_benchmark.py` is an isolated, explicitly requested comparison of
+Qwen3.5-9B BF16 on L40S and exact H100 hardware (`H100!`), at batches 32 and 128.
+Each configuration generates the same 256 curriculum prompts and saves native
+top-64 probability targets. Four workers run concurrently, with no retries and
+an independent controller cancelling remaining calls at the persisted 20-minute
+absolute deadline. Production teachers remain stopped.
+
+Results include hardware identity, wall time including startup, per-batch time
+through the durable Volume commit, generated/format-accepted tokens per second,
+and a first-shard probability/storage integrity audit. The audit does not prove
+semantic correctness or numerical equivalence to another GPU. Rates exclude
+startup and prompt preparation; report wall time separately. This small test
+selects candidates for sustained load validation, not a guaranteed fleet rate.
+
+The initial controller import failed before GPU work; the missing `/experiment`
+module search path was fixed before the second attempt. Benchmark receipts and
+results belong under `qwen35-buffered-targets/` in the existing HF results repo.
