@@ -31,8 +31,8 @@
     {"name": "trim-large-200m-kd", "vocab": "trimmed", "size": "large", "positions": 200015872, "kd_weight": 0.5, "lr": 0.0008, "micro_windows": 8},
     {"name": "trim-large-500m-ce", "vocab": "trimmed", "size": "large", "positions": 499974144, "kd_weight": 0.0, "lr": 0.0008, "micro_windows": 8},
     {"name": "trim-large-500m-kd", "vocab": "trimmed", "size": "large", "positions": 499974144, "kd_weight": 0.5, "lr": 0.0008, "micro_windows": 8},
-    {"name": "full-small-500m-ce", "vocab": "full", "size": "small", "positions": 499974144, "kd_weight": 0.0, "lr": 0.0015, "micro_windows": 8},
-    {"name": "full-small-500m-kd", "vocab": "full", "size": "small", "positions": 499974144, "kd_weight": 0.5, "lr": 0.0015, "micro_windows": 8}
+    {"name": "full-small-200m-ce", "vocab": "full", "size": "small", "positions": 200015872, "kd_weight": 0.0, "lr": 0.0015, "micro_windows": 8},
+    {"name": "full-small-200m-kd", "vocab": "full", "size": "small", "positions": 200015872, "kd_weight": 0.5, "lr": 0.0015, "micro_windows": 8}
   ],
   "control": {
     "name": "qwen35-0.8b-base-50m-ce",

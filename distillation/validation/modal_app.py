@@ -366,6 +366,7 @@ def poll(call):
     except (
         modal.exception.FunctionTimeoutError,
         modal.exception.OutputExpiredError,
+        modal.exception.InputCancellation,  # a BaseException: a child cancelled by hand
     ) as error:
         return "error", repr(error)[:2000]
     except (TimeoutError, modal.exception.TimeoutError):

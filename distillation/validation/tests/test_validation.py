@@ -370,6 +370,8 @@ class PollTest(unittest.TestCase):
             Call(modal.exception.FunctionTimeoutError("child timed out"))
         )
         self.assertEqual(state, "error")
+        state, _ = modal_app.poll(Call(modal.exception.InputCancellation("cancelled")))
+        self.assertEqual(state, "error")
         state, _ = modal_app.poll(Call(ValueError("boom")))
         self.assertEqual(state, "error")
 
