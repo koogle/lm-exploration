@@ -365,6 +365,19 @@ class GraderTest(unittest.TestCase):
         self.assertIn("NameError", results["error"]["error"])
 
 
+class AdoptionTest(unittest.TestCase):
+    def test_restart_adopts_only_its_own_unfailed_calls(self):
+        import modal_app
+
+        previous = {
+            "supervisor_call_id": "fc-1",
+            "calls": {"a": {"id": "fc-a"}, "b": {"id": "fc-b", "error": "boom"}},
+        }
+        self.assertEqual(modal_app.adoptable(previous, "fc-1"), {"a": {"id": "fc-a"}})
+        self.assertEqual(modal_app.adoptable(previous, "fc-2"), {})
+        self.assertEqual(modal_app.adoptable({}, "fc-1"), {})
+
+
 class PollTest(unittest.TestCase):
     def test_unfinished_call_is_pending_not_failed(self):
         import modal

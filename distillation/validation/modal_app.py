@@ -381,17 +381,27 @@ def poll(call):
         return "error", repr(error)[:2000]
 
 
+def adoptable(previous, call_id):
+    """Calls recorded by an earlier attempt of the same supervisor input."""
+    if previous.get("supervisor_call_id") != call_id:
+        return {}
+    return {k: v for k, v in previous.get("calls", {}).items() if "error" not in v}
+
+
 class Supervisor:
     """Spawns children within the deadline, records IDs and cancels at expiry."""
 
     def __init__(self, campaign, deadline):
         self.campaign, self.deadline = campaign, deadline
         self.state_path = campaign_dir(campaign) / "supervision.json"
+        call_id = modal.current_function_call_id()
+        previous = registry.get(campaign) or {}
         self.state = {
             "campaign": campaign,
             "deadline": deadline,
-            "supervisor_call_id": modal.current_function_call_id(),
-            "calls": {},
+            "supervisor_call_id": call_id,
+            # A restarted input (same call ID) adopts the calls it already spawned.
+            "calls": adoptable(previous, call_id),
             "sandboxes": {},
             "status": "running",
         }
@@ -404,6 +414,8 @@ class Supervisor:
 
     def spawn(self, label, kind, *args):
         """Spawn ``kind`` (a TIMEOUTS key naming a function) bounded by the deadline."""
+        if label in self.state["calls"] and "error" not in self.state["calls"][label]:
+            return modal.FunctionCall.from_id(self.state["calls"][label]["id"])
         function = FUNCTIONS[kind]
         budget = min(TIMEOUTS[kind], remaining(self.deadline))
         if budget < 300:
@@ -522,6 +534,7 @@ def grade_completions(supervisor, label, items, completions):
     memory=8192,
     timeout=MAX_SECONDS,
     retries=0,
+    nonpreemptible=True,  # a preempted supervisor used to cancel its children
     volumes={"/runs": volume},
     secrets=[hf_secret],
 )
@@ -766,12 +779,18 @@ def campaign(plan, deadline):
         supervisor.state["status"] = "completed_with_errors" if errors else "completed"
         supervisor.save()
         return results
-    except BaseException:
+    except Exception:
         if supervisor.state["status"] == "running":
             supervisor.state["status"] = "failed"
             supervisor.cancel_all()
             supervisor.state["status"] = "failed"
             supervisor.save()
+        raise
+    except BaseException:
+        # Preemption or cancellation of the supervisor itself: children keep running,
+        # bounded by their own deadline-capped timeouts; a restart adopts them.
+        supervisor.state["status"] = "interrupted"
+        supervisor.save()
         raise
 
 
