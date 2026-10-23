@@ -231,6 +231,14 @@ def run(root, worker, deadline, backend, batch_size, max_batches=0, sweep=False)
         )
         atomic_json(progress, state)
         volume.commit()
+        state.setdefault("batch_metrics", []).append(
+            {
+                "batch_size": len(rows),
+                "generated_tokens": generated,
+                "accepted_tokens": kept,
+                "durable_seconds": time.monotonic() - before,
+            }
+        )
         if sweep:
             measured = state["trials"].setdefault(
                 str(trial),
