@@ -1,10 +1,8 @@
 # Simple LLM pretraining plan and agent handoff
 
-Updated 2026-10-16. This is the current plan for the next from-scratch model.
-It supersedes earlier 100M proposals and undecided mixture notes for this experiment.
-The [machine-readable plan](simple-llm-150m.json) records token budgets;
-the [tokenizer recipe](../tokenizer/recipe-v1.json) pins all 12 source revisions
-and shard lists used for the tokenizer sample.
+Updated 2026-10-16; dataset mixture replaced 2026-10-23. This is the current plan
+for the next from-scratch model. It supersedes earlier 100M proposals and undecided
+mixture notes for this experiment.
 
 ## Goal and scope
 
@@ -33,39 +31,23 @@ Instruction tuning and optional later reasoning training are separate experiment
 
 ## Dataset mixture
 
-Apply these proportions to **loss-bearing tokens under the frozen tokenizer**
-in model training. FineWeb-Edu is capped at 10%; math and papers together are 35%.
-The high-level mix is agreed; subdivisions within math/papers and books below are
-working allocations to validate against usable capacity.
+The user withdrew the 12-source scholarly/code mixture on 2026-10-23 after the
+124M runs in [what didn't work](../NEGATIVE_RESULTS.md) failed to give usable
+generations. The [data review](../references/pretraining-data-2026-10-23.md)
+found curated web mixtures and filtered code better than these sources.
+The next mixture is:
 
-| Source | Share | At 20B | At 50B | Initial dataset |
-| --- | ---: | ---: | ---: | --- |
-| FineWeb-Edu | 10% | 2B | 5B | HuggingFaceFW/fineweb-edu |
-| Open-source code | 30% | 6B | 15B | codeparrot/codeparrot-clean-train |
-| FineMath | 20% | 4B | 10B | HuggingFaceTB/finemath, finemath-4plus |
-| peS2o | 10% | 2B | 5B | common-pile/peS2o_filtered |
-| PubMed/PMC | 3% | 0.6B | 1.5B | common-pile/pubmed_filtered |
-| arXiv | 2% | 0.4B | 1B | common-pile/arxiv_papers_filtered |
-| Books and textbooks | 25% | 5B | 12.5B | Sources below |
+| Source | Replaces | Status |
+| --- | --- | --- |
+| ClimbMix: `karpathy/climbmix-400b-shuffle`, the copy nanochat trains on. Text-only Parquet without document IDs, 6,543 shards. Its card says MIT; NVIDIA's `nvidia/Nemotron-ClimbMix` is CC BY-NC 4.0. | FineWeb-Edu, FineMath, peS2o, PubMed, arXiv and the Common Pile books | Selected; recipe pending |
+| Private code dataset on HF | `codeparrot/codeparrot-clean-train` | Selected; dataset and adapter pending |
 
-The tokenizer's book allocation is Pressbooks 3%, LibreTexts 3%, DOAB 4%,
-Project Gutenberg 5%, pre-1929 books 7%, and Library of Congress 3% of the whole
-sample. All use the corresponding `common-pile/*_filtered` repositories pinned
-in the recipe. Keep books at 25% overall; adjust child shares explicitly after
-measuring capacity rather than silently exhausting and repeating small sources.
-Institutional Books 1.0 is a possible expansion, researched but not integrated.
-
-The initial code source is Python-heavy. It is a bootstrap source, not evidence
-of broad programming-language coverage or sufficient eligible capacity for 15B
-exposures. Retain only records whose license metadata matches MIT, Apache-2.0,
-BSD-2-Clause, BSD-3-Clause or ISC. Preserve repository, path, revision and license
-provenance. Evaluate additional openly licensed code collections if capacity or
-language diversity requires it; do not silently change this policy.
-
-Use FineWeb-Edu, not Cosmopedia. Prefer FineMath and peS2o within the technical
-allocation. Dataset filtering scores and simple LLM provenance are quality signals,
-not proof that every claim or solution is correct. FineMath-4plus is a subset of
-3plus; do not count them as disjoint corpora.
+Shares, capacity and the corpus recipe are not yet set. ClimbMix is non-commercial,
+which is acceptable for this personal research project; published models trained
+on it carry that restriction. The removed recipe is identical to the historical
+tokenizer's [`simple-llm-v1/recipe.json`](../tokenizer/simple-llm-v1/recipe.json),
+which stays as that tokenizer's provenance. Rewritten data is allowed but not
+planned for the first run because generation would take too long.
 
 ## Streaming, storage and capacity
 

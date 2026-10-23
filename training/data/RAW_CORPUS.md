@@ -34,18 +34,16 @@ single-pass continuation is every source with `--one-pass`.
 ## Explicit small-model workflow
 
 Run commands from `training/`. `workflows/modal_train.py` implements
-preparation, qualification and bounded continuation. The selected model config specifies
-the modern 9.85M model (eight layers, width 192, three heads).
-[`workflows/small-5b.json`](../workflows/small-5b.json) selects
-three H100s, a 5B-token target, preparation settings and continuation limits.
-The workflow resolves its GPU allocation and token target with the selected model
-and dataset configs; non-pilot runs enforce capacity checks. Model dimensions are not
-duplicated in Python validation.
+preparation, qualification and bounded continuation. A workflow whose dataset config
+uses `mode: "prepare_raw"` names a corpus recipe; the workflow resolves its GPU
+allocation and token target with the selected model and dataset configs, and
+non-pilot runs enforce capacity checks. Model dimensions are not duplicated in
+Python validation.
 
-The workflow selects `model_configs/modern-10m.json` and
-`datasets/scholarly-raw.json`. Model/optimizer settings, dataset selection and
-execution settings each have one owner. Use `workflows.modal_train` with
-`--workflow workflows/small-5b.json`; selectors can choose another model or dataset.
+No corpus recipe is shipped at present. The 12-source scholarly/code recipe and its
+`small-5b.json` workflow were removed in favour of a new mixture; see the
+[pretraining plan](../plans/SIMPLE_LLM_PRETRAINING.md). Model/optimizer settings,
+dataset selection and execution settings each have one owner.
 Qualification uses the selected final training schedule with a short step limit.
 Importing or deploying the module does not launch training:
 `prepare_and_launch.spawn(...)` explicitly requires approved resources and a fresh

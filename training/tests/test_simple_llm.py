@@ -12,12 +12,7 @@ from training_data.token_stream import TokenMixture
 
 
 def recipe():
-    result = load_recipe(Path(__file__).resolve().parents[1] / "tokenizer/recipe-v1.json")
-    result = copy.deepcopy(result)
-    result["sources"] = [result["sources"][0]]
-    result["sources"][0]["weight_percent"] = 100
-    result["sources"][0]["files"] = ["fixture.parquet"]
-    return result
+    return load_recipe(Path(__file__).resolve().parent / "fixtures/corpus-recipe.json")
 
 
 def row_for(source, split, text="A short document with mathematics: 12 + 34 = 46.", start=0):
@@ -123,42 +118,11 @@ class CorpusTests(unittest.TestCase):
         self.assertEqual(report["sources"][self.source["name"]]["splits"]["train"]["documents"], 0)
         self.assertEqual(stage.db.execute("SELECT count FROM documents").fetchone()[0], 0)
 
-    def test_parent_and_code_license_adapters(self):
-        sources = load_recipe(Path(__file__).resolve().parents[1] / "tokenizer/recipe-v1.json")[
-            "sources"
-        ]
-        code = next(s for s in sources if s["name"] == "code_python")
-        row = {
-            "content": "print('hello')",
-            "repo_name": "owner/repo",
-            "path": "a.py",
-            "license": "apache-2.0",
-        }
-        a, reason = adapt(code, row)
-        self.assertIsNone(reason)
-        row["path"] = "b.py"
-        b, _ = adapt(code, row)
-        self.assertEqual(a["parent"], b["parent"])
-        row["license"] = "GPL-3.0"
-        self.assertEqual(adapt(code, row)[1], "code_license")
-        pressbooks = next(s for s in sources if s["name"] == "pressbooks")
-        a, _ = adapt(
-            pressbooks,
-            {
-                "id": "chapter-one",
-                "text": "hello",
-                "metadata": {"book_url": "https://books.example/physics/front-matter/intro/"},
-            },
-        )
-        b, _ = adapt(
-            pressbooks,
-            {
-                "id": "chapter-two",
-                "text": "hello",
-                "metadata": {"book_url": "https://books.example/physics/chapter/two/"},
-            },
-        )
-        self.assertEqual(a["parent"], b["parent"])
+    def test_adapter_requires_text_and_document_identity(self):
+        self.assertEqual(adapt(self.source, {"id": "a", "text": " "})[1], "empty")
+        self.assertEqual(adapt(self.source, {"text": "hello"})[1], "missing_document_or_parent")
+        document, _ = adapt(self.source, {"url": "https://example.org/a", "text": "hello"})
+        self.assertEqual(document["parent"], "web:https://example.org/a")
 
     def test_loader_padding_resume_repetition_and_tampering(self):
         rows = [row_for(self.source, "train", "def f(x):\n    return x + 1\n")]

@@ -1,8 +1,8 @@
 # Simple LLM streaming preparation
 
 This implements the first corpus preparation milestone in the
-[pretraining plan](../plans/SIMPLE_LLM_PRETRAINING.md). It streams the pinned
-12-source recipe from Hugging Face into a persistent token staging database,
+[pretraining plan](../plans/SIMPLE_LLM_PRETRAINING.md). It streams the sources
+pinned by a corpus recipe from Hugging Face into a persistent token staging database,
 exports immutable shards, and exposes resumable PyTorch batches. It does not
 launch model training or modify the existing character-level trainer.
 
@@ -13,7 +13,7 @@ Run from `training/`:
 ```sh
 uv sync --locked --extra corpus
 uv run python -m unittest discover -s tests -v
-uv run lm-prepare-simple-llm \
+uv run lm-prepare-simple-llm --recipe RECIPE.json \
   --output runs/simple-llm-stream-v1 \
   --max-records-per-source 100 \
   --export runs/simple-llm-stream-v1/snapshots/pilot-001
@@ -21,7 +21,7 @@ uv run lm-prepare-simple-llm \
 
 Repeat with the same output and a **new** snapshot name to continue. The record
 limit applies to newly scanned records per source per invocation, including
-rejections. `--source code_python` restricts a local preparation call; omitted
+rejections. `--source NAME` restricts a local preparation call; omitted
 sources retain their weights and cannot silently disappear from training.
 An empty source in a snapshot makes the loader fail until more data is prepared.
 The small record limit is a smoke test, not representative capacity evidence.
@@ -52,7 +52,7 @@ does not initialize a budget or borrow the latent-workspace ledger.
 
 ```sh
 modal run modal_scripts/modal_prepare_simple_llm.py \
-  --version simple-llm-stream-v1 --snapshot pilot-001 --max-records 100
+  --version simple-llm-stream-v1 --snapshot pilot-001 --recipe RECIPE.json --max-records 100
 ```
 
 The CPU-only worker uses two CPUs, 4 GiB RAM, a 30-minute timeout, no automatic

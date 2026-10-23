@@ -21,8 +21,8 @@ Run commands from `training/`. Inspect the complete resolved configuration local
 this does not import Modal, download data or launch work:
 
 ```sh
-uv run python -m workflows --workflow workflows/small-5b.json
-uv run python -m workflows --workflow workflows/small-5b.json \
+uv run python -m workflows --workflow workflows/h100x1-pilot.json
+uv run python -m workflows --workflow workflows/h100x1-pilot.json \
   --model-config model_configs/modern-124m.json \
   --dataset-config datasets/pilot-tokens.json
 ```
@@ -39,13 +39,14 @@ The generic Modal entrypoint accepts the same selections:
 uv run modal run --detach -m workflows.modal_train \
   --workflow workflows/h100x1-pilot.json --run-id my-pilot-01
 
-# Prepare/reuse the selected raw corpus, then train the selected small model.
+# Prepare/reuse a raw corpus: select a workflow whose dataset uses prepare_raw.
 uv run modal run --detach -m workflows.modal_train \
-  --workflow workflows/small-5b.json --run-id my-training-01 --version my-data-v1
+  --workflow workflows/MY-WORKFLOW.json --run-id my-training-01 --version my-data-v1
 ```
 
 `h100x1-pilot.json` and `h100x2-pilot.json` share one model config and dataset config.
-`small-5b.json` preserves the existing three-H100/5B workflow's settings.
+No shipped workflow prepares a raw corpus: the 12-source scholarly/code recipe and
+its `small-5b.json` workflow were removed with that mixture.
 `h100x3-20b.json` is a template: replace its dataset's placeholder snapshot with a
 prepared, reviewed, capacity-qualified snapshot before launch. These configurations
 are not newly measured or deployed results.

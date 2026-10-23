@@ -31,10 +31,10 @@ image = (
     max_containers=1,
     volumes={"/data": volume},
 )
-def prepare(version: str, snapshot: str, max_records: int):
-    from training_data.simple_llm import Stager, load_recipe
+def prepare(version: str, snapshot: str, max_records: int, recipe: dict):
+    from training_data.simple_llm import Stager, validate_recipe
 
-    recipe = load_recipe("/project/tokenizer/recipe-v1.json")
+    recipe = validate_recipe(recipe)
     stager = Stager(Path("/data/scholarly-code") / version, recipe)
     try:
         for source in recipe["sources"]:
@@ -48,13 +48,13 @@ def prepare(version: str, snapshot: str, max_records: int):
 
 
 @app.local_entrypoint()
-def main(version: str, snapshot: str, max_records: int = 100):
+def main(version: str, snapshot: str, recipe: str, max_records: int = 100):
     for value in (version, snapshot):
         if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", value):
             raise ValueError("Version and snapshot must be simple unique names")
     if not 1 <= max_records <= 100_000:
         raise ValueError("max_records must be between 1 and 100000 per source")
-    report = prepare.remote(version, snapshot, max_records)
+    report = prepare.remote(version, snapshot, max_records, json.loads(Path(recipe).read_text()))
     Path("artifacts/results").mkdir(parents=True, exist_ok=True)
     Path(f"artifacts/results/prep-{version}-{snapshot}.json").write_text(
         json.dumps(report, indent=2) + "\n"
