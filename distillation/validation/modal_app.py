@@ -347,6 +347,26 @@ def student_job(campaign, settings, items, eval_settings, deadline):
     return result
 
 
+def poll(call):
+    """Non-blocking result check: ("pending" | "done" | "error", value).
+
+    ``get(timeout=0)`` on an unfinished call raises the builtin TimeoutError; a child
+    that exceeded its own timeout raises Modal's FunctionTimeoutError. Remote errors
+    re-raise with the child's own exception type, so child code must not raise TimeoutError.
+    """
+    try:
+        return "done", call.get(timeout=0)
+    except (
+        modal.exception.FunctionTimeoutError,
+        modal.exception.OutputExpiredError,
+    ) as error:
+        return "error", repr(error)[:2000]
+    except (TimeoutError, modal.exception.TimeoutError):
+        return "pending", None
+    except Exception as error:  # noqa: BLE001 - recorded, never retried
+        return "error", repr(error)[:2000]
+
+
 class Supervisor:
     """Spawns children within the deadline, records IDs and cancels at expiry."""
 
@@ -391,21 +411,14 @@ class Supervisor:
                 self.cancel_all()
                 raise TimeoutError("campaign deadline reached")
             for label, call in list(pending.items()):
-                try:
-                    results[label] = call.get(timeout=0)
-                except (
-                    modal.exception.FunctionTimeoutError,
-                    modal.exception.OutputExpiredError,
-                ) as error:
-                    errors[label] = repr(error)[:2000]
-                    self.state["calls"][label]["error"] = errors[label]
-                    self.save()
-                except modal.exception.TimeoutError:
-                    continue  # not finished yet
-                # Remote errors re-raise with the child's own exception type.
-                except Exception as error:  # noqa: BLE001 - recorded, never retried
-                    errors[label] = repr(error)[:2000]
-                    self.state["calls"][label]["error"] = errors[label]
+                state, value = poll(call)
+                if state == "pending":
+                    continue
+                if state == "done":
+                    results[label] = value
+                else:
+                    errors[label] = value
+                    self.state["calls"][label]["error"] = value
                     self.save()
                 del pending[label]
                 if label in results and on_result:
@@ -792,4 +805,10 @@ def stop():
         modal.FunctionCall.from_id(call_id).cancel()
     for sandbox_id in state.get("sandboxes", {}).values():
         modal.Sandbox.from_id(sandbox_id).terminate()
+    if state:
+        registry[PLAN["campaign"]] = {
+            **state,
+            "status": "stopped",
+            "stopped_at": time.time(),
+        }
     print(f"cancelled {len(ids)} calls and {len(state.get('sandboxes', {}))} sandboxes")

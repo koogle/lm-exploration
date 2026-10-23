@@ -347,5 +347,32 @@ class GraderTest(unittest.TestCase):
         self.assertIn("NameError", results["error"]["error"])
 
 
+class PollTest(unittest.TestCase):
+    def test_unfinished_call_is_pending_not_failed(self):
+        import modal
+        import modal_app
+
+        class Call:
+            def __init__(self, outcome):
+                self.outcome = outcome
+
+            def get(self, timeout=None):
+                if isinstance(self.outcome, BaseException):
+                    raise self.outcome
+                return self.outcome
+
+        self.assertEqual(modal_app.poll(Call(TimeoutError())), ("pending", None))
+        self.assertEqual(
+            modal_app.poll(Call(modal.exception.TimeoutError())), ("pending", None)
+        )
+        self.assertEqual(modal_app.poll(Call({"ok": 1})), ("done", {"ok": 1}))
+        state, _ = modal_app.poll(
+            Call(modal.exception.FunctionTimeoutError("child timed out"))
+        )
+        self.assertEqual(state, "error")
+        state, _ = modal_app.poll(Call(ValueError("boom")))
+        self.assertEqual(state, "error")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -195,7 +195,7 @@ def train(settings, train_shards, vocab, out_dir, log, deadline=None, device="cu
     model.train()
     for step in range(steps):
         if deadline and time.time() > deadline:
-            raise TimeoutError("deadline reached during training")
+            raise RuntimeError("campaign deadline reached during training")
         for group in optimizer.param_groups:
             group["lr"] = learning_rate(step, steps, settings["lr"], warmup)
         sums = torch.zeros(3, device=device)
