@@ -30,62 +30,89 @@ def op_checks():
 
     torch.manual_seed(0)
     results = {}
+
+    def compare(actual, expected):
+        return {
+            name: relative_error(a, e)
+            for name, (a, e) in zip(expected, zip(actual, expected.values()))
+        }
+
     # RMSNorm: FP32 residual in, BF16 out.
     x = torch.randn(4096, 768, device="cuda", requires_grad=True)
     w = (1 + 0.1 * torch.randn(768, device="cuda")).requires_grad_()
     dy = torch.randn(4096, 768, device="cuda").bfloat16()
     reference = x * torch.rsqrt(x.square().mean(-1, keepdim=True) + 1e-5) * w
-    gx, gw = torch.autograd.grad(reference, (x, w), dy.float())
+    expected = dict(
+        zip(
+            ("forward", "dx", "dw"),
+            (reference, *torch.autograd.grad(reference, (x, w), dy.float())),
+        )
+    )
     y = fused.RMSNormFunction.apply(x, w, 1e-5)
-    fx, fw = torch.autograd.grad(y, (x, w), dy)
-    results["rmsnorm"] = {
-        "forward": relative_error(y, reference),
-        "dx": relative_error(fx, gx),
-        "dw": relative_error(fw, gw),
-    }
-    # QKV split + RoPE against the model's own rotary().
+    results["rmsnorm"] = compare((y, *torch.autograd.grad(y, (x, w), dy)), expected)
+
+    # Residual add + RMSNorm with the delta's bias.
+    r = torch.randn(4096, 768, device="cuda", requires_grad=True)
+    d = torch.randn(4096, 768, device="cuda").bfloat16().requires_grad_()
+    b = (0.1 * torch.randn(768, device="cuda")).requires_grad_()
+    d_total = torch.randn(4096, 768, device="cuda")
+    total = r + d.float() + b
+    normed = total * torch.rsqrt(total.square().mean(-1, keepdim=True) + 1e-5) * w
+    grads = torch.autograd.grad((total, normed), (r, d, b, w), (d_total, dy.float()))
+    expected = dict(zip(("total", "normed", "dr", "dd", "db", "dw"), (total, normed, *grads)))
+    t, n = fused.AddRMSNormFunction.apply(r, d, b, w, 1e-5)
+    results["add_rmsnorm"] = compare(
+        (t, n, *torch.autograd.grad((t, n), (r, d, b, w), (d_total, dy))), expected
+    )
+
+    # QKV split + RoPE with bias, against the model's own rotary().
     qkv = torch.randn(2, 512, 3 * 768, device="cuda").bfloat16().requires_grad_()
+    bias = (0.1 * torch.randn(3 * 768, device="cuda")).requires_grad_()
     heads = 12
 
-    def reference_qkv(t):
-        q, k, v = t.float().chunk(3, -1)
+    def reference_qkv(t, bias):
+        q, k, v = (t.float() + bias).chunk(3, -1)
         q, k, v = [z.view(2, 512, heads, 64).transpose(1, 2) for z in (q, k, v)]
         return rotary(q), rotary(k), v
 
-    grads = [torch.randn(2, heads, 512, 64, device="cuda").bfloat16() for _ in range(3)]
-    expected = reference_qkv(qkv)
-    expected_grad = torch.autograd.grad(expected, qkv, [g.float() for g in grads])[0]
-    actual = fused.QKVRopeFunction.apply(qkv, heads)
-    actual_grad = torch.autograd.grad(actual, qkv, grads)[0]
-    results["qkv_rope"] = {
-        **{name: relative_error(a, e) for name, a, e in zip("qkv", actual, expected)},
-        "dqkv": relative_error(actual_grad, expected_grad),
-    }
-    # SwiGLU activation.
+    outputs = [torch.randn(2, heads, 512, 64, device="cuda").bfloat16() for _ in range(3)]
+    reference = reference_qkv(qkv, bias)
+    grads = torch.autograd.grad(reference, (qkv, bias), [g.float() for g in outputs])
+    expected = dict(zip(("q", "k", "v", "dqkv", "dbias"), (*reference, *grads)))
+    actual = fused.QKVRopeFunction.apply(qkv, bias, heads)
+    results["qkv_rope"] = compare(
+        (*actual, *torch.autograd.grad(actual, (qkv, bias), outputs)), expected
+    )
+
+    # SwiGLU activation with both biases.
     g = torch.randn(8192, 2048, device="cuda").bfloat16().requires_grad_()
     u = torch.randn(8192, 2048, device="cuda").bfloat16().requires_grad_()
+    bg = (0.1 * torch.randn(2048, device="cuda")).requires_grad_()
+    bu = (0.1 * torch.randn(2048, device="cuda")).requires_grad_()
     dh = torch.randn(8192, 2048, device="cuda").bfloat16()
-    reference = F.silu(g.float()) * u.float()
-    rg, ru = torch.autograd.grad(reference, (g, u), dh.float())
-    h = fused.SwiGLUFunction.apply(g, u)
-    ag, au = torch.autograd.grad(h, (g, u), dh)
-    results["swiglu"] = {
-        "forward": relative_error(h, reference),
-        "dgate": relative_error(ag, rg),
-        "dup": relative_error(au, ru),
-    }
-    # Cross-entropy with ignored targets.
-    logits = (3 * torch.randn(4096, 32768, device="cuda")).bfloat16().requires_grad_()
-    targets = torch.randint(4, 32768, (4096,), device="cuda")
+    reference = F.silu(g.float() + bg) * (u.float() + bu)
+    grads = torch.autograd.grad(reference, (g, u, bg, bu), dh.float())
+    expected = dict(zip(("forward", "dgate", "dup", "dgate_bias", "dup_bias"), (reference, *grads)))
+    h = fused.SwiGLUFunction.apply(g, u, bg, bu)
+    results["swiglu"] = compare((h, *torch.autograd.grad(h, (g, u, bg, bu), dh)), expected)
+
+    # LM head + cross-entropy in chunks, with ignored targets.
+    hidden = torch.randn(10000, 768, device="cuda").bfloat16().requires_grad_()
+    weight = (0.02 * torch.randn(32768, 768, device="cuda")).requires_grad_()
+    targets = torch.randint(4, 32768, (10000,), device="cuda")
     targets[::7] = -100
-    reference = F.cross_entropy(logits.float(), targets, ignore_index=-100, reduction="sum")
-    (rgrad,) = torch.autograd.grad(reference, logits)
-    loss = fused.CrossEntropyFunction.apply(logits, targets)
-    (agrad,) = torch.autograd.grad(loss, logits)
-    results["cross_entropy"] = {
-        "loss": relative_error(loss, reference),
-        "dlogits": relative_error(agrad, rgrad),
-    }
+    logits = hidden.float() @ weight.t()
+    reference = F.cross_entropy(logits, targets, ignore_index=-100, reduction="sum")
+    expected = dict(
+        zip(
+            ("loss", "dhidden", "dweight"),
+            (reference, *torch.autograd.grad(reference, (hidden, weight))),
+        )
+    )
+    loss = fused.LinearCrossEntropyFunction.apply(hidden, weight, targets)
+    results["linear_cross_entropy"] = compare(
+        (loss, *torch.autograd.grad(loss, (hidden, weight))), expected
+    )
     return results
 
 
