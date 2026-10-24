@@ -6,7 +6,7 @@ training, and resume bounded sessions through [`trainer.loop`](../trainer/README
 
 | Files | Owns |
 | --- | --- |
-| `*.json` | Model/dataset selection, GPU family/count, token target, data-review opt-in, pilot mode, session/qualification/continuation and preparation concurrency |
+| `*.json` | Model/dataset selection, GPU family/count, token target, data-review opt-in, pilot mode, session/qualification/continuation, preparation concurrency and overlap with training |
 | [`model_configs/`](model_configs/README.md) | Architecture dimensions, context/batching, optimizer, learning-rate schedule, checkpoint/evaluation settings |
 | `datasets/*.json` | Dataset root on the Modal volume, loader, and either a prepared snapshot or a corpus preparation recipe |
 

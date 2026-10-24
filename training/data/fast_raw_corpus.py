@@ -22,6 +22,8 @@ from .subword import FIRST_CONTENT_TOKEN_ID
 class FastRawCorpus(RawCorpus):
     def __init__(self, folder, recipe, *, workers=3, batch_size=64, reader=stream_rows):
         super().__init__(folder, recipe)
+        # Readers do not block the writer, so `persist` can copy from another thread.
+        self.db.execute("PRAGMA journal_mode=WAL")
         if workers < 1 or batch_size < 1:
             raise ValueError("Positive worker and batch sizes required")
         self.batch_size = batch_size
@@ -233,15 +235,23 @@ class FastRawCorpus(RawCorpus):
                 }
 
     def persist(self, path):
-        """Copy the committed database to `path` atomically (e.g. local disk -> volume)."""
+        """Copy the committed database to `path` atomically (e.g. local disk -> volume).
+
+        Safe to call from another thread while preparation writes: the copy reads one
+        consistent snapshot through its own connection. The copy uses a rollback
+        journal so read-only consumers need no WAL files beside it.
+        """
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         partial = path.with_name(path.name + ".partial")
+        source = sqlite3.connect(self.folder / "raw.sqlite")
         target = sqlite3.connect(partial)
         try:
-            self.db.backup(target)
+            source.backup(target)
+            target.execute("PRAGMA journal_mode=DELETE")
         finally:
             target.close()
+            source.close()
         os.replace(partial, path)
 
     def close(self):

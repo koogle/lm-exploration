@@ -9,6 +9,11 @@ default prepared format; the two loader cursor schemas are distinct. Select
 `loader: "raw"` or `"token_shards"` in the workflow's dataset config. A mismatched
 manifest is rejected, never used to switch implementations implicitly.
 
+Each source is read in insertion order (SQLite row ID), so a cursor is a pass, row ID and
+token offset. Preparation inserts each source in upstream shard order, so training sees
+documents in that order with no shuffle. Snapshots that reference prepared databases
+read each (database, stored source) part in turn.
+
 ## Pass caps and exact source targets
 
 A raw manifest source may set `max_passes: 1` to read it at most once (the default and
@@ -44,11 +49,29 @@ single-pass continuation is every source with `--one-pass`.
 - **Whole shards.** `CachedShards` downloads each JSON or Parquet shard to local disk
   before reading it. Downloading a 92 MB ClimbMix shard and parsing it reads about
   36M characters/s, against about 1.6M/s for HTTP range reads.
-- **Local staging.** `prepare_and_launch` keeps the SQLite database on local disk and
-  copies a consistent backup to the volume every five minutes and when preparation is
-  ready, instead of committing every batch to the network volume.
+- **Local staging.** `prepare_and_launch` keeps the SQLite database on local disk (in
+  WAL mode) instead of committing every batch to the network volume. A background
+  thread copies a consistent snapshot to the volume every `persist_seconds` (workflow
+  setting, default 600) while preparation keeps writing; a final copy follows when
+  preparation is ready.
 - **Overlap.** Each source fetches and tokenizes its next batch while the previous one
   is written. Workflows use 1,024-document batches (still capped at 4 MiB of text).
+- **Training during preparation.** With `overlap_preparation: true` in the workflow,
+  `prepare_and_launch` copies the database and starts training as soon as every source has
+  training data and enough validation tokens for the configured validation windows.
+  It writes a `raw-text-growing-v1` manifest whose counts describe that prefix. The
+  manifest does not name a database; the loader reads the version's `raw.sqlite` as it
+  grows. Preparation then reports in `preparation.json` (training owns `workflow.json`),
+  keeps persisting, and writes `complete.json` with the final counts and checked capacity
+  when ready. In each training container a [`growing.py`](growing.py) refresher reloads
+  the data volume every five minutes and copies each new database to local disk. The
+  loader reads the first pass as documents arrive and waits for a newer copy when it
+  catches up. Later passes start only after `complete.json` exists. A wait longer than an
+  hour fails the run, and the NCCL timeout covers that wait. Exact per-source
+  `target_tokens` budgets need final counts, so growing snapshots reject them. Once
+  training catches up with preparation, it proceeds at preparation speed; the first step
+  no longer waits for the whole corpus. Each local copy is the full database, so the
+  training container needs disk space for about two copies.
 
 Measured on one ClimbMix shard in a 4-CPU container (2026-10-24): 759K tokens/s before
 these changes, 1.05M with the overlap and 1.17M with 1,024-document batches. The first

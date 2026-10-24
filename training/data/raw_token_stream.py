@@ -10,8 +10,10 @@ is reached, masking any excess targets in the last window. When every budget is 
 a source runs out of passes, the final partial batch is padded rather than dropped.
 """
 
+import itertools
 import json
 import math
+import os
 import sqlite3
 import zlib
 from fractions import Fraction
@@ -30,6 +32,11 @@ from .subword import (
 )
 from .token_stream import TokenMixture
 
+# A snapshot whose database preparation is still appending to (see data/growing.py).
+GROWING_FORMAT = "raw-text-growing-v1"
+# Row keys of referenced snapshots keep the stored row ID in the low bits.
+PART_BITS = 40
+
 
 class RawTokenMixture(TokenMixture):
     """The same token-deficit scheduler, with resumable raw-document cursors."""
@@ -37,7 +44,7 @@ class RawTokenMixture(TokenMixture):
     def __init__(self, manifest_path, context=2048, split="train", allow_unreviewed=False):
         self.path = Path(manifest_path)
         self.manifest = json.loads(self.path.read_text())
-        if self.manifest.get("format") != "raw-text-v1":
+        if self.manifest.get("format") not in ("raw-text-v1", GROWING_FORMAT):
             raise ValueError("Unexpected raw manifest format")
         if context < 1 or split not in ("train", "validation"):
             raise ValueError("Invalid context or split")
@@ -48,17 +55,22 @@ class RawTokenMixture(TokenMixture):
             or self.manifest["max_passes"] != 2
         ):
             raise ValueError("Tokenizer or repetition policy mismatch")
-        artifact = self.manifest["database"]
-        if Path(artifact["path"]).name != artifact["path"]:
-            raise ValueError("Unsafe database path")
-        database = self.path.parent / artifact["path"]
-        if digest(database) != artifact["sha256"]:
-            raise ValueError("Raw database checksum mismatch")
-        self.db = sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro&immutable=1", uri=True)
-        if "external_databases" in self.manifest:
-            from .prepared_reference import attach_prepared
+        self.growing = None
+        if self.manifest["format"] == GROWING_FORMAT:
+            from .growing import STATE_ENV, GrowingDatabase
 
-            attach_prepared(self.db, self.manifest)
+            if STATE_ENV not in os.environ:
+                raise ValueError(f"A growing snapshot needs {STATE_ENV} (see data/growing.py)")
+            self.growing = GrowingDatabase(os.environ[STATE_ENV])
+            database = Path(self.growing.current()["path"])
+        else:
+            artifact = self.manifest["database"]
+            if Path(artifact["path"]).name != artifact["path"]:
+                raise ValueError("Unsafe database path")
+            database = self.path.parent / artifact["path"]
+            if digest(database) != artifact["sha256"]:
+                raise ValueError("Raw database checksum mismatch")
+        self.db = self.connect(database)
         self.context, self.split = context, split
         self.identity = {
             "manifest_sha256": digest(self.path),
@@ -76,6 +88,8 @@ class RawTokenMixture(TokenMixture):
                 raise ValueError(f"Source pass cap must be from 1 to {MAX_PASSES}")
             self.passes[name] = cap if split == "train" else 1
         self.budgets = {}
+        if self.growing and any("target_tokens" in s for s in self.sources.values()):
+            raise ValueError("A growing snapshot has no final capacity for exact source targets")
         if split == "train" and any("target_tokens" in s for s in self.sources.values()):
             for name, source in self.sources.items():
                 budget = source.get("target_tokens")
@@ -86,55 +100,113 @@ class RawTokenMixture(TokenMixture):
         self.positions = dict.fromkeys(self.sources, 0)
         self.exposures = dict.fromkeys(self.sources, 0)
         self.iterators = {}
-        self.cursors = {name: {"pass": 0, "hash": "", "offset": 0} for name in self.sources}
+        self.cursors = {name: {"pass": 0, "row": 0, "offset": 0} for name in self.sources}
         self.tokenizer = load_frozen()
 
+    def connect(self, database):
+        db = sqlite3.connect(f"{Path(database).resolve().as_uri()}?mode=ro&immutable=1", uri=True)
+        # Referenced snapshots read one view per (database, stored source) part.
+        self.parts = None
+        if "external_databases" in self.manifest:
+            from .prepared_reference import attach_prepared
+
+            self.parts = attach_prepared(db, self.manifest)
+        return db
+
+    def rows(self, db, name, start):
+        """(row key, text, loss tokens) in insertion order, from row key `start`.
+
+        A referenced snapshot's row key is its part index shifted above the stored row ID.
+        """
+        if self.parts is None:
+            yield from db.execute(
+                """SELECT rowid,text,loss_tokens FROM documents
+                WHERE source=? AND split=? AND conflict=0 AND rowid>=? ORDER BY rowid""",
+                (name, self.split, start),
+            )
+            return
+        for part, view in enumerate(self.parts.get(name, [])):
+            base = part << PART_BITS
+            if start >= base + (1 << PART_BITS):
+                continue
+            for ordinal, text, count in db.execute(
+                f"""SELECT ordinal,text,loss_tokens FROM {view}
+                WHERE split=? AND conflict=0 AND ordinal>=? ORDER BY ordinal""",
+                (self.split, max(start - base, 0)),
+            ):
+                yield base + ordinal, text, count
+
     def blocks(self, name):
+        """Documents in insertion order, packed into windows.
+
+        A growing snapshot reads its first pass as preparation appends documents, waiting
+        for newer copies when it catches up; later passes start once preparation is done.
+        """
         saved = dict(self.cursors[name])
         for pass_index in range(saved["pass"], self.passes[name]):
             resume = pass_index == saved["pass"]
-            rows = self.db.execute(
-                """SELECT hash,text,loss_tokens FROM documents
-                WHERE source=? AND split=? AND conflict=0 AND hash>=? ORDER BY hash""",
-                (name, self.split, saved["hash"] if resume else ""),
-            )
+            next_row = saved["row"] if resume else 0
+            db, complete = self.db, True
+            if self.growing:
+                state = self.growing.current() if pass_index == 0 else self.growing.complete()
+                db, complete, generation = (
+                    self.connect(state["path"]),
+                    state["complete"],
+                    state["generation"],
+                )
             buffer = []
-            # [document hash, offset of the buffer's first token in it, tokens left]
+            # [document row, offset of the buffer's first token in it, tokens left]
             segments = []
-            for key, ids, expected_count in self.encoded(rows):
-                if len(ids) + 1 != expected_count or min(ids, default=FIRST_CONTENT_TOKEN_ID) < (
-                    FIRST_CONTENT_TOKEN_ID
-                ):
-                    raise ValueError("Raw document/token count mismatch")
-                tokens = [BOS_TOKEN_ID, *ids, EOS_TOKEN_ID]
-                start = saved["offset"] if resume and key == saved["hash"] else 0
-                if start >= len(tokens):
-                    continue
-                buffer.extend(tokens[start:])
-                segments.append([key, start, len(tokens) - start])
-                while len(buffer) > self.context:
-                    window = buffer[: self.context + 1]
-                    # The next window starts at this window's last target.
-                    del buffer[: self.context]
-                    consume(segments, self.context)
-                    self.cursors[name] = {
-                        "pass": pass_index,
-                        "hash": segments[0][0],
-                        "offset": segments[0][1],
-                    }
-                    yield self.window(name, pass_index, window)
+            while True:
+                for key, ids, expected_count in self.encoded(self.rows(db, name, next_row)):
+                    next_row = key + 1
+                    if len(ids) + 1 != expected_count or min(
+                        ids, default=FIRST_CONTENT_TOKEN_ID
+                    ) < (FIRST_CONTENT_TOKEN_ID):
+                        raise ValueError("Raw document/token count mismatch")
+                    tokens = [BOS_TOKEN_ID, *ids, EOS_TOKEN_ID]
+                    start = saved["offset"] if resume and key == saved["row"] else 0
+                    if start >= len(tokens):
+                        continue
+                    buffer.extend(tokens[start:])
+                    segments.append([key, start, len(tokens) - start])
+                    while len(buffer) > self.context:
+                        window = buffer[: self.context + 1]
+                        # The next window starts at this window's last target.
+                        del buffer[: self.context]
+                        consume(segments, self.context)
+                        self.cursors[name] = {
+                            "pass": pass_index,
+                            "row": segments[0][0],
+                            "offset": segments[0][1],
+                        }
+                        yield self.window(name, pass_index, window)
+                if complete:
+                    break
+                # Caught up with this copy of a database that is still being prepared.
+                state = self.growing.newer(generation)
+                if db is not self.db:
+                    db.close()
+                db, complete, generation = (
+                    self.connect(state["path"]),
+                    state["complete"],
+                    state["generation"],
+                )
+            if db is not self.db:
+                db.close()
             if len(buffer) > 1:
                 key, start, length = segments[-1]
-                self.cursors[name] = {"pass": pass_index, "hash": key, "offset": start + length}
+                self.cursors[name] = {"pass": pass_index, "row": key, "offset": start + length}
                 yield self.window(name, pass_index, buffer)
 
     def encoded(self, rows, chunk=256):
-        """Yield (hash, token IDs, expected count), tokenizing `chunk` documents per call.
+        """Yield (row key, token IDs, expected count), tokenizing `chunk` documents per call.
 
         encode_batch spreads a chunk over all CPU cores; one encode per document kept
         the training GPUs waiting on a single core.
         """
-        while batch := rows.fetchmany(chunk):
+        rows = iter(rows)
+        while batch := list(itertools.islice(rows, chunk)):
             texts = [zlib.decompress(raw).decode() for _, raw, _ in batch]
             encodings = self.tokenizer.encode_batch(texts, add_special_tokens=False)
             for (key, _, expected_count), encoding in zip(batch, encodings, strict=True):
@@ -237,7 +309,8 @@ class RawTokenMixture(TokenMixture):
                 or not 0 <= cursor["pass"] < self.passes[name]
                 or type(cursor["offset"]) is not int
                 or cursor["offset"] < 0
-                or not isinstance(cursor["hash"], str)
+                or type(cursor["row"]) is not int
+                or cursor["row"] < 0
             ):
                 raise ValueError("Invalid raw cursor")
         if self.budgets and any(

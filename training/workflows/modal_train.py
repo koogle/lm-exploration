@@ -25,8 +25,13 @@ data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
 run_volume = modal.Volume.from_name("lm-exploration-training")
 
 
-# How often preparation copies its local staging database to the data volume.
-PERSIST_SECONDS = 300
+# Audits a prepared snapshot still needs; allow_unreviewed_data accepts them explicitly.
+PENDING_AUDITS = [
+    "tokenizer split reconciliation",
+    "global near deduplication",
+    "cross-source parent reconciliation",
+    "eligibility and contamination review",
+]
 
 
 def track_call(run_id, call_id, kind):
@@ -37,11 +42,11 @@ def track_call(run_id, call_id, kind):
     run_volume.commit()
 
 
-def record(run_id, stage, **details):
+def record(run_id, stage, *, status_file="workflow.json", **details):
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=True)
     status = {"run_id": run_id, "stage": stage, "updated_unix": time.time(), **details}
-    (folder / "workflow.json").write_text(json.dumps(status, indent=2) + "\n")
+    (folder / status_file).write_text(json.dumps(status, indent=2) + "\n")
     run_volume.commit()
     print(json.dumps(status), flush=True)
 
@@ -59,21 +64,40 @@ def record(run_id, stage, **details):
     secrets=[modal.Secret.from_name("simple-llm-hf")],
 )
 def train_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_seconds):
+    import os
+
+    from training_data.growing import STATE_ENV, Refresher, volume_paths
+    from training_data.raw_token_stream import GROWING_FORMAT
+
     from distributed.modal_train import worker
     from workflows.config import resolve_payload
 
     _, dataset, config = resolve_payload(bundle)
     settings = config.as_dict()
-    return worker.local(
-        run_id,
-        snapshot,
-        settings,
-        provenance,
-        resume,
-        max_seconds,
-        max_steps,
-        dataset_root=dataset.root,
-    )
+    folder = Path("/data") / dataset.root / snapshot
+    refresher = None
+    if json.loads((folder / "manifest.json").read_text()).get("format") == GROWING_FORMAT:
+        # Preparation is still appending; copy each persisted database to local disk.
+        database, complete = volume_paths(folder)
+        refresher = Refresher(database, complete, "/tmp/growing", data_volume.reload)
+        os.environ[STATE_ENV] = str(refresher.state_path)
+        # Later reloads start after one interval, once the run has copied its manifest.
+        if not refresher.refresh():
+            refresher.start()
+    try:
+        return worker.local(
+            run_id,
+            snapshot,
+            settings,
+            provenance,
+            resume,
+            max_seconds,
+            max_steps,
+            dataset_root=dataset.root,
+        )
+    finally:
+        if refresher is not None:
+            refresher.stop.set()
 
 
 @app.function(
@@ -195,9 +219,10 @@ def continue_training(
 def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=False):
     import os
     import shutil
+    from concurrent.futures import ThreadPoolExecutor
 
     from training_data.cached_shards import CachedShards
-    from training_data.export_raw import export_raw
+    from training_data.export_raw import complete_growing, export_growing, export_raw
     from training_data.fast_raw_corpus import FastRawCorpus
     from training_data.prepared_snapshot import find_prepared_snapshot
 
@@ -221,6 +246,10 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
     status_path = run_folder / "workflow.json"
     selection_path = run_folder / "resolved-workflow.json"
     launch_path = run_folder / "launch.json"
+    # With overlap_preparation, training starts on a growing snapshot during preparation;
+    # training owns workflow.json from then on and preparation reports in its own file.
+    training_path = run_folder / "training.json"
+    preparation_status = "workflow.json"
     # Modal restarts a preempted container with the same input. That restart carries
     # this launch's deadline and continues preparation from the persisted database.
     if launch_path.exists():
@@ -230,9 +259,14 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
         prior = json.loads(status_path.read_text())
         if json.loads(selection_path.read_text()) != bundle:
             raise ValueError("Preparation resume requires the identical resolved workflow")
-        preparation_failed = (
-            prior.get("stage") == "failed"
-            and not (folder / "snapshots" / run_id / "manifest.json").exists()
+        launched = training_path.exists()
+        if launched:
+            preparation_status = "preparation.json"
+            path = run_folder / preparation_status
+            prior = json.loads(path.read_text()) if path.exists() else {"stage": "preparing"}
+        preparation_failed = prior.get("stage") == "failed" and (
+            launched
+            or not (folder / "snapshots" / run_id / "manifest.json").exists()
             and not (Path("/runs") / f"{run_id}-s00").exists()
         )
         if not resume_preparation or not (prior.get("stage") == "preparing" or preparation_failed):
@@ -253,7 +287,13 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
             run_folder.mkdir(parents=True, exist_ok=False)
             selection_path.write_text(json.dumps(bundle, indent=2) + "\n")
         launch_path.write_text(json.dumps({"deadline_unix": deadline}) + "\n")
-        record(run_id, "preparing", target_tokens=target, provenance=provenance)
+        record(
+            run_id,
+            "preparing",
+            status_file=preparation_status,
+            target_tokens=target,
+            provenance=provenance,
+        )
         if cached is not None:
             snapshot = str(cached.parent.relative_to(data_root))
             manifest = json.loads(cached.read_text())
@@ -271,7 +311,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
             track_call(run_id, call.object_id, "continue_training")
             return {"training_call_id": call.object_id, "snapshot": snapshot, "data_reused": True}
         # SQLite commits on the network volume are slow; stage on local disk and
-        # persist a consistent copy to the volume every few minutes and when ready.
+        # persist a consistent copy to the volume every `persist_seconds` and when ready.
         local = Path("/tmp/staging") / version
         local.mkdir(parents=True, exist_ok=True)
         if (folder / "raw.sqlite").exists() and not (local / "raw.sqlite").exists():
@@ -283,42 +323,99 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
             batch_size=policy.database_batch_size,
             reader=CachedShards(),
         )
-        persisted = time.monotonic()
-        while True:
-            progress = corpus.prepare_parallel(target, max_seconds=policy.preparation_chunk_seconds)
-            report = corpus.report(target)
-            if progress["ready"] or time.monotonic() - persisted >= PERSIST_SECONDS:
-                corpus.persist(folder / "raw.sqlite")
-                (folder / "capacity.json").write_text(json.dumps(report, indent=2) + "\n")
+        snapshot = f"{version}/snapshots/{run_id}"
+        # Validation reads its first windows in insertion order, so they stay fixed.
+        prefix_tokens = (settings["validation_windows_per_source"] + 1) * settings["context"]
+
+        def persist(report):
+            corpus.persist(folder / "raw.sqlite")
+            (folder / "capacity.json").write_text(json.dumps(report, indent=2) + "\n")
+            data_volume.commit()
+
+        def start_training():
+            # A preempted restart may already have exported the snapshot.
+            if not (data_root / snapshot / "manifest.json").exists():
+                export_growing(folder, data_root / snapshot, PENDING_AUDITS)
                 data_volume.commit()
-                persisted = time.monotonic()
-            record(
-                run_id,
-                "preparing",
-                target_tokens=target,
-                sources=report["sources"],
-                supported_mixture_exposures=report["supported_mixture_exposures"],
-                preparation_progress=progress,
-                source_workers=policy.source_workers,
-                tokenizer_threads=policy.tokenizer_threads,
-                database_batch_size=policy.database_batch_size,
+            call = continue_training.with_options(timeout=bounded_timeout(deadline, 86400)).spawn(
+                run_id, snapshot, bundle, {**provenance, "pending_data_audits": PENDING_AUDITS}
             )
-            if progress["ready"]:
-                break
-            bounded_timeout(deadline, 86400)
+            track_call(run_id, call.object_id, "continue_training")
+            training_path.write_text(
+                json.dumps({"training_call_id": call.object_id, "snapshot": snapshot}) + "\n"
+            )
+            run_volume.commit()
+            return "preparation.json"
+
+        # Copies run on their own thread so preparation keeps writing meanwhile.
+        persister = ThreadPoolExecutor(max_workers=1)
+        pending = None  # (copy future, whether training starts once it is persisted)
+        persisted = time.monotonic()
+        try:
+            while True:
+                progress = corpus.prepare_parallel(
+                    target, max_seconds=policy.preparation_chunk_seconds
+                )
+                report = corpus.report(target)
+                if pending is not None and pending[0].done():
+                    copy, launch = pending
+                    pending = None
+                    copy.result()
+                    if launch:
+                        preparation_status = start_training()
+                launch = (
+                    policy.overlap_preparation
+                    and not training_path.exists()
+                    and all(
+                        s["train_loss_tokens"] > 0 and s["validation_loss_tokens"] >= prefix_tokens
+                        for s in report["sources"].values()
+                    )
+                )
+                due = time.monotonic() - persisted >= policy.persist_seconds
+                if not progress["ready"] and pending is None and (launch or due):
+                    pending = (persister.submit(persist, report), launch)
+                    persisted = time.monotonic()
+                record(
+                    run_id,
+                    "preparing",
+                    status_file=preparation_status,
+                    target_tokens=target,
+                    sources=report["sources"],
+                    supported_mixture_exposures=report["supported_mixture_exposures"],
+                    preparation_progress=progress,
+                    source_workers=policy.source_workers,
+                    tokenizer_threads=policy.tokenizer_threads,
+                    database_batch_size=policy.database_batch_size,
+                )
+                if progress["ready"]:
+                    break
+                bounded_timeout(deadline, 86400)
+            if pending is not None:
+                pending[0].result()
+        finally:
+            persister.shutdown(wait=True)
+        persist(report)
+        if policy.overlap_preparation and not training_path.exists():
+            preparation_status = start_training()
         check_capacity(report, target)
         corpus.close()
         corpus = None
-        snapshot = f"{version}/snapshots/{run_id}"
+        if training_path.exists():
+            # The final database is persisted; let training start its later passes.
+            complete_growing(folder, data_root / snapshot, capacity_verified_for_tokens=target)
+            data_volume.commit()
+            record(
+                run_id,
+                "data_prepared",
+                status_file=preparation_status,
+                snapshot=snapshot,
+                capacity=report,
+            )
+            return json.loads(training_path.read_text())
         manifest = export_raw(folder, data_root / snapshot)
         # Preserve pending audit flags. The explicit allow_unreviewed_data
         # opt-in permits this research run, without claiming audited data.
-        manifest["pending"] = [
-            "tokenizer split reconciliation",
-            "global near deduplication",
-            "cross-source parent reconciliation",
-            "eligibility and contamination review",
-        ]
+        manifest["pending"] = PENDING_AUDITS
         manifest["capacity_verified_for_tokens"] = target
         (data_root / snapshot / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
         data_volume.commit()
@@ -336,7 +433,9 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
         track_call(run_id, call.object_id, "continue_training")
         return {"training_call_id": call.object_id, "snapshot": snapshot}
     except Exception as exc:
-        record(run_id, "failed", error=f"{type(exc).__name__}: {exc}")
+        record(
+            run_id, "failed", status_file=preparation_status, error=f"{type(exc).__name__}: {exc}"
+        )
         raise
     finally:
         if corpus is not None:
@@ -458,10 +557,16 @@ def enforce_deadline(run_id, deadline_unix):
     from workflows.deadline import tracked_calls
 
     status = Path("/runs") / run_id / "workflow.json"
+    preparation = status.with_name("preparation.json")
+
+    def stage(path):
+        return json.loads(path.read_text())["stage"] if path.exists() else None
+
     while (remaining := deadline_unix - time.time()) > 0:
         time.sleep(min(remaining, 300))
         run_volume.reload()
-        if status.exists() and json.loads(status.read_text())["stage"] == "completed":
+        # Overlapped preparation can outlast training only if it is still preparing.
+        if stage(status) == "completed" and stage(preparation) != "preparing":
             return {"stage": "completed"}
     run_volume.reload()
     cancelled = []

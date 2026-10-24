@@ -23,8 +23,11 @@ def check_capacity(mixture, target_tokens):
     """Reject a token target the snapshot cannot supply within each source's pass cap.
 
     Exact per-source `target_tokens` budgets must cover every source and sum to the
-    run's target; otherwise the weighted mixture must fit within the pass caps.
+    run's target; otherwise the weighted mixture must fit within the pass caps. A
+    growing snapshot has no final counts yet; its preparation checks capacity when done.
     """
+    if mixture.manifest.get("format") == "raw-text-growing-v1":
+        return
     default = mixture.manifest["max_passes"]
     sources = mixture.sources
     budgets = {name: s["target_tokens"] for name, s in sources.items() if "target_tokens" in s}

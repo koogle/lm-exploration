@@ -13,6 +13,7 @@ from datetime import timedelta
 from itertools import islice
 from pathlib import Path
 
+from training_data.growing import STALL_SECONDS, STATE_ENV
 from training_data.mixture import check_capacity, open_mixture
 from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, LOSS_IGNORE_INDEX, VOCAB_SIZE
 
@@ -226,7 +227,8 @@ def train(
         init_method=runtime.init_method,
         rank=rank,
         world_size=world,
-        timeout=timedelta(seconds=300),
+        # Rank zero may wait for a growing database while peers wait in a broadcast.
+        timeout=timedelta(seconds=STALL_SECONDS + 300 if STATE_ENV in os.environ else 300),
     )
     output, manifest = Path(output), Path(manifest)
     if config.data_loader == "live" and (

@@ -5,8 +5,76 @@ import json
 import sqlite3
 from pathlib import Path
 
-from .raw_token_stream import token_targets
+from .growing import COMPLETE_RECORD, write_json
+from .raw_token_stream import GROWING_FORMAT, token_targets
 from .subword import TOKENIZER_SHA256, digest
+
+
+def describe(db):
+    """The staging identity and per-source manifest entries with current split counts."""
+    identity = json.loads(db.execute("SELECT value FROM settings WHERE id=1").fetchone()[0])
+    sources = {}
+    for entry in identity["recipe"]["sources"]:
+        counts = dict(
+            db.execute(
+                """SELECT split, SUM(loss_tokens) FROM documents
+            WHERE source=? AND conflict=0 GROUP BY split""",
+                (entry["name"],),
+            )
+        )
+        sources[entry["name"]] = {
+            "weight_percent": entry["weight_percent"],
+            "repo": entry["repo"],
+            "revision": entry["revision"],
+            "splits": {
+                split: {"loss_tokens": counts.get(split, 0)} for split in ("train", "validation")
+            },
+        }
+        if "max_passes" in entry:
+            sources[entry["name"]]["max_passes"] = entry["max_passes"]
+    return identity, sources
+
+
+def export_growing(folder, destination, pending):
+    """Write a growing snapshot over the persisted database that preparation still appends to.
+
+    The manifest is written once; its counts describe the prefix available at launch.
+    The database stays at `folder/raw.sqlite` (see `data/growing.py`), and
+    `complete_growing` records the final counts when preparation is done.
+    """
+    folder, destination = Path(folder), Path(destination)
+    if destination.exists():
+        raise ValueError("Snapshot already exists")
+    database = sqlite3.connect(f"{(folder / 'raw.sqlite').resolve().as_uri()}?mode=ro", uri=True)
+    try:
+        identity, sources = describe(database)
+    finally:
+        database.close()
+    manifest = {
+        "format": GROWING_FORMAT,
+        "training_ready": False,
+        "max_passes": 2,
+        "tokenizer_sha256": TOKENIZER_SHA256,
+        "staging_identity": identity,
+        "sources": sources,
+        "pending": pending,
+    }
+    destination.mkdir(parents=True)
+    (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    return manifest
+
+
+def complete_growing(folder, destination, **details):
+    """Mark a growing snapshot's database final, recording its counts."""
+    folder, destination = Path(folder), Path(destination)
+    database = sqlite3.connect(f"{(folder / 'raw.sqlite').resolve().as_uri()}?mode=ro", uri=True)
+    try:
+        _, sources = describe(database)
+    finally:
+        database.close()
+    record = {"sources": sources, **details}
+    write_json(destination / COMPLETE_RECORD, record)
+    return record
 
 
 def export_raw(folder, destination, *, max_passes=None, target_tokens=None):
@@ -22,27 +90,7 @@ def export_raw(folder, destination, *, max_passes=None, target_tokens=None):
         raise ValueError("Snapshot already exists")
     source = sqlite3.connect(f"{(folder / 'raw.sqlite').resolve().as_uri()}?mode=ro", uri=True)
     try:
-        identity = json.loads(source.execute("SELECT value FROM settings WHERE id=1").fetchone()[0])
-        sources = {}
-        for entry in identity["recipe"]["sources"]:
-            counts = dict(
-                source.execute(
-                    """SELECT split, SUM(loss_tokens) FROM documents
-                WHERE source=? AND conflict=0 GROUP BY split""",
-                    (entry["name"],),
-                )
-            )
-            sources[entry["name"]] = {
-                "weight_percent": entry["weight_percent"],
-                "repo": entry["repo"],
-                "revision": entry["revision"],
-                "splits": {
-                    split: {"loss_tokens": counts.get(split, 0)}
-                    for split in ("train", "validation")
-                },
-            }
-            if "max_passes" in entry:
-                sources[entry["name"]]["max_passes"] = entry["max_passes"]
+        identity, sources = describe(source)
         if set(max_passes or {}) - set(sources):
             raise ValueError("Pass caps name an unknown source")
         for name, cap in (max_passes or {}).items():
