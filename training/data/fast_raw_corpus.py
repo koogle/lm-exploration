@@ -13,6 +13,7 @@ import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from .growing import mark_finished
 from .persistent_stream import PersistentStream
 from .raw_corpus import RawCorpus
 from .simple_llm import adapt, canonical, stream_rows
@@ -234,12 +235,13 @@ class FastRawCorpus(RawCorpus):
                     "seconds": time.monotonic() - started,
                 }
 
-    def persist(self, path):
+    def persist(self, path, finished=()):
         """Copy the committed database to `path` atomically (e.g. local disk -> volume).
 
         Safe to call from another thread while preparation writes: the copy reads one
         consistent snapshot through its own connection. The copy uses a rollback
-        journal so read-only consumers need no WAL files beside it.
+        journal so read-only consumers need no WAL files beside it. `finished` names the
+        sources preparation will not extend further (see `data/growing.py`).
         """
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -248,6 +250,7 @@ class FastRawCorpus(RawCorpus):
         target = sqlite3.connect(partial)
         try:
             source.backup(target)
+            mark_finished(target, finished)
             target.execute("PRAGMA journal_mode=DELETE")
         finally:
             target.close()

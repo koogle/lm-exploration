@@ -42,6 +42,24 @@ def track_call(run_id, call_id, kind):
     run_volume.commit()
 
 
+def started_chain(run_id, wait):
+    """The training chain this launch already started, from the calls it tracks.
+
+    `continue_training` tracks itself as it starts; after a preempted launch, wait a few
+    minutes for a chain spawned just before the preemption to do so.
+    """
+    from workflows.deadline import tracked_calls
+
+    for attempt in range(4 if wait else 1):
+        if attempt:
+            time.sleep(60)
+        run_volume.reload()
+        calls = tracked_calls(Path("/runs/.calls") / run_id, kind="continue_training")
+        if calls:
+            return calls[0]
+    return None
+
+
 def record(run_id, stage, *, status_file="workflow.json", **details):
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -327,22 +345,41 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
         # Validation reads its first windows in insertion order, so they stay fixed.
         prefix_tokens = (settings["validation_windows_per_source"] + 1) * settings["context"]
 
-        def persist(report):
-            corpus.persist(folder / "raw.sqlite")
+        # Sources that have enough data; preparation never extends them again.
+        finished = set()
+
+        def persist(report, finished):
+            corpus.persist(folder / "raw.sqlite", finished)
             (folder / "capacity.json").write_text(json.dumps(report, indent=2) + "\n")
             data_volume.commit()
 
+        def training_started():
+            return training_path.exists() and "training_call_id" in json.loads(
+                training_path.read_text()
+            )
+
         def start_training():
+            # Record the intent before spawning. A restart that finds an intent without a
+            # call ID adopts the chain that launch started, if it registered itself.
+            restarted = training_path.exists()
+            if not restarted:
+                training_path.write_text(json.dumps({"snapshot": snapshot}) + "\n")
+                run_volume.commit()
             # A preempted restart may already have exported the snapshot.
             if not (data_root / snapshot / "manifest.json").exists():
                 export_growing(folder, data_root / snapshot, PENDING_AUDITS)
                 data_volume.commit()
-            call = continue_training.with_options(timeout=bounded_timeout(deadline, 86400)).spawn(
-                run_id, snapshot, bundle, {**provenance, "pending_data_audits": PENDING_AUDITS}
-            )
-            track_call(run_id, call.object_id, "continue_training")
+            call_id = started_chain(run_id, wait=restarted)
+            if call_id is None:
+                call = continue_training.with_options(
+                    timeout=bounded_timeout(deadline, 86400)
+                ).spawn(
+                    run_id, snapshot, bundle, {**provenance, "pending_data_audits": PENDING_AUDITS}
+                )
+                track_call(run_id, call.object_id, "continue_training")
+                call_id = call.object_id
             training_path.write_text(
-                json.dumps({"training_call_id": call.object_id, "snapshot": snapshot}) + "\n"
+                json.dumps({"training_call_id": call_id, "snapshot": snapshot}) + "\n"
             )
             run_volume.commit()
             return "preparation.json"
@@ -357,6 +394,9 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
                     target, max_seconds=policy.preparation_chunk_seconds
                 )
                 report = corpus.report(target)
+                finished |= {
+                    name for name, s in report["sources"].items() if FastRawCorpus.enough(s)
+                }
                 if pending is not None and pending[0].done():
                     copy, launch = pending
                     pending = None
@@ -365,7 +405,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
                         preparation_status = start_training()
                 launch = (
                     policy.overlap_preparation
-                    and not training_path.exists()
+                    and not training_started()
                     and all(
                         s["train_loss_tokens"] > 0 and s["validation_loss_tokens"] >= prefix_tokens
                         for s in report["sources"].values()
@@ -373,7 +413,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
                 )
                 due = time.monotonic() - persisted >= policy.persist_seconds
                 if not progress["ready"] and pending is None and (launch or due):
-                    pending = (persister.submit(persist, report), launch)
+                    pending = (persister.submit(persist, report, frozenset(finished)), launch)
                     persisted = time.monotonic()
                 record(
                     run_id,
@@ -394,8 +434,8 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
                 pending[0].result()
         finally:
             persister.shutdown(wait=True)
-        persist(report)
-        if policy.overlap_preparation and not training_path.exists():
+        persist(report, set(report["sources"]))
+        if policy.overlap_preparation and not training_started():
             preparation_status = start_training()
         check_capacity(report, target)
         corpus.close()
@@ -476,7 +516,12 @@ def seed_phase(parent, seed, manifest, bundle, note=""):
     volumes={"/data": data_volume, "/runs": run_volume},
 )
 def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
+    import os
+    import tempfile
+
+    from training_data.growing import STATE_ENV, volume_paths, write_json
     from training_data.mixture import open_mixture
+    from training_data.raw_token_stream import GROWING_FORMAT
 
     from workflows.checks import validate_paths
     from workflows.config import resolve_payload
@@ -492,6 +537,20 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
     if resume and phase_from:
         raise ValueError("Choose either an exact resume or a new phase, not both")
     manifest_path = Path("/data") / dataset.root / dataset.snapshot / "manifest.json"
+    if json.loads(manifest_path.read_text()).get("format") == GROWING_FORMAT:
+        # A run that trained during preparation continues once that preparation is done;
+        # its segments copy the final database (see train_segment).
+        _, complete = volume_paths(manifest_path.parent)
+        if not complete.exists():
+            raise ValueError("Finish the growing snapshot's preparation with --resume-preparation")
+        completion = json.loads(complete.read_text())
+        database = manifest_path.parent / Path(completion["database"]["path"]).name
+        verified = completion["capacity_verified_for_tokens"]
+        if not config.pilot and verified < config.target_tokens:
+            raise ValueError("Growing snapshot capacity was verified for fewer tokens")
+        state = os.path.join(tempfile.mkdtemp(prefix="growing-"), "state.json")
+        write_json(state, {"generation": 1, "path": str(database), "complete": True})
+        os.environ[STATE_ENV] = state
     # Validate format, tokenizer, data review and capacity before any GPU scheduling.
     mixture = open_mixture(
         manifest_path,

@@ -139,7 +139,7 @@ def build(destination, weights, databases, *, target, context=2048, parents_per_
                 "SELECT source,SUM(loss_tokens) FROM documents WHERE split='train' GROUP BY source"
             )
         )
-        # Raw cursors resume by document hash, so a hash may appear only once.
+        # A document in two referenced databases would be trained twice per pass.
         repeated = counter.execute("SELECT COUNT(*)-COUNT(DISTINCT hash) FROM documents")
         if repeated.fetchone()[0]:
             raise ValueError("Referenced databases share documents; deduplicate them first")

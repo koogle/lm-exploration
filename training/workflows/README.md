@@ -90,7 +90,10 @@ trains from that seed. The lineage is recorded in `RUN_ID/workflow.json`. See
 [continued pretraining](../trainer/README.md#continued-pretraining) for what carries over.
 
 Interrupted preparation can use `--resume-preparation` with its original run ID,
-version and identical resolved selection, provided training has not begun.
+version and identical resolved selection, provided training has not begun. With
+`overlap_preparation`, preparation that stops after its training started also resumes
+this way. A growing snapshot can be selected for `--resume` once its preparation has
+written `complete.json`.
 Historical recipe files are retained under `model_configs/historical/`; the old
 `workflows.modal_small_5b` module and standalone recipe-launch CLI are replaced by
 `workflows.modal_train`. Existing remote resource names and measured artifacts

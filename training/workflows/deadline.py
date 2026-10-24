@@ -46,8 +46,9 @@ def track(run_folder, call_id, kind):
     (folder / f"{call_id}.json").write_text(json.dumps(record) + "\n")
 
 
-def tracked_calls(run_folder):
+def tracked_calls(run_folder, kind=None):
     folder = Path(run_folder) / "calls"
     if not folder.exists():
         return []
-    return sorted(json.loads(p.read_text())["call_id"] for p in folder.glob("*.json"))
+    records = [json.loads(p.read_text()) for p in folder.glob("*.json")]
+    return sorted(r["call_id"] for r in records if kind is None or r["kind"] == kind)

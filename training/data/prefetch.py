@@ -166,6 +166,9 @@ class PrefetchedBatches:
 
     def close(self):
         self.stop.set()
+        # A source waiting for newer prepared data (data/growing.py) cannot see `stop`.
+        if hasattr(self.source, "interrupt"):
+            self.source.interrupt()
         self.thread.join(timeout=120)
         if self.thread.is_alive():
             raise TimeoutError("Producer did not stop within two minutes")
