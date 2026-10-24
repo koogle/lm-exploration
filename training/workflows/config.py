@@ -6,7 +6,7 @@ import re
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 
-from training_data.growing import STALL_SECONDS
+from training_data.growing import max_persist_seconds
 
 from distributed.config import DistributedConfig
 
@@ -78,7 +78,7 @@ class WorkflowConfig:
             raise ValueError("Workflow segments must fit within the controller timeout")
         # Training that caught up waits for the next persisted copy; it fails after
         # STALL_SECONDS, which must also cover the copy and the refresher's interval.
-        if self.overlap_preparation and self.persist_seconds > STALL_SECONDS // 2:
+        if self.overlap_preparation and self.persist_seconds > max_persist_seconds():
             raise ValueError("Overlapped preparation must persist within half the stall timeout")
         if type(self.qualification_segments) is not int or not (
             0 <= self.qualification_segments < self.max_segments

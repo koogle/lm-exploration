@@ -12,11 +12,11 @@ from unittest import mock
 
 from training_data.export_raw import complete_growing, export_growing
 from training_data.growing import (
-    DEADLINE_ENV,
     STATE_ENV,
     DataDeadline,
     Refresher,
     mark_finished,
+    serve,
     volume_paths,
     write_json,
 )
@@ -141,7 +141,7 @@ class GrowingTests(unittest.TestCase):
             write_json(state, {"generation": 1, "path": str(prefix), "complete": False})
             with mock.patch.dict(os.environ, {STATE_ENV: str(state)}):
                 growing = RawTokenMixture(manifest(root, counts, growing=True), context=16)
-            growing.growing.poll_seconds, growing.growing.stall_seconds = 0.01, 0.05
+            growing.copies.poll_seconds, growing.copies.stall_seconds = 0.01, 0.05
             with self.assertRaisesRegex(RuntimeError, "stalled"):
                 windows(growing)
 
@@ -156,7 +156,7 @@ class GrowingTests(unittest.TestCase):
                 growing = RawTokenMixture(manifest(root, counts, growing=True), context=16)
                 saved = growing.state_dict()
                 growing.load_state_dict({**saved, "raw_cursors": second_pass})
-                growing.growing.poll_seconds, growing.growing.stall_seconds = 0.01, 0.05
+                growing.copies.poll_seconds, growing.copies.stall_seconds = 0.01, 0.05
                 with self.assertRaisesRegex(RuntimeError, "stalled"):
                     windows(growing)
                 write_json(state, {"generation": 1, "path": str(database), "complete": True})
@@ -170,12 +170,13 @@ class GrowingTests(unittest.TestCase):
             database, _, counts = build(root, documents=2)
             db = sqlite3.connect(database)
             mark_finished(db, ["web"])
+            db.commit()
             db.close()
             state = root / "state.json"
             write_json(state, {"generation": 1, "path": str(database), "complete": False})
             with mock.patch.dict(os.environ, {STATE_ENV: str(state)}):
                 growing = RawTokenMixture(manifest(root, counts, growing=True), context=16)
-                growing.growing.poll_seconds, growing.growing.stall_seconds = 0.01, 0.05
+                growing.copies.poll_seconds, growing.copies.stall_seconds = 0.01, 0.05
                 passes = {block["pass"] for block in iter(growing.next_block, None)}
             self.assertEqual(passes, {1, 2})
 
@@ -201,10 +202,10 @@ class GrowingTests(unittest.TestCase):
             _, prefix, counts = build(root, snapshot_after=1)
             state = root / "state.json"
             write_json(state, {"generation": 1, "path": str(prefix), "complete": False})
-            deadline = str(time.time() + 0.2)
-            with mock.patch.dict(os.environ, {STATE_ENV: str(state), DEADLINE_ENV: deadline}):
+            with mock.patch.dict(os.environ, {STATE_ENV: str(state)}):
                 growing = RawTokenMixture(manifest(root, counts, growing=True), context=16)
-            growing.growing.poll_seconds = 0.01
+            growing.copies.deadline = time.time() + 0.2
+            growing.copies.poll_seconds = 0.01
             saved = growing.state_dict()
             with self.assertRaises(DataDeadline):
                 growing.next_batch(64)
@@ -242,6 +243,67 @@ class GrowingTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "growing"),
             ):
                 RawTokenMixture(path, context=16)
+
+
+class CopyTests(unittest.TestCase):
+    def test_a_completed_snapshot_reads_its_frozen_copy_without_a_refresher(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            database, _, counts = build(root)
+            full = windows(RawTokenMixture(manifest(root, counts), context=16))
+            path = manifest(root, counts, growing=True)
+            with mock.patch.dict(os.environ, clear=False) as environment:
+                environment.pop(STATE_ENV, None)
+                with self.assertRaisesRegex(ValueError, "until its preparation completes"):
+                    RawTokenMixture(path, context=16)
+                freeze(database, root / "complete.json")
+                self.assertEqual(windows(RawTokenMixture(path, context=16)), full)
+
+    def test_serve_runs_a_refresher_only_while_preparation_runs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            snapshot = Path(folder) / "v1/snapshots/run"
+            snapshot.mkdir(parents=True)
+            database, _, counts = build(snapshot.parents[1])
+            shutil.copyfile(
+                manifest(snapshot.parents[1], counts, growing=True), snapshot / "manifest.json"
+            )
+            with mock.patch.dict(os.environ, clear=False) as environment:
+                environment.pop(STATE_ENV, None)
+                with serve(snapshot, lambda: None):
+                    state = json.loads(Path(os.environ[STATE_ENV]).read_text())
+                    self.assertEqual((state["generation"], state["complete"]), (1, False))
+                    local = Path(os.environ[STATE_ENV]).parent
+                self.assertNotIn(STATE_ENV, os.environ)
+                self.assertFalse(local.exists())
+                freeze(database, snapshot / "complete.json")
+                with serve(snapshot, lambda: None):
+                    self.assertNotIn(STATE_ENV, os.environ)
+
+    def test_reopens_the_newest_copy_when_the_named_one_was_replaced(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            database, _, counts = build(root)
+            state = root / "state.json"
+            write_json(state, {"generation": 2, "path": str(database), "complete": True})
+            with mock.patch.dict(os.environ, {STATE_ENV: str(state)}):
+                growing = RawTokenMixture(manifest(root, counts, growing=True), context=16)
+            stale = {"generation": 1, "path": str(root / "gone.sqlite"), "complete": False}
+            current, db = growing.opened(stale)
+            db.close()
+            self.assertEqual(current["generation"], 2)
+
+    def test_insertion_order_reads_use_an_index(self):
+        from training_data.raw_corpus import RawCorpus
+
+        with tempfile.TemporaryDirectory() as folder:
+            corpus = RawCorpus(Path(folder), {"sources": []})
+            plan = corpus.db.execute(
+                "EXPLAIN QUERY PLAN SELECT rowid,text FROM documents "
+                "WHERE source='a' AND split='train' AND rowid>=0 ORDER BY rowid"
+            ).fetchall()
+            corpus.close()
+            self.assertIn("document_order", str(plan))
+            self.assertNotIn("TEMP B-TREE", str(plan))
 
 
 class RefresherTests(unittest.TestCase):
@@ -352,7 +414,8 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(volume_paths(snapshot), (database, snapshot / "complete.json"))
             with self.assertRaises(ValueError):
                 export_growing(version, snapshot, [])
-            record = complete_growing(version, snapshot, capacity_verified_for_tokens=5)
+            shutil.copyfile(database, snapshot / "raw.sqlite")
+            record = complete_growing(snapshot, capacity_verified_for_tokens=5)
             self.assertEqual(json.loads((snapshot / "complete.json").read_text()), record)
             frozen = snapshot / record["database"]["path"]
             self.assertEqual(digest(frozen), record["database"]["sha256"])

@@ -20,21 +20,23 @@ import json
 import os
 import shutil
 import sqlite3
+import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from .subword import digest
 
+# A snapshot whose database preparation is still appending to.
+GROWING_FORMAT = "raw-text-growing-v1"
 STATE_ENV = "GROWING_DATABASE_STATE"
 # Written in the snapshot folder once preparation has persisted its final database.
 COMPLETE_RECORD = "complete.json"
 # How long the loader waits for newer prepared data before failing. Distributed
 # collectives that wait on the loader need a longer timeout than this.
 STALL_SECONDS = 3600
-# Wall-clock time (Unix seconds) at which a wait ends the training session instead.
-DEADLINE_ENV = "GROWING_DATABASE_DEADLINE"
-# Sources that had enough data when a copy was persisted, stored in each copy.
+# Sources preparation has finished (it never extends them again), stored in the database.
 FINISHED_TABLE = "prepared_sources"
 
 
@@ -51,10 +53,90 @@ def finished_sources(db):
 
 
 def mark_finished(db, sources):
+    """Record `sources` as finished; the caller commits."""
     db.execute(f"CREATE TABLE IF NOT EXISTS {FINISHED_TABLE}(source TEXT PRIMARY KEY)")
-    db.execute(f"DELETE FROM {FINISHED_TABLE}")
-    db.executemany(f"INSERT INTO {FINISHED_TABLE} VALUES(?)", [(s,) for s in sorted(sources)])
-    db.commit()
+    db.executemany(f"INSERT OR IGNORE INTO {FINISHED_TABLE} VALUES(?)", [(s,) for s in sources])
+
+
+def max_persist_seconds():
+    """The longest persist interval that still leaves a refresh inside the stall timeout."""
+    return STALL_SECONDS // 2
+
+
+class FixedDatabase:
+    """A finished database: one complete copy that never waits."""
+
+    def __init__(self, path):
+        self.state = {"generation": 1, "path": str(path), "complete": True}
+        self.deadline = None
+
+    def current(self):
+        return self.state
+
+    def newer(self, generation):
+        return self.state
+
+    def interrupt(self):
+        pass
+
+
+def verified(folder, artifact, message):
+    """The checksum-verified database an artifact entry names inside `folder`."""
+    if Path(artifact["path"]).name != artifact["path"]:
+        raise ValueError("Unsafe database path")
+    path = Path(folder) / artifact["path"]
+    if digest(path) != artifact["sha256"]:
+        raise ValueError(message)
+    return path
+
+
+def database_copies(manifest_path, manifest):
+    """Where a raw snapshot's loader finds its database.
+
+    A frozen snapshot, or a growing one whose preparation completed, is one verified
+    database. A growing snapshot still being prepared follows the refresher's state
+    (see `serve`).
+    """
+    folder = Path(manifest_path).parent
+    if manifest["format"] != GROWING_FORMAT:
+        return FixedDatabase(
+            verified(folder, manifest["database"], "Raw database checksum mismatch")
+        )
+    if STATE_ENV in os.environ:
+        return GrowingDatabase(os.environ[STATE_ENV])
+    complete = folder / COMPLETE_RECORD
+    if not complete.exists():
+        raise ValueError(f"A growing snapshot needs {STATE_ENV} until its preparation completes")
+    frozen = json.loads(complete.read_text())["database"]
+    return FixedDatabase(verified(folder, frozen, "Frozen growing database checksum mismatch"))
+
+
+@contextmanager
+def serve(snapshot, reload, interval_seconds=300.0):
+    """Keep local copies of a snapshot's database while its preparation still runs.
+
+    Sets `STATE_ENV` for the loader. A frozen or completed snapshot needs nothing.
+    """
+    snapshot = Path(snapshot)
+    manifest = json.loads((snapshot / "manifest.json").read_text())
+    if manifest["format"] != GROWING_FORMAT or (snapshot / COMPLETE_RECORD).exists():
+        yield
+        return
+    database, complete = volume_paths(snapshot)
+    local = tempfile.mkdtemp(prefix="growing-")
+    refresher = Refresher(database, complete, local, reload, interval_seconds)
+    os.environ[STATE_ENV] = str(refresher.state_path)
+    try:
+        # Later reloads start after one interval, once the caller has read the manifest.
+        if not refresher.refresh():
+            refresher.start()
+        yield
+    finally:
+        refresher.stop.set()
+        if refresher.is_alive():
+            refresher.join()
+        os.environ.pop(STATE_ENV, None)
+        shutil.rmtree(local, ignore_errors=True)
 
 
 def volume_paths(snapshot):
@@ -76,13 +158,12 @@ def write_json(path, value):
 class GrowingDatabase:
     """The loader's view of the newest local copy of a database still being prepared."""
 
-    def __init__(self, state_path, poll_seconds=10.0, stall_seconds=STALL_SECONDS, deadline=None):
+    def __init__(self, state_path, poll_seconds=10.0, stall_seconds=STALL_SECONDS):
         self.state_path = Path(state_path)
         self.poll_seconds = poll_seconds
         self.stall_seconds = stall_seconds
-        if deadline is None and DEADLINE_ENV in os.environ:
-            deadline = float(os.environ[DEADLINE_ENV])
-        self.deadline = deadline
+        # Wall-clock time (Unix seconds) at which a wait ends the session instead.
+        self.deadline = None
         self.interrupted = threading.Event()
 
     def state(self):

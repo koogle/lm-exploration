@@ -8,6 +8,7 @@ every document sharing a held-out parent. There is no global audit: external dat
 are checked by path and size, not full checksums.
 """
 
+import itertools
 import json
 import sqlite3
 import zlib
@@ -41,7 +42,7 @@ def attach_prepared(db, manifest):
     db.executemany(
         "INSERT INTO excluded_parent VALUES(?)", [(p,) for p in manifest["excluded_parents"]]
     )
-    parts = {}
+    parts, numbers = {}, itertools.count()
     for index, artifact in enumerate(manifest["external_databases"]):
         path = Path(artifact["path"])
         if not path.is_absolute() or path.stat().st_size != artifact["size_bytes"]:
@@ -49,7 +50,7 @@ def attach_prepared(db, manifest):
         alias = f"prepared_{index}"
         db.execute(f"ATTACH DATABASE ? AS {alias}", (path.as_uri() + "?mode=ro&immutable=1",))
         for stored, source in artifact["sources"].items():
-            view = f"part_{sum(map(len, parts.values()))}"
+            view = f"part_{next(numbers)}"
             db.execute(
                 f"CREATE TEMP VIEW {view} AS SELECT d.rowid AS ordinal,hash,"
                 f"{_literal(source)} AS source,split,parent,provenance,text,loss_tokens,conflict "

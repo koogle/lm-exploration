@@ -13,7 +13,7 @@ from datetime import timedelta
 from itertools import islice
 from pathlib import Path
 
-from training_data.growing import DEADLINE_ENV, STALL_SECONDS, STATE_ENV, DataDeadline
+from training_data.growing import STALL_SECONDS, STATE_ENV, DataDeadline
 from training_data.mixture import check_capacity, open_mixture
 from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, LOSS_IGNORE_INDEX, VOCAB_SIZE
 
@@ -263,7 +263,7 @@ def train(
     try:
         started = time.monotonic()
         # A growing database wait ends at the session limit with a checkpoint.
-        os.environ[DEADLINE_ENV] = str(time.time() + max_seconds)
+        deadline = time.time() + max_seconds
         random.seed(config.seed)
         np.random.seed(config.seed)
         torch.manual_seed(config.seed)
@@ -276,12 +276,15 @@ def train(
             output.mkdir(parents=True, exist_ok=True)
 
             def make_data():
-                return open_mixture(
+                mixture = open_mixture(
                     manifest,
                     loader=config.data_loader,
                     context=config.context,
                     allow_unreviewed=config.allow_unreviewed_data,
                 )
+                if hasattr(mixture, "copies"):
+                    mixture.copies.deadline = deadline
+                return mixture
 
             if config.prefetch_batches:
                 from training_data.prefetch import PrefetchedBatches
@@ -495,7 +498,7 @@ def train(
                 except StopIteration:
                     return {"stop": "source_two_pass_limit"}
                 except DataDeadline:
-                    return {"stop": "time_limit"}
+                    return {"stop": "data_wait"}
                 count = int((full_y != LOSS_IGNORE_INDEX).sum())
                 if tokens + count > config.target_tokens:
                     # Do not consume untrained data or exceed the token ceiling.
