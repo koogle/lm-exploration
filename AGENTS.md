@@ -16,8 +16,9 @@ relevant folder's README and instructions before making changes.
 Keep the root README short. Put plans and run instructions in their owning folder.
 Distinguish mockups, implemented behavior and measured results. Describe what code,
 docs and pull requests do; do not state what was removed or is not used (that history
-belongs in commit messages). Preserve experiment provenance and negative results. Run project commands from the documented working
-directory. A repository consolidation does not require GPU training or deployment.
+belongs in commit messages). Preserve experiment provenance and negative results. Run
+project commands from the documented working directory. A repository consolidation
+does not require GPU training or deployment.
 Keep credentials and local checkpoints out of Git.
 
 ## No backward compatibility
