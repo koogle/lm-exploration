@@ -59,12 +59,13 @@ position). The run pins the dataset commit it reads and records it in its result
 - **Metrics.** Held-out CE per token (only comparable within one vocabulary), CE per
   UTF-8 byte (comparable across vocabularies; trimmed UNK targets make the trimmed
   arms slightly optimistic), KL to the teacher, and pass@1 with 95% Wilson intervals.
-- **Inference.** `export.py` writes each student as a Llama checkpoint (query/key rows
-  reordered from interleaved to half-split RoPE; attention and MLP biases and tied
-  embeddings kept) that vLLM serves natively. `vllm_eval.py` generates from token IDs
-  without a tokenizer and decodes through the student vocabulary; every evaluation
-  records the prompt log-probability gap between vLLM (BF16) and the PyTorch
-  checkpoint (FP32). The teacher also runs on vLLM.
+- **Inference.** `vllm_model.py` is the student decoder written for vLLM (same
+  parameter names, interleaved RoPE, biased projections, tied embeddings); vLLM
+  registers it in-process and loads the training checkpoint `model.pt` directly
+  (`load_format="pt"`). `vllm_eval.py` generates from token IDs without a tokenizer and
+  decodes through the student vocabulary; every evaluation records the prompt
+  log-probability gap between vLLM (BF16) and the PyTorch checkpoint (FP32). The
+  teacher also runs on vLLM. Hugging Face Transformers is not used.
 - **Grading.** Every completion runs in a network-blocked Modal Sandbox. Each case
   gets its own interpreter with CPU, memory, file-size and process limits and must
   print a random marker. Model output is never executed outside the sandbox.
@@ -115,13 +116,13 @@ M=distillation/validation/modal_app.py
 distillation/validation/.venv/bin/modal run $M::archive --repo-id jfrick/qwen35-distillation-shards-20261023
 # Results, grades, completions, metrics and supervision records (no weights).
 distillation/validation/.venv/bin/modal run $M::archive_outputs --campaigns CAMPAIGN[,CAMPAIGN...]
-# Final student weights and vLLM exports (weights-card.md becomes the card).
+# Final student weights (weights-card.md becomes the card).
 distillation/validation/.venv/bin/modal run $M::archive_checkpoints --campaigns CAMPAIGN[,CAMPAIGN...]
 ```
 
 Outputs go to the Modal volume `lm-exploration-distillation-validation` under
 `/<campaign>/`: `manifest.json`, `stages/`, `eval-items.json`, `teacher/`,
-`students/<arm>/` (metrics, summary, completions, `model.pt`, `export/`), `grades/`
+`students/<arm>/` (metrics, summary, completions, `model.pt`, `vllm/`), `grades/`
 and `results.json`. Findings below are written by hand.
 
 ## Tests
@@ -131,11 +132,12 @@ python -m unittest discover -s distillation/validation/tests -v
 ruff check distillation && ruff format --check distillation
 ```
 
-They need torch, numpy and safetensors. They check the soft loss against a hand
-computation, cross-entropy against PyTorch, packing and stream order (including the
-covering vocabulary's piece expansion), a short training run, the Llama export against
-a reference Llama forward pass, supervisor polling and adoption, the MBPP conversion
-and the grader on fixed snippets. vLLM loading and parity are checked on the GPU in
+They need torch and numpy and are split per module (`tests/test_*.py`). They check
+the soft loss against a hand computation, cross-entropy against PyTorch, packing and
+stream order (including the covering vocabulary's piece expansion), covering
+spelling, a short training run, the vLLM model directory (config, checkpoint link and
+the weights as vLLM's `.pt` loader reads them), supervisor polling and adoption, the
+MBPP conversion and the grader on fixed snippets. vLLM loading and parity are checked on the GPU in
 every evaluation (see the re-evaluation below).
 
 ## Findings
@@ -265,6 +267,7 @@ Operational notes, negative ones included:
 - Results, grades, completions, metrics and supervision records of all four campaigns,
   plus the control throughput probes: HF dataset `jfrick/lm-exploration-results`,
   folder `distillation-validation/`.
-- Final weights (`students/*/model.pt`, the vLLM exports in `students/*/export/`, and the
+- Final weights (`students/*/model.pt`, the earlier Llama exports in `students/*/export/`
+  from campaign `-04-vllm-reeval`, and the
   fine-tuned 0.8B models in `control/*/model/`): private HF dataset
   `jfrick/distillation-validation-checkpoints-20261023`.
