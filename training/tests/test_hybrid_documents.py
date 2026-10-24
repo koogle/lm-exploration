@@ -34,8 +34,9 @@ class DocumentTests(unittest.TestCase):
     def test_loader_wrapper_emits_document_ids(self):
         inputs = torch.tensor([[3, EOS, 4, 5], [6, 7, EOS, 8]])
         loader = documents.DocumentBatches(FixedMixture(inputs), EOS)
-        _, _, ids = loader.next_batch(2)
-        self.assertEqual(ids.tolist(), [[0, 0, 1, 1], [0, 0, 0, 1]])
+        batch = loader.next_batch(2)
+        self.assertEqual(batch.documents.tolist(), [[0, 0, 1, 1], [0, 0, 0, 1]])
+        self.assertEqual(batch.mtp_labels.tolist(), [[-100, -100, 5, -100], [7, -100, -100, -100]])
         self.assertEqual(loader.state, "cursor")
 
     def test_document_b_is_unaffected_by_document_a(self):

@@ -5,7 +5,11 @@ at every position whose previous input token is EOS. Ids restart at 0 in each ro
 padding after a final EOS forms its own document, and its targets are ignored.
 """
 
+from typing import NamedTuple
+
 import torch
+
+IGNORE_INDEX = -100
 
 
 def document_ids(input_ids, eos_id):
@@ -37,15 +41,40 @@ def cu_seqlens(documents):
     return torch.cat((starts, end)).to(torch.int32)
 
 
+def mtp_labels(inputs, labels, eos_id):
+    """Targets x_(t+2) for the MTP module at each position t, [B, T].
+
+    The target is labels[t + 1]. It is ignored when x_t or x_(t+1) is EOS (it
+    would belong to the next document) and at the last position, whose x_(t+2)
+    lies outside the window.
+    """
+    targets = torch.full_like(labels, IGNORE_INDEX)
+    within = (inputs[:, :-1] != eos_id) & (inputs[:, 1:] != eos_id)
+    targets[:, :-1] = labels[:, 1:].masked_fill(~within, IGNORE_INDEX)
+    return targets
+
+
+class Batch(NamedTuple):
+    inputs: torch.Tensor
+    labels: torch.Tensor
+    documents: torch.Tensor
+    mtp_labels: torch.Tensor
+
+
 class DocumentBatches:
-    """Wrap a token mixture so each batch also carries its document ids."""
+    """Wrap a token mixture so each batch also carries document ids and MTP targets."""
 
     def __init__(self, mixture, eos_id):
         self.mixture, self.eos_id = mixture, eos_id
 
     def next_batch(self, batch_size, device="cpu"):
         inputs, labels = self.mixture.next_batch(batch_size, device)
-        return inputs, labels, document_ids(inputs, self.eos_id)
+        return Batch(
+            inputs,
+            labels,
+            document_ids(inputs, self.eos_id),
+            mtp_labels(inputs, labels, self.eos_id),
+        )
 
     def __getattr__(self, name):
         return getattr(self.mixture, name)

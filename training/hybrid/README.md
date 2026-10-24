@@ -119,6 +119,29 @@ step that way and 19.0–19.5 ms with fla excluded by `torch.compiler.disable`
 layers 3, 7, 11 and 15 of 16. Full-attention layers keep RoPE, the sink and the
 output gate.
 
+## Multi-token prediction
+
+`MultiTokenPrediction` is one DeepSeek-V3/GLM-style module (`mtp=True` by
+default). At position `t` it concatenates RMSNorm of the trunk's last residual
+state `h_t` with RMSNorm of the embedding of `x_(t+1)`, projects back to the
+model width, runs one hybrid block (`mtp_layer_kind`, full attention by
+default, sharing the trunk's document mask and RoPE) and an output RMSNorm, and
+predicts `x_(t+2)` through the shared tied output layer. Its loss uses the same
+chunked cross-entropy and z-loss.
+
+`documents.mtp_labels(inputs, labels, eos_id)` builds the `t+2` targets:
+`labels[t + 1]`, ignored when `x_t` or `x_(t+1)` is EOS (the target would be in
+the next document) and at the last position. `DocumentBatches.next_batch`
+returns a `Batch(inputs, labels, documents, mtp_labels)`.
+`forward(tokens, labels, documents, mtp_labels)` adds `mtp_loss`, `mtp_ce`,
+`mtp_z` and `mtp_count`. The trainer combines the means as
+`loss / count + mtp_weight(config, progress) * mtp_loss / mtp_count`, where the
+weight decays linearly from 0.3 to 0.1 over training progress.
+
+Inference does not run the module: `forward(tokens)` returns trunk logits, and
+a model built with `mtp=False` loads the trunk weights (all keys outside `mtp.`)
+and produces identical logits.
+
 The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
 placeholders until the 720M configuration is fixed in PR 8.
 
@@ -128,7 +151,8 @@ From `training/`:
 
 ```sh
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
-  tests.test_hybrid_exact_attention tests.test_hybrid_sink_gate tests.test_hybrid_kda -v
+  tests.test_hybrid_exact_attention tests.test_hybrid_sink_gate tests.test_hybrid_kda \
+  tests.test_hybrid_mtp -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
@@ -153,7 +177,9 @@ bf16 training steps of a small compiled hybrid model with the fla call outside t
 compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
 The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it.
 
-`test_hybrid_kda` compares the KDA recurrence with an independent matrix form
+`test_hybrid_mtp` checks target alignment and boundary masking, the loss
+against an explicit computation, that the module never sees its own target,
+the weight schedule and inference without MTP. `test_hybrid_kda` compares the KDA recurrence with an independent matrix form
 `S_t = (I - b k k^T) diag(a) S_(t-1) + b k v^T`, the short convolution with
 `F.conv1d`, checks state and convolution resets at document boundaries, the
 layout, document isolation and causality through mixed KDA/full stacks, and that
