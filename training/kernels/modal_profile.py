@@ -26,7 +26,7 @@ def step_fn(model, optimizer, tokens, labels):
 
 
 @app.function(image=image, **limits)
-def profile(deadline, microbatch=16, context=2048):
+def profile(deadline, microbatch=16, context=2048, fused_kernels=False):
     import torch
     from model_100m.model import GPT, ModelConfig
     from torch.profiler import ProfilerActivity, profile
@@ -37,6 +37,10 @@ def profile(deadline, microbatch=16, context=2048):
     results = {"device": torch.cuda.get_device_name(), "microbatch": microbatch, "context": context}
     for compiled in (False, True):
         model = GPT(ModelConfig(vocab_size=32768, block_size=context)).cuda()
+        if fused_kernels:
+            from kernels import fused
+
+            fused.fuse(model)
         if compiled:
             model.compile()
         optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, fused=True)
@@ -82,8 +86,8 @@ def profile(deadline, microbatch=16, context=2048):
 
 
 @app.local_entrypoint()
-def main(output: str = "artifacts/kernels/profile.json"):
-    report = profile.remote(time.time() + LAUNCH_LIMIT_SECONDS)
+def main(output: str = "artifacts/kernels/profile.json", fused_kernels: bool = False):
+    report = profile.remote(time.time() + LAUNCH_LIMIT_SECONDS, fused_kernels=fused_kernels)
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2) + "\n")
