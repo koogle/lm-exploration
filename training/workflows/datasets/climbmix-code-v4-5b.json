@@ -1,0 +1,6 @@
+{
+  "mode": "snapshot",
+  "root": "climbmix-code",
+  "loader": "raw",
+  "snapshot": "climbmix-code-v4/snapshots/climbmix-124m-5b-01"
+}

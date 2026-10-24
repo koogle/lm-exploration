@@ -101,11 +101,10 @@ class RawTokenMixture(TokenMixture):
             buffer = []
             # [document hash, offset of the buffer's first token in it, tokens left]
             segments = []
-            for key, raw, expected_count in rows:
-                ids = self.tokenizer.encode(
-                    zlib.decompress(raw).decode(), add_special_tokens=False
-                ).ids
-                if len(ids) + 1 != expected_count or any(t < FIRST_CONTENT_TOKEN_ID for t in ids):
+            for key, ids, expected_count in self.encoded(rows):
+                if len(ids) + 1 != expected_count or min(ids, default=FIRST_CONTENT_TOKEN_ID) < (
+                    FIRST_CONTENT_TOKEN_ID
+                ):
                     raise ValueError("Raw document/token count mismatch")
                 tokens = [BOS_TOKEN_ID, *ids, EOS_TOKEN_ID]
                 start = saved["offset"] if resume and key == saved["hash"] else 0
@@ -128,6 +127,18 @@ class RawTokenMixture(TokenMixture):
                 key, start, length = segments[-1]
                 self.cursors[name] = {"pass": pass_index, "hash": key, "offset": start + length}
                 yield self.window(name, pass_index, buffer)
+
+    def encoded(self, rows, chunk=256):
+        """Yield (hash, token IDs, expected count), tokenizing `chunk` documents per call.
+
+        encode_batch spreads a chunk over all CPU cores; one encode per document kept
+        the training GPUs waiting on a single core.
+        """
+        while batch := rows.fetchmany(chunk):
+            texts = [zlib.decompress(raw).decode() for _, raw, _ in batch]
+            encodings = self.tokenizer.encode_batch(texts, add_special_tokens=False)
+            for (key, _, expected_count), encoding in zip(batch, encodings, strict=True):
+                yield key, encoding.ids, expected_count
 
     def window(self, name, pass_index, tokens):
         x, y = tokens[:-1], tokens[1:]

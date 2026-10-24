@@ -225,3 +225,51 @@ class PassCapTests(unittest.TestCase):
                     break
             mixture.close()
             self.assertEqual(total, train * 3)
+
+
+class PrefetchedRawTests(unittest.TestCase):
+    def test_prefetch_matches_direct_batches_and_resumes(self):
+        from training_data.prefetch import PrefetchedBatches
+
+        source = {
+            "name": "web",
+            "weight_percent": 100,
+            "files": ["a"],
+            "repo": "test",
+            "revision": "0" * 40,
+        }
+        rows = [
+            {"id": str(i), "text": f"packed prefetch text {i} " * (1 + i % 5)} for i in range(400)
+        ]
+        rows = [r for r in rows if adapt(source, r)[0]["split"] == "train"]
+
+        def reader(source, shard, start):
+            yield from enumerate(rows[start:], start)
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            corpus = RawCorpus(root, {"sources": [source]})
+            corpus.prepare("web", reader=reader)
+            corpus.close()
+            export_raw(root, root / "snapshot", max_passes={"web": 1})
+            path = root / "snapshot/manifest.json"
+
+            def make():
+                return RawTokenMixture(path, context=16, allow_unreviewed=True)
+
+            direct = make()
+            expected = [direct.next_batch(4) for _ in range(6)]
+            direct.close()
+            prefetched = PrefetchedBatches(make, 4, depth=3)
+            for x, y in expected[:3]:
+                got = prefetched.next_batch(4)
+                self.assertTrue(torch.equal(got[0], x) and torch.equal(got[1], y))
+                prefetched.acknowledge()
+            state = prefetched.state_dict()
+            prefetched.close()
+            resumed = PrefetchedBatches(make, 4, depth=3, state=state)
+            for x, y in expected[3:]:
+                got = resumed.next_batch(4)
+                self.assertTrue(torch.equal(got[0], x) and torch.equal(got[1], y))
+                resumed.acknowledge()
+            resumed.close()

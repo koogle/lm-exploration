@@ -1,6 +1,6 @@
 {
   "model_config": "model_configs/modern-124m.json",
-  "dataset_config": "datasets/climbmix-code-v2-raw.json",
+  "dataset_config": "datasets/climbmix-code-v4-5b.json",
   "target_tokens": 5000000000,
   "allow_unreviewed_data": true,
   "pilot": false,

@@ -17,5 +17,6 @@
   "gradient_clip_norm": 1.0,
   "validation_windows_per_source": 1,
   "log_every": 10,
-  "optimizer": "adamw"
+  "optimizer": "adamw",
+  "prefetch_batches": 4
 }
