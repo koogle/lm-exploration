@@ -1,4 +1,4 @@
-"""From-scratch students: packed data stream, CE / CE+KD losses, training and decoding.
+"""From-scratch students: packed data stream, CE / CE+KD losses, training and validation.
 
 The architecture is the repository's modern decoder (``training/10m/model.py``:
 RMSNorm, RoPE, SwiGLU, tied embeddings). The teacher signal is its top-K
