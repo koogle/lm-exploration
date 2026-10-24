@@ -11,7 +11,8 @@
 - Pre-norm blocks with `RMSNorm` (statistics in fp32) and a `SwiGLU`
   feed-forward layer, both the shared classes from [`10m/model.py`](../10m/model.py);
   the hybrid family builds `SwiGLU` without biases at a configurable hidden width.
-- Tied input/output embeddings; no bias parameters anywhere.
+- Tied input/output embeddings; no bias parameters except the attention output
+  gate's (below).
 - Full-attention layers use grouped-query attention (`n_head` query heads,
   `n_kv_head` key/value heads, head dimension 128), RMSNorm on each query and key
   head (QK-norm), and RoPE with a configurable base (default 1,000,000).
@@ -72,6 +73,21 @@ costs this factor; a faster kernel must keep the same reference bits.
 On CPU, `model.reference_attention` (an explicit masked softmax, fp32 or fp64) is
 the model's attention.
 
+## Attention sink and output gate
+
+Each full-attention layer has a learned sink: one logit per head, initialized to
+0, acting as an extra key with a zero value. Softmax over the scores plus the sink
+equals the plain attention output times `sigmoid(lse - sink)`, where `lse` is the
+log-sum-exp of the scores, so the layer applies that factor to the kernel's (or
+the reference's) output; the kernel's backward takes the log-sum-exp gradient. A head can then attend to "nothing" without spending
+probability on a real token.
+
+After the sink, an elementwise sigmoid gate multiplies the merged heads before
+`o_proj`: `sigmoid(gate_proj(x) + gate_bias)`, with `x` the layer's normalized
+input. `gate_bias` (per channel) starts at `gate_bias_init = 3.0`, so the gate
+starts about 95% open. With the gate fully open and the sink at -inf the layer
+reduces exactly to plain document-causal attention.
+
 The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
 placeholders until the 720M configuration is fixed in PR 8.
 
@@ -81,7 +97,7 @@ From `training/`:
 
 ```sh
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
-  tests.test_hybrid_exact_attention -v
+  tests.test_hybrid_exact_attention tests.test_hybrid_sink_gate -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
@@ -100,6 +116,9 @@ attention, runs a compiled bf16 model with `fullgraph=True`, and times the kerne
 `test_hybrid_exact_attention` checks `exp_fixed` and `log_fixed` accuracy, and
 the reference's output, log-sum-exp and gradients against fp64 autograd.
 
+`test_hybrid_sink_gate` compares the sink with an explicit softmax that has an
+extra zero-value key, checks that an open gate and a -inf sink reproduce plain
+attention exactly, and that the gate starts mostly open and receives gradients.
 `test_hybrid_documents` checks document ids, positions and `cu_seqlens`, and that
 document B's logits are identical whether it follows a different document A, or
 none. The backbone tests cover output shapes, tied weights and absent biases, initialization scales,

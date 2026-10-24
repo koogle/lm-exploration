@@ -41,7 +41,8 @@ class HybridBackboneTests(unittest.TestCase):
         tokens = torch.randint(0, 37, (3, 11))
         self.assertEqual(lm(tokens).shape, (3, 11, 37))
         self.assertIs(lm.output_weight, lm.token_embedding.weight)
-        self.assertFalse([name for name, _ in lm.named_parameters() if "bias" in name])
+        biases = [name for name, _ in lm.named_parameters() if "bias" in name]
+        self.assertTrue(all(name.endswith("mixer.gate_bias") for name in biases))
         self.assertTrue(all(m.bias is None for m in lm.modules() if isinstance(m, torch.nn.Linear)))
         with self.assertRaises(ValueError):
             lm(torch.zeros(1, 17, dtype=torch.long))
@@ -52,7 +53,8 @@ class HybridBackboneTests(unittest.TestCase):
         residual = 0.02 / math.sqrt(2 * config.n_layer)
         for name, parameter in lm.named_parameters():
             if parameter.ndim == 1:
-                torch.testing.assert_close(parameter, torch.ones_like(parameter))
+                start = {"sink": 0.0, "gate_bias": 3.0}.get(name.rsplit(".", 1)[-1], 1.0)
+                torch.testing.assert_close(parameter, torch.full_like(parameter, start))
                 continue
             expected = residual if name.endswith(("o_proj.weight", "down.weight")) else 0.02
             self.assertAlmostEqual(parameter.std().item(), expected, delta=0.1 * expected)
@@ -79,7 +81,9 @@ class HybridBackboneTests(unittest.TestCase):
         query, key, value = attention.project(x, rope)
         scores = query @ key.transpose(-1, -2) / math.sqrt(8)
         scores = scores.masked_fill(torch.ones(9, 9, dtype=torch.bool).triu(1), -math.inf)
-        expected = attention.o_proj((scores.softmax(-1) @ value).transpose(1, 2).reshape(2, 9, -1))
+        attended = (scores.softmax(-1) @ value) * torch.sigmoid(scores.logsumexp(-1))[..., None]
+        gate = torch.sigmoid(attention.gate_proj(x) + 3.0)
+        expected = attention.o_proj(attended.transpose(1, 2).reshape(2, 9, -1) * gate)
         torch.testing.assert_close(attention(x, rope, causal_mask(9)), expected)
 
     def test_gqa_matches_mha_with_shared_kv_heads(self):
