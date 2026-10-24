@@ -2,8 +2,9 @@
 
 A bounded experiment that answers, before any large student run, whether the
 Qwen3.5-9B Python/math trajectories can teach a small model anything measurable,
-and whether more data or a bigger model helps. **Status: campaign
-`distill-validation-20261023-01` ran on 2026-10-23; findings below.**
+and whether more data or a bigger model helps. **Status: campaigns
+`distill-validation-20261023-01`, `-02-covering`, `-03-qwen-200m` and
+`distill-validation-20261024-04-vllm-reeval` ran on 2026-10-23/24; findings below.**
 
 Data: the private HF dataset `jfrick/qwen35-python-math-trajectories-20261022`
 (native Qwen3.5 token IDs plus the teacher's top-64 log probabilities per
@@ -21,8 +22,10 @@ position). The run pins the dataset commit it reads and records it in its result
 
    The teacher's own pass rate (chat template, thinking off) is the ceiling.
 2. **Data-quality control.** Qwen3.5-0.8B-Base (same tokenizer) evaluated before and
-   after full fine-tuning on the first 50M positions of the same stream. If it does
-   not improve, the data or the evaluation is the bottleneck, not student size.
+   after full fine-tuning on the first 50M and 200M positions of the same stream. If it
+   does not improve, the data or the evaluation is the bottleneck, not student size.
+   The fine-tune used Hugging Face Transformers; that code was removed from this folder
+   afterwards (last present in commit `883cffe`) and its results are archived on HF.
 3. **From-scratch ladder** (`plan.json`), all one pass over a nested prefix of one
    fixed chunk order (50M ⊂ 200M ⊂ 500M positions; no repeats):
 
@@ -56,6 +59,12 @@ position). The run pins the dataset commit it reads and records it in its result
 - **Metrics.** Held-out CE per token (only comparable within one vocabulary), CE per
   UTF-8 byte (comparable across vocabularies; trimmed UNK targets make the trimmed
   arms slightly optimistic), KL to the teacher, and pass@1 with 95% Wilson intervals.
+- **Inference.** `export.py` writes each student as a Llama checkpoint (query/key rows
+  reordered from interleaved to half-split RoPE; attention and MLP biases and tied
+  embeddings kept) that vLLM serves natively. `vllm_eval.py` generates from token IDs
+  without a tokenizer and decodes through the student vocabulary; every evaluation
+  records the prompt log-probability gap between vLLM (BF16) and the PyTorch
+  checkpoint (FP32). The teacher also runs on vLLM.
 - **Grading.** Every completion runs in a network-blocked Modal Sandbox. Each case
   gets its own interpreter with CPU, memory, file-size and process limits and must
   print a random marker. Model output is never executed outside the sandbox.
@@ -76,40 +85,44 @@ distillation/validation/.venv/bin/modal run --detach distillation/validation/mod
 distillation/validation/.venv/bin/modal run distillation/validation/modal_app.py::stop
 ```
 
+`VALIDATION_PLAN=<file>` selects another plan. Follow-up plans reuse an earlier
+campaign's shards and evaluation sets (`data_campaign`) and may skip the teacher:
+`plan-covering.json` retrains one arm with the covering vocabulary, and
+`plan-reeval-vllm.json` re-evaluates saved students (`checkpoint`) without retraining.
+
 **Runtime limits.** `campaign` has a 12-hour absolute deadline (`budget_seconds`,
 launch + 43,200 s). Every child gets `retries=0` and a timeout of
 `min(its own limit, remaining budget)`. Children: data prep 1 h, MBPP 15 min,
-teacher 90 min, control 4 h, student 6 h, grading sandbox 1 h. The supervisor
+teacher 90 min, student 6 h, grading sandbox 1 h. The supervisor runs non-preemptible,
 records all call and sandbox IDs in the Modal Dict `lm-distillation-validation-calls`
 and in `supervision.json` on the volume, refuses to start work with less than 5
-minutes left, and cancels everything at the deadline or on failure. Finished
+minutes left, and cancels everything at the deadline or on a genuine failure. If the
+supervisor itself is interrupted, children keep running within their own capped
+timeouts and a restarted input adopts them. Finished
 stages (`stages/*.json`) and models already in `results.json` are skipped on
 relaunch, so a relaunch after a failure does not repeat data preparation.
 
-**Estimated cost (not measured).** About 64 CPU containers for data preparation
-(~200 GB download), then 16 H100 jobs: roughly 10–15 H100-hours in total (the
-three 500M-position 150M-scale students dominate), about $40–60 at the public
-$3.95/H100-hour rate. Wall time depends on how many H100s Modal allocates; earlier
-campaigns reached about ten at once.
+**Cost (estimated, not reconciled with billing).** About 45–55 H100-hours across the
+four campaigns, of which about 10 were lost to the preemptions and cancelled runs
+described below.
 
-**Training shards on HF.** After the data stage completes, upload the prepared
-shards (about 50 GB) to a private dataset and verify every file's size:
+**Archiving.** Each upload is a separate app (no retries, bounded) that verifies every
+file's size on HF and does not touch running campaigns:
 
 ```sh
-distillation/validation/.venv/bin/modal run distillation/validation/modal_app.py::archive \
-  --repo-id jfrick/qwen35-distillation-shards-20261023
+M=distillation/validation/modal_app.py
+# Prepared shards of the plan's campaign (shards-card.md becomes the card).
+distillation/validation/.venv/bin/modal run $M::archive --repo-id jfrick/qwen35-distillation-shards-20261023
+# Results, grades, completions, metrics and supervision records (no weights).
+distillation/validation/.venv/bin/modal run $M::archive_outputs --campaigns CAMPAIGN[,CAMPAIGN...]
+# Final student weights and vLLM exports (weights-card.md becomes the card).
+distillation/validation/.venv/bin/modal run $M::archive_checkpoints --campaigns CAMPAIGN[,CAMPAIGN...]
 ```
-
-This is a separate app, bounded at 6 hours with no retries, and it does not touch the
-running campaign. The receipt (`shards-archive.json` on the volume) records the HF
-revision. `shards-card.md` becomes the dataset card.
 
 Outputs go to the Modal volume `lm-exploration-distillation-validation` under
 `/<campaign>/`: `manifest.json`, `stages/`, `eval-items.json`, `teacher/`,
-`control/`, `students/<arm>/` (metrics, summary, completions, `model.pt`),
-`grades/` and `results.json`. Archive them to the HF dataset
-`jfrick/lm-exploration-results` under `distillation-validation/<campaign>/` and
-record the findings below by hand.
+`students/<arm>/` (metrics, summary, completions, `model.pt`, `export/`), `grades/`
+and `results.json`. Findings below are written by hand.
 
 ## Tests
 
@@ -118,13 +131,12 @@ python -m unittest discover -s distillation/validation/tests -v
 ruff check distillation && ruff format --check distillation
 ```
 
-They need torch and numpy. They check the
-soft loss against a hand computation, packing and stream order, KV-cache decoding
-against the full forward pass with left padding, a short training run, the MBPP
-conversion and the grader on fixed snippets. A CPU smoke test on real dataset
-chunks (prepare → trimmed and full vocabulary → train → validate → generate)
-also passed. GPU throughput, vLLM loading of the fine-tuned control and the
-sandbox were not exercised before launch.
+They need torch, numpy and safetensors. They check the soft loss against a hand
+computation, cross-entropy against PyTorch, packing and stream order (including the
+covering vocabulary's piece expansion), a short training run, the Llama export against
+a reference Llama forward pass, supervisor polling and adoption, the MBPP conversion
+and the grader on fixed snippets. vLLM loading and parity are checked on the GPU in
+every evaluation (see the re-evaluation below).
 
 ## Findings
 
@@ -162,8 +174,25 @@ Vocabulary at equal backbone (31.5M, 10 × 512) and 200M tokens:
 | 248,320 native | KD | 31.4% [24.2, 39.6] | 4.4% [2.9, 6.8] | 0.289 | 151.8 min |
 
 ¹ Campaign `distill-validation-20261023-03-qwen-200m`, after the control was sped up
-from 7.1K to 19–23K tokens/s (`fla-core` kernels and a soft loss without dense
-vocabulary temporaries).
+from about 7K to 19–23K tokens/s (`fla-core` kernels and a soft loss without dense
+vocabulary temporaries; H100 probe reports in `distillation-validation/control-probes/`).
+
+Student scores above come from the original PyTorch decoder. Re-evaluating all 15
+saved students through the Llama export and vLLM (`distill-validation-20261024-04-vllm-reeval`)
+reproduces them within noise: per model, held-out passes changed by −4 to +4 of 137
+(mean +0.3) and MBPP passes by −2 to +2 of 427 (mean +0.3). The vLLM-vs-PyTorch prompt
+log-probability gap was 0.011–0.014 on average and at most 0.06–0.10 per checkpoint.
+
+| Student | Held-out, original → vLLM | MBPP, original → vLLM |
+| --- | ---: | ---: |
+| trim-small-50m-ce / -kd | 11 → 10 / 8 → 8 | 1 → 1 / 3 → 3 |
+| trim-small-200m-ce / -kd | 48 → 50 / 45 → 46 | 17 → 19 / 18 → 18 |
+| trim-small-500m-ce / -kd | 68 → 68 / 61 → 65 | 39 → 41 / 25 → 24 |
+| trim-large-50m-ce / -kd | 13 → 13 / 15 → 15 | 8 → 8 / 4 → 4 |
+| trim-large-200m-ce / -kd | 61 → 62 / 61 → 62 | 22 → 22 / 25 → 26 |
+| trim-large-500m-ce / -kd | 74 → 76 / 86 → 84 | 47 → 49 / 58 → 59 |
+| full-small-200m-ce / -kd | 46 → 48 / 43 → 41 | 17 → 17 / 19 → 17 |
+| cover-large-500m-kd | 83 → 79 | 48 → 48 |
 
 - **The data teaches the task.** Fine-tuning the pretrained 0.8B control on 50M tokens
   (about a tenth of the data) raised MBPP from 12.9% to 41.7% and the held-out set from
@@ -222,15 +251,20 @@ Operational notes, negative ones included:
   for the trimmed small model (about 8× slower), so the 500M runs could not finish
   within the 6-hour job limit. They were cancelled at about 230M positions and
   replaced by 200M runs.
-- The 0.8B control fine-tune took 143 minutes for 50M tokens; its throughput was not
-  investigated.
+- The 0.8B control fine-tune first ran at about 7K tokens/s: `flash-linear-attention`
+  0.5 keeps its kernels in `fla-core`, which was not installed, so Transformers
+  silently used PyTorch reference loops; the dense soft loss was the next bottleneck.
+- Modal preempted two supervisors. Their shutdown went through the failure path and
+  cancelled children (the full-vocabulary runs at about 1.3 hours, the 0.8B 200M runs at
+  77%); the supervisor is now non-preemptible and adopts its children on restart.
+  Training runs do not checkpoint mid-run, so an interruption restarts them.
 
 ## Archive
 
 - Training shards: private HF dataset `jfrick/qwen35-distillation-shards-20261023`.
-- Results, grades, completions, metrics and supervision records of campaigns
-  `distill-validation-20261023-01`, `-02-covering` and `-03-qwen-200m`: HF dataset
-  `jfrick/lm-exploration-results`, folder `distillation-validation/` (uploaded with
-  `modal_app.py::archive_outputs`, each file size-verified).
-- Model weights (`students/*/model.pt`, `control/*/model/`) remain on the Modal volume
-  `lm-exploration-distillation-validation` and are not yet archived.
+- Results, grades, completions, metrics and supervision records of all four campaigns,
+  plus the control throughput probes: HF dataset `jfrick/lm-exploration-results`,
+  folder `distillation-validation/`.
+- Final weights (`students/*/model.pt`, the vLLM exports in `students/*/export/`, and the
+  fine-tuned 0.8B models in `control/*/model/`): private HF dataset
+  `jfrick/distillation-validation-checkpoints-20261023`.
