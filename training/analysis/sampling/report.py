@@ -40,7 +40,8 @@ def load(path):
             rows.append(
                 {
                     "run": run["name"],
-                    "revision": run["revision"],
+                    # Volume checkpoints have no HF revision; their weights hash identifies them.
+                    "revision": run.get("revision") or run["checkpoint_sha256"],
                     "prompt": sample["prompt"],
                     "prompt_group": sample["prompt_group"],
                     "mode": sample["mode"],
