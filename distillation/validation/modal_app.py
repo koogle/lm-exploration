@@ -954,6 +954,68 @@ def archive_results(campaigns, repo_id, prefix):
     return receipts
 
 
+WEIGHT_PATTERNS = [
+    "students/*/model.pt",
+    "students/*/settings.json",
+    "students/*/summary.json",
+    "control/*/model/*",
+    "control/*/settings.json",
+    "control/*/train-summary.json",
+]
+
+
+@app.function(
+    image=cpu_image,
+    cpu=8,
+    memory=16384,
+    timeout=6 * 3600,
+    retries=0,
+    volumes={"/runs": volume},
+    secrets=[hf_secret],
+)
+def archive_weights(campaigns, repo_id):
+    """Upload final student and control weights to a private HF dataset; verify sizes."""
+    from huggingface_hub import HfApi
+
+    volume.reload()
+    api = HfApi()
+    api.create_repo(repo_id, repo_type="dataset", private=True, exist_ok=True)
+    api.upload_file(
+        path_or_fileobj=str(HERE / "weights-card.md"),
+        path_in_repo="README.md",
+        repo_id=repo_id,
+        repo_type="dataset",
+    )
+    patterns = [f"{c}/{p}" for c in campaigns for p in WEIGHT_PATTERNS]
+    root = Path("/runs")
+    api.upload_large_folder(
+        repo_id=repo_id,
+        folder_path=str(root),
+        repo_type="dataset",
+        allow_patterns=patterns,
+        private=True,
+    )
+    local = {
+        str(path.relative_to(root)): path.stat().st_size
+        for pattern in patterns
+        for path in root.glob(pattern)
+        if path.is_file()
+    }
+    info = api.dataset_info(repo_id, files_metadata=True)
+    remote = {entry.rfilename: entry.size for entry in info.siblings}
+    mismatched = sorted(n for n, size in local.items() if remote.get(n) != size)
+    receipt = {
+        "repo_id": repo_id,
+        "revision": info.sha,
+        "files": len(local),
+        "bytes": sum(local.values()),
+        "mismatched": mismatched,
+    }
+    if mismatched:
+        raise RuntimeError(f"{len(mismatched)} files differ on HF: {mismatched[:5]}")
+    return receipt
+
+
 FUNCTIONS = {
     "prepare_group": prepare_group,
     "finalize_data": finalize_data,
@@ -1029,6 +1091,14 @@ def archive_outputs(
             archive_results.remote(campaigns.split(","), repo_id, prefix), indent=1
         )
     )
+
+
+@app.local_entrypoint()
+def archive_checkpoints(
+    campaigns: str, repo_id: str = "jfrick/distillation-validation-checkpoints-20261023"
+):
+    """Archive comma-separated campaigns' final weights to a private HF dataset."""
+    print(json.dumps(archive_weights.remote(campaigns.split(","), repo_id), indent=1))
 
 
 @app.local_entrypoint()
