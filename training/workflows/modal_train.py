@@ -331,19 +331,20 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
         while True:
             progress = corpus.prepare_parallel(target, max_seconds=policy.preparation_chunk_seconds)
             report = corpus.report(target)
-            if progress["ready"] or time.monotonic() - persisted >= PERSIST_SECONDS:
+            launch = (
+                policy.overlap_preparation
+                and not training_path.exists()
+                and all(
+                    s["train_loss_tokens"] > 0 and s["validation_loss_tokens"] >= prefix_tokens
+                    for s in report["sources"].values()
+                )
+            )
+            if launch or progress["ready"] or time.monotonic() - persisted >= PERSIST_SECONDS:
                 corpus.persist(folder / "raw.sqlite")
                 (folder / "capacity.json").write_text(json.dumps(report, indent=2) + "\n")
                 data_volume.commit()
                 persisted = time.monotonic()
-                if (
-                    policy.overlap_preparation
-                    and not training_path.exists()
-                    and all(
-                        s["train_loss_tokens"] > 0 and s["validation_loss_tokens"] >= prefix_tokens
-                        for s in report["sources"].values()
-                    )
-                ):
+                if launch:
                     # A preempted restart may already have exported the snapshot.
                     if not (data_root / snapshot / "manifest.json").exists():
                         export_growing(folder, data_root / snapshot, PENDING_AUDITS)

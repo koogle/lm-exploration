@@ -55,7 +55,7 @@ single-pass continuation is every source with `--one-pass`.
 - **Overlap.** Each source fetches and tokenizes its next batch while the previous one
   is written. Workflows use 1,024-document batches (still capped at 4 MiB of text).
 - **Training during preparation.** With `overlap_preparation: true` in the workflow,
-  `prepare_and_launch` starts training once a persisted copy gives every source
+  `prepare_and_launch` persists and starts training as soon as every source has
   training data and enough validation tokens for the configured validation windows.
   It writes a `raw-text-growing-v1` manifest whose counts describe that prefix. The
   manifest does not name a database; the loader reads the version's `raw.sqlite` as it
