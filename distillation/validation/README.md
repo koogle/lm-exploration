@@ -150,8 +150,14 @@ intervals; loss is held-out CE per UTF-8 byte. Full outputs: see [Archive](#arch
 | trim-large KD | 200M | 44.5% [36.5, 52.9] | 5.9% [4.0, 8.5] | 0.250 |
 | trim-large KD | 500M | 62.8% [54.4, 70.4] | 13.6% [10.7, 17.2] | 0.204 |
 
-The full-vocabulary 200M students (`full-small-200m-ce`, `-kd`) are still running;
-their rows will be added when they finish.
+Vocabulary at equal backbone (31.5M, 10 × 512) and 200M tokens:
+
+| Vocabulary | Objective | Held-out curriculum | MBPP | CE/byte | Train time |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 16,384 trimmed | CE | 35.0% [27.6, 43.3] | 4.0% [2.5, 6.3] | 0.291 | 20.5 min |
+| 248,320 native | CE | 33.6% [26.2, 41.8] | 4.0% [2.5, 6.3] | 0.295 | 152.3 min |
+| 16,384 trimmed | KD | 32.8% [25.5, 41.1] | 4.2% [2.7, 6.6] | 0.287 | 23.2 min |
+| 248,320 native | KD | 31.4% [24.2, 39.6] | 4.4% [2.9, 6.8] | 0.289 | 151.8 min |
 
 - **The data teaches the task.** Fine-tuning the pretrained 0.8B control on 50M tokens
   (about a tenth of the data) raised MBPP from 12.9% to 41.7% and the held-out set from
@@ -170,6 +176,10 @@ their rows will be added when they finish.
   was the best student (62.8% held-out, 13.6% MBPP vs 54.0% / 11.0% for CE). Intervals
   overlap, so this is a lead, not a result. KD used α = 0.5 at temperature 1 without
   tuning.
+- **The native vocabulary buys nothing.** With Qwen's tokenizer shared by every arm,
+  the 248K vocabulary matched the trimmed one on both sets and was marginally worse on
+  loss, at 7.4× the training time (partly the dense soft-loss code since replaced;
+  the output layer alone is about 4× the backbone's compute at this width).
 - **The from-scratch gap is general knowledge, not data.** The best student reaches
   63% held-out but only 14% MBPP, against 42% for the 0.8B model fine-tuned on a tenth
   of the data. Narrow exercises alone do not supply the Python knowledge MBPP needs.
