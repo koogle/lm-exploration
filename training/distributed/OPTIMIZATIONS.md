@@ -16,8 +16,9 @@ not a new hardware qualification of this package reconciliation.
   of nonpadding labels, not by each microbatch's length.
 - `loss_chunk_size`: checkpoint the output projection and sum cross entropy in
   chunks of this many token positions. Backward recomputes each chunk, bounding
-  live vocabulary logits. This is standard PyTorch chunking, not a custom fused
-  kernel; it may trade speed for memory and must be measured.
+  live vocabulary logits. Each chunk's loss is the fixed cross-entropy kernel
+  (`trainer/loss.py`); the chunking itself is standard PyTorch and may trade speed
+  for memory.
 - `cache_rope`: precompute FP32 trigonometric tables once per attention layer.
   Nonpersistent buffers keep checkpoint tensor names unchanged.
 - `compile_model`: compile the model in place with dynamic sequence dimensions.

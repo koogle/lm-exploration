@@ -57,9 +57,8 @@ code to PyTorch: `log_softmax`, `softmax`, `cross_entropy` (with `ignore_index`
 and reductions) and `soft_target_cross_entropy`.
 [`tests/test_stable_softmax.py`](../tests/test_stable_softmax.py) reproduces both of
 the paper's worked examples, and checks fp32 against the exact gradient up to
-m = 80 and agreement with the standard functions on ordinary logits. The module is
-not wired into the training loop. In eager mode it materializes several N×V
-temporaries. One rough CPU measurement (2048 × 32768 fp32, forward and backward)
+m = 80 and agreement with the standard functions on ordinary logits. It is the CPU
+fallback of the training loss. In eager mode it materializes several N×V temporaries. One rough CPU measurement (2048 × 32768 fp32, forward and backward)
 took 0.86 s against 0.31 s for `F.cross_entropy`. Measure on GPU (eager and
 `torch.compile`) before using it for pretraining.
 
