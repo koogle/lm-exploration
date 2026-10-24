@@ -1,0 +1,25 @@
+{
+  "campaign": "distill-validation-20261023-02-covering",
+  "data_campaign": "distill-validation-20261023-01",
+  "budget_seconds": 21600,
+  "teacher": false,
+  "prep_workers": 64,
+  "heldout_workers": 2,
+  "trimmed_vocab": 16384,
+  "eval": {
+    "seed": 20261023,
+    "curriculum_candidates": 600,
+    "curriculum_max": 400,
+    "max_new_tokens": 768
+  },
+  "student_defaults": {
+    "window": 2048,
+    "batch_windows": 32,
+    "seed": 0,
+    "log_every": 50,
+    "validation_positions": 2097152
+  },
+  "students": [
+    {"name": "cover-large-500m-kd", "vocab": "covering", "size": "large", "positions": 499974144, "kd_weight": 0.5, "lr": 0.0008, "micro_windows": 8}
+  ]
+}

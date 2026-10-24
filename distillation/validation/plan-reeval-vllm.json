@@ -1,0 +1,39 @@
+{
+  "campaign": "distill-validation-20261024-05-vllm-native",
+  "data_campaign": "distill-validation-20261023-01",
+  "budget_seconds": 10800,
+  "teacher": false,
+  "prep_workers": 64,
+  "heldout_workers": 2,
+  "trimmed_vocab": 16384,
+  "eval": {
+    "seed": 20261023,
+    "curriculum_candidates": 600,
+    "curriculum_max": 400,
+    "max_new_tokens": 768
+  },
+  "student_defaults": {
+    "window": 2048,
+    "batch_windows": 32,
+    "seed": 0,
+    "log_every": 50,
+    "validation_positions": 2097152
+  },
+  "students": [
+    {"name": "trim-small-50m-ce", "vocab": "trimmed", "size": "small", "positions": 50331648, "kd_weight": 0.0, "lr": 0.0015, "micro_windows": 16, "checkpoint": "distill-validation-20261023-01/students/trim-small-50m-ce/model.pt"},
+    {"name": "trim-small-50m-kd", "vocab": "trimmed", "size": "small", "positions": 50331648, "kd_weight": 0.5, "lr": 0.0015, "micro_windows": 16, "checkpoint": "distill-validation-20261023-01/students/trim-small-50m-kd/model.pt"},
+    {"name": "trim-small-200m-ce", "vocab": "trimmed", "size": "small", "positions": 200015872, "kd_weight": 0.0, "lr": 0.0015, "micro_windows": 16, "checkpoint": "distill-validation-20261023-01/students/trim-small-200m-ce/model.pt"},
+    {"name": "trim-small-200m-kd", "vocab": "trimmed", "size": "small", "positions": 200015872, "kd_weight": 0.5, "lr": 0.0015, "micro_windows": 16, "checkpoint": "distill-validation-20261023-01/students/trim-small-200m-kd/model.pt"},
+    {"name": "trim-small-500m-ce", "vocab": "trimmed", "size": "small", "positions": 499974144, "kd_weight": 0.0, "lr": 0.0015, "micro_windows": 16, "checkpoint": "distill-validation-20261023-01/students/trim-small-500m-ce/model.pt"},
+    {"name": "trim-small-500m-kd", "vocab": "trimmed", "size": "small", "positions": 499974144, "kd_weight": 0.5, "lr": 0.0015, "micro_windows": 16, "checkpoint": "distill-validation-20261023-01/students/trim-small-500m-kd/model.pt"},
+    {"name": "trim-large-50m-ce", "vocab": "trimmed", "size": "large", "positions": 50331648, "kd_weight": 0.0, "lr": 0.0008, "micro_windows": 8, "checkpoint": "distill-validation-20261023-01/students/trim-large-50m-ce/model.pt"},
+    {"name": "trim-large-50m-kd", "vocab": "trimmed", "size": "large", "positions": 50331648, "kd_weight": 0.5, "lr": 0.0008, "micro_windows": 8, "checkpoint": "distill-validation-20261023-01/students/trim-large-50m-kd/model.pt"},
+    {"name": "trim-large-200m-ce", "vocab": "trimmed", "size": "large", "positions": 200015872, "kd_weight": 0.0, "lr": 0.0008, "micro_windows": 8, "checkpoint": "distill-validation-20261023-01/students/trim-large-200m-ce/model.pt"},
+    {"name": "trim-large-200m-kd", "vocab": "trimmed", "size": "large", "positions": 200015872, "kd_weight": 0.5, "lr": 0.0008, "micro_windows": 8, "checkpoint": "distill-validation-20261023-01/students/trim-large-200m-kd/model.pt"},
+    {"name": "trim-large-500m-ce", "vocab": "trimmed", "size": "large", "positions": 499974144, "kd_weight": 0.0, "lr": 0.0008, "micro_windows": 8, "checkpoint": "distill-validation-20261023-01/students/trim-large-500m-ce/model.pt"},
+    {"name": "trim-large-500m-kd", "vocab": "trimmed", "size": "large", "positions": 499974144, "kd_weight": 0.5, "lr": 0.0008, "micro_windows": 8, "checkpoint": "distill-validation-20261023-01/students/trim-large-500m-kd/model.pt"},
+    {"name": "full-small-200m-ce", "vocab": "full", "size": "small", "positions": 200015872, "kd_weight": 0.0, "lr": 0.0015, "micro_windows": 8, "checkpoint": "distill-validation-20261023-01/students/full-small-200m-ce/model.pt"},
+    {"name": "full-small-200m-kd", "vocab": "full", "size": "small", "positions": 200015872, "kd_weight": 0.5, "lr": 0.0015, "micro_windows": 8, "checkpoint": "distill-validation-20261023-01/students/full-small-200m-kd/model.pt"},
+    {"name": "cover-large-500m-kd", "vocab": "covering", "size": "large", "positions": 499974144, "kd_weight": 0.5, "lr": 0.0008, "micro_windows": 8, "checkpoint": "distill-validation-20261023-02-covering/students/cover-large-500m-kd/model.pt"}
+  ]
+}
