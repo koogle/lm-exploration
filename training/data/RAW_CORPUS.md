@@ -63,9 +63,18 @@ allocation and token target with the selected model and dataset configs, and
 non-pilot runs enforce capacity checks. Model dimensions are not duplicated in
 Python validation.
 
-No corpus recipe is shipped at present. The 12-source scholarly/code recipe and its
-`small-5b.json` workflow were removed in favour of a new mixture; see the
-[pretraining plan](../plans/SIMPLE_LLM_PRETRAINING.md). Model/optimizer settings,
+Corpus recipes live in [`recipes/`](recipes/); `climbmix-code-v4.json` is the current
+one. A source's `files` is an explicit list or a spec that `simple_llm.load_recipe`
+expands when the workflow resolves:
+
+- `{"pattern": "shard_{:05d}.parquet", "range": [0, 300, 4]}` formats each index of
+  the range (here every fourth ClimbMix shard from 0).
+- `{"glob": "raw/*/*.jsonl.gz", "latest_export": true, "order": "interleave"}` lists the
+  matching files at the pinned revision, keeps each stream's newest export directory and
+  orders them by shard number, then file name. The default order is sorted paths.
+
+Data identity and reuse use the expanded list, which the resolved workflow records.
+Resolving a glob needs Hugging Face access. Model/optimizer settings,
 dataset selection and execution settings each have one owner.
 Qualification uses the selected final training schedule with a short step limit.
 Importing or deploying the module does not launch training:
