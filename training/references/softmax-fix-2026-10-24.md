@@ -72,10 +72,26 @@ Its forward pass streams the row once with an online log-sum-exp over `z_j - z_t
 so the only N×V allocation is the gradient itself. Half/bf16 logits are read directly
 and computed in fp32. The extension is JIT-built with `torch.utils.cpp_extension` and
 needs `nvcc`; it must be built without `--use_fast_math`. It compiles for sm_80/sm_90
-against torch 2.14 / CUDA 13.0. It has **not yet run on a GPU**:
-[`tests/test_stable_ce_cuda.py`](../tests/test_stable_ce_cuda.py) (skipped without
-CUDA) and a throughput comparison with `F.cross_entropy` are still pending. Run both on one
-H100 with `modal run -m modal_scripts.modal_stable_ce_check` from `training/`.
+against torch 2.14 / CUDA 13.0.
+
+Measured 2026-10-24 on one H100 (torch 2.6.0, CUDA 12.4) with
+`modal run -m modal_scripts.modal_stable_ce_check` from `training/`:
+[`tests/test_stable_ce_cuda.py`](../tests/test_stable_ce_cuda.py) and the PyTorch-port
+tests pass (10 tests). Forward plus backward on random bf16 logits, mean of 20 steps.
+The baseline is `F.cross_entropy` on fp32-cast logits, which is what autocast runs:
+
+| Rows × vocab | Loss | ms | Extra peak memory (MiB) |
+| --- | --- | ---: | ---: |
+| 16384 × 32768 | `F.cross_entropy` | 9.58 | 6144 |
+| 16384 × 32768 | PyTorch port | 28.79 | 10752 |
+| 16384 × 32768 | CUDA kernel | 2.47 | 1024 |
+| 8192 × 50304 | `F.cross_entropy` | 7.34 | 4716 |
+| 8192 × 50304 | PyTorch port | 22.15 | 8253 |
+| 8192 × 50304 | CUDA kernel | 1.88 | 786 |
+
+The kernel's extra memory is the bf16 gradient alone. These are isolated loss-step
+timings on random logits, not end-to-end training throughput. The raw result JSON is
+in the ignored `artifacts/results/` and is not yet archived on HF.
 
 Proposed experiment, not run:
 1. Log the fraction of training tokens with margin > 16.6 from a published checkpoint.
