@@ -61,7 +61,9 @@ CPU it runs the PyTorch port in `stable_softmax.py`. The dense loss in
 `backward_batch`, the model's chunked loss (`loss_fn` argument) and `evaluate_sources`
 all go through it. The shared Modal image (`../distributed/image.py`) is a CUDA devel
 image that prebuilds the kernel into `/opt/stable_ce`; a source change that does not
-match that build is JIT-compiled instead.
+match that build is JIT-compiled instead. Measured on the 124M recipe with three H100s:
+8.7% more tokens/s and 8 GiB less peak memory per GPU than `F.cross_entropy`, with
+matching losses (details in the reading note).
 
 ## Continued pretraining
 

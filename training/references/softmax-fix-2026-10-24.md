@@ -89,8 +89,38 @@ The baseline is `F.cross_entropy` on fp32-cast logits, which is what autocast ru
 | 8192 × 50304 | CUDA kernel | 1.88 | 786 |
 
 The kernel's extra memory is the bf16 gradient alone. These are isolated loss-step
-timings on random logits, not end-to-end training throughput. The raw result JSON is
-in the ignored `artifacts/results/` and is not yet archived on HF.
+timings on random logits.
+
+### In the trainer
+
+The trainer uses the kernel for its loss and evaluation as of 2026-10-24 (see
+[trainer README](../trainer/README.md#training-loss)). Validation on the shared
+training image (torch 2.6.0, CUDA 12.4), H100:
+
+- The image's prebuilt kernel (`/opt/stable_ce/stable_ce.so`) is the one loaded; the
+  12 kernel, port, `torch.compile` and model-loss tests pass.
+- [`tests/check_optimization_cuda.py`](../tests/check_optimization_cuda.py) passes
+  against an `F.cross_entropy` reference for microbatch 1/2/4, chunked loss and
+  compilation. The largest gradient error is 4.5e-8 in fp32 and 5.8e-4 in bf16,
+  within the gate's existing tolerances.
+
+Training speed, measured with `modal run -m modal_scripts.modal_stable_ce_check::speed`
+([`trainer/loss_benchmark.py`](../trainer/loss_benchmark.py)). This is the
+`modern-124m` recipe on three H100s with DDP: 48 × 2048-token windows per step,
+microbatch 16, AdamW, bf16, random tokens. It covers the median of 20 full optimizer
+steps after 3 warmup steps, from the same initialization and data for both losses.
+Data loading and checkpointing are excluded.
+
+| Loss | Median step (s) | Tokens/s | Peak allocated (GiB) | Loss after 20 steps |
+| --- | ---: | ---: | ---: | ---: |
+| `F.cross_entropy` | 0.1752 | 561,207 | 33.2 | 10.42624 |
+| CUDA kernel | 0.1611 | 610,126 | 25.2 | 10.42619 |
+
+That is 8.7% more training throughput and 8.0 GiB less peak memory per GPU, with
+matching loss trajectories. On one H100, a single 16 × 2048 microbatch
+forward+backward took 157.1 ms against 171.0 ms. The freed memory has not yet been
+used for a larger microbatch. The raw result JSONs are in the ignored
+`artifacts/results/` and are not yet archived on HF.
 
 Proposed experiment, not run:
 1. Log the fraction of training tokens with margin > 16.6 from a published checkpoint.
