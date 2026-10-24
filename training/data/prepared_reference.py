@@ -27,7 +27,12 @@ def _literal(value):
 
 
 def attach_prepared(db, manifest):
-    """Expose the referenced databases as a temporary `documents` view on `db`."""
+    """Expose the referenced databases as temporary views on `db`.
+
+    Each (database, stored source) pair becomes a view `part_{n}` whose `ordinal` is the
+    stored row ID, so it reads in insertion order without sorting; `documents` is their
+    union. Returns `{mixture source: [view names in reading order]}`.
+    """
     db.execute("CREATE TEMP TABLE excluded_hash(hash TEXT PRIMARY KEY)")
     db.execute("CREATE TEMP TABLE excluded_parent(parent TEXT PRIMARY KEY)")
     db.executemany(
@@ -36,7 +41,7 @@ def attach_prepared(db, manifest):
     db.executemany(
         "INSERT INTO excluded_parent VALUES(?)", [(p,) for p in manifest["excluded_parents"]]
     )
-    views = []
+    parts = {}
     for index, artifact in enumerate(manifest["external_databases"]):
         path = Path(artifact["path"])
         if not path.is_absolute() or path.stat().st_size != artifact["size_bytes"]:
@@ -44,14 +49,20 @@ def attach_prepared(db, manifest):
         alias = f"prepared_{index}"
         db.execute(f"ATTACH DATABASE ? AS {alias}", (path.as_uri() + "?mode=ro&immutable=1",))
         for stored, source in artifact["sources"].items():
-            views.append(
-                f"SELECT hash,{_literal(source)} AS source,split,parent,provenance,text,"
-                f"loss_tokens,conflict FROM {alias}.documents d "
-                f"WHERE source={_literal(stored)} AND conflict=0 "
+            view = f"part_{sum(map(len, parts.values()))}"
+            db.execute(
+                f"CREATE TEMP VIEW {view} AS SELECT d.rowid AS ordinal,hash,"
+                f"{_literal(source)} AS source,split,parent,provenance,text,loss_tokens,conflict "
+                f"FROM {alias}.documents d WHERE source={_literal(stored)} AND conflict=0 "
                 "AND NOT EXISTS(SELECT 1 FROM excluded_hash e WHERE e.hash=d.hash) "
                 "AND NOT EXISTS(SELECT 1 FROM excluded_parent e WHERE e.parent=d.parent)"
             )
-    db.execute("CREATE TEMP VIEW documents AS " + " UNION ALL ".join(views))
+            parts.setdefault(source, []).append(view)
+    views = [view for names in parts.values() for view in names]
+    db.execute(
+        "CREATE TEMP VIEW documents AS " + " UNION ALL ".join(f"SELECT * FROM {v}" for v in views)
+    )
+    return parts
 
 
 def _sample_heldout(path, mapping, tokenizer, context, parents_per_source):
