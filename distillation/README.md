@@ -29,6 +29,13 @@ the student on that tokenizer from the start, or at least pick a teacher whose t
 the student already shares. Do not handle cross-tokenizer KL divergence; treat any need
 for alignment code as a reason to stop and redesign.
 
+## Validation ladder
+
+[`validation/`](validation/README.md) tests whether the Qwen3.5-9B trajectories teach
+anything measurable before a large run: an execution-graded evaluation with the teacher
+ceiling, a fine-tuned Qwen3.5-0.8B data-quality control, and a from-scratch ladder over
+model size, token budget, CE versus KD, and a trimmed versus native vocabulary.
+
 ## Archive
 
 Results, generated reports, run docs and the hand-written findings (`pr-43/EXPERIMENTS.md`,

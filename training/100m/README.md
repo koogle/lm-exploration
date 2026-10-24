@@ -1,5 +1,49 @@
 # Updated 100M-family architecture
 
+## Experimental sequential multi-token prediction
+
+[`GPTWithMTP`](../10m/mtp.py) adds one auxiliary causal transformer block to
+predict token `t+2` from backbone state `h_t` and the embedding of known token
+`t+1`. Both branches share the existing tied vocabulary projection. This is a
+small DeepSeek-V3-inspired prototype, not a full reproduction or measured gain.
+At width 768 it adds 8,269,312 parameters, without duplicating the vocabulary.
+
+```python
+from model_100m.model import ModelConfig
+from model_10m.mtp import GPTWithMTP
+
+model = GPTWithMTP(ModelConfig(vocab_size=32768))
+# sequence: [batch, T+1] token IDs; lengths: actual document lengths, including
+# the final target. One document per row, right padding only; no packed documents.
+losses = model.training_losses(sequence, lengths)
+loss = (
+    losses["ntp_sum"] / losses["ntp_count"].clamp_min(1)
+    + 0.1 * losses["mtp_sum"] / losses["mtp_count"].clamp_min(1)
+)
+loss.backward()
+logits = model(sequence[:, :-1])  # ordinary next-token inference
+```
+
+The weight `0.1` is an experimental starting point. Losses use independently
+counted valid targets; padding contributes to neither objective. Documents with
+fewer than three tokens contribute no MTP targets. Training uses ground-truth
+intervening tokens; it does not expose the auxiliary target to its prediction.
+This also works on teacher-generated text without sharing the teacher tokenizer.
+There is no teacher-logit KL implementation here.
+
+This class is **not integrated into the recipe/distributed trainer**, whose
+existing forward path would train only next-token prediction. A distributed
+integration must aggregate each objective's target counts over all ranks and
+microbatches, then scale its summed loss separately. The prototype materializes
+both vocabulary-logit tensors; it does not yet implement chunked projection loss.
+Inherited inference does not run the MTP block or provide speculative decoding.
+No GPU training or quality comparison has been performed.
+
+Local correctness checks: `python -m unittest discover -s tests -p 'test_mtp.py' -v`
+from `training/` with the training package installed.
+
+## Base architecture
+
 A subsequent [bounded subword pilot](PILOT.md) trained this architecture for
 4.08M tokens on Modal. See its [measured report](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/simple-llm-124m-pilot-20261016-01.md);
 the architecture-merge verification described below remains separate.
