@@ -2,8 +2,8 @@
 
 A bounded experiment testing whether the Qwen3.5-9B Python/math trajectories
 (private HF dataset `jfrick/qwen35-python-math-trajectories-20261022`) teach a small
-model anything measurable. It is added in stacked parts; this part prepares the data.
-Evaluation, students and the Modal campaign follow in later pull requests.
+model anything measurable. It is added in stacked parts; these parts prepare the data and the evaluation.
+Students and the Modal campaign follow in later pull requests.
 
 ## Data preparation
 
@@ -26,6 +26,21 @@ keep the problem/code/explanation text.
 
 `shards-card.md` is the dataset card for the archived shards
 (`jfrick/qwen35-distillation-shards-20261023`).
+
+## Evaluation sets and grading
+
+`evalsets.py` builds two execution-graded sets in the training data's JSON format:
+
+- `mbpp`: all 427 sanitized MBPP problems (human-written tests); the tested function is
+  renamed to `solve` and the problem shows its signature and first test.
+- `curriculum`: exercises from held-out chunks with teacher-written asserts, kept only
+  when the teacher's original solution passes all of them (`curriculum_items` counts
+  the rest, an estimate of how self-consistent the data is).
+
+It also holds the student prompt format, the parser for the generated code string and
+the teacher prompts. `grader.py` runs each case in its own isolated interpreter with
+CPU, memory, file-size and process limits and a random pass marker. Model output is
+only ever graded inside a network-blocked sandbox; the tests run fixed snippets.
 
 ## Tests
 
