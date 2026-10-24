@@ -41,6 +41,7 @@ training_data = "data"
 sampling = "analysis/sampling"
 
 [tool.setuptools.package-data]
+trainer = ["kernels/*.cu"]
 workflows = ["*.json", "model_configs/*.json", "model_configs/historical/*.json", "datasets/*.json"]
 
 [dependency-groups]
