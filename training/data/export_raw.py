@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import sqlite3
 from pathlib import Path
 
@@ -65,14 +66,26 @@ def export_growing(folder, destination, pending):
 
 
 def complete_growing(folder, destination, **details):
-    """Mark a growing snapshot's database final, recording its counts."""
+    """Freeze the final database into a growing snapshot and record its counts.
+
+    Later preparation in the same version cannot change the frozen copy, which every
+    later training segment reads (see `data/growing.py`).
+    """
     folder, destination = Path(folder), Path(destination)
-    database = sqlite3.connect(f"{(folder / 'raw.sqlite').resolve().as_uri()}?mode=ro", uri=True)
+    source = sqlite3.connect(f"{(folder / 'raw.sqlite').resolve().as_uri()}?mode=ro", uri=True)
+    partial = destination / "raw.sqlite.partial"
     try:
-        _, sources = describe(database)
+        _, sources = describe(source)
+        target = sqlite3.connect(partial)
+        try:
+            source.backup(target)
+        finally:
+            target.close()
     finally:
-        database.close()
-    record = {"sources": sources, **details}
+        source.close()
+    os.replace(partial, destination / "raw.sqlite")
+    database = {"path": "raw.sqlite", "sha256": digest(destination / "raw.sqlite")}
+    record = {"database": database, "sources": sources, **details}
     write_json(destination / COMPLETE_RECORD, record)
     return record
 

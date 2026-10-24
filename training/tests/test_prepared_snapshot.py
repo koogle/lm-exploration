@@ -138,6 +138,7 @@ class PersistTests(unittest.TestCase):
         import sqlite3
 
         from training_data.fast_raw_corpus import FastRawCorpus
+        from training_data.growing import finished_sources
 
         recipe = {
             "sources": [
@@ -159,13 +160,14 @@ class PersistTests(unittest.TestCase):
             root = Path(temporary)
             corpus = FastRawCorpus(root / "local", recipe, reader=reader)
             self.assertTrue(corpus.prepare_parallel(100, max_seconds=5)["ready"])
-            corpus.persist(root / "volume/raw.sqlite")
+            corpus.persist(root / "volume/raw.sqlite", {"web"})
             expected = corpus.db.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
             corpus.close()
             copy_db = sqlite3.connect(root / "volume/raw.sqlite")
             self.assertEqual(
                 copy_db.execute("SELECT COUNT(*) FROM documents").fetchone()[0], expected
             )
+            self.assertEqual(finished_sources(copy_db), {"web"})
             copy_db.close()
             self.assertFalse((root / "volume/raw.sqlite.partial").exists())
 
@@ -206,6 +208,8 @@ class PersistTests(unittest.TestCase):
             corpus.prepare_parallel(2000, max_seconds=5)
             thread.join()
             corpus.close()
+            # A failed persist ends the thread early; every copy must have been written.
+            self.assertEqual(len(copies), 5)
             counts = []
             for copy in copies:
                 # Read-only consumers need no WAL files beside the copy.

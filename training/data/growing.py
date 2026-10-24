@@ -1,22 +1,30 @@
 """Train from a raw corpus while it is still being prepared.
 
-Preparation persists its SQLite database to the data volume every few minutes and
-writes a completion record when it is done. In the training function, a `Refresher`
-thread reloads the volume and copies each newly persisted database to local disk as an
-immutable, numbered generation; a Modal volume cannot reload while files on it are open,
-so the loader never opens the volume copy. The loader's `GrowingDatabase` reads the
-state file naming the newest local generation and whether preparation is complete.
+Preparation persists its SQLite database to the data volume every few minutes. Each
+copy lists, in its `prepared_sources` table, the sources preparation has stopped
+extending. When preparation is done it freezes a checksummed copy into the snapshot
+folder and writes a completion record naming it. In the training function, a
+`Refresher` thread reloads the volume and copies each newly persisted database to local
+disk as an immutable, numbered generation; a Modal volume cannot reload while files on
+it are open, so the loader never opens the volume copy. The loader's `GrowingDatabase`
+reads the state file naming the newest local generation and whether preparation is
+complete.
 
 Documents are only ever appended, so a training cursor (pass, row ID, offset) stays
-valid in every later generation.
+valid in every later generation. Preparation can later flag a stored document as a
+cross-split duplicate, but never stores the duplicate itself; the growing loader
+ignores those flags so every copy reads the same rows.
 """
 
 import json
 import os
 import shutil
+import sqlite3
 import threading
 import time
 from pathlib import Path
+
+from .subword import digest
 
 STATE_ENV = "GROWING_DATABASE_STATE"
 # Written in the snapshot folder once preparation has persisted its final database.
@@ -24,6 +32,29 @@ COMPLETE_RECORD = "complete.json"
 # How long the loader waits for newer prepared data before failing. Distributed
 # collectives that wait on the loader need a longer timeout than this.
 STALL_SECONDS = 3600
+# Wall-clock time (Unix seconds) at which a wait ends the training session instead.
+DEADLINE_ENV = "GROWING_DATABASE_DEADLINE"
+# Sources that had enough data when a copy was persisted, stored in each copy.
+FINISHED_TABLE = "prepared_sources"
+
+
+class DataDeadline(Exception):
+    """The session's time limit passed while waiting for newer prepared data."""
+
+
+def finished_sources(db):
+    """Sources a persisted copy marks as no longer growing."""
+    try:
+        return {row[0] for row in db.execute(f"SELECT source FROM {FINISHED_TABLE}")}
+    except sqlite3.OperationalError:
+        return set()
+
+
+def mark_finished(db, sources):
+    db.execute(f"CREATE TABLE IF NOT EXISTS {FINISHED_TABLE}(source TEXT PRIMARY KEY)")
+    db.execute(f"DELETE FROM {FINISHED_TABLE}")
+    db.executemany(f"INSERT INTO {FINISHED_TABLE} VALUES(?)", [(s,) for s in sorted(sources)])
+    db.commit()
 
 
 def volume_paths(snapshot):
@@ -45,10 +76,14 @@ def write_json(path, value):
 class GrowingDatabase:
     """The loader's view of the newest local copy of a database still being prepared."""
 
-    def __init__(self, state_path, poll_seconds=10.0, stall_seconds=STALL_SECONDS):
+    def __init__(self, state_path, poll_seconds=10.0, stall_seconds=STALL_SECONDS, deadline=None):
         self.state_path = Path(state_path)
         self.poll_seconds = poll_seconds
         self.stall_seconds = stall_seconds
+        if deadline is None and DEADLINE_ENV in os.environ:
+            deadline = float(os.environ[DEADLINE_ENV])
+        self.deadline = deadline
+        self.interrupted = threading.Event()
 
     def state(self):
         try:
@@ -56,16 +91,27 @@ class GrowingDatabase:
         except FileNotFoundError:
             return None
 
+    def interrupt(self):
+        """End current and later waits from another thread (e.g. a closing prefetcher)."""
+        self.interrupted.set()
+
     def wait(self, condition):
-        """Block until the state satisfies `condition`; fail after `stall_seconds`."""
+        """Block until the state satisfies `condition`; fail after `stall_seconds`.
+
+        Raises `DataDeadline` once the session deadline passes, so training can stop
+        at its time limit with a checkpoint instead of being killed mid-wait.
+        """
         started = time.monotonic()
         while True:
             state = self.state()
             if state is not None and condition(state):
                 return state
+            if self.deadline is not None and time.time() >= self.deadline:
+                raise DataDeadline("Session time limit reached while waiting for prepared data")
             if time.monotonic() - started > self.stall_seconds:
                 raise RuntimeError("Growing database stalled: no newer prepared data")
-            time.sleep(self.poll_seconds)
+            if self.interrupted.wait(self.poll_seconds):
+                raise RuntimeError("Growing database wait interrupted")
 
     def current(self):
         return self.wait(lambda state: True)
@@ -79,7 +125,11 @@ class GrowingDatabase:
 
 
 class Refresher(threading.Thread):
-    """Copy each newly persisted volume database to local disk and publish its state."""
+    """Copy each newly persisted volume database to local disk and publish its state.
+
+    Once the completion record exists, the final copy comes from the frozen database it
+    names, verified against its checksum.
+    """
 
     def __init__(self, database, complete_record, local_dir, reload, interval_seconds=300.0):
         super().__init__(daemon=True, name="growing-database-refresher")
@@ -91,7 +141,6 @@ class Refresher(threading.Thread):
         self.stop = threading.Event()
         self.generation = 0
         self.signature = None
-        self.error = None
         self.local_dir.mkdir(parents=True, exist_ok=True)
         self.state_path = self.local_dir / "state.json"
 
@@ -105,34 +154,51 @@ class Refresher(threading.Thread):
             )
             return False
         complete = self.complete_record.exists()
-        stat = self.database.stat()
-        signature = (stat.st_size, stat.st_mtime_ns)
+        source, checksum = self.database, None
+        if complete:
+            frozen = json.loads(self.complete_record.read_text())["database"]
+            if Path(frozen["path"]).name != frozen["path"]:
+                raise ValueError("Unsafe frozen database path")
+            source, checksum = self.complete_record.parent / frozen["path"], frozen["sha256"]
+        stat = source.stat()
+        signature = (str(source), stat.st_size, stat.st_mtime_ns)
         if signature != self.signature:
-            self.generation += 1
-            target = self.local_dir / f"raw-{self.generation:05d}.sqlite"
+            target = self.local_dir / f"raw-{self.generation + 1:05d}.sqlite"
             partial = Path(str(target) + ".partial")
-            shutil.copyfile(self.database, partial)
+            try:
+                shutil.copyfile(source, partial)
+                if checksum is not None and digest(partial) != checksum:
+                    raise ValueError("Frozen growing database checksum mismatch")
+            except BaseException:
+                partial.unlink(missing_ok=True)
+                raise
             os.replace(partial, target)
+            self.generation += 1
             self.signature = signature
-            # Open loader connections keep an unlinked older copy readable.
-            for old in self.local_dir.glob("raw-*.sqlite"):
-                if old != target:
-                    old.unlink()
         path = self.local_dir / f"raw-{self.generation:05d}.sqlite"
+        # Publish the new copy before removing older ones, so the state never names a
+        # deleted file. Open loader connections keep an unlinked older copy readable.
         write_json(
             self.state_path,
             {"generation": self.generation, "path": str(path), "complete": complete},
         )
+        for old in self.local_dir.glob("raw-*.sqlite"):
+            if old != path:
+                old.unlink()
         return complete
 
     def run(self):
-        """Refresh until the final database is local, starting after one interval."""
-        try:
-            while not self.stop.wait(self.interval_seconds):
+        """Refresh until the final database is local, starting after one interval.
+
+        A failed refresh is retried at the next interval; one that keeps failing
+        surfaces through the loader's stall timeout.
+        """
+        while not self.stop.wait(self.interval_seconds):
+            try:
                 if self.refresh():
                     return
-        except Exception as exc:  # noqa: BLE001 -- surfaced through the loader's stall timeout
-            self.error = exc
-            print(
-                json.dumps({"growing_refresher_failed": f"{type(exc).__name__}: {exc}"}), flush=True
-            )
+            except Exception as exc:  # noqa: BLE001 -- e.g. a failed copy; retried next interval
+                print(
+                    json.dumps({"growing_refresh_failed": f"{type(exc).__name__}: {exc}"}),
+                    flush=True,
+                )

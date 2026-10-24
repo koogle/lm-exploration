@@ -51,6 +51,14 @@ class WorkflowResolutionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "microbatches"):
             resolve_payload(bundle)
 
+    def test_overlapped_preparation_persists_within_the_stall_timeout(self):
+        bundle = load_workflow(ROOT / "climbmix-124m-overlap-smoke.json")
+        bundle["workflow"]["persist_seconds"] = 3600
+        with self.assertRaisesRegex(ValueError, "stall"):
+            resolve_payload(bundle)
+        bundle["workflow"]["overlap_preparation"] = False
+        resolve_payload(bundle)
+
     def test_payload_is_frozen_when_source_files_change(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

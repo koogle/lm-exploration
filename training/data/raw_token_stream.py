@@ -19,6 +19,7 @@ import zlib
 from fractions import Fraction
 from pathlib import Path
 
+from .growing import finished_sources
 from .simple_llm import MAX_PASSES
 from .subword import (
     BOS_TOKEN_ID,
@@ -62,7 +63,10 @@ class RawTokenMixture(TokenMixture):
             if STATE_ENV not in os.environ:
                 raise ValueError(f"A growing snapshot needs {STATE_ENV} (see data/growing.py)")
             self.growing = GrowingDatabase(os.environ[STATE_ENV])
-            database = Path(self.growing.current()["path"])
+            self.growing.current()
+            # Each source opens the copy it reads (see `blocks`); holding one here would
+            # keep a superseded copy on disk for the whole session.
+            self.db, self.parts = None, None
         else:
             artifact = self.manifest["database"]
             if Path(artifact["path"]).name != artifact["path"]:
@@ -70,7 +74,7 @@ class RawTokenMixture(TokenMixture):
             database = self.path.parent / artifact["path"]
             if digest(database) != artifact["sha256"]:
                 raise ValueError("Raw database checksum mismatch")
-        self.db = self.connect(database)
+            self.db = self.connect(database)
         self.context, self.split = context, split
         self.identity = {
             "manifest_sha256": digest(self.path),
@@ -119,9 +123,11 @@ class RawTokenMixture(TokenMixture):
         A referenced snapshot's row key is its part index shifted above the stored row ID.
         """
         if self.parts is None:
+            # Growing copies keep rows that preparation flags later (see data/growing.py).
+            conflicts = "" if self.growing else "AND conflict=0"
             yield from db.execute(
-                """SELECT rowid,text,loss_tokens FROM documents
-                WHERE source=? AND split=? AND conflict=0 AND rowid>=? ORDER BY rowid""",
+                f"""SELECT rowid,text,loss_tokens FROM documents
+                WHERE source=? AND split=? {conflicts} AND rowid>=? ORDER BY rowid""",
                 (name, self.split, start),
             )
             return
@@ -136,11 +142,18 @@ class RawTokenMixture(TokenMixture):
             ):
                 yield base + ordinal, text, count
 
+    def open_copy(self, state, name):
+        """A growing copy's connection, whether `name` is final in it, and its generation."""
+        db = self.connect(state["path"])
+        final = state["complete"] or name in finished_sources(db)
+        return db, final, state["generation"]
+
     def blocks(self, name):
         """Documents in insertion order, packed into windows.
 
-        A growing snapshot reads its first pass as preparation appends documents, waiting
-        for newer copies when it catches up; later passes start once preparation is done.
+        A growing snapshot reads a source's first pass as preparation appends documents,
+        waiting for newer copies when it catches up; later passes start once a copy marks
+        the source finished or preparation is done.
         """
         saved = dict(self.cursors[name])
         for pass_index in range(saved["pass"], self.passes[name]):
@@ -148,12 +161,10 @@ class RawTokenMixture(TokenMixture):
             next_row = saved["row"] if resume else 0
             db, complete = self.db, True
             if self.growing:
-                state = self.growing.current() if pass_index == 0 else self.growing.complete()
-                db, complete, generation = (
-                    self.connect(state["path"]),
-                    state["complete"],
-                    state["generation"],
-                )
+                db, complete, generation = self.open_copy(self.growing.current(), name)
+                while pass_index > 0 and not complete:
+                    db.close()
+                    db, complete, generation = self.open_copy(self.growing.newer(generation), name)
             buffer = []
             # [document row, offset of the buffer's first token in it, tokens left]
             segments = []
@@ -183,15 +194,10 @@ class RawTokenMixture(TokenMixture):
                         yield self.window(name, pass_index, window)
                 if complete:
                     break
-                # Caught up with this copy of a database that is still being prepared.
-                state = self.growing.newer(generation)
-                if db is not self.db:
-                    db.close()
-                db, complete, generation = (
-                    self.connect(state["path"]),
-                    state["complete"],
-                    state["generation"],
-                )
+                # Caught up with this copy of a database that is still being prepared;
+                # release it while waiting so the refresher can replace it on disk.
+                db.close()
+                db, complete, generation = self.open_copy(self.growing.newer(generation), name)
             if db is not self.db:
                 db.close()
             if len(buffer) > 1:
@@ -324,9 +330,15 @@ class RawTokenMixture(TokenMixture):
         self.exposures = dict(state["loss_token_exposures"])
         self.cursors = {k: dict(v) for k, v in cursors.items()}
 
+    def interrupt(self):
+        """End a wait for newer prepared data from another thread (see data/growing.py)."""
+        if self.growing:
+            self.growing.interrupt()
+
     def close(self):
         super().close()
-        self.db.close()
+        if self.db is not None:
+            self.db.close()
 
 
 def consume(segments, count):
