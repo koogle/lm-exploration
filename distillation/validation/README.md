@@ -2,8 +2,8 @@
 
 A bounded experiment testing whether the Qwen3.5-9B Python/math trajectories
 (private HF dataset `jfrick/qwen35-python-math-trajectories-20261022`) teach a small
-model anything measurable. It is added in stacked parts; these parts prepare the data and the evaluation.
-Students and the Modal campaign follow in later pull requests.
+model anything measurable. It is added in stacked parts; these parts prepare the data, the evaluation and the
+students. The Modal campaign and its findings follow in the last pull request.
 
 ## Data preparation
 
@@ -41,6 +41,23 @@ It also holds the student prompt format, the parser for the generated code strin
 the teacher prompts. `grader.py` runs each case in its own isolated interpreter with
 CPU, memory, file-size and process limits and a random pass marker. Model output is
 only ever graded inside a network-blocked sandbox; the tests run fixed snippets.
+
+## Students and inference
+
+- `student.py`: the repository's modern decoder (`training/10m/model.py`) trained on a
+  packed, fixed-order stream (a BOS per document, no repeats) with cross-entropy or
+  `0.5 · CE + 0.5 · soft CE` against the teacher's {top-16, residual} partition. The soft
+  loss uses only the gathered teacher logits and one log-sum-exp per position.
+  Vocabularies: trimmed, covering (pieces expanded in training and prompts) or the full
+  248K native IDs.
+- `vllm_model.py`: the same decoder written for vLLM (paged attention, interleaved RoPE,
+  biased projections, tied embeddings, identical parameter names). vLLM loads the
+  training checkpoint `model.pt` directly with `load_format="pt"`.
+- `vllm_eval.py`: greedy generation on vLLM for the teacher (test writing and the
+  ceiling) and for students (from token IDs, decoded through the student vocabulary),
+  with a vLLM-vs-PyTorch prompt log-probability parity check.
+- `jobs.py`: the container job body that trains (or loads) a student, validates it and
+  evaluates it through vLLM; pass@1 scoring with Wilson intervals.
 
 ## Tests
 
