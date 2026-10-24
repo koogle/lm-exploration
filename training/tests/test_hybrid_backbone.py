@@ -23,6 +23,10 @@ def tiny_config(**overrides):
     return model.HybridConfig(**(settings | overrides))
 
 
+def causal_mask(length):
+    return model.DocumentMask(torch.zeros(1, length, dtype=torch.long))
+
+
 class HybridBackboneTests(unittest.TestCase):
     def setUp(self):
         torch.set_num_threads(1)
@@ -76,7 +80,7 @@ class HybridBackboneTests(unittest.TestCase):
         scores = query @ key.transpose(-1, -2) / math.sqrt(8)
         scores = scores.masked_fill(torch.ones(9, 9, dtype=torch.bool).triu(1), -math.inf)
         expected = attention.o_proj((scores.softmax(-1) @ value).transpose(1, 2).reshape(2, 9, -1))
-        torch.testing.assert_close(attention(x, rope), expected)
+        torch.testing.assert_close(attention(x, rope, causal_mask(9)), expected)
 
     def test_gqa_matches_mha_with_shared_kv_heads(self):
         gqa = model.Attention(tiny_config()).double()
@@ -87,7 +91,7 @@ class HybridBackboneTests(unittest.TestCase):
         mha.load_state_dict(state)
         x = torch.randn(2, 9, 32, dtype=torch.float64)
         rope = tuple(t.double() for t in model.rope_tables(9, 8, 1e6, None))
-        torch.testing.assert_close(gqa(x, rope), mha(x, rope))
+        torch.testing.assert_close(gqa(x, rope, causal_mask(9)), mha(x, rope, causal_mask(9)))
 
     def test_rope_base_changes_rotation(self):
         default = model.rope_tables(5, 8, 1e6, None)

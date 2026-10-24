@@ -3,7 +3,9 @@
 Pre-norm blocks reuse RMSNorm (fp32 statistics) and SwiGLU from model_10m, the
 SwiGLU without biases at a configurable width; tied embeddings and no biases.
 Full-attention layers use GQA with head dimension 128, QK-norm and RoPE with a
-configurable base. The loss is a chunked cross-entropy with a z-loss.
+configurable base, with a document-aware causal mask. On CUDA attention runs our
+own kernel (document_attention.py), bit-exact with the fixed-order definition in
+exact_attention.py. The loss is a chunked cross-entropy with a z-loss.
 """
 
 import math
@@ -15,9 +17,13 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.checkpoint import checkpoint
 
+from .document_attention import document_attention, softmax_scale
+from .exact_attention import document_starts
+
 __all__ = [
     "Attention",
     "Block",
+    "DocumentMask",
     "HybridConfig",
     "HybridLM",
     "RMSNorm",
@@ -25,6 +31,43 @@ __all__ = [
     "chunked_cross_entropy",
 ]
 IGNORE_INDEX = -100
+
+
+class DocumentMask:
+    """Document-aware causal mask: position q sees k <= q within its own document."""
+
+    def __init__(self, documents):
+        self.documents = documents
+        # Documents are contiguous, so row i may attend to keys [start_i, i].
+        self.starts = document_starts(documents)
+
+    def dense(self):
+        """[B, 1, T, T] boolean matrix of allowed attention."""
+        length = self.documents.size(1)
+        index = torch.arange(length, device=self.documents.device)
+        same = self.documents[:, :, None] == self.documents[:, None, :]
+        return (same & (index[None, :] <= index[:, None]))[:, None]
+
+
+def reference_attention(query, key, value, allowed):
+    """Explicit masked softmax attention with GQA, computed in at least fp32.
+
+    Returns the output and the fp32 (or fp64) log-sum-exp of the scaled scores.
+    """
+    groups = query.size(1) // key.size(1)
+    key, value = key.repeat_interleave(groups, 1), value.repeat_interleave(groups, 1)
+    dtype = torch.float64 if query.dtype == torch.float64 else torch.float32
+    scores = query.to(dtype) @ key.to(dtype).transpose(-1, -2) / math.sqrt(query.size(-1))
+    scores = scores.masked_fill(~allowed, -math.inf)
+    lse = scores.logsumexp(-1)
+    weights = (scores - lse[..., None]).exp()
+    return (weights @ value.to(dtype)).to(query.dtype), lse
+
+
+def attend(query, key, value, mask):
+    if query.is_cuda:
+        return document_attention(query, key, value, mask.starts, softmax_scale(query.size(-1)))[0]
+    return reference_attention(query, key, value, mask.dense())[0]
 
 
 @dataclass(frozen=True)
@@ -64,7 +107,7 @@ def rope_tables(length, head_dim, base, device):
 
 
 def apply_rope(x, cos, sin):
-    """Rotate halves of the head dimension; x is [B, H, T, D], tables are [T, D/2]."""
+    """Rotate halves of the head dimension; x is [B, H, T, D], tables [T or B, 1, T, D/2]."""
     values = x.float() if x.dtype in (torch.float16, torch.bfloat16) else x
     first, second = values.chunk(2, dim=-1)
     cos, sin = cos.to(values.dtype), sin.to(values.dtype)
@@ -72,8 +115,17 @@ def apply_rope(x, cos, sin):
     return rotated.to(x.dtype)
 
 
+def document_positions(documents):
+    """Position of each token within its own document, [B, T]."""
+    index = torch.arange(documents.size(1), device=documents.device).expand_as(documents)
+    start = torch.zeros_like(documents, dtype=torch.bool)
+    start[:, 0] = True
+    start[:, 1:] = documents[:, 1:] != documents[:, :-1]
+    return index - torch.where(start, index, 0).cummax(1).values
+
+
 class Attention(nn.Module):
-    """Causal GQA with QK-norm and RoPE."""
+    """Document-causal GQA with QK-norm and RoPE."""
 
     def __init__(self, config):
         super().__init__()
@@ -100,11 +152,9 @@ class Attention(nn.Module):
         cos, sin = rope
         return apply_rope(query, cos, sin), apply_rope(key, cos, sin), value
 
-    def forward(self, x, rope):
+    def forward(self, x, rope, mask):
         query, key, value = self.project(x, rope)
-        attended = F.scaled_dot_product_attention(
-            query, key, value, is_causal=True, enable_gqa=self.n_kv_head != self.n_head
-        )
+        attended = attend(query, key, value, mask)
         batch, length, _ = x.shape
         return self.o_proj(attended.transpose(1, 2).reshape(batch, length, -1))
 
@@ -118,8 +168,8 @@ class Block(nn.Module):
         self.mlp = SwiGLU(config.n_embd, config.mlp_hidden, bias=False)
         self.mlp.down.residual_output = True
 
-    def forward(self, x, rope):
-        x = x + self.mixer(self.mixer_norm(x), rope)
+    def forward(self, x, rope, mask):
+        x = x + self.mixer(self.mixer_norm(x), rope, mask)
         return x + self.mlp(self.mlp_norm(x))
 
 
@@ -173,23 +223,34 @@ class HybridLM(nn.Module):
                 std /= math.sqrt(2 * self.config.n_layer)
             nn.init.normal_(module.weight, std=std)
 
-    def hidden_states(self, tokens):
+    def hidden_states(self, tokens, documents=None):
+        """Final normalized hidden states; `documents` [B, T] isolates packed documents.
+
+        Attention and RoPE positions restart at each document; without document
+        ids, each row is one document.
+        """
         length = tokens.size(1)
         if not 0 < length <= self.config.block_size:
             raise ValueError("sequence length must be within the model's block_size")
-        rope = (self.rope_cos[:length], self.rope_sin[:length])
+        if documents is None:
+            documents = torch.zeros_like(tokens)
+        if documents.shape != tokens.shape:
+            raise ValueError("document ids must match the token shape")
+        positions = document_positions(documents)
+        rope = (self.rope_cos[positions][:, None], self.rope_sin[positions][:, None])
+        mask = DocumentMask(documents)
         x = self.token_embedding(tokens)
         for block in self.blocks:
-            x = block(x, rope)
+            x = block(x, rope, mask)
         return self.final_norm(x)
 
-    def forward(self, tokens, labels=None):
+    def forward(self, tokens, labels=None, documents=None):
         """Logits, or summed losses when `labels` are given.
 
         Returns {"loss", "ce", "z", "count"}: `loss = ce + z_loss * z` summed over
         valid targets; divide by the global valid-target count to get the mean.
         """
-        hidden = self.hidden_states(tokens)
+        hidden = self.hidden_states(tokens, documents)
         if labels is None:
             return F.linear(hidden, self.output_weight)
         ce, z = chunked_cross_entropy(
