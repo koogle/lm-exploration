@@ -2,6 +2,10 @@
 
 Run from training/:
     modal run -m modal_scripts.modal_stable_ce_check [--output <result.json>]
+    modal run -m modal_scripts.modal_stable_ce_check::speed [--steps 20]
+
+`speed` times full optimizer steps of the 124M recipe on three H100s
+(trainer/loss_benchmark.py), same 30-minute timeout and deadline.
 
 One H100, 30-minute timeout, no retries. The launcher records a deadline 24 hours
 after launch, and the worker refuses to start after it. The worker checks that the
@@ -128,6 +132,27 @@ def check(deadline):
         "loss_alone_bf16": losses_alone,
         "train_microbatch_124m_bf16": microbatch,
     }
+
+
+@app.function(image=image, gpu="H100:3", cpu=12, memory=65536, timeout=1800, retries=0)
+def train_speed(deadline, steps):
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    recipe = "/project/workflows/model_configs/modern-124m.json"
+    command = ["torchrun", "--nproc_per_node=3", "-m", "trainer.loss_benchmark", recipe]
+    result = run([*command, str(steps)], 1500)
+    return json.loads(result.stdout.strip().splitlines()[-1])
+
+
+@app.local_entrypoint()
+def speed(steps: int = 20, output: str = ""):
+    """Full 124M optimizer steps on three H100s, F.cross_entropy versus the kernel."""
+    deadline = time.time() + LAUNCH_LIMIT_SECONDS
+    result = train_speed.remote(deadline, steps)
+    path = Path(output or f"artifacts/results/stable-ce-train-speed-{int(time.time())}.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps(result, indent=2))
 
 
 @app.local_entrypoint()
