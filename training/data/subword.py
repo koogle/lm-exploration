@@ -33,11 +33,24 @@ def digest(path):
     return value.hexdigest()
 
 
+def fetch_hub_files(folder, manifest):
+    """Download large frozen files kept on HF at their pinned revision; Git holds the rest."""
+    hub = manifest.get("hub")
+    if hub is None:
+        return
+    from huggingface_hub import hf_hub_download
+
+    for name in hub["files"]:
+        if not (folder / name).exists():
+            hf_hub_download(hub["repo"], name, revision=hub["revision"], local_dir=folder)
+
+
 def load_frozen(folder=DEFAULT_FOLDER):
     from tokenizers import Tokenizer
 
     folder = Path(folder)
     manifest = json.loads((folder / "freeze-manifest.json").read_text())
+    fetch_hub_files(folder, manifest)
     if manifest["files"]["tokenizer.json"] != TOKENIZER_SHA256:
         raise ValueError("Unexpected tokenizer identity")
     for name, expected in manifest["files"].items():

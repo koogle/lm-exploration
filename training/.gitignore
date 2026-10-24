@@ -13,3 +13,6 @@ __pycache__/
 /results/tokenizer-learning-curve/*/*mib-*.json
 # Downloaded and newly generated experiment artifacts belong on HF datasets.
 /artifacts/
+# Fetched from its pinned HF revision by training_data.subword.load_frozen.
+/tokenizer/climbmix-code-v1/tokenizer.json
+/tokenizer/climbmix-code-v1/.cache/

@@ -51,6 +51,8 @@ def record(run_id, stage, **details):
     retries=0,
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
+    # Fetches the frozen tokenizer from its private HF repo if the image lacks it.
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
 )
 def train_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_seconds):
     from distributed.modal_train import worker

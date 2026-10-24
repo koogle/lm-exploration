@@ -36,6 +36,9 @@ on 256 MiB sampled from the training split of the
 15% code. It keeps the GPT-2-style pre-tokenizer, except that every digit is its
 own token so arithmetic sees one token per digit. Special IDs are unchanged.
 Fit it with `python -m tokenizer.mixture_tokenizer` (see the module docstring).
+Its `tokenizer.json` lives in the private HF repo `jfrick/climbmix-code-tokenizer`;
+`load_frozen()` downloads it at the revision pinned in `freeze-manifest.json` on first
+use (with `HF_TOKEN`) and verifies its SHA256. The other files stay in Git.
 
 On 20 MiB of held-out validation text from the same sources (`evaluation.json`):
 
@@ -59,5 +62,5 @@ assert VOCAB_SIZE == tokenizer.get_vocab_size() == 32768
 The [training plan](../plans/SIMPLE_LLM_PRETRAINING.md) records the selection.
 `structured-code-v1` is published at
 [`jfrick/scholarly-code-tokenizer`](https://huggingface.co/jfrick/scholarly-code-tokenizer);
-`climbmix-code-v1` is not yet published. The original assets live in
+`climbmix-code-v1` is private on HF. The original assets live in
 [`simple-llm-v1/`](simple-llm-v1/) with their bytes and hashes unchanged.
