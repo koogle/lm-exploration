@@ -1,23 +1,25 @@
-"""CUDA checks for the hybrid family's attention kernel.
+"""CUDA checks for the hybrid family: our attention kernel and fla's KDA kernel.
 
-The kernel must be bitwise identical to the fixed-order definition in
+The attention kernel must be bitwise identical to the fixed-order definition in
 exact_attention.py (forward outputs and statistics, all input gradients), give the
 same bits on repeated runs, stay close to fp64 softmax attention, and work inside
-torch.compile. Run on one GPU through model_hybrid.modal_checks; returns a
+torch.compile. fla's chunked KDA must match kda_reference within TF32 tolerance,
+and a small hybrid model is timed with fla inside and outside the compiled graph.
+Run on one GPU through model_hybrid.modal_checks; returns a
 JSON-serializable dict and raises on any mismatch.
 """
 
 import time
 
 import torch
-from model_hybrid import exact_attention, model
+from model_hybrid import exact_attention, kda, model
 from model_hybrid.document_attention import (
     _backward,
     _forward,
     document_attention,
     softmax_scale,
 )
-from model_hybrid.documents import document_ids
+from model_hybrid.documents import document_ids, document_positions
 
 EOS = 2
 
@@ -87,8 +89,17 @@ def against_reference(dtype, batch, heads, kv_heads, length, width, ends):
 
 def compiled_model():
     torch.manual_seed(1)
+    # Full attention only: fullgraph proves the kernel's custom ops do not break the
+    # graph (the fla call in KDA layers is a deliberate graph break).
     config = model.HybridConfig(
-        vocab_size=512, block_size=256, n_layer=2, n_embd=256, n_head=4, n_kv_head=2, head_dim=64
+        vocab_size=512,
+        block_size=256,
+        n_layer=2,
+        n_embd=256,
+        n_head=4,
+        n_kv_head=2,
+        head_dim=64,
+        layer_pattern=("full",),
     )
     lm = model.HybridLM(config).cuda()
     compiled = torch.compile(lm, fullgraph=True)
@@ -145,6 +156,101 @@ def timing(batch=8, heads=12, kv_heads=4, length=4096, width=128, documents=1):
     return result
 
 
+def kda_against_reference(dtype, tolerance):
+    torch.manual_seed(2)
+    batch, length, heads, width = 2, 512, 4, 128
+
+    def leaf(*shape):
+        return torch.randn(*shape, device="cuda").to(dtype).requires_grad_()
+
+    q, k, v = (leaf(batch, length, heads, width) for _ in range(3))
+    g, beta = leaf(batch, length, heads, width), leaf(batch, length, heads)
+    A_log = torch.empty(heads, device="cuda").uniform_(1, 16).log().requires_grad_()
+    dt_bias = (torch.randn(heads * width, device="cuda") - 4).requires_grad_()
+    tokens = torch.randint(3, 100, (batch, length), device="cuda")
+    tokens[0, [63, 64, 300]] = EOS
+    tokens[1, 200] = EOS
+    documents = document_ids(tokens, EOS)
+    inputs = (q, k, v, g, beta, A_log, dt_bias)
+    upstream = torch.randn(batch, length, heads, width, device="cuda")
+
+    def run(function, last):
+        output = function(*inputs, last)
+        return output, torch.autograd.grad((output.float() * upstream).sum(), inputs)
+
+    fla_out, fla_grads = run(kda.kda_kernel, documents)
+    ref_out, ref_grads = run(kda.kda_reference, document_positions(documents))
+    names = ("q", "k", "v", "g", "beta", "A_log", "dt_bias")
+    errors = {
+        "output": max_error(fla_out, ref_out) / ref_out.float().abs().max().item(),
+        **{
+            f"grad_{name}": max_error(a, b) / max(b.float().abs().max().item(), 1e-6)
+            for name, a, b in zip(names, fla_grads, ref_grads, strict=True)
+        },
+    }
+    if max(errors.values()) > tolerance:
+        raise AssertionError(f"KDA kernel mismatch for {dtype}: {errors}")
+    return {"relative_max_error": errors}
+
+
+def compile_boundary_timing(rounds=3, steps=10):
+    """bf16 training-step time of a small compiled hybrid model, fla inside or outside.
+
+    Both variants compile and warm up (including fla's autotuning) before any
+    timing; timing rounds then alternate between them.
+    """
+    torch.manual_seed(3)
+    config = model.HybridConfig(
+        vocab_size=4096,
+        block_size=1024,
+        n_layer=4,
+        n_embd=512,
+        n_head=4,
+        n_kv_head=2,
+        n_kda_head=4,
+        mlp_hidden=1024,
+    )
+    lm = model.HybridLM(config).cuda()
+    tokens = torch.randint(3, 4096, (4, 1024), device="cuda")
+    tokens[:, 300] = EOS
+    labels = torch.randint(0, 4096, tokens.shape, device="cuda")
+    documents = document_ids(tokens, EOS)
+
+    def variant(function):
+        # Both compiled variants share one code cache, guarded on the kernel function.
+        kda.kda_kernel = function
+        compiled = torch.compile(lm)
+
+        def step():
+            kda.kda_kernel = function
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                losses = compiled(tokens, labels, documents)
+            losses["loss"].backward()
+
+        for _ in range(5):
+            step()
+        return step
+
+    original = kda.kda_kernel
+    try:
+        steps_by_name = {
+            "fla_outside_graph": variant(torch.compiler.disable(original)),
+            "fla_inside_graph": variant(original),
+        }
+        times = {name: [] for name in steps_by_name}
+        for _ in range(rounds):
+            for name, step in steps_by_name.items():
+                torch.cuda.synchronize()
+                start = time.perf_counter()
+                for _ in range(steps):
+                    step()
+                torch.cuda.synchronize()
+                times[name].append((time.perf_counter() - start) * 1000 / steps)
+    finally:
+        kda.kda_kernel = original
+    return {f"{name}_step_ms": values for name, values in times.items()}
+
+
 def checks():
     cases = (
         (torch.float32, 2, 12, 4, 300, 128, [[63, 64, 200], [150]]),
@@ -158,6 +264,10 @@ def checks():
         "kernel_vs_exact_reference": [
             {"dtype": str(case[0]), **against_reference(*case)} for case in cases
         ],
+        # fla's Triton dots use TF32 even for fp32 inputs.
+        "kda_vs_reference_fp32": kda_against_reference(torch.float32, 1e-2),
+        "kda_vs_reference_bf16": kda_against_reference(torch.bfloat16, 5e-2),
         "compiled_model": compiled_model(),
+        "compile_boundary": compile_boundary_timing(),
         "timing": [timing(documents=1), timing(documents=4)],
     }

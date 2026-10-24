@@ -14,7 +14,7 @@ than small CUDA correctness checks.
 | 1 | Backbone: RMSNorm, SwiGLU, tied embeddings, GQA, QK-norm, RoPE base 1M, scaled init, chunked CE + z-loss | Implemented, CPU-tested |
 | 2 | Document masking: loader document ids / `cu_seqlens`; our own bit-exact document-causal attention kernel | Implemented, CPU-tested, H100 bit-exact check passed |
 | 3 | Attention sink and sigmoid output gate | Implemented, CPU-tested |
-| 4 | KDA layers via flash-linear-attention, document state reset, `[KDA, KDA, KDA, full]` layout | Planned |
+| 4 | KDA layers via flash-linear-attention, document state reset, `[KDA, KDA, KDA, full]` layout | Implemented, CPU-tested, H100 check passed |
 | 5 | One DeepSeek/GLM-style MTP module predicting t+2 | Planned |
 | 6 | Muon/AdamW parameter grouping | Planned |
 | 7 | GLM-4.7-Flash tokenizer and 40B recipe (70% ClimbMix, 20% code, 10% math) | Planned |

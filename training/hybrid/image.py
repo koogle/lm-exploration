@@ -8,7 +8,7 @@ kernel, prebuilt here into /opt/hybrid_attention.
 import modal
 
 CUDA_BASE = "nvidia/cuda:13.0.0-devel-ubuntu22.04"
-PACKAGES = ("torch==2.14.1", "numpy", "einops", "ninja")
+PACKAGES = ("torch==2.14.1", "numpy", "einops", "ninja", "fla-core==0.6.0", "packaging")
 BUILD_KERNEL = (
     'python -c "from torch.utils.cpp_extension import load; '
     "load(name='hybrid_document_attention', "

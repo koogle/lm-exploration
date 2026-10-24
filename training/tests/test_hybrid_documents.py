@@ -27,7 +27,7 @@ class DocumentTests(unittest.TestCase):
         inputs = torch.tensor([[7, 8, EOS, 1, 9, EOS, 0, 0], [5, 6, 7, 8, 9, 10, 11, 12]])
         ids = documents.document_ids(inputs, EOS)
         self.assertEqual(ids.tolist(), [[0, 0, 0, 1, 1, 1, 2, 2], [0] * 8])
-        self.assertEqual(model.document_positions(ids).tolist()[0], [0, 1, 2, 0, 1, 2, 0, 1])
+        self.assertEqual(documents.document_positions(ids).tolist()[0], [0, 1, 2, 0, 1, 2, 0, 1])
         self.assertEqual(documents.cu_seqlens(ids).tolist(), [0, 3, 6, 8, 16])
         self.assertEqual(documents.cu_seqlens(ids).dtype, torch.int32)
 
