@@ -180,6 +180,13 @@ Vocabulary at equal backbone (31.5M, 10 × 512) and 200M tokens:
   the 248K vocabulary matched the trimmed one on both sets and was marginally worse on
   loss, at 7.4× the training time (partly the dense soft-loss code since replaced;
   the output layer alone is about 4× the backbone's compute at this width).
+- **Removing UNK from MBPP prompts did not help.** Every MBPP prompt contained tokens
+  outside the trimmed vocabulary (`assert` in all 427, ` python` in 126; 3.4 UNK per
+  prompt). Retraining `trim-large-500m-kd` with the covering vocabulary
+  (`distill-validation-20261023-02-covering`, no UNK, exact round-trips) gave 60.6%
+  [52.2, 68.4] held-out and 11.2% [8.6, 14.6] MBPP (413/427 parsed, CE/byte 0.206),
+  within noise of the trimmed run. The words are now readable as pieces, but the
+  training data never uses them, so the gap is knowledge rather than vocabulary.
 - **The from-scratch gap is general knowledge, not data.** The best student reaches
   63% held-out but only 14% MBPP, against 42% for the 0.8B model fine-tuned on a tenth
   of the data. Narrow exercises alone do not supply the Python knowledge MBPP needs.
