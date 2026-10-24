@@ -220,6 +220,12 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
     run_folder = Path("/runs") / run_id
     status_path = run_folder / "workflow.json"
     selection_path = run_folder / "resolved-workflow.json"
+    launch_path = run_folder / "launch.json"
+    # Modal restarts a preempted container with the same input. That restart carries
+    # this launch's deadline and continues preparation from the persisted database.
+    if launch_path.exists():
+        restarted = json.loads(launch_path.read_text())["deadline_unix"] == deadline
+        resume_preparation = resume_preparation or restarted
     if status_path.exists():
         prior = json.loads(status_path.read_text())
         if json.loads(selection_path.read_text()) != bundle:
@@ -246,6 +252,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
         if not resume_preparation:
             run_folder.mkdir(parents=True, exist_ok=False)
             selection_path.write_text(json.dumps(bundle, indent=2) + "\n")
+        launch_path.write_text(json.dumps({"deadline_unix": deadline}) + "\n")
         record(run_id, "preparing", target_tokens=target, provenance=provenance)
         if cached is not None:
             snapshot = str(cached.parent.relative_to(data_root))
