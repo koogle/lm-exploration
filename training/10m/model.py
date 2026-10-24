@@ -139,14 +139,19 @@ class GPT(nn.Module):
             if isinstance(module, nn.Linear) and module.bias is not None:
                 nn.init.zeros_(module.bias)
 
-    def forward(self, tokens, labels=None, loss_chunk_size=0):
+    def forward(self, tokens, labels=None, loss_chunk_size=0, loss_fn=F.cross_entropy):
+        """Logits, or the summed loss when `labels` are given.
+
+        `loss_fn(logits, targets, ignore_index=..., reduction=...)` follows
+        F.cross_entropy; the trainer passes `trainer.loss.cross_entropy`.
+        """
         if not 0 < tokens.size(1) <= self.config.block_size:
             raise ValueError("sequence length must be within the model's block_size")
         hidden = self.final_norm(self.blocks(self.token_embedding(tokens)))
         if labels is None:
             return self.lm_head(hidden)
         if not loss_chunk_size:
-            return F.cross_entropy(
+            return loss_fn(
                 self.lm_head(hidden).flatten(0, 1),
                 labels.flatten(),
                 ignore_index=-100,
@@ -156,9 +161,7 @@ class GPT(nn.Module):
         from torch.utils.checkpoint import checkpoint
 
         def chunk_loss(features, targets):
-            return F.cross_entropy(
-                self.lm_head(features), targets, ignore_index=-100, reduction="sum"
-            )
+            return loss_fn(self.lm_head(features), targets, ignore_index=-100, reduction="sum")
 
         return sum(
             checkpoint(chunk_loss, features, targets, use_reentrant=False)
