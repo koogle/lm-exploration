@@ -63,6 +63,17 @@ temporaries. One rough CPU measurement (2048 × 32768 fp32, forward and backward
 took 0.86 s against 0.31 s for `F.cross_entropy`. Measure on GPU (eager and
 `torch.compile`) before using it for pretraining.
 
+[`trainer/stable_ce_triton.py`](../trainer/stable_ce_triton.py) is a fused Triton
+kernel for the hard-target loss. Its forward pass streams each row once with an online
+log-sum-exp over `z_j - z_t` (j ≠ t) and keeps one float per row. Its backward pass
+writes `g_j = exp(z_j - z_t - loss)` and `g_t = -exp(lse - loss)` straight into the
+gradient, so the only N×V allocation is the gradient itself. bf16 logits are read
+directly and computed in fp32. On CPU,
+[`tests/test_stable_ce_triton.py`](../tests/test_stable_ce_triton.py) checks it
+against the PyTorch port under `TRITON_INTERPRET=1`; that confirms correctness only.
+It has **not yet run on a GPU**: compiled-kernel accuracy (Triton's fast `exp`/`log`)
+and throughput against `F.cross_entropy` are unmeasured.
+
 Proposed experiment, not run:
 1. Log the fraction of training tokens with margin > 16.6 from a published checkpoint.
 2. If that share is non-trivial, run a matched short continuation with the fixed CE.

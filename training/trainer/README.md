@@ -53,7 +53,9 @@ Muon/AdamW implementation lives in `optimizers.py`; see the
 [matched comparison](../distributed/MUON_COMPARISON.md) for measured context.
 
 `stable_softmax.py` holds opt-in log-softmax, softmax and cross-entropy that avoid
-Softmax Collapse and Cancellation; the loop still uses `F.cross_entropy`. See the
+Softmax Collapse and Cancellation; `stable_ce_triton.py` is a fused Triton kernel for
+the hard-target loss (correctness checked in the Triton interpreter, not yet on GPU).
+The loop still uses `F.cross_entropy`. See the
 [reading note](../references/softmax-fix-2026-10-24.md).
 
 ## Continued pretraining
