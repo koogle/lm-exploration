@@ -129,12 +129,16 @@ class LinearCrossEntropyFunction(torch.autograd.Function):
         return d_hidden * grad_output.to(d_hidden.dtype), d_weight * grad_output, None
 
 
-def attention(module, y):
+def attention(options, module, y):
     batch, length, width = y.shape
     query, key, value = QKVRopeFunction.apply(
         F.linear(y, module.qkv.weight), module.qkv.bias, module.n_head
     )
-    attended = F.scaled_dot_product_attention(query, key, value, is_causal=True)
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
+    backend = {"flash": SDPBackend.FLASH_ATTENTION, "cudnn": SDPBackend.CUDNN_ATTENTION}
+    with sdpa_kernel(backend[options["attention"]]):
+        attended = F.scaled_dot_product_attention(query, key, value, is_causal=True)
     return F.linear(
         attended.transpose(1, 2).reshape(batch, length, width), module.projection.weight
     )
@@ -159,7 +163,7 @@ def gpt_forward(self, tokens, labels=None, loss_chunk_size=0):
     x = self.token_embedding(tokens)
     y = RMSNormFunction.apply(x, blocks[0].attention_norm.weight, blocks[0].attention_norm.eps)
     for block, mlp_norm, next_norm in zip(blocks, norms, following):
-        a = attention(block.attention, y)
+        a = attention(self.fused_options, block.attention, y)
         x, y = AddRMSNormFunction.apply(
             x, a, block.attention.projection.bias, mlp_norm.weight, mlp_norm.eps
         )
@@ -170,7 +174,14 @@ def gpt_forward(self, tokens, labels=None, loss_chunk_size=0):
     return LinearCrossEntropyFunction.apply(y.flatten(0, 1), self.lm_head.weight, labels.flatten())
 
 
-def fuse(model):
-    """Route a GPT's forward through the fused kernels, in place."""
+def fuse(model, *, attention="cudnn"):
+    """Route a GPT's forward through the fused kernels, in place.
+
+    `attention` selects PyTorch's cuDNN ("cudnn", faster on H100) or FlashAttention-2
+    ("flash") kernel.
+    """
+    if attention not in ("flash", "cudnn"):
+        raise ValueError("attention must be cudnn or flash")
+    model.fused_options = {"attention": attention}
     model.forward = types.MethodType(gpt_forward, model)
     return model

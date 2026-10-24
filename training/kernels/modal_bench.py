@@ -116,7 +116,7 @@ def op_checks():
     return results
 
 
-def model_check():
+def model_check(**options):
     """Loss and gradients of the whole model, fused versus unfused, same weights."""
     import torch
     from model_100m.model import GPT, ModelConfig
@@ -128,7 +128,7 @@ def model_check():
     reference = GPT(config).cuda()
     candidate = GPT(config).cuda()
     candidate.load_state_dict(reference.state_dict())
-    fused.fuse(candidate)
+    fused.fuse(candidate, **options)
     tokens = torch.randint(4, 32768, (4, 2048), device="cuda")
     labels = torch.randint(4, 32768, (4, 2048), device="cuda")
     labels[:, :17] = -100
@@ -156,7 +156,7 @@ def time_steps(variant, microbatch, context, steps=10):
     torch.manual_seed(0)
     model = GPT(ModelConfig(vocab_size=32768, block_size=context)).cuda()
     if "fused" in variant:
-        fused.fuse(model)
+        fused.fuse(model, attention="flash" if "flash" in variant else "cudnn")
     if "compiled" in variant:
         model.compile()
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, fused=True)
@@ -192,9 +192,14 @@ def bench(deadline, microbatch=16, context=2048):
 
     if time.time() > deadline:
         raise RuntimeError("Launch deadline passed; refusing work")
-    report = {"device": torch.cuda.get_device_name(), "ops": op_checks(), "model": model_check()}
+    report = {
+        "device": torch.cuda.get_device_name(),
+        "ops": op_checks(),
+        "model": model_check(),
+        "model_flash": model_check(attention="flash"),
+    }
     report["steps"] = {}
-    for variant in ("eager", "fused", "compiled", "fused+compiled"):
+    for variant in ("eager", "compiled", "fused+flash", "fused"):
         try:
             report["steps"][variant] = time_steps(variant, microbatch, context)
         except Exception as exc:  # noqa: BLE001 -- record and continue with other variants
