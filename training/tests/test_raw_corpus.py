@@ -185,3 +185,43 @@ class PackedWindowTests(unittest.TestCase):
                 resumed.load_state_dict(states[index])
                 self.assertEqual(resumed.next_block(), blocks[index])
                 resumed.close()
+
+
+class PassCapTests(unittest.TestCase):
+    def test_recipe_pass_cap_sets_capacity_and_loader_repeats(self):
+        source = {
+            "name": "small",
+            "weight_percent": 100,
+            "files": ["a"],
+            "repo": "test",
+            "revision": "0" * 40,
+            "max_passes": 3,
+        }
+        rows = [{"id": str(i), "text": "tiny source text " * 3} for i in range(30)]
+        rows = [r for r in rows if adapt(source, r)[0]["split"] == "train"]
+
+        def reader(source, shard, start):
+            yield from enumerate(rows[start:], start)
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            corpus = RawCorpus(root, {"sources": [source]})
+            corpus.prepare("small", reader=reader)
+            train = corpus.counts("small")["train"]
+            report = corpus.report(train * 3)
+            corpus.close()
+            self.assertEqual(report["sources"]["small"]["minimum_unique_train_tokens"], train)
+            self.assertTrue(report["sources"]["small"]["capacity_sufficient"])
+            self.assertEqual(report["supported_mixture_exposures"], train * 3)
+            export_raw(root, root / "snapshot")
+            mixture = RawTokenMixture(
+                root / "snapshot/manifest.json", context=8, allow_unreviewed=True
+            )
+            total = 0
+            while True:
+                try:
+                    total += mixture.next_block()["loss_tokens"]
+                except StopIteration:
+                    break
+            mixture.close()
+            self.assertEqual(total, train * 3)

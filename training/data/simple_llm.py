@@ -19,6 +19,9 @@ from .token_shards import FORMAT, file_entry, write_shard
 SPLIT_VERSION = "scholarly-parent-v2"
 MAX_CHARS = 4_000_000
 MAX_LINE_BYTES = 64 * 1024 * 1024
+# A small source inside a larger mixture tolerates many repeats (arXiv 2605.12715);
+# a recipe can raise its default two passes up to this cap.
+MAX_PASSES = 16
 
 
 def canonical(value):
@@ -44,6 +47,9 @@ def validate_recipe(recipe):
             raise ValueError("Unsupported or empty source")
         if source["weight_percent"] <= 0:
             raise ValueError("Weights must be positive")
+        passes = source.get("max_passes", 2)
+        if type(passes) is not int or not 1 <= passes <= MAX_PASSES:
+            raise ValueError(f"max_passes must be an integer from 1 to {MAX_PASSES}")
         if source.get("split_by", "document") not in ("document", "row"):
             raise ValueError("split_by must be document or row")
     return recipe

@@ -4,7 +4,7 @@ Each source's documents are concatenated, as `BOS ids EOS`, into full windows, s
 short documents do not waste a window on padding. BOS is never a target; every
 content token and EOS is a target exactly once per pass.
 
-Each source is read at most `max_passes` times (1 or 2; default 2). A source may also
+Each source is read at most `max_passes` times (1 to 16; default 2). A source may also
 set an exact `target_tokens` budget: the scheduler stops drawing from it once the budget
 is reached, masking any excess targets in the last window. When every budget is met, or
 a source runs out of passes, the final partial batch is padded rather than dropped.
@@ -17,6 +17,7 @@ import zlib
 from fractions import Fraction
 from pathlib import Path
 
+from .simple_llm import MAX_PASSES
 from .subword import (
     BOS_TOKEN_ID,
     EOS_TOKEN_ID,
@@ -71,8 +72,8 @@ class RawTokenMixture(TokenMixture):
         self.passes = {}
         for name, source in self.sources.items():
             cap = source.get("max_passes", 2)
-            if type(cap) is not int or cap not in (1, 2):
-                raise ValueError("Source pass cap must be one or two")
+            if type(cap) is not int or not 1 <= cap <= MAX_PASSES:
+                raise ValueError(f"Source pass cap must be from 1 to {MAX_PASSES}")
             self.passes[name] = cap if split == "train" else 1
         self.budgets = {}
         if split == "train" and any("target_tokens" in s for s in self.sources.values()):

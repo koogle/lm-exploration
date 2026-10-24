@@ -45,7 +45,7 @@ The recipe is [`climbmix-code-v1`](../data/recipes/climbmix-code-v1.json):
 
 Neither source has document IDs, so all three use `"split_by": "row"`. Code shards
 are interleaved across repositories so training never sits in one project.
-Code is 15% because the goal is coherent text and math, not coding. The MIT collection holds only about 40M training tokens, so it gets 2%: its 2B-run share then needs 20M unique tokens under the two-pass limit. A first 85/10/5 split stopped in preparation because 5% needed 50M. ClimbMix has
+Code is 15% because the goal is coherent text and math, not coding. The MIT collection holds only about 40M training tokens. A first 85/10/5 split stopped in preparation because 5% of 2B needed 50M unique tokens under the two-pass limit, so the running 2B run uses 85/13/2. Later runs can instead raise the MIT source's `max_passes`. ClimbMix has
 little explicit math; math ability is to come from fine-tuning on GSM8K-style data
 after pretraining.
 
@@ -89,8 +89,10 @@ Before a substantial GPU run:
    decisions. Persist stream cursors, shuffle RNG state and shard hashes so a
    restart does not masquerade as fresh data.
 4. Record unique tokens separately from exposures and effective passes per source.
-   Initial policy: at most two passes per source; expand eligible sources or
-   explicitly revise the plan if capacity cannot support a target share.
+   Default policy: at most two passes per source. A recipe source may set
+   `max_passes` up to 16 (revised 2026-10-24): a small, high-quality source inside a
+   larger mixture tolerates many repeats ([arXiv 2605.12715](https://arxiv.org/html/2605.12715v2)
+   found optimal repetition around 15–20).
 5. Mix by actual trained token counts, mask padding, and document EOS/packing
    policy. Do not reuse the small pilot/tokenizer cache to reach billions.
 
