@@ -20,5 +20,6 @@
   "optimizer": "adamw",
   "prefetch_batches": 4,
   "lr_schedule": "wsd",
-  "decay_fraction": 0.1
+  "decay_fraction": 0.1,
+  "compile_model": true
 }

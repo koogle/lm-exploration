@@ -103,10 +103,11 @@ pre-decay loss and the Chinchilla shape for 124M both suggest roughly 2.5 at 5B,
 10B and 2.2 at 20B, but one cosine curve cannot pin down the floor. To measure instead:
 
 1. Train [`climbmix-124m-wsd-20b`](../workflows/climbmix-124m-wsd-20b.json) on eight H100s
-   with a warmup-stable-decay schedule: constant peak learning rate, then a linear decay
-   over the last 10% of tokens. Recipe [`climbmix-code-v3`](../data/recipes/climbmix-code-v3.json)
-   lists 300 ClimbMix shards and gives curated code 14% (four passes) and MIT code 1%
-   (eight passes).
+   with a warmup-stable-decay schedule (constant peak learning rate, then a linear decay
+   over the last 10% of tokens) and `torch.compile`. Recipe
+   [`climbmix-code-v4`](../data/recipes/climbmix-code-v4.json) lists 300 ClimbMix shards
+   as four shuffled parts (85% together), so preparation runs one worker per part, and
+   gives curated code 14% (four passes) and MIT code 1% (eight passes).
 2. Branch decays from the stable-phase checkpoints at steps 50,000 (about 4.9B tokens)
    and 100,000 (about 9.8B): each resumes the checkpoint exactly with a target of
    checkpoint tokens / 0.9, so its 10% decay starts at the branch point.
