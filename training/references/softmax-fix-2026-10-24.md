@@ -74,7 +74,8 @@ and computed in fp32. The extension is JIT-built with `torch.utils.cpp_extension
 needs `nvcc`; it must be built without `--use_fast_math`. It compiles for sm_80/sm_90
 against torch 2.14 / CUDA 13.0. It has **not yet run on a GPU**:
 [`tests/test_stable_ce_cuda.py`](../tests/test_stable_ce_cuda.py) (skipped without
-CUDA) and a throughput comparison with `F.cross_entropy` are still pending.
+CUDA) and a throughput comparison with `F.cross_entropy` are still pending. Run both on one
+H100 with `modal run -m modal_scripts.modal_stable_ce_check` from `training/`.
 
 Proposed experiment, not run:
 1. Log the fraction of training tokens with margin > 16.6 from a published checkpoint.
