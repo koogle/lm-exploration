@@ -2,7 +2,7 @@
 
 ``campaign`` is a remote supervisor with an absolute deadline (launch + plan budget,
 at most 24 hours). Every child call gets a timeout bounded by the remaining budget,
-all call and sandbox IDs are recorded in a Modal Dict and on the volume, and
+all call IDs are recorded in a Modal Dict and on the volume, and
 outstanding work is cancelled at the deadline. Completed stages are cached on the
 volume, so a relaunch resumes instead of repeating them. Retries are disabled.
 
@@ -46,6 +46,7 @@ TIMEOUTS = {
     "prepare_group": 3600,
     "finalize_data": 1800,
     "build_mbpp": 900,
+    "grade_job": 3600,
     "teacher_job": 5400,
     "student_job": 6 * 3600,
 }
@@ -86,9 +87,6 @@ vllm_image = (
     .pip_install_from_requirements(str(HERE / "vllm-overlay.lock"))
 )
 vllm_image = with_source(vllm_image)
-grader_image = modal.Image.debian_slim(python_version="3.12").add_local_file(
-    HERE / "grader.py", "/grader/grader.py"
-)
 
 
 def campaign_dir(campaign):
@@ -238,6 +236,16 @@ def build_mbpp():
     return mbpp_items(rows)
 
 
+@app.function(
+    image=cpu_image, cpu=8, memory=16384, timeout=TIMEOUTS["grade_job"], retries=0
+)
+def grade_job(cases):
+    """Run hidden tests on CPU; no volume is mounted, so candidate code cannot touch runs."""
+    from grader import grade
+
+    return grade(cases)
+
+
 def run_vllm(mode, items, out):
     import subprocess
 
@@ -337,7 +345,6 @@ class Supervisor:
             "supervisor_call_id": call_id,
             # A restarted input (same call ID) adopts the calls it already spawned.
             "calls": adoptable(previous, call_id),
-            "sandboxes": {},
             "status": "running",
         }
         self.save()
@@ -391,46 +398,20 @@ class Supervisor:
                 time.sleep(20)
         return results, errors
 
-    def sandbox_grade(self, label, cases):
+    def grade(self, label, cases):
+        """Grade cases in a CPU child (``grade_job``) like any other recorded call."""
         if not cases:
             return {}
-        budget = min(3600, remaining(self.deadline))
-        if budget < 300:
-            raise TimeoutError("not enough time left to grade")
-        sandbox_app = modal.App.lookup(
-            "lm-distillation-validation-grader", create_if_missing=True
-        )
-        sandbox = modal.Sandbox.create(
-            "python",
-            "/grader/grader.py",
-            app=sandbox_app,
-            image=grader_image,
-            block_network=True,
-            timeout=budget,
-            cpu=8.0,
-            memory=8192,
-        )
-        self.state["sandboxes"][label] = sandbox.object_id
-        self.save()
-        sandbox.stdin.write(json.dumps(cases).encode())
-        sandbox.stdin.write_eof()
-        sandbox.stdin.drain()
-        output = sandbox.stdout.read()
-        sandbox.wait()
-        if sandbox.returncode != 0:
-            raise RuntimeError(f"grader failed: {sandbox.stderr.read()[-2000:]}")
-        return json.loads(output)
+        results, errors = self.wait({label: self.spawn(label, "grade_job", cases)})
+        if errors:
+            raise RuntimeError(f"grading failed: {errors}")
+        return results[label]
 
     def cancel_all(self):
         failures = {}
         for label, entry in self.state["calls"].items():
             try:
                 modal.FunctionCall.from_id(entry["id"]).cancel()
-            except modal.exception.Error as error:
-                failures[label] = repr(error)[:500]
-        for label, sandbox_id in self.state["sandboxes"].items():
-            try:
-                modal.Sandbox.from_id(sandbox_id).terminate()
             except modal.exception.Error as error:
                 failures[label] = repr(error)[:500]
         self.state["cancel_failures"] = failures
@@ -460,7 +441,7 @@ def grade_completions(supervisor, label, items, completions):
         for item in items
         if (completions.get(item["id"]) or {}).get("code")
     ]
-    return supervisor.sandbox_grade(label, cases)
+    return supervisor.grade(label, cases)
 
 
 @app.function(
@@ -614,7 +595,7 @@ def campaign(plan, deadline):
                 for r in candidates
                 if len(tests.get(r["id"], [])) >= 3
             ]
-            graded = supervisor.sandbox_grade("grade:curriculum-references", cases)
+            graded = supervisor.grade("grade:curriculum-references", cases)
             items, counts = curriculum_items(
                 candidates, tests, {k: v["passed"] for k, v in graded.items()}
             )
@@ -907,6 +888,7 @@ FUNCTIONS = {
     "prepare_group": prepare_group,
     "finalize_data": finalize_data,
     "build_mbpp": build_mbpp,
+    "grade_job": grade_job,
     "teacher_job": teacher_job,
     "student_job": student_job,
 }
@@ -983,19 +965,17 @@ def archive_checkpoints(
 
 @app.local_entrypoint()
 def stop():
-    """Cancel every recorded call and sandbox of the plan's campaign."""
+    """Cancel every recorded call of the plan's campaign."""
     state = registry.get(PLAN["campaign"]) or {}
     ids = [state.get("supervisor_call_id")] + [
         c["id"] for c in state.get("calls", {}).values()
     ]
     for call_id in filter(None, ids):
         modal.FunctionCall.from_id(call_id).cancel()
-    for sandbox_id in state.get("sandboxes", {}).values():
-        modal.Sandbox.from_id(sandbox_id).terminate()
     if state:
         registry[PLAN["campaign"]] = {
             **state,
             "status": "stopped",
             "stopped_at": time.time(),
         }
-    print(f"cancelled {len(ids)} calls and {len(state.get('sandboxes', {}))} sandboxes")
+    print(f"cancelled {len(ids)} calls")

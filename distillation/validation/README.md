@@ -67,9 +67,11 @@ position). The run pins the dataset commit it reads and records it in its result
   decodes through the student vocabulary; every evaluation records the prompt
   log-probability gap between vLLM (BF16) and the PyTorch checkpoint (FP32). The
   teacher also runs on vLLM. Hugging Face Transformers is not used.
-- **Grading.** Every completion runs in a network-blocked Modal Sandbox. Each case
-  gets its own interpreter with CPU, memory, file-size and process limits and must
-  print a random marker. Model output is never executed outside the sandbox.
+- **Grading.** A CPU Modal function (`grade_job`, no volume mounted) runs each case in
+  its own interpreter with a timeout; a case passes only if every test runs and the
+  process then prints a random marker. The campaign itself graded in a network-blocked
+  Modal Sandbox with resource limits; that was dropped afterwards as unnecessary for
+  short generated exercises.
 
 ## Run
 
@@ -83,7 +85,7 @@ uv pip install --python distillation/validation/.venv -r distillation/validation
 distillation/validation/.venv/bin/modal run distillation/validation/modal_app.py::main
 # Launch; the remote supervisor keeps running after the client disconnects.
 distillation/validation/.venv/bin/modal run --detach distillation/validation/modal_app.py::main --launch
-# Cancel every recorded call and sandbox of the campaign.
+# Cancel every recorded call of the campaign.
 distillation/validation/.venv/bin/modal run distillation/validation/modal_app.py::stop
 ```
 
@@ -95,8 +97,8 @@ campaign's shards and evaluation sets (`data_campaign`) and may skip the teacher
 **Runtime limits.** `campaign` has a 12-hour absolute deadline (`budget_seconds`,
 launch + 43,200 s). Every child gets `retries=0` and a timeout of
 `min(its own limit, remaining budget)`. Children: data prep 1 h, MBPP 15 min,
-teacher 90 min, student 6 h, grading sandbox 1 h. The supervisor runs non-preemptible,
-records all call and sandbox IDs in the Modal Dict `lm-distillation-validation-calls`
+teacher 90 min, student 6 h, grading 1 h. The supervisor runs non-preemptible,
+records all call IDs in the Modal Dict `lm-distillation-validation-calls`
 and in `supervision.json` on the volume, refuses to start work with less than 5
 minutes left, and cancels everything at the deadline or on a genuine failure. If the
 supervisor itself is interrupted, children keep running within their own capped
