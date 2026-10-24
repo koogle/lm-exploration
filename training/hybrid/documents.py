@@ -15,6 +15,15 @@ def document_ids(input_ids, eos_id):
     return starts.cumsum(1)
 
 
+def document_positions(documents):
+    """Position of each token within its own document, [B, T]."""
+    index = torch.arange(documents.size(1), device=documents.device).expand_as(documents)
+    start = torch.zeros_like(documents, dtype=torch.bool)
+    start[:, 0] = True
+    start[:, 1:] = documents[:, 1:] != documents[:, :-1]
+    return index - torch.where(start, index, 0).cummax(1).values
+
+
 def cu_seqlens(documents):
     """int32 offsets of every document in the flattened [B * T] batch.
 

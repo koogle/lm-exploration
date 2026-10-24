@@ -1,4 +1,4 @@
-"""Hybrid-family decoder backbone.
+"""Hybrid-family decoder: Kimi Delta Attention and full-attention layers.
 
 Pre-norm blocks reuse RMSNorm (fp32 statistics) and SwiGLU from model_10m, the
 SwiGLU without biases at a configurable width; tied embeddings and no biases.
@@ -20,7 +20,8 @@ from torch.nn import functional as F
 from torch.nn.attention.flex_attention import AuxRequest, create_block_mask, flex_attention
 from torch.utils.checkpoint import checkpoint
 
-from .documents import document_ids
+from .documents import document_ids, document_positions
+from .kda import KimiDeltaAttention
 
 __all__ = [
     "Attention",
@@ -41,6 +42,7 @@ class DocumentMask:
 
     def __init__(self, documents):
         self.documents = documents
+        self.positions = document_positions(documents)
         self._block = None
 
     @property
@@ -109,6 +111,9 @@ class HybridConfig:
     n_kv_head: int = 4
     head_dim: int = 128
     mlp_hidden: int = 4096
+    layer_pattern: tuple[str, ...] = ("kda", "kda", "kda", "full")
+    n_kda_head: int = 12
+    kda_conv_size: int = 4
     gate_bias_init: float = 3.0
     rope_base: float = 1_000_000.0
     norm_eps: float = 1e-5
@@ -118,7 +123,7 @@ class HybridConfig:
 
     def __post_init__(self):
         for name, value in asdict(self).items():
-            if name not in ("z_loss", "eos_id", "gate_bias_init") and value <= 0:
+            if name not in ("z_loss", "eos_id", "gate_bias_init", "layer_pattern") and value <= 0:
                 raise ValueError(f"{name} must be positive")
         if self.z_loss < 0:
             raise ValueError("z_loss must be non-negative")
@@ -128,6 +133,14 @@ class HybridConfig:
             raise ValueError("RoPE requires an even head dimension")
         if not 0 <= self.eos_id < self.vocab_size:
             raise ValueError("eos_id must be a token id")
+        if not self.layer_pattern or set(self.layer_pattern) - {"kda", "full"}:
+            raise ValueError("layer_pattern must list 'kda' and 'full' layers")
+        if self.n_layer % len(self.layer_pattern):
+            raise ValueError("n_layer must be a multiple of the layer pattern length")
+
+    @property
+    def layer_kinds(self):
+        return tuple(self.layer_pattern[i % len(self.layer_pattern)] for i in range(self.n_layer))
 
 
 def rope_tables(length, head_dim, base, device):
@@ -145,15 +158,6 @@ def apply_rope(x, cos, sin):
     cos, sin = cos.to(values.dtype), sin.to(values.dtype)
     rotated = torch.cat((first * cos - second * sin, first * sin + second * cos), dim=-1)
     return rotated.to(x.dtype)
-
-
-def document_positions(documents):
-    """Position of each token within its own document, [B, T]."""
-    index = torch.arange(documents.size(1), device=documents.device).expand_as(documents)
-    start = torch.zeros_like(documents, dtype=torch.bool)
-    start[:, 0] = True
-    start[:, 1:] = documents[:, 1:] != documents[:, :-1]
-    return index - torch.where(start, index, 0).cummax(1).values
 
 
 class Attention(nn.Module):
@@ -208,10 +212,13 @@ class Attention(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, config):
+    """Pre-norm block whose token mixer is KDA or full attention."""
+
+    def __init__(self, config, kind):
         super().__init__()
+        self.kind = kind
         self.mixer_norm = RMSNorm(config.n_embd, config.norm_eps)
-        self.mixer = Attention(config)
+        self.mixer = KimiDeltaAttention(config) if kind == "kda" else Attention(config)
         self.mlp_norm = RMSNorm(config.n_embd, config.norm_eps)
         self.mlp = SwiGLU(config.n_embd, config.mlp_hidden, bias=False)
         self.mlp.down.residual_output = True
@@ -252,7 +259,7 @@ class HybridLM(nn.Module):
         super().__init__()
         self.config = config
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embd)
-        self.blocks = nn.ModuleList(Block(config) for _ in range(config.n_layer))
+        self.blocks = nn.ModuleList(Block(config, kind) for kind in config.layer_kinds)
         self.final_norm = RMSNorm(config.n_embd, config.norm_eps)
         self.apply(self.initialize)
         cos, sin = rope_tables(config.block_size, config.head_dim, config.rope_base, None)
@@ -274,15 +281,15 @@ class HybridLM(nn.Module):
     def hidden_states(self, tokens):
         """Final normalized hidden states.
 
-        Each EOS ends a document: attention and RoPE positions restart after it.
+        Each EOS ends a document: attention, convolutions, KDA state and RoPE
+        positions restart after it.
         """
         length = tokens.size(1)
         if not 0 < length <= self.config.block_size:
             raise ValueError("sequence length must be within the model's block_size")
         documents = document_ids(tokens, self.config.eos_id)
-        positions = document_positions(documents)
-        rope = (self.rope_cos[positions][:, None], self.rope_sin[positions][:, None])
         mask = DocumentMask(documents)
+        rope = (self.rope_cos[mask.positions][:, None], self.rope_sin[mask.positions][:, None])
         x = self.token_embedding(tokens)
         for block in self.blocks:
             x = block(x, rope, mask)
