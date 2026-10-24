@@ -121,7 +121,7 @@ class CorpusBuilder:
                     if self.complete(name):
                         self.db.commit()
                         return
-                    doc, reason = adapt(source, row)
+                    doc, reason = adapt(source, row, (shards[shard_index], row_index))
                     if doc is not None:
                         if doc["split"] == "test":
                             reason = "excluded_test"

@@ -1,0 +1,19 @@
+{
+  "id": "climbmix-code-bpe-v1",
+  "status": "frozen",
+  "vocab_size": 32768,
+  "files": {
+    "config.json": "ef1f7e15eb8451f989ed2b380a09ce84aa3960ea03d2e472aa1f25a12cdb9a18",
+    "sample.json": "cf6e2241aba3ea6f3c779e54087cb01ffa3394cf5e5562807c244561d3de5cf9",
+    "tokenizer.json": "48aa6fb6d01d04067570637ca8a5ecced608f5df5585f9ce44a12c05c5281ae5",
+    "evaluation.json": "57a207587ae46a9a4293629a52f5653b6de980353f320b639c52e926c1c6ddc8"
+  },
+  "contract": "Immutable. Record tokenizer SHA256 in shards and checkpoints. Prior tokenizer data must be retokenized in a new version.",
+  "hub": {
+    "repo": "jfrick/climbmix-code-tokenizer",
+    "revision": "2d8a612c15915a56bd4ae77b69d78942f0eeba55",
+    "files": [
+      "tokenizer.json"
+    ]
+  }
+}

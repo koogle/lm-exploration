@@ -134,3 +134,142 @@ class RawTokenStreamTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unknown source"):
                 export_raw(root, root / "bad", max_passes={"missing": 1})
             self.assertFalse((root / "bad").exists())
+
+
+class PackedWindowTests(unittest.TestCase):
+    def test_documents_pack_into_full_windows_and_resume_anywhere(self):
+        from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, PAD_TOKEN_ID
+
+        source = {
+            "name": "web",
+            "weight_percent": 100,
+            "files": ["a"],
+            "repo": "test",
+            "revision": "0" * 40,
+        }
+        rows = [{"id": str(i), "text": "short note " * (1 + i % 3)} for i in range(40)]
+        rows = [r for r in rows if adapt(source, r)[0]["split"] == "train"]
+
+        def reader(source, shard, start):
+            yield from enumerate(rows[start:], start)
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            corpus = RawCorpus(root, {"sources": [source]})
+            corpus.prepare("web", reader=reader)
+            documents = corpus.db.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+            counts = corpus.counts("web")
+            corpus.close()
+            export_raw(root, root / "snapshot", max_passes={"web": 1})
+            path = root / "snapshot/manifest.json"
+
+            mixture = RawTokenMixture(path, context=16, allow_unreviewed=True)
+            blocks, states = [], []
+            while True:
+                states.append(mixture.state_dict())
+                try:
+                    blocks.append(mixture.next_block())
+                except StopIteration:
+                    break
+            mixture.close()
+            targets = [t for b in blocks for t in b["labels"] if t != LOSS_IGNORE_INDEX]
+            # Each content token and EOS is a target once; BOS never is.
+            self.assertEqual(len(targets), counts["train"])
+            self.assertEqual(targets.count(EOS_TOKEN_ID), documents)
+            self.assertNotIn(BOS_TOKEN_ID, targets)
+            # Short documents share windows: only the last window is padded.
+            self.assertLess(len(blocks), documents)
+            self.assertTrue(all(PAD_TOKEN_ID not in b["input_ids"] for b in blocks[:-1]))
+            for index in range(len(blocks)):
+                resumed = RawTokenMixture(path, context=16, allow_unreviewed=True)
+                resumed.load_state_dict(states[index])
+                self.assertEqual(resumed.next_block(), blocks[index])
+                resumed.close()
+
+
+class PassCapTests(unittest.TestCase):
+    def test_recipe_pass_cap_sets_capacity_and_loader_repeats(self):
+        source = {
+            "name": "small",
+            "weight_percent": 100,
+            "files": ["a"],
+            "repo": "test",
+            "revision": "0" * 40,
+            "max_passes": 3,
+        }
+        rows = [{"id": str(i), "text": "tiny source text " * 3} for i in range(30)]
+        rows = [r for r in rows if adapt(source, r)[0]["split"] == "train"]
+
+        def reader(source, shard, start):
+            yield from enumerate(rows[start:], start)
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            corpus = RawCorpus(root, {"sources": [source]})
+            corpus.prepare("small", reader=reader)
+            train = corpus.counts("small")["train"]
+            report = corpus.report(train * 3)
+            corpus.close()
+            self.assertEqual(report["sources"]["small"]["minimum_unique_train_tokens"], train)
+            self.assertTrue(report["sources"]["small"]["capacity_sufficient"])
+            self.assertEqual(report["supported_mixture_exposures"], train * 3)
+            export_raw(root, root / "snapshot")
+            mixture = RawTokenMixture(
+                root / "snapshot/manifest.json", context=8, allow_unreviewed=True
+            )
+            total = 0
+            while True:
+                try:
+                    total += mixture.next_block()["loss_tokens"]
+                except StopIteration:
+                    break
+            mixture.close()
+            self.assertEqual(total, train * 3)
+
+
+class PrefetchedRawTests(unittest.TestCase):
+    def test_prefetch_matches_direct_batches_and_resumes(self):
+        from training_data.prefetch import PrefetchedBatches
+
+        source = {
+            "name": "web",
+            "weight_percent": 100,
+            "files": ["a"],
+            "repo": "test",
+            "revision": "0" * 40,
+        }
+        rows = [
+            {"id": str(i), "text": f"packed prefetch text {i} " * (1 + i % 5)} for i in range(400)
+        ]
+        rows = [r for r in rows if adapt(source, r)[0]["split"] == "train"]
+
+        def reader(source, shard, start):
+            yield from enumerate(rows[start:], start)
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            corpus = RawCorpus(root, {"sources": [source]})
+            corpus.prepare("web", reader=reader)
+            corpus.close()
+            export_raw(root, root / "snapshot", max_passes={"web": 1})
+            path = root / "snapshot/manifest.json"
+
+            def make():
+                return RawTokenMixture(path, context=16, allow_unreviewed=True)
+
+            direct = make()
+            expected = [direct.next_batch(4) for _ in range(6)]
+            direct.close()
+            prefetched = PrefetchedBatches(make, 4, depth=3)
+            for x, y in expected[:3]:
+                got = prefetched.next_batch(4)
+                self.assertTrue(torch.equal(got[0], x) and torch.equal(got[1], y))
+                prefetched.acknowledge()
+            state = prefetched.state_dict()
+            prefetched.close()
+            resumed = PrefetchedBatches(make, 4, depth=3, state=state)
+            for x, y in expected[3:]:
+                got = resumed.next_batch(4)
+                self.assertTrue(torch.equal(got[0], x) and torch.equal(got[1], y))
+                resumed.acknowledge()
+            resumed.close()

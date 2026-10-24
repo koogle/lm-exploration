@@ -63,7 +63,9 @@ def worker(
                 output / "source" / folder,
                 ignore=shutil.ignore_patterns("__pycache__"),
             )
-        shutil.copytree("/project/tokenizer/structured-code-v1", output / "tokenizer")
+        from training_data.subword import DEFAULT_FOLDER
+
+        shutil.copytree(DEFAULT_FOLDER, output / "tokenizer")
         shutil.copyfile(manifest, output / "data-manifest.json")
         (output / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
         request = output / "request.json"

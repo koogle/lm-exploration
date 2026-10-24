@@ -206,7 +206,8 @@ class LiveTokenMixture(TokenMixture):
                 self.streams[name].close()
                 continue
             row, location = item
-            document, _reason = adapt(self.sources[name], row)
+            source = self.sources[name]
+            document, _reason = adapt(source, row, (source["files"][location[1]], location[2]))
             if document is None or not self._admit(document, location, cursor["pass"]):
                 continue
             if document["split"] != self.split:

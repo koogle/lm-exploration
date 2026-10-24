@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-TOKENIZER_SHA256 = "add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9"
+TOKENIZER_SHA256 = "48aa6fb6d01d04067570637ca8a5ecced608f5df5585f9ce44a12c05c5281ae5"
 VOCAB_SIZE = 32768
 
 # Vocabulary IDs fixed by the frozen tokenizer artifact.
@@ -22,7 +22,7 @@ FIRST_CONTENT_TOKEN_ID = 4  # IDs below this are reserved, not document content.
 
 # Loss-label sentinel, NOT a vocabulary ID. PyTorch ignores these targets.
 LOSS_IGNORE_INDEX = -100
-DEFAULT_FOLDER = Path(__file__).resolve().parents[1] / "tokenizer/structured-code-v1"
+DEFAULT_FOLDER = Path(__file__).resolve().parents[1] / "tokenizer/climbmix-code-v1"
 
 
 def digest(path):
@@ -33,11 +33,24 @@ def digest(path):
     return value.hexdigest()
 
 
+def fetch_hub_files(folder, manifest):
+    """Download large frozen files kept on HF at their pinned revision; Git holds the rest."""
+    hub = manifest.get("hub")
+    if hub is None:
+        return
+    from huggingface_hub import hf_hub_download
+
+    for name in hub["files"]:
+        if not (folder / name).exists():
+            hf_hub_download(hub["repo"], name, revision=hub["revision"], local_dir=folder)
+
+
 def load_frozen(folder=DEFAULT_FOLDER):
     from tokenizers import Tokenizer
 
     folder = Path(folder)
     manifest = json.loads((folder / "freeze-manifest.json").read_text())
+    fetch_hub_files(folder, manifest)
     if manifest["files"]["tokenizer.json"] != TOKENIZER_SHA256:
         raise ValueError("Unexpected tokenizer identity")
     for name, expected in manifest["files"].items():

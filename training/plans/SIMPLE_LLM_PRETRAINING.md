@@ -35,19 +35,38 @@ The user withdrew the 12-source scholarly/code mixture on 2026-10-23 after the
 124M runs in [what didn't work](../NEGATIVE_RESULTS.md) failed to give usable
 generations. The [data review](../references/pretraining-data-2026-10-23.md)
 found curated web mixtures and filtered code better than these sources.
-The next mixture is:
+The recipe is [`climbmix-code-v1`](../data/recipes/climbmix-code-v1.json):
 
-| Source | Replaces | Status |
-| --- | --- | --- |
-| ClimbMix: `karpathy/climbmix-400b-shuffle`, the copy nanochat trains on. Text-only Parquet without document IDs, 6,543 shards. Its card says MIT; NVIDIA's `nvidia/Nemotron-ClimbMix` is CC BY-NC 4.0. | FineWeb-Edu, FineMath, peS2o, PubMed, arXiv and the Common Pile books | Selected; recipe pending |
-| Private code dataset on HF | `codeparrot/codeparrot-clean-train` | Selected; dataset and adapter pending |
+| Source | Share | Pinned input | Replaces |
+| --- | ---: | --- | --- |
+| ClimbMix | 85% | `karpathy/climbmix-400b-shuffle`, the copy nanochat trains on; first 200 of 6,543 text-only shards | FineWeb-Edu, FineMath, peS2o, PubMed, arXiv and the Common Pile books |
+| Curated open-source code | 13% | `jfrick/curated-oss-code-20261019` (private): 49 established projects, latest snapshot per project, 210 `raw/` shards | `codeparrot/codeparrot-clean-train` |
+| MIT AI-attributed code | 2% | `jfrick/mit-claude-codex-code-20261019` (private): 36 repositories, 54 `raw/` shards | |
 
-Shares, capacity and the corpus recipe are not yet set. ClimbMix is non-commercial,
-which is acceptable for this personal research project; published models trained
-on it carry that restriction. The removed recipe is identical to the historical
-tokenizer's [`simple-llm-v1/recipe.json`](../tokenizer/simple-llm-v1/recipe.json),
-which stays as that tokenizer's provenance. Rewritten data is allowed but not
-planned for the first run because generation would take too long.
+Neither source has document IDs, so all three use `"split_by": "row"`. Code shards
+are interleaved across repositories so training never sits in one project.
+Code is 15% because the goal is coherent text and math, not coding. The MIT collection holds only about 40M training tokens. A first 85/10/5 split stopped in preparation because 5% of 2B needed 50M unique tokens under the two-pass limit, so the running 2B run uses 85/13/2. Later runs can instead raise the MIT source's `max_passes`. ClimbMix has
+little explicit math; math ability is to come from fine-tuning on GSM8K-style data
+after pretraining.
+
+ClimbMix's card says MIT, but NVIDIA's `nvidia/Nemotron-ClimbMix` is CC BY-NC 4.0.
+The curated code includes GPL projects such as Linux. Both are acceptable for this
+personal research project; published models must carry those restrictions.
+The removed 12-source recipe is identical to the historical tokenizer's
+[`simple-llm-v1/recipe.json`](../tokenizer/simple-llm-v1/recipe.json), which stays as
+that tokenizer's provenance. Rewritten data is allowed but not planned for the
+first run because generating it would take too long.
+
+## First run and next steps (2026-10-23)
+
+1. **Pretrain** the 124M model on 2B tokens with
+   [`workflows/climbmix-124m-2b.json`](../workflows/climbmix-124m-2b.json):
+   three H100s, about 8 hours of training, inside the 24-hour launch deadline.
+2. **Look at what we get:** held-out loss per source, fixed-prompt samples and
+   the repetition suite. Continue to 5B if the samples improve.
+3. **Fine-tune for math** on GSM8K-style data, such as TinyGSM or teacher-generated
+   traces, then score GSM8K, SVAMP and GSM-Symbolic by exact match. Screen
+   training data against the test sets.
 
 ## Streaming, storage and capacity
 
@@ -70,34 +89,21 @@ Before a substantial GPU run:
    decisions. Persist stream cursors, shuffle RNG state and shard hashes so a
    restart does not masquerade as fresh data.
 4. Record unique tokens separately from exposures and effective passes per source.
-   Initial policy: at most two passes per source; expand eligible sources or
-   explicitly revise the plan if capacity cannot support a target share.
+   Default policy: at most two passes per source. A recipe source may set
+   `max_passes` up to 16 (revised 2026-10-24): a small, high-quality source inside a
+   larger mixture tolerates many repeats ([arXiv 2605.12715](https://arxiv.org/html/2605.12715v2)
+   found optimal repetition around 15–20).
 5. Mix by actual trained token counts, mask padding, and document EOS/packing
    policy. Do not reuse the small pilot/tokenizer cache to reach billions.
 
-## Tokenizer: code-focused 32K default
+## Tokenizer: mixture 32K default
 
-The repository default is [`structured-code-v1`](../tokenizer/structured-code-v1/),
-a 32,768-entry byte-level BPE trained on approximately 64 MiB on Modal.
-The user selected this tokenizer for the model's code and tool-calling focus.
-
-- Fitting mixture: 40% Python, 20% JSON, 20% Git diffs, 20% tool-call formats by bytes.
-- Same complete byte alphabet and pretokenization rules as the original tokenizer;
-  no normalization, automatic boundaries, padding or truncation.
-- Special IDs: PAD 0, BOS 1, EOS 2, UNK 3. Model vocabulary size must be 32,768.
-- Exact artifact SHA256: `add5b2c7542e4efded329735825ecdcb94df1432617c3d3e4b7508aa459432f9`.
-- Published at [Simple LLM tokenizer](https://huggingface.co/jfrick/scholarly-code-tokenizer).
-- Compared with the earlier 2 GiB / 32K default: 13.97% fewer tokens on tool-format
-  fixtures, 11.83% fewer on diffs, 8.21% fewer on JSON and 2.81% fewer on Python;
-  13.99% more tokens on the simple LLM mixture. This trade-off was accepted explicitly.
-- JSON/diff/tool examples are controlled generated fixtures, not production traces.
-  See the [full comparison](https://huggingface.co/datasets/jfrick/lm-exploration-results/blob/main/training/results/tokenizer-structured/structured-code-v1/REPORT.md).
-
-The old `simple-llm-v1` 16K assets and all prior measured candidates remain
-immutable historical versions. Existing encoded shards/checkpoints are not compatible
-with the new token IDs. Use new staging/snapshot versions and retokenize before model
-training; the loaders reject mismatched tokenizer identities. Do not change an old
-checkpoint's vocabulary metadata to pretend it uses this tokenizer.
+The default is [`climbmix-code-v1`](../tokenizer/climbmix-code-v1/), fitted on the
+new recipe's training split with one token per digit. It packs 25% more ClimbMix
+text into each token than the earlier code-focused `structured-code-v1`, and is
+slightly better on code; see the [tokenizer guide](../tokenizer/README.md#default-tokenizer).
+Special IDs (PAD 0, BOS 1, EOS 2, UNK 3) and the 32,768 vocabulary are unchanged.
+Snapshots and checkpoints made with earlier tokenizers must be retokenized.
 
 ## Training and evaluation sequence
 

@@ -6,9 +6,12 @@ never write SQLite. Uncommitted prefetched rows can be replayed after a restart.
 """
 
 import hashlib
+import os
+import sqlite3
 import time
 import zlib
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from .persistent_stream import PersistentStream
 from .raw_corpus import RawCorpus
@@ -89,7 +92,7 @@ class FastRawCorpus(RawCorpus):
             rows = stream(source, source["files"][shard_index], start)
             try:
                 for row_index, row in rows:
-                    document, reason = adapt(source, row)
+                    document, reason = adapt(source, row, (source["files"][shard_index], row_index))
                     item = {
                         "row": row_index,
                         "shard": shard_index,
@@ -217,16 +220,29 @@ class FastRawCorpus(RawCorpus):
             for source in needed:
                 name = source["name"]
                 batch = self.futures.pop(name).result()
+                # Fetch and tokenize the next batch while this one is written. A
+                # prefetch that turns out unneeded is uncommitted and discarded.
+                if batch["cursor"][0] < len(source["files"]):
+                    self.futures[name] = self.pool.submit(self._fetch, source, batch["cursor"])
                 self._write(source, batch)
-                status = self.report(target_tokens)["sources"][name]
-                if not self.enough(status) and not status["upstream_exhausted"]:
-                    self.futures[name] = self.pool.submit(self._fetch, source, self.cursor(name))
             if time.monotonic() - started >= max_seconds:
                 return {
                     "ready": False,
                     "scanned": self.scanned - before,
                     "seconds": time.monotonic() - started,
                 }
+
+    def persist(self, path):
+        """Copy the committed database to `path` atomically (e.g. local disk -> volume)."""
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        partial = path.with_name(path.name + ".partial")
+        target = sqlite3.connect(partial)
+        try:
+            self.db.backup(target)
+        finally:
+            target.close()
+        os.replace(partial, path)
 
     def close(self):
         self.pool.shutdown(wait=True, cancel_futures=True)

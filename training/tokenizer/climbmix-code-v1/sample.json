@@ -1,0 +1,30 @@
+{
+  "recipe_sha256": "320b4e5219aba8a78dd675847041653c55eb96f74ef57abdc54d472f2c90ea5f",
+  "train_bytes_target": 268435456,
+  "eval_bytes_target": 16777216,
+  "files_per_source": 64,
+  "sources": {
+    "climbmix": {
+      "train": 228529615,
+      "validation": 14743727,
+      "documents": 81269,
+      "files": 64
+    },
+    "code_curated": {
+      "train": 31454416,
+      "validation": 3682462,
+      "documents": 5130,
+      "files": 64
+    },
+    "code_mit": {
+      "train": 13964697,
+      "validation": 1733957,
+      "documents": 1586,
+      "files": 54
+    }
+  },
+  "train_sha256": "f4b611bc901131b6dd4a8824b30024fb7e38c3f56be6a83a1fed482549f4f1df",
+  "eval_sha256": "71e377e1008755b83876ebab70f509df46974387d270ca218ceb7a7263ade543",
+  "recipe_id": "climbmix-code-v1",
+  "fit_seconds": 31.667878392000034
+}

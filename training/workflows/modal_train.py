@@ -25,6 +25,18 @@ data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
 run_volume = modal.Volume.from_name("lm-exploration-training")
 
 
+# How often preparation copies its local staging database to the data volume.
+PERSIST_SECONDS = 300
+
+
+def track_call(run_id, call_id, kind):
+    """Record a call so the deadline supervisor can cancel it."""
+    from workflows.deadline import track
+
+    track(Path("/runs/.calls") / run_id, call_id, kind)
+    run_volume.commit()
+
+
 def record(run_id, stage, **details):
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -43,12 +55,14 @@ def record(run_id, stage, **details):
     retries=0,
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
+    # Fetches the frozen tokenizer from its private HF repo if the image lacks it.
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
 )
-def train_segment(run_id, snapshot, bundle, provenance, resume="", max_steps=None):
+def train_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_seconds):
     from distributed.modal_train import worker
     from workflows.config import resolve_payload
 
-    policy, dataset, config = resolve_payload(bundle)
+    _, dataset, config = resolve_payload(bundle)
     settings = config.as_dict()
     return worker.local(
         run_id,
@@ -56,7 +70,7 @@ def train_segment(run_id, snapshot, bundle, provenance, resume="", max_steps=Non
         settings,
         provenance,
         resume,
-        policy.segment_seconds,
+        max_seconds,
         max_steps,
         dataset_root=dataset.root,
     )
@@ -82,9 +96,12 @@ def continue_training(
 ):
     from workflows.checks import check_progress, check_resume, validate_paths
     from workflows.config import resolve_payload
+    from workflows.deadline import bounded_timeout, segment_seconds
 
     policy, dataset, config = resolve_payload(bundle)
     settings = config.as_dict()
+    deadline = provenance["deadline_unix"]
+    track_call(run_id, modal.current_function_call_id(), "continue_training")
     if type(first_segment) is not int or not 0 <= first_segment < policy.max_segments:
         raise ValueError("Invalid first segment")
     validate_paths(f"{run_id}-s{first_segment:02d}", snapshot, initial_resume)
@@ -108,18 +125,22 @@ def continue_training(
                 completed_tokens=previous["total_loss_tokens"] if previous else 0,
                 pending_data_audits=provenance.get("pending_data_audits", []),
             )
-            report = train_segment.with_options(
+            timeout = bounded_timeout(deadline, policy.worker_timeout_seconds)
+            call = train_segment.with_options(
                 gpu=f"{policy.gpu}:{policy.world_size}",
                 cpu=4 * policy.world_size,
-                timeout=policy.worker_timeout_seconds,
-            ).remote(
+                timeout=timeout,
+            ).spawn(
                 segment_id,
                 snapshot,
                 bundle,
                 provenance,
                 resume,
                 policy.qualification_steps if segment < policy.qualification_segments else None,
+                segment_seconds(timeout, policy.segment_seconds),
             )
+            track_call(run_id, call.object_id, "train_segment")
+            report = call.get()
             if previous:
                 check_resume(previous, report)
             previous_tokens = previous["total_loss_tokens"] if previous else 0
@@ -150,7 +171,10 @@ def continue_training(
         if segment + 1 >= policy.max_segments:
             raise RuntimeError("Training reached the bounded session limit without completing")
         record(run_id, "continuing", completed_tokens=previous["total_loss_tokens"], resume=resume)
-        call = continue_training.spawn(run_id, snapshot, bundle, provenance, previous, segment + 1)
+        call = continue_training.with_options(timeout=bounded_timeout(deadline, 86400)).spawn(
+            run_id, snapshot, bundle, provenance, previous, segment + 1
+        )
+        track_call(run_id, call.object_id, "continue_training")
         return {"continuation_call_id": call.object_id, "resume": resume}
     except Exception as exc:
         record(run_id, "failed", error=f"{type(exc).__name__}: {exc}", resume=resume)
@@ -165,9 +189,12 @@ def continue_training(
     retries=0,
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
+    # Private code sources stream with the HF token.
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
 )
 def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=False):
     import os
+    import shutil
 
     from training_data.cached_shards import CachedShards
     from training_data.export_raw import export_raw
@@ -176,10 +203,14 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
 
     from workflows.checks import check_capacity, validate_paths
     from workflows.config import resolve_payload
+    from workflows.deadline import bounded_timeout
 
     policy, dataset, config = resolve_payload(bundle)
     settings = config.as_dict()
     validate_paths(run_id + "-s00", f"{version}/snapshots/{run_id}", "")
+    deadline = provenance["deadline_unix"]
+    bounded_timeout(deadline, 86400)
+    track_call(run_id, modal.current_function_call_id(), "prepare_and_launch")
     if dataset.mode != "prepare_raw":
         raise ValueError("Preparation requires a prepare_raw dataset config")
     data_root = Path("/data") / dataset.root
@@ -227,20 +258,33 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
                 pending_data_audits=manifest.get("pending", []),
             )
             provenance = {**provenance, "pending_data_audits": manifest.get("pending", [])}
-            call = continue_training.spawn(run_id, snapshot, bundle, provenance)
+            call = continue_training.with_options(timeout=bounded_timeout(deadline, 86400)).spawn(
+                run_id, snapshot, bundle, provenance
+            )
+            track_call(run_id, call.object_id, "continue_training")
             return {"training_call_id": call.object_id, "snapshot": snapshot, "data_reused": True}
+        # SQLite commits on the network volume are slow; stage on local disk and
+        # persist a consistent copy to the volume every few minutes and when ready.
+        local = Path("/tmp/staging") / version
+        local.mkdir(parents=True, exist_ok=True)
+        if (folder / "raw.sqlite").exists() and not (local / "raw.sqlite").exists():
+            shutil.copyfile(folder / "raw.sqlite", local / "raw.sqlite")
         corpus = FastRawCorpus(
-            folder,
+            local,
             recipe,
             workers=policy.source_workers,
             batch_size=policy.database_batch_size,
             reader=CachedShards(),
         )
+        persisted = time.monotonic()
         while True:
             progress = corpus.prepare_parallel(target, max_seconds=policy.preparation_chunk_seconds)
             report = corpus.report(target)
-            (folder / "capacity.json").write_text(json.dumps(report, indent=2) + "\n")
-            data_volume.commit()
+            if progress["ready"] or time.monotonic() - persisted >= PERSIST_SECONDS:
+                corpus.persist(folder / "raw.sqlite")
+                (folder / "capacity.json").write_text(json.dumps(report, indent=2) + "\n")
+                data_volume.commit()
+                persisted = time.monotonic()
             record(
                 run_id,
                 "preparing",
@@ -254,6 +298,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
             )
             if progress["ready"]:
                 break
+            bounded_timeout(deadline, 86400)
         check_capacity(report, target)
         corpus.close()
         corpus = None
@@ -278,7 +323,10 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
             pending_data_audits=manifest["pending"],
         )
         provenance = {**provenance, "pending_data_audits": manifest["pending"]}
-        call = continue_training.spawn(run_id, snapshot, bundle, provenance)
+        call = continue_training.with_options(timeout=bounded_timeout(deadline, 86400)).spawn(
+            run_id, snapshot, bundle, provenance
+        )
+        track_call(run_id, call.object_id, "continue_training")
         return {"training_call_id": call.object_id, "snapshot": snapshot}
     except Exception as exc:
         record(run_id, "failed", error=f"{type(exc).__name__}: {exc}")
@@ -326,8 +374,12 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
 
     from workflows.checks import validate_paths
     from workflows.config import resolve_payload
+    from workflows.deadline import bounded_timeout
 
     _, dataset, config = resolve_payload(bundle)
+    deadline = provenance["deadline_unix"]
+    bounded_timeout(deadline, 86400)
+    track_call(run_id, modal.current_function_call_id(), "launch_snapshot")
     if dataset.mode != "snapshot":
         raise ValueError("Snapshot launch requires a snapshot dataset config")
     validate_paths(run_id + "-s00", dataset.snapshot, resume or phase_from)
@@ -369,18 +421,48 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
         # A fresh seed run ID keeps the parent run untouched and passes resume path checks.
         resume = f"{run_id}-seed/step-000000000.pt"
         validate_paths(run_id + "-s00", dataset.snapshot, resume)
-        lineage = seed_phase.remote(
+        call = seed_phase.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
             phase_from, resume, str(manifest_path), bundle, note=f"workflow run {run_id}"
         )
+        track_call(run_id, call.object_id, "seed_phase")
+        lineage = call.get()
         record(run_id, "phase_seeded", seed=resume, parent=phase_from, lineage=lineage)
-    call = continue_training.spawn(
+    call = continue_training.with_options(timeout=bounded_timeout(deadline, 86400)).spawn(
         run_id,
         dataset.snapshot,
         bundle,
         provenance,
         initial_resume=resume,
     )
+    track_call(run_id, call.object_id, "continue_training")
     return {"training_call_id": call.object_id, "snapshot": dataset.snapshot}
+
+
+@app.function(
+    image=cpu_image,
+    cpu=0.25,
+    memory=512,
+    timeout=86400,
+    retries=0,
+    volumes={"/runs": run_volume},
+)
+def enforce_deadline(run_id, deadline_unix):
+    """Independent supervisor: cancel every recorded call of this launch at its deadline."""
+    from workflows.deadline import tracked_calls
+
+    status = Path("/runs") / run_id / "workflow.json"
+    while (remaining := deadline_unix - time.time()) > 0:
+        time.sleep(min(remaining, 300))
+        run_volume.reload()
+        if status.exists() and json.loads(status.read_text())["stage"] == "completed":
+            return {"stage": "completed"}
+    run_volume.reload()
+    cancelled = []
+    for call_id in tracked_calls(Path("/runs/.calls") / run_id):
+        modal.FunctionCall.from_id(call_id).cancel()
+        cancelled.append(call_id)
+    record(run_id, "deadline_cancelled", cancelled_calls=cancelled)
+    return {"stage": "deadline_cancelled", "cancelled_calls": cancelled}
 
 
 @app.local_entrypoint()
@@ -405,15 +487,28 @@ def main(
         f"{version}/snapshots/{run_id}" if dataset.mode == "prepare_raw" else dataset.snapshot
     )
     validate_paths(run_id + "-s00", snapshot, resume or phase_from)
+    from workflows.deadline import new_deadline
+
     provenance = {
         "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         "resolved_workflow": bundle,
+        # Every call this launch starts stops by this time.
+        "deadline_unix": new_deadline(),
     }
+    # The supervisor starts first so no work runs unsupervised.
+    supervisor = enforce_deadline.spawn(run_id, provenance["deadline_unix"])
+    print(
+        json.dumps(
+            {"deadline_unix": provenance["deadline_unix"], "supervisor": supervisor.object_id}
+        )
+    )
     if dataset.mode == "prepare_raw":
         if resume or phase_from:
             raise ValueError("Checkpoint resume requires a prepared snapshot dataset")
-        print(prepare_and_launch.remote(run_id, version, bundle, provenance, resume_preparation))
+        call = prepare_and_launch.spawn(run_id, version, bundle, provenance, resume_preparation)
+        print(call.get())
     else:
         if version or resume_preparation:
             raise ValueError("Snapshot datasets do not use version or resume_preparation")
-        print(launch_snapshot.remote(run_id, bundle, provenance, resume, phase_from))
+        call = launch_snapshot.spawn(run_id, bundle, provenance, resume, phase_from)
+        print(call.get())

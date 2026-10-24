@@ -42,7 +42,7 @@ data_image = (
     .pip_install("tokenizers==0.22.2", "huggingface-hub==1.33.0")
     .env({"PYTHONPATH": "/project"})
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
-    .add_local_dir("tokenizer/structured-code-v1", "/project/tokenizer/structured-code-v1")
+    .add_local_dir("tokenizer", "/project/tokenizer", ignore=["__pycache__"])
     .add_local_dir("trainer", "/project/trainer", ignore=["__pycache__"])
     .add_local_dir("modal_scripts", "/project/modal_scripts", ignore=["__pycache__"])
 )

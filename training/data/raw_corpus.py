@@ -11,7 +11,21 @@ import zlib
 from pathlib import Path
 
 from .simple_llm import SPLIT_VERSION, adapt, canonical, stream_rows
-from .subword import FIRST_CONTENT_TOKEN_ID, TOKENIZER_SHA256, digest, load_frozen
+from .subword import FIRST_CONTENT_TOKEN_ID, TOKENIZER_SHA256, load_frozen
+
+# Raise when adapters, filters, deduplication or stored fields change what a
+# recipe prepares. Unrelated code edits keep prepared data reusable.
+PREPARATION_VERSION = "raw-prep-v1"
+
+
+def staging_identity(recipe):
+    """What determines prepared data: recipe, tokenizer, split rule and preparation version."""
+    return {
+        "recipe": recipe,
+        "tokenizer": TOKENIZER_SHA256,
+        "split": SPLIT_VERSION,
+        "preparation": PREPARATION_VERSION,
+    }
 
 
 class RawCorpus:
@@ -33,16 +47,7 @@ class RawCorpus:
             CREATE TABLE IF NOT EXISTS decisions (
                 source TEXT, reason TEXT, count INTEGER, PRIMARY KEY(source, reason));
         """)
-        identity = canonical(
-            {
-                "recipe": recipe,
-                "tokenizer": TOKENIZER_SHA256,
-                "split": SPLIT_VERSION,
-                "implementation_sha256": digest(__file__),
-                "adapter_sha256": digest(Path(__file__).with_name("simple_llm.py")),
-                "tokenizer_loader_sha256": digest(Path(__file__).with_name("subword.py")),
-            }
-        )
+        identity = canonical(staging_identity(recipe))
         previous = self.db.execute("SELECT value FROM settings WHERE id=1").fetchone()
         if previous and previous[0] != identity:
             self.db.close()
@@ -72,7 +77,7 @@ class RawCorpus:
             rows = reader(source, source["files"][shard], cursor[1] if shard == cursor[0] else 0)
             try:
                 for row_index, row in rows:
-                    document, reason = adapt(source, row)
+                    document, reason = adapt(source, row, (source["files"][shard], row_index))
                     with self.db:
                         if document is not None:
                             content = document["text"].encode()
@@ -142,12 +147,14 @@ class RawCorpus:
         sources = {}
         for source in self.recipe["sources"]:
             counts = self.counts(source["name"])
-            needed = (target_tokens * source["weight_percent"] + 199) // 200
+            passes = source.get("max_passes", 2)
+            needed = -(-target_tokens * source["weight_percent"] // (100 * passes))
             cursor = self.db.execute(
                 "SELECT shard,row FROM cursors WHERE source=?", (source["name"],)
             ).fetchone() or (0, 0)
             sources[source["name"]] = {
                 "weight_percent": source["weight_percent"],
+                "max_passes": passes,
                 "train_loss_tokens": counts.get("train", 0),
                 "validation_loss_tokens": counts.get("validation", 0),
                 "minimum_unique_train_tokens": needed,
@@ -156,7 +163,8 @@ class RawCorpus:
                 "cursor": cursor,
             }
         capacity = min(
-            s["train_loss_tokens"] * 200 // s["weight_percent"] for s in sources.values()
+            s["train_loss_tokens"] * s["max_passes"] * 100 // s["weight_percent"]
+            for s in sources.values()
         )
         return {
             "target_tokens": target_tokens,

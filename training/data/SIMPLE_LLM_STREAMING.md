@@ -83,11 +83,13 @@ data_state = data.state_dict()
 # On resume, construct the same loader and call data.load_state_dict(data_state).
 ```
 
-Windows are document-local, with explicit BOS input and loss-bearing EOS target.
-Long documents use contiguous windows with one token of input/target overlap.
-PAD input is 0 and padded targets are -100. Each content token and EOS receives
-loss exactly once per pass. Documents are not concatenated across parents.
-This sacrifices some packing efficiency for a simple boundary/masking contract.
+The raw loader packs each source's documents, as `BOS ids EOS`, into full windows
+with one token of input/target overlap between consecutive windows. Attention is
+not masked at document boundaries. BOS is an input but never a target, and each
+content token and EOS receives loss exactly once per pass. Only a source's last
+window in a pass is padded (PAD input 0, target -100). Packing replaced
+document-local windows on 2026-10-23: ClimbMix documents average about 600 tokens,
+so document-local 2,048-token windows were about two-thirds padding.
 
 The scheduler selects the source with the lowest cumulative loss tokens divided
 by its weight. Shares converge with a window-sized discrepancy, rather than being
@@ -136,17 +138,16 @@ default. Preparation is not a claim that these gates have passed:
   is absent. This implementation explicitly uses `simple-llm-parent-v2`; recover
   and reconcile the tokenizer fitting/held-out assignments before relying on its
   evaluation split. It does not claim compatibility with the old split.
-- Book chapters group by book identifiers and code files by repository. Paper
-  IDs and book identities still need reconciliation across different datasets.
-  Exact duplicate contents are retained once; a conflicting split quarantines
-  that content entirely in subsequent snapshots. Deduplication is limited to the
-  current staging database. Global near deduplication is still required.
-- Code licenses are matched case-insensitively to the plan's five SPDX IDs.
-  Generated-code flags are filtered. Original metadata, repository/path and the
-  pinned dataset revision are preserved. CodeParrot does not necessarily provide
-  an original repository commit; a dataset pin is not that missing commit.
-  Record-level provenance/eligibility, code quality, credential/PII and benchmark
-  contamination audits remain pending.
+- Splits are 80% train, 10% validation and 10% test, hashed from each document's
+  parent. By default a document is identified by its `id` or `url` field and rows
+  without one are rejected. A recipe source with `"split_by": "row"` has no
+  document IDs (for example the pre-shuffled ClimbMix text): its split is sampled
+  from the row's pinned shard and row index, which stays stable while the revision
+  is pinned. Exact duplicate contents are retained once; a conflicting split
+  quarantines that content entirely in subsequent snapshots. Deduplication is
+  limited to the current staging database. Global near deduplication is still
+  required, as are record-level provenance/eligibility, credential/PII and
+  benchmark contamination audits.
 - Counts are measured only for scanned, accepted records, with content tokens
   plus EOS and separately reported train/validation counts. The two-pass exposure
   ceiling and 20B target comparison are **observations of this snapshot**, not

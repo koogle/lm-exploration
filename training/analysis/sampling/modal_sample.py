@@ -32,6 +32,14 @@ checkpoint_image = image(
     "pydantic>=2.11,<3", "tokenizers==0.22.2", "huggingface-hub==1.33.0", "safetensors>=0.4"
 )
 transformers_image = image("transformers==4.51.3", "huggingface-hub==0.30.2", "safetensors")
+# Unpublished training checkpoints load with this checkout's model code, verified against
+# the source hashes the checkpoint recorded.
+volume_image = (
+    image("pydantic>=2.11,<3", "tokenizers==0.22.2")
+    .add_local_dir("100m", "/project/model_100m", ignore=["__pycache__", "images"])
+    .add_local_dir("10m", "/project/model_10m", ignore=["__pycache__"])
+    .add_local_dir("tokenizer", "/project/tokenizer", ignore=["__pycache__", "research"])
+)
 app = modal.App("sampling-recipe")
 volume = modal.Volume.from_name("lm-exploration-training")
 limits = {
@@ -149,6 +157,58 @@ def open_checkpoints(spec, done):
         yield info, wrapped
 
 
+def open_volume(spec, done):
+    """Yield one training checkpoint from the run volume, verified like publication export."""
+    import importlib
+    from types import SimpleNamespace
+
+    import torch
+    from tokenizers import Tokenizer
+
+    name = spec["name"]
+    if name in done:
+        return
+    path = Path("/runs") / spec["checkpoint"]
+    # Only trusted checkpoints written by our own trainer on our own volume.
+    saved = torch.load(path, map_location="cpu", weights_only=False)
+    architecture = saved["architecture"]
+    module = importlib.import_module(architecture["module"])
+    definitions = {"model": module.__file__, **getattr(module, "MODEL_DEPENDENCIES", {})}
+    for key, source in definitions.items():
+        assert sha256(source) == saved["source_sha256"][key], f"model source differs: {key}"
+    tokenizer_path = Path("/project/tokenizer") / spec["tokenizer"] / "tokenizer.json"
+    tokenizer_hash = sha256(tokenizer_path)
+    assert tokenizer_hash == saved["data_identity"]["tokenizer_sha256"] == spec["tokenizer_sha256"]
+    model = module.GPT(module.ModelConfig(**architecture["config"]))
+    model.load_state_dict(saved["model"], strict=True)
+    model = model.cuda().eval()
+    assert all(torch.isfinite(p).all() for p in model.parameters())
+    assert sum(p.numel() for p in model.parameters()) == spec["parameters"]
+    tokenizer = Tokenizer.from_file(str(tokenizer_path))
+    ids = saved["special_tokens"]
+    info = {
+        "name": name,
+        "kind": "volume",
+        "checkpoint": spec["checkpoint"],
+        "checkpoint_sha256": sha256(path),
+        "step": saved.get("step"),
+        "trained_tokens": saved.get("tokens"),
+        "parameters": spec["parameters"],
+        "tokenizer_sha256": tokenizer_hash,
+    }
+    print(json.dumps(info), flush=True)
+    yield (
+        info,
+        SimpleNamespace(
+            forward=model,
+            encode=lambda p: [ids["bos"], *tokenizer.encode(p, add_special_tokens=False).ids],
+            decode=lambda generated: tokenizer.decode(generated, skip_special_tokens=True),
+            eos_token_id=ids["eos"],
+            device="cuda",
+        ),
+    )
+
+
 def open_transformers(spec, done):
     """Yield one Hugging Face Transformers model at a pinned commit, without remote code."""
     from types import SimpleNamespace
@@ -230,6 +290,11 @@ def sample_transformers(recipe, deadline):
     return run(recipe, deadline, open_transformers)
 
 
+@app.function(image=volume_image, memory=16384, **limits)
+def sample_volume(recipe, deadline):
+    return run(recipe, deadline, open_volume)
+
+
 @app.local_entrypoint()
 def main(recipe: str, output: str = ""):
     from sampling.recipe import load_recipe
@@ -237,7 +302,11 @@ def main(recipe: str, output: str = ""):
     spec = load_recipe(recipe)
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     kind = spec["models"][0]["kind"]
-    function = sample_checkpoints if kind == "checkpoint" else sample_transformers
+    function = {
+        "checkpoint": sample_checkpoints,
+        "transformers": sample_transformers,
+        "volume": sample_volume,
+    }[kind]
     report = function.remote(spec, deadline)
     path = Path(output or f"artifacts/sampling/{spec['name']}.json")
     path.parent.mkdir(parents=True, exist_ok=True)

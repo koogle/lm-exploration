@@ -41,6 +41,8 @@ def export_raw(folder, destination, *, max_passes=None, target_tokens=None):
                     for split in ("train", "validation")
                 },
             }
+            if "max_passes" in entry:
+                sources[entry["name"]]["max_passes"] = entry["max_passes"]
         if set(max_passes or {}) - set(sources):
             raise ValueError("Pass caps name an unknown source")
         for name, cap in (max_passes or {}).items():

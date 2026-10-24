@@ -1,0 +1,19 @@
+{
+  "model_config": "model_configs/modern-124m.json",
+  "dataset_config": "datasets/climbmix-code-v2-raw.json",
+  "target_tokens": 50000000,
+  "allow_unreviewed_data": true,
+  "pilot": true,
+  "gpu": "H100",
+  "world_size": 1,
+  "segment_seconds": 600,
+  "worker_timeout_seconds": 1800,
+  "max_segments": 2,
+  "segments_per_call": 2,
+  "qualification_segments": 1,
+  "qualification_steps": 2,
+  "source_workers": 3,
+  "tokenizer_threads": 8,
+  "database_batch_size": 1024,
+  "preparation_chunk_seconds": 20
+}
