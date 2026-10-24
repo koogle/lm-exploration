@@ -25,8 +25,7 @@ position). The run pins the dataset commit it reads and records it in its result
 2. **Data-quality control.** Qwen3.5-0.8B-Base (same tokenizer) evaluated before and
    after full fine-tuning on the first 50M and 200M positions of the same stream. If it
    does not improve, the data or the evaluation is the bottleneck, not student size.
-   The fine-tune used Hugging Face Transformers; that code was removed from this folder
-   afterwards (last present in commit `883cffe`) and its results are archived on HF.
+   Its training code is in commit `883cffe`; its results are archived on HF.
 3. **From-scratch ladder** (`plan.json`), all one pass over a nested prefix of one
    fixed chunk order (50M ⊂ 200M ⊂ 500M positions; no repeats):
 
@@ -66,12 +65,10 @@ position). The run pins the dataset commit it reads and records it in its result
   (`load_format="pt"`). `vllm_eval.py` generates from token IDs without a tokenizer and
   decodes through the student vocabulary; every evaluation records the prompt
   log-probability gap between vLLM (BF16) and the PyTorch checkpoint (FP32). The
-  teacher also runs on vLLM. Hugging Face Transformers is not used.
-- **Grading.** A CPU Modal function (`grade_job`, no volume mounted) runs each case in
-  its own interpreter with a timeout; a case passes only if every test runs and the
-  process then prints a random marker. The campaign itself graded in a network-blocked
-  Modal Sandbox with resource limits; that was dropped afterwards as unnecessary for
-  short generated exercises.
+  teacher also runs on vLLM.
+- **Grading.** A CPU Modal function (`grade_job`) runs each case in its own interpreter
+  with a timeout; a case passes only if every test runs and the process then prints a
+  random marker.
 
 ## Run
 
