@@ -11,6 +11,18 @@ Data: the private HF dataset `jfrick/qwen35-python-math-trajectories-20261022`
 (native Qwen3.5 token IDs plus the teacher's top-64 log probabilities per
 position). The run pins the dataset commit it reads and records it in its results.
 
+## Terms
+
+- **CE (cross-entropy) training:** the student learns only the token the teacher actually
+  wrote at each position (a one-hot target), the ordinary next-token objective.
+- **KD (knowledge distillation) training:** the student also learns the teacher's full
+  next-token probability distribution, stored as its top-16 tokens plus one bucket for the
+  remaining probability. The loss is `0.5 · CE + 0.5 · soft CE`, where soft CE is the
+  cross-entropy against that distribution.
+- **CE per byte (metric):** held-out cross-entropy in nats per UTF-8 byte of text, which
+  can be compared across vocabularies; lower is better.
+- **Pass@1:** the share of problems whose single greedy answer passes all hidden tests.
+
 ## Questions and arms
 
 1. **Evaluation and teacher ceiling.** Execution-graded pass@1 (greedy) on two sets:
@@ -35,10 +47,10 @@ position). The run pins the dataset commit it reads and records it in its result
    | `trim-large` | 18 × 832 | 16,384 trimmed | 149.7M / 163.4M | 50M, 200M, 500M |
    | `full-small` | 10 × 512 | 248,320 native | 31.5M / 158.7M | 200M (500M did not fit; see findings) |
 
-   Each cell is trained twice: plain cross-entropy (`ce`) and `0.5 · CE + 0.5 ·
-   soft CE` against the teacher (`kd`). `full-small` is the "150M total with Qwen's
-   vocabulary" shape. Compared with `trim-small` it isolates the vocabulary: same
-   backbone, so roughly 4× more compute goes into the output layer.
+   Each cell is trained twice, with CE (`-ce` runs) and with KD (`-kd` runs); see Terms.
+   `full-small` is the "150M total with Qwen's vocabulary" shape. Compared with
+   `trim-small` it isolates the vocabulary: same backbone, so roughly 4× more compute
+   goes into the output layer.
 
 ## Method
 
