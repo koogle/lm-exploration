@@ -1,5 +1,5 @@
 {
-  "campaign": "distill-validation-20261024-04-vllm-reeval",
+  "campaign": "distill-validation-20261024-05-vllm-native",
   "data_campaign": "distill-validation-20261023-01",
   "budget_seconds": 10800,
   "teacher": false,

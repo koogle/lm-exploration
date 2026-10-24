@@ -3,19 +3,19 @@
 Modes:
 - ``tests``: teacher writes hidden asserts for held-out curriculum problems.
 - ``solve``: teacher solves eval items through its chat template (the ceiling).
-- ``student``: an exported student (``export.py``) completes the training-format
-  prompt. vLLM runs without a tokenizer; prompts and outputs are student IDs mapped
-  through the student's vocabulary, and a parity check compares vLLM's prompt log
-  probabilities with the PyTorch checkpoint.
+- ``student``: a student completes the training-format prompt. vLLM runs our decoder
+  (``vllm_model.py``) on the training checkpoint itself, without a tokenizer; prompts
+  and outputs are student IDs mapped through the student's vocabulary, and a parity
+  check compares vLLM's prompt log probabilities with the PyTorch checkpoint.
 
 Usage:
     python vllm_eval.py tests|solve ITEMS.json OUT.json
-    python vllm_eval.py student ITEMS.json OUT.json --export DIR --checkpoint model.pt \
-        --tokenizer tokenizer.json
+    python vllm_eval.py student ITEMS.json OUT.json --model-dir DIR --tokenizer tokenizer.json
 """
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 
@@ -76,11 +76,11 @@ def teacher(mode, items):
     return {"results": results}
 
 
-def load_vocab(export_dir):
+def load_vocab(model_dir):
     import numpy as np
     from student import Vocabulary
 
-    arrays = np.load(Path(export_dir) / "vocab.npz")
+    arrays = np.load(Path(model_dir) / "vocab.npz")
     pieces = (
         tuple(arrays[k] for k in ("pieces", "offsets", "lengths"))
         if "pieces" in arrays
@@ -115,11 +115,15 @@ def parity(checkpoint, prompts, outputs):
     }
 
 
-def students(items, export_dir, checkpoint, tokenizer_path, max_tokens):
+def students(items, model_dir, tokenizer_path, max_tokens):
+    # Run the engine in this process so the model registered below is visible to it.
+    os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
     from tokenizers import Tokenizer
-    from vllm import LLM, SamplingParams
+    from vllm import LLM, ModelRegistry, SamplingParams
+    from vllm_model import ARCHITECTURE, SimpleLLMForCausalLM
 
-    vocab = load_vocab(export_dir)
+    ModelRegistry.register_model(ARCHITECTURE, SimpleLLMForCausalLM)
+    vocab = load_vocab(model_dir)
     tokenizer = Tokenizer.from_file(tokenizer_path)
     eos = int(vocab.encode([IM_END])[0])
     trimmed = vocab.size < len(vocab.table)
@@ -135,10 +139,12 @@ def students(items, export_dir, checkpoint, tokenizer_path, max_tokens):
         for item in items
     ]
     llm = LLM(
-        model=str(export_dir),
+        model=str(model_dir),
+        load_format="pt",  # the training checkpoint, model.pt
         skip_tokenizer_init=True,
+        enforce_eager=True,
         dtype="bfloat16",
-        max_model_len=json.loads((Path(export_dir) / "config.json").read_text())[
+        max_model_len=json.loads((Path(model_dir) / "config.json").read_text())[
             "max_position_embeddings"
         ],
         enable_prefix_caching=False,
@@ -171,7 +177,7 @@ def students(items, export_dir, checkpoint, tokenizer_path, max_tokens):
         }
     return {
         "results": results,
-        "parity": parity(checkpoint, prompts[:PARITY_PROMPTS], check),
+        "parity": parity(Path(model_dir) / "model.pt", prompts[:PARITY_PROMPTS], check),
     }
 
 
@@ -180,17 +186,14 @@ def main():
     parser.add_argument("mode", choices=("tests", "solve", "student"))
     parser.add_argument("items")
     parser.add_argument("out")
-    parser.add_argument("--export")
-    parser.add_argument("--checkpoint")
+    parser.add_argument("--model-dir")
     parser.add_argument("--tokenizer")
     parser.add_argument("--max-tokens", type=int, default=768)
     args = parser.parse_args()
     items = json.loads(Path(args.items).read_text())
     started = time.time()
     if args.mode == "student":
-        report = students(
-            items, args.export, args.checkpoint, args.tokenizer, args.max_tokens
-        )
+        report = students(items, args.model_dir, args.tokenizer, args.max_tokens)
     else:
         report = teacher(args.mode, items)
     report.update(mode=args.mode, seconds=time.time() - started)

@@ -4,6 +4,7 @@ import math
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import numpy as np
@@ -440,92 +441,31 @@ class CoveringVocabularyTest(unittest.TestCase):
         )  # teacher's top-1 (the token) maps to its first piece
 
 
-def llama_reference(tensors, config, tokens):
-    """Plain Llama forward (rotate_half RoPE) used only to check the export."""
-    from torch.nn import functional as F
-
-    def norm(x, weight):
-        return x * torch.rsqrt(x.square().mean(-1, keepdim=True) + 1e-5) * weight
-
-    heads, width = config["num_attention_heads"], config["hidden_size"]
-    head_dim = width // heads
-    x = tensors["model.embed_tokens.weight"][tokens]
-    length = tokens.size(-1)
-    frequencies = 10000.0 ** (-torch.arange(0, head_dim, 2).float() / head_dim)
-    angles = torch.outer(torch.arange(length).float(), frequencies)
-    cos, sin = torch.cat([angles.cos()] * 2, -1), torch.cat([angles.sin()] * 2, -1)
-
-    def rotate(t):
-        half = t[..., : head_dim // 2], t[..., head_dim // 2 :]
-        return t * cos + torch.cat([-half[1], half[0]], -1) * sin
-
-    for layer in range(config["num_hidden_layers"]):
-        p = f"model.layers.{layer}."
-        h = norm(x, tensors[p + "input_layernorm.weight"])
-        q, k, v = (
-            F.linear(
-                h,
-                tensors[p + f"self_attn.{n}_proj.weight"],
-                tensors[p + f"self_attn.{n}_proj.bias"],
-            )
-            .view(length, heads, head_dim)
-            .transpose(0, 1)
-            for n in "qkv"
-        )
-        a = F.scaled_dot_product_attention(rotate(q), rotate(k), v, is_causal=True)
-        x = x + F.linear(
-            a.transpose(0, 1).reshape(length, width),
-            tensors[p + "self_attn.o_proj.weight"],
-            tensors[p + "self_attn.o_proj.bias"],
-        )
-        h = norm(x, tensors[p + "post_attention_layernorm.weight"])
-        mlp = {
-            n: (tensors[p + f"mlp.{n}_proj.weight"], tensors[p + f"mlp.{n}_proj.bias"])
-            for n in ("gate", "up", "down")
-        }
-        x = x + F.linear(
-            F.silu(F.linear(h, *mlp["gate"])) * F.linear(h, *mlp["up"]), *mlp["down"]
-        )
-    x = norm(x, tensors["model.norm.weight"])
-    return x @ tensors["model.embed_tokens.weight"].T
-
-
-class ExportTest(unittest.TestCase):
-    def test_llama_export_reproduces_student_logits(self):
-        import export
-
-        torch.manual_seed(0)
-        config = student.ModelConfig(
-            vocab_size=50, block_size=32, n_layer=2, n_head=4, n_embd=32
-        )
-        model = student.GPT(config).eval()
-        for parameter in model.parameters():  # non-trivial biases and norms
-            torch.nn.init.normal_(parameter, std=0.1)
-        tokens = torch.randint(0, 50, (12,))
-        with torch.no_grad():
-            expected = model(tokens[None])[0]
-            tensors = export.llama_state(model.state_dict(), config.__dict__)
-            got = llama_reference(
-                tensors, export.llama_config(config.__dict__, 1, 2), tokens
-            )
-        self.assertLess(float((got - expected).abs().max()), 1e-4)
-
-    def test_export_writes_a_vllm_checkpoint(self):
-        import export
-
+class VllmModelDirTest(unittest.TestCase):
+    def test_model_dir_links_the_checkpoint_and_describes_it(self):
         config = student.ModelConfig(
             vocab_size=40, block_size=32, n_layer=1, n_head=2, n_embd=16
         )
         model = student.GPT(config)
         vocab = student.Vocabulary.full(40, bos=1)
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "model.pt"
-            torch.save({"model": model.state_dict(), "config": config.__dict__}, path)
-            out = export.export(path, vocab, 2, Path(tmp) / "hf")
+            checkpoint = Path(tmp) / "run" / "model.pt"
+            checkpoint.parent.mkdir()
+            torch.save(
+                {"model": model.state_dict(), "config": config.__dict__}, checkpoint
+            )
+            with unittest.mock.patch.object(jobs, "IM_END", 7):
+                out = jobs.vllm_model_dir(checkpoint, vocab, Path(tmp) / "vllm")
             written = json.loads((out / "config.json").read_text())
-            self.assertEqual(written["architectures"], ["LlamaForCausalLM"])
-            self.assertTrue((out / "model.safetensors").exists())
+            self.assertEqual(written["architectures"], ["SimpleLLMForCausalLM"])
+            self.assertEqual(written["num_hidden_layers"], 1)
+            self.assertEqual(written["eos_token_id"], 7)
+            self.assertEqual((out / "model.pt").resolve(), checkpoint.resolve())
             self.assertEqual(int(np.load(out / "vocab.npz")["bos"]), 1)
+            saved = torch.load(
+                out / "model.pt", weights_only=True
+            )  # what vLLM's pt loader does
+            self.assertEqual(set(saved["model"]), set(model.state_dict()))
 
 
 if __name__ == "__main__":

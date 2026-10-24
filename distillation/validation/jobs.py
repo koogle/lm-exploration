@@ -27,12 +27,56 @@ def load_vocab(manifest, kind):
     )
 
 
+def vllm_config(saved_config, bos, eos):
+    """config.json for vLLM: Llama-typed so it parses, naming our decoder class."""
+    width, heads = saved_config["n_embd"], saved_config["n_head"]
+    return {
+        "architectures": ["SimpleLLMForCausalLM"],  # vllm_model.ARCHITECTURE
+        "model_type": "llama",
+        "vocab_size": saved_config["vocab_size"],
+        "hidden_size": width,
+        "intermediate_size": (8 * width + 2) // 3,
+        "num_hidden_layers": saved_config["n_layer"],
+        "num_attention_heads": heads,
+        "num_key_value_heads": heads,
+        "head_dim": width // heads,
+        "max_position_embeddings": saved_config["block_size"],
+        "tie_word_embeddings": True,
+        "bos_token_id": bos,
+        "eos_token_id": eos,
+        "torch_dtype": "float32",
+    }
+
+
+def vllm_model_dir(checkpoint, vocab, out_dir):
+    """A vLLM model directory around the training checkpoint (linked, not converted)."""
+    import torch
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    saved = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    eos = int(vocab.encode([IM_END])[0])
+    atomic_json(out_dir / "config.json", vllm_config(saved["config"], vocab.bos, eos))
+    link = out_dir / "model.pt"
+    if link.is_symlink() or link.exists():
+        link.unlink()
+    link.symlink_to(Path(checkpoint).resolve())
+    arrays = {
+        "table": vocab.table,
+        "native": vocab.native,
+        "bos": np.asarray(vocab.bos),
+    }
+    if vocab.pieces is not None:
+        arrays.update(pieces=vocab.pieces, offsets=vocab.offsets, lengths=vocab.lengths)
+    np.savez(out_dir / "vocab.npz", **arrays)
+    return out_dir
+
+
 def student_run(settings, manifest, items, run_dir, deadline, eval_settings):
-    """Train (or load ``settings["checkpoint"]``), export to Llama and evaluate with vLLM."""
+    """Train (or load ``settings["checkpoint"]``), then evaluate the checkpoint with vLLM."""
     import subprocess
 
     import torch
-    from export import export
     from student import train, validate
 
     run_dir = Path(run_dir)
@@ -74,9 +118,7 @@ def student_run(settings, manifest, items, run_dir, deadline, eval_settings):
         checkpoint = run_dir / "model.pt"
         del model
         torch.cuda.empty_cache()
-    exported = export(
-        checkpoint, vocab, int(vocab.encode([IM_END])[0]), run_dir / "export"
-    )
+    model_dir = vllm_model_dir(checkpoint, vocab, run_dir / "vllm")
     items_path, out = run_dir / "eval-items.json", run_dir / "vllm.json"
     items_path.write_text(json.dumps(items))
     subprocess.run(
@@ -86,10 +128,8 @@ def student_run(settings, manifest, items, run_dir, deadline, eval_settings):
             "student",
             str(items_path),
             str(out),
-            "--export",
-            str(exported),
-            "--checkpoint",
-            str(checkpoint),
+            "--model-dir",
+            str(model_dir),
             "--tokenizer",
             manifest["tokenizer"],
             "--max-tokens",

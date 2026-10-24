@@ -848,7 +848,6 @@ WEIGHT_PATTERNS = [
     "students/*/model.pt",
     "students/*/settings.json",
     "students/*/summary.json",
-    "students/*/export/*",
 ]
 
 
