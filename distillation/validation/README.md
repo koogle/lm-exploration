@@ -137,6 +137,8 @@ intervals; loss is held-out CE per UTF-8 byte. Full outputs: see [Archive](#arch
 | Qwen3.5-9B teacher (ceiling) | – | 83.2% [76.1, 88.5] | 76.8% [72.6, 80.6] | – |
 | Qwen3.5-0.8B-Base, before | – | 10.2% [6.2, 16.4] | 12.9% [10.0, 16.4] | 0.305 |
 | Qwen3.5-0.8B-Base, fine-tuned | 50M | 62.0% [53.7, 69.7] | 41.7% [37.1, 46.4] | 0.171 |
+| Qwen3.5-0.8B-Base, fine-tuned CE ¹ | 200M | 78.8% [71.3, 84.8] | 42.9% [38.2, 47.6] | 0.153 |
+| Qwen3.5-0.8B-Base, fine-tuned KD ¹ | 200M | 81.0% [73.6, 86.7] | 44.0% [39.4, 48.8] | 0.151 |
 | trim-small CE | 50M | 8.0% [4.5, 13.8] | 0.2% [0.0, 1.3] | 0.493 |
 | trim-small CE | 200M | 35.0% [27.6, 43.3] | 4.0% [2.5, 6.3] | 0.291 |
 | trim-small CE | 500M | 49.6% [41.4, 57.9] | 9.1% [6.8, 12.2] | 0.241 |
@@ -158,6 +160,10 @@ Vocabulary at equal backbone (31.5M, 10 × 512) and 200M tokens:
 | 248,320 native | CE | 33.6% [26.2, 41.8] | 4.0% [2.5, 6.3] | 0.295 | 152.3 min |
 | 16,384 trimmed | KD | 32.8% [25.5, 41.1] | 4.2% [2.7, 6.6] | 0.287 | 23.2 min |
 | 248,320 native | KD | 31.4% [24.2, 39.6] | 4.4% [2.9, 6.8] | 0.289 | 151.8 min |
+
+¹ Campaign `distill-validation-20261023-03-qwen-200m`, after the control was sped up
+from 7.1K to 19–23K tokens/s (`fla-core` kernels and a soft loss without dense
+vocabulary temporaries).
 
 - **The data teaches the task.** Fine-tuning the pretrained 0.8B control on 50M tokens
   (about a tenth of the data) raised MBPP from 12.9% to 41.7% and the held-out set from
@@ -187,6 +193,10 @@ Vocabulary at equal backbone (31.5M, 10 × 512) and 200M tokens:
   [52.2, 68.4] held-out and 11.2% [8.6, 14.6] MBPP (413/427 parsed, CE/byte 0.206),
   within noise of the trimmed run. The words are now readable as pieces, but the
   training data never uses them, so the gap is knowledge rather than vocabulary.
+- **More data closes the in-distribution gap for the pretrained model, not MBPP.**
+  From 50M to 200M tokens the 0.8B rose from 62.0% to 78.8–81.0% held-out, close to the
+  teacher's 83.2%, while MBPP moved only from 41.7% to 42.9–44.0%. KD was within noise
+  of CE (slightly ahead on both sets and on loss).
 - **The from-scratch gap is general knowledge, not data.** The best student reaches
   63% held-out but only 14% MBPP, against 42% for the 0.8B model fine-tuned on a tenth
   of the data. Narrow exercises alone do not supply the Python knowledge MBPP needs.
@@ -217,4 +227,10 @@ Operational notes, negative ones included:
 
 ## Archive
 
-Shards: private HF dataset `jfrick/qwen35-distillation-shards-20261023`.
+- Training shards: private HF dataset `jfrick/qwen35-distillation-shards-20261023`.
+- Results, grades, completions, metrics and supervision records of campaigns
+  `distill-validation-20261023-01`, `-02-covering` and `-03-qwen-200m`: HF dataset
+  `jfrick/lm-exploration-results`, folder `distillation-validation/` (uploaded with
+  `modal_app.py::archive_outputs`, each file size-verified).
+- Model weights (`students/*/model.pt`, `control/*/model/`) remain on the Modal volume
+  `lm-exploration-distillation-validation` and are not yet archived.

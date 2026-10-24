@@ -884,6 +884,76 @@ def archive_shards(campaign, repo_id):
     return receipt
 
 
+RESULT_PATTERNS = ["*.json", "*.jsonl"]
+RESULT_IGNORE = [
+    "shards/*",
+    "hf-cache/*",
+    "*/model/*",
+    "*.pt",
+    "*.npy",
+    "tokenizer.json",
+]
+
+
+@app.function(
+    image=cpu_image,
+    cpu=2,
+    memory=8192,
+    timeout=2 * 3600,
+    retries=0,
+    volumes={"/runs": volume},
+    secrets=[hf_secret],
+)
+def archive_results(campaigns, repo_id, prefix):
+    """Upload campaign outputs (no shards or weights) to HF and verify each file."""
+    import fnmatch
+
+    from huggingface_hub import HfApi
+
+    volume.reload()
+    api = HfApi()
+    receipts = {}
+    for campaign in campaigns:
+        root = campaign_dir(campaign)
+        commit = api.upload_folder(
+            repo_id=repo_id,
+            repo_type="dataset",
+            folder_path=str(root),
+            path_in_repo=f"{prefix}/{campaign}",
+            allow_patterns=RESULT_PATTERNS,
+            ignore_patterns=RESULT_IGNORE,
+            commit_message=f"Archive {campaign} results",
+        )
+        local = {
+            str(p.relative_to(root)): p.stat().st_size
+            for p in root.rglob("*")
+            if p.is_file()
+            and any(
+                fnmatch.fnmatch(str(p.relative_to(root)), g) for g in RESULT_PATTERNS
+            )
+            and not any(
+                fnmatch.fnmatch(str(p.relative_to(root)), g) for g in RESULT_IGNORE
+            )
+        }
+        info = api.dataset_info(repo_id, revision=commit.oid, files_metadata=True)
+        remote = {e.rfilename: e.size for e in info.siblings}
+        missing = sorted(
+            n
+            for n, size in local.items()
+            if remote.get(f"{prefix}/{campaign}/{n}") != size
+        )
+        receipts[campaign] = {
+            "revision": commit.oid,
+            "files": len(local),
+            "mismatched": missing,
+        }
+        if missing:
+            raise RuntimeError(
+                f"{campaign}: {len(missing)} files differ on HF: {missing[:5]}"
+            )
+    return receipts
+
+
 FUNCTIONS = {
     "prepare_group": prepare_group,
     "finalize_data": finalize_data,
@@ -945,6 +1015,20 @@ def archive(repo_id: str = "jfrick/qwen35-distillation-shards-20261023"):
 def probe(imports_only: bool = False):
     """Run the 20-minute-bounded 0.8B throughput probe."""
     print(json.dumps(control_probe.remote(imports_only), indent=1))
+
+
+@app.local_entrypoint()
+def archive_outputs(
+    campaigns: str,
+    repo_id: str = "jfrick/lm-exploration-results",
+    prefix: str = "distillation-validation",
+):
+    """Archive comma-separated campaigns' result files to the HF results dataset."""
+    print(
+        json.dumps(
+            archive_results.remote(campaigns.split(","), repo_id, prefix), indent=1
+        )
+    )
 
 
 @app.local_entrypoint()
