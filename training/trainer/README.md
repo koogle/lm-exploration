@@ -52,6 +52,19 @@ preserved.
 Muon/AdamW implementation lives in `optimizers.py`; see the
 [matched comparison](../distributed/MUON_COMPARISON.md) for measured context.
 
+## Training loss
+
+Training and evaluation use `loss.cross_entropy`, which avoids Softmax Collapse
+([reading note](../references/softmax-fix-2026-10-24.md)). On CUDA it runs the fused
+kernel in `kernels/stable_ce.cu` (wrapped as a custom op by `stable_ce_cuda.py`); on
+CPU it runs the PyTorch port in `stable_softmax.py`. The dense loss in
+`backward_batch`, the model's chunked loss (`loss_fn` argument) and `evaluate_sources`
+all go through it. The shared Modal image (`../distributed/image.py`) is a CUDA devel
+image that prebuilds the kernel into `/opt/stable_ce`; a source change that does not
+match that build is JIT-compiled instead. Measured on the 124M recipe with three H100s:
+8.7% more tokens/s and 8 GiB less peak memory per GPU than `F.cross_entropy`, with
+matching losses (details in the reading note).
+
 ## Continued pretraining
 
 [`continued_pretraining.py`](continued_pretraining.py) starts a new data phase from a
