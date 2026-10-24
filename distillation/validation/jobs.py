@@ -6,7 +6,6 @@ from pathlib import Path
 
 import numpy as np
 from common import QWEN_ENDOFTEXT, QWEN_VOCAB, atomic_json
-from evalsets import parse_code_string, student_prompt
 
 IM_END = 248046  # teacher stop token at the end of every accepted document
 
@@ -28,99 +27,82 @@ def load_vocab(manifest, kind):
     )
 
 
-def complete(model, vocab, tokenizer, items, max_new, batch, device="cuda"):
-    """Greedy training-format completions; returns {id: {text, code, unknown}}."""
-    from student import UNK, generate
+def student_run(settings, manifest, items, run_dir, deadline, eval_settings):
+    """Train (or load ``settings["checkpoint"]``), export to Llama and evaluate with vLLM."""
+    import subprocess
 
-    eos = int(vocab.encode([IM_END])[0])
-    prompts = {
-        item["id"]: [vocab.bos]
-        + vocab.expand(
-            tokenizer.encode(
-                student_prompt(item["problem"]), add_special_tokens=False
-            ).ids
-        )[0].tolist()
-        for item in items
-    }
-    order = sorted(prompts, key=lambda key: len(prompts[key]))
-
-    def text_of(ids):
-        return tokenizer.decode(vocab.decode_native(ids), skip_special_tokens=False)
-
-    def finished(ids):
-        return parse_code_string(text_of(ids)) is not None
-
-    trimmed = vocab.size < QWEN_VOCAB
-    results = {}
-    for start in range(0, len(order), batch):
-        keys = order[start : start + batch]
-        outputs = generate(
-            model, [prompts[k] for k in keys], max_new, eos, finished, device=device
-        )
-        for key, ids in zip(keys, outputs):
-            text = text_of(ids)
-            results[key] = {
-                "text": text,
-                "code": parse_code_string(text),
-                "unknown_tokens": sum(1 for i in ids if i == UNK) if trimmed else 0,
-                "prompt_unknown_tokens": prompts[key].count(UNK) if trimmed else 0,
-                "generated_tokens": len(ids),
-            }
-    return results
-
-
-def student_run(
-    settings, manifest, items, run_dir, deadline, eval_settings, device="cuda"
-):
     import torch
+    from export import export
     from student import train, validate
-    from tokenizers import Tokenizer
 
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     atomic_json(run_dir / "settings.json", settings)
     vocab = load_vocab(manifest, settings["vocab"])
-    log_file = (run_dir / "metrics.jsonl").open("a")
+    if settings.get("checkpoint"):
+        checkpoint = Path("/runs") / settings["checkpoint"]
+        summary = {
+            **json.loads((checkpoint.parent / "summary.json").read_text()),
+            "source_checkpoint": settings["checkpoint"],
+        }
+    else:
+        log_file = (run_dir / "metrics.jsonl").open("a")
 
-    def log(entry):
-        entry = {"time": time.time(), **entry}
-        log_file.write(json.dumps(entry) + "\n")
-        log_file.flush()
-        print(json.dumps(entry), flush=True)
+        def log(entry):
+            entry = {"time": time.time(), **entry}
+            log_file.write(json.dumps(entry) + "\n")
+            log_file.flush()
+            print(json.dumps(entry), flush=True)
 
-    torch.backends.cuda.matmul.allow_tf32 = True
-    model, summary = train(
-        settings, manifest["train"], vocab, run_dir, log, deadline, device=device
+        torch.backends.cuda.matmul.allow_tf32 = True
+        model, summary = train(
+            settings, manifest["train"], vocab, run_dir, log, deadline
+        )
+        summary["vocabulary_size"] = vocab.size
+        started = time.time()
+        summary["validation"] = validate(
+            model,
+            manifest["heldout"],
+            vocab,
+            np.load(manifest["byte_lengths"]),
+            settings["validation_positions"],
+            window=settings["window"],
+        )
+        summary["validation_seconds"] = time.time() - started
+        log({"event": "validation", **summary["validation"]})
+        log_file.close()
+        checkpoint = run_dir / "model.pt"
+        del model
+        torch.cuda.empty_cache()
+    exported = export(
+        checkpoint, vocab, int(vocab.encode([IM_END])[0]), run_dir / "export"
     )
-    summary["vocabulary_size"] = vocab.size
-    started = time.time()
-    summary["validation"] = validate(
-        model,
-        manifest["heldout"],
-        vocab,
-        np.load(manifest["byte_lengths"]),
-        settings["validation_positions"],
-        window=settings["window"],
-        device=device,
+    items_path, out = run_dir / "eval-items.json", run_dir / "vllm.json"
+    items_path.write_text(json.dumps(items))
+    subprocess.run(
+        [
+            "python",
+            "/validation/vllm_eval.py",
+            "student",
+            str(items_path),
+            str(out),
+            "--export",
+            str(exported),
+            "--checkpoint",
+            str(checkpoint),
+            "--tokenizer",
+            manifest["tokenizer"],
+            "--max-tokens",
+            str(eval_settings["max_new_tokens"]),
+        ],
+        cwd="/validation",
+        check=True,
     )
-    summary["validation_seconds"] = time.time() - started
-    log({"event": "validation", **summary["validation"]})
-    tokenizer = Tokenizer.from_file(manifest["tokenizer"])
-    started = time.time()
-    completions = complete(
-        model,
-        vocab,
-        tokenizer,
-        items,
-        eval_settings["max_new_tokens"],
-        eval_settings["generation_batch"],
-        device=device,
-    )
-    summary["generation_seconds"] = time.time() - started
+    report = json.loads(out.read_text())
+    summary.update(parity=report["parity"], generation_seconds=report["seconds"])
     atomic_json(run_dir / "summary.json", summary)
-    atomic_json(run_dir / "completions.json", completions)
-    log_file.close()
-    return {"summary": summary, "completions": completions}
+    atomic_json(run_dir / "completions.json", report["results"])
+    return {"summary": summary, "completions": report["results"]}
 
 
 def wilson(passed, total, z=1.96):

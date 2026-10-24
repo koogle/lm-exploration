@@ -3,7 +3,6 @@
   "data_campaign": "distill-validation-20261023-01",
   "budget_seconds": 21600,
   "teacher": false,
-  "control": null,
   "prep_workers": 64,
   "heldout_workers": 2,
   "trimmed_vocab": 16384,
@@ -11,8 +10,7 @@
     "seed": 20261023,
     "curriculum_candidates": 600,
     "curriculum_max": 400,
-    "max_new_tokens": 768,
-    "generation_batch": 64
+    "max_new_tokens": 768
   },
   "student_defaults": {
     "window": 2048,

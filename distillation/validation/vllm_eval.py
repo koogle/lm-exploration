@@ -1,18 +1,25 @@
-"""vLLM generation for the teacher and the Qwen3.5-0.8B control (one GPU, greedy).
+"""vLLM generation for the teacher and the exported students (one GPU, greedy).
 
 Modes:
 - ``tests``: teacher writes hidden asserts for held-out curriculum problems.
 - ``solve``: teacher solves eval items through its chat template (the ceiling).
-- ``raw``: a base/fine-tuned model completes the training-format prompt.
+- ``student``: an exported student (``export.py``) completes the training-format
+  prompt. vLLM runs without a tokenizer; prompts and outputs are student IDs mapped
+  through the student's vocabulary, and a parity check compares vLLM's prompt log
+  probabilities with the PyTorch checkpoint.
 
-Usage: python vllm_eval.py MODE MODEL REVISION ITEMS.json OUT.json
+Usage:
+    python vllm_eval.py tests|solve ITEMS.json OUT.json
+    python vllm_eval.py student ITEMS.json OUT.json --export DIR --checkpoint model.pt \
+        --tokenizer tokenizer.json
 """
 
+import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
+from common import TEACHER, TEACHER_REVISION
 from evalsets import (
     SOLVE_PROMPT,
     TEST_PROMPT,
@@ -22,77 +29,173 @@ from evalsets import (
     valid_tests,
 )
 
-STOPS = ['"explanation"', "<|im_end|>", "<|endoftext|>"]
+IM_END = 248046  # teacher stop token at the end of every accepted document
+PARITY_PROMPTS = 8
 
 
-def main(mode, model, revision, items_path, out_path):
+def teacher(mode, items):
     from vllm import LLM, SamplingParams
 
-    items = json.loads(Path(items_path).read_text())
-    started = time.time()
-    hub = not model.startswith("/")  # local paths are text-only fine-tuned checkpoints
     llm = LLM(
-        model=model,
-        revision=revision if hub else None,
-        tokenizer_revision=revision if hub else None,
+        model=TEACHER,
+        revision=TEACHER_REVISION,
+        tokenizer_revision=TEACHER_REVISION,
         dtype="bfloat16",
         download_dir="/runs/hf-cache",
-        language_model_only=hub,
+        language_model_only=True,
         max_model_len=4096,
         enable_prefix_caching=False,
         gpu_memory_utilization=0.85,
         seed=0,
     )
-    loaded = time.time() - started
-    if mode == "raw":
-        prompts = ["<|endoftext|>" + student_prompt(item["problem"]) for item in items]
-        params = SamplingParams(temperature=0, max_tokens=768, stop=STOPS)
-        outputs = llm.generate(prompts, params)
-    else:
-        template = TEST_PROMPT if mode == "tests" else SOLVE_PROMPT
-        tokenizer = llm.get_tokenizer()
-        prompts = [
-            {
-                "prompt_token_ids": tokenizer.apply_chat_template(
-                    [
-                        {
-                            "role": "user",
-                            "content": template.format(problem=item["problem"]),
-                        }
-                    ],
-                    tokenize=True,
-                    return_dict=False,
-                    add_generation_prompt=True,
-                    enable_thinking=False,
-                )
-            }
-            for item in items
-        ]
-        params = SamplingParams(temperature=0, max_tokens=2048)
-        outputs = llm.generate(prompts, params)
+    template = TEST_PROMPT if mode == "tests" else SOLVE_PROMPT
+    tokenizer = llm.get_tokenizer()
+    prompts = [
+        {
+            "prompt_token_ids": tokenizer.apply_chat_template(
+                [{"role": "user", "content": template.format(problem=item["problem"])}],
+                tokenize=True,
+                return_dict=False,
+                add_generation_prompt=True,
+                enable_thinking=False,
+            )
+        }
+        for item in items
+    ]
+    outputs = llm.generate(prompts, SamplingParams(temperature=0, max_tokens=2048))
     results = {}
     for item, output in zip(items, outputs):
         text = output.outputs[0].text
         entry = {"text": text, "finish_reason": output.outputs[0].finish_reason}
         if mode == "tests":
             entry["tests"] = valid_tests(parse_json_answer(text, "tests"))
-        elif mode == "solve":
+        else:
             code = parse_json_answer(text, "code")
             entry["code"] = code if isinstance(code, str) else None
-        else:
-            entry["code"] = parse_code_string(text)
         results[item["id"]] = entry
-    report = {
-        "mode": mode,
-        "model": model,
-        "revision": revision,
-        "load_seconds": loaded,
-        "generation_seconds": time.time() - started - loaded,
-        "results": results,
+    return {"results": results}
+
+
+def load_vocab(export_dir):
+    import numpy as np
+    from student import Vocabulary
+
+    arrays = np.load(Path(export_dir) / "vocab.npz")
+    pieces = (
+        tuple(arrays[k] for k in ("pieces", "offsets", "lengths"))
+        if "pieces" in arrays
+        else (None,) * 3
+    )
+    return Vocabulary(arrays["table"], arrays["native"], int(arrays["bos"]), *pieces)
+
+
+def parity(checkpoint, prompts, outputs):
+    """Max/mean |log p| difference on prompt tokens between vLLM and PyTorch (FP32)."""
+    import torch
+    from student import GPT, ModelConfig
+
+    saved = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    model = GPT(ModelConfig(**saved["config"])).eval()
+    model.load_state_dict(saved["model"])
+    differences = []
+    with torch.no_grad():
+        for prompt, output in zip(prompts, outputs):
+            ids = torch.tensor(prompt["prompt_token_ids"])
+            reference = model(ids[None])[0].float().log_softmax(-1)
+            expected = reference[:-1].gather(1, ids[1:, None])[:, 0]
+            rows = output.prompt_logprobs[1:]
+            got = torch.tensor([row[int(i)].logprob for row, i in zip(rows, ids[1:])])
+            differences.append((got - expected).abs())
+    flat = torch.cat(differences)
+    return {
+        "prompts": len(prompts),
+        "tokens": int(flat.numel()),
+        "max_abs": float(flat.max()),
+        "mean_abs": float(flat.mean()),
     }
-    with open(out_path, "w") as handle:
-        json.dump(report, handle)
+
+
+def students(items, export_dir, checkpoint, tokenizer_path, max_tokens):
+    from tokenizers import Tokenizer
+    from vllm import LLM, SamplingParams
+
+    vocab = load_vocab(export_dir)
+    tokenizer = Tokenizer.from_file(tokenizer_path)
+    eos = int(vocab.encode([IM_END])[0])
+    trimmed = vocab.size < len(vocab.table)
+    prompts = [
+        {
+            "prompt_token_ids": [vocab.bos]
+            + vocab.expand(
+                tokenizer.encode(
+                    student_prompt(item["problem"]), add_special_tokens=False
+                ).ids
+            )[0].tolist()
+        }
+        for item in items
+    ]
+    llm = LLM(
+        model=str(export_dir),
+        skip_tokenizer_init=True,
+        dtype="bfloat16",
+        max_model_len=json.loads((Path(export_dir) / "config.json").read_text())[
+            "max_position_embeddings"
+        ],
+        enable_prefix_caching=False,
+        gpu_memory_utilization=0.7,
+        seed=0,
+    )
+    check = llm.generate(
+        prompts[:PARITY_PROMPTS],
+        SamplingParams(
+            temperature=0, max_tokens=1, prompt_logprobs=0, detokenize=False
+        ),
+    )
+    params = SamplingParams(
+        temperature=0, max_tokens=max_tokens, stop_token_ids=[eos], detokenize=False
+    )
+    outputs = llm.generate(prompts, params)
+    results = {}
+    for item, prompt, output in zip(items, prompts, outputs):
+        ids = list(output.outputs[0].token_ids)
+        text = tokenizer.decode(vocab.decode_native(ids), skip_special_tokens=False)
+        results[item["id"]] = {
+            "text": text,
+            "code": parse_code_string(text),
+            "finish_reason": output.outputs[0].finish_reason,
+            "generated_tokens": len(ids),
+            "unknown_tokens": ids.count(2) if trimmed else 0,
+            "prompt_unknown_tokens": prompt["prompt_token_ids"].count(2)
+            if trimmed
+            else 0,
+        }
+    return {
+        "results": results,
+        "parity": parity(checkpoint, prompts[:PARITY_PROMPTS], check),
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("mode", choices=("tests", "solve", "student"))
+    parser.add_argument("items")
+    parser.add_argument("out")
+    parser.add_argument("--export")
+    parser.add_argument("--checkpoint")
+    parser.add_argument("--tokenizer")
+    parser.add_argument("--max-tokens", type=int, default=768)
+    args = parser.parse_args()
+    items = json.loads(Path(args.items).read_text())
+    started = time.time()
+    if args.mode == "student":
+        report = students(
+            items, args.export, args.checkpoint, args.tokenizer, args.max_tokens
+        )
+    else:
+        report = teacher(args.mode, items)
+    report.update(mode=args.mode, seconds=time.time() - started)
+    Path(args.out).write_text(json.dumps(report))
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:6])
+    main()

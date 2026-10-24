@@ -28,13 +28,10 @@ sys.path.insert(0, str(HERE))
 
 from common import (
     CAMPAIGN,
-    CONTROL,
-    CONTROL_REVISION,
     DATASET,
     MBPP,
     MBPP_REVISION,
     TEACHER,
-    TEACHER_REVISION,
     atomic_json,
     file_sha256,
     is_heldout,
@@ -50,7 +47,6 @@ TIMEOUTS = {
     "finalize_data": 1800,
     "build_mbpp": 900,
     "teacher_job": 5400,
-    "control_job": 8 * 3600,
     "student_job": 6 * 3600,
 }
 
@@ -82,23 +78,12 @@ cpu_image = with_source(
         "tokenizers==0.22.1",
     )
 )
-torch_image = with_source(
-    modal.Image.debian_slim(python_version="3.12").pip_install(
-        "torch==2.9.1", "numpy==2.3.4", "tokenizers==0.22.1"
-    )
-)
 vllm_image = (
     modal.Image.from_registry(VLLM_IMAGE)
     .entrypoint([])
     # The pinned vLLM runtime provides python3 but no unversioned python.
     .run_commands("ln -sf /usr/bin/python3 /usr/local/bin/python")
     .pip_install_from_requirements(str(HERE / "vllm-overlay.lock"))
-    # flash-linear-attention 0.5 keeps its kernels in fla-core; without it Transformers
-    # silently uses the PyTorch reference loops for the DeltaNet layers.
-    .pip_install(
-        "flash-linear-attention==0.5.2", "fla-core==0.5.2", extra_options="--no-deps"
-    )
-    .pip_install("einops==0.8.1")
 )
 vllm_image = with_source(vllm_image)
 grader_image = modal.Image.debian_slim(python_version="3.12").add_local_file(
@@ -253,7 +238,7 @@ def build_mbpp():
     return mbpp_items(rows)
 
 
-def run_vllm(mode, model, revision, items, out):
+def run_vllm(mode, items, out):
     import subprocess
 
     out = Path(out)
@@ -261,15 +246,7 @@ def run_vllm(mode, model, revision, items, out):
     items_path = out.with_suffix(".items.json")
     items_path.write_text(json.dumps(items))
     subprocess.run(
-        [
-            "python",
-            "/validation/vllm_eval.py",
-            mode,
-            model,
-            revision,
-            str(items_path),
-            str(out),
-        ],
+        ["python", "/validation/vllm_eval.py", mode, str(items_path), str(out)],
         cwd="/validation",
         check=True,
     )
@@ -288,53 +265,11 @@ def run_vllm(mode, model, revision, items, out):
 )
 def teacher_job(campaign, mode, items):
     out = campaign_dir(campaign) / "teacher" / f"{mode}.json"
-    return run_vllm(mode, TEACHER, TEACHER_REVISION, items, out)
+    return run_vllm(mode, items, out)
 
 
 @app.function(
-    image=vllm_image,
-    gpu="H100",
-    cpu=8,
-    memory=98304,
-    timeout=TIMEOUTS["control_job"],
-    retries=0,
-    volumes={"/runs": volume},
-)
-def control_job(campaign, data_campaign, settings, items):
-    import subprocess
-
-    volume.reload()
-    root = campaign_dir(campaign)
-    run = root / "control" / settings["name"]
-    run.mkdir(parents=True, exist_ok=True)
-    base = run_vllm(
-        "raw", CONTROL, CONTROL_REVISION, items, run / "base-completions.json"
-    )
-    (run / "settings.json").write_text(json.dumps(settings))
-    subprocess.run(
-        [
-            "python",
-            "/validation/control.py",
-            str(run / "settings.json"),
-            str(campaign_dir(data_campaign) / "manifest.json"),
-            str(run),
-        ],
-        cwd="/validation",
-        check=True,
-    )
-    volume.commit()
-    tuned = run_vllm(
-        "raw", str(run / "model"), "", items, run / "tuned-completions.json"
-    )
-    return {
-        "base": base,
-        "tuned": tuned,
-        "summary": json.loads((run / "train-summary.json").read_text()),
-    }
-
-
-@app.function(
-    image=torch_image,
+    image=vllm_image,  # students train with PyTorch here, then evaluate through vLLM
     gpu="H100",
     cpu=8,
     memory=98304,
@@ -696,7 +631,7 @@ def campaign(plan, deadline):
         atomic_json(root / "eval-items.json", items)
         volume.commit()
 
-        # 3. Teacher ceiling, control and students run in parallel.
+        # 3. Teacher ceiling and students run in parallel.
         results_path = root / "results.json"
         volume.reload()
         results = (
@@ -731,20 +666,6 @@ def campaign(plan, deadline):
             calls["teacher"] = supervisor.spawn(
                 "teacher:solve", "teacher_job", name, "solve", items
             )
-        # "controls" lists several 0.8B fine-tunes; "control" is the single-run form.
-        controls = plan.get("controls") or (
-            [plan["control"]] if plan.get("control") else []
-        )
-        for control in controls:
-            if f"{control['name']}:tuned" not in results["models"]:
-                calls[f"control:{control['name']}"] = supervisor.spawn(
-                    f"control:{control['name']}",
-                    "control_job",
-                    name,
-                    data_name,
-                    control,
-                    items,
-                )
         for settings in plan["students"]:
             if settings["name"] not in results["models"]:
                 merged = {**plan["student_defaults"], **settings}
@@ -762,14 +683,6 @@ def campaign(plan, deadline):
         def on_result(label, value):
             if label == "teacher":
                 record("teacher", value["results"], {"model": TEACHER})
-            elif label.startswith("control:"):
-                control = label.split(":", 1)[1]
-                record(f"{control}:base", value["base"]["results"], {"model": CONTROL})
-                record(
-                    f"{control}:tuned",
-                    value["tuned"]["results"],
-                    {"model": CONTROL, "train": value["summary"]},
-                )
             else:
                 record(label, value["completions"], {"train": value["summary"]})
 
@@ -792,29 +705,6 @@ def campaign(plan, deadline):
         supervisor.state["status"] = "interrupted"
         supervisor.save()
         raise
-
-
-@app.function(
-    image=vllm_image,
-    gpu="H100",
-    cpu=8,
-    memory=65536,
-    timeout=1200,
-    retries=0,
-    volumes={"/runs": volume},
-)
-def control_probe(imports_only=False):
-    """Short throughput and kernel-availability probe for the 0.8B control."""
-    import subprocess
-
-    out = Path("/tmp/control-probe.json")
-    flags = ["--imports-only"] if imports_only else []
-    subprocess.run(
-        ["python", "/validation/control_probe.py", str(out), *flags],
-        cwd="/validation",
-        check=True,
-    )
-    return {} if imports_only else json.loads(out.read_text())
 
 
 SHARD_PATTERNS = [
@@ -958,9 +848,7 @@ WEIGHT_PATTERNS = [
     "students/*/model.pt",
     "students/*/settings.json",
     "students/*/summary.json",
-    "control/*/model/*",
-    "control/*/settings.json",
-    "control/*/train-summary.json",
+    "students/*/export/*",
 ]
 
 
@@ -974,7 +862,7 @@ WEIGHT_PATTERNS = [
     secrets=[hf_secret],
 )
 def archive_weights(campaigns, repo_id):
-    """Upload final student and control weights to a private HF dataset; verify sizes."""
+    """Upload final student weights to a private HF dataset; verify sizes."""
     from huggingface_hub import HfApi
 
     volume.reload()
@@ -1021,7 +909,6 @@ FUNCTIONS = {
     "finalize_data": finalize_data,
     "build_mbpp": build_mbpp,
     "teacher_job": teacher_job,
-    "control_job": control_job,
     "student_job": student_job,
 }
 
@@ -1043,7 +930,7 @@ def main(launch: bool = False):
         )
     )
     print(
-        f"{len(PLAN['students'])} students + control + teacher; dry run"
+        f"{len(PLAN['students'])} students + teacher; dry run"
         if not launch
         else "launching"
     )
@@ -1071,12 +958,6 @@ def main(launch: bool = False):
 def archive(repo_id: str = "jfrick/qwen35-distillation-shards-20261023"):
     """Upload the plan's prepared shards to a private HF dataset (after the data stage)."""
     print(json.dumps(archive_shards.remote(PLAN["campaign"], repo_id), indent=1))
-
-
-@app.local_entrypoint()
-def probe(imports_only: bool = False):
-    """Run the 20-minute-bounded 0.8B throughput probe."""
-    print(json.dumps(control_probe.remote(imports_only), indent=1))
 
 
 @app.local_entrypoint()

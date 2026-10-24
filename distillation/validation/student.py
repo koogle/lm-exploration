@@ -6,7 +6,6 @@ distribution per position plus one residual bucket holding the remaining mass,
 so the soft loss is an exact cross-entropy over the partition {top-K, rest}.
 """
 
-import json
 import math
 import time
 from pathlib import Path
@@ -14,7 +13,6 @@ from pathlib import Path
 import numpy as np
 import torch
 from model_10m.model import GPT, ModelConfig
-from torch.nn import functional as F
 from torch.utils.checkpoint import checkpoint
 
 PAD, BOS, UNK = 0, 1, 2
@@ -338,112 +336,3 @@ def validate(
         "kl_per_token": soft - entropy,
         "ce_per_byte": float(sums[0]) / bytes_seen,
     }
-
-
-def rope(x, positions):
-    """RoPE for explicit per-row positions; matches ``model_10m.model.rotary``."""
-    width = x.size(-1)
-    frequencies = 10000.0 ** (
-        -torch.arange(0, width, 2, device=x.device, dtype=torch.float32) / width
-    )
-    angles = positions.float()[:, None, :, None] * frequencies
-    cos, sin = angles.cos().to(x.dtype), angles.sin().to(x.dtype)
-    even, odd = x[..., ::2], x[..., 1::2]
-    return torch.stack((even * cos - odd * sin, even * sin + odd * cos), -1).flatten(-2)
-
-
-def cached_forward(model, tokens, positions, mask, cache, start):
-    """Run ``tokens`` at cache slots ``start:``; ``mask`` is [B, 1, Tq, Tk] bool."""
-    x = model.token_embedding(tokens)
-    for layer, block in enumerate(model.blocks):
-        attention = block.attention
-        batch, length, width = x.shape
-        heads = attention.n_head
-        q, k, v = attention.qkv(block.attention_norm(x)).chunk(3, -1)
-        q, k, v = [
-            t.view(batch, length, heads, width // heads).transpose(1, 2)
-            for t in (q, k, v)
-        ]
-        q, k = rope(q, positions), rope(k, positions)
-        keys, values = cache[layer]
-        keys[:, :, start : start + length] = k
-        values[:, :, start : start + length] = v
-        end = start + length
-        attended = F.scaled_dot_product_attention(
-            q, keys[:, :, :end], values[:, :, :end], attn_mask=mask
-        )
-        x = x + attention.projection(
-            attended.transpose(1, 2).reshape(batch, length, width)
-        )
-        x = x + block.mlp(block.mlp_norm(x))
-    return model.lm_head(model.final_norm(x[:, -1]))
-
-
-@torch.no_grad()
-def generate(model, prompts, max_new, eos, finished, device="cuda"):
-    """Greedy decoding of left-padded prompts (lists of student IDs).
-
-    ``finished(ids)`` is checked every 16 steps on each row's generated IDs.
-    """
-    model.eval()
-    batch = len(prompts)
-    longest = max(map(len, prompts))
-    total = longest + max_new
-    pad = torch.tensor([longest - len(p) for p in prompts], device=device)
-    tokens = torch.full((batch, longest), PAD, dtype=torch.long, device=device)
-    for row, prompt in enumerate(prompts):
-        tokens[row, longest - len(prompt) :] = torch.tensor(prompt, device=device)
-    slots = torch.arange(total, device=device)
-    valid = slots[None, :] >= pad[:, None]
-    positions = (slots[None, :] - pad[:, None]).clamp(min=0)
-    config = model.config
-    shape = (batch, config.n_head, total, config.n_embd // config.n_head)
-    dtype = torch.bfloat16 if device == "cuda" else torch.float32
-    cache = [
-        (
-            torch.zeros(shape, device=device, dtype=dtype),
-            torch.zeros(shape, device=device, dtype=dtype),
-        )
-        for _ in model.blocks
-    ]
-    causal = slots[:longest, None] >= slots[None, :longest]
-    mask = (causal[None] & valid[:, None, :longest]) | torch.eye(
-        longest, dtype=torch.bool, device=device
-    )
-    with torch.autocast(device, dtype=torch.bfloat16, enabled=device == "cuda"):
-        logits = cached_forward(
-            model, tokens, positions[:, :longest], mask[:, None], cache, 0
-        )
-    generated = torch.zeros((batch, max_new), dtype=torch.long, device=device)
-    done = torch.zeros(batch, dtype=torch.bool, device=device)
-    lengths = [max_new] * batch
-    for step in range(max_new):
-        next_token = logits.float().argmax(-1)
-        generated[:, step] = next_token
-        stopped = (~done) & (next_token == eos)
-        if (step + 1) % 16 == 0:
-            rows = generated[:, : step + 1].tolist()
-            for row in range(batch):
-                if not done[row] and finished(rows[row]):
-                    stopped[row] = True
-        for row in stopped.nonzero().flatten().tolist():
-            lengths[row] = step + 1
-        done |= stopped
-        if bool(done.all()):
-            break
-        slot = longest + step
-        step_mask = valid[:, None, None, : slot + 1]
-        with torch.autocast(device, dtype=torch.bfloat16, enabled=device == "cuda"):
-            logits = cached_forward(
-                model,
-                next_token[:, None],
-                positions[:, slot : slot + 1],
-                step_mask,
-                cache,
-                slot,
-            )
-    return [row[:n] for row, n in zip(generated.tolist(), lengths)]
-
-
-def load_lines(path):
-    return [json.loads(line) for line in Path(path).read_text().splitlines() if line]

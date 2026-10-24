@@ -9,8 +9,6 @@ DATASET = "jfrick/qwen35-python-math-trajectories-20261022"
 CAMPAIGN = "qwen35-python-math-8h-20261022-01"
 TEACHER = "Qwen/Qwen3.5-9B"
 TEACHER_REVISION = "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
-CONTROL = "Qwen/Qwen3.5-0.8B-Base"
-CONTROL_REVISION = "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68"
 MBPP = "google-research-datasets/mbpp"
 MBPP_REVISION = "4bb6404fdc6cacfda99d4ac4205087b89d32030c"
 
