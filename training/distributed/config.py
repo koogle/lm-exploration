@@ -22,6 +22,11 @@ class DistributedConfig:
     muon_momentum: float = 0.95
     peak_lr: float = 3e-4
     min_lr_ratio: float = 0.1
+    # "cosine" decays over the whole run. "wsd" (warmup-stable-decay) holds the peak
+    # rate and decays linearly over the last `decay_fraction` of target_tokens, so a
+    # stable-phase checkpoint can be branched into a short decay at any token count.
+    lr_schedule: str = "cosine"
+    decay_fraction: float = 0.1
     weight_decay: float = 0.1
     adam_beta1: float = 0.9
     adam_beta2: float = 0.95
@@ -85,6 +90,16 @@ class DistributedConfig:
             raise ValueError("RoPE requires an even integral head dimension")
         if self.warmup_tokens >= self.target_tokens:
             raise ValueError("Warmup must end before the token target")
+        if self.lr_schedule not in ("cosine", "wsd"):
+            raise ValueError("lr_schedule must be cosine or wsd")
+        if (
+            isinstance(self.decay_fraction, bool)
+            or not isinstance(self.decay_fraction, (float, int))
+            or not 0 < self.decay_fraction <= 1
+        ):
+            raise ValueError("decay_fraction must be in (0, 1]")
+        if self.lr_schedule == "wsd" and self.decay_start_tokens <= self.warmup_tokens:
+            raise ValueError("The WSD decay must start after warmup")
         if self.optimizer not in ("adamw", "muon"):
             raise ValueError("optimizer must be adamw or muon")
         for name in (
@@ -116,9 +131,17 @@ class DistributedConfig:
     def as_dict(self):
         return asdict(self)
 
+    @property
+    def decay_start_tokens(self):
+        return round(self.target_tokens * (1 - self.decay_fraction))
+
     def learning_rate(self, tokens):
         if tokens < self.warmup_tokens:
             return self.peak_lr * min((tokens + 1) / self.warmup_tokens, 1.0)
+        if self.lr_schedule == "wsd":
+            start = self.decay_start_tokens
+            progress = min(max(tokens - start, 0) / (self.target_tokens - start), 1)
+            return self.peak_lr * (1 - (1 - self.min_lr_ratio) * progress)
         progress = min((tokens - self.warmup_tokens) / (self.target_tokens - self.warmup_tokens), 1)
         return self.peak_lr * (
             self.min_lr_ratio + (1 - self.min_lr_ratio) * (1 + math.cos(math.pi * progress)) / 2
@@ -179,12 +202,26 @@ class DistributedRuntime:
 CHECKPOINT_FORMAT = "scholarly-ddp-v1"
 
 
+def wsd_branch(saved, config):
+    """A WSD stable-phase checkpoint may resume under a new target: a decay branch.
+
+    Only target_tokens may differ, and the checkpoint must not have reached either
+    run's decay, so the branch sees exactly the parent's learning rates up to it.
+    """
+    old = DistributedConfig(**saved["config"])
+    return (
+        old.lr_schedule == config.lr_schedule == "wsd"
+        and {**saved["config"], "target_tokens": config.target_tokens} == config.as_dict()
+        and saved["tokens"] <= min(old.decay_start_tokens, config.decay_start_tokens)
+    )
+
+
 def validate_resume(saved, config, identity, source_hashes, torch_version):
     if saved.get("format") != CHECKPOINT_FORMAT:
         raise ValueError(
             "Unsupported checkpoint format; pilot/character checkpoints cannot resume here"
         )
-    if saved["config"] != config.as_dict():
+    if saved["config"] != config.as_dict() and not wsd_branch(saved, config):
         raise ValueError("Resume requires identical training settings and GPU count")
     if saved["data_identity"] != identity:
         raise ValueError("Checkpoint dataset/tokenizer identity mismatch")

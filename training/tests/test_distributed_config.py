@@ -107,6 +107,61 @@ class DistributedConfigTests(unittest.TestCase):
                     {**saved, field: value}, config, {"hash": "x"}, {"model": "y"}, "2.6"
                 )
 
+    def test_wsd_holds_peak_then_decays_over_the_last_fraction(self):
+        config = DistributedConfig(
+            lr_schedule="wsd", decay_fraction=0.1, target_tokens=1000, warmup_tokens=10
+        )
+        self.assertEqual(config.decay_start_tokens, 900)
+        self.assertEqual(config.learning_rate(500), config.peak_lr)
+        self.assertEqual(config.learning_rate(900), config.peak_lr)
+        self.assertAlmostEqual(
+            config.learning_rate(950), config.peak_lr * (1 + config.min_lr_ratio) / 2
+        )
+        self.assertAlmostEqual(config.learning_rate(1000), config.peak_lr * config.min_lr_ratio)
+        with self.assertRaises(ValueError):
+            DistributedConfig(
+                lr_schedule="wsd", decay_fraction=0.999, target_tokens=1000, warmup_tokens=10
+            )
+
+    def test_wsd_stable_checkpoint_resumes_as_a_decay_branch(self):
+        main = DistributedConfig(lr_schedule="wsd", target_tokens=20_000, warmup_tokens=10)
+        branch = DistributedConfig(lr_schedule="wsd", target_tokens=5_500, warmup_tokens=10)
+
+        def saved(tokens, config=main):
+            return {
+                "format": "scholarly-ddp-v1",
+                "config": config.as_dict(),
+                "tokens": tokens,
+                "data_identity": {},
+                "source_sha256": {},
+                "torch_version": "2.6",
+            }
+
+        validate_resume(saved(4_900), branch, {}, {}, "2.6")
+        # Past the branch's decay start, or from a cosine run, is not a branch.
+        with self.assertRaises(ValueError):
+            validate_resume(saved(5_000), branch, {}, {}, "2.6")
+        cosine = DistributedConfig(target_tokens=20_000, warmup_tokens=10)
+        with self.assertRaises(ValueError):
+            validate_resume(
+                saved(4_900, cosine),
+                DistributedConfig(target_tokens=5_500, warmup_tokens=10),
+                {},
+                {},
+                "2.6",
+            )
+        # Any other setting must still match.
+        with self.assertRaises(ValueError):
+            validate_resume(
+                saved(4_900),
+                DistributedConfig(
+                    lr_schedule="wsd", target_tokens=5_500, warmup_tokens=10, peak_lr=1e-3
+                ),
+                {},
+                {},
+                "2.6",
+            )
+
     def test_runtime_resolves_torchrun_launch_details(self):
         runtime = DistributedRuntime.from_torchrun(
             {

@@ -1,0 +1,19 @@
+{
+  "model_config": "model_configs/modern-124m-wsd-h100x8.json",
+  "dataset_config": "datasets/climbmix-code-v3-raw.json",
+  "target_tokens": 20000000000,
+  "allow_unreviewed_data": true,
+  "pilot": false,
+  "gpu": "H100",
+  "world_size": 8,
+  "segment_seconds": 21600,
+  "worker_timeout_seconds": 25200,
+  "max_segments": 6,
+  "segments_per_call": 3,
+  "qualification_segments": 1,
+  "qualification_steps": 2,
+  "source_workers": 3,
+  "tokenizer_threads": 8,
+  "database_batch_size": 1024,
+  "preparation_chunk_seconds": 20
+}
