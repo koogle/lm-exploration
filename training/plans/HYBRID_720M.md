@@ -16,7 +16,7 @@ than small CUDA correctness checks.
 | 3 | Attention sink and sigmoid output gate | Implemented, CPU-tested |
 | 4 | KDA layers via flash-linear-attention, document state reset, `[KDA, KDA, KDA, full]` layout | Implemented, CPU-tested, H100 check passed |
 | 5 | One DeepSeek/GLM-style MTP module predicting t+2 | Implemented, CPU-tested |
-| 6 | Muon/AdamW parameter grouping | Planned |
+| 6 | Muon/AdamW parameter grouping | Implemented, CPU-tested |
 | 7 | GLM-4.7-Flash tokenizer and 40B recipe (70% ClimbMix, 20% code, 10% math) | Planned |
 | 8 | 720M config, throughput benchmark, ~200M-token pilot | Planned |
 | 9 | 40B launch on 8×H100 in 24-hour segments | Planned |
