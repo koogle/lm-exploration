@@ -20,7 +20,7 @@ class WorkflowResolutionTests(unittest.TestCase):
 
     def test_different_model_and_dataset_can_be_selected_without_controller_changes(self):
         bundle = load_workflow(
-            ROOT / "small-5b.json",
+            ROOT / "h100x3-20b.json",
             model_config="model_configs/modern-124m.json",
             dataset_config="datasets/pilot-tokens.json",
         )
@@ -30,7 +30,7 @@ class WorkflowResolutionTests(unittest.TestCase):
         self.assertEqual(training.target_tokens, bundle["workflow"]["target_tokens"])
         self.assertEqual(training.world_size, bundle["workflow"]["world_size"])
         with self.assertRaises(ValueError):
-            load_workflow(ROOT / "small-5b.json", model_config="../model.json")
+            load_workflow(ROOT / "h100x3-20b.json", model_config="../model.json")
         self.assertEqual(dataset.mode, "snapshot")
         self.assertNotIn("preparation_recipe", bundle)
 
@@ -42,11 +42,11 @@ class WorkflowResolutionTests(unittest.TestCase):
             "allow_unreviewed_data",
             "data_loader",
         ):
-            bundle = load_workflow(ROOT / "small-5b.json")
+            bundle = load_workflow(ROOT / "h100x3-20b.json")
             bundle["model"][field] = 1
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, "duplicate"):
                 resolve_payload(bundle)
-        bundle = load_workflow(ROOT / "small-5b.json")
+        bundle = load_workflow(ROOT / "h100x3-20b.json")
         bundle["model"]["microbatch"] = 7
         with self.assertRaisesRegex(ValueError, "microbatches"):
             resolve_payload(bundle)

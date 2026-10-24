@@ -6,10 +6,12 @@ Compare 64, 128, 256, 512, 1,024 and 2,048 MiB of fitting text at 16,384,
 
 ## Corpus
 
-All 12 sources and their complete pinned shard lists in `../recipe-v1.json` are
+All 12 sources and their complete pinned shard lists in `../simple-llm-v1/recipe.json` are
 eligible. “Full dataset” means the complete pinned source inventory, not a claim
 that every upstream record is scanned. FineWeb remains the plan's 10BT subset.
 The earlier 64 MiB tokenizer cache is not reused.
+The code license filter and book parent rules this study used were removed with the
+mixture on 2026-10-23, so a rerun does not reproduce its code and book sources.
 
 A seeded permutation orders shards per source; records stream sequentially.
 Each document contributes at most 64 KiB and each parent at most 256 KiB. Source

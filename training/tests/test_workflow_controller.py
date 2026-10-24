@@ -24,7 +24,23 @@ def controller(name):
 
 class WorkflowControllerTests(unittest.TestCase):
     def setUp(self):
-        self.bundle = load_workflow(ROOT / "workflows/small-5b.json")
+        with tempfile.TemporaryDirectory() as temporary:
+            workflow = json.loads((ROOT / "workflows/h100x1-pilot.json").read_text())
+            model = (ROOT / "workflows" / workflow["model_config"]).read_text()
+            workflow.update(model_config="model.json", dataset_config="data.json")
+            (Path(temporary) / "run.json").write_text(json.dumps(workflow))
+            (Path(temporary) / "model.json").write_text(model)
+            (Path(temporary) / "data.json").write_text(
+                json.dumps(
+                    {
+                        "mode": "prepare_raw",
+                        "root": "fixture",
+                        "loader": "raw",
+                        "recipe": "tests/fixtures/corpus-recipe.json",
+                    }
+                )
+            )
+            self.bundle = load_workflow(Path(temporary) / "run.json", project_root=ROOT)
 
     def test_pending_data_fails_before_ingestion(self):
         prepare = controller("prepare_and_launch")
