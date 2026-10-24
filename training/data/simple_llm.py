@@ -28,8 +28,73 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def load_recipe(path):
-    return validate_recipe(json.loads(Path(path).read_text()))
+def load_recipe(path, listing=None):
+    """Load a recipe, expanding each source's `files` spec into the explicit shard list.
+
+    Prepared-data identity uses the expanded list, so a spec and the list it expands
+    to prepare and reuse the same data.
+    """
+    recipe = json.loads(Path(path).read_text())
+    for source in recipe["sources"]:
+        source["files"] = resolve_files(source, listing or hf_glob)
+    return validate_recipe(recipe)
+
+
+# A shard file name ends in `-NNNNN` before its extension, e.g. `org--repo-00003.jsonl.gz`.
+SHARD_NAME = re.compile(r"^(?P<stream>.+)-(?P<index>\d+)\.[a-z.]+$")
+
+
+def hf_glob(source, pattern):
+    """Repository-relative paths matching `pattern` at the source's pinned revision."""
+    from huggingface_hub import HfFileSystem
+
+    root = f"datasets/{source['repo']}@{source['revision']}/"
+    return [path.removeprefix(root) for path in HfFileSystem().glob(root + pattern)]
+
+
+def resolve_files(source, listing):
+    """The ordered shard list for a source's `files`.
+
+    `files` is an explicit list, or one of:
+
+    - `{"pattern": "shard_{:05d}.parquet", "range": [start, stop, step]}`: formats
+      each index of `range(start, stop, step)`.
+    - `{"glob": "raw/*/*.jsonl.gz", "latest_export": true, "order": "interleave"}`:
+      lists matching files at the pinned revision. `latest_export` keeps, for each
+      stream (file name without its `-NNNNN` shard number), only the newest parent
+      directory. `order` is `"path"` (sorted paths, the default) or `"interleave"`
+      (shard number, then file name: every stream's first shard, then every second).
+    """
+    spec = source["files"]
+    if isinstance(spec, list):
+        return spec
+    if not isinstance(spec, dict):
+        raise ValueError("files must be a list or a file spec")
+    if set(spec) == {"pattern", "range"}:
+        if len(spec["range"]) != 3 or any(type(v) is not int for v in spec["range"]):
+            raise ValueError("A files range is [start, stop, step]")
+        return [spec["pattern"].format(index) for index in range(*spec["range"])]
+    if "glob" not in spec or set(spec) - {"glob", "latest_export", "order"}:
+        raise ValueError("Unknown files spec")
+    order = spec.get("order", "path")
+    if order not in ("path", "interleave"):
+        raise ValueError("files order must be path or interleave")
+    paths = sorted(listing(source, spec["glob"]))
+    names = {}
+    for path in paths:
+        match = SHARD_NAME.match(path.rsplit("/", 1)[-1])
+        if match is None and (spec.get("latest_export") or order == "interleave"):
+            raise ValueError(f"Shard file name has no -NNNNN number: {path}")
+        names[path] = match
+    if spec.get("latest_export"):
+        newest = {}
+        for path in paths:
+            stream, export = names[path]["stream"], path.rsplit("/", 2)[-2]
+            newest[stream] = max(newest.get(stream, export), export)
+        paths = [p for p in paths if p.rsplit("/", 2)[-2] == newest[names[p]["stream"]]]
+    if order == "interleave":
+        paths.sort(key=lambda p: (int(names[p]["index"]), p.rsplit("/", 1)[-1]))
+    return paths
 
 
 def validate_recipe(recipe):

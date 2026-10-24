@@ -1,0 +1,6 @@
+{
+  "mode": "prepare_raw",
+  "root": "climbmix-code",
+  "loader": "raw",
+  "recipe": "data/recipes/climbmix-code-v3.json"
+}

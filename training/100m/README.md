@@ -16,10 +16,9 @@ model = GPTWithMTP(ModelConfig(vocab_size=32768))
 # sequence: [batch, T+1] token IDs; lengths: actual document lengths, including
 # the final target. One document per row, right padding only; no packed documents.
 losses = model.training_losses(sequence, lengths)
-loss = (
-    losses["ntp_sum"] / losses["ntp_count"].clamp_min(1)
-    + 0.1 * losses["mtp_sum"] / losses["mtp_count"].clamp_min(1)
-)
+loss = losses["ntp_sum"] / losses["ntp_count"].clamp_min(1) + 0.1 * losses["mtp_sum"] / losses[
+    "mtp_count"
+].clamp_min(1)
 loss.backward()
 logits = model(sequence[:, :-1])  # ordinary next-token inference
 ```

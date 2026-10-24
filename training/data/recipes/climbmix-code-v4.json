@@ -1,0 +1,81 @@
+{
+  "id": "climbmix-code-v4",
+  "sources": [
+    {
+      "name": "climbmix_0",
+      "repo": "karpathy/climbmix-400b-shuffle",
+      "revision": "915333b4f8b8684f39aeaafea600fea6f43fb703",
+      "format": "parquet",
+      "split_by": "row",
+      "weight_percent": 21,
+      "files": {
+        "pattern": "shard_{:05d}.parquet",
+        "range": [0, 300, 4]
+      }
+    },
+    {
+      "name": "climbmix_1",
+      "repo": "karpathy/climbmix-400b-shuffle",
+      "revision": "915333b4f8b8684f39aeaafea600fea6f43fb703",
+      "format": "parquet",
+      "split_by": "row",
+      "weight_percent": 21,
+      "files": {
+        "pattern": "shard_{:05d}.parquet",
+        "range": [1, 300, 4]
+      }
+    },
+    {
+      "name": "climbmix_2",
+      "repo": "karpathy/climbmix-400b-shuffle",
+      "revision": "915333b4f8b8684f39aeaafea600fea6f43fb703",
+      "format": "parquet",
+      "split_by": "row",
+      "weight_percent": 21,
+      "files": {
+        "pattern": "shard_{:05d}.parquet",
+        "range": [2, 300, 4]
+      }
+    },
+    {
+      "name": "climbmix_3",
+      "repo": "karpathy/climbmix-400b-shuffle",
+      "revision": "915333b4f8b8684f39aeaafea600fea6f43fb703",
+      "format": "parquet",
+      "split_by": "row",
+      "weight_percent": 22,
+      "files": {
+        "pattern": "shard_{:05d}.parquet",
+        "range": [3, 300, 4]
+      }
+    },
+    {
+      "name": "code_curated",
+      "repo": "jfrick/curated-oss-code-20261019",
+      "revision": "171fe27b0e1f50086e0a3200877c84114d5a1609",
+      "format": "json.gz",
+      "split_by": "row",
+      "weight_percent": 14,
+      "files": {
+        "glob": "raw/*/*.jsonl.gz",
+        "latest_export": true,
+        "order": "interleave"
+      },
+      "max_passes": 4
+    },
+    {
+      "name": "code_mit",
+      "repo": "jfrick/mit-claude-codex-code-20261019",
+      "revision": "93ec37ea75af88600900c065706cdd862e8c7a2a",
+      "format": "json.gz",
+      "split_by": "row",
+      "weight_percent": 1,
+      "files": {
+        "glob": "raw/*/*.jsonl.gz",
+        "latest_export": true,
+        "order": "interleave"
+      },
+      "max_passes": 8
+    }
+  ]
+}

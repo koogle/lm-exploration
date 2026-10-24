@@ -96,6 +96,24 @@ Before a substantial GPU run:
 5. Mix by actual trained token counts, mask padding, and document EOS/packing
    policy. Do not reuse the small pilot/tokenizer cache to reach billions.
 
+## Measuring returns to data: 20B WSD run (2026-10-24)
+
+The 2B run reached training loss 2.74 and was still improving. A power-law fit to its
+pre-decay loss and the Chinchilla shape for 124M both suggest roughly 2.5 at 5B, 2.3 at
+10B and 2.2 at 20B, but one cosine curve cannot pin down the floor. To measure instead:
+
+1. Train [`climbmix-124m-wsd-20b`](../workflows/climbmix-124m-wsd-20b.json) on eight H100s
+   with a warmup-stable-decay schedule (constant peak learning rate, then a linear decay
+   over the last 10% of tokens) and `torch.compile`. Recipe
+   [`climbmix-code-v4`](../data/recipes/climbmix-code-v4.json) lists 300 ClimbMix shards
+   as four shuffled parts (85% together), so preparation runs one worker per part, and
+   gives curated code 14% (four passes) and MIT code 1% (eight passes).
+2. Branch decays from the stable-phase checkpoints at steps 50,000 (about 4.9B tokens)
+   and 100,000 (about 9.8B): each resumes the checkpoint exactly with a target of
+   checkpoint tokens / 0.9, so its 10% decay starts at the branch point.
+3. Score each end point (about 5.5B, 10.9B and 20B) with the same sample recipe,
+   held-out bits per byte and small benchmarks.
+
 ## Tokenizer: mixture 32K default
 
 The default is [`climbmix-code-v1`](../tokenizer/climbmix-code-v1/), fitted on the
