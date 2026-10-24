@@ -30,6 +30,7 @@ uv run modal run -m workflows.modal_train \
 | `modal_training_optimizations.py` | Opt-in padding crop/chunked loss/compile/RoPE benchmark suite; [guide](../distributed/OPTIMIZATIONS.md) |
 | `modal_single_gpu_optimizations.py` | Single-H100 optimization suite; same guide |
 | `modal_eight_gpu_finalists.py` | Eight-H100 finalist comparison; same guide |
+| `modal_stable_ce_check.py` | One-H100 tests and throughput of the fixed cross-entropy CUDA kernel; [note](../references/softmax-fix-2026-10-24.md) |
 | `modal_muon_comparison.py` | Matched 100M-token Muon vs AdamW comparison; [guide](../distributed/MUON_COMPARISON.md); outputs on HF under `pr-24/training/results/` |
 | `modal_overlap_checks.py` | Bounded three-GPU equivalence/resume checks for the overlapped [`../modal_streaming_train.py`](../modal_streaming_train.py) launcher |
 | `modal_sft_data.py` | Repair-SFT data: verified arithmetic curriculum, CommitPackFT and private-patch preparation; [guide](../sft/README.md) |

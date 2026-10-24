@@ -52,6 +52,13 @@ preserved.
 Muon/AdamW implementation lives in `optimizers.py`; see the
 [matched comparison](../distributed/MUON_COMPARISON.md) for measured context.
 
+`stable_softmax.py` holds opt-in log-softmax, softmax and cross-entropy that avoid
+Softmax Collapse and Cancellation; `stable_ce_cuda.py` wraps a fused CUDA kernel
+(`kernels/stable_ce.cu`) for the hard-target loss (tested on H100; about 3.9× faster
+than `F.cross_entropy` in isolation).
+The loop still uses `F.cross_entropy`. See the
+[reading note](../references/softmax-fix-2026-10-24.md).
+
 ## Continued pretraining
 
 [`continued_pretraining.py`](continued_pretraining.py) starts a new data phase from a

@@ -4,6 +4,9 @@ Source-backed reading notes and proposed experiments for our from-scratch models
 External results are attributed to their authors; proposals are not measured
 results or changes to the agreed training plan.
 
+- [A fix for softmax and cross-entropy — 2026-10-24](softmax-fix-2026-10-24.md):
+  Softmax Collapse/Cancellation (Barron et al.), a tested PyTorch port in
+  `trainer/stable_softmax.py`, and what to measure before using it in our trainer.
 - [Smallest useful model and pretraining data — 2026-10-23](pretraining-data-2026-10-23.md):
   size and token evidence for useful small models; recent web, code and synthetic
   datasets; data-constrained mixing; and a proposed
