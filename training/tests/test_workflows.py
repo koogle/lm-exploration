@@ -107,6 +107,11 @@ class WorkflowProgressTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 check_progress({**report, **change}, 80, 100, 10)
+        # A session that only waited for prepared data continues the chain.
+        waited = {**report, "total_loss_tokens": 80, "stop_reason": "data_wait"}
+        self.assertFalse(check_progress(waited, 80, 100, 10))
+        with self.assertRaises(ValueError):
+            check_progress({**waited, "stop_reason": "time_limit"}, 80, 100, 10)
         check_resume(report, {"initial_validation": report["final_validation"]})
         with self.assertRaises(ValueError):
             check_resume(report, {"initial_validation": {"weighted_loss": 2.0}})

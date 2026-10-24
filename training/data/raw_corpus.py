@@ -44,6 +44,8 @@ class RawCorpus:
                 hash TEXT PRIMARY KEY, source TEXT, split TEXT, parent TEXT,
                 provenance TEXT, text BLOB, loss_tokens INTEGER, conflict INTEGER DEFAULT 0);
             CREATE INDEX IF NOT EXISTS document_split ON documents(source, split, conflict);
+            -- Insertion-order reads that keep flagged rows (data/growing.py).
+            CREATE INDEX IF NOT EXISTS document_order ON documents(source, split);
             CREATE TABLE IF NOT EXISTS decisions (
                 source TEXT, reason TEXT, count INTEGER, PRIMARY KEY(source, reason));
         """)

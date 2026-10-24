@@ -14,13 +14,20 @@ ROOT = Path(__file__).resolve().parents[1]
 LAUNCH = {"deadline_unix": time.time() + 86400}
 
 
+# Module helpers the controllers call; compiled alongside each one.
+HELPERS = ("spawn_training", "started_chain")
+
+
 def controller(name):
     tree = ast.parse((ROOT / "workflows/modal_train.py").read_text())
-    function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
-    function.decorator_list = []
+    functions = [
+        n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in (name, *HELPERS)
+    ]
+    for function in functions:
+        function.decorator_list = []
     namespace = {"Path": Mock(side_effect=AssertionError("filesystem accessed before preflight"))}
     # Only trusted repository code is compiled, without its cloud decorators.
-    exec(compile(ast.Module(body=[function], type_ignores=[]), str(ROOT), "exec"), namespace)  # noqa: S102
+    exec(compile(ast.Module(body=functions, type_ignores=[]), str(ROOT), "exec"), namespace)  # noqa: S102
     return namespace[name]
 
 
@@ -112,6 +119,7 @@ class WorkflowControllerTests(unittest.TestCase):
 
     def test_growing_snapshot_launches_once_its_preparation_completes(self):
         import os
+        import shutil
         import sqlite3
 
         from test_growing import build
@@ -150,11 +158,12 @@ class WorkflowControllerTests(unittest.TestCase):
             with patch.dict(os.environ), patch("tempfile.mkdtemp", return_value=temporary):
                 with self.assertRaisesRegex(ValueError, "resume-preparation"):
                     launch("run", bundle, LAUNCH)
-                complete_growing(version, snapshot, capacity_verified_for_tokens=target - 1)
+                shutil.copyfile(version / "raw.sqlite", snapshot / "raw.sqlite")
+                complete_growing(snapshot, capacity_verified_for_tokens=target - 1)
                 with self.assertRaisesRegex(ValueError, "fewer tokens"):
                     launch("run", bundle, LAUNCH)
                 spawn.assert_not_called()
-                complete_growing(version, snapshot, capacity_verified_for_tokens=target)
+                complete_growing(snapshot, capacity_verified_for_tokens=target)
                 launch("run", bundle, LAUNCH)
             spawn.assert_called_once()
             self.assertEqual(spawn.call_args.args[1], "v1/snapshots/overlap")

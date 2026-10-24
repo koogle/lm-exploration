@@ -2,12 +2,12 @@
 
 import argparse
 import json
-import os
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
-from .growing import COMPLETE_RECORD, write_json
-from .raw_token_stream import GROWING_FORMAT, token_targets
+from .growing import COMPLETE_RECORD, GROWING_FORMAT, write_json
+from .raw_token_stream import token_targets
 from .subword import TOKENIZER_SHA256, digest
 
 
@@ -36,21 +36,23 @@ def describe(db):
     return identity, sources
 
 
+def describe_database(path):
+    """`describe` for the database file at `path`, opened read-only."""
+    with closing(sqlite3.connect(f"{Path(path).resolve().as_uri()}?mode=ro", uri=True)) as db:
+        return describe(db)
+
+
 def export_growing(folder, destination, pending):
     """Write a growing snapshot over the persisted database that preparation still appends to.
 
     The manifest is written once; its counts describe the prefix available at launch.
     The database stays at `folder/raw.sqlite` (see `data/growing.py`), and
-    `complete_growing` records the final counts when preparation is done.
+    `complete_growing` records the final database when preparation is done.
     """
     folder, destination = Path(folder), Path(destination)
-    if destination.exists():
+    if (destination / "manifest.json").exists():
         raise ValueError("Snapshot already exists")
-    database = sqlite3.connect(f"{(folder / 'raw.sqlite').resolve().as_uri()}?mode=ro", uri=True)
-    try:
-        identity, sources = describe(database)
-    finally:
-        database.close()
+    identity, sources = describe_database(folder / "raw.sqlite")
     manifest = {
         "format": GROWING_FORMAT,
         "training_ready": False,
@@ -60,30 +62,19 @@ def export_growing(folder, destination, pending):
         "sources": sources,
         "pending": pending,
     }
-    destination.mkdir(parents=True)
+    destination.mkdir(parents=True, exist_ok=True)
     (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
 
 
-def complete_growing(folder, destination, **details):
-    """Freeze the final database into a growing snapshot and record its counts.
+def complete_growing(destination, **details):
+    """Record the final database preparation persisted into a growing snapshot.
 
-    Later preparation in the same version cannot change the frozen copy, which every
-    later training segment reads (see `data/growing.py`).
+    Later preparation in the same version cannot change this copy, which every later
+    training segment reads (see `data/growing.py`).
     """
-    folder, destination = Path(folder), Path(destination)
-    source = sqlite3.connect(f"{(folder / 'raw.sqlite').resolve().as_uri()}?mode=ro", uri=True)
-    partial = destination / "raw.sqlite.partial"
-    try:
-        _, sources = describe(source)
-        target = sqlite3.connect(partial)
-        try:
-            source.backup(target)
-        finally:
-            target.close()
-    finally:
-        source.close()
-    os.replace(partial, destination / "raw.sqlite")
+    destination = Path(destination)
+    _, sources = describe_database(destination / "raw.sqlite")
     database = {"path": "raw.sqlite", "sha256": digest(destination / "raw.sqlite")}
     record = {"database": database, "sources": sources, **details}
     write_json(destination / COMPLETE_RECORD, record)

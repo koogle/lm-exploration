@@ -160,7 +160,7 @@ class PersistTests(unittest.TestCase):
             root = Path(temporary)
             corpus = FastRawCorpus(root / "local", recipe, reader=reader)
             self.assertTrue(corpus.prepare_parallel(100, max_seconds=5)["ready"])
-            corpus.persist(root / "volume/raw.sqlite", {"web"})
+            corpus.persist([root / "volume/raw.sqlite", root / "snapshot/raw.sqlite"])
             expected = corpus.db.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
             corpus.close()
             copy_db = sqlite3.connect(root / "volume/raw.sqlite")
@@ -170,6 +170,47 @@ class PersistTests(unittest.TestCase):
             self.assertEqual(finished_sources(copy_db), {"web"})
             copy_db.close()
             self.assertFalse((root / "volume/raw.sqlite.partial").exists())
+            self.assertEqual(
+                (root / "snapshot/raw.sqlite").read_bytes(),
+                (root / "volume/raw.sqlite").read_bytes(),
+            )
+            self.assertFalse((root / "local/persist.sqlite").exists())
+
+    def test_a_finished_source_is_never_extended_again(self):
+        from training_data.fast_raw_corpus import FastRawCorpus
+        from training_data.growing import finished_sources
+
+        recipe = {
+            "sources": [
+                {
+                    "name": "web",
+                    "weight_percent": 100,
+                    "files": ["fixture"],
+                    "repo": "test",
+                    "revision": "0" * 40,
+                }
+            ]
+        }
+        rows = [{"id": str(i), "text": f"Document {i} has distinct text."} for i in range(400)]
+
+        def reader(source, shard, start):
+            yield from enumerate(rows[start:], start)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            corpus = FastRawCorpus(root / "local", recipe, batch_size=8, reader=reader)
+            self.assertTrue(corpus.prepare_parallel(100, max_seconds=5)["ready"])
+            stored = corpus.db.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+            corpus.close()
+            # A larger target on reopen would extend an unfinished source.
+            corpus = FastRawCorpus(root / "local", recipe, batch_size=8, reader=reader)
+            self.assertEqual(corpus.finished, {"web"})
+            self.assertTrue(corpus.prepare_parallel(2000, max_seconds=5)["ready"])
+            self.assertEqual(
+                corpus.db.execute("SELECT COUNT(*) FROM documents").fetchone()[0], stored
+            )
+            self.assertEqual(finished_sources(corpus.db), {"web"})
+            corpus.close()
 
     def test_persist_from_a_thread_while_preparation_writes(self):
         import sqlite3
@@ -200,7 +241,7 @@ class PersistTests(unittest.TestCase):
 
             def persist():
                 for index in range(5):
-                    corpus.persist(root / f"volume/raw-{index}.sqlite")
+                    corpus.persist([root / f"volume/raw-{index}.sqlite"])
                     copies.append(root / f"volume/raw-{index}.sqlite")
 
             thread = threading.Thread(target=persist)

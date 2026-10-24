@@ -24,16 +24,19 @@ def check_capacity(report, target):
 
 def check_progress(report, previous_tokens, target, global_positions):
     tokens = report["total_loss_tokens"]
-    if not previous_tokens < tokens <= target:
-        raise ValueError("Training made no progress or exceeded target")
+    reason = report["stop_reason"]
+    # A session can spend its whole time waiting for prepared data (data/growing.py).
+    if not (previous_tokens < tokens or reason == "data_wait" and previous_tokens == tokens):
+        raise ValueError("Training made no progress")
+    if tokens > target:
+        raise ValueError("Training exceeded its target")
     if not math.isfinite(report["final_validation"]["weighted_loss"]):
         raise ValueError("Non-finite validation")
-    reason = report["stop_reason"]
     if reason == "token_limit":
         if target - tokens >= global_positions:
             raise ValueError("Token stop occurred too far below target")
         return True
-    if reason not in ("time_limit", "step_limit"):
+    if reason not in ("time_limit", "step_limit", "data_wait"):
         raise ValueError(f"Training stopped unexpectedly: {reason}")
     return False
 

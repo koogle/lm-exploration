@@ -79,11 +79,12 @@ class PreparedReferenceTests(unittest.TestCase):
             self.assertEqual(manifest["heldout"]["windows"], 3)
             path = root / "snapshot/manifest.json"
             data = RawTokenMixture(path, context=8, allow_unreviewed=True)
-            hidden = data.db.execute(
+            db = data.connect(data.copies.current()["path"])
+            hidden = db.execute(
                 "SELECT COUNT(*) FROM documents WHERE parent='repo/b' AND split='train'"
             ).fetchone()[0]
             self.assertEqual(hidden, 0)
-            counted = data.db.execute(
+            counted = db.execute(
                 "SELECT SUM(loss_tokens) FROM documents WHERE source='code' AND split='train'"
             ).fetchone()[0]
             self.assertEqual(manifest["sources"]["code"]["splits"]["train"]["loss_tokens"], counted)

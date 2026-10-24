@@ -10,16 +10,15 @@ is reached, masking any excess targets in the last window. When every budget is 
 a source runs out of passes, the final partial batch is padded rather than dropped.
 """
 
-import itertools
 import json
 import math
-import os
 import sqlite3
 import zlib
+from contextlib import closing
 from fractions import Fraction
 from pathlib import Path
 
-from .growing import finished_sources
+from .growing import GROWING_FORMAT, database_copies, finished_sources
 from .simple_llm import MAX_PASSES
 from .subword import (
     BOS_TOKEN_ID,
@@ -33,8 +32,6 @@ from .subword import (
 )
 from .token_stream import TokenMixture
 
-# A snapshot whose database preparation is still appending to (see data/growing.py).
-GROWING_FORMAT = "raw-text-growing-v1"
 # Row keys of referenced snapshots keep the stored row ID in the low bits.
 PART_BITS = 40
 
@@ -56,25 +53,11 @@ class RawTokenMixture(TokenMixture):
             or self.manifest["max_passes"] != 2
         ):
             raise ValueError("Tokenizer or repetition policy mismatch")
-        self.growing = None
-        if self.manifest["format"] == GROWING_FORMAT:
-            from .growing import STATE_ENV, GrowingDatabase
-
-            if STATE_ENV not in os.environ:
-                raise ValueError(f"A growing snapshot needs {STATE_ENV} (see data/growing.py)")
-            self.growing = GrowingDatabase(os.environ[STATE_ENV])
-            self.growing.current()
-            # Each source opens the copy it reads (see `blocks`); holding one here would
-            # keep a superseded copy on disk for the whole session.
-            self.db, self.parts = None, None
-        else:
-            artifact = self.manifest["database"]
-            if Path(artifact["path"]).name != artifact["path"]:
-                raise ValueError("Unsafe database path")
-            database = self.path.parent / artifact["path"]
-            if digest(database) != artifact["sha256"]:
-                raise ValueError("Raw database checksum mismatch")
-            self.db = self.connect(database)
+        # Each source opens the copy it reads, so a growing source can move to newer copies.
+        self.growing = self.manifest["format"] == GROWING_FORMAT
+        self.copies = database_copies(self.path, self.manifest)
+        self.copies.current()
+        self.parts = None
         self.context, self.split = context, split
         self.identity = {
             "manifest_sha256": digest(self.path),
@@ -110,7 +93,6 @@ class RawTokenMixture(TokenMixture):
     def connect(self, database):
         db = sqlite3.connect(f"{Path(database).resolve().as_uri()}?mode=ro&immutable=1", uri=True)
         # Referenced snapshots read one view per (database, stored source) part.
-        self.parts = None
         if "external_databases" in self.manifest:
             from .prepared_reference import attach_prepared
 
@@ -142,35 +124,50 @@ class RawTokenMixture(TokenMixture):
             ):
                 yield base + ordinal, text, count
 
-    def open_copy(self, state, name):
-        """A growing copy's connection, whether `name` is final in it, and its generation."""
-        db = self.connect(state["path"])
-        final = state["complete"] or name in finished_sources(db)
-        return db, final, state["generation"]
+    def opened(self, state):
+        """`state`'s copy, or the newest one if the refresher replaced it meanwhile."""
+        try:
+            return state, self.connect(state["path"])
+        except sqlite3.OperationalError:
+            state = self.copies.current()
+            return state, self.connect(state["path"])
 
-    def blocks(self, name):
-        """Documents in insertion order, packed into windows.
+    def documents(self, name, pass_index, start):
+        """A source's rows from row key `start`, following newer copies until it is final.
+
+        Yields `None` before each wait for a newer copy.
 
         A growing snapshot reads a source's first pass as preparation appends documents,
-        waiting for newer copies when it catches up; later passes start once a copy marks
+        waiting for a newer copy when it catches up; later passes start once a copy marks
         the source finished or preparation is done.
         """
+        state = self.copies.current()
+        while True:
+            state, db = self.opened(state)
+            # Released while waiting, so the refresher can replace the copy on disk.
+            with closing(db):
+                final = state["complete"] or name in finished_sources(db)
+                if final or pass_index == 0:
+                    for row in self.rows(db, name, start):
+                        start = row[0] + 1
+                        yield row
+                if final:
+                    return
+            # Let the caller use the rows it holds before this waits for a newer copy.
+            yield None
+            state = self.copies.newer(state["generation"])
+
+    def blocks(self, name):
+        """Documents in insertion order, packed into windows."""
         saved = dict(self.cursors[name])
         for pass_index in range(saved["pass"], self.passes[name]):
             resume = pass_index == saved["pass"]
-            next_row = saved["row"] if resume else 0
-            db, complete = self.db, True
-            if self.growing:
-                db, complete, generation = self.open_copy(self.growing.current(), name)
-                while pass_index > 0 and not complete:
-                    db.close()
-                    db, complete, generation = self.open_copy(self.growing.newer(generation), name)
             buffer = []
             # [document row, offset of the buffer's first token in it, tokens left]
             segments = []
-            while True:
-                for key, ids, expected_count in self.encoded(self.rows(db, name, next_row)):
-                    next_row = key + 1
+            documents = self.documents(name, pass_index, saved["row"] if resume else 0)
+            try:
+                for key, ids, expected_count in self.encoded(documents):
                     if len(ids) + 1 != expected_count or min(
                         ids, default=FIRST_CONTENT_TOKEN_ID
                     ) < (FIRST_CONTENT_TOKEN_ID):
@@ -192,14 +189,8 @@ class RawTokenMixture(TokenMixture):
                             "offset": segments[0][1],
                         }
                         yield self.window(name, pass_index, window)
-                if complete:
-                    break
-                # Caught up with this copy of a database that is still being prepared;
-                # release it while waiting so the refresher can replace it on disk.
-                db.close()
-                db, complete, generation = self.open_copy(self.growing.newer(generation), name)
-            if db is not self.db:
-                db.close()
+            finally:
+                documents.close()
             if len(buffer) > 1:
                 key, start, length = segments[-1]
                 self.cursors[name] = {"pass": pass_index, "row": key, "offset": start + length}
@@ -209,14 +200,23 @@ class RawTokenMixture(TokenMixture):
         """Yield (row key, token IDs, expected count), tokenizing `chunk` documents per call.
 
         encode_batch spreads a chunk over all CPU cores; one encode per document kept
-        the training GPUs waiting on a single core.
+        the training GPUs waiting on a single core. A `None` row (see `documents`) flushes
+        a partial chunk before the rows pause.
         """
-        rows = iter(rows)
-        while batch := list(itertools.islice(rows, chunk)):
-            texts = [zlib.decompress(raw).decode() for _, raw, _ in batch]
-            encodings = self.tokenizer.encode_batch(texts, add_special_tokens=False)
-            for (key, _, expected_count), encoding in zip(batch, encodings, strict=True):
-                yield key, encoding.ids, expected_count
+        batch = []
+        for row in rows:
+            if row is not None:
+                batch.append(row)
+            if batch and (row is None or len(batch) == chunk):
+                yield from self.encode(batch)
+                batch = []
+        yield from self.encode(batch)
+
+    def encode(self, batch):
+        texts = [zlib.decompress(raw).decode() for _, raw, _ in batch]
+        encodings = self.tokenizer.encode_batch(texts, add_special_tokens=False)
+        for (key, _, expected_count), encoding in zip(batch, encodings, strict=True):
+            yield key, encoding.ids, expected_count
 
     def window(self, name, pass_index, tokens):
         x, y = tokens[:-1], tokens[1:]
@@ -332,13 +332,7 @@ class RawTokenMixture(TokenMixture):
 
     def interrupt(self):
         """End a wait for newer prepared data from another thread (see data/growing.py)."""
-        if self.growing:
-            self.growing.interrupt()
-
-    def close(self):
-        super().close()
-        if self.db is not None:
-            self.db.close()
+        self.copies.interrupt()
 
 
 def consume(segments, count):
