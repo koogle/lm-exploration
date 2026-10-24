@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-TOKENIZER_SHA256 = "8d77c172bad41bab8388e2e1351e86f178243167764025c515e2567e11aa1e5b"
+TOKENIZER_SHA256 = "48aa6fb6d01d04067570637ca8a5ecced608f5df5585f9ce44a12c05c5281ae5"
 VOCAB_SIZE = 32768
 
 # Vocabulary IDs fixed by the frozen tokenizer artifact.

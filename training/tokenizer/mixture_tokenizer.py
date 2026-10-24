@@ -122,7 +122,7 @@ def fit(sample_folder, output, vocab=32768):
     start = time.perf_counter()
     tokenizer.train_from_iterator((r["text"] for r in rows(sample_folder / "train.jsonl")), trainer)
     elapsed = time.perf_counter() - start
-    tokenizer.save(str(output / "tokenizer.json"))
+    tokenizer.save(str(output / "tokenizer.json"), pretty=False)
     if tokenizer.get_vocab_size() != vocab:
         raise ValueError("Requested vocabulary not reached")
     for spelling, expected in SPECIAL_TOKEN_IDS.items():

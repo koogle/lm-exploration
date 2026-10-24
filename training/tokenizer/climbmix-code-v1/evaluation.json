@@ -2,7 +2,7 @@
   "eval_sha256": "71e377e1008755b83876ebab70f509df46974387d270ca218ceb7a7263ade543",
   "tokenizers": {
     "climbmix-code-v1": {
-      "tokenizer_sha256": "8d77c172bad41bab8388e2e1351e86f178243167764025c515e2567e11aa1e5b",
+      "tokenizer_sha256": "48aa6fb6d01d04067570637ca8a5ecced608f5df5585f9ce44a12c05c5281ae5",
       "sources": {
         "climbmix": {
           "bytes": 14743727,
