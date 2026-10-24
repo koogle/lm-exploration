@@ -168,3 +168,52 @@ class PersistTests(unittest.TestCase):
             )
             copy_db.close()
             self.assertFalse((root / "volume/raw.sqlite.partial").exists())
+
+    def test_persist_from_a_thread_while_preparation_writes(self):
+        import sqlite3
+        import threading
+
+        from training_data.fast_raw_corpus import FastRawCorpus
+
+        recipe = {
+            "sources": [
+                {
+                    "name": "web",
+                    "weight_percent": 100,
+                    "files": ["fixture"],
+                    "repo": "test",
+                    "revision": "0" * 40,
+                }
+            ]
+        }
+        rows = [{"id": str(i), "text": f"Document {i} has distinct text."} for i in range(400)]
+
+        def reader(source, shard, start):
+            yield from enumerate(rows[start:], start)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            corpus = FastRawCorpus(root / "local", recipe, batch_size=8, reader=reader)
+            copies = []
+
+            def persist():
+                for index in range(5):
+                    corpus.persist(root / f"volume/raw-{index}.sqlite")
+                    copies.append(root / f"volume/raw-{index}.sqlite")
+
+            thread = threading.Thread(target=persist)
+            thread.start()
+            corpus.prepare_parallel(2000, max_seconds=5)
+            thread.join()
+            corpus.close()
+            counts = []
+            for copy in copies:
+                # Read-only consumers need no WAL files beside the copy.
+                db = sqlite3.connect(f"{copy.resolve().as_uri()}?mode=ro", uri=True)
+                self.assertEqual(db.execute("PRAGMA journal_mode").fetchone()[0], "delete")
+                total = db.execute("SELECT COUNT(*) FROM documents WHERE conflict=0").fetchone()[0]
+                stored = db.execute("SELECT SUM(documents) FROM fast_counts").fetchone()[0]
+                db.close()
+                self.assertEqual(total, stored or 0)
+                counts.append(total)
+            self.assertEqual(counts, sorted(counts))

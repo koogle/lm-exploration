@@ -49,13 +49,15 @@ single-pass continuation is every source with `--one-pass`.
 - **Whole shards.** `CachedShards` downloads each JSON or Parquet shard to local disk
   before reading it. Downloading a 92 MB ClimbMix shard and parsing it reads about
   36M characters/s, against about 1.6M/s for HTTP range reads.
-- **Local staging.** `prepare_and_launch` keeps the SQLite database on local disk and
-  copies a consistent backup to the volume every five minutes and when preparation is
-  ready, instead of committing every batch to the network volume.
+- **Local staging.** `prepare_and_launch` keeps the SQLite database on local disk (in
+  WAL mode) instead of committing every batch to the network volume. A background
+  thread copies a consistent snapshot to the volume every `persist_seconds` (workflow
+  setting, default 600) while preparation keeps writing; a final copy follows when
+  preparation is ready.
 - **Overlap.** Each source fetches and tokenizes its next batch while the previous one
   is written. Workflows use 1,024-document batches (still capped at 4 MiB of text).
 - **Training during preparation.** With `overlap_preparation: true` in the workflow,
-  `prepare_and_launch` persists and starts training as soon as every source has
+  `prepare_and_launch` copies the database and starts training as soon as every source has
   training data and enough validation tokens for the configured validation windows.
   It writes a `raw-text-growing-v1` manifest whose counts describe that prefix. The
   manifest does not name a database; the loader reads the version's `raw.sqlite` as it

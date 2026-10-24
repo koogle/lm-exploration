@@ -39,6 +39,8 @@ class WorkflowConfig:
     tokenizer_threads: int = 8
     database_batch_size: int = 64
     preparation_chunk_seconds: int = 20
+    # How often preparation copies its staging database to the volume, in the background.
+    persist_seconds: int = 600
     # Start training on a growing snapshot once every source has a usable prefix.
     overlap_preparation: bool = False
 
@@ -60,6 +62,7 @@ class WorkflowConfig:
             "tokenizer_threads",
             "database_batch_size",
             "preparation_chunk_seconds",
+            "persist_seconds",
         ):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"Workflow {name} must be a positive integer")
