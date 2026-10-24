@@ -7,7 +7,7 @@ CUDA 13.0 devel base matches torch 2.14.1+cu130.
 import modal
 
 CUDA_BASE = "nvidia/cuda:13.0.0-devel-ubuntu22.04"
-PACKAGES = ("torch==2.14.1", "numpy", "einops", "ninja")
+PACKAGES = ("torch==2.14.1", "numpy", "einops", "ninja", "fla-core==0.6.0", "packaging")
 
 image = (
     modal.Image.from_registry(CUDA_BASE, add_python="3.12")
