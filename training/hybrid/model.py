@@ -109,6 +109,7 @@ class HybridConfig:
     n_kv_head: int = 4
     head_dim: int = 128
     mlp_hidden: int = 4096
+    gate_bias_init: float = 3.0
     rope_base: float = 1_000_000.0
     norm_eps: float = 1e-5
     init_std: float = 0.02
@@ -117,7 +118,7 @@ class HybridConfig:
 
     def __post_init__(self):
         for name, value in asdict(self).items():
-            if name not in ("z_loss", "eos_id") and value <= 0:
+            if name not in ("z_loss", "eos_id", "gate_bias_init") and value <= 0:
                 raise ValueError(f"{name} must be positive")
         if self.z_loss < 0:
             raise ValueError("z_loss must be non-negative")
@@ -156,7 +157,13 @@ def document_positions(documents):
 
 
 class Attention(nn.Module):
-    """Document-causal GQA with QK-norm and RoPE."""
+    """Document-causal GQA with QK-norm, RoPE, an attention sink and an output gate.
+
+    The sink is one learned logit per head for an extra key with a zero value:
+    softmax over [scores, sink] scales the output by sigmoid(lse - sink). The
+    elementwise gate sigmoid(W_g x + b) is computed from the layer input; `b` is
+    the family's only bias and starts at `gate_bias_init` (3.0: about 95% open).
+    """
 
     def __init__(self, config):
         super().__init__()
@@ -170,6 +177,11 @@ class Attention(nn.Module):
         self.v_proj = nn.Linear(config.n_embd, config.n_kv_head * config.head_dim, bias=False)
         self.q_norm = RMSNorm(config.head_dim, config.norm_eps)
         self.k_norm = RMSNorm(config.head_dim, config.norm_eps)
+        self.sink = nn.Parameter(torch.zeros(config.n_head))
+        self.gate_proj = nn.Linear(config.n_embd, config.n_head * config.head_dim, bias=False)
+        self.gate_bias = nn.Parameter(
+            torch.full((config.n_head * config.head_dim,), config.gate_bias_init)
+        )
         self.o_proj = nn.Linear(config.n_head * config.head_dim, config.n_embd, bias=False)
         self.o_proj.residual_output = True
 
@@ -185,9 +197,14 @@ class Attention(nn.Module):
 
     def forward(self, x, rope, mask):
         query, key, value = self.project(x, rope)
-        attended = attend(query, key, value, mask)[0]
+        attended, lse = attend(query, key, value, mask)
+        # lse is fp32 from FlexAttention, and fp32/fp64 from the reference.
+        kept = torch.sigmoid(lse - self.sink.to(lse.dtype)[:, None])
+        attended = (attended * kept[..., None]).to(attended.dtype)
         batch, length, _ = x.shape
-        return self.o_proj(attended.transpose(1, 2).reshape(batch, length, -1))
+        attended = attended.transpose(1, 2).reshape(batch, length, -1)
+        gate = torch.sigmoid(self.gate_proj(x) + self.gate_bias)
+        return self.o_proj(attended * gate.to(attended.dtype))
 
 
 class Block(nn.Module):
