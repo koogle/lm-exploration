@@ -1,93 +1,20 @@
-import gzip
 import json
 import math
-import sys
 import tempfile
 import unittest
 import unittest.mock
 from pathlib import Path
 
-import numpy as np
-import torch
+import helpers  # noqa: F401  (sets sys.path for the project modules below)
+from helpers import tiny_shard
 
-HERE = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(HERE), str(HERE.parents[1] / "training")]
-sys.modules.setdefault("model_10m", __import__("importlib").import_module("10m"))
-sys.modules.setdefault(
-    "model_10m.model", __import__("importlib").import_module("10m.model")
-)
-
-import evalsets
-import grader
+# isort: split
 import jobs
+import numpy as np
 import prepare
 import student
-from common import QWEN_VOCAB, TOPK
-
-
-def chunk_file(directory, records):
-    path = Path(directory) / "chunk.jsonl.gz"
-    with gzip.open(path, "wt") as handle:
-        for record in records:
-            handle.write(json.dumps(record) + "\n")
-    return path
-
-
-def record(tokens, accepted=True, finish="stop"):
-    rng = np.random.default_rng(len(tokens))
-    ids = [[t] + rng.integers(0, 50, 63).tolist() for t in tokens]
-    logprobs = [
-        sorted(np.log(rng.dirichlet(np.ones(64)) * 0.99).tolist(), reverse=True)
-    ]
-    return {
-        "id": f"r{tokens[0]}",
-        "prompt": "p",
-        "text": json.dumps(
-            {"problem": "x", "code": "def solve():\n    return 1", "explanation": "e"}
-        ),
-        "accepted": accepted,
-        "finish_reason": finish,
-        "token_ids": tokens,
-        "targets": {"topk_ids": ids, "topk_logprobs": logprobs * len(tokens)},
-    }
-
-
-class PrepareTest(unittest.TestCase):
-    def test_shard_keeps_accepted_stop_records_aligned(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = chunk_file(
-                tmp,
-                [
-                    record([5, 6, 7]),
-                    record([8, 9], accepted=False),
-                    record([10, 11], finish="length"),
-                    record([12, 13]),
-                ],
-            )
-            summary = prepare.write_shard(
-                [path], Path(tmp) / "shard", keep_records=True
-            )
-            shard = Path(tmp) / "shard"
-            self.assertEqual(summary["documents"], 2)
-            np.testing.assert_array_equal(
-                np.load(shard / "tokens.npy"), [5, 6, 7, 12, 13]
-            )
-            np.testing.assert_array_equal(np.load(shard / "offsets.npy"), [0, 3, 5])
-            self.assertEqual(np.load(shard / "topk_ids.npy").shape, (5, TOPK))
-            np.testing.assert_array_equal(
-                np.load(shard / "topk_ids.npy")[:, 0], [5, 6, 7, 12, 13]
-            )
-            self.assertEqual(np.load(shard / "counts.npy")[12], 1)
-            self.assertEqual(len((shard / "records.jsonl").read_text().splitlines()), 2)
-
-    def test_trimmed_vocabulary_maps_rare_ids_to_unknown(self):
-        counts = np.zeros(QWEN_VOCAB, dtype=np.int64)
-        counts[[10, 20, 30]] = [5, 9, 1]
-        table, kept = prepare.build_vocab(counts, 5)
-        np.testing.assert_array_equal(kept, [20, 10])
-        self.assertEqual(table[20], 3)
-        self.assertEqual(table[10], 4)
-        self.assertEqual(table[30], student.UNK)
+import torch
+from common import QWEN_VOCAB
 
 
 class LossTest(unittest.TestCase):
@@ -138,27 +65,6 @@ class LossTest(unittest.TestCase):
             logits, torch.tensor([[0, 1]]), torch.log(torch.tensor([[0.5, 0.25]]))
         )
         self.assertAlmostEqual(float(soft - entropy), 0.0, places=6)
-
-
-def tiny_shard(directory, documents):
-    rng = np.random.default_rng(1)
-    tokens = np.concatenate(documents).astype(np.int32)
-    offsets = np.concatenate([[0], np.cumsum([len(d) for d in documents])])
-    ids = np.stack(
-        [tokens] + [rng.integers(0, 40, tokens.size) for _ in range(TOPK - 1)], 1
-    )
-    lp = np.full((tokens.size, TOPK), math.log(0.9 / TOPK), dtype=np.float16)
-    lp[:, 0] = math.log(0.1)
-    shard = Path(directory)
-    shard.mkdir(parents=True, exist_ok=True)
-    for name, array in {
-        "tokens": tokens,
-        "offsets": offsets,
-        "topk_ids": ids.astype(np.int32),
-        "topk_logprobs": lp,
-    }.items():
-        np.save(shard / f"{name}.npy", array)
-    return shard
 
 
 class StreamTest(unittest.TestCase):
@@ -237,155 +143,6 @@ class ModelTest(unittest.TestCase):
             )
 
 
-class EvalSetTest(unittest.TestCase):
-    def test_code_string_parsing(self):
-        self.assertEqual(
-            evalsets.parse_code_string(
-                'def solve(x):\\n    return \\"a\\"",\n  "explanation"'
-            ),
-            'def solve(x):\n    return "a"',
-        )
-        self.assertIsNone(evalsets.parse_code_string("def solve(x):\\n    return 1"))
-
-    def test_student_prompt_round_trips_through_json(self):
-        prompt = (
-            evalsets.student_prompt('Say "hi"')
-            + 'def solve():\\n    pass", "explanation": "x"}'
-        )
-        self.assertEqual(json.loads(prompt)["code"], "def solve():\n    pass")
-
-    def test_mbpp_items_rename_tested_function(self):
-        row = {
-            "task_id": 2,
-            "prompt": "Write a function to find the shared elements.",
-            "code": "def helper(x):\n    return x\n\ndef similar_elements(a, b):\n    return tuple(set(a) & set(b))",
-            "test_imports": [],
-            "test_list": ["assert set(similar_elements((3, 4), (5, 4))) == set((4,))"],
-        }
-        item = evalsets.mbpp_items([row])[0]
-        self.assertIn("`def solve(a, b):`", item["problem"])
-        self.assertEqual(
-            item["tests"], ["assert set(solve((3, 4), (5, 4))) == set((4,))"]
-        )
-        result = grader.run_case(
-            {"key": "k", "code": item["reference"], "setup": "", "tests": item["tests"]}
-        )
-        self.assertTrue(result["passed"], result)
-
-    def test_valid_tests_keeps_single_line_asserts(self):
-        tests = [
-            "assert solve(1) == 2",
-            "x = 1",
-            "assert other(1)",
-            "assert solve(\n1)",
-            3,
-        ]
-        self.assertEqual(evalsets.valid_tests(tests), ["assert solve(1) == 2"])
-
-    def test_teacher_json_answer_with_fence(self):
-        text = 'Sure\n```json\n{"code": "def solve():\\n    return 1"}\n```'
-        self.assertEqual(
-            evalsets.parse_json_answer(text, "code"), "def solve():\n    return 1"
-        )
-
-
-class ScoreTest(unittest.TestCase):
-    def test_score_counts_passes_per_set_with_interval(self):
-        items = [
-            {"id": "a", "set": "mbpp"},
-            {"id": "b", "set": "mbpp"},
-            {"id": "c", "set": "curriculum"},
-        ]
-        completions = {"a": {"code": "x"}, "b": {"code": None}, "c": {"code": "y"}}
-        grades = {"a": {"passed": True}, "c": {"passed": False}}
-        scores = jobs.score(items, completions, grades)
-        self.assertEqual(scores["mbpp"]["passed"], 1)
-        self.assertEqual(scores["mbpp"]["parsed"], 1)
-        self.assertEqual(scores["curriculum"]["pass_rate"], 0.0)
-        low, high = jobs.wilson(3, 32)
-        self.assertAlmostEqual(low, 0.0324, places=3)
-        self.assertAlmostEqual(high, 0.2422, places=3)
-
-
-class GraderTest(unittest.TestCase):
-    # Fixed snippets only; model outputs are graded in the network-blocked sandbox.
-    def test_pass_fail_error_and_timeout(self):
-        cases = [
-            {
-                "key": "pass",
-                "code": "def solve(x):\n    return x + 1",
-                "setup": "",
-                "tests": ["assert solve(1) == 2"],
-            },
-            {
-                "key": "fail",
-                "code": "def solve(x):\n    return x",
-                "setup": "",
-                "tests": ["assert solve(1) == 2"],
-            },
-            {
-                "key": "error",
-                "code": "def solve(x):\n    return y",
-                "setup": "",
-                "tests": ["assert solve(1) == 2"],
-            },
-            {
-                "key": "exit",
-                "code": "import sys\nsys.exit(0)",
-                "setup": "",
-                "tests": [],
-            },
-            {"key": "loop", "code": "while True:\n    pass", "setup": "", "tests": []},
-        ]
-        results = grader.grade(cases)
-        self.assertTrue(results["pass"]["passed"])
-        for key in ("fail", "error", "exit", "loop"):
-            self.assertFalse(results[key]["passed"], key)
-        self.assertIn("NameError", results["error"]["error"])
-
-
-class AdoptionTest(unittest.TestCase):
-    def test_restart_adopts_only_its_own_unfailed_calls(self):
-        import modal_app
-
-        previous = {
-            "supervisor_call_id": "fc-1",
-            "calls": {"a": {"id": "fc-a"}, "b": {"id": "fc-b", "error": "boom"}},
-        }
-        self.assertEqual(modal_app.adoptable(previous, "fc-1"), {"a": {"id": "fc-a"}})
-        self.assertEqual(modal_app.adoptable(previous, "fc-2"), {})
-        self.assertEqual(modal_app.adoptable({}, "fc-1"), {})
-
-
-class PollTest(unittest.TestCase):
-    def test_unfinished_call_is_pending_not_failed(self):
-        import modal
-        import modal_app
-
-        class Call:
-            def __init__(self, outcome):
-                self.outcome = outcome
-
-            def get(self, timeout=None):
-                if isinstance(self.outcome, BaseException):
-                    raise self.outcome
-                return self.outcome
-
-        self.assertEqual(modal_app.poll(Call(TimeoutError())), ("pending", None))
-        self.assertEqual(
-            modal_app.poll(Call(modal.exception.TimeoutError())), ("pending", None)
-        )
-        self.assertEqual(modal_app.poll(Call({"ok": 1})), ("done", {"ok": 1}))
-        state, _ = modal_app.poll(
-            Call(modal.exception.FunctionTimeoutError("child timed out"))
-        )
-        self.assertEqual(state, "error")
-        state, _ = modal_app.poll(Call(modal.exception.InputCancellation("cancelled")))
-        self.assertEqual(state, "error")
-        state, _ = modal_app.poll(Call(ValueError("boom")))
-        self.assertEqual(state, "error")
-
-
 class CoveringVocabularyTest(unittest.TestCase):
     def fake_tokenizer(self):
         decoder = prepare.byte_decoder()
@@ -439,6 +196,24 @@ class CoveringVocabularyTest(unittest.TestCase):
         self.assertEqual(
             ids[0, 0], abc[0]
         )  # teacher's top-1 (the token) maps to its first piece
+
+
+class ScoreTest(unittest.TestCase):
+    def test_score_counts_passes_per_set_with_interval(self):
+        items = [
+            {"id": "a", "set": "mbpp"},
+            {"id": "b", "set": "mbpp"},
+            {"id": "c", "set": "curriculum"},
+        ]
+        completions = {"a": {"code": "x"}, "b": {"code": None}, "c": {"code": "y"}}
+        grades = {"a": {"passed": True}, "c": {"passed": False}}
+        scores = jobs.score(items, completions, grades)
+        self.assertEqual(scores["mbpp"]["passed"], 1)
+        self.assertEqual(scores["mbpp"]["parsed"], 1)
+        self.assertEqual(scores["curriculum"]["pass_rate"], 0.0)
+        low, high = jobs.wilson(3, 32)
+        self.assertAlmostEqual(low, 0.0324, places=3)
+        self.assertAlmostEqual(high, 0.2422, places=3)
 
 
 class VllmModelDirTest(unittest.TestCase):
