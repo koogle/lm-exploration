@@ -1,4 +1,4 @@
-"""vLLM generation for the teacher and the exported students (one GPU, greedy).
+"""vLLM generation for the teacher and the students (one GPU, greedy).
 
 Modes:
 - ``tests``: teacher writes hidden asserts for held-out curriculum problems.
