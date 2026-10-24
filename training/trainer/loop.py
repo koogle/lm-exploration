@@ -107,7 +107,8 @@ def evaluate_sources(model, heldout, *, device="cuda", bf16=True):
     A block's `stratum` defaults to its source.
     """
     import torch
-    from torch.nn import functional as F
+
+    from trainer.loss import cross_entropy
 
     losses, counts, stratum_sums, stratum_counts = {}, {}, {}, {}
     with torch.no_grad():
@@ -117,7 +118,7 @@ def evaluate_sources(model, heldout, *, device="cuda", bf16=True):
                 x = torch.tensor([block["input_ids"]], device=device)
                 y = torch.tensor([block["labels"]], device=device)
                 with torch.autocast(torch.device(device).type, dtype=torch.bfloat16, enabled=bf16):
-                    loss = F.cross_entropy(
+                    loss = cross_entropy(
                         model(x).flatten(0, 1),
                         y.flatten(),
                         reduction="sum",
@@ -155,7 +156,8 @@ def backward_batch(
     DDP's autograd hooks reduce gradients during the final microbatch backward.
     """
     import torch
-    from torch.nn import functional as F
+
+    from trainer.loss import cross_entropy
 
     total_loss = torch.zeros((), device=x.device)
     parts = list(zip(x.split(microbatch), y.split(microbatch)))
@@ -167,9 +169,11 @@ def backward_batch(
         with nullcontext() if is_last_microbatch else ddp.no_sync():
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=bf16):
                 if loss_chunk_size:
-                    loss = ddp(mx, labels=my, loss_chunk_size=loss_chunk_size)
+                    loss = ddp(
+                        mx, labels=my, loss_chunk_size=loss_chunk_size, loss_fn=cross_entropy
+                    )
                 else:
-                    loss = F.cross_entropy(
+                    loss = cross_entropy(
                         ddp(mx).flatten(0, 1),
                         my.flatten(),
                         reduction="sum",

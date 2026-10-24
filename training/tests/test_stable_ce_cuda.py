@@ -61,6 +61,42 @@ class CudaCrossEntropyTests(unittest.TestCase):
             torch.testing.assert_close(loss.float(), expected_loss)
             torch.testing.assert_close(actual.float(), expected.float())
 
+    def test_compiled_matches_eager(self):
+        torch.manual_seed(2)
+        z = torch.randn(32, 1000, device="cuda")
+        targets = torch.randint(0, 1000, (32,), device="cuda")
+        targets[0] = -100
+        compiled = torch.compile(lambda z: self.kernel(z, targets, reduction="sum"), fullgraph=True)
+        expected_loss, expected = grad(lambda z: self.kernel(z, targets, reduction="sum"), z)
+        loss, actual = grad(compiled, z)
+        torch.testing.assert_close(loss, expected_loss)
+        torch.testing.assert_close(actual, expected)
+
+    def test_model_dense_and_chunked_losses_match_standard(self):
+        from model_100m.model import GPT, ModelConfig
+
+        from trainer.loss import cross_entropy
+
+        torch.manual_seed(3)
+        model = GPT(ModelConfig(vocab_size=512, block_size=64, n_layer=2, n_head=2, n_embd=64))
+        model = model.cuda()
+        x = torch.randint(0, 512, (4, 64), device="cuda")
+        y = torch.randint(0, 512, (4, 64), device="cuda")
+        y[1, 20:] = -100
+
+        def run(**kwargs):
+            model.zero_grad()
+            loss = model(x, labels=y, **kwargs)
+            loss.backward()
+            return loss.detach(), [p.grad.clone() for p in model.parameters()]
+
+        expected_loss, expected = run()
+        for chunk in (0, 37):
+            loss, actual = run(loss_chunk_size=chunk, loss_fn=cross_entropy)
+            torch.testing.assert_close(loss, expected_loss, rtol=1e-5, atol=1e-4)
+            for a, b in zip(actual, expected):
+                torch.testing.assert_close(a, b, rtol=1e-4, atol=1e-6)
+
 
 if __name__ == "__main__":
     unittest.main()
