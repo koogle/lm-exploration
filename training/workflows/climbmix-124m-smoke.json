@@ -14,6 +14,6 @@
   "qualification_steps": 2,
   "source_workers": 3,
   "tokenizer_threads": 8,
-  "database_batch_size": 64,
+  "database_batch_size": 1024,
   "preparation_chunk_seconds": 20
 }

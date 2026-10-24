@@ -3,20 +3,13 @@
 import json
 from pathlib import Path
 
-from .simple_llm import SPLIT_VERSION
+from .raw_corpus import staging_identity
 from .subword import TOKENIZER_SHA256, digest
 
 
 def find_prepared_snapshot(folder, recipe, target_tokens):
     folder = Path(folder)
-    expected = {
-        "recipe": recipe,
-        "tokenizer": TOKENIZER_SHA256,
-        "split": SPLIT_VERSION,
-        "implementation_sha256": digest(Path(__file__).with_name("raw_corpus.py")),
-        "adapter_sha256": digest(Path(__file__).with_name("simple_llm.py")),
-        "tokenizer_loader_sha256": digest(Path(__file__).with_name("subword.py")),
-    }
+    expected = staging_identity(recipe)
     weights = {s["name"]: s["weight_percent"] for s in recipe["sources"]}
     for path in sorted((folder / "snapshots").glob("*/manifest.json")):
         manifest = json.loads(path.read_text())
@@ -31,7 +24,8 @@ def find_prepared_snapshot(folder, recipe, target_tokens):
         if {name: s["weight_percent"] for name, s in sources.items()} != weights:
             continue
         if any(
-            s["splits"]["train"]["loss_tokens"] * 200 < target_tokens * s["weight_percent"]
+            s["splits"]["train"]["loss_tokens"] * 100 * s.get("max_passes", 2)
+            < target_tokens * s["weight_percent"]
             or s["splits"]["validation"]["loss_tokens"] <= 0
             for s in sources.values()
         ):

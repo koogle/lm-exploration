@@ -31,6 +31,29 @@ uv run python -m training_data.export_raw --folder STAGING --destination SNAPSHO
 (`raw_token_stream.token_targets`), so the per-source targets sum exactly to it. A
 single-pass continuation is every source with `--one-pass`.
 
+## Preparation speed and reuse
+
+- **Reuse first.** A finished snapshot stays on the data volume. Train from it with a
+  `mode: "snapshot"` dataset config, for example
+  [`climbmix-code-v3-2b.json`](../workflows/datasets/climbmix-code-v3-2b.json) for the
+  first 2B run's data; no preparation runs. A `prepare_raw` workflow also reuses a
+  snapshot whose staging identity matches: the recipe, tokenizer SHA256, split rule and
+  `PREPARATION_VERSION` in [`raw_corpus.py`](raw_corpus.py). Raise that version only when
+  adapters, filters, deduplication or stored fields change what a recipe prepares;
+  other code edits keep prepared data reusable.
+- **Whole shards.** `CachedShards` downloads each JSON or Parquet shard to local disk
+  before reading it. Downloading a 92 MB ClimbMix shard and parsing it reads about
+  36M characters/s, against about 1.6M/s for HTTP range reads.
+- **Local staging.** `prepare_and_launch` keeps the SQLite database on local disk and
+  copies a consistent backup to the volume every five minutes and when preparation is
+  ready, instead of committing every batch to the network volume.
+- **Overlap.** Each source fetches and tokenizes its next batch while the previous one
+  is written. Workflows use 1,024-document batches (still capped at 4 MiB of text).
+
+Measured on one ClimbMix shard in a 4-CPU container (2026-10-24): 759K tokens/s before
+these changes, 1.05M with the overlap and 1.17M with 1,024-document batches. The first
+2B run's preparation on Modal, before these changes, managed 60–100K tokens/s.
+
 ## Explicit small-model workflow
 
 Run commands from `training/`. `workflows/modal_train.py` implements

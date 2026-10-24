@@ -11,7 +11,21 @@ import zlib
 from pathlib import Path
 
 from .simple_llm import SPLIT_VERSION, adapt, canonical, stream_rows
-from .subword import FIRST_CONTENT_TOKEN_ID, TOKENIZER_SHA256, digest, load_frozen
+from .subword import FIRST_CONTENT_TOKEN_ID, TOKENIZER_SHA256, load_frozen
+
+# Raise when adapters, filters, deduplication or stored fields change what a
+# recipe prepares. Unrelated code edits keep prepared data reusable.
+PREPARATION_VERSION = "raw-prep-v1"
+
+
+def staging_identity(recipe):
+    """What determines prepared data: recipe, tokenizer, split rule and preparation version."""
+    return {
+        "recipe": recipe,
+        "tokenizer": TOKENIZER_SHA256,
+        "split": SPLIT_VERSION,
+        "preparation": PREPARATION_VERSION,
+    }
 
 
 class RawCorpus:
@@ -33,16 +47,7 @@ class RawCorpus:
             CREATE TABLE IF NOT EXISTS decisions (
                 source TEXT, reason TEXT, count INTEGER, PRIMARY KEY(source, reason));
         """)
-        identity = canonical(
-            {
-                "recipe": recipe,
-                "tokenizer": TOKENIZER_SHA256,
-                "split": SPLIT_VERSION,
-                "implementation_sha256": digest(__file__),
-                "adapter_sha256": digest(Path(__file__).with_name("simple_llm.py")),
-                "tokenizer_loader_sha256": digest(Path(__file__).with_name("subword.py")),
-            }
-        )
+        identity = canonical(staging_identity(recipe))
         previous = self.db.execute("SELECT value FROM settings WHERE id=1").fetchone()
         if previous and previous[0] != identity:
             self.db.close()

@@ -76,3 +76,95 @@ class CachedShardsTests(unittest.TestCase):
                 self.assertFalse((Path(temporary) / "code_python/a.gz").exists())
                 self.assertTrue((Path(temporary) / "code_python/b.gz").exists())
                 self.assertEqual(fetch.call_args.kwargs["revision"], source["revision"])
+
+    def test_parquet_shards_download_whole_and_resume_mid_shard(self):
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        source = {"name": "web", "format": "parquet", "repo": "test", "revision": "0" * 40}
+        with tempfile.TemporaryDirectory() as temporary:
+
+            def download(**kwargs):
+                path = Path(kwargs["local_dir"]) / kwargs["filename"]
+                path.parent.mkdir(parents=True, exist_ok=True)
+                table = pa.table({"text": [f"row {i}" for i in range(2500)]})
+                pq.write_table(table, path, row_group_size=1000)
+                return str(path)
+
+            with patch("huggingface_hub.hf_hub_download", side_effect=download):
+                rows = list(CachedShards(temporary)(source, "s.parquet", start=1999))
+            self.assertEqual(rows[0], (1999, {"text": "row 1999"}))
+            self.assertEqual([i for i, _ in rows], list(range(1999, 2500)))
+
+
+class PreparationReuseTests(unittest.TestCase):
+    def test_reuse_survives_code_edits_and_honors_pass_caps(self):
+        recipe = {
+            "sources": [
+                {
+                    "name": "small",
+                    "weight_percent": 100,
+                    "files": ["fixture"],
+                    "repo": "test",
+                    "revision": "0" * 40,
+                    "max_passes": 4,
+                }
+            ]
+        }
+        rows = [{"id": str(i), "text": f"Document {i} has distinct text."} for i in range(100)]
+
+        def reader(source, shard, start):
+            yield from enumerate(rows[start:], start)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            corpus = RawCorpus(folder, recipe)
+            corpus.prepare("small", reader=reader)
+            train = corpus.counts("small")["train"]
+            corpus.close()
+            export_raw(folder, folder / "snapshots" / "first")
+            # The identity names data inputs and a preparation version, not code hashes.
+            manifest = json.loads((folder / "snapshots/first/manifest.json").read_text())
+            self.assertEqual(
+                set(manifest["staging_identity"]), {"recipe", "tokenizer", "split", "preparation"}
+            )
+            # Four passes stretch the same unique tokens to four times the target.
+            self.assertIsNotNone(find_prepared_snapshot(folder, recipe, train * 4))
+            self.assertIsNone(find_prepared_snapshot(folder, recipe, train * 4 + 1))
+
+
+class PersistTests(unittest.TestCase):
+    def test_persist_writes_a_consistent_copy(self):
+        import sqlite3
+
+        from training_data.fast_raw_corpus import FastRawCorpus
+
+        recipe = {
+            "sources": [
+                {
+                    "name": "web",
+                    "weight_percent": 100,
+                    "files": ["fixture"],
+                    "repo": "test",
+                    "revision": "0" * 40,
+                }
+            ]
+        }
+        rows = [{"id": str(i), "text": f"Document {i} has distinct text."} for i in range(50)]
+
+        def reader(source, shard, start):
+            yield from enumerate(rows[start:], start)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            corpus = FastRawCorpus(root / "local", recipe, reader=reader)
+            self.assertTrue(corpus.prepare_parallel(100, max_seconds=5)["ready"])
+            corpus.persist(root / "volume/raw.sqlite")
+            expected = corpus.db.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+            corpus.close()
+            copy_db = sqlite3.connect(root / "volume/raw.sqlite")
+            self.assertEqual(
+                copy_db.execute("SELECT COUNT(*) FROM documents").fetchone()[0], expected
+            )
+            copy_db.close()
+            self.assertFalse((root / "volume/raw.sqlite.partial").exists())

@@ -25,6 +25,10 @@ data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
 run_volume = modal.Volume.from_name("lm-exploration-training")
 
 
+# How often preparation copies its local staging database to the data volume.
+PERSIST_SECONDS = 300
+
+
 def track_call(run_id, call_id, kind):
     """Record a call so the deadline supervisor can cancel it."""
     from workflows.deadline import track
@@ -190,6 +194,7 @@ def continue_training(
 )
 def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=False):
     import os
+    import shutil
 
     from training_data.cached_shards import CachedShards
     from training_data.export_raw import export_raw
@@ -258,18 +263,28 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
             )
             track_call(run_id, call.object_id, "continue_training")
             return {"training_call_id": call.object_id, "snapshot": snapshot, "data_reused": True}
+        # SQLite commits on the network volume are slow; stage on local disk and
+        # persist a consistent copy to the volume every few minutes and when ready.
+        local = Path("/tmp/staging") / version
+        local.mkdir(parents=True, exist_ok=True)
+        if (folder / "raw.sqlite").exists() and not (local / "raw.sqlite").exists():
+            shutil.copyfile(folder / "raw.sqlite", local / "raw.sqlite")
         corpus = FastRawCorpus(
-            folder,
+            local,
             recipe,
             workers=policy.source_workers,
             batch_size=policy.database_batch_size,
             reader=CachedShards(),
         )
+        persisted = time.monotonic()
         while True:
             progress = corpus.prepare_parallel(target, max_seconds=policy.preparation_chunk_seconds)
             report = corpus.report(target)
-            (folder / "capacity.json").write_text(json.dumps(report, indent=2) + "\n")
-            data_volume.commit()
+            if progress["ready"] or time.monotonic() - persisted >= PERSIST_SECONDS:
+                corpus.persist(folder / "raw.sqlite")
+                (folder / "capacity.json").write_text(json.dumps(report, indent=2) + "\n")
+                data_volume.commit()
+                persisted = time.monotonic()
             record(
                 run_id,
                 "preparing",
