@@ -3,8 +3,9 @@
 A bounded experiment that answers, before any large student run, whether the
 Qwen3.5-9B Python/math trajectories can teach a small model anything measurable,
 and whether more data or a bigger model helps. **Status: campaigns
-`distill-validation-20261023-01`, `-02-covering`, `-03-qwen-200m` and
-`distill-validation-20261024-04-vllm-reeval` ran on 2026-10-23/24; findings below.**
+`distill-validation-20261023-01`, `-02-covering`, `-03-qwen-200m`,
+`distill-validation-20261024-04-vllm-reeval` and `-05-vllm-native` ran on 2026-10-23/24;
+findings below.**
 
 Data: the private HF dataset `jfrick/qwen35-python-math-trajectories-20261022`
 (native Qwen3.5 token IDs plus the teacher's top-64 log probabilities per
@@ -185,6 +186,13 @@ reproduces them within noise: per model, held-out passes changed by −4 to +4 o
 (mean +0.3) and MBPP passes by −2 to +2 of 427 (mean +0.3). The vLLM-vs-PyTorch prompt
 log-probability gap was 0.011–0.014 on average and at most 0.06–0.10 per checkpoint.
 
+The current path runs the student itself in vLLM (`vllm_model.py`, loading `model.pt`
+directly). Its re-evaluation of the same 15 checkpoints
+(`distill-validation-20261024-05-vllm-native`) also reproduces them: held-out passes
+changed by −3 to +4 (mean +0.5) and MBPP passes by −4 to +3 (mean +0.1); the prompt
+log-probability gap was 0.012–0.016 on average and at most 0.06–0.14. The table shows
+the export-based run (`-04`):
+
 | Student | Held-out, original → vLLM | MBPP, original → vLLM |
 | --- | ---: | ---: |
 | trim-small-50m-ce / -kd | 11 → 10 / 8 → 8 | 1 → 1 / 3 → 3 |
@@ -264,7 +272,8 @@ Operational notes, negative ones included:
 ## Archive
 
 - Training shards: private HF dataset `jfrick/qwen35-distillation-shards-20261023`.
-- Results, grades, completions, metrics and supervision records of all four campaigns,
+- Results, grades, completions, metrics and supervision records of all campaigns (`-01`,
+  `-02-covering`, `-03-qwen-200m`, `-04-vllm-reeval`, `-05-vllm-native`),
   plus the control throughput probes: HF dataset `jfrick/lm-exploration-results`,
   folder `distillation-validation/`.
 - Final weights (`students/*/model.pt`, the earlier Llama exports in `students/*/export/`
