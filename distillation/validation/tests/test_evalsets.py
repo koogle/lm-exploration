@@ -62,7 +62,6 @@ class EvalSetTest(unittest.TestCase):
 
 
 class GraderTest(unittest.TestCase):
-    # Fixed snippets only; model outputs are graded in the network-blocked sandbox.
     def test_pass_fail_error_and_timeout(self):
         cases = [
             {
@@ -91,7 +90,7 @@ class GraderTest(unittest.TestCase):
             },
             {"key": "loop", "code": "while True:\n    pass", "setup": "", "tests": []},
         ]
-        results = grader.grade(cases)
+        results = grader.grade(cases, timeout=2)
         self.assertTrue(results["pass"]["passed"])
         for key in ("fail", "error", "exit", "loop"):
             self.assertFalse(results[key]["passed"], key)

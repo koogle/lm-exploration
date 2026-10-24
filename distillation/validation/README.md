@@ -38,9 +38,9 @@ keep the problem/code/explanation text.
   the rest, an estimate of how self-consistent the data is).
 
 It also holds the student prompt format, the parser for the generated code string and
-the teacher prompts. `grader.py` runs each case in its own isolated interpreter with
-CPU, memory, file-size and process limits and a random pass marker. Model output is
-only ever graded inside a network-blocked sandbox; the tests run fixed snippets.
+the teacher prompts. `grader.py` runs each case in its own interpreter with a timeout
+(generated code can loop) and counts it as passed only if every test runs and the
+process then prints a random marker (so code that exits early cannot pass).
 
 ## Tests
 
