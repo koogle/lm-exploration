@@ -40,12 +40,12 @@ The recipe is [`climbmix-code-v1`](../data/recipes/climbmix-code-v1.json):
 | Source | Share | Pinned input | Replaces |
 | --- | ---: | --- | --- |
 | ClimbMix | 85% | `karpathy/climbmix-400b-shuffle`, the copy nanochat trains on; first 200 of 6,543 text-only shards | FineWeb-Edu, FineMath, peS2o, PubMed, arXiv and the Common Pile books |
-| Curated open-source code | 10% | `jfrick/curated-oss-code-20261019` (private): 49 established projects, latest snapshot per project, 210 `raw/` shards | `codeparrot/codeparrot-clean-train` |
-| MIT AI-attributed code | 5% | `jfrick/mit-claude-codex-code-20261019` (private): 36 repositories, 54 `raw/` shards | |
+| Curated open-source code | 13% | `jfrick/curated-oss-code-20261019` (private): 49 established projects, latest snapshot per project, 210 `raw/` shards | `codeparrot/codeparrot-clean-train` |
+| MIT AI-attributed code | 2% | `jfrick/mit-claude-codex-code-20261019` (private): 36 repositories, 54 `raw/` shards | |
 
 Neither source has document IDs, so all three use `"split_by": "row"`. Code shards
 are interleaved across repositories so training never sits in one project.
-Code is 15% because the goal is coherent text and math, not coding. ClimbMix has
+Code is 15% because the goal is coherent text and math, not coding. The MIT collection holds only about 40M training tokens, so it gets 2%: its 2B-run share then needs 20M unique tokens under the two-pass limit. A first 85/10/5 split stopped in preparation because 5% needed 50M. ClimbMix has
 little explicit math; math ability is to come from fine-tuning on GSM8K-style data
 after pretraining.
 
