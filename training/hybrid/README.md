@@ -8,8 +8,9 @@
 
 [`model.py`](model.py) defines `HybridConfig` and `HybridLM`:
 
-- Pre-norm blocks with RMSNorm (statistics in fp32) and a SwiGLU feed-forward
-  layer of configurable hidden width.
+- Pre-norm blocks with `RMSNorm` (statistics in fp32) and a `SwiGLU`
+  feed-forward layer, both the shared classes from [`10m/model.py`](../10m/model.py);
+  the hybrid family builds `SwiGLU` without biases at a configurable hidden width.
 - Tied input/output embeddings; no bias parameters anywhere.
 - Full-attention layers use grouped-query attention (`n_head` query heads,
   `n_kv_head` key/value heads, head dimension 128), RMSNorm on each query and key

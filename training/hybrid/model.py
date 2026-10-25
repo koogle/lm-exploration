@@ -1,6 +1,7 @@
 """Hybrid-family decoder backbone.
 
-Pre-norm RMSNorm (fp32 statistics), SwiGLU, tied embeddings and no biases.
+Pre-norm blocks reuse RMSNorm (fp32 statistics) and SwiGLU from model_10m, the
+SwiGLU without biases at a configurable width; tied embeddings and no biases.
 Full-attention layers use GQA with head dimension 128, QK-norm and RoPE with a
 configurable base. The loss is a chunked cross-entropy with a z-loss.
 """
@@ -9,6 +10,7 @@ import math
 from dataclasses import asdict, dataclass
 
 import torch
+from model_10m.model import RMSNorm, SwiGLU
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.checkpoint import checkpoint
@@ -51,20 +53,6 @@ class HybridConfig:
             raise ValueError("n_head must be divisible by n_kv_head")
         if self.head_dim % 2:
             raise ValueError("RoPE requires an even head dimension")
-
-
-class RMSNorm(nn.Module):
-    """RMSNorm with statistics in fp32; the scale is the only parameter."""
-
-    def __init__(self, width, eps=1e-5):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(width))
-        self.eps = eps
-
-    def forward(self, x):
-        values = x.float() if x.dtype in (torch.float16, torch.bfloat16) else x
-        normalized = values * torch.rsqrt(values.square().mean(-1, keepdim=True) + self.eps)
-        return (normalized * self.weight.to(values.dtype)).to(x.dtype)
 
 
 def rope_tables(length, head_dim, base, device):
@@ -121,25 +109,14 @@ class Attention(nn.Module):
         return self.o_proj(attended.transpose(1, 2).reshape(batch, length, -1))
 
 
-class SwiGLU(nn.Module):
-    def __init__(self, width, hidden):
-        super().__init__()
-        self.gate = nn.Linear(width, hidden, bias=False)
-        self.up = nn.Linear(width, hidden, bias=False)
-        self.down = nn.Linear(hidden, width, bias=False)
-        self.down.residual_output = True
-
-    def forward(self, x):
-        return self.down(F.silu(self.gate(x)) * self.up(x))
-
-
 class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.mixer_norm = RMSNorm(config.n_embd, config.norm_eps)
         self.mixer = Attention(config)
         self.mlp_norm = RMSNorm(config.n_embd, config.norm_eps)
-        self.mlp = SwiGLU(config.n_embd, config.mlp_hidden)
+        self.mlp = SwiGLU(config.n_embd, config.mlp_hidden, bias=False)
+        self.mlp.down.residual_output = True
 
     def forward(self, x, rope):
         x = x + self.mixer(self.mixer_norm(x), rope)
