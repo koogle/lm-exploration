@@ -16,9 +16,18 @@ weights and no importance ratio is needed. A group whose answers all score the s
 zero advantage and is skipped. A prompt whose group is all wrong or all right on two
 visits in a row rests for `rest_steps` steps.
 
+On-policy here means the answers come from the weights being trained, but the sampler
+(`trainer/rollout.py`, cached one-token decoding) and the learner (a full forward pass)
+compute probabilities with different kernels, so they differ slightly. With
+`score_centering_top_k`, each token's score is centered on the sampler's distribution
+(`trainer/policy_loss.py`, Score Centering, the method behind StableReinforce), which
+cancels that mismatch; the mismatch itself (mean sampler minus learner log-probability of
+the sampled tokens) is logged as `sampler_mismatch`.
+
 Optional terms: `kl_coef` times the k3 estimate of KL(policy ‖ parent) on the answer
-tokens (always measured and logged), and the SFT trainer's pretraining replay
-(`replay_*`, `training_data.replay`) at `replay_weight`.
+tokens (always measured and logged), `sampler_kl_coef` times the k3 estimate of
+KL(sampler ‖ learner), and the SFT trainer's pretraining replay (`replay_*`,
+`training_data.replay`) at `replay_weight`.
 
 Validation is greedy (temperature 0) accuracy on the pool's validation problems, and
 replay validation loss. The parent is an SFT checkpoint (`trainer/sft.py`) on the run
@@ -63,8 +72,10 @@ class Settings:
     lr: float = 1e-6
     warmup_steps: int = 20
     weight_decay: float = 0.0
-    micro_batch: int = 32
+    micro_batch: int = 16
     kl_coef: float = 0.0
+    score_centering_top_k: int = 32
+    sampler_kl_coef: float = 0.0
     rest_steps: int = 50
     seed: int = 42
     evaluate_every: int = 50
@@ -99,8 +110,14 @@ class Settings:
             raise ValueError("Invalid learning rate")
         if not 0 <= self.warmup_steps < self.steps or not 0 <= self.rest_steps:
             raise ValueError("Invalid warmup or rest steps")
-        if not 0 < self.temperature <= 2 or self.kl_coef < 0 or self.weight_decay < 0:
-            raise ValueError("Invalid temperature, kl_coef or weight_decay")
+        if type(self.score_centering_top_k) is not int or self.score_centering_top_k < 0:
+            raise ValueError("score_centering_top_k must be a nonnegative integer")
+        if self.score_centering_top_k and self.temperature != 1:
+            raise ValueError("Score centering needs sampling at temperature 1")
+        if not 0 < self.temperature <= 2 or min(self.kl_coef, self.sampler_kl_coef) < 0:
+            raise ValueError("Invalid temperature or KL coefficient")
+        if self.weight_decay < 0:
+            raise ValueError("Invalid weight_decay")
         if self.max_seconds > 20 * 60 * 60:
             raise ValueError("RL capped at 20 hours per invocation")
         replay = (self.replay_snapshot, self.replay_sources, self.replay_batch_size)
@@ -170,7 +187,7 @@ def train(
     from model_100m.model import GPT, ModelConfig
     from torch.nn import functional as F
 
-    from trainer import rollout
+    from trainer import policy_loss, rollout
 
     if deadline is not None and time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing RL work")
@@ -196,6 +213,7 @@ def train(
     source_hashes = {
         "trainer": digest(__file__),
         "rollout": digest(rollout.__file__),
+        "policy_loss": digest(policy_loss.__file__),
         "rl_tasks": digest(rl_tasks.__file__),
         "math_sft": digest(sys.modules["training_data.math_sft"].__file__),
         "code_sft": digest(sys.modules["training_data.code_sft"].__file__),
@@ -252,6 +270,7 @@ def train(
     files = {
         "trainer": __file__,
         "rollout": rollout.__file__,
+        "policy_loss": policy_loss.__file__,
         "rl_tasks": rl_tasks.__file__,
         "math_sft": sys.modules["training_data.math_sft"].__file__,
         "code_sft": sys.modules["training_data.code_sft"].__file__,
@@ -269,9 +288,11 @@ def train(
         return tokenizer.decode(ids, skip_special_tokens=True)
 
     def generate(rows, temperature):
-        """(completions, finished, rewards) for `rows`, one batch per task; code answers
-        are checked in a background thread while math is sampled."""
+        """(completions, finished, rewards, sampler) for `rows`, one batch per task; code
+        answers are checked in a background thread while math is sampled. `sampler[i]`
+        holds row i's sampler log-probabilities and top-k per answer token (sampling)."""
         completions, finished = [None] * len(rows), [None] * len(rows)
+        sampler = [None] * len(rows)
         rewards = [0.0] * len(rows)
         model.eval()
         with ThreadPoolExecutor(max_workers=1) as pool_thread:
@@ -280,16 +301,25 @@ def train(
                 indices = [i for i, r in enumerate(rows) if r["task"] == task]
                 if not indices:
                     continue
-                ids, done = rollout.sample(
+                samples = rollout.sample(
                     model,
                     [rows[i]["prompt_ids"] for i in indices],
                     settings.token_limit(task),
                     EOS_TOKEN_ID,
                     temperature,
                     generator,
+                    settings.score_centering_top_k,
                 )
-                for i, c, d in zip(indices, ids, done, strict=True):
+                ids, done = samples.completions, samples.finished
+                for j, (i, c, d) in enumerate(zip(indices, ids, done, strict=True)):
                     completions[i], finished[i] = c, d
+                    if samples.logprobs is not None:
+                        n = len(c) + d
+                        sampler[i] = (
+                            samples.logprobs[j, :n],
+                            None if samples.top_ids is None else samples.top_ids[j, :n],
+                            None if samples.top_ids is None else samples.top_logprobs[j, :n],
+                        )
                 chosen = [rows[i] for i in indices]
                 texts = [decode(c) for c in ids]
                 if task == "code":
@@ -306,7 +336,7 @@ def train(
                 for i, r in zip(pending[0], pending[1].result(), strict=True):
                     rewards[i] = r
         model.train()
-        return completions, finished, rewards
+        return completions, finished, rewards, sampler
 
     def sequences(rows, completions, finished):
         """Inputs and targets of prompt + answer (+ EOS); only answer tokens are targets."""
@@ -350,7 +380,7 @@ def train(
     def evaluate():
         metrics = {}
         rows = pool["validation"]
-        _, finished, rewards = generate(rows, 0)
+        _, finished, rewards, _ = generate(rows, 0)
         for task in rl_tasks.TASKS:
             chosen = [r for r, row in zip(rewards, rows, strict=True) if row["task"] == task]
             done = [f for f, row in zip(finished, rows, strict=True) if row["task"] == task]
@@ -410,7 +440,7 @@ def train(
         )
         group = settings.samples_per_prompt
         rows = [row for row in drawn for _ in range(group)]
-        completions, finished, rewards = generate(rows, settings.temperature)
+        completions, finished, rewards, sampler = generate(rows, settings.temperature)
         timings["generate_seconds"] = time.monotonic() - clock
         clock = time.monotonic()
         advantage = advantages(rewards, group)
@@ -421,15 +451,27 @@ def train(
         optimizer.zero_grad(set_to_none=True)
         data = sequences(rows, completions, finished)
         trained = [i for i, a in enumerate(advantage) if a != 0]
-        totals = {"kl": 0.0, "nll": 0.0, "tokens": 0}
+        totals = {"kl": 0.0, "nll": 0.0, "mismatch": 0.0, "tokens": 0}
         for start in range(0, len(trained), settings.micro_batch):
             chosen = trained[start : start + settings.micro_batch]
             x, y = collate([data[i] for i in chosen])
-            logp, mask = token_logprobs(model, x, y)
+            mask = y != LOSS_IGNORE_INDEX
+            # Sampler log-probabilities and top-k at each answer target position.
+            sampled = torch.zeros(y.shape, device="cuda")
+            top = settings.score_centering_top_k
+            top_ids = torch.zeros((*y.shape, top), dtype=torch.long, device="cuda")
+            top_logprobs = torch.zeros((*y.shape, top), device="cuda")
+            for b, i in enumerate(chosen):
+                start_at = len(rows[i]["prompt_ids"]) - 1
+                logprobs, ids, values = sampler[i]
+                sampled[b, start_at : start_at + len(logprobs)] = logprobs
+                if top:
+                    top_ids[b, start_at : start_at + len(ids)] = ids
+                    top_logprobs[b, start_at : start_at + len(ids)] = values
             with torch.no_grad():
                 reference_logp, _ = token_logprobs(reference, x, y)
-            delta = (reference_logp - logp) * mask
-            kl = (delta.exp() - delta - 1) * mask
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                logits = model(x)
             weight = torch.tensor(
                 [
                     advantage[i] / (len(rows) * settings.token_limit(rows[i]["task"]))
@@ -441,12 +483,26 @@ def train(
                 [1 / (len(rows) * settings.token_limit(rows[i]["task"])) for i in chosen],
                 device="cuda",
             )
-            loss = -(weight[:, None] * logp).sum()
+            loss, logp = policy_loss.surrogate(
+                logits,
+                y,
+                mask,
+                weight,
+                top_ids if top else None,
+                top_logprobs if top else None,
+            )
+            del logits
+            delta = (reference_logp - logp) * mask
+            kl = (delta.exp() - delta - 1) * mask
+            if settings.sampler_kl_coef:
+                drift = policy_loss.sampler_kl(logp, sampled, mask)
+                loss = loss + settings.sampler_kl_coef * (scale[:, None] * drift).sum()
             if settings.kl_coef:
                 loss = loss + settings.kl_coef * (scale[:, None] * kl).sum()
             loss.backward()
-            totals["kl"] += kl.sum().item()
-            totals["nll"] += -logp.sum().item()
+            totals["kl"] += kl.detach().sum().item()
+            totals["nll"] += -logp.detach().sum().item()
+            totals["mismatch"] += ((sampled - logp.detach()) * mask).sum().item()
             totals["tokens"] += int(mask.sum())
         values = {}
         if replay:
@@ -475,6 +531,7 @@ def train(
             trained_answers=len(trained),
             sampled_nll=totals["nll"] / max(1, totals["tokens"]),
             kl=totals["kl"] / max(1, totals["tokens"]),
+            sampler_mismatch=totals["mismatch"] / max(1, totals["tokens"]),
             grad_norm=grad_norm.item(),
             lr=settings.learning_rate(step - 1),
             resting_prompts=scheduler.resting(step),

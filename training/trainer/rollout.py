@@ -5,7 +5,13 @@ from its first real token, padded keys are masked out, and every new token is co
 once and cached, so a row's logits equal those of the model run on that row alone (up to
 numerical precision). Sampling uses the plain softmax at `temperature` (no top-k or
 nucleus), so samples follow the policy's own probabilities; temperature 0 is greedy.
+
+When sampling, the sampler also returns its own log-probability of each sampled token
+and, with `top_k`, its `top_k` most likely tokens and their log-probabilities: the
+sampler-side information that Score Centering (`trainer/rl.py`) needs.
 """
+
+from dataclasses import dataclass
 
 import torch
 from torch.nn import functional as F
@@ -57,10 +63,23 @@ def forward(model, tokens, positions, cache, start, valid):
     return model.lm_head(model.final_norm(x[:, -1])).float()
 
 
+@dataclass
+class Samples:
+    """New token IDs per prompt (without EOS), whether each ended in EOS, and for
+    sampled (not greedy) tokens the sampler's log-probabilities: of each new token
+    (EOS included) `[batch, steps]`, and of its `top_k` likeliest tokens
+    `top_ids`/`top_logprobs` `[batch, steps, top_k]` (None without `top_k`)."""
+
+    completions: list
+    finished: list
+    logprobs: torch.Tensor | None = None
+    top_ids: torch.Tensor | None = None
+    top_logprobs: torch.Tensor | None = None
+
+
 @torch.no_grad()
-def sample(model, prompts, max_new_tokens, eos, temperature=1.0, generator=None):
-    """(completions, finished): new token IDs of each prompt (token lists, without EOS)
-    and whether each ended in EOS within `max_new_tokens`."""
+def sample(model, prompts, max_new_tokens, eos, temperature=1.0, generator=None, top_k=0):
+    """Sample up to `max_new_tokens` after each prompt; see `Samples`."""
     device = model.token_embedding.weight.device
     batch, width = len(prompts), max(map(len, prompts))
     total = width + max_new_tokens
@@ -76,16 +95,24 @@ def sample(model, prompts, max_new_tokens, eos, temperature=1.0, generator=None)
     cache = [None] * len(model.blocks)
     autocast = torch.autocast("cuda", dtype=torch.bfloat16, enabled=device.type == "cuda")
     generated = torch.zeros((batch, max_new_tokens), dtype=torch.long, device=device)
+    greedy = temperature == 0
+    logprobs = None if greedy else torch.zeros((batch, max_new_tokens), device=device)
+    if top_k and not greedy:
+        top_ids = torch.zeros((batch, max_new_tokens, top_k), dtype=torch.long, device=device)
+        top_logprobs = torch.zeros((batch, max_new_tokens, top_k), device=device)
     done = torch.zeros(batch, dtype=torch.bool, device=device)
     with autocast:
         logits = forward(model, tokens, positions, cache, 0, valid)
     steps = 0
     for step in range(max_new_tokens):
-        if temperature == 0:
+        if greedy:
             chosen = logits.argmax(-1)
         else:
-            probabilities = torch.softmax(logits / temperature, -1)
-            chosen = torch.multinomial(probabilities, 1, generator=generator)[:, 0]
+            scores = torch.log_softmax(logits / temperature, -1)
+            chosen = torch.multinomial(scores.exp(), 1, generator=generator)[:, 0]
+            logprobs[:, step] = scores.gather(1, chosen[:, None])[:, 0]
+            if top_k:
+                top_logprobs[:, step], top_ids[:, step] = scores.topk(top_k, -1)
         chosen = torch.where(done, eos, chosen)
         generated[:, step] = chosen
         done |= chosen == eos
@@ -97,7 +124,12 @@ def sample(model, prompts, max_new_tokens, eos, temperature=1.0, generator=None)
             logits = forward(
                 model, chosen[:, None], (lengths + step)[:, None], cache, width + step, valid
             )
-    completions, finished = [], done.tolist()
+    completions = []
     for row in generated[:, :steps].tolist():
         completions.append(row[: row.index(eos)] if eos in row else row)
-    return completions, finished
+    result = Samples(completions, done.tolist())
+    if not greedy:
+        result.logprobs = logprobs[:, :steps]
+        if top_k:
+            result.top_ids, result.top_logprobs = top_ids[:, :steps], top_logprobs[:, :steps]
+    return result

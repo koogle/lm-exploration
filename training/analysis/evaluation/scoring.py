@@ -141,9 +141,9 @@ def code_answers(model, problems, sandbox, max_new_tokens, batch=64):
             [model.bos_token_id, *model.encode(code_prompt(p["question"], p["declaration"]))]
             for p in chunk
         ]
-        ids, done = sample(model.network, prompts, max_new_tokens, model.eos_token_id, 0)
-        completions += [model.decode(i) for i in ids]
-        finished += done
+        samples = sample(model.network, prompts, max_new_tokens, model.eos_token_id, 0)
+        completions += [model.decode(i) for i in samples.completions]
+        finished += samples.finished
     programs = [p["preamble"] + c for p, c in zip(problems, completions, strict=True)]
     results = sandbox.run([(c, p["tests"]) for c, p in zip(programs, problems, strict=True)], 20)
     outcomes = [

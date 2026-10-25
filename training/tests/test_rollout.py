@@ -28,8 +28,11 @@ class RolloutTests(unittest.TestCase):
         self.prompts = [[1, 5, 9, 11], [1, 7], [1, 3, 3, 3, 4, 8, 20]]
 
     def test_greedy_matches_unbatched_uncached_decoding(self):
-        completions, finished = sample(self.model, self.prompts, 20, EOS, temperature=0)
-        for prompt, completion, done in zip(self.prompts, completions, finished, strict=True):
+        samples = sample(self.model, self.prompts, 20, EOS, temperature=0)
+        self.assertIsNone(samples.logprobs)
+        for prompt, completion, done in zip(
+            self.prompts, samples.completions, samples.finished, strict=True
+        ):
             self.assertEqual((completion, done), naive_greedy(self.model, prompt, 20))
 
     def test_sampling_is_seeded_and_stops_at_eos(self):
@@ -37,10 +40,26 @@ class RolloutTests(unittest.TestCase):
             sample(self.model, self.prompts, 30, EOS, generator=torch.Generator().manual_seed(3))
             for _ in range(2)
         ]
-        self.assertEqual(draws[0], draws[1])
-        for completion, done in zip(*draws[0], strict=True):
+        self.assertEqual(draws[0].completions, draws[1].completions)
+        for completion, done in zip(draws[0].completions, draws[0].finished, strict=True):
             self.assertNotIn(EOS, completion)
             self.assertTrue(done or len(completion) == 30)
+
+    def test_recorded_logprobs_match_the_model(self):
+        samples = sample(
+            self.model, self.prompts, 12, EOS, generator=torch.Generator().manual_seed(1), top_k=4
+        )
+        for row, prompt in enumerate(self.prompts):
+            answer = samples.completions[row] + ([EOS] if samples.finished[row] else [])
+            with torch.no_grad():
+                logits = self.model(torch.tensor([prompt + answer]))[0]
+            expected = torch.log_softmax(logits[len(prompt) - 1 : -1], -1)
+            steps = len(answer)
+            picked = expected.gather(1, torch.tensor(answer)[:, None])[:, 0]
+            torch.testing.assert_close(samples.logprobs[row, :steps], picked, atol=1e-4, rtol=0)
+            top, ids = expected.topk(4, -1)
+            torch.testing.assert_close(samples.top_logprobs[row, :steps], top, atol=1e-4, rtol=0)
+            self.assertTrue(torch.equal(samples.top_ids[row, :steps], ids))
 
     def test_rejects_overlong_requests(self):
         with self.assertRaises(ValueError):
