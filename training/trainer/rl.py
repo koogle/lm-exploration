@@ -17,7 +17,8 @@ zero advantage and is skipped. A prompt whose group is all wrong or all right on
 visits in a row rests for `rest_steps` steps.
 
 On-policy here means the answers come from the weights being trained, but the sampler
-(`trainer/rollout.py`, cached one-token decoding) and the learner (a full forward pass)
+(`trainer/rollout.py`, cached one-token decoding, by default with the custom CUDA-graph
+engine) and the learner (a full forward pass)
 compute probabilities with different kernels, so they differ slightly. With
 `score_centering_top_k`, each token's score is centered on the sampler's distribution
 (`trainer/policy_loss.py`, Score Centering, the method behind StableReinforce), which
@@ -75,6 +76,8 @@ class Settings:
     micro_batch: int = 16
     kl_coef: float = 0.0
     score_centering_top_k: int = 32
+    # Rollout engine (`trainer/rollout.py`): "graph" replays custom-kernel CUDA graphs.
+    engine: str = "graph"
     sampler_kl_coef: float = 0.0
     rest_steps: int = 50
     seed: int = 42
@@ -110,6 +113,8 @@ class Settings:
             raise ValueError("Invalid learning rate")
         if not 0 <= self.warmup_steps < self.steps or not 0 <= self.rest_steps:
             raise ValueError("Invalid warmup or rest steps")
+        if self.engine not in ("eager", "graph"):
+            raise ValueError("engine must be eager or graph")
         if type(self.score_centering_top_k) is not int or self.score_centering_top_k < 0:
             raise ValueError("score_centering_top_k must be a nonnegative integer")
         if self.score_centering_top_k and self.temperature != 1:
@@ -309,6 +314,7 @@ def train(
                     temperature,
                     generator,
                     settings.score_centering_top_k,
+                    settings.engine,
                 )
                 ids, done = samples.completions, samples.finished
                 for j, (i, c, d) in enumerate(zip(indices, ids, done, strict=True)):

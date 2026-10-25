@@ -20,7 +20,6 @@ from pathlib import Path
 
 import modal
 
-from modal_scripts.modal_sft_data import data_image, fresh_output, write
 from trainer.sft_recipe import run_id
 
 LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
@@ -33,11 +32,29 @@ SANDBOX_BATCH = 2000
 app = modal.App("simple-llm-teacher")
 volume = modal.Volume.from_name("lm-exploration-training")
 weights = modal.Volume.from_name("lm-exploration-hf-cache", create_if_missing=True)
+# vLLM's FlashInfer kernels compile at load time, so the image carries nvcc (CUDA 13.0,
+# matching vLLM 0.31's torch 2.13).
 vllm_image = (
-    modal.Image.debian_slim(python_version="3.12")
+    modal.Image.from_registry("nvidia/cuda:13.0.1-devel-ubuntu22.04", add_python="3.12")
     .pip_install("vllm==0.31.0", "huggingface-hub[hf_transfer]")
-    .env({"HF_HOME": "/hf", "HF_HUB_ENABLE_HF_TRANSFER": "1", "PYTHONPATH": "/project"})
+    # DeepGEMM's FP8 weight preprocessing fails for this model; CUTLASS FP8 runs it.
+    .env(
+        {
+            "HF_HOME": "/hf",
+            "HF_HUB_ENABLE_HF_TRANSFER": "1",
+            "PYTHONPATH": "/project",
+            "VLLM_USE_DEEP_GEMM": "0",
+            "CUDA_HOME": "/usr/local/cuda",
+        }
+    )
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
+    .add_local_dir("trainer", "/project/trainer", ignore=["__pycache__", "kernels"])
+)
+cpu_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .env({"PYTHONPATH": "/project"})
+    .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
+    .add_local_dir("trainer", "/project/trainer", ignore=["__pycache__", "kernels"])
 )
 
 
@@ -77,7 +94,7 @@ def generate(rows, samples, deadline):
 
 
 @app.function(
-    image=data_image,
+    image=cpu_image,
     cpu=2,
     memory=16384,
     timeout=ORCHESTRATOR_SECONDS,
@@ -100,7 +117,9 @@ def distill(source, data_id, shards, samples, limit, deadline):
         != json.loads((folder / "report.json").read_text())["dataset_sha256"]
     ):
         raise ValueError("Source differs from its preparation report")
-    output = fresh_output(data_id)
+    output = Path("/runs") / run_id(data_id, "data_id")
+    if output.exists():
+        raise ValueError("Use a fresh data ID")
     rows = [json.loads(line) for line in (folder / "examples.jsonl").read_text().splitlines()]
     rows = rows[:limit] if limit else rows
     if time.time() + SHARD_SECONDS >= deadline:
@@ -171,4 +190,8 @@ def main(
 ):
     run_id(data_id, "data_id")
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    write(report, distill.remote(source, data_id, shards, samples, limit, deadline))
+    result = distill.remote(source, data_id, shards, samples, limit, deadline)
+    if report:
+        Path(report).parent.mkdir(parents=True, exist_ok=True)
+        Path(report).write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps(result, indent=2))

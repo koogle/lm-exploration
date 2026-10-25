@@ -29,7 +29,9 @@ TIMEOUT_SECONDS = 21 * 60 * 60
 FIELDS = {"name", "description", "run_id", "parent", "pool", "settings"}
 
 app = modal.App("simple-llm-rl")
-image = project_image("math-verify==0.8.0")
+image = project_image("math-verify==0.8.0").add_local_dir(
+    "kernels", "/project/kernels", ignore=["__pycache__"]
+)
 run_volume = modal.Volume.from_name("lm-exploration-training")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
 
