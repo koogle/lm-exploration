@@ -1,4 +1,4 @@
-"""Bounded SFT (repair, CIG) on one Modal GPU. Importing this module never starts a job.
+"""Bounded SFT (math, repair, CIG) on one Modal GPU. Importing this module never starts a job.
 
 Run from training/ (see sft/README.md for the recipe format):
     modal run -m modal_scripts.modal_sft_train::main --recipe <recipe.json> \
