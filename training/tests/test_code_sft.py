@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -45,6 +46,19 @@ class CodeSFTTests(unittest.TestCase):
         self.assertTrue(all(r["passed"] for r in results))
         failed = {**OCI, "tests_execution_status": '["pass", "fail"]'}
         self.assertIsNone(opencodeinstruct_row(failed, "train"))
+
+    @unittest.skipUnless(os.geteuid() == 0, "programs get separate user IDs only as root")
+    def test_programs_cannot_touch_each_other(self):
+        tests = assert_tests(["assert add(1, 2) == 3"])
+        good = "def add(a, b):\n    return a + b\n"
+        wipe = (
+            "import os, shutil, tempfile\n"
+            "for name in os.listdir(tempfile.gettempdir()):\n"
+            "    shutil.rmtree(os.path.join(tempfile.gettempdir(), name), ignore_errors=True)\n"
+            + good
+        )
+        results = run_local([(wipe, tests)] + [(good, tests)] * 20)
+        self.assertTrue(all(r["passed"] for r in results))
 
     def test_declarations_and_definitions(self):
         self.assertIsNone(declaration("def f(): pass", "g"))

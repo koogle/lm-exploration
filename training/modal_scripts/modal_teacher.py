@@ -8,7 +8,9 @@ One CPU orchestrator call reads `/runs/<source>/examples.jsonl` (a `code-sft-v1`
 spawns one H100 vLLM call per shard (after one call caches the teacher weights in the
 `lm-exploration-hf-cache` volume) of problems, runs every answer against its problem's
 tests in a network-blocked code sandbox, and writes `examples.jsonl` and `report.json` to
-`/runs/<data-id>`. The launcher records a deadline 24 hours after launch: the
+`/runs/<data-id>`. Each shard's teacher answers and kept rows are saved under
+`/runs/teacher-work/<data-id>/` as soon as they exist, so rerunning the same command
+after a failure reuses them instead of generating again. The launcher records a deadline 24 hours after launch: the
 orchestrator refuses work after it, spawns a shard only if the shard's timeout ends
 before it, cancels its unfinished shard calls when it stops, and its sandbox's own
 timeout ends at the deadline. No call retries.
@@ -122,19 +124,42 @@ def distill(source, data_id, shards, samples, limit, deadline):
         raise ValueError("Use a fresh data ID")
     rows = [json.loads(line) for line in (folder / "examples.jsonl").read_text().splitlines()]
     rows = rows[:limit] if limit else rows
-    if time.time() + SHARD_SECONDS >= deadline:
-        raise TimeoutError("Not enough launch budget left for a generation shard")
-    fetch.remote()
     size = -(-len(rows) // shards)
-    calls = [
-        generate.spawn(rows[i : i + size], samples, deadline) for i in range(0, len(rows), size)
-    ]
+    chunks = [rows[i : i + size] for i in range(0, len(rows), size)]
+    work = Path("/runs/teacher-work") / data_id
+    work.mkdir(parents=True, exist_ok=True)
+    settings = {"source": digest(folder / "examples.jsonl"), "shards": shards}
+    settings.update(samples=samples, limit=limit, teacher=list(TEACHER))
+    if (work / "settings.json").exists():
+        if json.loads((work / "settings.json").read_text()) != settings:
+            raise ValueError("Saved teacher work was made with other settings")
+    else:
+        (work / "settings.json").write_text(json.dumps(settings))
+    pending = [i for i in range(len(chunks)) if not (work / f"answers-{i}.json").exists()]
+    calls = {}
+    if pending:
+        if time.time() + SHARD_SECONDS >= deadline:
+            raise TimeoutError("Not enough launch budget left for a generation shard")
+        fetch.remote()
+        calls = {i: generate.spawn(chunks[i], samples, deadline) for i in pending}
     sandbox = Sandbox(app, deadline - time.time(), cpu=32)
     kept, counts = [], {"problems": len(rows), "kept": 0, "no_code": 0, "no_pass": 0}
     try:
-        for index, call in enumerate(calls):
-            answers = call.get()
-            chunk = rows[index * size : (index + 1) * size]
+        for index, chunk in enumerate(chunks):
+            done = work / f"kept-{index}.json"
+            if done.exists():
+                saved = json.loads(done.read_text())
+                kept += saved["rows"]
+                for key, value in saved["counts"].items():
+                    counts[key] += value
+                continue
+            answers_path = work / f"answers-{index}.json"
+            if index in calls:
+                answers_path.write_text(json.dumps(calls[index].get()))
+                volume.commit()
+            answers = json.loads(answers_path.read_text())
+            shard = {"kept": 0, "no_code": 0, "no_pass": 0}
+            shard_rows = []
             codes = [[extract(text, row) for text in texts] for row, texts in zip(chunk, answers)]
             pairs = [
                 (code, row["tests"])
@@ -153,15 +178,20 @@ def distill(source, data_id, shards, samples, limit, deadline):
                 found = [next(results) for code in options if code is not None]
                 chosen = choose(row, options, found)
                 if chosen:
-                    kept.append(chosen)
-                    counts["kept"] += 1
+                    shard_rows.append(chosen)
+                    shard["kept"] += 1
                 elif not found:
-                    counts["no_code"] += 1
+                    shard["no_code"] += 1
                 else:
-                    counts["no_pass"] += 1
+                    shard["no_pass"] += 1
+            done.write_text(json.dumps({"rows": shard_rows, "counts": shard}))
+            volume.commit()
+            kept += shard_rows
+            for key, value in shard.items():
+                counts[key] += value
             print(json.dumps({"shard": index, **counts}), flush=True)
     finally:
-        for call in calls:
+        for call in calls.values():
             call.cancel()
         sandbox.close()
     output.mkdir(parents=True)
