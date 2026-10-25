@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -69,6 +70,16 @@ class PlaygroundGenerationTests(unittest.TestCase):
             self.model, [1, 5], 4, 0, 0, 1.0, 1.0, 0, -1, 32, stop=lambda g: len(g) == 2
         )
         self.assertEqual(len(stopped), 2)
+
+
+class ConfigTests(unittest.TestCase):
+    def test_layout_shows_every_model(self):
+        root = Path(__file__).resolve().parents[1]
+        config = json.loads(
+            (root / "analysis/playground/configs/base-vs-math-sft.json").read_text()
+        )
+        labels = sorted(m["label"] for m in config["models"])
+        self.assertEqual(labels, sorted(label for row in config["layout"] for label in row))
 
 
 if __name__ == "__main__":
