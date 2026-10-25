@@ -55,7 +55,8 @@ warmup steps, decaying to 2e-6), and replay 8 windows of 1,024 pretraining token
 step from the 20B run's snapshot: 60% ClimbMix, 40% code (35% curated, 5% MIT), with
 replay weight 0.25. Three-step resume qualifications on H100 (`qualify --steps 3`) did
 not match bit for bit, with replay and with the r01 recipe without it: step, sampling and
-RNG state matched, model and optimizer weights did not. Results will be compared with r01 on math and general benchmarks.
+RNG state matched, model and optimizer weights did not. Math runs take under an hour, so
+an interrupted run is rerun from scratch rather than resumed. Results will be compared with r01 on math and general benchmarks.
 
 ## Next
 
