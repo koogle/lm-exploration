@@ -12,7 +12,7 @@ than small CUDA correctness checks.
 | PR | Scope | State |
 | --- | --- | --- |
 | 1 | Backbone: RMSNorm, SwiGLU, tied embeddings, GQA, QK-norm, RoPE base 1M, scaled init, chunked CE + z-loss | Implemented, CPU-tested |
-| 2 | Document masking: loader document ids / `cu_seqlens`; our own bit-exact document-causal attention kernel | Implemented |
+| 2 | Document masking: document ids from EOS / `cu_seqlens`; FlexAttention with a document-causal block mask | Implemented |
 | 3 | Attention sink and sigmoid output gate | Planned |
 | 4 | KDA layers via flash-linear-attention, document state reset, `[KDA, KDA, KDA, full]` layout | Planned |
 | 5 | One DeepSeek/GLM-style MTP module predicting t+2 | Planned |

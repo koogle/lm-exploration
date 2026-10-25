@@ -5,8 +5,9 @@ SwiGLU without biases at a configurable width; tied embeddings and no biases.
 Full-attention layers use GQA with head dimension 128, QK-norm and RoPE with a
 configurable base. Every forward pass masks attention by document: documents
 end in EOS (`HybridConfig.eos_id`) and a token sees only earlier tokens of its
-own document. On CUDA attention runs our own kernel (document_attention.py),
-bit-exact with the fixed-order definition in exact_attention.py. The loss is a chunked cross-entropy with a z-loss.
+own document. On CUDA attention is compiled FlexAttention with that document-causal
+block mask; on CPU an explicit masked softmax. The loss is a chunked cross-entropy
+with a z-loss.
 """
 
 import math
@@ -16,11 +17,10 @@ import torch
 from model_10m.model import RMSNorm, SwiGLU
 from torch import nn
 from torch.nn import functional as F
+from torch.nn.attention.flex_attention import AuxRequest, create_block_mask, flex_attention
 from torch.utils.checkpoint import checkpoint
 
-from .document_attention import document_attention, softmax_scale
 from .documents import document_ids
-from .exact_attention import document_starts
 
 __all__ = [
     "Attention",
@@ -33,6 +33,7 @@ __all__ = [
     "chunked_cross_entropy",
 ]
 IGNORE_INDEX = -100
+compiled_flex_attention = torch.compile(flex_attention, dynamic=False)
 
 
 class DocumentMask:
@@ -40,8 +41,20 @@ class DocumentMask:
 
     def __init__(self, documents):
         self.documents = documents
-        # Documents are contiguous, so row i may attend to keys [start_i, i].
-        self.starts = document_starts(documents)
+        self._block = None
+
+    @property
+    def block(self):
+        """FlexAttention block mask, built once per batch on first use."""
+        if self._block is None:
+            documents = self.documents
+
+            def allowed(batch, head, q, k):
+                return (q >= k) & (documents[batch, q] == documents[batch, k])
+
+            batch, length = documents.shape
+            self._block = create_block_mask(allowed, batch, None, length, length, device="cuda")
+        return self._block
 
     def dense(self):
         """[B, 1, T, T] boolean matrix of allowed attention."""
@@ -67,9 +80,22 @@ def reference_attention(query, key, value, allowed):
 
 
 def attend(query, key, value, mask):
-    if query.is_cuda:
-        return document_attention(query, key, value, mask.starts, softmax_scale(query.size(-1)))[0]
-    return reference_attention(query, key, value, mask.dense())[0]
+    """Attention output [B, H, T, D] and fp32 (or fp64) log-sum-exp [B, H, T].
+
+    CUDA runs compiled FlexAttention (tensor cores) with the document-causal block
+    mask; tests/check_hybrid_cuda.py compares it with `reference_attention` in fp64.
+    """
+    if not query.is_cuda:
+        return reference_attention(query, key, value, mask.dense())
+    output, aux = compiled_flex_attention(
+        query,
+        key,
+        value,
+        block_mask=mask.block,
+        enable_gqa=key.size(1) != query.size(1),
+        return_aux=AuxRequest(lse=True),
+    )
+    return output, aux.lse
 
 
 @dataclass(frozen=True)
@@ -159,7 +185,7 @@ class Attention(nn.Module):
 
     def forward(self, x, rope, mask):
         query, key, value = self.project(x, rope)
-        attended = attend(query, key, value, mask)
+        attended = attend(query, key, value, mask)[0]
         batch, length, _ = x.shape
         return self.o_proj(attended.transpose(1, 2).reshape(batch, length, -1))
 
