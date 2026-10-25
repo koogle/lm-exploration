@@ -24,6 +24,55 @@
   rows and recomputed in backward, so the full `[tokens, vocab]` logit tensor is
   never stored. Labels of `-100` are ignored.
 
+### Grouped-query attention
+
+With the default 12 query heads and 4 key/value heads, each key/value head
+serves a group of 3 consecutive query heads: query head `h` reads key/value
+head `h // (n_head // n_kv_head)`. Every query head still has its own attention
+pattern; the groups share only the keys and values they attend over, so
+`k_proj`/`v_proj` and the KV cache are a third the size of multi-head attention.
+
+```mermaid
+flowchart TB
+    subgraph queries["12 query heads (q_proj)"]
+        direction LR
+        q0["q0"]
+        q1["q1"]
+        q2["q2"]
+        q3["q3"]
+        q4["q4"]
+        q5["q5"]
+        q6["q6"]
+        q7["q7"]
+        q8["q8"]
+        q9["q9"]
+        q10["q10"]
+        q11["q11"]
+    end
+    subgraph keys["4 key/value heads (k_proj, v_proj, KV cache)"]
+        direction LR
+        kv0["k0, v0"]
+        kv1["k1, v1"]
+        kv2["k2, v2"]
+        kv3["k3, v3"]
+    end
+    q0 --> kv0
+    q1 --> kv0
+    q2 --> kv0
+    q3 --> kv1
+    q4 --> kv1
+    q5 --> kv1
+    q6 --> kv2
+    q7 --> kv2
+    q8 --> kv2
+    q9 --> kv3
+    q10 --> kv3
+    q11 --> kv3
+```
+
+Multi-head attention is the case `n_kv_head == n_head` (one query per group);
+multi-query attention is `n_kv_head == 1` (all queries in one group).
+
 The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
 placeholders until the 720M configuration is fixed in PR 8.
 
