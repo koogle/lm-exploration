@@ -4,9 +4,9 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from training_data.repair_sft import encode, prepare, prompt
+from training_data.repair_sft import REPAIR
 
-from trainer.repair_sft import Settings
+from trainer.sft import Settings
 
 
 class Tokenizer:
@@ -31,8 +31,8 @@ def example(name="one", split="train"):
 class RepairTests(unittest.TestCase):
     def test_answer_alignment_and_eos(self):
         row = example()
-        encoded = encode(row, Tokenizer(), 1024)
-        prefix_len = 1 + len(prompt(row))
+        encoded = REPAIR.encode(row, Tokenizer(), 1024)
+        prefix_len = 1 + len(REPAIR.prompt(row))
         self.assertEqual(encoded["y"][: prefix_len - 1], [-100] * (prefix_len - 1))
         self.assertEqual(encoded["y"][prefix_len - 1], ord("d") + 4)
         self.assertEqual(encoded["y"][-1], 2)
@@ -44,7 +44,7 @@ class RepairTests(unittest.TestCase):
 
         tokenizer = load_frozen()
         row = example()
-        encoded = encode(row, tokenizer, 1024)
+        encoded = REPAIR.encode(row, tokenizer, 1024)
         labels = [v for v in encoded["y"] if v != -100]
         self.assertEqual(labels[-1], 2)
         self.assertEqual(tokenizer.decode(labels[:-1]), row["fixed"])
@@ -71,11 +71,11 @@ class RepairTests(unittest.TestCase):
                 row.update(
                     language=lang, fixed=code + comment, broken=code.replace("+", "-") + comment
                 )
-                encoded = encode(row, tokenizer, 1024)
+                encoded = REPAIR.encode(row, tokenizer, 1024)
                 labels = [v for v in encoded["y"] if v != -100]
                 self.assertEqual(tokenizer.decode(labels[:-1]), row["fixed"])
-                self.assertIn(f"Repair the {lang} code", prompt(row))
-                self.assertEqual(encoded["language"], lang)
+                self.assertIn(f"Repair the {lang} code", REPAIR.prompt(row))
+                self.assertEqual(encoded["bucket"], lang)
                 rows.append(row)
         splits, _ = self.prepare_rows(rows)
         self.assertEqual(len(splits["train"]), len(snippets))
@@ -84,7 +84,7 @@ class RepairTests(unittest.TestCase):
         row = example()
         del row["language"]
         with self.assertRaisesRegex(ValueError, "language"):
-            encode(row, Tokenizer(), 1024)
+            REPAIR.encode(row, Tokenizer(), 1024)
         a, b = example(), example("two", "validation")
         a["language"] = "rust"
         with self.assertRaisesRegex(ValueError, "Missing validation languages"):
@@ -92,13 +92,13 @@ class RepairTests(unittest.TestCase):
 
     def test_no_truncation(self):
         with self.assertRaisesRegex(ValueError, "exceeds context"):
-            encode(example(), Tokenizer(), 10)
+            REPAIR.encode(example(), Tokenizer(), 10)
 
     def prepare_rows(self, rows):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "rows.jsonl"
             path.write_text("\n".join(json.dumps(r) for r in rows))
-            return prepare(path, Tokenizer(), 1024)
+            return REPAIR.prepare(path, Tokenizer(), 1024)
 
     def test_split_and_hash(self):
         splits, digest = self.prepare_rows([example(), example("two", "validation")])
@@ -114,7 +114,7 @@ class RepairTests(unittest.TestCase):
     def test_solution_leak(self):
         a, b = example(), example("two", "validation")
         b["fixed"] = a["fixed"]
-        with self.assertRaisesRegex(ValueError, "duplicate crosses"):
+        with self.assertRaisesRegex(ValueError, "Duplicate text crosses"):
             self.prepare_rows([a, b])
 
     def test_invalid_data_and_settings(self):
@@ -127,7 +127,7 @@ class RepairTests(unittest.TestCase):
 
 class TensorBatchTests(unittest.TestCase):
     def test_padding_does_not_become_supervision(self):
-        from trainer.repair_sft import collate
+        from trainer.sft import collate
 
         rows = [{"x": [1, 5, 6], "y": [-100, 6, 2]}, {"x": [1], "y": [2]}]
         x, y = collate(rows, "cpu")

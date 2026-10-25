@@ -6,7 +6,7 @@ import time
 import unittest
 from pathlib import Path
 
-from trainer.repair_sft import Settings, train
+from trainer.sft import Settings, train
 from trainer.sft_recipe import load_recipe, parse_checkpoints, validate_recipe
 
 PARENT = "parent-run/step-000000100.pt"

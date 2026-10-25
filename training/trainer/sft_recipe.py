@@ -1,7 +1,7 @@
-"""Validate repair-SFT run recipes for `modal_scripts/modal_sft_train.py` without Modal.
+"""Validate SFT run recipes for `modal_scripts/modal_sft_train.py` without Modal.
 
 A recipe is a JSON object naming one run: the parent checkpoint, the data, the output run ID,
-the GPU type and `trainer.repair_sft.Settings`. Command-line overrides replace recipe values so
+the GPU type and `trainer.sft.Settings`. Command-line overrides replace recipe values so
 one recipe can describe a recorded run and also seed a fresh one.
 """
 
@@ -10,7 +10,7 @@ import re
 from dataclasses import asdict
 from pathlib import Path
 
-from trainer.repair_sft import Settings
+from trainer.sft import Settings
 
 RUN_ID = re.compile(r"[a-zA-Z0-9_-]{1,80}")
 CHECKPOINT = re.compile(r"[a-zA-Z0-9_-]{1,80}/step-[0-9]{9}\.pt")

@@ -91,21 +91,23 @@ def curriculum(output: str):
     import tempfile
 
     from training_data.repair_curriculum import LANGUAGES, VERSION, rows, write_dataset
-    from training_data.repair_sft import prepare
+    from training_data.repair_sft import REPAIR
     from training_data.subword import digest, load_frozen
 
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     with tempfile.TemporaryDirectory() as folder:
         candidate = Path(folder) / "candidate.jsonl"
         write_dataset(candidate, [row for lang in LANGUAGES for row in rows(lang)])
-        prepare(candidate, load_frozen(), 1024)  # Reject invalid data before any remote work.
+        REPAIR.prepare(
+            candidate, load_frozen(), 1024
+        )  # Reject invalid data before any remote work.
     records = [
         row for result in verify.map(LANGUAGES, kwargs={"deadline": deadline}) for row in result
     ]
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
     write_dataset(destination, records)
-    splits, data_hash = prepare(destination, load_frozen(), 1024)
+    splits, data_hash = REPAIR.prepare(destination, load_frozen(), 1024)
     report = {
         "version": VERSION,
         "dataset_sha256": data_hash,

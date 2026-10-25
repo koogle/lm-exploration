@@ -6,7 +6,7 @@ import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from training_data.repair_sft import encode
+from training_data import repair_sft
 from training_data.subword import digest, load_frozen
 
 REPO = "bigcode/commitpackft"
@@ -146,7 +146,7 @@ def build(files, output, context=2048, train_cap=6000, validation_cap=64, exclud
                     rejected["duplicate"] += 1
                     continue
                 try:
-                    item = encode(row, tokenizer, context)
+                    item = repair_sft.REPAIR.encode(row, tokenizer, context)
                 except ValueError:
                     rejected["context"] += 1
                     continue
