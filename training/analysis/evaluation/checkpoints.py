@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 from training_data.subword import digest
 
-SFT_FORMATS = ("math-sft-v1", "repair-sft-v2")
+SFT_FORMATS = ("math-sft-v1", "repair-sft-v2", "code-sft-v1", "mixture-sft-v1")
 # Padding sits after every scored position; PAD is ID 0 in our tokenizers.
 PAD_TOKEN_ID = 0
 

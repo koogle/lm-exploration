@@ -34,8 +34,11 @@ Two settings make training gentler on what pretraining learned:
 | --- | --- | --- | --- |
 | `repair` (default) | language, task and broken code | the complete corrected code | [`../data/repair_sft.py`](../data/repair_sft.py) |
 | `math` | `Question: {question}\nAnswer:` | the full worked solution, ending in `#### N` | [`../data/math_sft.py`](../data/math_sft.py): GSM8K and MetaMathQA solutions |
+| `code` | ``Question: {problem}\nWrite a Python function `def f(args):`.\nAnswer:\n`` | the complete function or class | [`../data/code_sft.py`](../data/code_sft.py): OpenCodeInstruct and MBPP problems, with Qwen3.5 solutions that pass their tests ([`../data/teacher.py`](../data/teacher.py)) |
+| `mixture` | each row's own task's prompt | each row's own task's answer | [`../data/mixture_sft.py`](../data/mixture_sft.py): math and code rows in one file |
 
-The math runs in [MATH_EXPERIMENTS.md](MATH_EXPERIMENTS.md) used `math`; the earlier
+[CODE_DATA.md](CODE_DATA.md) describes how the code and mixture data, and the RL prompt
+pool, are built. The math runs in [MATH_EXPERIMENTS.md](MATH_EXPERIMENTS.md) used `math`; the earlier
 repair runs in [EXPERIMENTS.md](EXPERIMENTS.md) used `repair`.
 
 - **Repair SFT** (`"task": "repair"`): validation reports answer-token cross-entropy

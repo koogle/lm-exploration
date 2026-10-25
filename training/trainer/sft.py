@@ -25,7 +25,9 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from training_data.code_sft import CODE
 from training_data.math_sft import MATH
+from training_data.mixture_sft import MIXTURE
 from training_data.repair_sft import REPAIR
 from training_data.subword import (
     BOS_TOKEN_ID,
@@ -37,7 +39,7 @@ from training_data.subword import (
 )
 
 # The SFT dataset (`training_data.sft.SFTDataset`) of each task.
-TASKS = {"repair": REPAIR, "math": MATH}
+TASKS = {"repair": REPAIR, "math": MATH, "code": CODE, "mixture": MIXTURE}
 
 
 @dataclass(frozen=True)
@@ -189,7 +191,10 @@ def train(
     import sys
 
     data = TASKS[settings.task]
-    data_module = sys.modules[type(data).__module__]
+    # The task's dataset module, and for a mixture each mixed task's module too.
+    data_modules = {"data": sys.modules[type(data).__module__].__file__}
+    for name, task in sorted(getattr(data, "tasks", {}).items()):
+        data_modules[f"data_{name}"] = sys.modules[type(task).__module__].__file__
     tokenizer = load_frozen()
     splits, data_hash = data.prepare(dataset, tokenizer, settings.context)
     # Only load our trusted private run-volume checkpoints, never dataset-supplied files.
@@ -239,7 +244,7 @@ def train(
         replay_validation = replay.validation(settings.replay_validation_windows)
     source_hashes.update(
         replay=digest(replay_module.__file__),
-        data=digest(data_module.__file__),
+        **{name: digest(file) for name, file in data_modules.items()},
         sft_data=digest(sft_data_module.__file__),
         model=digest(model_module.__file__),
         shared_model=digest(shared_module.__file__),
@@ -296,7 +301,7 @@ def train(
     for name, module in (
         ("trainer", __file__),
         ("cig", cig.__file__),
-        ("data", data_module.__file__),
+        *data_modules.items(),
         ("sft_data", sft_data_module.__file__),
         ("replay", replay_module.__file__),
         ("model", model_module.__file__),
