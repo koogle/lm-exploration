@@ -82,4 +82,4 @@ interrupted run is rerun from scratch rather than resumed.
 ## Next
 
 Reinforcement learning on math and code with verifiable rewards, after a joint math and
-code SFT stage: see the [RL design](../rl/README.md).
+code SFT stage: see [RL](../rl/README.md).
