@@ -6,7 +6,8 @@ Run from training/:
 
 Each checkpoint loads the model code its own run copied (`RUN-sNN/source`, or the files
 beside an SFT checkpoint), verified against the source hashes the checkpoint recorded, so
-any checkout can evaluate it. `--shots` sets the math exemplar count. One
+any checkout can evaluate it. `--shots` sets the math exemplar count; `--tasks` limits the
+run to a comma-separated subset of `TASKS`. One
 function call, a 3-hour hard timeout and no retries; the call refuses new work 24 hours
 after launch, including time spent queued. Results go to `/runs/evaluation/NAME.json`
 after each checkpoint and to `--output` (default `artifacts/evaluation/NAME.json`).
@@ -73,12 +74,13 @@ DATASETS = {
         "data/train-00000-of-00001.parquet",
     ),
 }
+TASKS = ("heldout", *DATASETS)
 SETTINGS = {
     "precision": "bf16-autocast",
     "heldout_windows_per_source": 64,
     "gsm8k_examples": 500,
     "gsm8k_max_new_tokens": 256,
-    "svamp_max_new_tokens": 32,
+    "svamp_max_new_tokens": 256,
 }
 
 image = (
@@ -269,7 +271,7 @@ def check_deadline(deadline):
     max_containers=1,
     volumes={"/runs": run_volume, "/data": data_volume},
 )
-def evaluate(name, snapshot, checkpoints, deadline, shots):
+def evaluate(name, snapshot, checkpoints, deadline, shots, selected):
     import torch
 
     from evaluation import tasks
@@ -279,7 +281,7 @@ def evaluate(name, snapshot, checkpoints, deadline, shots):
     result = {
         "name": name,
         "snapshot": snapshot,
-        "settings": {**SETTINGS, "shots": shots},
+        "settings": {**SETTINGS, "shots": shots, "tasks": selected},
         "datasets": {
             task: {"repo": r, "revision": v, "file": f, "exemplars": e}
             for task, (r, v, f, e) in DATASETS.items()
@@ -296,7 +298,8 @@ def evaluate(name, snapshot, checkpoints, deadline, shots):
         started = time.time()
         info, model, tokenizer = open_checkpoint(Path("/runs") / checkpoint)
         print(json.dumps(info), flush=True)
-        if heldout is None:
+        scores, answers = {}, {}
+        if "heldout" in selected and heldout is None:
             manifest, documents = heldout_documents(
                 Path("/data") / snapshot, tokenizer, SETTINGS["heldout_windows_per_source"]
             )
@@ -313,16 +316,21 @@ def evaluate(name, snapshot, checkpoints, deadline, shots):
             result["snapshot_weights"] = {
                 source: entry["weight_percent"] for source, entry in manifest["sources"].items()
             }
-        scores = {"heldout": {s: tasks.bits_per_byte(model, w) for s, w in heldout.items()}}
+        if "heldout" in selected:
+            scores["heldout"] = {s: tasks.bits_per_byte(model, w) for s, w in heldout.items()}
         for task in ("hellaswag", "arc_easy", "arc_challenge", "openbookqa"):
-            scores[task] = tasks.score_multiple_choice(model, task, data[task][0])
-        scores["winogrande"] = tasks.score_winogrande(model, data["winogrande"][0])
-        scores["lambada"] = tasks.score_lambada(model, data["lambada"][0])
-        answers = {}
+            if task in selected:
+                scores[task] = tasks.score_multiple_choice(model, task, data[task][0])
+        if "winogrande" in selected:
+            scores["winogrande"] = tasks.score_winogrande(model, data["winogrande"][0])
+        if "lambada" in selected:
+            scores["lambada"] = tasks.score_lambada(model, data["lambada"][0])
         for task, count, tokens in (
             ("gsm8k", SETTINGS["gsm8k_examples"], SETTINGS["gsm8k_max_new_tokens"]),
             ("svamp", None, SETTINGS["svamp_max_new_tokens"]),
         ):
+            if task not in selected:
+                continue
             check_deadline(deadline)
             evaluated, exemplars = data[task]
             scores[task], answers[task] = tasks.score_math(
@@ -341,11 +349,16 @@ def evaluate(name, snapshot, checkpoints, deadline, shots):
 
 
 @app.local_entrypoint()
-def main(name: str, snapshot: str, checkpoints: str, output: str = "", shots: int = 5):
+def main(
+    name: str, snapshot: str, checkpoints: str, output: str = "", shots: int = 5, tasks: str = ""
+):
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     if not 0 <= shots <= 8:
         raise ValueError("shots must be from 0 to 8")
-    result = evaluate.remote(name, snapshot, checkpoints.split(","), deadline, shots)
+    selected = tasks.split(",") if tasks else list(TASKS)
+    if set(selected) - set(TASKS):
+        raise ValueError(f"tasks must be among {TASKS}")
+    result = evaluate.remote(name, snapshot, checkpoints.split(","), deadline, shots, selected)
     path = Path(output or f"artifacts/evaluation/{name}.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, indent=2) + "\n")

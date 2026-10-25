@@ -191,20 +191,13 @@ def score_math(model, task, rows, exemplars, max_new_tokens):
         completion = generate(
             model, f"{shots}Question: {question}\nAnswer:", max_new_tokens, ["\n\n", "Question:"]
         )
-        found = gsm8k_answer(completion) if task == "gsm8k" else first_number(completion)
+        # Worked solutions put the answer last; bare answers are the only number.
+        found = gsm8k_answer(completion)
         outcomes.append(
             {"question": question, "gold": gold, "answer": found, "completion": completion}
         )
     correct = sum(o["answer"] is not None and o["answer"] == o["gold"] for o in outcomes)
     return {"examples": len(rows), "shots": len(exemplars), "acc": correct / len(rows)}, outcomes
-
-
-def first_number(text):
-    found = NUMBER.search(text)
-    try:
-        return number(found.group()) if found else None
-    except ValueError:
-        return None
 
 
 def packed_windows(documents, bos, eos, context, count):

@@ -92,7 +92,7 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual(tasks.gsm8k_answer("so 3 + 4 = 7\n#### 1,234"), 1234)
         self.assertEqual(tasks.gsm8k_answer("It is 12 then 15.5"), 15.5)
         self.assertIsNone(tasks.gsm8k_answer("no number"))
-        self.assertEqual(tasks.first_number(" 8 apples, then 9"), 8)
+        self.assertEqual(tasks.gsm8k_answer(" 8 apples, then 9"), 9)
         self.assertEqual(tasks.number("40.0"), 40)
 
     def test_math_prompts(self):

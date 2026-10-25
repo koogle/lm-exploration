@@ -24,7 +24,8 @@ tokenizer hashes the checkpoint recorded, so any checkout can evaluate any check
 pretraining checkpoints from `RUN-sNN/source`, SFT checkpoints
 ([`sft/`](../../sft/README.md)) from the `model.py` and `shared_model.py` beside them.
 `--shots` sets the math exemplar count (default 5; use 0 for SFT models, whose training
-prompt is the zero-shot format). The call refuses new work 24 hours after launch. Results go to
+prompt is the zero-shot format). `--tasks` limits a run to a comma-separated subset,
+such as `gsm8k,svamp`. The call refuses new work 24 hours after launch. Results go to
 `/runs/evaluation/NAME.json` after each checkpoint and to `--output` (default
 `artifacts/evaluation/NAME.json`, ignored by Git); the HF results archive keeps them.
 
@@ -43,8 +44,8 @@ prompt is the zero-shot format). The call refuses new work 24 hours after launch
   last-word perplexity.
 - **Few-shot math, greedy:** GSM8K test (first 500) and SVAMP test (300), each with the
   first `--shots` training examples as `Question: ...\nAnswer: ...` exemplars. Generation stops
-  at a blank line, `Question:` or EOS (256 and 32 new tokens). GSM8K takes the number
-  after `####`, else the last number; SVAMP takes the first number. Answers are kept in the
+  at a blank line, `Question:` or EOS (256 new tokens). The answer is the number after
+  `####`, else the last number. Answers are kept in the
   result.
 
 Datasets are pinned to HF commits in `DATASETS`. Inference uses BF16 autocast with FP32
