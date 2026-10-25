@@ -252,8 +252,8 @@ and their gradients in one chunked pass, without storing or recomputing the
 [tokens, 154,880] logits, for the next-token and MTP heads.
 
 Custom kernels in this family: the fused output-layer loss (+15% training
-throughput on one H100) and, inside it, a Triton
-kernel ([`softmax_kernel.py`](softmax_kernel.py)) that turns each bf16 logit row
+throughput on one H100) and, inside it, a CUDA kernel
+([`kernels/softmax_gradient.cu`](kernels/softmax_gradient.cu)) that turns each bf16 logit row
 into its cross-entropy/z-loss gradient in place in two passes, instead of several
 fp32 copies of the [rows, 154,880] block. FlexAttention and fla supply the
 tensor-core attention and KDA kernels.
