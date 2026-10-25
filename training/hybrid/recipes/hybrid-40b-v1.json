@@ -1,0 +1,143 @@
+{
+  "name": "hybrid-40b-v1",
+  "target_tokens": 40000000000,
+  "context": 4096,
+  "seed": 20261025,
+  "tokenizer_sha256": "19e773648cb4e65de8660ea6365e10acca112d42a854923df93db4a6f333a82d",
+  "sources": {
+    "climbmix": {
+      "weight": 0.7,
+      "repo": "karpathy/climbmix-400b-shuffle",
+      "revision": "915333b4f8b8684f39aeaafea600fea6f43fb703",
+      "pattern": "shard_{index:05d}.parquet",
+      "shards": 600,
+      "column": "text",
+      "max_passes": 1,
+      "estimated_tokens_per_shard": 52600000
+    },
+    "code": {
+      "weight": 0.2,
+      "repo": "codeparrot/github-code-clean",
+      "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
+      "pattern": "data/train-{index:05d}-of-00880.parquet",
+      "shards": 80,
+      "column": "code",
+      "licenses": [
+        "mit",
+        "apache-2.0",
+        "bsd-2-clause",
+        "bsd-3-clause",
+        "isc",
+        "cc0-1.0",
+        "unlicense"
+      ],
+      "max_passes": 1,
+      "estimated_tokens_per_shard": 139000000
+    },
+    "math": {
+      "weight": 0.1,
+      "repo": "HuggingFaceTB/finemath",
+      "revision": "e92b25a616738fe95dc186b64dfb19f9c8525594",
+      "pattern": "finemath-4plus/train-{index:05d}-of-00064.parquet",
+      "shards": 38,
+      "column": "text",
+      "max_passes": 1,
+      "estimated_tokens_per_shard": 125000000
+    }
+  },
+  "heldout": {
+    "shard": "last",
+    "documents": 2000
+  },
+  "contamination": {
+    "ngram": 13,
+    "benchmarks": [
+      {
+        "repo": "openai/gsm8k",
+        "revision": "740312add88f781978c0658806c59bc2815b9866",
+        "files": [
+          "main/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "question",
+          "answer"
+        ]
+      },
+      {
+        "repo": "openai/openai_humaneval",
+        "revision": "7dce6050a7d6d172f3cc5c32aa97f52fa1a2e544",
+        "files": [
+          "openai_humaneval/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "prompt",
+          "canonical_solution",
+          "test"
+        ]
+      },
+      {
+        "repo": "google-research-datasets/mbpp",
+        "revision": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
+        "files": [
+          "full/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "text",
+          "code",
+          "test_list"
+        ]
+      },
+      {
+        "repo": "cais/mmlu",
+        "revision": "c30699e8356da336a370243923dbaf21066bb9fe",
+        "files": [
+          "all/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "question",
+          "choices"
+        ]
+      },
+      {
+        "repo": "allenai/ai2_arc",
+        "revision": "210d026faf9955653af8916fad021475a3f00453",
+        "files": [
+          "ARC-Challenge/test-00000-of-00001.parquet",
+          "ARC-Easy/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "question",
+          "choices"
+        ]
+      },
+      {
+        "repo": "Rowan/hellaswag",
+        "revision": "218ec52e09a7e7462a5400043bb9a69a41d06b76",
+        "files": [
+          "data/validation-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "ctx",
+          "endings"
+        ]
+      },
+      {
+        "repo": "EleutherAI/hendrycks_math",
+        "revision": "21a5633873b6a120296cce3e2df9d5550074f4a3",
+        "files": [
+          "algebra/test-00000-of-00001.parquet",
+          "counting_and_probability/test-00000-of-00001.parquet",
+          "geometry/test-00000-of-00001.parquet",
+          "intermediate_algebra/test-00000-of-00001.parquet",
+          "number_theory/test-00000-of-00001.parquet",
+          "prealgebra/test-00000-of-00001.parquet",
+          "precalculus/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "problem",
+          "solution"
+        ]
+      }
+    ]
+  }
+}
