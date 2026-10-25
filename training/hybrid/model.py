@@ -21,6 +21,7 @@ from torch.nn.attention.flex_attention import AuxRequest, create_block_mask, fle
 from torch.utils.checkpoint import checkpoint
 
 from .documents import document_ids, document_positions
+from .fused_loss import fused_cross_entropy
 from .kda import KimiDeltaAttention
 from .roles import declare
 
@@ -194,6 +195,9 @@ class Attention(nn.Module):
     the family's only bias and starts at `gate_bias_init` (3.0: about 95% open).
     """
 
+    # Set during evaluation to record gate openness and sink weight per layer.
+    record_statistics = False
+
     def __init__(self, config):
         super().__init__()
         self.n_head, self.n_kv_head, self.head_dim = (
@@ -239,6 +243,11 @@ class Attention(nn.Module):
         batch, length, _ = x.shape
         attended = attended.transpose(1, 2).reshape(batch, length, -1)
         gate = torch.sigmoid(self.gate_proj(x) + self.gate_bias)
+        if Attention.record_statistics:
+            self.statistics = {
+                "gate_open": gate.float().mean().item(),
+                "sink_weight": (1 - kept).float().mean().item(),
+            }
         return self.o_proj(attended * gate.to(attended.dtype))
 
 
@@ -376,11 +385,17 @@ class HybridLM(nn.Module):
         return self.final_norm(self.trunk(tokens)[0])
 
     def loss_sums(self, hidden, labels, prefix=""):
-        ce, z = chunked_cross_entropy(
-            hidden, self.output_weight, labels, self.config.loss_chunk_size
-        )
+        if hidden.is_cuda and torch.is_grad_enabled():
+            loss, ce, z = fused_cross_entropy(
+                hidden, self.output_weight, labels, self.config.z_loss, self.config.loss_chunk_size
+            )
+        else:
+            ce, z = chunked_cross_entropy(
+                hidden, self.output_weight, labels, self.config.loss_chunk_size
+            )
+            loss = ce + self.config.z_loss * z
         return {
-            f"{prefix}loss": ce + self.config.z_loss * z,
+            f"{prefix}loss": loss,
             f"{prefix}ce": ce,
             f"{prefix}z": z,
             f"{prefix}count": (labels != IGNORE_INDEX).sum(),

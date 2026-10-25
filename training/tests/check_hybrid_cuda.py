@@ -69,6 +69,7 @@ def compiled_model():
         n_kv_head=2,
         head_dim=64,
         layer_pattern=("full",),
+        mtp=False,
     )
     lm = model.HybridLM(config).cuda()
     compiled = torch.compile(lm)
