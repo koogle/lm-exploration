@@ -554,6 +554,9 @@ corpus = [
 ]
 hybrid = [
     { name = "fla-core" },
+    { name = "huggingface-hub" },
+    { name = "pyarrow" },
+    { name = "tokenizers" },
 ]
 research = [
     { name = "matplotlib" },
@@ -571,14 +574,17 @@ dev = [
 requires-dist = [
     { name = "fla-core", marker = "extra == 'hybrid'", specifier = "==0.6.0" },
     { name = "huggingface-hub", marker = "extra == 'corpus'", specifier = "==1.33.0" },
+    { name = "huggingface-hub", marker = "extra == 'hybrid'", specifier = "==1.33.0" },
     { name = "matplotlib", marker = "extra == 'research'", specifier = "==3.11.2" },
     { name = "modal", extras = ["api-proxy-support"], marker = "extra == 'research'", specifier = "==1.6.2" },
     { name = "numpy", specifier = ">=2.5.4" },
     { name = "pyarrow", marker = "extra == 'corpus'", specifier = "==26.0.0" },
+    { name = "pyarrow", marker = "extra == 'hybrid'", specifier = "==26.0.0" },
     { name = "pydantic", specifier = ">=2.11" },
     { name = "requests", marker = "extra == 'corpus'", specifier = "==2.34.2" },
     { name = "safetensors", marker = "extra == 'research'", specifier = ">=0.4,<1" },
     { name = "tokenizers", marker = "extra == 'corpus'", specifier = "==0.22.2" },
+    { name = "tokenizers", marker = "extra == 'hybrid'", specifier = "==0.22.2" },
     { name = "torch", specifier = ">=2.5,<3" },
     { name = "tqdm", specifier = ">=4.70.1" },
     { name = "truststore", marker = "extra == 'research'", specifier = "==0.10.5" },

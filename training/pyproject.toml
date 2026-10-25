@@ -19,6 +19,9 @@ corpus = [
 ]
 hybrid = [
     "fla-core==0.6.0",
+    "tokenizers==0.22.2",
+    "pyarrow==26.0.0",
+    "huggingface-hub==1.33.0",
 ]
 research = [
     "safetensors>=0.4,<1",
@@ -46,7 +49,7 @@ sampling = "analysis/sampling"
 
 [tool.setuptools.package-data]
 trainer = ["kernels/*.cu"]
-model_hybrid = ["kernels/*.cu"]
+model_hybrid = ["kernels/*.cu", "recipes/*.json"]
 workflows = ["*.json", "model_configs/*.json", "model_configs/historical/*.json", "datasets/*.json"]
 
 [dependency-groups]
