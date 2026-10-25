@@ -83,6 +83,7 @@ class HybridOptimizer:
         for group in self.muon.param_groups:
             group["lr_scale"] = config.muon_lr / config.adamw_lr
         self.param_groups = self.muon.param_groups + self.adamw.param_groups
+        self.base_lr = config.adamw_lr
 
     def zero_grad(self, set_to_none=True):
         self.muon.zero_grad(set_to_none=set_to_none)

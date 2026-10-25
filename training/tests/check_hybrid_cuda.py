@@ -87,6 +87,32 @@ def against_reference(dtype, batch, heads, kv_heads, length, width, ends):
     }
 
 
+def flex_against_exact(length=1024, ends=((100, 400, 401, 900), (511,))):
+    """The training path (FlexAttention) against our exact kernel, bf16 inputs."""
+    torch.manual_seed(5)
+    q = torch.randn(2, 12, length, 128, device="cuda", dtype=torch.bfloat16, requires_grad=True)
+    k = torch.randn(2, 4, length, 128, device="cuda", dtype=torch.bfloat16, requires_grad=True)
+    v = torch.randn_like(k, requires_grad=True)
+    tokens = torch.randint(3, 100, (2, length), device="cuda")
+    for row, positions in enumerate(ends):
+        tokens[row, list(positions)] = EOS
+    documents = document_ids(tokens, EOS)
+    upstream = torch.randn_like(q)
+    upstream_lse = torch.randn(2, 12, length, device="cuda")
+    results = {}
+    for kernel in ("flex", "exact"):
+        out, lse = model.attend(q, k, v, model.DocumentMask(documents, kernel))
+        objective = (out.float() * upstream).sum() + (lse.float() * upstream_lse).sum()
+        results[kernel] = (out, lse, *torch.autograd.grad(objective, (q, k, v)))
+    names = ("out", "lse", "dq", "dk", "dv")
+    errors = {
+        n: max_error(a, b) for n, a, b in zip(names, results["flex"], results["exact"], strict=True)
+    }
+    if max(errors.values()) > 0.1:
+        raise AssertionError(f"FlexAttention disagrees with the exact kernel: {errors}")
+    return errors
+
+
 def compiled_model():
     torch.manual_seed(1)
     # Full attention only: fullgraph proves the kernel's custom ops do not break the
@@ -100,6 +126,7 @@ def compiled_model():
         n_kv_head=2,
         head_dim=64,
         layer_pattern=("full",),
+        mtp=False,
     )
     lm = model.HybridLM(config).cuda()
     compiled = torch.compile(lm, fullgraph=True)
@@ -267,6 +294,7 @@ def checks():
         # fla's Triton dots use TF32 even for fp32 inputs.
         "kda_vs_reference_fp32": kda_against_reference(torch.float32, 1e-2),
         "kda_vs_reference_bf16": kda_against_reference(torch.bfloat16, 5e-2),
+        "flex_vs_exact_bf16": flex_against_exact(),
         "compiled_model": compiled_model(),
         "compile_boundary": compile_boundary_timing(),
         "timing": [timing(documents=1), timing(documents=4)],

@@ -15,11 +15,13 @@ import torch
 from model_10m.model import RMSNorm, SwiGLU
 from torch import nn
 from torch.nn import functional as F
+from torch.nn.attention.flex_attention import AuxRequest, create_block_mask, flex_attention
 from torch.utils.checkpoint import checkpoint
 
 from .document_attention import document_attention, softmax_scale
 from .documents import document_positions
 from .exact_attention import document_starts
+from .fused_loss import fused_cross_entropy
 from .kda import KimiDeltaAttention
 
 __all__ = [
@@ -35,14 +37,33 @@ __all__ = [
 IGNORE_INDEX = -100
 
 
+ATTENTION_KERNELS = ("flex", "exact")
+compiled_flex_attention = torch.compile(flex_attention, dynamic=False)
+
+
 class DocumentMask:
     """Document-aware causal mask: position q sees k <= q within its own document."""
 
-    def __init__(self, documents):
+    def __init__(self, documents, kernel="exact"):
         self.documents = documents
         self.positions = document_positions(documents)
         # Documents are contiguous, so row i may attend to keys [start_i, i].
         self.starts = document_starts(documents)
+        self.kernel = kernel
+        self._block = None
+
+    @property
+    def block(self):
+        """FlexAttention block mask, built once per batch on first use."""
+        if self._block is None:
+            documents = self.documents
+
+            def allowed(batch, head, q, k):
+                return (q >= k) & (documents[batch, q] == documents[batch, k])
+
+            batch, length = documents.shape
+            self._block = create_block_mask(allowed, batch, None, length, length, device="cuda")
+        return self._block
 
     def dense(self):
         """[B, 1, T, T] boolean matrix of allowed attention."""
@@ -68,10 +89,26 @@ def reference_attention(query, key, value, allowed):
 
 
 def attend(query, key, value, mask):
-    """Attention output [B, H, T, D] and fp32 (or fp64) log-sum-exp [B, H, T]."""
-    if query.is_cuda:
-        return document_attention(query, key, value, mask.starts, softmax_scale(query.size(-1)))
-    return reference_attention(query, key, value, mask.dense())
+    """Attention output [B, H, T, D] and fp32 (or fp64) log-sum-exp [B, H, T].
+
+    On CUDA, `mask.kernel` selects our bit-exact kernel ("exact") or compiled
+    FlexAttention with the same document-causal mask ("flex", tensor cores; it
+    matches the exact kernel to rounding, see tests/check_hybrid_cuda.py).
+    """
+    if not query.is_cuda:
+        return reference_attention(query, key, value, mask.dense())
+    if mask.kernel == "flex":
+        output, aux = compiled_flex_attention(
+            query,
+            key,
+            value,
+            block_mask=mask.block,
+            scale=softmax_scale(query.size(-1)),
+            enable_gqa=key.size(1) != query.size(1),
+            return_aux=AuxRequest(lse=True),
+        )
+        return output, aux.lse
+    return document_attention(query, key, value, mask.starts, softmax_scale(query.size(-1)))
 
 
 POSITIVE_FIELDS = (
@@ -109,6 +146,7 @@ class HybridConfig:
     mtp_layer_kind: str = "full"
     mtp_weight_start: float = 0.3
     mtp_weight_end: float = 0.1
+    attention_kernel: str = "flex"
     gate_bias_init: float = 3.0
     rope_base: float = 1_000_000.0
     norm_eps: float = 1e-5
@@ -128,6 +166,8 @@ class HybridConfig:
             raise ValueError("RoPE requires an even head dimension")
         if not self.layer_pattern or set(self.layer_pattern) - {"kda", "full"}:
             raise ValueError("layer_pattern must list 'kda' and 'full' layers")
+        if self.attention_kernel not in ATTENTION_KERNELS:
+            raise ValueError(f"attention_kernel must be one of {ATTENTION_KERNELS}")
         if self.mtp_layer_kind not in ("kda", "full"):
             raise ValueError("mtp_layer_kind must be 'kda' or 'full'")
         if self.n_layer % len(self.layer_pattern):
@@ -163,6 +203,9 @@ class Attention(nn.Module):
     elementwise gate sigmoid(W_g x + b) is computed from the layer input; `b` is
     the family's only bias and starts at `gate_bias_init` (3.0: about 95% open).
     """
+
+    # Set during evaluation to record gate openness and sink weight per layer.
+    record_statistics = False
 
     def __init__(self, config):
         super().__init__()
@@ -203,6 +246,11 @@ class Attention(nn.Module):
         batch, length, _ = x.shape
         attended = attended.transpose(1, 2).reshape(batch, length, -1)
         gate = torch.sigmoid(self.gate_proj(x) + self.gate_bias)
+        if Attention.record_statistics:
+            self.statistics = {
+                "gate_open": gate.float().mean().item(),
+                "sink_weight": (1 - kept).float().mean().item(),
+            }
         return self.o_proj(attended * gate.to(attended.dtype))
 
 
@@ -315,7 +363,7 @@ class HybridLM(nn.Module):
             documents = torch.zeros_like(tokens)
         if documents.shape != tokens.shape:
             raise ValueError("document ids must match the token shape")
-        mask = DocumentMask(documents)
+        mask = DocumentMask(documents, self.config.attention_kernel)
         rope = (self.rope_cos[mask.positions][:, None], self.rope_sin[mask.positions][:, None])
         x = self.token_embedding(tokens)
         for block in self.blocks:
@@ -326,11 +374,17 @@ class HybridLM(nn.Module):
         return self.final_norm(self.trunk(tokens, documents)[0])
 
     def loss_sums(self, hidden, labels, prefix=""):
-        ce, z = chunked_cross_entropy(
-            hidden, self.output_weight, labels, self.config.loss_chunk_size
-        )
+        if hidden.is_cuda and torch.is_grad_enabled():
+            loss, ce, z = fused_cross_entropy(
+                hidden, self.output_weight, labels, self.config.z_loss, self.config.loss_chunk_size
+            )
+        else:
+            ce, z = chunked_cross_entropy(
+                hidden, self.output_weight, labels, self.config.loss_chunk_size
+            )
+            loss = ce + self.config.z_loss * z
         return {
-            f"{prefix}loss": ce + self.config.z_loss * z,
+            f"{prefix}loss": loss,
             f"{prefix}ce": ce,
             f"{prefix}z": z,
             f"{prefix}count": (labels != IGNORE_INDEX).sum(),

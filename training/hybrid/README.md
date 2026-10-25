@@ -211,8 +211,56 @@ screened out). The screen holds 3,225,682 unique 13-grams. At those sizes the
 training shards hold about 31B ClimbMix, 11B code and 4.6B math tokens, above
 the 28B/8B/4B shares.
 
-The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
-placeholders until the 720M configuration is fixed in PR 8.
+## 720M configuration and training
+
+[`configs/hybrid-720m-40b.json`](configs/hybrid-720m-40b.json): width 1536, 16
+layers as 4 x [KDA, KDA, KDA, full] (full attention at 3, 7, 11, 15), 12 query /
+4 KV heads, 12 KDA heads, head dimension 128, SwiGLU 4,224, GLM vocabulary
+154,880, context 4,096, one MTP module. The trunk used for inference has
+707,129,536 parameters; with the MTP module 739,972,556 (`test_hybrid_720m`
+asserts both). Training: 256 x 4,096 = 1,048,576 tokens per step, warmup over
+500M tokens, then constant, then linear decay to 0 over the last 15%; Muon/AdamW
+as above with weight decay 0.1, gradient clipping 1.0, bf16 autocast with fp32
+parameters, `torch.compile`, z-loss 1e-4, MTP weight 0.3 to 0.1.
+
+Full attention trains with FlexAttention (`attention_kernel: "flex"`, tensor
+cores, document block mask, log-sum-exp gradient for the sink). On an H100 it
+agrees with our bit-exact kernel to bf16 rounding (output and gradients within
+0.016–0.063, log-sum-exp within 2e-6); `"exact"` selects the exact kernel.
+[`fused_loss.py`](fused_loss.py) computes the output layer, cross-entropy, z-loss
+and their gradients in one chunked pass, without storing or recomputing the
+[tokens, 154,880] logits, for the next-token and MTP heads.
+
+[`train.py`](train.py) is the torchrun trainer: rank 0 reads `PreparedMixture`
+and broadcasts each batch and every stop decision (stop time, data exhausted or
+late, stop request); every rank derives document ids and MTP targets, and DDP
+averages gradients. Each loss is normalized by its global target count. Rank 0
+writes `metrics.jsonl` (loss, z, MTP loss, learning rate, gradient norm,
+tokens/s, MFU, rows per source), every `eval_every_steps` the held-out loss,
+bits per byte and MTP loss per source with per-layer gate openness and sink
+weight plus sink, gate-bias and KDA-decay parameters, and every
+`sample_every_steps` greedy continuations of fixed prompts. Checkpoints (model,
+optimizer, data cursor, RNG, progress; the last two kept) are written every
+`checkpoint_seconds` and at stop; a run directory resumes from its latest one,
+also with a different GPU count (the global batch is unchanged). With `hf_repo`
+set, bf16 trunk weights, config and metrics go to that private HF model repo
+every `hf_every_tokens` and at the end.
+
+[`modal_train.py`](modal_train.py) runs it on Modal:
+
+```sh
+uv run modal run -m model_hybrid.modal_train::bench --gpus 1      # 30-minute call
+uv run modal run --detach -m model_hybrid.modal_train::launch --run-id <id> [--gpus 8]
+uv run modal run -m model_hybrid.modal_train::stop --run-id <id>  # checkpoint and exit
+```
+
+Each launch fixes a deadline 24 hours ahead (less a margin), starts an
+independent supervisor that cancels the recorded segment then, and starts one
+segment (`retries=0`, timeout bounded by the deadline) that stops itself 15
+minutes before its timeout with a checkpoint. Launching again with the same run
+ID and config resumes. MFU counts 6 x (matmul weights, including both
+output-layer uses) plus attention FLOPs over the mean attended keys, against
+989 TFLOPS per H100.
 
 ## Tests
 
@@ -222,7 +270,8 @@ From `training/`:
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
   tests.test_hybrid_exact_attention tests.test_hybrid_sink_gate tests.test_hybrid_kda \
   tests.test_hybrid_mtp tests.test_hybrid_optim \
-  tests.test_hybrid_tokenizer tests.test_hybrid_data -v
+  tests.test_hybrid_tokenizer tests.test_hybrid_data tests.test_hybrid_720m \
+  tests.test_hybrid_fused_loss -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
@@ -247,6 +296,9 @@ bf16 training steps of a small compiled hybrid model with the fla call outside t
 compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
 The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it.
 
+`test_hybrid_720m` checks the configuration, parameter count, schedule, FLOP
+accounting, attention-kernel choice and gate/sink statistics;
+`test_hybrid_fused_loss` checks the fused loss and its gradients against autograd.
 `test_hybrid_data` prepares shards from small parquet files (license filter,
 empty documents, contamination drops, EOS layout, byte counts) and checks the
 mixture's weights, contiguity across shards, resume and the held-out windows;

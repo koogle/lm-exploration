@@ -8,7 +8,17 @@ kernel, prebuilt here into /opt/hybrid_attention.
 import modal
 
 CUDA_BASE = "nvidia/cuda:13.0.0-devel-ubuntu22.04"
-PACKAGES = ("torch==2.14.1", "numpy", "einops", "ninja", "fla-core==0.6.0", "packaging")
+PACKAGES = (
+    "torch==2.14.1",
+    "numpy",
+    "einops",
+    "ninja",
+    "fla-core==0.6.0",
+    "packaging",
+    "tokenizers==0.22.2",
+    "huggingface-hub==1.33.0",
+    "safetensors",
+)
 BUILD_KERNEL = (
     'python -c "from torch.utils.cpp_extension import load; '
     "load(name='hybrid_document_attention', "
@@ -27,6 +37,10 @@ image = (
     )
     .run_commands(BUILD_KERNEL)
     .add_local_dir("10m", "/project/model_10m", ignore=["__pycache__"])
+    .add_local_file("workflows/__init__.py", "/project/workflows/__init__.py")
+    .add_local_file("workflows/deadline.py", "/project/workflows/deadline.py")
+    .add_local_file("trainer/__init__.py", "/project/trainer/__init__.py")
+    .add_local_file("trainer/optimizers.py", "/project/trainer/optimizers.py")
     .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__"])
     .add_local_dir("tests", "/project/tests", ignore=["__pycache__", "fixtures"])
 )
