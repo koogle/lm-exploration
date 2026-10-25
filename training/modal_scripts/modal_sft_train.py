@@ -1,4 +1,4 @@
-"""Bounded repair SFT / CIG-SFT on one Modal GPU. Importing this module never starts a job.
+"""Bounded SFT (math, repair, CIG) on one Modal GPU. Importing this module never starts a job.
 
 Run from training/ (see sft/README.md for the recipe format):
     modal run -m modal_scripts.modal_sft_train::main --recipe <recipe.json> \
@@ -30,13 +30,15 @@ LOCAL_DATA_LIMIT = 20 * 1024 * 1024
 image = image.add_local_dir("modal_scripts", "/project/modal_scripts")
 app = modal.App("simple-llm-sft")
 run_volume = modal.Volume.from_name("lm-exploration-training")
+# Raw snapshots for pretraining replay.
+data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
 limits = {
     "image": image,
     "timeout": TIMEOUT_SECONDS,
     "retries": 0,
     "max_containers": 2,
     "single_use_containers": True,
-    "volumes": {"/runs": run_volume},
+    "volumes": {"/runs": run_volume, "/data": data_volume},
 }
 
 

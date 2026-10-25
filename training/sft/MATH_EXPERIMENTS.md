@@ -47,7 +47,15 @@ tokens and scored the SFT models near 1%; the scores above take the `####` answe
 the last number (commit `e95ce4d`). The evaluation now checks answers with Math-Verify;
 these scores have not been recomputed with it.
 
+## Replay runs (r02, in progress)
+
+[`recipes/math-metamath-replay-{20b,5b}.json`](recipes/) train the same data from the
+same parents for 15,000 steps (about two epochs) with a cosine schedule (2e-5 peak, 300
+warmup steps, decaying to 2e-6), and replay 8 windows of 1,024 pretraining tokens per
+step from the 20B run's snapshot: 60% ClimbMix, 40% code (35% curated, 5% MIT), with
+replay weight 0.25. Results will be compared with r01 on math and general benchmarks.
+
 ## Next
 
-Mix pretraining text into SFT batches (replay) to limit forgetting, and compare the
-step-2,500 and step-5,000 checkpoints on both math and general benchmarks.
+Reinforcement learning on GSM8K-style problems with a verifiable answer reward, starting
+from the better replay checkpoint.

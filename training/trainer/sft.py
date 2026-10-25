@@ -8,6 +8,12 @@ far; prompt tokens carry no loss. The loss is the mean answer-token cross-entrop
 `trainer/cig.py`). The model never generates during training. Validation reports the same
 answer-token cross-entropy per bucket.
 
+Optional replay (`replay_*` settings, `training_data.replay`) adds `replay_batch_size`
+windows of pretraining text to every step, trained with the ordinary next-token loss on
+every token; the step loss is `(1 - replay_weight) * answer loss + replay_weight * replay
+loss`. The learning rate is constant, or warms up linearly over `warmup_steps` and
+follows a cosine to `min_lr_ratio * lr` (`schedule: "cosine"`).
+
 The parent is an explicit `scholarly-ddp-v1` checkpoint on the private run volume; launchers
 pass it in. See `sft/README.md` for the data formats and launch commands.
 """
@@ -16,7 +22,7 @@ import json
 import math
 import random
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from training_data.math_sft import MATH
@@ -47,6 +53,16 @@ class Settings:
     objective: str = "sft"
     cig_proximity: float = 0.3
     task: str = "repair"
+    schedule: str = "constant"
+    warmup_steps: int = 0
+    min_lr_ratio: float = 1.0
+    # Pretraining replay: a raw snapshot under the data volume and source weights.
+    replay_snapshot: str = ""
+    replay_sources: dict = field(default_factory=dict)
+    replay_batch_size: int = 0
+    replay_context: int = 1024
+    replay_weight: float = 0.0
+    replay_validation_windows: int = 4
 
     def __post_init__(self):
         if self.objective not in ("sft", "cig"):
@@ -71,6 +87,43 @@ class Settings:
             raise ValueError("Invalid learning rate")
         if self.max_seconds > 14400:
             raise ValueError("SFT capped at four hours per invocation")
+        if self.schedule not in ("constant", "cosine"):
+            raise ValueError("schedule must be constant or cosine")
+        if type(self.warmup_steps) is not int or not 0 <= self.warmup_steps < self.steps:
+            raise ValueError("warmup_steps must be from 0 to below steps")
+        if not 0 < self.min_lr_ratio <= 1 or (self.schedule == "constant") != (
+            self.min_lr_ratio == 1 and self.warmup_steps == 0
+        ):
+            raise ValueError("Only a cosine schedule warms up or decays (min_lr_ratio in (0, 1])")
+        replay = (
+            self.replay_snapshot,
+            self.replay_sources,
+            self.replay_batch_size,
+            self.replay_weight,
+        )
+        if any(replay) and not (
+            all(replay[:3])
+            and 0 < self.replay_weight < 1
+            and all(type(w) in (int, float) and w > 0 for w in self.replay_sources.values())
+            and type(self.replay_context) is int
+            and 0 < self.replay_context
+            and type(self.replay_validation_windows) is int
+            and self.replay_validation_windows > 0
+        ):
+            raise ValueError(
+                "Replay needs a snapshot, positive source weights and batch size, "
+                "and a weight between 0 and 1"
+            )
+
+    def learning_rate(self, step):
+        """The rate for update `step` (0-based)."""
+        if self.schedule == "constant":
+            return self.lr
+        if step < self.warmup_steps:
+            return self.lr * (step + 1) / self.warmup_steps
+        progress = (step - self.warmup_steps) / max(1, self.steps - self.warmup_steps)
+        cosine = 0.5 * (1 + math.cos(math.pi * min(progress, 1.0)))
+        return self.lr * (self.min_lr_ratio + (1 - self.min_lr_ratio) * cosine)
 
 
 def validate_resume_identity(saved, current, step, extend=False):
@@ -112,8 +165,11 @@ def train(
     stop_after_step=None,
     extend=False,
     deadline=None,
+    data_root=Path("/data"),
 ):
     """Train until the step target, `settings.max_seconds` or the absolute `deadline`.
+
+    `data_root` holds `settings.replay_snapshot`.
 
     `deadline` is a Unix time from the launcher's 24-hour launch budget; the loop stops
     taking updates once it passes, then evaluates and saves a final checkpoint.
@@ -166,9 +222,23 @@ def train(
         cache = cig.reference_cache(model, splits, raw_rows, tokenizer, settings.context)
     import model_10m.model as shared_module
     import model_100m.model as model_module
+    import training_data.replay as replay_module
     import training_data.sft as sft_data_module
 
+    replay, replay_validation = None, []
+    if settings.replay_batch_size:
+        if settings.replay_context > cfg["context"]:
+            raise ValueError("Replay context exceeds parent context")
+        replay = replay_module.Replay(
+            Path(data_root) / settings.replay_snapshot,
+            settings.replay_sources,
+            settings.replay_context,
+            tokenizer,
+            settings.seed,
+        )
+        replay_validation = replay.validation(settings.replay_validation_windows)
     source_hashes.update(
+        replay=digest(replay_module.__file__),
         data=digest(data_module.__file__),
         sft_data=digest(sft_data_module.__file__),
         model=digest(model_module.__file__),
@@ -177,6 +247,7 @@ def train(
     identity = {
         "dataset_sha256": data_hash,
         "parent_sha256": digest(parent),
+        "replay": replay.identity() if replay else None,
         "tokenizer_sha256": TOKENIZER_SHA256,
         "settings": asdict(settings),
         "source_sha256": source_hashes,
@@ -192,6 +263,8 @@ def train(
         model.load_state_dict(saved["model"])
         optimizer.load_state_dict(saved["optimizer"])
         rng.setstate(saved["sampling_rng"])
+        if replay:
+            replay.rng.setstate(saved["replay_rng"])
         torch.set_rng_state(saved["torch_rng"])
         torch.cuda.set_rng_state_all(saved["cuda_rng"])
         step, answer_tokens = saved["step"], saved["answer_tokens"]
@@ -225,6 +298,7 @@ def train(
         ("cig", cig.__file__),
         ("data", data_module.__file__),
         ("sft_data", sft_data_module.__file__),
+        ("replay", replay_module.__file__),
         ("model", model_module.__file__),
         ("shared_model", shared_module.__file__),
     ):
@@ -269,8 +343,14 @@ def train(
                 bucket = totals.setdefault(row["bucket"], [0.0, 0])
                 bucket[0] += value.item()
                 bucket[1] += n.item()
+            replayed = {}
+            for row in replay_validation:
+                value, n = loss([row])
+                bucket = replayed.setdefault(row["bucket"], [0.0, 0])
+                bucket[0] += value.item()
+                bucket[1] += n.item()
         model.train()
-        return {
+        metrics = {
             "validation_loss": sum(v[0] for v in totals.values())
             / sum(v[1] for v in totals.values()),
             "validation_by_bucket": {
@@ -278,6 +358,11 @@ def train(
                 for name, (total, count) in sorted(totals.items())
             },
         }
+        if replayed:
+            metrics["replay_validation_by_source"] = {
+                name: total / count for name, (total, count) in sorted(replayed.items())
+            }
+        return metrics
 
     def record(**values):
         with (output / "metrics.jsonl").open("a") as handle:
@@ -299,6 +384,7 @@ def train(
                 "step": step,
                 "answer_tokens": answer_tokens,
                 "sampling_rng": rng.getstate(),
+                "replay_rng": replay.rng.getstate() if replay else None,
                 "torch_rng": torch.get_rng_state(),
                 "cuda_rng": torch.cuda.get_rng_state_all(),
             },
@@ -320,9 +406,21 @@ def train(
         and (deadline is None or time.time() < deadline)
     ):
         rows = [rng.choice(splits["train"]) for _ in range(settings.batch_size)]
+        learning_rate = settings.learning_rate(step)
+        for group in optimizer.param_groups:
+            group["lr"] = learning_rate
         optimizer.zero_grad(set_to_none=True)
         value, count = loss(rows, training=True)
-        objective = value / count
+        answer_loss = value / count
+        objective, values = answer_loss, {"train_loss": answer_loss.item()}
+        if replay:
+            replay_value, replay_count = loss(
+                [replay.sample() for _ in range(settings.replay_batch_size)]
+            )
+            replay_loss = replay_value / replay_count
+            weight = settings.replay_weight
+            objective = (1 - weight) * answer_loss + weight * replay_loss
+            values["replay_loss"] = replay_loss.item()
         if not torch.isfinite(objective):
             raise RuntimeError("Non-finite SFT loss")
         objective.backward()
@@ -330,7 +428,7 @@ def train(
         optimizer.step()
         step += 1
         answer_tokens += count.item()
-        record(train_loss=objective.item())
+        record(**values, lr=learning_rate)
         if step % settings.evaluate_every == 0:
             metrics = evaluate()
             record(**metrics)
