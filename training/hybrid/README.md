@@ -75,15 +75,13 @@ multi-query attention is `n_kv_head == 1` (all queries in one group).
 
 ## Document masking
 
-Loaders pack documents back to back, each ending in EOS.
-[`documents.py`](documents.py) derives per-row document ids from those EOS
-boundaries (`document_ids`), converts them to flattened `cu_seqlens` for varlen
-kernels, and `DocumentBatches` wraps any token mixture so `next_batch` returns
-`(inputs, labels, document_ids)`. Pass the ids as `forward(tokens, labels, documents)`.
-
-Attention is document-causal: a token sees earlier tokens of its own document
-only, and RoPE positions restart at each document. Without document ids each row
-is treated as one document.
+Loaders pack documents back to back, each ending in EOS. Every forward pass is
+document-masked: the model derives per-row document ids from the EOS tokens in
+its input (`HybridConfig.eos_id`, [`documents.py`](documents.py)
+`document_ids`), so a token sees earlier tokens of its own document only and RoPE
+positions restart after each EOS. Training, evaluation and sampling all call
+`forward(tokens[, labels])` with no separate mask. `cu_seqlens` converts the
+ids to flattened document offsets for varlen kernels.
 
 ## Attention kernel
 

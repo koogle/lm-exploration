@@ -88,7 +88,14 @@ def against_reference(dtype, batch, heads, kv_heads, length, width, ends):
 def compiled_model():
     torch.manual_seed(1)
     config = model.HybridConfig(
-        vocab_size=512, block_size=256, n_layer=2, n_embd=256, n_head=4, n_kv_head=2, head_dim=64
+        vocab_size=512,
+        eos_id=EOS,
+        block_size=256,
+        n_layer=2,
+        n_embd=256,
+        n_head=4,
+        n_kv_head=2,
+        head_dim=64,
     )
     lm = model.HybridLM(config).cuda()
     compiled = torch.compile(lm, fullgraph=True)
@@ -98,10 +105,10 @@ def compiled_model():
     second = torch.cat((torch.randint(3, 512, (1, 99), device="cuda"), b), 1)
     second[0, 98] = EOS
     with torch.autocast("cuda", dtype=torch.bfloat16):
-        a = compiled(first, documents=document_ids(first, EOS))[0, 155:]
-        c = compiled(second, documents=document_ids(second, EOS))[0, 99:]
+        a = compiled(first)[0, 155:]
+        c = compiled(second)[0, 99:]
         labels = torch.randint(0, 512, first.shape, device="cuda")
-        losses = compiled(first, labels, document_ids(first, EOS))
+        losses = compiled(first, labels)
     losses["loss"].backward()
     if not all(torch.isfinite(p.grad).all() for p in lm.parameters()):
         raise AssertionError("Non-finite gradients in the compiled model")

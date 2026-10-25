@@ -26,17 +26,3 @@ def cu_seqlens(documents):
     starts = boundary.flatten().nonzero().squeeze(1)
     end = torch.tensor([batch * length], device=documents.device)
     return torch.cat((starts, end)).to(torch.int32)
-
-
-class DocumentBatches:
-    """Wrap a token mixture so each batch also carries its document ids."""
-
-    def __init__(self, mixture, eos_id):
-        self.mixture, self.eos_id = mixture, eos_id
-
-    def next_batch(self, batch_size, device="cpu"):
-        inputs, labels = self.mixture.next_batch(batch_size, device)
-        return inputs, labels, document_ids(inputs, self.eos_id)
-
-    def __getattr__(self, name):
-        return getattr(self.mixture, name)

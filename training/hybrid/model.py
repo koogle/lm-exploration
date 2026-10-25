@@ -3,9 +3,10 @@
 Pre-norm blocks reuse RMSNorm (fp32 statistics) and SwiGLU from model_10m, the
 SwiGLU without biases at a configurable width; tied embeddings and no biases.
 Full-attention layers use GQA with head dimension 128, QK-norm and RoPE with a
-configurable base, with a document-aware causal mask. On CUDA attention runs our
-own kernel (document_attention.py), bit-exact with the fixed-order definition in
-exact_attention.py. The loss is a chunked cross-entropy with a z-loss.
+configurable base. Every forward pass masks attention by document: documents
+end in EOS (`HybridConfig.eos_id`) and a token sees only earlier tokens of its
+own document. On CUDA attention runs our own kernel (document_attention.py),
+bit-exact with the fixed-order definition in exact_attention.py. The loss is a chunked cross-entropy with a z-loss.
 """
 
 import math
@@ -18,6 +19,7 @@ from torch.nn import functional as F
 from torch.utils.checkpoint import checkpoint
 
 from .document_attention import document_attention, softmax_scale
+from .documents import document_ids
 from .exact_attention import document_starts
 
 __all__ = [
@@ -73,6 +75,7 @@ def attend(query, key, value, mask):
 @dataclass(frozen=True)
 class HybridConfig:
     vocab_size: int
+    eos_id: int
     block_size: int = 4096
     n_layer: int = 16
     n_embd: int = 1536
@@ -88,7 +91,7 @@ class HybridConfig:
 
     def __post_init__(self):
         for name, value in asdict(self).items():
-            if name != "z_loss" and value <= 0:
+            if name not in ("z_loss", "eos_id") and value <= 0:
                 raise ValueError(f"{name} must be positive")
         if self.z_loss < 0:
             raise ValueError("z_loss must be non-negative")
@@ -96,6 +99,8 @@ class HybridConfig:
             raise ValueError("n_head must be divisible by n_kv_head")
         if self.head_dim % 2:
             raise ValueError("RoPE requires an even head dimension")
+        if not 0 <= self.eos_id < self.vocab_size:
+            raise ValueError("eos_id must be a token id")
 
 
 def rope_tables(length, head_dim, base, device):
@@ -223,19 +228,15 @@ class HybridLM(nn.Module):
                 std /= math.sqrt(2 * self.config.n_layer)
             nn.init.normal_(module.weight, std=std)
 
-    def hidden_states(self, tokens, documents=None):
-        """Final normalized hidden states; `documents` [B, T] isolates packed documents.
+    def hidden_states(self, tokens):
+        """Final normalized hidden states.
 
-        Attention and RoPE positions restart at each document; without document
-        ids, each row is one document.
+        Each EOS ends a document: attention and RoPE positions restart after it.
         """
         length = tokens.size(1)
         if not 0 < length <= self.config.block_size:
             raise ValueError("sequence length must be within the model's block_size")
-        if documents is None:
-            documents = torch.zeros_like(tokens)
-        if documents.shape != tokens.shape:
-            raise ValueError("document ids must match the token shape")
+        documents = document_ids(tokens, self.config.eos_id)
         positions = document_positions(documents)
         rope = (self.rope_cos[positions][:, None], self.rope_sin[positions][:, None])
         mask = DocumentMask(documents)
@@ -244,13 +245,13 @@ class HybridLM(nn.Module):
             x = block(x, rope, mask)
         return self.final_norm(x)
 
-    def forward(self, tokens, labels=None, documents=None):
+    def forward(self, tokens, labels=None):
         """Logits, or summed losses when `labels` are given.
 
         Returns {"loss", "ce", "z", "count"}: `loss = ce + z_loss * z` summed over
         valid targets; divide by the global valid-target count to get the mean.
         """
-        hidden = self.hidden_states(tokens, documents)
+        hidden = self.hidden_states(tokens)
         if labels is None:
             return F.linear(hidden, self.output_weight)
         ce, z = chunked_cross_entropy(

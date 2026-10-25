@@ -11,6 +11,7 @@ from torch.nn import functional as F
 def tiny_config(**overrides):
     settings = {
         "vocab_size": 37,
+        "eos_id": 2,
         "block_size": 16,
         "n_layer": 2,
         "n_embd": 32,
@@ -33,7 +34,7 @@ class HybridBackboneTests(unittest.TestCase):
         torch.manual_seed(3)
 
     def test_defaults(self):
-        config = model.HybridConfig(154_880)
+        config = model.HybridConfig(154_880, eos_id=154_820)
         self.assertEqual((config.head_dim, config.rope_base, config.z_loss), (128, 1e6, 1e-4))
 
     def test_shapes_tied_embeddings_and_no_biases(self):
