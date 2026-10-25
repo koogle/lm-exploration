@@ -99,23 +99,21 @@ def few_shot_answers(model, problems, exemplars, max_new_tokens):
     line, `Question:` or EOS. `math_verify` extracts the final answer from the completion
     and the gold text and checks that they are equal.
     """
-    from math_verify import ExprExtractionConfig, parse, verify
-    from training_data.math_sft import question_prompt
+    from training_data.math_sft import answer_matches, question_prompt
 
-    extract = [ExprExtractionConfig()]
     shots = "".join(f"{question_prompt(q)} {worked}\n\n" for q, worked in exemplars)
     outcomes = []
     for question, gold in problems:
         completion = generate(
             model, shots + question_prompt(question), max_new_tokens, ["\n\n", "Question:"]
         )
-        expected, found = parse(gold, extract), parse(completion, extract)
+        answer, correct = answer_matches(completion, gold)
         outcomes.append(
             {
                 "question": question,
                 "gold": gold,
-                "answer": found[-1] if found else None,
-                "correct": bool(found) and verify(expected, found),
+                "answer": answer,
+                "correct": correct,
                 "completion": completion,
             }
         )

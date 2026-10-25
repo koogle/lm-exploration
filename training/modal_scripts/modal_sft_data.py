@@ -8,10 +8,17 @@ Run from training/:
         --data-id <fresh-id> [--reserved <data-id>,...] [--replay <data-id>] [--full] \
         [--report <report.json>]
     modal run -m modal_scripts.modal_sft_data::math --data-id <fresh-id> [--report <report.json>]
+    modal run -m modal_scripts.modal_sft_data::code --data-id <fresh-id> [--report <report.json>]
+    modal run -m modal_scripts.modal_sft_data::mixture --data-id <fresh-id> \
+        --math <math-data-id> --code <code-data-id> [--report <report.json>]
+    modal run -m modal_scripts.modal_sft_data::rl_pool --data-id <fresh-id> [--report <report.json>]
 
 `curriculum` execute-verifies every original arithmetic repair and writes the JSONL locally.
-`commitpack`, `private_patches` and `math` (GSM8K + MetaMathQA word problems) write `examples.jsonl` and `report.json` to
-`/runs/<data-id>` on the private run volume for `modal_sft_train --data-id`. Every function has
+`commitpack`, `private_patches`, `math` (GSM8K + MetaMathQA word problems), `code` (KodCode +
+MBPP functions) and `mixture` (prepared math and code rows in one file) write `examples.jsonl`
+and `report.json` to `/runs/<data-id>` on the private run volume for `modal_sft_train
+--data-id`. `rl_pool` writes the RL prompt pool `pool.jsonl` (`training_data.rl_tasks`).
+No supplied code is executed during preparation. Every function has
 no retries and a timeout under 24 hours; calls that start more than 24 hours after launch refuse
 work.
 """
@@ -269,3 +276,127 @@ def math(data_id: str, report: str = ""):
     run_id(data_id, "data_id")
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     write(report, prepare_math.remote(data_id, deadline))
+
+
+def benchmark_problems():
+    """(math test questions, code benchmark problems) used for decontamination."""
+    from training_data.code_sft import HUMANEVAL_PLUS, MBPP, MBPP_PLUS, benchmark_texts
+    from training_data.hub_files import pinned_rows
+    from training_data.math_sft import GSM8K, SVAMP
+
+    math = [r["question"] for r in pinned_rows(*GSM8K, "main/test-00000-of-00001.parquet")]
+    math += [
+        f"{r['Body']} {r['Question']}"
+        for r in pinned_rows(*SVAMP, "data/test-00000-of-00001.parquet")
+    ]
+    held_out = [
+        row
+        for split in ("test", "validation", "prompt")
+        for row in pinned_rows(*MBPP, f"full/{split}-00000-of-00001.parquet")
+    ]
+    code = benchmark_texts(
+        pinned_rows(*MBPP_PLUS, "data/test-00000-of-00001-d5781c9c51e02795.parquet"),
+        pinned_rows(*HUMANEVAL_PLUS, "data/test-00000-of-00001-5973903632b82d40.parquet"),
+        held_out,
+    )
+    return math, code
+
+
+@app.function(
+    image=data_image,
+    cpu=4,
+    memory=32768,
+    timeout=3600,
+    retries=0,
+    volumes={"/runs": volume},
+)
+def prepare_code(data_id, deadline):
+    from training_data.code_sft import KODCODE, KODCODE_RL, KODCODE_SHARDS, MBPP, build
+    from training_data.hub_files import pinned_rows
+
+    check_deadline(deadline)
+    volume.reload()
+    output = fresh_output(data_id)
+    reserved = {
+        r["question_id"] for r in pinned_rows(*KODCODE_RL, "data/train-00000-of-00001.parquet")
+    }
+
+    def shards():
+        for index in range(KODCODE_SHARDS):
+            check_deadline(deadline)
+            yield pinned_rows(*KODCODE, f"data/train-{index:05d}-of-{KODCODE_SHARDS:05d}.parquet")
+
+    mbpp_train = pinned_rows(*MBPP, "full/train-00000-of-00001.parquet")
+    report = build(shards(), mbpp_train, benchmark_problems()[1], reserved, output)
+    volume.commit()
+    return report
+
+
+@app.function(
+    image=data_image, cpu=2, memory=8192, timeout=1800, retries=0, volumes={"/runs": volume}
+)
+def prepare_mixture(data_id, datasets, deadline):
+    from training_data.mixture_sft import combine
+    from training_data.subword import digest
+
+    check_deadline(deadline)
+    volume.reload()
+    output = fresh_output(data_id)
+    paths = {}
+    for task, source in datasets.items():
+        folder = Path("/runs") / run_id(source, "data_id")
+        report = json.loads((folder / "report.json").read_text())
+        if digest(folder / "examples.jsonl") != report["dataset_sha256"]:
+            raise ValueError(f"{source} differs from its preparation report")
+        paths[task] = folder / "examples.jsonl"
+    report = combine(paths, output)
+    report["data_ids"] = datasets
+    (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    volume.commit()
+    return report
+
+
+@app.function(
+    image=data_image, cpu=2, memory=16384, timeout=1800, retries=0, volumes={"/runs": volume}
+)
+def prepare_rl_pool(data_id, deadline):
+    from training_data.code_sft import KODCODE_RL, MBPP
+    from training_data.hub_files import pinned_rows
+    from training_data.math_sft import GSM8K
+    from training_data.rl_tasks import build
+
+    check_deadline(deadline)
+    volume.reload()
+    output = fresh_output(data_id)
+    math_tests, code_tests = benchmark_problems()
+    report = build(
+        pinned_rows(*GSM8K, "main/train-00000-of-00001.parquet"),
+        pinned_rows(*KODCODE_RL, "data/train-00000-of-00001.parquet"),
+        pinned_rows(*MBPP, "full/validation-00000-of-00001.parquet"),
+        math_tests,
+        code_tests,
+        output,
+    )
+    volume.commit()
+    return report
+
+
+@app.local_entrypoint()
+def code(data_id: str, report: str = ""):
+    run_id(data_id, "data_id")
+    deadline = time.time() + LAUNCH_LIMIT_SECONDS
+    write(report, prepare_code.remote(data_id, deadline))
+
+
+@app.local_entrypoint()
+def mixture(data_id: str, math: str, code: str, report: str = ""):
+    run_id(data_id, "data_id")
+    deadline = time.time() + LAUNCH_LIMIT_SECONDS
+    write(report, prepare_mixture.remote(data_id, {"math": math, "code": code}, deadline))
+
+
+@app.local_entrypoint()
+def rl_pool(data_id: str, report: str = ""):
+    run_id(data_id, "data_id")
+    deadline = time.time() + LAUNCH_LIMIT_SECONDS
+    write(report, prepare_rl_pool.remote(data_id, deadline))
