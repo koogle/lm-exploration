@@ -32,13 +32,14 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["model_10m", "model_100m", "training_data", "training_data.fetching", "trainer", "tokenizer", "modal_scripts", "distributed", "workflows", "sampling"]
+packages = ["model_10m", "model_100m", "training_data", "training_data.fetching", "trainer", "tokenizer", "modal_scripts", "distributed", "workflows", "sampling", "evaluation"]
 
 [tool.setuptools.package-dir]
 model_10m = "10m"
 model_100m = "100m"
 training_data = "data"
 sampling = "analysis/sampling"
+evaluation = "analysis/evaluation"
 
 [tool.setuptools.package-data]
 trainer = ["kernels/*.cu"]
