@@ -122,7 +122,9 @@ class ConfigTests(unittest.TestCase):
         for spec in config["datasets"].values():
             self.assertRegex(spec["revision"], r"^[0-9a-f]{40}$")
         self.assertTrue(all("max_new_tokens" in config["datasets"][t] for t in MATH))
-        playground = json.loads((root / "analysis/playground/configs/base-vs-math-sft.json").read_text())
+        playground = json.loads(
+            (root / "analysis/playground/configs/base-vs-math-sft.json").read_text()
+        )
         labels = sorted(m["label"] for m in playground["models"])
         self.assertEqual(labels, sorted(label for row in playground["layout"] for label in row))
 
