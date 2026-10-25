@@ -33,6 +33,8 @@ fused output-layer loss, microbatch 4 x 4,096), MFU against 989 TFLOPS per H100:
 | 2 x H100, fused loss | prepared recipe (pilot) | ~92,600 | 27.8% |
 | 1 x H100, fused loss + Triton gradient kernel | synthetic, 1,000-token documents | 46,680 | 28.0% |
 | 2 x H100, fused loss + Triton gradient kernel | prepared recipe (40B run) | ~96,000 | 28.7–29.0% |
+| 1 x H100, fused loss + CUDA gradient kernel | synthetic, 1,000-token documents | 47,379 | 28.4% |
+| 2 x H100, fused loss + CUDA gradient kernel | prepared recipe (40B run) | 100,000–104,000 | 29.9–31.3% |
 
 Microbatch 8 runs out of memory on an 80 GB H100. The 8 x H100 benchmark could
 not be scheduled: the workspace allows 10 concurrent GPUs and the 124M run holds
@@ -56,7 +58,8 @@ attention mass. Curves, metrics and config: HF dataset
 | Config | [`configs/hybrid-720m-40b.json`](../hybrid/configs/hybrid-720m-40b.json), recipe `hybrid-40b-v1` |
 | First launch | 2026-10-25 04:44 UTC, 2 x H100, commit recorded in `launches/`; stopped at step 46 to switch to the Triton gradient kernel |
 | Second launch | 2026-10-25 ~05:15 UTC, 2 x H100, resumed from step 46; losses continue the pilot's trajectory |
-| Throughput | ~96K tokens/s on 2 x H100 (28.7–29.0% MFU) |
+| Third launch | 2026-10-25 ~05:45 UTC, 2 x H100, resumed from step 95 with the CUDA gradient kernel |
+| Throughput | 100–104K tokens/s on 2 x H100 (30–31% MFU) |
 | Checkpoints | every 90 minutes and at each stop; bf16 exports to `jfrick/hybrid-720m-40b` (private) every 5B tokens |
 | Data | `capacity.json` and `screen.json` in `training/results/hybrid-40b-v1/` of the results dataset |
 
