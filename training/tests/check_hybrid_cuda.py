@@ -56,6 +56,33 @@ def against_reference(dtype, batch, heads, kv_heads, length, width, ends):
     return {"shape": [batch, heads, kv_heads, length, width], "vs_fp64": errors}
 
 
+def fused_loss_against_autograd():
+    """Fused output-layer loss (Triton gradient kernel) against the chunked autograd loss."""
+    from model_hybrid.fused_loss import fused_cross_entropy
+
+    torch.manual_seed(6)
+    hidden = torch.randn(4096, 1536, device="cuda", requires_grad=True)
+    weight = (torch.randn(154_880, 1536, device="cuda") * 0.02).requires_grad_()
+    labels = torch.randint(0, 154_856, (4096,), device="cuda")
+    labels[::7] = -100
+    loss, ce, z = fused_cross_entropy(hidden, weight, labels, 1e-4, 2048)
+    fused = torch.autograd.grad(loss, (hidden, weight))
+    with torch.autocast("cuda", dtype=torch.bfloat16):
+        expected_ce, expected_z = model.chunked_cross_entropy(hidden, weight, labels, 2048)
+    reference = torch.autograd.grad(expected_ce + 1e-4 * expected_z, (hidden, weight))
+    errors = {
+        "ce_relative": abs(ce.item() - expected_ce.item()) / expected_ce.item(),
+        "z_relative": abs(z.item() - expected_z.item()) / expected_z.item(),
+        **{
+            f"grad_{n}_relative": max_error(a, b) / b.abs().max().item()
+            for n, a, b in zip(("hidden", "weight"), fused, reference, strict=True)
+        },
+    }
+    if max(errors.values()) > 2e-2:
+        raise AssertionError(f"Fused loss disagrees with autograd: {errors}")
+    return errors
+
+
 def compiled_model():
     torch.manual_seed(1)
     # Full attention only, so this isolates the compiled FlexAttention path.
@@ -235,6 +262,7 @@ def checks():
         # fla's Triton dots use TF32 even for fp32 inputs.
         "kda_vs_reference_fp32": kda_against_reference(torch.float32, 1e-2),
         "kda_vs_reference_bf16": kda_against_reference(torch.bfloat16, 5e-2),
+        "fused_loss_vs_autograd": fused_loss_against_autograd(),
         "compiled_model": compiled_model(),
         "compile_boundary": compile_boundary_timing(),
         "timing": [timing(documents=1), timing(documents=4)],
