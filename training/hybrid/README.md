@@ -231,6 +231,16 @@ agrees with our bit-exact kernel to bf16 rounding (output and gradients within
 and their gradients in one chunked pass, without storing or recomputing the
 [tokens, 154,880] logits, for the next-token and MTP heads.
 
+Custom kernels in this family: the bit-exact attention kernel
+(`kernels/document_attention.cu`, the correctness reference and the
+`"exact"` training option; fp32 CUDA cores, 161 ms vs 3.1 ms for tensor-core
+attention per layer at 8 x 4,096 tokens, so not the default), the fused
+output-layer loss (+15% training throughput on one H100) and, inside it, a Triton
+kernel ([`softmax_kernel.py`](softmax_kernel.py)) that turns each bf16 logit row
+into its cross-entropy/z-loss gradient in place in two passes, instead of several
+fp32 copies of the [rows, 154,880] block. FlexAttention and fla supply the
+tensor-core attention and KDA kernels.
+
 [`train.py`](train.py) is the torchrun trainer: rank 0 reads `PreparedMixture`
 and broadcasts each batch and every stop decision (stop time, data exhausted or
 late, stop request); every rank derives document ids and MTP targets, and DDP
