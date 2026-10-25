@@ -43,7 +43,9 @@ zero-shot training format. GSM8K is the first 500 test problems; SVAMP all 300.
 
 Result JSONs (including every generated answer) are in `jfrick/lm-exploration-results`
 under `pr-76/evaluation/`. A first SVAMP scoring took the first number of at most 32
-tokens and scored the SFT models near 1%; the scores above use the `####` answer.
+tokens and scored the SFT models near 1%; the scores above take the `####` answer, else
+the last number (commit `e95ce4d`). The evaluation now checks answers with Math-Verify;
+these scores have not been recomputed with it.
 
 ## Next
 

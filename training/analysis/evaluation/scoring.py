@@ -1,17 +1,12 @@
-"""Benchmark tasks scored by log-likelihood or greedy generation, independent of Modal.
+"""Model-agnostic scoring: continuation log-likelihoods, greedy generation, few-shot
+answer checking and bits per byte. Dataset formats live in `benchmarks/`.
 
 A model is any object with `forward(tokens) -> logits` over a `[batch, time]` LongTensor,
 `encode(text) -> ids` (no special tokens), `decode(ids) -> text`, `bos_token_id`,
 `eos_token_id`, `pad_token_id`, `block_size` and `device`.
-
-Multiple-choice tasks follow the EleutherAI evaluation harness formats: each choice is a
-continuation of a shared context, scored by its summed log-probability (`acc`) and by
-that sum divided by the continuation's UTF-8 byte length (`acc_norm`). Generation tasks
-use fixed few-shot exemplars from the task's training split and greedy decoding.
 """
 
 import math
-import re
 
 # Requests per forward pass are bounded by total padded tokens, not by count.
 TOKENS_PER_BATCH = 16384
@@ -74,35 +69,14 @@ def generate(model, prompt, max_new_tokens, stop):
     return text[:cut]
 
 
-def hellaswag_text(text):
-    text = text.strip().replace(" [title]", ". ")
-    text = re.sub(r"\[.*?\]", "", text)
-    return text.replace("  ", " ")
+def choice_accuracy(model, items):
+    """Accuracy over (context, [continuations], gold index) items, EleutherAI harness style.
 
-
-def multiple_choice(task, row):
-    """(context, [continuations], gold index) for one row of a multiple-choice task."""
-    if task == "hellaswag":
-        context = hellaswag_text(
-            row["activity_label"] + ": " + row["ctx_a"] + " " + row["ctx_b"].capitalize()
-        )
-        return context, [" " + hellaswag_text(e) for e in row["endings"]], int(row["label"])
-    if task in ("arc_easy", "arc_challenge"):
-        choices = row["choices"]
-        context = f"Question: {row['question']}\nAnswer:"
-        gold = list(choices["label"]).index(row["answerKey"])
-        return context, [" " + t for t in choices["text"]], gold
-    if task == "openbookqa":
-        choices = row["choices"]
-        gold = list(choices["label"]).index(row["answerKey"])
-        return row["question_stem"], [" " + t for t in choices["text"]], gold
-    raise ValueError(f"Unknown multiple-choice task {task}")
-
-
-def score_multiple_choice(model, task, rows):
+    `acc` picks the continuation with the highest summed log-probability; `acc_norm`
+    divides that sum by the continuation's UTF-8 byte length first.
+    """
     requests, spans = [], []
-    for row in rows:
-        context, choices, gold = multiple_choice(task, row)
+    for context, choices, gold in items:
         ids = model.encode(context)
         spans.append((len(requests), choices, gold))
         requests += [(ids, model.encode(choice)) for choice in choices]
@@ -113,91 +87,40 @@ def score_multiple_choice(model, task, rows):
         lengths = [len(c.encode()) for c in choices]
         correct += max(range(len(totals)), key=totals.__getitem__) == gold
         normalized += max(range(len(totals)), key=lambda i: totals[i] / lengths[i]) == gold
-    return {"examples": len(rows), "acc": correct / len(rows), "acc_norm": normalized / len(rows)}
+    count = len(items)
+    return {"examples": count, "acc": correct / count, "acc_norm": normalized / count}
 
 
-def score_winogrande(model, rows):
-    """Partial scoring: the shared continuation after the blank, under each filled context."""
-    requests = []
-    for row in rows:
-        sentence = row["sentence"]
-        blank = sentence.index("_")
-        continuation = model.encode(" " + sentence[blank + 1 :].strip())
-        for option in (row["option1"], row["option2"]):
-            requests.append((model.encode(sentence[:blank] + option), continuation))
-    scores = loglikelihoods(model, requests)
-    correct = sum(
-        (scores[2 * i][0] < scores[2 * i + 1][0]) == (row["answer"] == "2")
-        for i, row in enumerate(rows)
-    )
-    return {"examples": len(rows), "acc": correct / len(rows)}
+def few_shot_answers(model, problems, exemplars, max_new_tokens):
+    """Greedy answers to (question, gold answer text) problems after worked exemplars.
 
+    `exemplars` are (question, worked answer) pairs, shown as `Question: ...\nAnswer: ...`
+    blocks before the problem's own `Question: ...\nAnswer:`. Generation stops at a blank
+    line, `Question:` or EOS. `math_verify` extracts the final answer from the completion
+    and the gold text and checks that they are equal.
+    """
+    from math_verify import ExprExtractionConfig, parse, verify
+    from training_data.math_sft import question_prompt
 
-def score_lambada(model, rows):
-    """Last-word accuracy (greedy match of every target token) and target perplexity."""
-    requests = []
-    for row in rows:
-        context, word = row["text"].rsplit(" ", 1)
-        requests.append((model.encode(context), model.encode(" " + word)))
-    scores = loglikelihoods(model, requests)
-    tokens = sum(len(continuation) for _, continuation in requests)
-    return {
-        "examples": len(rows),
-        "acc": sum(greedy for _, greedy in scores) / len(rows),
-        "perplexity": math.exp(-sum(total for total, _ in scores) / tokens),
-    }
-
-
-NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
-
-
-def number(text):
-    if text is None:
-        return None
-    value = float(text.replace(",", ""))
-    return int(value) if value.is_integer() else value
-
-
-def gsm8k_answer(text):
-    """The number after `####`, else the last number in the text."""
-    marked = re.search(r"####\s*(-?[\d,\.]+)", text)
-    found = marked.group(1).rstrip(".") if marked else (NUMBER.findall(text) or [None])[-1]
-    try:
-        return number(found)
-    except ValueError:
-        return None
-
-
-def math_prompt(task, row):
-    """(question text, gold answer, worked exemplar answer) for a math row."""
-    if task == "gsm8k":
-        return row["question"], gsm8k_answer(row["answer"]), row["answer"]
-    if task == "svamp":
-        question = f"{row['Body'].strip()} {row['Question'].strip()}"
-        gold = number(str(row["Answer"]))
-        return question, gold, str(gold)
-    raise ValueError(f"Unknown math task {task}")
-
-
-def score_math(model, task, rows, exemplars, max_new_tokens):
-    """Greedy few-shot answers; exact match on the extracted number."""
-    shots = "".join(
-        f"Question: {q}\nAnswer: {worked}\n\n"
-        for q, _, worked in (math_prompt(task, row) for row in exemplars)
-    )
+    extract = [ExprExtractionConfig()]
+    shots = "".join(f"{question_prompt(q)} {worked}\n\n" for q, worked in exemplars)
     outcomes = []
-    for row in rows:
-        question, gold, _ = math_prompt(task, row)
+    for question, gold in problems:
         completion = generate(
-            model, f"{shots}Question: {question}\nAnswer:", max_new_tokens, ["\n\n", "Question:"]
+            model, shots + question_prompt(question), max_new_tokens, ["\n\n", "Question:"]
         )
-        # Worked solutions put the answer last; bare answers are the only number.
-        found = gsm8k_answer(completion)
+        expected, found = parse(gold, extract), parse(completion, extract)
         outcomes.append(
-            {"question": question, "gold": gold, "answer": found, "completion": completion}
+            {
+                "question": question,
+                "gold": gold,
+                "answer": found[-1] if found else None,
+                "correct": bool(found) and verify(expected, found),
+                "completion": completion,
+            }
         )
-    correct = sum(o["answer"] is not None and o["answer"] == o["gold"] for o in outcomes)
-    return {"examples": len(rows), "shots": len(exemplars), "acc": correct / len(rows)}, outcomes
+    accuracy = sum(o["correct"] for o in outcomes) / len(outcomes)
+    return {"examples": len(problems), "shots": len(exemplars), "acc": accuracy}, outcomes
 
 
 def packed_windows(documents, bos, eos, context, count):

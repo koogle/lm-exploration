@@ -1,9 +1,10 @@
-"""Strict JSONL math word problems for answer-only SFT, and the GSM8K + MetaMathQA builder.
+"""Math word-problem SFT rows (`math-sft-v1`) and the GSM8K + MetaMathQA builder.
 
-Each row is `{"id", "group", "split", "bucket", "question", "answer", "source", "license"}`.
-The prompt is `Question: {question}\\nAnswer:` (the evaluation format in
-`analysis/evaluation`); the answer, after one space, and EOS are supervised. Answers end
-with `#### N`.
+What is trained (see `training_data.sft`): the model reads `Question: {question}\nAnswer:`
+and learns to write the whole worked solution that follows, step by step and ending in
+`#### N`, then EOS. The solutions are GSM8K's human-written ones and MetaMathQA's
+(written by GPT-3.5 for its paper); the model never generates its own training answers.
+The prompt is also the zero-shot format the benchmarks use (`question_prompt`).
 """
 
 import hashlib
@@ -11,66 +12,55 @@ import json
 import re
 from pathlib import Path
 
-from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, LOSS_IGNORE_INDEX
+from training_data.sft import SFTDataset
 
-FORMAT = "math-sft-v1"
-FIELDS = ("id", "group", "split", "bucket", "question", "answer", "source", "license")
-# Word n-gram length for test-set decontamination.
+# Word n-gram length for test-set decontamination (see `build`).
 NGRAM = 13
 GSM8K = ("openai/gsm8k", "740312add88f781978c0658806c59bc2815b9866")
 METAMATH = ("meta-math/MetaMathQA", "aa4f34d3d2d3231299b5b03d9b3e5a20da45aa18")
 SVAMP = ("ChilleD/SVAMP", "5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef")
 
 
+def question_prompt(question):
+    return f"Question: {question.strip()}\nAnswer:"
+
+
+class MathSFT(SFTDataset):
+    FORMAT = "math-sft-v1"
+    FIELDS = ("bucket", "question", "answer")
+
+    def prompt(self, row):
+        return question_prompt(row["question"])
+
+    def answer(self, row):
+        return " " + row["answer"].strip()
+
+    def bucket(self, row):
+        return row["bucket"]
+
+    def fingerprints(self, row):
+        return (normalize(row["question"]),)
+
+    def check(self, row):
+        if not re.search(r"####\s*\S", row["answer"]):
+            raise ValueError(f"Answer of {row['id']} lacks a final #### line")
+
+
+MATH = MathSFT()
+
+
 def normalize(text):
     return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
 
 
-def prompt(row):
-    return f"Question: {row['question'].strip()}\nAnswer:"
-
-
-def encode(row, tokenizer, context):
-    prefix = [BOS_TOKEN_ID] + tokenizer.encode(prompt(row), add_special_tokens=False).ids
-    answer = tokenizer.encode(" " + row["answer"].strip(), add_special_tokens=False).ids
-    answer.append(EOS_TOKEN_ID)
-    if len(prefix) + len(answer) - 1 > context:
-        raise ValueError(f"Example {row['id']} exceeds context; refusing to truncate the answer")
-    tokens = prefix + answer
-    labels = [LOSS_IGNORE_INDEX] * len(prefix) + answer
-    return {"id": row["id"], "bucket": row["bucket"], "x": tokens[:-1], "y": labels[1:]}
-
-
-def prepare(path, tokenizer, context):
-    """Tokenized train/validation splits and the file's SHA256; rejects split leaks."""
-    raw = Path(path).read_bytes()
-    splits = {"train": [], "validation": []}
-    ids, groups, questions = set(), {}, {}
-    for line in raw.decode().splitlines():
-        if not line.strip():
-            continue
-        row = json.loads(line)
-        for key in FIELDS:
-            if not isinstance(row.get(key), str) or not row[key].strip():
-                raise ValueError(f"Missing nonempty string: {key}")
-        split = row["split"]
-        if split not in splits or row["id"] in ids:
-            raise ValueError("Invalid split or duplicate ID")
-        ids.add(row["id"])
-        # A group is one original problem and all of its rewrites.
-        if groups.setdefault(row["group"], split) != split:
-            raise ValueError("Group crosses train/validation")
-        if questions.setdefault(normalize(row["question"]), split) != split:
-            raise ValueError("Question duplicate crosses train/validation")
-        if not re.search(r"####\s*\S", row["answer"]):
-            raise ValueError(f"Answer of {row['id']} lacks a final #### line")
-        splits[split].append(encode(row, tokenizer, context))
-    if not all(splits.values()):
-        raise ValueError("Both train and validation examples are required")
-    return splits, hashlib.sha256(raw).hexdigest()
-
-
 def ngrams(text):
+    """Every run of NGRAM consecutive normalized words.
+
+    Decontamination: MetaMathQA rewrites GSM8K training problems, and GSM8K and SVAMP
+    problems share templates, so a training problem can nearly copy a test question. Any
+    training problem sharing one 13-word run with a GSM8K or SVAMP test question is
+    dropped, the n-gram overlap test GPT-3 used for its benchmarks.
+    """
     words = normalize(text).split()
     return {" ".join(words[i : i + NGRAM]) for i in range(len(words) - NGRAM + 1)}
 
@@ -96,6 +86,11 @@ def metamath_solution(response):
 
 def build(gsm8k_train, metamath, test_questions, output, validation_count=500):
     """Write `examples.jsonl` and `report.json` to `output`.
+
+    `examples.jsonl` holds the rows the trainer reads (`--data-id` names this folder on the
+    run volume); `report.json` records its SHA256, which the trainer checks, the pinned
+    sources and the counts below. The trainer copies the file into each run's folder, so a
+    run keeps the exact examples it trained on.
 
     The first `validation_count` GSM8K training problems (in file order) are validation;
     MetaMathQA rewrites of them are dropped from training. Only MetaMathQA's GSM-derived
@@ -172,7 +167,7 @@ def build(gsm8k_train, metamath, test_questions, output, validation_count=500):
     path = output / "examples.jsonl"
     path.write_text("".join(json.dumps(r) + "\n" for r in rows))
     report = {
-        "format": FORMAT,
+        "format": MathSFT.FORMAT,
         "dataset_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "sources": {"gsm8k": GSM8K, "metamath": METAMATH, "svamp": SVAMP},
         "decontamination": f"{NGRAM}-word n-grams of GSM8K and SVAMP test questions",

@@ -22,6 +22,7 @@ research = [
     "matplotlib==3.11.2",
     "modal[api-proxy-support]==1.6.2",
     "truststore==0.10.5",
+    "math-verify==0.8.0",
 ]
 
 [project.scripts]
@@ -32,7 +33,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["model_10m", "model_100m", "training_data", "training_data.fetching", "trainer", "tokenizer", "modal_scripts", "distributed", "workflows", "sampling", "evaluation"]
+packages = ["model_10m", "model_100m", "training_data", "training_data.fetching", "trainer", "tokenizer", "modal_scripts", "distributed", "workflows", "sampling", "evaluation", "evaluation.benchmarks", "playground"]
 
 [tool.setuptools.package-dir]
 model_10m = "10m"
@@ -40,6 +41,7 @@ model_100m = "100m"
 training_data = "data"
 sampling = "analysis/sampling"
 evaluation = "analysis/evaluation"
+playground = "analysis/playground"
 
 [tool.setuptools.package-data]
 trainer = ["kernels/*.cu"]

@@ -1,7 +1,15 @@
-"""Bounded single-GPU SFT (repair, ordinary or CIG-weighted, or math) from a pretraining checkpoint.
+"""Bounded single-GPU supervised fine-tuning from a pretraining checkpoint.
+
+Each step samples `batch_size` examples of the task's dataset (`TASKS`; see
+`training_data.sft`): a prompt and a complete written answer. The model is trained by
+teacher forcing to predict every answer token and EOS given the prompt and the answer so
+far; prompt tokens carry no loss. The loss is the mean answer-token cross-entropy
+(`objective: "sft"`), or for repair data optionally CIG-weighted (`objective: "cig"`,
+`trainer/cig.py`). The model never generates during training. Validation reports the same
+answer-token cross-entropy per bucket.
 
 The parent is an explicit `scholarly-ddp-v1` checkpoint on the private run volume; launchers
-pass it in. See `sft/README.md` for the data contract and launch commands.
+pass it in. See `sft/README.md` for the data formats and launch commands.
 """
 
 import json
@@ -11,6 +19,8 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from training_data.math_sft import MATH
+from training_data.repair_sft import REPAIR
 from training_data.subword import (
     BOS_TOKEN_ID,
     EOS_TOKEN_ID,
@@ -20,9 +30,8 @@ from training_data.subword import (
     load_frozen,
 )
 
-# Data module per task: each provides FORMAT, prepare(path, tokenizer, context) and
-# rows with x, y and a validation bucket.
-TASKS = {"repair": "training_data.repair_sft", "math": "training_data.math_sft"}
+# The SFT dataset (`training_data.sft.SFTDataset`) of each task.
+TASKS = {"repair": REPAIR, "math": MATH}
 
 
 @dataclass(frozen=True)
@@ -121,11 +130,12 @@ def train(
         raise RuntimeError("Training is CUDA/Modal only")
     if stop_after_step is not None and not 1 <= stop_after_step <= settings.steps:
         raise ValueError("Invalid qualification stop step")
-    import importlib
+    import sys
 
-    data_module = importlib.import_module(TASKS[settings.task])
+    data = TASKS[settings.task]
+    data_module = sys.modules[type(data).__module__]
     tokenizer = load_frozen()
-    splits, data_hash = data_module.prepare(dataset, tokenizer, settings.context)
+    splits, data_hash = data.prepare(dataset, tokenizer, settings.context)
     # Only load our trusted private run-volume checkpoints, never dataset-supplied files.
     base = torch.load(parent, map_location="cpu", weights_only=False)
     if base.get("format") != "scholarly-ddp-v1":
@@ -156,9 +166,11 @@ def train(
         cache = cig.reference_cache(model, splits, raw_rows, tokenizer, settings.context)
     import model_10m.model as shared_module
     import model_100m.model as model_module
+    import training_data.sft as sft_data_module
 
     source_hashes.update(
         data=digest(data_module.__file__),
+        sft_data=digest(sft_data_module.__file__),
         model=digest(model_module.__file__),
         shared_model=digest(shared_module.__file__),
     )
@@ -174,7 +186,7 @@ def train(
     step, answer_tokens = 0, 0
     if resume:
         saved = torch.load(resume, map_location="cpu", weights_only=False)
-        if saved.get("format") != data_module.FORMAT:
+        if saved.get("format") != data.FORMAT:
             raise ValueError("SFT resume format mismatch")
         validate_resume_identity(saved["identity"], identity, saved["step"], extend=extend)
         model.load_state_dict(saved["model"])
@@ -212,6 +224,7 @@ def train(
         ("trainer", __file__),
         ("cig", cig.__file__),
         ("data", data_module.__file__),
+        ("sft_data", sft_data_module.__file__),
         ("model", model_module.__file__),
         ("shared_model", shared_module.__file__),
     ):
@@ -277,7 +290,7 @@ def train(
         temporary = target.with_suffix(".partial")
         torch.save(
             {
-                "format": data_module.FORMAT,
+                "format": data.FORMAT,
                 "identity": identity,
                 "special_tokens": {"bos": BOS_TOKEN_ID, "eos": EOS_TOKEN_ID},
                 "model_config": asdict(model.config),

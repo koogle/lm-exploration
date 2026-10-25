@@ -92,21 +92,23 @@ def curriculum(output: str):
     import tempfile
 
     from training_data.repair_curriculum import LANGUAGES, VERSION, rows, write_dataset
-    from training_data.repair_sft import prepare
+    from training_data.repair_sft import REPAIR
     from training_data.subword import digest, load_frozen
 
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     with tempfile.TemporaryDirectory() as folder:
         candidate = Path(folder) / "candidate.jsonl"
         write_dataset(candidate, [row for lang in LANGUAGES for row in rows(lang)])
-        prepare(candidate, load_frozen(), 1024)  # Reject invalid data before any remote work.
+        REPAIR.prepare(
+            candidate, load_frozen(), 1024
+        )  # Reject invalid data before any remote work.
     records = [
         row for result in verify.map(LANGUAGES, kwargs={"deadline": deadline}) for row in result
     ]
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
     write_dataset(destination, records)
-    splits, data_hash = prepare(destination, load_frozen(), 1024)
+    splits, data_hash = REPAIR.prepare(destination, load_frozen(), 1024)
     report = {
         "version": VERSION,
         "dataset_sha256": data_hash,
@@ -242,27 +244,21 @@ def private_patches(
     volumes={"/runs": volume},
 )
 def prepare_math(data_id, deadline):
-    import pyarrow.parquet as pq
-    from huggingface_hub import hf_hub_download
+    from training_data.hub_files import pinned_rows
     from training_data.math_sft import GSM8K, METAMATH, SVAMP, build
 
     check_deadline(deadline)
     volume.reload()
     output = fresh_output(data_id)
-
-    def fetch(source, name):
-        repo, revision = source
-        return hf_hub_download(repo, name, repo_type="dataset", revision=revision, token=False)
-
-    def table(source, name):
-        return pq.read_table(fetch(source, name)).to_pylist()
-
-    gsm8k_train = table(GSM8K, "main/train-00000-of-00001.parquet")
-    test_questions = [r["question"] for r in table(GSM8K, "main/test-00000-of-00001.parquet")]
-    test_questions += [
-        f"{r['Body']} {r['Question']}" for r in table(SVAMP, "data/test-00000-of-00001.parquet")
+    gsm8k_train = pinned_rows(*GSM8K, "main/train-00000-of-00001.parquet")
+    test_questions = [
+        r["question"] for r in pinned_rows(*GSM8K, "main/test-00000-of-00001.parquet")
     ]
-    metamath = json.loads(Path(fetch(METAMATH, "MetaMathQA-395K.json")).read_text())
+    test_questions += [
+        f"{r['Body']} {r['Question']}"
+        for r in pinned_rows(*SVAMP, "data/test-00000-of-00001.parquet")
+    ]
+    metamath = pinned_rows(*METAMATH, "MetaMathQA-395K.json")
     report = build(gsm8k_train, metamath, test_questions, output)
     volume.commit()
     return report

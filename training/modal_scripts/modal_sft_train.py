@@ -43,7 +43,7 @@ limits = {
 def run(recipe, examples, deadline, stop_after_step=None):
     from training_data.subword import digest
 
-    from trainer.repair_sft import Settings, train
+    from trainer.sft import Settings, train
     from trainer.sft_recipe import validate_recipe
 
     if time.time() >= deadline - FINAL_RESERVE_SECONDS:
@@ -135,13 +135,11 @@ def local_examples(recipe):
     """Validate local data before allocating a GPU; volume data is checked remotely."""
     if "volume" in recipe["data"]:
         return b""
-    import importlib
-
     from training_data.subword import load_frozen
 
-    from trainer.repair_sft import TASKS
+    from trainer.sft import TASKS
 
-    data = importlib.import_module(TASKS[recipe["settings"]["task"]])
+    data = TASKS[recipe["settings"]["task"]]
     path = Path(recipe["data"]["local"])
     data.prepare(path, load_frozen(), recipe["settings"]["context"])
     return path.read_bytes()

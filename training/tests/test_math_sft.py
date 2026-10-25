@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from training_data.math_sft import build, gsm8k_solution, metamath_solution, prepare, prompt
+from training_data.math_sft import MATH, build, gsm8k_solution, metamath_solution
 from training_data.subword import (
     BOS_TOKEN_ID,
     EOS_TOKEN_ID,
@@ -82,7 +82,7 @@ class MathSftTests(unittest.TestCase):
             self.assertEqual(by_id["metamath-1"]["answer"], "8\n#### 8")
             # A rewrite shares its original problem's group.
             self.assertEqual(by_id["metamath-1"]["group"], by_id["gsm8k-train-1"]["group"])
-            splits, digest = prepare(Path(folder) / "math/examples.jsonl", load_frozen(), 256)
+            splits, digest = MATH.prepare(Path(folder) / "math/examples.jsonl", load_frozen(), 256)
             self.assertEqual(digest, report["dataset_sha256"])
             self.assertEqual({k: len(v) for k, v in splits.items()}, {"train": 3, "validation": 1})
 
@@ -108,9 +108,11 @@ class MathSftTests(unittest.TestCase):
                 + "\n"
             )
             tokenizer = load_frozen()
-            splits, _ = prepare(path, tokenizer, 256)
+            splits, _ = MATH.prepare(path, tokenizer, 256)
             encoded = splits["train"][0]
-            prefix = [BOS_TOKEN_ID] + tokenizer.encode(prompt(row), add_special_tokens=False).ids
+            prefix = [BOS_TOKEN_ID] + tokenizer.encode(
+                MATH.prompt(row), add_special_tokens=False
+            ).ids
             self.assertEqual(encoded["x"][: len(prefix)], prefix)
             answer = [t for t in encoded["y"] if t != LOSS_IGNORE_INDEX]
             self.assertEqual(answer[-1], EOS_TOKEN_ID)
@@ -119,7 +121,7 @@ class MathSftTests(unittest.TestCase):
                 encoded["y"][: len(prefix) - 1], [LOSS_IGNORE_INDEX] * (len(prefix) - 1)
             )
             with self.assertRaisesRegex(ValueError, "exceeds context"):
-                prepare(path, tokenizer, 8)
+                MATH.prepare(path, tokenizer, 8)
 
     def test_leaks_and_answers_are_rejected(self):
         row = {
@@ -134,7 +136,7 @@ class MathSftTests(unittest.TestCase):
         }
         cases = [
             ({**row, "id": "b", "split": "validation"}, "Group crosses"),
-            ({**row, "id": "b", "group": "h", "split": "validation"}, "Question duplicate"),
+            ({**row, "id": "b", "group": "h", "split": "validation"}, "Duplicate text"),
             ({**row, "id": "b", "group": "h", "question": "Other?", "answer": "1"}, "####"),
         ]
         for other, message in cases:
@@ -142,7 +144,7 @@ class MathSftTests(unittest.TestCase):
                 path = Path(folder) / "rows.jsonl"
                 path.write_text(json.dumps(row) + "\n" + json.dumps(other) + "\n")
                 with self.assertRaisesRegex(ValueError, message):
-                    prepare(path, load_frozen(), 256)
+                    MATH.prepare(path, load_frozen(), 256)
 
     def test_solution_formats(self):
         self.assertEqual(gsm8k_solution("1+1=<<1+1=2>>2\n#### 2"), "1+1=2\n#### 2")

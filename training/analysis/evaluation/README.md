@@ -6,7 +6,11 @@ by hand in the owning study's docs. uv installs this folder as `evaluation`.
 
 | File | Role |
 | --- | --- |
-| `tasks.py` | Task formats, log-likelihood batching, greedy generation, bits per byte |
+| `configs/benchmarks.json` | Benchmark datasets (HF repository, pinned commit, files) and settings |
+| `benchmarks/` | One module per benchmark: its prompt format and `score` |
+| `scoring.py` | Log-likelihood batching, greedy generation, answer checking, bits per byte |
+| `checkpoints.py` | Loading a checkpoint with its run's verified model code |
+| `heldout.py` | Validation windows of a raw snapshot |
 | `modal_evaluate.py` | Modal launcher: one H100, 3-hour timeout, no retries |
 
 ## Run
@@ -16,8 +20,12 @@ From `training/`:
 ```sh
 uv run --all-extras modal run -m evaluation.modal_evaluate --name NAME \
   --snapshot climbmix-code/VERSION/snapshots/RUN \
-  --checkpoints RUN-s01/step-000050000.pt,RUN-s02/step-000100000.pt
+  --checkpoints RUN-s01/step-000050000.pt,RUN-s02/step-000100000.pt \
+  [--config analysis/evaluation/configs/benchmarks.json]
 ```
+
+`--config` names the datasets and settings (default `configs/benchmarks.json`); the result
+records it and the SHA256 of every evaluation source file.
 
 Each checkpoint loads the model code its run copied, after checking the source and
 tokenizer hashes the checkpoint recorded, so any checkout can evaluate any checkpoint:
@@ -44,9 +52,10 @@ such as `gsm8k,svamp`. The call refuses new work 24 hours after launch. Results 
   last-word perplexity.
 - **Few-shot math, greedy:** GSM8K test (first 500) and SVAMP test (300), each with the
   first `--shots` training examples as `Question: ...\nAnswer: ...` exemplars. Generation stops
-  at a blank line, `Question:` or EOS (256 new tokens). The answer is the number after
-  `####`, else the last number. Answers are kept in the
+  at a blank line, `Question:` or EOS (256 new tokens).
+  [Math-Verify](https://github.com/huggingface/Math-Verify) extracts the final answer
+  from the completion and the gold answer and checks they are equal. Answers are kept in the
   result.
 
-Datasets are pinned to HF commits in `DATASETS`. Inference uses BF16 autocast with FP32
+Datasets are pinned to HF commits in `configs/benchmarks.json`. Inference uses BF16 autocast with FP32
 weights. Chance levels: about 25% for HellaSwag, ARC and OpenBookQA, 50% for Winogrande.
