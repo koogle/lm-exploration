@@ -462,6 +462,8 @@ def seed_phase(parent, seed, manifest, bundle, note=""):
     retries=0,
     max_containers=1,
     volumes={"/data": data_volume, "/runs": run_volume},
+    # Preflight loads the frozen tokenizer from its private HF repo if the image lacks it.
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
 )
 def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
     from training_data.growing import COMPLETE_RECORD, GROWING_FORMAT

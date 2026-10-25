@@ -110,7 +110,12 @@ pre-decay loss and the Chinchilla shape for 124M both suggest roughly 2.5 at 5B,
    gives curated code 14% (four passes) and MIT code 1% (eight passes).
 2. Branch decays from the stable-phase checkpoints at steps 50,000 (about 4.9B tokens)
    and 100,000 (about 9.8B): each resumes the checkpoint exactly with a target of
-   checkpoint tokens / 0.9, so its 10% decay starts at the branch point.
+   checkpoint tokens / 0.9, so its 10% decay starts at the branch point:
+   [`climbmix-124m-wsd-20b-decay-5b`](../workflows/climbmix-124m-wsd-20b-decay-5b.json)
+   and [`climbmix-124m-wsd-20b-decay-10b`](../workflows/climbmix-124m-wsd-20b-decay-10b.json)
+   on the run's snapshot. Launch them from the run's own commit with
+   `--resume RUN-s01/step-000050000.pt` (or `step-000100000.pt`); the checkpoint pins the
+   training source hashes.
 3. Score each end point (about 5.5B, 10.9B and 20B) with the same sample recipe,
    held-out bits per byte and small benchmarks.
 
