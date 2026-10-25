@@ -16,8 +16,17 @@ tokens before it. The prompt carries no loss. Each step samples `batch_size` exa
 with replacement and minimizes the mean answer-token cross-entropy; validation reports
 the same quantity per bucket.
 
-`"schedule": "cosine"` warms the learning rate up over `warmup_steps` and decays it by
-a cosine to `min_lr_ratio * lr`; the default is a constant rate.
+Two settings make training gentler on what pretraining learned:
+
+- **Replay** (`replay_*`, [`../trainer/replay_hook.py`](../trainer/replay_hook.py), the
+  hook every post-training loop shares, over [`../data/replay.py`](../data/replay.py)): each step also
+  trains on `replay_batch_size` windows of `replay_context` tokens of pretraining text
+  from a raw snapshot on the data volume (`replay_snapshot`), with sources drawn by
+  `replay_sources` weights. Replay windows use the ordinary pretraining loss on every
+  token. The step minimizes `(1 - replay_weight) * answer loss + replay_weight * replay
+  loss`, and validation adds replay loss per source on fixed validation windows.
+- **Schedule**: `"schedule": "cosine"` warms the learning rate up over `warmup_steps`
+  and decays it by a cosine to `min_lr_ratio * lr`; the default is a constant rate.
 
 `settings.task` picks the dataset ([`../data/sft.py`](../data/sft.py) holds the shared
 `SFTDataset`; each task's subclass only says how a row becomes a prompt and an answer):

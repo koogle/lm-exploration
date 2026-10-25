@@ -47,6 +47,41 @@ tokens and scored the SFT models near 1%; the scores above take the `####` answe
 the last number (commit `e95ce4d`). The evaluation now checks answers with Math-Verify;
 these scores have not been recomputed with it.
 
+## Replay runs (r02)
+
+[`recipes/math-metamath-replay-{20b,5b}.json`](recipes/) train the same data from the
+same parents for 15,000 steps (about two epochs) with a cosine schedule (2e-5 peak, 300
+warmup steps, decaying to 2e-6), and replay 8 windows of 1,024 pretraining tokens per
+step from the 20B run's snapshot: 60% ClimbMix, 40% code (35% curated, 5% MIT), with
+replay weight 0.25. Each run took about 1h54 on one H100. r02 ran with replay built into
+`trainer/sft.py` (commit `99b1ed5`); `trainer/replay_hook.py` now holds the same window
+sampling, loss and validation for every post-training loop.
+
+Final checkpoints (`step-000015000.pt`) with r01 rescored in the same call
+(`math-sft-r01-r02-01`), math checked with Math-Verify, zero-shot:
+
+| Model | GSM8K | SVAMP | ClimbMix bpb | Code bpb | HellaSwag | ARC-E | ARC-C | OBQA | LAMBADA |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 5.45B + math SFT (r01) | 15.8 | 14.3 | 1.201 | 1.341 | 31.6 | 43.8 | 23.9 | 26.6 | 19.8 |
+| 5.45B + math SFT + replay (r02) | 14.6 | 9.7 | 0.926 | 0.634 | 34.4 | 49.3 | 25.9 | 29.8 | 25.1 |
+| 20B + math SFT (r01) | 20.4 | 20.3 | 1.178 | 1.182 | 33.6 | 46.2 | 24.9 | 29.0 | 24.2 |
+| 20B + math SFT + replay (r02) | 17.4 | 16.7 | 0.890 | 0.618 | 38.2 | 53.1 | 26.3 | 32.8 | 29.1 |
+
+- Replay removes most of the forgetting. From the 20B parent, ClimbMix bits per byte end
+  1.6% above the base model (r01: 35%); HellaSwag, OpenBookQA and LAMBADA match or exceed
+  the base model, and ARC-E is 4 points below it (r01: 11).
+- Code bits per byte still end 23% above the base model (r01: 136%), although code is
+  40% of the replay; replay validation loss on curated code rose steadily through training.
+- Math is 3 points lower on GSM8K and 4 on SVAMP than r01 for the 20B parent; the 5.45B
+  parent loses 5 points on SVAMP. The r02 answer loss ends slightly higher (0.972 vs 0.948).
+- Math-Verify rescoring leaves r01 unchanged (20.4 / 20.3 and 15.8 / 14.3).
+
+Three-step resume qualifications on H100 (`qualify --steps 3`) did not match bit for bit,
+with replay and with the r01 recipe without it: step, sampling and RNG state matched,
+model and optimizer weights did not. Math runs take at most about two hours, so an
+interrupted run is rerun from scratch rather than resumed.
+
 ## Next
 
-Mix pretraining text into SFT batches (replay) to limit forgetting.
+Reinforcement learning on GSM8K-style problems with a verifiable answer reward, starting
+from the better replay checkpoint.
