@@ -53,7 +53,9 @@ these scores have not been recomputed with it.
 same parents for 15,000 steps (about two epochs) with a cosine schedule (2e-5 peak, 300
 warmup steps, decaying to 2e-6), and replay 8 windows of 1,024 pretraining tokens per
 step from the 20B run's snapshot: 60% ClimbMix, 40% code (35% curated, 5% MIT), with
-replay weight 0.25. Each run took about 1h54 on one H100.
+replay weight 0.25. Each run took about 1h54 on one H100. r02 ran with replay built into
+`trainer/sft.py` (commit `99b1ed5`); `trainer/replay_hook.py` now holds the same window
+sampling, loss and validation for every post-training loop.
 
 Final checkpoints (`step-000015000.pt`) with r01 rescored in the same call
 (`math-sft-r01-r02-01`), math checked with Math-Verify, zero-shot:
