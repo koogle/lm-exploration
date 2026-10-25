@@ -16,7 +16,7 @@ from collections import Counter
 from pathlib import Path
 
 from training_data.commitpack_sft import fingerprint
-from training_data.repair_sft import encode, prepare
+from training_data.repair_sft import REPAIR
 from training_data.subword import digest, load_frozen
 
 LANGUAGES = {
@@ -251,7 +251,7 @@ def build(
                             "verification": "Git blob hashes and exact buffer slices verified; project tests not rerun",
                         }
                         try:
-                            encoded = encode(row, tokenizer, context)
+                            encoded = REPAIR.encode(row, tokenizer, context)
                         except ValueError:
                             rejected["context"] += 1
                             continue
@@ -351,7 +351,7 @@ def build(
                     input_tokens += row["input_tokens"]
     db.close()
     # Reuse the actual trainer's strict split, duplicate and tokenizer validation.
-    splits, data_hash = prepare(destination, tokenizer, context)
+    splits, data_hash = REPAIR.prepare(destination, tokenizer, context)
     del splits
     report = {
         "dataset_sha256": data_hash,

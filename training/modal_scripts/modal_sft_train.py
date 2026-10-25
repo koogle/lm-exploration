@@ -1,7 +1,7 @@
-"""Bounded repair SFT / CIG-SFT on one Modal GPU. Importing this module never starts a job.
+"""Bounded SFT (repair, CIG) on one Modal GPU. Importing this module never starts a job.
 
 Run from training/ (see sft/README.md for the recipe format):
-    modal run -m modal_scripts.modal_sft_train --recipe <recipe.json> \
+    modal run -m modal_scripts.modal_sft_train::main --recipe <recipe.json> \
         [--run-id <fresh-id>] [--parent <run/step-N.pt>] [--dataset <jsonl> | --data-id <id>] \
         [--resume <run/step-N.pt>] [--output <result.json>]
     modal run -m modal_scripts.modal_sft_train::qualify --recipe <recipe.json> \
@@ -43,7 +43,7 @@ limits = {
 def run(recipe, examples, deadline, stop_after_step=None):
     from training_data.subword import digest
 
-    from trainer.repair_sft import Settings, train
+    from trainer.sft import Settings, train
     from trainer.sft_recipe import validate_recipe
 
     if time.time() >= deadline - FINAL_RESERVE_SECONDS:
@@ -135,11 +135,13 @@ def local_examples(recipe):
     """Validate local data before allocating a GPU; volume data is checked remotely."""
     if "volume" in recipe["data"]:
         return b""
-    from training_data.repair_sft import prepare
     from training_data.subword import load_frozen
 
+    from trainer.sft import TASKS
+
+    data = TASKS[recipe["settings"]["task"]]
     path = Path(recipe["data"]["local"])
-    prepare(path, load_frozen(), recipe["settings"]["context"])
+    data.prepare(path, load_frozen(), recipe["settings"]["context"])
     return path.read_bytes()
 
 

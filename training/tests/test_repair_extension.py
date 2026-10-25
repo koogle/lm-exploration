@@ -2,7 +2,7 @@ import copy
 import unittest
 from dataclasses import asdict
 
-from trainer.repair_sft import Settings, validate_resume_identity
+from trainer.sft import Settings, validate_resume_identity
 
 
 class ExtensionTests(unittest.TestCase):
