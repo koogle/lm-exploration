@@ -38,10 +38,11 @@ fused output-layer loss, microbatch 4 x 4,096), MFU against 989 TFLOPS per H100:
 | 2 x H100, fused loss + Triton gradient kernel | prepared recipe (40B run) | ~96,000 | 28.7–29.0% |
 | 1 x H100, fused loss + CUDA gradient kernel | synthetic, 1,000-token documents | 47,379 | 28.4% |
 | 2 x H100, fused loss + CUDA gradient kernel | prepared recipe (40B run) | 100,000–104,000 | 29.9–31.3% |
+| 8 x H100, fused loss + CUDA gradient kernel | synthetic, 1,000-token documents | 372,758 | 27.9% |
+| 8 x H100, fused loss + CUDA gradient kernel | prepared recipe (40B run) | ~372,700 | 27.9% |
 
-Microbatch 8 runs out of memory on an 80 GB H100. The 8 x H100 benchmark could
-not be scheduled: the workspace allows 10 concurrent GPUs and the 124M run holds
-8 until its launch deadline.
+Microbatch 8 runs out of memory on an 80 GB H100. Eight GPUs give 7.9 times the
+one-GPU throughput at the same 1,048,576-token global batch.
 
 ## Pilot
 
@@ -62,12 +63,14 @@ attention mass. Curves, metrics and config: HF dataset
 | First launch | 2026-10-25 04:44 UTC, 2 x H100, commit recorded in `launches/`; stopped at step 46 to switch to the Triton gradient kernel |
 | Second launch | 2026-10-25 ~05:15 UTC, 2 x H100, resumed from step 46; losses continue the pilot's trajectory |
 | Third launch | 2026-10-25 ~05:45 UTC, 2 x H100, resumed from step 95 with the CUDA gradient kernel |
-| Throughput | 100–104K tokens/s on 2 x H100 (30–31% MFU) |
+| Fourth launch | 2026-10-25 ~09:55 UTC, 8 x H100, resumed from step 1,466 (1.54B tokens) after the 124M run released its GPUs; uses the shared RMSNorm and SwiGLU |
+| Throughput | ~372.7K tokens/s on 8 x H100 (27.9% MFU); about 29 hours for the remaining 38.5B tokens |
 | Checkpoints | every 90 minutes and at each stop; bf16 exports to `jfrick/hybrid-720m-40b` (private) every 5B tokens |
 | Data | `capacity.json` and `screen.json` in `training/results/hybrid-40b-v1/` of the results dataset |
 
 The workspace allows 10 concurrent GPUs, and the 124M run held 8 until its own
-deadline, so the first segment runs on the 2 free H100s. When 8 are free:
+deadline, so the first segments ran on the 2 free H100s. Moving between GPU
+counts uses:
 
 ```sh
 uv run modal run -m model_hybrid.modal_train::stop --run-id hybrid-720m-40b-01
@@ -76,7 +79,8 @@ uv run modal run --detach -m model_hybrid.modal_train::launch --run-id hybrid-72
 ```
 
 The resumed segment keeps the 1,048,576-token global batch. Every launch stops
-within 24 hours; continuing needs a new launch with the same run ID.
+within 24 hours; the 8-GPU segment ends about 09:30 UTC on 2026-10-26, and the
+last ~5 hours need one more launch with the same run ID.
 
 Cost estimate (Modal list price $3.95 per H100-hour, 2026-10-25): at the
 measured ~46K tokens/s per GPU, 40B tokens take about 240 H100-hours, about $950,
