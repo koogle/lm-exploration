@@ -1,28 +1,23 @@
-# RL for math and code (design)
+# RL for math and code
 
-**Status: design only. Nothing in this document is implemented or measured yet.**
-
-This is a reinforcement-learning loop that trains our 124M models on problems whose
-answers can be checked automatically: math word problems, checked against the reference
-answer, and Python functions, checked by running unit tests. The model writes complete
-answers and is trained on its own samples, scored by those checkers. In SFT
+Reinforcement learning for our 124M models on problems whose answers can be checked
+automatically: math word problems, checked against the reference answer, and Python
+functions, checked by running unit tests. The model writes complete answers and is
+trained on its own samples, scored by those checkers. In SFT
 ([`../sft/README.md`](../sft/README.md)) it only imitates answers someone else wrote.
+
+**Status:** implemented and smoke-tested on Modal (3 steps from the r02 math model).
+Stage 0 SFT is training; no RL run has been measured yet.
 
 ## Starting point
 
-Measured so far ([`../sft/MATH_EXPERIMENTS.md`](../sft/MATH_EXPERIMENTS.md)):
+Measured so far ([`../sft/MATH_EXPERIMENTS.md`](../sft/MATH_EXPERIMENTS.md)): the 20B base
+model scores about 2% on GSM8K. Math SFT r01 reaches 20.4 but forgets general ability;
+math SFT with pretraining replay (r02) reaches 17.4 on GSM8K and 16.7 on SVAMP and keeps
+most of it. No model had been trained to write a function for a problem statement.
 
-- 20B base model: about 2% on GSM8K and 1% on SVAMP.
-- Math SFT r01: 20.4 on GSM8K, but it forgot much of its general ability (ClimbMix bits
-  per byte +35%, ARC-E −11 points).
-- Math SFT with pretraining replay, r02 (20B parent): 17.4 on GSM8K and 16.7 on SVAMP,
-  scored with Math-Verify, while keeping most general ability.
-- No model has seen an instruction-to-function coding task, and no code benchmark is
-  wired into [`../analysis/evaluation`](../analysis/evaluation/README.md) yet.
-
-RL can only reinforce answers the model already produces sometimes. A prompt the model
-never solves in a group of samples gives no learning signal. So code needs an SFT stage
-before RL, and both tasks need a pool of prompts the model solves only some of the time.
+RL can only reinforce answers the model already produces sometimes: a prompt the model
+never solves gives no learning signal. So code needs an SFT stage before RL.
 
 ## Targets
 
@@ -30,7 +25,7 @@ before RL, and both tasks need a pool of prompts the model solves only some of t
 | --- | --- | --- |
 | GSM8K (500 test, greedy, Math-Verify) | 17.4 | ≥ 30 |
 | SVAMP (300, greedy) | 16.7 | ≥ 25 |
-| MBPP+ / HumanEval+ pass@1 | not measured | clearly above the stage 0 SFT model |
+| MBPP+ / HumanEval+ greedy pass@1 | stage 0 pending | clearly above stage 0 |
 | ClimbMix bits per byte | 0.890 (base 0.876) | within 3% of base |
 | HellaSwag, ARC-E | 38.2, 53.1 | within 2 points of the starting checkpoint |
 
@@ -39,155 +34,127 @@ fine-tuned on GSM8K reached about 33%.
 
 ## Stage 0: joint SFT (math + code + replay)
 
-This reuses `trainer/sft.py` as it is, with a new `code` task in `data/` that subclasses
-`SFTDataset`:
+`trainer/sft.py` with `"task": "mixture"` ([`../data/mixture_sft.py`](../data/mixture_sft.py)):
+each row is a math row ([`math_sft.py`](../data/math_sft.py)) or a code row
+([`code_sft.py`](../data/code_sft.py)) and keeps its task's prompt and answer. Code rows:
 
-- **Prompt:** the problem statement and the function signature.
-- **Answer:** the complete reference solution.
-- **Data:** KodCode-V1 (`KodCode/KodCode-V1`, pinned revision; synthetic Python
-  problems, each with a solution and pytest tests), plus the MBPP train split.
-  - KodCode is filtered to solutions of at most 512 tokens and its easier subsets.
-  - The tests are kept for RL.
-- **Licence:** KodCode is CC-BY-NC-4.0. That's fine for this private research, but it
-  restricts publishing derived weights.
-- **Decontamination:** the 13-gram filter from `data/math_sft.py` removes prompts that
-  overlap HumanEval, MBPP or EvalPlus test problems.
-- **Run settings:** a single run mixes the math and code tasks (sampling the two
-  datasets by weight) and keeps the r02 replay and cosine schedule.
-- **Parent:** the 20B end point, or whichever r02 checkpoint scores best.
-
-Gate before RL: on 512 held-out training-pool prompts per task, sampled 8 times each
-at temperature 1, at least 25% of prompts should have a pass rate strictly between 0
-and 1. Otherwise more or easier SFT comes first.
+- **Prompt:** ``Question: {problem}\nWrite a Python function `def f(args):`.\nAnswer:\n``;
+  **answer:** the complete reference solution, then EOS.
+- **Data** (`code-kodcode-mbpp-01`): 135,004 KodCode-V1 rows (synthetic problems with
+  GPT-4o solutions checked against pytest tests; instruct style, one function, solution
+  and problem at most 1,500 characters, tests callable without pytest fixtures) and 305
+  MBPP train rows; 263 KodCode rows are validation. KodCode-Light-RL-10K problems are
+  left out for RL. Rows sharing a 13-word n-gram with an MBPP test/validation/prompt,
+  MBPP+ or HumanEval+ problem are dropped (158).
+- **Licence:** KodCode is CC-BY-NC-4.0: fine for this private research, but it restricts
+  publishing derived weights.
+- **Mixture** (`mixture-math-code-01`): 224,533 math and 135,309 code rows, sampled
+  uniformly (62% math).
+- **Run** ([`../sft/recipes/math-code-replay-20b.json`](../sft/recipes/math-code-replay-20b.json)):
+  the 20B end point, 20,000 steps of 32, r02's cosine schedule and replay.
 
 ## Stage 1: the RL loop
 
-One H100 runs everything except code execution. The policy samples with the current
-weights, so the loop is fully on-policy.
+[`../trainer/rl.py`](../trainer/rl.py) on one H100; the policy samples with the current
+weights, so the loop is fully on-policy. Each step:
 
-Each step:
+1. **Prompts.** Draw `prompts_per_step` (64) training problems of the pool,
+   `math_share` (half) math. A prompt solved by none or all of its group on two visits in
+   a row rests for `rest_steps` (50) steps.
+2. **Rollouts.** `samples_per_prompt` (8) answers per prompt at temperature 1, without
+   top-k or top-p, so samples follow the policy's probabilities: at most 256 new tokens
+   for math and 384 for code. [`../trainer/rollout.py`](../trainer/rollout.py) samples a
+   left-padded batch with a key/value cache; its greedy output matches unbatched,
+   uncached decoding exactly (`tests/test_rollout.py`).
+3. **Rewards** ([`../data/rl_tasks.py`](../data/rl_tasks.py)). 1 or 0; an answer
+   without EOS within the limit scores 0. Math: Math-Verify finds the final answer equal
+   to the reference. Code: every test passes in the sandbox (below). Code answers are
+   checked in a background thread while math is sampled.
+4. **Advantages.** Reward minus the mean reward of the prompt's group, with no division
+   by the group's standard deviation (Dr. GRPO, arXiv:2503.20783). Groups whose answers
+   all score the same have zero advantage and are skipped; their share is logged.
+5. **Loss.** −advantage × log p(token) summed over answer tokens, divided by the number
+   of answers times the task's token limit (no per-answer length normalization). One
+   optimizer step per batch, so no importance ratio or clipping is needed.
+6. **Anchors.** KL(policy ‖ parent) is estimated (k3) on the answer tokens every step and
+   added with `kl_coef` (default 0). Pretraining replay (`replay_*`, as in SFT) adds a
+   next-token loss on pretraining windows at `replay_weight`.
+7. **Optimizer.** AdamW without weight decay, LR 1e-6 after 20 warmup steps, gradient
+   clipping at 1.0. 1e-6 is a starting guess.
 
-1. **Prompts.** Draw 64 prompts, half math (GSM8K and MetaMathQA training questions,
-   decontaminated as in `data/math_sft.py`) and half code (the KodCode/MBPP pool from
-   stage 0). Skip prompts whose recent pass rate is 0/8 or 8/8 on two visits in a row;
-   they come back after N steps.
-2. **Rollouts.** Sample G = 8 answers per prompt (512 sequences) at temperature 1.0,
-   without top-k or top-p, so the sampling matches the policy's probabilities. Limits:
-   256 new tokens for math, 384 for code. This needs a batched KV-cache sampler on the
-   GPU (`trainer/rollout.py`); the playground's `generation.py` samples one sequence at
-   a time on the CPU.
-3. **Rewards.** Binary. An answer that does not end in EOS within the limit scores 0.
-   - Math: 1 if Math-Verify finds the `#### N` answer equal to the reference.
-   - Code: 1 if every test passes in the sandbox (below).
-4. **Advantages.** Group-relative: for each sample, its reward minus its group's mean
-   reward.
-   - No division by the group's standard deviation, and the loss is not normalized per
-     sequence length. Dr. GRPO (arXiv:2503.20783) shows both bias training toward
-     longer wrong answers.
-   - Groups with identical rewards have zero advantage. Their share is logged, because
-     it measures how many prompts are wasted.
-5. **Loss.** Policy gradient −A · log p(token) summed over the answer tokens of all
-   samples, divided by a constant (512 × the token limit). Prompt tokens carry no loss.
-   - One optimizer step per batch: the samples come from the current weights, so no
-     importance ratio or clipping is needed.
-   - PPO-style clipping is added only if a later variant reuses a batch for several
-     steps.
-6. **Anchor.** Add the r02 replay term: 8 pretraining windows per step, at a small
-   weight (start at 0.1). Log the KL divergence to the starting checkpoint on the
-   rollout tokens, but don't penalize it at first. If general benchmarks slip or the
-   KL keeps growing, add a KL penalty.
-7. **Optimizer.** AdamW, constant LR 1e-6 after 20 warmup steps, gradient clipping at
-   1.0. 1e-6 is a starting guess; sweep 5e-7 to 3e-6 in short runs.
+Validation is greedy accuracy on the pool's validation problems (199 of the first
+200 GSM8K training problems, which SFT only validates on, and 77 MBPP validation problems) plus
+replay validation loss, at the start, every `evaluate_every` steps and at the end.
+
+### RL pool
+
+`rl-pool-math-code-02` (`modal_sft_data::rl_pool`): 6,971 GSM8K training problems after
+the first 500 (SFT's validation problems), 7,929 KodCode-Light-RL-10K problems,
+and the validation sets above; decontaminated like the SFT data. Prompts longer than 512
+tokens are not used.
 
 ### Code execution sandbox
 
-Model-written code runs only in a Modal Sandbox with these properties:
+Model-written code runs only in a Modal Sandbox
+([`../data/code_execution.py`](../data/code_execution.py)): `block_network=True`, CPU
+only, no volumes, secrets or HF token, and a `timeout` ending at the launch deadline.
+[`../data/code_runner.py`](../data/code_runner.py) runs each program as `python -I -`
+in a fresh directory with 5 s of CPU, 1 GB of memory and a 16 MB file-size limit. The
+program imports the solution as the module `solution`, runs the tests, calls every
+`test*` function they define and then prints a random per-program nonce; it passes only
+with exit code 0 and the nonce as its last line, so a solution that exits early or skips
+the tests fails.
 
-- `block_network=True`, CPU only, and no volumes, secrets or HF token.
-- `timeout` set to the smaller of 24 hours and the job's remaining launch budget, per
-  [AGENTS.md](../../AGENTS.md).
-- The trainer creates one sandbox per training call and records its ID in the run's
-  deadline record. It terminates the sandbox in a `finally` block, and the deadline
-  supervisor terminates it by ID if the trainer dies.
+### 24-hour limit
 
-Each step sends the batch of programs to the sandbox, which runs them in parallel worker
-processes:
+`modal_scripts/modal_rl_train.py` records a deadline 24 hours after launch and spawns the
+training call (21-hour timeout, no retries; `max_seconds` at most 20 hours) and a
+supervisor call. Training refuses work after the deadline and stops taking updates 30
+minutes before it. The sandbox ID is written to `/runs/rl-launches/<run-id>.json`; the
+supervisor cancels the training call at the deadline and terminates the sandbox when the
+call ends. A run does not resume; an interrupted run is rerun from scratch.
 
-- **Per-program limits:** about 5 s of CPU time, 512 MB of memory, a 64 KB output cap,
-  and a fresh temporary working directory.
-- **How each program runs:** the source is fed to `python -` on stdin, so `__file__` is
-  undefined. The source is the solution followed by the tests. After the last test it
-  prints a per-step random nonce, which the model never sees.
-- **What counts as a pass:** exit code 0 and the nonce on stdout. A program that calls
-  `sys.exit(0)`, skips the tests or crashes cannot pass.
+### Logged
 
-Execution overlaps with the next step's math rollouts, so the GPU doesn't wait for the
-CPU.
+Every step: reward, share of uniform groups, answer length and truncation rate per task;
+answers trained on; mean NLL of the sampled tokens; KL to the parent; replay loss; gradient
+norm; resting prompts; generation and training seconds. Every evaluation: validation
+accuracy and truncation per task, and replay validation loss per source.
 
-### Rough cost
+Signs to watch: rewards rising while EvalPlus pass@1 does not (reward hacking), sampled
+NLL collapsing toward zero while reward plateaus (lost exploration), truncation rising.
 
-These are estimates, not measured:
+## Evaluation
 
-- **Sampling:** 512 sequences of at most 384 tokens with a KV cache take a few seconds
-  on an H100 for a 124M model.
-- **Gradient step:** about 300K tokens, around a second.
-- **Code execution:** 256 programs on a 16-core sandbox take tens of seconds.
-
-That comes to about 20–40 s per step, so 1,000 steps take 6–11 hours. That is one
-24-hour-bounded call with checkpoints every 100 steps, roughly $30–50 of H100 time.
-
-## Measurement
-
-**Logged every step:**
-
-- Reward per task.
-- The distribution of per-prompt pass rates and the share of identical-reward groups.
-- Mean answer length and truncation rate.
-- Token entropy.
-- KL to the starting checkpoint, replay loss and gradient norm.
-
-**Every 100 steps:**
-
-- Greedy accuracy on the 498 GSM8K validation problems from the SFT data.
-- Pass@1 on MBPP validation (90 problems).
-- Replay validation loss per source.
-
-**At the end, with `analysis/evaluation`:**
-
-- GSM8K and SVAMP.
-- New `humaneval` and `mbpp` benchmark modules: EvalPlus test sets, greedy pass@1 and
-  pass@10 at temperature 0.8, run in the same sandbox runner.
-- The general benchmarks and held-out bits per byte.
-
-Watch for these failure signs:
-
-- **Reward hacking:** answers that pass the training checker but fail the stricter
-  EvalPlus tests, or math answers without working.
-- **Entropy collapse:** entropy near zero while reward plateaus.
-- **Length blow-up:** truncation rate rising.
+[`analysis/evaluation`](../analysis/evaluation/README.md) adds MBPP+ (378) and
+HumanEval+ (164) greedy pass@1 in the same sandbox, next to GSM8K, SVAMP, the general
+benchmarks and held-out bits per byte.
 
 ## Runs
 
 | Run | Purpose | Success looks like |
 | --- | --- | --- |
-| S0 | Joint math + code SFT with replay | Code pass@1 above 0, math and general scores at r02 level, pool gate met |
-| R1 | Math-only RL from S0, 300 steps | GSM8K rises; validates the loop and logging cheaply |
-| R2 | Code-only RL from S0, 300 steps | MBPP pass@1 rises; validates the sandbox |
+| S0 | Joint math + code SFT with replay | Code pass@1 above 0, math and general scores at r02 level |
+| R1 | Math-only RL from S0, 300 steps | GSM8K rises; validates the loop cheaply |
+| R2 | Code-only RL from S0, 300 steps | MBPP+ pass@1 rises; validates the sandbox |
 | R3 | Joint RL from S0, 1,000 steps | Both rise; general scores within the targets |
-| Ablations on R1 | G = 8 vs 16; replay on vs off; LR 5e-7 / 1e-6 / 3e-6 | Pick settings for R3 |
+| Ablations | 8 vs 16 samples; replay on or off; LR 5e-7 / 1e-6 / 3e-6 | Settings for R3 |
 
-## Planned code layout
+## Run
 
-| File | Role |
-| --- | --- |
-| `data/code_sft.py` | KodCode/MBPP `SFTDataset` with retained tests and decontamination |
-| `data/rl_tasks.py` | RL prompt pools: prompt text, reference answer or tests, and the checker |
-| `trainer/rollout.py` | Batched KV-cache sampling on the GPU, returning tokens and log-probabilities |
-| `trainer/rewards.py` | Math-Verify reward; the client for the code sandbox |
-| `trainer/rl.py` | The loop: prompt scheduling, advantages, loss, replay, checkpoints, metrics |
-| `modal_scripts/modal_rl_train.py` | Launcher: 24-hour deadline, sandbox lifecycle, supervisor |
-| `analysis/evaluation/benchmarks/{humaneval,mbpp}.py` | Code benchmarks with the sandbox runner |
-| `rl/recipes/*.json` | Run recipes |
+From `training/`:
 
-Checkpoints follow the SFT checkpoint layout, with a new format ID, so the
-evaluation loader and playground can read them.
+```sh
+# Data (once): code SFT rows, the math + code mixture and the RL pool.
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::code --data-id code-kodcode-mbpp-01
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::mixture --data-id mixture-math-code-01 \
+  --math math-gsm8k-metamath-02 --code code-kodcode-mbpp-01
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool --data-id rl-pool-math-code-02
+# Stage 0 SFT, then RL from its final checkpoint.
+uv run --all-extras modal run -m modal_scripts.modal_sft_train::main --recipe sft/recipes/math-code-replay-20b.json
+uv run --all-extras modal run -m modal_scripts.modal_rl_train --recipe rl/recipes/RECIPE.json
+```
+
+An RL recipe names `run_id`, `parent` (`run/step-N.pt`), `pool` (a pool data ID) and
+`settings` (`trainer.rl.Settings`). RL checkpoints (format `rl-v1`) keep the model code
+and tokenizer beside them, so `analysis/evaluation` loads them like SFT checkpoints.

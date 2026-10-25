@@ -1,5 +1,7 @@
+import json
 import random
 import unittest
+from pathlib import Path
 
 from training_data import rl_tasks
 from training_data.code_execution import run_local
@@ -69,6 +71,15 @@ class RLTests(unittest.TestCase):
             ),
             "Question: Add two numbers.\nWrite a Python function `def add(a, b):`.\nAnswer:\n",
         )
+
+    def test_recipes_validate(self):
+        from modal_scripts.modal_rl_train import validate_recipe
+
+        recipes = sorted(Path(__file__).parents[1].glob("rl/recipes/*.json"))
+        self.assertTrue(recipes)
+        for path in recipes:
+            with self.subTest(recipe=path.name):
+                validate_recipe(json.loads(path.read_text()))
 
 
 if __name__ == "__main__":

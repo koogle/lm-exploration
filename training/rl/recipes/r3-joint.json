@@ -1,0 +1,29 @@
+{
+  "name": "rl-r3-joint",
+  "description": "Joint math and code RL from stage 0",
+  "run_id": "rl-r3-joint-20b-r01",
+  "parent": "math-code-sft-replay-20b-s0-r01/step-000020000.pt",
+  "pool": "rl-pool-math-code-02",
+  "settings": {
+    "steps": 1000,
+    "math_share": 0.5,
+    "prompts_per_step": 64,
+    "samples_per_prompt": 8,
+    "lr": 1e-06,
+    "warmup_steps": 20,
+    "evaluate_every": 50,
+    "save_every": 100,
+    "replay_snapshot": "climbmix-code/climbmix-code-v6/snapshots/climbmix-124m-wsd20b-02",
+    "replay_sources": {
+      "climbmix_0": 0.15,
+      "climbmix_1": 0.15,
+      "climbmix_2": 0.15,
+      "climbmix_3": 0.15,
+      "code_curated": 0.35,
+      "code_mit": 0.05
+    },
+    "replay_batch_size": 8,
+    "replay_context": 1024,
+    "replay_weight": 0.1
+  }
+}
