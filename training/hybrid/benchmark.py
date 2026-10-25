@@ -81,7 +81,10 @@ def profile_summary(profiler, steps):
     """GPU kernel time per category and the 25 slowest kernels, per profiled step."""
     kernels = collections.Counter()
     for event in profiler.events():
-        if event.device_type.name == "CUDA" and event.self_device_time_total > 0:
+        # User annotations (ProfilerStep#, module and optimizer ranges) span kernels.
+        if event.is_user_annotation or event.device_type.name != "CUDA":
+            continue
+        if event.self_device_time_total > 0:
             kernels[event.name] += event.self_device_time_total / 1000 / steps
     categories = collections.Counter()
     for name, ms in kernels.items():
