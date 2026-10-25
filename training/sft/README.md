@@ -18,7 +18,8 @@ the same quantity per bucket.
 
 Two settings make training gentler on what pretraining learned:
 
-- **Replay** (`replay_*`, [`../data/replay.py`](../data/replay.py)): each step also
+- **Replay** (`replay_*`, [`../trainer/replay_hook.py`](../trainer/replay_hook.py), the
+  hook every post-training loop shares, over [`../data/replay.py`](../data/replay.py)): each step also
   trains on `replay_batch_size` windows of `replay_context` tokens of pretraining text
   from a raw snapshot on the data volume (`replay_snapshot`), with sources drawn by
   `replay_sources` weights. Replay windows use the ordinary pretraining loss on every

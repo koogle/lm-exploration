@@ -27,8 +27,8 @@ the sampled tokens) is logged as `sampler_mismatch`.
 
 Optional terms: `kl_coef` times the k3 estimate of KL(policy ‖ parent) on the answer
 tokens (always measured and logged), `sampler_kl_coef` times the k3 estimate of
-KL(sampler ‖ learner), and the SFT trainer's pretraining replay (`replay_*`,
-`training_data.replay`) at `replay_weight`.
+KL(sampler ‖ learner), and pretraining replay (`replay_*`, the hook
+`trainer/replay_hook.py` that SFT also uses) at `replay_weight`.
 
 Validation is greedy (temperature 0) accuracy on the pool's validation problems, and
 replay validation loss. The parent is an SFT checkpoint (`trainer/sft.py`) on the run
@@ -41,7 +41,7 @@ import random
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from training_data import rl_tasks
@@ -54,6 +54,8 @@ from training_data.subword import (
     load_frozen,
 )
 
+from trainer.replay_hook import ReplayHook, ReplaySettings
+
 FORMAT = "rl-v1"
 # Parents this trainer accepts: SFT checkpoints of `trainer/sft.py`.
 PARENT_FORMATS = ("math-sft-v1", "code-sft-v1", "mixture-sft-v1")
@@ -62,7 +64,7 @@ MAX_PROMPT_TOKENS = 512
 
 
 @dataclass(frozen=True)
-class Settings:
+class Settings(ReplaySettings):
     steps: int = 300
     prompts_per_step: int = 64
     samples_per_prompt: int = 8
@@ -84,12 +86,6 @@ class Settings:
     evaluate_every: int = 50
     save_every: int = 100
     max_seconds: int = 72000
-    replay_snapshot: str = ""
-    replay_sources: dict = field(default_factory=dict)
-    replay_batch_size: int = 0
-    replay_context: int = 1024
-    replay_weight: float = 0.0
-    replay_validation_windows: int = 4
 
     def __post_init__(self):
         for key in (
@@ -125,9 +121,7 @@ class Settings:
             raise ValueError("Invalid weight_decay")
         if self.max_seconds > 20 * 60 * 60:
             raise ValueError("RL capped at 20 hours per invocation")
-        replay = (self.replay_snapshot, self.replay_sources, self.replay_batch_size)
-        if (any(replay) or self.replay_weight) and not (all(replay) and 0 < self.replay_weight < 1):
-            raise ValueError("Replay needs a snapshot, sources, batch size and weight")
+        self.check_replay()
 
     def learning_rate(self, step):
         """Linear warmup over `warmup_steps`, then constant."""
@@ -213,7 +207,6 @@ def train(
     import model_10m.model as shared_module
     import model_100m.model as model_module
     import training_data.code_execution as execution_module
-    import training_data.replay as replay_module
 
     source_hashes = {
         "trainer": digest(__file__),
@@ -223,7 +216,7 @@ def train(
         "math_sft": digest(sys.modules["training_data.math_sft"].__file__),
         "code_sft": digest(sys.modules["training_data.code_sft"].__file__),
         "code_execution": digest(execution_module.__file__),
-        "replay": digest(replay_module.__file__),
+        **{name: digest(file) for name, file in ReplayHook.SOURCES.items()},
         "model": digest(model_module.__file__),
         "shared_model": digest(shared_module.__file__),
     }
@@ -244,18 +237,7 @@ def train(
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=settings.lr, weight_decay=settings.weight_decay
     )
-    replay, replay_validation = None, []
-    if settings.replay_batch_size:
-        if settings.replay_context > config["block_size"]:
-            raise ValueError("Replay context exceeds the model's context")
-        replay = replay_module.Replay(
-            Path(data_root) / settings.replay_snapshot,
-            settings.replay_sources,
-            settings.replay_context,
-            tokenizer,
-            settings.seed,
-        )
-        replay_validation = replay.validation(settings.replay_validation_windows)
+    replay = ReplayHook.attach(settings, data_root, tokenizer, config["block_size"], settings.seed)
     identity = {
         "parent": str(parent),
         "parent_sha256": digest(parent),
@@ -280,7 +262,7 @@ def train(
         "math_sft": sys.modules["training_data.math_sft"].__file__,
         "code_sft": sys.modules["training_data.code_sft"].__file__,
         "code_execution": execution_module.__file__,
-        "replay": replay_module.__file__,
+        **ReplayHook.SOURCES,
         "model": model_module.__file__,
         "shared_model": shared_module.__file__,
     }
@@ -374,15 +356,6 @@ def train(
         ).view_as(y)
         return values * mask, mask
 
-    def replay_loss(rows):
-        x, y = collate([(r["x"], r["y"]) for r in rows])
-        with torch.autocast("cuda", dtype=torch.bfloat16):
-            logits = model(x)
-        value = F.cross_entropy(
-            logits.float().flatten(0, 1), y.flatten(), ignore_index=LOSS_IGNORE_INDEX
-        )
-        return value
-
     def evaluate():
         metrics = {}
         rows = pool["validation"]
@@ -393,16 +366,10 @@ def train(
             if chosen:
                 metrics[f"validation_{task}_accuracy"] = sum(chosen) / len(chosen)
                 metrics[f"validation_{task}_truncated"] = 1 - sum(done) / len(done)
-        if replay_validation:
+        if replay:
             model.eval()
-            totals = {}
-            with torch.inference_mode():
-                for row in replay_validation:
-                    totals.setdefault(row["bucket"], []).append(replay_loss([row]).item())
+            metrics["replay_validation_by_source"] = replay.validation(model)
             model.train()
-            metrics["replay_validation_by_source"] = {
-                name: sum(v) / len(v) for name, v in sorted(totals.items())
-            }
         return metrics
 
     def record(**values):
@@ -512,7 +479,7 @@ def train(
             totals["tokens"] += int(mask.sum())
         values = {}
         if replay:
-            value = replay_loss([replay.sample() for _ in range(settings.replay_batch_size)])
+            value = replay.loss(model)
             (settings.replay_weight * value).backward()
             values["replay_loss"] = value.item()
         grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
