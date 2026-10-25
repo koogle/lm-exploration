@@ -136,7 +136,7 @@ learning, data, model, objective or trainer source; lineage goes to `continuatio
 # Exact resume qualification: uninterrupted run vs. stop, fresh-container restore, continue.
 modal run -m modal_scripts.modal_sft_train::qualify --recipe <recipe.json> --run-prefix <fresh-prefix>
 # Train; command-line values override the recipe's parent, data, run ID and resume.
-modal run -m modal_scripts.modal_sft_train --recipe <recipe.json> \
+modal run -m modal_scripts.modal_sft_train::main --recipe <recipe.json> \
   --run-id <fresh-run-id> --parent <run>/step-NNNNNNNNN.pt [--dataset <jsonl> | --data-id <id>]
 ```
 

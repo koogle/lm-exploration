@@ -1,7 +1,7 @@
 """Bounded repair SFT / CIG-SFT on one Modal GPU. Importing this module never starts a job.
 
 Run from training/ (see sft/README.md for the recipe format):
-    modal run -m modal_scripts.modal_sft_train --recipe <recipe.json> \
+    modal run -m modal_scripts.modal_sft_train::main --recipe <recipe.json> \
         [--run-id <fresh-id>] [--parent <run/step-N.pt>] [--dataset <jsonl> | --data-id <id>] \
         [--resume <run/step-N.pt>] [--output <result.json>]
     modal run -m modal_scripts.modal_sft_train::qualify --recipe <recipe.json> \
