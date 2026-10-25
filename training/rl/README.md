@@ -36,7 +36,8 @@ weights and takes one optimizer step, so the loop is on-policy:
    samples come from the weights being trained, so no importance ratio or clipping is
    needed.
 6. **Anchors.** KL(policy ‖ parent) is estimated (k3) on the answer tokens every step and
-   added with `kl_coef` (default 0). Pretraining replay (`replay_*`, the hook SFT also uses, [`../trainer/replay_hook.py`](../trainer/replay_hook.py)) adds a
+   added with `kl_coef` (default 0). Pretraining replay (`replay_*`, the hook SFT also
+   uses, [`../trainer/replay_hook.py`](../trainer/replay_hook.py)) adds a
    next-token loss on pretraining windows at `replay_weight`.
 7. **Optimizer.** AdamW without weight decay, LR 1e-6 after 20 warmup steps, gradient
    clipping at 1.0.
