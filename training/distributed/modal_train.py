@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 
 import modal
+from training_data.growing import STATE_ENV
 
 from distributed.config import DistributedConfig
 from distributed.image import image
@@ -67,8 +68,8 @@ def worker(
 
         shutil.copytree(DEFAULT_FOLDER, output / "tokenizer")
         shutil.copyfile(manifest, output / "data-manifest.json")
-        if json.loads(manifest.read_text()).get("format") == "raw-text-growing-v1":
-            # Training reloads the data volume while it grows; read the run's copy.
+        if STATE_ENV in os.environ:
+            # A refresher reloads the data volume while it grows; read the run's copy.
             manifest = output / "data-manifest.json"
         (output / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
         request = output / "request.json"

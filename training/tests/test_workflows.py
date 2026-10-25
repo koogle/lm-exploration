@@ -51,6 +51,14 @@ class WorkflowResolutionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "microbatches"):
             resolve_payload(bundle)
 
+    def test_overlapped_preparation_persists_within_the_stall_timeout(self):
+        bundle = load_workflow(ROOT / "climbmix-124m-overlap-smoke.json")
+        bundle["workflow"]["persist_seconds"] = 3600
+        with self.assertRaisesRegex(ValueError, "stall"):
+            resolve_payload(bundle)
+        bundle["workflow"]["overlap_preparation"] = False
+        resolve_payload(bundle)
+
     def test_payload_is_frozen_when_source_files_change(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -99,6 +107,11 @@ class WorkflowProgressTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 check_progress({**report, **change}, 80, 100, 10)
+        # A session that only waited for prepared data continues the chain.
+        waited = {**report, "total_loss_tokens": 80, "stop_reason": "data_wait"}
+        self.assertFalse(check_progress(waited, 80, 100, 10))
+        with self.assertRaises(ValueError):
+            check_progress({**waited, "stop_reason": "time_limit"}, 80, 100, 10)
         check_resume(report, {"initial_validation": report["final_validation"]})
         with self.assertRaises(ValueError):
             check_resume(report, {"initial_validation": {"weighted_loss": 2.0}})

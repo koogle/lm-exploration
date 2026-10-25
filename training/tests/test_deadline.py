@@ -36,6 +36,7 @@ class DeadlineTests(unittest.TestCase):
             track(folder, "fc-b", "train_segment")
             track(folder, "fc-a", "continue_training")
             self.assertEqual(tracked_calls(folder), ["fc-a", "fc-b"])
+            self.assertEqual(tracked_calls(folder, kind="continue_training"), ["fc-a"])
 
 
 if __name__ == "__main__":

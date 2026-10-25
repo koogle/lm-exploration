@@ -51,27 +51,43 @@ single-pass continuation is every source with `--one-pass`.
   36M characters/s, against about 1.6M/s for HTTP range reads.
 - **Local staging.** `prepare_and_launch` keeps the SQLite database on local disk (in
   WAL mode) instead of committing every batch to the network volume. A background
-  thread copies a consistent snapshot to the volume every `persist_seconds` (workflow
-  setting, default 600) while preparation keeps writing; a final copy follows when
-  preparation is ready.
+  thread backs up a consistent snapshot to a local file every `persist_seconds`
+  (workflow setting, default 600) while preparation keeps writing, then copies that file
+  to the volume; a final copy follows when preparation is ready. Staging needs local
+  disk for about twice the database.
 - **Overlap.** Each source fetches and tokenizes its next batch while the previous one
   is written. Workflows use 1,024-document batches (still capped at 4 MiB of text).
 - **Training during preparation.** With `overlap_preparation: true` in the workflow,
   `prepare_and_launch` copies the database and starts training as soon as every source has
-  training data and enough validation tokens for the configured validation windows.
-  It writes a `raw-text-growing-v1` manifest whose counts describe that prefix. The
-  manifest does not name a database; the loader reads the version's `raw.sqlite` as it
-  grows. Preparation then reports in `preparation.json` (training owns `workflow.json`),
-  keeps persisting, and writes `complete.json` with the final counts and checked capacity
-  when ready. In each training container a [`growing.py`](growing.py) refresher reloads
-  the data volume every five minutes and copies each new database to local disk. The
-  loader reads the first pass as documents arrive and waits for a newer copy when it
-  catches up. Later passes start only after `complete.json` exists. A wait longer than an
-  hour fails the run, and the NCCL timeout covers that wait. Exact per-source
-  `target_tokens` budgets need final counts, so growing snapshots reject them. Once
-  training catches up with preparation, it proceeds at preparation speed; the first step
-  no longer waits for the whole corpus. Each local copy is the full database, so the
-  training container needs disk space for about two copies.
+  training data and enough validation tokens for the configured validation windows. It
+  writes a `raw-text-growing-v1` manifest whose counts describe that prefix; the manifest
+  also marks the launch, and a restarted preparation adopts the training chain that
+  launch started. Training owns `workflow.json`; preparation reports in
+  `preparation.json`.
+  - Preparation never extends a source again once it has enough data, and records it in
+    the database's `prepared_sources` table.
+  - When ready, preparation checks capacity and writes the final database both to the
+    version and into the snapshot folder, then `complete.json` with the snapshot copy's
+    SHA256, the final counts and the verified capacity. Later preparation in the same
+    version cannot change the snapshot copy.
+  - While preparation runs, each training segment runs a [`growing.py`](growing.py)
+    refresher. It reloads the data volume every five minutes and copies each new
+    database to local disk. A segment that starts after completion reads the verified
+    snapshot copy directly, as does `--resume`.
+  - The loader reads a source's first pass as documents arrive and waits for a newer
+    copy when it catches up. Its later passes start once a copy lists the source as
+    finished or `complete.json` exists. While training is caught up with a source that
+    is still growing, it proceeds at that source's preparation speed.
+  - Preparation may flag an already stored document as a cross-split duplicate; it never
+    stores the duplicate itself. The growing loader reads stored rows regardless of
+    those flags, so every copy yields the same windows, including validation.
+  - A wait ends the session at its time limit with a checkpoint and the stop reason
+    `data_wait`; the chain continues even if that session trained nothing. A wait longer
+    than an hour fails the run, and the NCCL timeout covers that wait.
+  - Exact per-source `target_tokens` budgets need final counts, so growing snapshots
+    reject them. Each local copy is the full database, and a source keeps reading its
+    copy until it catches up, so the training container needs disk space for the newest
+    copy plus every older copy a source is still reading (at most one per source).
 
 Measured on one ClimbMix shard in a 4-CPU container (2026-10-24): 759K tokens/s before
 these changes, 1.05M with the overlap and 1.17M with 1,024-document batches. The first

@@ -7,12 +7,14 @@ never write SQLite. Uncommitted prefetched rows can be replayed after a restart.
 
 import hashlib
 import os
+import shutil
 import sqlite3
 import time
 import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from .growing import finished_sources, mark_finished
 from .persistent_stream import PersistentStream
 from .raw_corpus import RawCorpus
 from .simple_llm import adapt, canonical, stream_rows
@@ -24,6 +26,7 @@ class FastRawCorpus(RawCorpus):
         super().__init__(folder, recipe)
         # Readers do not block the writer, so `persist` can copy from another thread.
         self.db.execute("PRAGMA journal_mode=WAL")
+        self.finished = finished_sources(self.db)
         if workers < 1 or batch_size < 1:
             raise ValueError("Positive worker and batch sizes required")
         self.batch_size = batch_size
@@ -204,7 +207,14 @@ class FastRawCorpus(RawCorpus):
         sources = sorted(self.recipe["sources"], key=lambda s: len(s["files"]))
         while True:
             statuses = self.report(target_tokens)["sources"]
-            needed = [s for s in sources if not self.enough(statuses[s["name"]])]
+            # A source that once had enough data is never extended again, so a persisted
+            # copy's finished sources are final (see data/growing.py).
+            newly = [n for n, s in statuses.items() if n not in self.finished and self.enough(s)]
+            if newly:
+                with self.db:
+                    mark_finished(self.db, newly)
+                self.finished.update(newly)
+            needed = [s for s in sources if s["name"] not in self.finished]
             for source in needed:
                 name = source["name"]
                 if statuses[name]["upstream_exhausted"]:
@@ -234,25 +244,31 @@ class FastRawCorpus(RawCorpus):
                     "seconds": time.monotonic() - started,
                 }
 
-    def persist(self, path):
-        """Copy the committed database to `path` atomically (e.g. local disk -> volume).
+    def persist(self, paths):
+        """Copy the committed database to each of `paths` atomically (local disk -> volume).
 
-        Safe to call from another thread while preparation writes: the copy reads one
-        consistent snapshot through its own connection. The copy uses a rollback
-        journal so read-only consumers need no WAL files beside it.
+        Safe to call from another thread while preparation writes: the backup reads one
+        consistent snapshot through its own connection into a local file, which then
+        uses a rollback journal, so neither the volume nor read-only consumers ever see
+        WAL files. Each destination receives a plain file copy.
         """
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        partial = path.with_name(path.name + ".partial")
+        local = self.folder / "persist.sqlite"
         source = sqlite3.connect(self.folder / "raw.sqlite")
-        target = sqlite3.connect(partial)
+        target = sqlite3.connect(local)
         try:
             source.backup(target)
             target.execute("PRAGMA journal_mode=DELETE")
         finally:
             target.close()
             source.close()
-        os.replace(partial, path)
+        try:
+            for path in map(Path, paths):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                partial = path.with_name(path.name + ".partial")
+                shutil.copyfile(local, partial)
+                os.replace(partial, path)
+        finally:
+            local.unlink()
 
     def close(self):
         self.pool.shutdown(wait=True, cancel_futures=True)

@@ -4,13 +4,22 @@ import os
 import shutil
 import sqlite3
 import tempfile
+import time
 import unittest
 import zlib
 from pathlib import Path
 from unittest import mock
 
 from training_data.export_raw import complete_growing, export_growing
-from training_data.growing import STATE_ENV, Refresher, volume_paths, write_json
+from training_data.growing import (
+    STATE_ENV,
+    DataDeadline,
+    Refresher,
+    mark_finished,
+    serve,
+    volume_paths,
+    write_json,
+)
 from training_data.raw_token_stream import GROWING_FORMAT, RawTokenMixture
 from training_data.subword import TOKENIZER_SHA256, digest, load_frozen
 
@@ -50,6 +59,14 @@ def build(root, documents=12, snapshot_after=None):
             db.execute("VACUUM INTO ?", (str(prefix),))
     db.close()
     return root / "raw.sqlite", prefix, counts
+
+
+def freeze(database, complete):
+    """Write the completion record naming a frozen copy of `database` beside it."""
+    frozen = complete.parent / "frozen.sqlite"
+    shutil.copyfile(database, frozen)
+    write_json(complete, {"database": {"path": frozen.name, "sha256": digest(frozen)}})
+    return frozen
 
 
 def manifest(root, counts, growing=False):
@@ -124,7 +141,7 @@ class GrowingTests(unittest.TestCase):
             write_json(state, {"generation": 1, "path": str(prefix), "complete": False})
             with mock.patch.dict(os.environ, {STATE_ENV: str(state)}):
                 growing = RawTokenMixture(manifest(root, counts, growing=True), context=16)
-            growing.growing.poll_seconds, growing.growing.stall_seconds = 0.01, 0.05
+            growing.copies.poll_seconds, growing.copies.stall_seconds = 0.01, 0.05
             with self.assertRaisesRegex(RuntimeError, "stalled"):
                 windows(growing)
 
@@ -139,13 +156,77 @@ class GrowingTests(unittest.TestCase):
                 growing = RawTokenMixture(manifest(root, counts, growing=True), context=16)
                 saved = growing.state_dict()
                 growing.load_state_dict({**saved, "raw_cursors": second_pass})
-                growing.growing.poll_seconds, growing.growing.stall_seconds = 0.01, 0.05
+                growing.copies.poll_seconds, growing.copies.stall_seconds = 0.01, 0.05
                 with self.assertRaisesRegex(RuntimeError, "stalled"):
                     windows(growing)
                 write_json(state, {"generation": 1, "path": str(database), "complete": True})
                 growing = RawTokenMixture(manifest(root, counts, growing=True), context=16)
                 growing.load_state_dict({**saved, "raw_cursors": second_pass})
                 self.assertEqual({block["pass"] for block in iter(growing.next_block, None)}, {2})
+
+    def test_a_finished_source_reads_later_passes_before_completion(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            database, _, counts = build(root, documents=2)
+            db = sqlite3.connect(database)
+            mark_finished(db, ["web"])
+            db.commit()
+            db.close()
+            state = root / "state.json"
+            write_json(state, {"generation": 1, "path": str(database), "complete": False})
+            with mock.patch.dict(os.environ, {STATE_ENV: str(state)}):
+                growing = RawTokenMixture(manifest(root, counts, growing=True), context=16)
+                growing.copies.poll_seconds, growing.copies.stall_seconds = 0.01, 0.05
+                passes = {block["pass"] for block in iter(growing.next_block, None)}
+            self.assertEqual(passes, {1, 2})
+
+    def test_reads_rows_flagged_after_they_were_stored(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            database, _, counts = build(root)
+            state = root / "state.json"
+            write_json(state, {"generation": 1, "path": str(database), "complete": True})
+            with mock.patch.dict(os.environ, {STATE_ENV: str(state)}):
+                path = manifest(root, counts, growing=True)
+                before = windows(RawTokenMixture(path, context=16, split="validation"))
+                db = sqlite3.connect(database)
+                db.execute("UPDATE documents SET conflict=1 WHERE rowid=2")
+                db.commit()
+                db.close()
+                after = windows(RawTokenMixture(path, context=16, split="validation"))
+            self.assertEqual(before, after)
+
+    def test_a_wait_past_the_session_deadline_stops_cleanly(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            _, prefix, counts = build(root, snapshot_after=1)
+            state = root / "state.json"
+            write_json(state, {"generation": 1, "path": str(prefix), "complete": False})
+            with mock.patch.dict(os.environ, {STATE_ENV: str(state)}):
+                growing = RawTokenMixture(manifest(root, counts, growing=True), context=16)
+            growing.copies.deadline = time.time() + 0.2
+            growing.copies.poll_seconds = 0.01
+            saved = growing.state_dict()
+            with self.assertRaises(DataDeadline):
+                growing.next_batch(64)
+            self.assertEqual(growing.state_dict(), saved)
+
+    def test_prefetcher_closes_while_waiting_for_newer_data(self):
+        from training_data.prefetch import PrefetchedBatches
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            _, prefix, counts = build(root, snapshot_after=1)
+            state = root / "state.json"
+            write_json(state, {"generation": 1, "path": str(prefix), "complete": False})
+            with mock.patch.dict(os.environ, {STATE_ENV: str(state)}):
+                path = manifest(root, counts, growing=True)
+                # The prefix holds fewer windows than one batch, so the producer waits.
+                prefetch = PrefetchedBatches(lambda: RawTokenMixture(path, context=16), 64)
+                started = time.monotonic()
+                prefetch.close()
+                self.assertLess(time.monotonic() - started, 30)
+                self.assertFalse(prefetch.thread.is_alive())
 
     def test_growing_snapshot_rejects_exact_source_targets(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -162,6 +243,67 @@ class GrowingTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "growing"),
             ):
                 RawTokenMixture(path, context=16)
+
+
+class CopyTests(unittest.TestCase):
+    def test_a_completed_snapshot_reads_its_frozen_copy_without_a_refresher(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            database, _, counts = build(root)
+            full = windows(RawTokenMixture(manifest(root, counts), context=16))
+            path = manifest(root, counts, growing=True)
+            with mock.patch.dict(os.environ, clear=False) as environment:
+                environment.pop(STATE_ENV, None)
+                with self.assertRaisesRegex(ValueError, "until its preparation completes"):
+                    RawTokenMixture(path, context=16)
+                freeze(database, root / "complete.json")
+                self.assertEqual(windows(RawTokenMixture(path, context=16)), full)
+
+    def test_serve_runs_a_refresher_only_while_preparation_runs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            snapshot = Path(folder) / "v1/snapshots/run"
+            snapshot.mkdir(parents=True)
+            database, _, counts = build(snapshot.parents[1])
+            shutil.copyfile(
+                manifest(snapshot.parents[1], counts, growing=True), snapshot / "manifest.json"
+            )
+            with mock.patch.dict(os.environ, clear=False) as environment:
+                environment.pop(STATE_ENV, None)
+                with serve(snapshot, lambda: None):
+                    state = json.loads(Path(os.environ[STATE_ENV]).read_text())
+                    self.assertEqual((state["generation"], state["complete"]), (1, False))
+                    local = Path(os.environ[STATE_ENV]).parent
+                self.assertNotIn(STATE_ENV, os.environ)
+                self.assertFalse(local.exists())
+                freeze(database, snapshot / "complete.json")
+                with serve(snapshot, lambda: None):
+                    self.assertNotIn(STATE_ENV, os.environ)
+
+    def test_reopens_the_newest_copy_when_the_named_one_was_replaced(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            database, _, counts = build(root)
+            state = root / "state.json"
+            write_json(state, {"generation": 2, "path": str(database), "complete": True})
+            with mock.patch.dict(os.environ, {STATE_ENV: str(state)}):
+                growing = RawTokenMixture(manifest(root, counts, growing=True), context=16)
+            stale = {"generation": 1, "path": str(root / "gone.sqlite"), "complete": False}
+            current, db = growing.opened(stale)
+            db.close()
+            self.assertEqual(current["generation"], 2)
+
+    def test_insertion_order_reads_use_an_index(self):
+        from training_data.raw_corpus import RawCorpus
+
+        with tempfile.TemporaryDirectory() as folder:
+            corpus = RawCorpus(Path(folder), {"sources": []})
+            plan = corpus.db.execute(
+                "EXPLAIN QUERY PLAN SELECT rowid,text FROM documents "
+                "WHERE source='a' AND split='train' AND rowid>=0 ORDER BY rowid"
+            ).fetchall()
+            corpus.close()
+            self.assertIn("document_order", str(plan))
+            self.assertNotIn("TEMP B-TREE", str(plan))
 
 
 class RefresherTests(unittest.TestCase):
@@ -181,7 +323,12 @@ class RefresherTests(unittest.TestCase):
             insert(db, "web", "train", 99)
             db.commit()
             db.close()
-            complete.write_text("{}")
+            frozen = freeze(database, complete)
+            # Later preparation in the same version cannot change the final copy.
+            db = sqlite3.connect(database)
+            insert(db, "web", "train", 100)
+            db.commit()
+            db.close()
             self.assertTrue(refresher.refresh())
             state = json.loads(refresher.state_path.read_text())
             self.assertEqual((state["generation"], state["complete"]), (2, True))
@@ -189,8 +336,48 @@ class RefresherTests(unittest.TestCase):
                 sorted(p.name for p in (root / "local").glob("raw-*.sqlite")),
                 ["raw-00002.sqlite"],
             )
-            self.assertEqual(Path(state["path"]).read_bytes(), database.read_bytes())
+            self.assertEqual(Path(state["path"]).read_bytes(), frozen.read_bytes())
             self.assertEqual(len(reloads), 3)
+
+    def test_rejects_a_frozen_copy_with_the_wrong_checksum(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            database, _, _ = build(root, documents=2)
+            complete = root / "complete.json"
+            freeze(database, complete)
+            write_json(complete, {"database": {"path": "frozen.sqlite", "sha256": "0" * 64}})
+            refresher = Refresher(database, complete, root / "local", lambda: None)
+            with self.assertRaisesRegex(ValueError, "checksum"):
+                refresher.refresh()
+            self.assertEqual(list((root / "local").glob("raw-*")), [])
+
+    def test_retries_a_failed_copy_without_leaving_partial_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            database, _, _ = build(root, documents=2)
+            complete = root / "complete.json"
+            freeze(database, complete)
+            refresher = Refresher(database, complete, root / "local", lambda: None, 0.01)
+            copy = shutil.copyfile
+            calls = []
+
+            def flaky(source, target):
+                calls.append(target)
+                if len(calls) == 1:
+                    Path(target).write_bytes(b"partial")
+                    raise OSError("transient read error")
+                return copy(source, target)
+
+            with mock.patch("shutil.copyfile", side_effect=flaky):
+                refresher.start()
+                refresher.join(timeout=30)
+            self.assertFalse(refresher.is_alive())
+            state = json.loads(refresher.state_path.read_text())
+            self.assertEqual((state["generation"], state["complete"]), (1, True))
+            self.assertEqual(
+                sorted(p.name for p in (root / "local").iterdir()),
+                ["raw-00001.sqlite", "state.json"],
+            )
 
     def test_skips_a_busy_reload(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -227,8 +414,14 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(volume_paths(snapshot), (database, snapshot / "complete.json"))
             with self.assertRaises(ValueError):
                 export_growing(version, snapshot, [])
-            record = complete_growing(version, snapshot, capacity_verified_for_tokens=5)
+            shutil.copyfile(database, snapshot / "raw.sqlite")
+            record = complete_growing(snapshot, capacity_verified_for_tokens=5)
             self.assertEqual(json.loads((snapshot / "complete.json").read_text()), record)
+            frozen = snapshot / record["database"]["path"]
+            self.assertEqual(digest(frozen), record["database"]["sha256"])
+            rows = "SELECT hash, split FROM documents ORDER BY rowid"
+            with sqlite3.connect(frozen) as copy, sqlite3.connect(database) as live:
+                self.assertEqual(copy.execute(rows).fetchall(), live.execute(rows).fetchall())
             shutil.rmtree(snapshot)
 
 

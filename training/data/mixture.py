@@ -26,7 +26,9 @@ def check_capacity(mixture, target_tokens):
     run's target; otherwise the weighted mixture must fit within the pass caps. A
     growing snapshot has no final counts yet; its preparation checks capacity when done.
     """
-    if mixture.manifest.get("format") == "raw-text-growing-v1":
+    from .growing import GROWING_FORMAT
+
+    if mixture.manifest.get("format") == GROWING_FORMAT:
         return
     default = mixture.manifest["max_passes"]
     sources = mixture.sources
