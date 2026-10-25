@@ -7,9 +7,10 @@ Run from training/:
     modal run -m modal_scripts.modal_sft_data::private_patches --sources <sources.json> \
         --data-id <fresh-id> [--reserved <data-id>,...] [--replay <data-id>] [--full] \
         [--report <report.json>]
+    modal run -m modal_scripts.modal_sft_data::math --data-id <fresh-id> [--report <report.json>]
 
 `curriculum` execute-verifies every original arithmetic repair and writes the JSONL locally.
-`commitpack` and `private_patches` write `examples.jsonl` and `report.json` to
+`commitpack`, `private_patches` and `math` (GSM8K + MetaMathQA word problems) write `examples.jsonl` and `report.json` to
 `/runs/<data-id>` on the private run volume for `modal_sft_train --data-id`. Every function has
 no retries and a timeout under 24 hours; calls that start more than 24 hours after launch refuse
 work.
@@ -39,7 +40,7 @@ runtime_image = (
 )
 data_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install("tokenizers==0.22.2", "huggingface-hub==1.33.0")
+    .pip_install("tokenizers==0.22.2", "huggingface-hub==1.33.0", "pyarrow==26.0.0")
     .env({"PYTHONPATH": "/project"})
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer", ignore=["__pycache__"])
@@ -232,3 +233,39 @@ def private_patches(
         data_id, source_list, reserved_ids, replay, full, deadline
     )
     write(report, result)
+
+
+@app.function(
+    image=data_image,
+    cpu=4,
+    memory=16384,
+    timeout=3600,
+    retries=0,
+    volumes={"/runs": volume},
+)
+def prepare_math(data_id, deadline):
+    from training_data.hub_files import pinned_rows
+    from training_data.math_sft import GSM8K, METAMATH, SVAMP, build
+
+    check_deadline(deadline)
+    volume.reload()
+    output = fresh_output(data_id)
+    gsm8k_train = pinned_rows(*GSM8K, "main/train-00000-of-00001.parquet")
+    test_questions = [
+        r["question"] for r in pinned_rows(*GSM8K, "main/test-00000-of-00001.parquet")
+    ]
+    test_questions += [
+        f"{r['Body']} {r['Question']}"
+        for r in pinned_rows(*SVAMP, "data/test-00000-of-00001.parquet")
+    ]
+    metamath = pinned_rows(*METAMATH, "MetaMathQA-395K.json")
+    report = build(gsm8k_train, metamath, test_questions, output)
+    volume.commit()
+    return report
+
+
+@app.local_entrypoint()
+def math(data_id: str, report: str = ""):
+    run_id(data_id, "data_id")
+    deadline = time.time() + LAUNCH_LIMIT_SECONDS
+    write(report, prepare_math.remote(data_id, deadline))
