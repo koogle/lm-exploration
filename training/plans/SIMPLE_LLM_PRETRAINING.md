@@ -119,6 +119,43 @@ pre-decay loss and the Chinchilla shape for 124M both suggest roughly 2.5 at 5B,
 3. Score each end point (about 5.5B, 10.9B and 20B) with the same sample recipe,
    held-out bits per byte and small benchmarks.
 
+### Results (2026-10-25)
+
+Run `climbmix-124m-wsd20b-02` (8×H100, about 0.9M tokens/s, 6.5 hours of training) and
+its two decay branches finished. Validation loss is the trainer's weighted nats per token;
+bits per byte use 64 validation windows per source of the run's snapshot
+([`evaluation`](../analysis/evaluation/README.md)). Benchmarks are zero-shot except
+5-shot greedy GSM8K (first 500) and SVAMP. HellaSwag, ARC-Challenge and OpenBookQA use the
+byte-normalized score; ARC-Easy, Winogrande and LAMBADA plain accuracy.
+
+| Model | Tokens | Val loss | ClimbMix bpb | Code bpb | HellaSwag | ARC-E | ARC-C | OBQA | Wino | LAMBADA (ppl) | GSM8K | SVAMP |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2B cosine run | 2.0B | — | 0.981 | 0.656 | 30.3 | 50.2 | 25.9 | 31.2 | 51.4 | 18.9 (27.4) | 2.2 | 2.0 |
+| WSD decay at 5B | 5.45B | 2.774 | 0.913 | 0.536 | 34.3 | 55.3 | 27.0 | 31.2 | 49.6 | 25.5 (14.5) | 1.8 | 1.0 |
+| WSD decay at 10B | 10.9B | 2.692 | 0.890 | 0.510 | 36.6 | 56.7 | 28.4 | 32.4 | 50.0 | 29.0 (11.7) | 1.6 | 0.7 |
+| WSD 20B | 20.0B | 2.650 | 0.876 | 0.501 | 38.0 | 57.3 | 28.3 | 32.6 | 51.6 | 28.6 (11.2) | 1.8 | 1.0 |
+
+ClimbMix bpb averages the four ClimbMix parts; code is the curated source. The 2B model
+trained on an earlier snapshot of the same recipe and split rule.
+
+- Each doubling of tokens still helps but by less: validation loss fell 0.082 from 5.45B
+  to 10.9B and 0.042 from 10.9B to 20B. A three-point power-law fit puts the floor near
+  2.58, about 2.62 at 40B: more ClimbMix tokens buy little for 124M parameters.
+- Decaying matters: the 5.45B branch (2.774) already beats the 20B run's stable phase at
+  17.4B tokens (2.79).
+- Likelihood benchmarks rise steadily with data (HellaSwag 30.3 → 38.0, ARC-Easy 50.2 →
+  57.3); Winogrande stays at chance.
+- GSM8K and SVAMP stay at 1–2% at every size: pretraining alone does not produce
+  arithmetic reasoning here, so math must come from post-training.
+- Samples are fluent but factually and arithmetically wrong; sampled repetition falls with
+  data (word 4-gram repetition at temperature 0.8: 19.6% at 5.45B, 11.7% at 20B).
+
+Result JSONs, samples and the sample report are in `jfrick/lm-exploration-results` under
+`pr-76/`. Checkpoints stay on the `lm-exploration-training` volume:
+`climbmix-124m-wsd20b-02-decay5b-s01/step-000055555.pt`,
+`climbmix-124m-wsd20b-02-decay10b-s01/step-000111111.pt` and
+`climbmix-124m-wsd20b-02-s02/step-000203724.pt`.
+
 ## Tokenizer: mixture 32K default
 
 The default is [`climbmix-code-v1`](../tokenizer/climbmix-code-v1/), fitted on the
