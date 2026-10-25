@@ -251,6 +251,13 @@ Full attention trains with FlexAttention (above).
 and their gradients in one chunked pass, without storing or recomputing the
 [tokens, 154,880] logits, for the next-token and MTP heads.
 
+Custom kernels in this family: the fused output-layer loss (+15% training
+throughput on one H100) and, inside it, a Triton
+kernel ([`softmax_kernel.py`](softmax_kernel.py)) that turns each bf16 logit row
+into its cross-entropy/z-loss gradient in place in two passes, instead of several
+fp32 copies of the [rows, 154,880] block. FlexAttention and fla supply the
+tensor-core attention and KDA kernels.
+
 [`train.py`](train.py) is the torchrun trainer: rank 0 reads `PreparedMixture`
 and broadcasts each batch and every stop decision (stop time, data exhausted or
 late, stop request); every rank derives MTP targets (the model derives its own
@@ -314,7 +321,7 @@ compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
 The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it.
 
 `test_hybrid_720m` checks the configuration, parameter count, schedule, FLOP
-accounting, attention-kernel choice and gate/sink statistics;
+accounting and gate/sink statistics;
 `test_hybrid_fused_loss` checks the fused loss and its gradients against autograd.
 `test_hybrid_data` prepares shards from small parquet files (license filter,
 empty documents, contamination drops, EOS layout, byte counts) and checks the
