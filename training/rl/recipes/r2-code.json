@@ -2,8 +2,8 @@
   "name": "rl-r2-code",
   "description": "Code-only RL from stage 0: validates the sandbox reward",
   "run_id": "rl-r2-code-20b-r01",
-  "parent": "math-code-sft-replay-20b-s0-r01/step-000020000.pt",
-  "pool": "rl-pool-math-code-02",
+  "parent": "math-code-sft-replay-20b-s0-r02/step-000020000.pt",
+  "pool": "rl-pool-math-code-03",
   "settings": {
     "steps": 300,
     "math_share": 0.0,

@@ -6,8 +6,8 @@ functions, checked by running unit tests. The model writes complete answers and 
 trained on its own samples, scored by those checkers. In SFT
 ([`../sft/README.md`](../sft/README.md)) it only imitates answers someone else wrote.
 
-**Status:** implemented and smoke-tested on Modal (3 steps from the r02 math model).
-Stage 0 SFT is training; no RL run has been measured yet.
+**Status:** implemented and smoke-tested on Modal (4 full-size steps from the r02 math
+model). The stage 0 teacher data is being generated; no RL run has been measured yet.
 
 ## Starting point
 
@@ -38,18 +38,23 @@ fine-tuned on GSM8K reached about 33%.
 each row is a math row ([`math_sft.py`](../data/math_sft.py)) or a code row
 ([`code_sft.py`](../data/code_sft.py)) and keeps its task's prompt and answer. Code rows:
 
-- **Prompt:** ``Question: {problem}\nWrite a Python function `def f(args):`.\nAnswer:\n``;
-  **answer:** the complete reference solution, then EOS.
-- **Data** (`code-kodcode-mbpp-01`): 135,004 KodCode-V1 rows (synthetic problems with
-  GPT-4o solutions checked against pytest tests; instruct style, one function, solution
-  and problem at most 1,500 characters, tests callable without pytest fixtures) and 305
-  MBPP train rows; 263 KodCode rows are validation. KodCode-Light-RL-10K problems are
-  left out for RL. Rows sharing a 13-word n-gram with an MBPP test/validation/prompt,
-  MBPP+ or HumanEval+ problem are dropped (158).
-- **Licence:** KodCode is CC-BY-NC-4.0: fine for this private research, but it restricts
-  publishing derived weights.
-- **Mixture** (`mixture-math-code-01`): 224,533 math and 135,309 code rows, sampled
-  uniformly (62% math).
+- **Prompt:** ``Question: {problem}\nWrite a Python function `def f(args):`.\nAnswer:\n``
+  (or ``class `class C:` ``); **answer:** the complete solution, then EOS.
+- **Problems** (`code-oci-mbpp-01`, `modal_sft_data::code`): 227,084 NVIDIA
+  OpenCodeInstruct problems (CC-BY-4.0) from six of its 50 shards, each with ten unit
+  tests, whose own Qwen2.5-Coder-32B solution passed all ten, plus 306 MBPP train
+  problems; 453 are validation. Rows sharing a 13-word n-gram with an MBPP
+  test/validation/prompt, MBPP+ or HumanEval+ problem are dropped (80).
+- **Solutions** ([`../data/teacher.py`](../data/teacher.py),
+  [`../modal_scripts/modal_teacher.py`](../modal_scripts/modal_teacher.py)): Qwen3.5-35B-A3B
+  (Apache-2.0, FP8, thinking off, vLLM) answers each problem twice; every answer runs
+  against the problem's tests in the code sandbox, and the shortest passing answer
+  becomes the row's solution. A 64-problem trial kept 59 problems, with a median
+  solution of 311 characters against 593 for the OpenCodeInstruct solutions.
+- **Licences:** problems and tests CC-BY-4.0 (OpenCodeInstruct), MBPP CC-BY-4.0, teacher
+  Apache-2.0, so trained weights can be published with attribution.
+- **Mixture** (`mixture-math-code-02`): the 224,533 math rows and the kept code rows,
+  sampled uniformly.
 - **Run** ([`../sft/recipes/math-code-replay-20b.json`](../sft/recipes/math-code-replay-20b.json)):
   the 20B end point, 20,000 steps of 32, r02's cosine schedule and replay.
 
@@ -64,8 +69,12 @@ weights, so the loop is fully on-policy. Each step:
 2. **Rollouts.** `samples_per_prompt` (8) answers per prompt at temperature 1, without
    top-k or top-p, so samples follow the policy's probabilities: at most 256 new tokens
    for math and 384 for code. [`../trainer/rollout.py`](../trainer/rollout.py) samples a
-   left-padded batch with a key/value cache; its greedy output matches unbatched,
-   uncached decoding exactly (`tests/test_rollout.py`).
+   left-padded batch with a key/value cache. The default `graph` engine replays one
+   CUDA graph per token built from custom decode kernels
+   ([`../kernels/README.md`](../kernels/README.md#rollout-decoding)), 3.2 times faster
+   than eager decoding on an H100; the `eager` engine's greedy output matches unbatched,
+   uncached decoding exactly (`tests/test_rollout.py`). The sampler also records each
+   token's log-probability and its top-32 tokens.
 3. **Rewards** ([`../data/rl_tasks.py`](../data/rl_tasks.py)). 1 or 0; an answer
    without EOS within the limit scores 0. Math: Math-Verify finds the final answer equal
    to the reference. Code: every test passes in the sandbox (below). Code answers are
@@ -73,11 +82,21 @@ weights, so the loop is fully on-policy. Each step:
 4. **Advantages.** Reward minus the mean reward of the prompt's group, with no division
    by the group's standard deviation (Dr. GRPO, arXiv:2503.20783). Groups whose answers
    all score the same have zero advantage and are skipped; their share is logged.
-5. **Loss.** −advantage × log p(token) summed over answer tokens, divided by the number
-   of answers times the task's token limit (no per-answer length normalization). One
-   optimizer step per batch, so no importance ratio or clipping is needed.
+5. **Loss.** −advantage × score summed over answer tokens, divided by the number of
+   answers times the task's token limit (no per-answer length normalization). One
+   optimizer step per batch, so the loop is on-policy and needs no importance ratio or
+   clipping. The score is Score Centering's (`score_centering_top_k`, default 32;
+   [`../trainer/policy_loss.py`](../trainer/policy_loss.py), the method behind Tinker's
+   StableReinforce, [reference](../references/stable-reinforce-2026-10-25.md)):
+   ∇log p(y) − Σ_v q_v ∇log p_v, where q is the sampler's distribution from its top-32
+   with the rest of the mass spread like the learner's. Its gradient on the logits is
+   onehot(y) − q instead of REINFORCE's onehot(y) − p, so a bias between the sampler's
+   numerics and the learner's cancels (`tests/test_policy_loss.py`). That bias is
+   logged every step as `sampler_mismatch`: in the smoke runs it was about 1e-4 nats per
+   token on average, with about 0.015 mean absolute difference per token.
 6. **Anchors.** KL(policy ‖ parent) is estimated (k3) on the answer tokens every step and
-   added with `kl_coef` (default 0). Pretraining replay (`replay_*`, as in SFT) adds a
+   added with `kl_coef` (default 0); `sampler_kl_coef` (default 0) adds Tinker's
+   sampler–learner KL term. Pretraining replay (`replay_*`, as in SFT) adds a
    next-token loss on pretraining windows at `replay_weight`.
 7. **Optimizer.** AdamW without weight decay, LR 1e-6 after 20 warmup steps, gradient
    clipping at 1.0. 1e-6 is a starting guess.
@@ -88,9 +107,9 @@ replay validation loss, at the start, every `evaluate_every` steps and at the en
 
 ### RL pool
 
-`rl-pool-math-code-02` (`modal_sft_data::rl_pool`): 6,971 GSM8K training problems after
-the first 500 (SFT's validation problems), 7,929 KodCode-Light-RL-10K problems,
-and the validation sets above; decontaminated like the SFT data. Prompts longer than 512
+`rl-pool-math-code-03` (`modal_sft_data::rl_pool`): 6,971 GSM8K training problems after
+the first 500 (SFT's validation problems), 10,000 OpenCodeInstruct problems from its last
+shard (code SFT uses the first six), and the validation sets above; decontaminated like the SFT data. Prompts longer than 512
 tokens are not used.
 
 ### Code execution sandbox
@@ -117,8 +136,10 @@ call ends. A run does not resume; an interrupted run is rerun from scratch.
 ### Logged
 
 Every step: reward, share of uniform groups, answer length and truncation rate per task;
-answers trained on; mean NLL of the sampled tokens; KL to the parent; replay loss; gradient
-norm; resting prompts; generation and training seconds. Every evaluation: validation
+answers trained on; mean NLL of the sampled tokens; KL to the parent; sampler–learner
+mismatch; replay loss; gradient norm; resting prompts; generation and training seconds.
+At 64 prompts × 8 answers the smoke run took 3.8 s to generate and 0.9 s to train per
+step. Every evaluation: validation
 accuracy and truncation per task, and replay validation loss per source.
 
 Signs to watch: rewards rising while EvalPlus pass@1 does not (reward hacking), sampled
@@ -146,10 +167,12 @@ From `training/`:
 
 ```sh
 # Data (once): code SFT rows, the math + code mixture and the RL pool.
-uv run --all-extras modal run -m modal_scripts.modal_sft_data::code --data-id code-kodcode-mbpp-01
-uv run --all-extras modal run -m modal_scripts.modal_sft_data::mixture --data-id mixture-math-code-01 \
-  --math math-gsm8k-metamath-02 --code code-kodcode-mbpp-01
-uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool --data-id rl-pool-math-code-02
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::code --data-id code-oci-mbpp-01
+uv run --all-extras modal run -m modal_scripts.modal_teacher --source code-oci-mbpp-01 \
+  --data-id code-teacher-qwen35-01 --shards 8 --samples 2
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::mixture --data-id mixture-math-code-02 \
+  --math math-gsm8k-metamath-02 --code code-teacher-qwen35-01
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool --data-id rl-pool-math-code-03
 # Stage 0 SFT, then RL from its final checkpoint.
 uv run --all-extras modal run -m modal_scripts.modal_sft_train::main --recipe sft/recipes/math-code-replay-20b.json
 uv run --all-extras modal run -m modal_scripts.modal_rl_train --recipe rl/recipes/RECIPE.json

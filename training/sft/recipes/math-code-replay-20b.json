@@ -1,10 +1,10 @@
 {
   "name": "math-code-replay-20b",
-  "description": "Joint math and code SFT (GSM8K + MetaMathQA, KodCode + MBPP) with pretraining replay of the WSD 20B end point; stage 0 before RL",
-  "run_id": "math-code-sft-replay-20b-s0-r01",
+  "description": "Joint math and code SFT (GSM8K + MetaMathQA; OpenCodeInstruct + MBPP problems with Qwen3.5 solutions) with pretraining replay of the WSD 20B end point; stage 0 before RL",
+  "run_id": "math-code-sft-replay-20b-s0-r02",
   "parent": "climbmix-124m-wsd20b-02-s02/step-000203724.pt",
   "data": {
-    "volume": "mixture-math-code-01"
+    "volume": "mixture-math-code-02"
   },
   "gpu": "H100",
   "settings": {
