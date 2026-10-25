@@ -8,6 +8,9 @@ far; prompt tokens carry no loss. The loss is the mean answer-token cross-entrop
 `trainer/cig.py`). The model never generates during training. Validation reports the same
 answer-token cross-entropy per bucket.
 
+The learning rate is constant, or warms up linearly over `warmup_steps` and follows a
+cosine to `min_lr_ratio * lr` (`schedule: "cosine"`).
+
 The parent is an explicit `scholarly-ddp-v1` checkpoint on the private run volume; launchers
 pass it in. See `sft/README.md` for the data formats and launch commands.
 """
@@ -47,6 +50,9 @@ class Settings:
     objective: str = "sft"
     cig_proximity: float = 0.3
     task: str = "repair"
+    schedule: str = "constant"
+    warmup_steps: int = 0
+    min_lr_ratio: float = 1.0
 
     def __post_init__(self):
         if self.objective not in ("sft", "cig"):
@@ -71,6 +77,24 @@ class Settings:
             raise ValueError("Invalid learning rate")
         if self.max_seconds > 14400:
             raise ValueError("SFT capped at four hours per invocation")
+        if self.schedule not in ("constant", "cosine"):
+            raise ValueError("schedule must be constant or cosine")
+        if type(self.warmup_steps) is not int or not 0 <= self.warmup_steps < self.steps:
+            raise ValueError("warmup_steps must be from 0 to below steps")
+        if not 0 < self.min_lr_ratio <= 1 or (self.schedule == "constant") != (
+            self.min_lr_ratio == 1 and self.warmup_steps == 0
+        ):
+            raise ValueError("Only a cosine schedule warms up or decays (min_lr_ratio in (0, 1])")
+
+    def learning_rate(self, step):
+        """The rate for update `step` (0-based)."""
+        if self.schedule == "constant":
+            return self.lr
+        if step < self.warmup_steps:
+            return self.lr * (step + 1) / self.warmup_steps
+        progress = (step - self.warmup_steps) / max(1, self.steps - self.warmup_steps)
+        cosine = 0.5 * (1 + math.cos(math.pi * min(progress, 1.0)))
+        return self.lr * (self.min_lr_ratio + (1 - self.min_lr_ratio) * cosine)
 
 
 def validate_resume_identity(saved, current, step, extend=False):
@@ -320,6 +344,9 @@ def train(
         and (deadline is None or time.time() < deadline)
     ):
         rows = [rng.choice(splits["train"]) for _ in range(settings.batch_size)]
+        learning_rate = settings.learning_rate(step)
+        for group in optimizer.param_groups:
+            group["lr"] = learning_rate
         optimizer.zero_grad(set_to_none=True)
         value, count = loss(rows, training=True)
         objective = value / count
@@ -330,7 +357,7 @@ def train(
         optimizer.step()
         step += 1
         answer_tokens += count.item()
-        record(train_loss=objective.item())
+        record(train_loss=objective.item(), lr=learning_rate)
         if step % settings.evaluate_every == 0:
             metrics = evaluate()
             record(**metrics)
