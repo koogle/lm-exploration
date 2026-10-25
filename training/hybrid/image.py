@@ -26,6 +26,7 @@ image = (
         copy=True,
     )
     .run_commands(BUILD_KERNEL)
+    .add_local_dir("10m", "/project/model_10m", ignore=["__pycache__"])
     .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__"])
     .add_local_dir("tests", "/project/tests", ignore=["__pycache__", "fixtures"])
 )
