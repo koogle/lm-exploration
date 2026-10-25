@@ -17,7 +17,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from training_data.code_sft import code_prompt, kodcode_row, mbpp_row
+from training_data.code_sft import code_prompt, mbpp_row, opencodeinstruct_row
 from training_data.math_sft import answer_matches, ngrams, question_prompt
 
 FORMAT = "rl-pool-v1"
@@ -46,6 +46,14 @@ def rewards(rows, completions, finished, sandbox):
     return scores
 
 
+def pool_row(sft):
+    """The pool row of a `code-sft-v1` row (or None)."""
+    if sft is None:
+        return None
+    keys = ("id", "split", "question", "declaration", "tests", "source", "license")
+    return {"task": "code", **{key: sft[key] for key in keys}}
+
+
 def load(path):
     """Pool rows by split, and the file's SHA256."""
     raw = Path(path).read_bytes()
@@ -61,15 +69,22 @@ def load(path):
 
 
 def build(
-    gsm8k_train, kodcode_rl, mbpp_validation, math_tests, code_tests, output, math_validation=200
+    gsm8k_train,
+    opencodeinstruct,
+    mbpp_validation,
+    math_tests,
+    code_tests,
+    output,
+    math_validation=200,
+    code_train=10000,
 ):
     """Write `pool.jsonl` and `report.json` to `output`.
 
     Math: GSM8K training problems. The first 500 are the SFT validation problems
     (`math_sft.build`); the first `math_validation` of them are pool validation, the
     other 500 − `math_validation` are left out, and the rest are training. Code:
-    KodCode-Light-RL-10K problems (left out of code SFT) are training and MBPP's
-    validation split is validation. Rows sharing a 13-word n-gram with a benchmark
+    the first `code_train` usable OpenCodeInstruct problems of `code_sft.RL_SHARD` (a
+    shard code SFT does not use) are training and MBPP's validation split is validation. Rows sharing a 13-word n-gram with a benchmark
     problem (`math_tests`, `code_tests`) are dropped.
     """
     output = Path(output)
@@ -103,22 +118,12 @@ def build(
                 "license": "MIT",
             }
         )
-    for source, split in ((kodcode_rl, "train"), (mbpp_validation, "validation")):
-        for row in source:
-            sft = kodcode_row(row, split) if split == "train" else mbpp_row(row, split)
-            keep(
-                sft
-                and {
-                    "id": sft["id"],
-                    "task": "code",
-                    "split": split,
-                    "question": sft["question"],
-                    "declaration": sft["declaration"],
-                    "tests": sft["tests"],
-                    "source": sft["source"],
-                    "license": sft["license"],
-                }
-            )
+    for row in opencodeinstruct:
+        if counts.get("code/train", 0) >= code_train:
+            break
+        keep(pool_row(opencodeinstruct_row(row, "train")))
+    for row in mbpp_validation:
+        keep(pool_row(mbpp_row(row, "validation")))
     output.mkdir(parents=True, exist_ok=False)
     path = output / "pool.jsonl"
     path.write_text("".join(json.dumps(r) + "\n" for r in rows))

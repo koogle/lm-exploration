@@ -14,7 +14,7 @@ Run from training/:
     modal run -m modal_scripts.modal_sft_data::rl_pool --data-id <fresh-id> [--report <report.json>]
 
 `curriculum` execute-verifies every original arithmetic repair and writes the JSONL locally.
-`commitpack`, `private_patches`, `math` (GSM8K + MetaMathQA word problems), `code` (KodCode +
+`commitpack`, `private_patches`, `math` (GSM8K + MetaMathQA word problems), `code` (OpenCodeInstruct +
 MBPP functions) and `mixture` (prepared math and code rows in one file) write `examples.jsonl`
 and `report.json` to `/runs/<data-id>` on the private run volume for `modal_sft_train
 --data-id`. `rl_pool` writes the RL prompt pool `pool.jsonl` (`training_data.rl_tasks`).
@@ -312,23 +312,20 @@ def benchmark_problems(mbpp_splits=("test", "validation", "prompt")):
     volumes={"/runs": volume},
 )
 def prepare_code(data_id, deadline):
-    from training_data.code_sft import KODCODE, KODCODE_RL, KODCODE_SHARDS, MBPP, build
+    from training_data.code_sft import MBPP, OPENCODEINSTRUCT, SFT_SHARDS, build, shard_name
     from training_data.hub_files import pinned_rows
 
     check_deadline(deadline)
     volume.reload()
     output = fresh_output(data_id)
-    reserved = {
-        r["question_id"] for r in pinned_rows(*KODCODE_RL, "data/train-00000-of-00001.parquet")
-    }
 
     def shards():
-        for index in range(KODCODE_SHARDS):
+        for index in SFT_SHARDS:
             check_deadline(deadline)
-            yield pinned_rows(*KODCODE, f"data/train-{index:05d}-of-{KODCODE_SHARDS:05d}.parquet")
+            yield pinned_rows(*OPENCODEINSTRUCT, shard_name(index))
 
     mbpp_train = pinned_rows(*MBPP, "full/train-00000-of-00001.parquet")
-    report = build(shards(), mbpp_train, benchmark_problems()[1], reserved, output)
+    report = build(shards(), mbpp_train, benchmark_problems()[1], output)
     volume.commit()
     return report
 
@@ -361,7 +358,7 @@ def prepare_mixture(data_id, datasets, deadline):
     image=data_image, cpu=2, memory=16384, timeout=1800, retries=0, volumes={"/runs": volume}
 )
 def prepare_rl_pool(data_id, deadline):
-    from training_data.code_sft import KODCODE_RL, MBPP
+    from training_data.code_sft import MBPP, OPENCODEINSTRUCT, RL_SHARD, shard_name
     from training_data.hub_files import pinned_rows
     from training_data.math_sft import GSM8K
     from training_data.rl_tasks import build
@@ -373,7 +370,7 @@ def prepare_rl_pool(data_id, deadline):
     math_tests, code_tests = benchmark_problems(("test", "prompt"))
     report = build(
         pinned_rows(*GSM8K, "main/train-00000-of-00001.parquet"),
-        pinned_rows(*KODCODE_RL, "data/train-00000-of-00001.parquet"),
+        pinned_rows(*OPENCODEINSTRUCT, shard_name(RL_SHARD)),
         pinned_rows(*MBPP, "full/validation-00000-of-00001.parquet"),
         math_tests,
         code_tests,

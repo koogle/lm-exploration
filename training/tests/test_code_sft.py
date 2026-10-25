@@ -8,21 +8,22 @@ from training_data.code_sft import (
     CODE,
     assert_tests,
     declaration,
-    kodcode_row,
+    definitions,
     mbpp_row,
-    usable_tests,
+    opencodeinstruct_row,
 )
 from training_data.mixture_sft import MIXTURE, combine
 from training_data.subword import LOSS_IGNORE_INDEX, load_frozen
 
-KODCODE = {
-    "style": "instruct",
-    "subset": "Leetcode",
-    "question_id": "Leetcode_3_I",
-    "question": "Return the larger of two numbers.",
-    "solution": 'def larger(a, b):\n    """Larger."""\n    return max(a, b)\n',
-    "test": "from solution import larger\n\ndef test_larger():\n    assert larger(1, 2) == 2\n",
-    "test_info": [{"function_name": "larger"}],
+OCI = {
+    "id": "abc123",
+    "domain": "generic",
+    "input": "Return the larger of two numbers.",
+    "output": "Here it is:\n```python\nimport math\n\n\ndef larger(a, b):\n"
+    '    """Larger."""\n    return max(a, b)\n\n\n# Example usage:\nx = larger(1, 2)\n'
+    "print(x)\n```\nIt returns the maximum.",
+    "unit_tests": '["\\nassert larger(1, 2) == 2\\n", "\\nassert larger(\\n    5, 3\\n) == 5\\n"]',
+    "tests_execution_status": '["pass", "pass"]',
 }
 MBPP = {
     "task_id": 7,
@@ -34,21 +35,21 @@ MBPP = {
 
 
 class CodeSFTTests(unittest.TestCase):
-    def test_rows_keep_declarations_and_runnable_tests(self):
-        kod, mbpp = kodcode_row(KODCODE, "train"), mbpp_row(MBPP, "train")
-        self.assertEqual(kod["declaration"], "def larger(a, b):")
-        self.assertEqual(kod["group"], "kodcode-Leetcode_3")
+    def test_rows_keep_definitions_and_runnable_tests(self):
+        oci, mbpp = opencodeinstruct_row(OCI, "train"), mbpp_row(MBPP, "train")
+        self.assertEqual(oci["declaration"], "def larger(a, b):")
+        self.assertNotIn("Example", oci["solution"])
+        self.assertTrue(oci["solution"].startswith("import math\n\ndef larger"))
         self.assertEqual(mbpp["declaration"], "def add(x, y):")
-        results = run_local([(r["solution"], r["tests"]) for r in (kod, mbpp)])
+        results = run_local([(r["solution"], r["tests"]) for r in (oci, mbpp)])
         self.assertTrue(all(r["passed"] for r in results))
-        self.assertIsNone(kodcode_row({**KODCODE, "style": "complete"}, "train"))
+        failed = {**OCI, "tests_execution_status": '["pass", "fail"]'}
+        self.assertIsNone(opencodeinstruct_row(failed, "train"))
 
-    def test_fixture_and_parametrized_tests_are_unusable(self):
-        self.assertTrue(usable_tests("def test_a():\n    assert True\n"))
-        self.assertFalse(usable_tests("def test_a(tmp_path):\n    pass\n"))
-        self.assertFalse(usable_tests("@p\ndef test_a():\n    pass\n"))
-        self.assertFalse(usable_tests("x = 1\n"))
+    def test_declarations_and_definitions(self):
         self.assertIsNone(declaration("def f(): pass", "g"))
+        self.assertEqual(declaration("class Car:\n    pass", "Car"), "class Car:")
+        self.assertEqual(definitions("@d\ndef f():\n    pass\nf()\n"), "@d\ndef f():\n    pass")
         self.assertIn("def test_asserts():\n    assert f(1)\n", assert_tests(["assert f(1)"]))
 
     def test_mixture_encodes_each_task_with_its_own_prompt(self):
@@ -62,7 +63,7 @@ class CodeSFTTests(unittest.TestCase):
             "question": "What is 1+1?",
             "answer": "1+1=2\n#### 2",
         }
-        code = {**kodcode_row(KODCODE, "validation")}
+        code = opencodeinstruct_row(OCI, "validation")
         with tempfile.TemporaryDirectory() as folder:
             folder = Path(folder)
             for name, row in (("math", math), ("code", code)):
@@ -74,7 +75,7 @@ class CodeSFTTests(unittest.TestCase):
             tokenizer = load_frozen()
             splits, _ = MIXTURE.prepare(folder / "out" / "examples.jsonl", tokenizer, 512)
         self.assertEqual(splits["train"][0]["bucket"], "math/gsm8k")
-        self.assertEqual(splits["validation"][0]["bucket"], "code/kodcode/leetcode")
+        self.assertEqual(splits["validation"][0]["bucket"], "code/oci/generic")
         encoded = splits["validation"][0]
         answer = [t for t in encoded["y"] if t != LOSS_IGNORE_INDEX]
         self.assertEqual(tokenizer.decode(answer[:-1]), CODE.answer(code))

@@ -1,65 +1,86 @@
-"""Python function-writing rows (`code-sft-v1`) and the KodCode + MBPP builder.
+"""Python function-writing rows (`code-sft-v1`) and the OpenCodeInstruct + MBPP builder.
 
 What is trained (see `training_data.sft`): the model reads a problem statement and the
-function to write (`code_prompt`) and learns to write the complete reference solution,
-then EOS. The solutions are KodCode's (written by GPT-4o and checked against KodCode's
-unit tests) and MBPP's (written by people). Each row also keeps its unit tests
-(`tests`, importing the solution as the module `solution`), which SFT ignores and RL
-runs (`training_data.code_execution`).
+function or class to write (`code_prompt`) and learns to write the complete reference
+solution, then EOS. The solutions are OpenCodeInstruct's and MBPP's (written by people).
+OpenCodeInstruct (CC-BY-4.0) is teacher-generated: Qwen2.5-Coder-32B-Instruct
+(Apache-2.0) wrote each solution and ten unit tests, and NVIDIA ran the tests; only
+solutions that pass all ten are kept, without their example-usage code. Each row also
+keeps its unit tests (`tests`, importing the solution as the module `solution`), which
+SFT ignores and RL runs (`training_data.code_execution`).
 """
 
 import ast
 import hashlib
 import json
 import re
+import textwrap
 import warnings
 from pathlib import Path
 
 from training_data.math_sft import ngrams, normalize
 from training_data.sft import SFTDataset
 
-KODCODE = ("KodCode/KodCode-V1", "97d81f0695ddd7c5c02bfe16436db9a17a4a21e5")
-KODCODE_SHARDS = 15
-KODCODE_RL = ("KodCode/KodCode-Light-RL-10K", "dcf78a8bbba9a613b596ce993c4921a38687dfcc")
+OPENCODEINSTRUCT = ("nvidia/OpenCodeInstruct", "8f3ba5bafe4d6e8db46082cf7ae6741bc370604d")
+OPENCODEINSTRUCT_SHARDS = 50
+# Shards for SFT rows; the last shard is the RL pool's (`training_data.rl_tasks`).
+SFT_SHARDS = range(6)
+RL_SHARD = OPENCODEINSTRUCT_SHARDS - 1
 MBPP = ("google-research-datasets/mbpp", "4bb6404fdc6cacfda99d4ac4205087b89d32030c")
 MBPP_PLUS = ("evalplus/mbppplus", "b2d74c91837c3f2a20c1299ae98133cbe7cfa077")
 HUMANEVAL_PLUS = ("evalplus/humanevalplus", "d32357cf319e50e9c8d8dab5ea876c72b0fd321b")
 # Longest reference solution and problem statement kept, in characters.
 MAX_SOLUTION = 1500
 MAX_QUESTION = 1500
+# Top-level statements a solution keeps; example usage (calls, prints, assignments) goes.
+KEPT = (ast.Import, ast.ImportFrom, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+
+def shard_name(index):
+    return f"data/train-{index:05d}-of-{OPENCODEINSTRUCT_SHARDS:05d}.parquet"
 
 
 def code_prompt(question, declaration):
-    return f"Question: {question.strip()}\nWrite a Python function `{declaration}`.\nAnswer:\n"
+    kind = "class" if declaration.startswith("class ") else "function"
+    return f"Question: {question.strip()}\nWrite a Python {kind} `{declaration}`.\nAnswer:\n"
+
+
+def parse(source):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        return ast.parse(source)
 
 
 def declaration(source, name):
-    """`def name(args):` of the top-level function `name` in `source`, or None."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", SyntaxWarning)
-        tree = ast.parse(source)
-    for node in tree.body:
+    """`def name(args):` or `class name:` of top-level `name` in `source`, or None."""
+    for node in parse(source).body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
             return f"def {name}({ast.unparse(node.args)}):"
+        if isinstance(node, ast.ClassDef) and node.name == name:
+            return f"class {name}:"
     return None
 
 
-def usable_tests(tests):
-    """Whether `tests` defines `test_*` functions a plain runner can call: no arguments
-    (pytest fixtures) and no decorators (parametrization)."""
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", SyntaxWarning)
-            tree = ast.parse(tests)
-    except SyntaxError:
-        return False
-    found = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name.startswith("test")]
-    return bool(found) and not any(n.args.args or n.args.vararg or n.decorator_list for n in found)
+def called(source, test):
+    """The declaration of the first name `test` calls that `source` defines, or None."""
+    names = re.findall(r"(\w+)\s*\(", test.strip().removeprefix("assert"))
+    return next((s for n in names if (s := declaration(source, n))), None)
+
+
+def definitions(source):
+    """`source` with only its imports, functions and classes (comments inside kept)."""
+    lines = source.splitlines()
+    kept = []
+    for node in parse(source).body:
+        if isinstance(node, KEPT):
+            start = min([d.lineno for d in getattr(node, "decorator_list", [])] + [node.lineno])
+            kept.append("\n".join(lines[start - 1 : node.end_lineno]))
+    return "\n\n".join(kept)
 
 
 def assert_tests(asserts, setup=""):
-    """MBPP-style assert lines as one `test_*` function over the solution module."""
-    body = "".join(f"    {line.strip()}\n" for line in asserts)
+    """Assert statements as one `test_*` function over the solution module."""
+    body = "".join(textwrap.indent(a.strip(), "    ") + "\n" for a in asserts)
     return f"from solution import *\n{setup.strip()}\n\ndef test_asserts():\n{body}"
 
 
@@ -80,7 +101,7 @@ class CodeSFT(SFTDataset):
         return (normalize(row["question"]),)
 
     def check(self, row):
-        name = re.fullmatch(r"def (\w+)\(.*\):", row["declaration"], re.DOTALL)
+        name = re.fullmatch(r"(?:def|class) (\w+)\b.*:", row["declaration"], re.DOTALL)
         if not name or declaration(row["solution"], name[1]) is None:
             raise ValueError(f"Solution of {row['id']} does not define {row['declaration']}")
 
@@ -88,39 +109,40 @@ class CodeSFT(SFTDataset):
 CODE = CodeSFT()
 
 
-def kodcode_row(row, split):
-    """A `code-sft-v1` row from a KodCode row, or None if it is unusable here."""
-    if row["style"] != "instruct" or row.get("filter_reason") or len(row["test_info"]) != 1:
+def opencodeinstruct_row(row, split):
+    """A `code-sft-v1` row from an OpenCodeInstruct row whose solution passed all its
+    tests, or None if it is unusable here."""
+    statuses = json.loads(row["tests_execution_status"])
+    if not statuses or any(s != "pass" for s in statuses):
         return None
-    if len(row["solution"]) > MAX_SOLUTION or len(row["question"]) > MAX_QUESTION:
+    blocks = re.findall(r"```python\n(.*?)```", row["output"], re.DOTALL)
+    if len(blocks) != 1 or len(row["input"]) > MAX_QUESTION:
         return None
-    if not usable_tests(row["test"]):
-        return None
+    tests = json.loads(row["unit_tests"])
     try:
-        signature = declaration(row["solution"], row["test_info"][0]["function_name"])
-    except SyntaxError:
+        solution = definitions(blocks[0]).strip()
+        signature = called(solution, tests[0])
+        parse(assert_tests(tests))
+    except (SyntaxError, IndexError):
         return None
-    if signature is None:
+    if signature is None or len(solution) > MAX_SOLUTION:
         return None
-    # IDs end in the style (`_I` instruct, `_C` complete); a group is one problem.
-    group = re.sub(r"_[A-Z]$", "", row["question_id"])
     return {
-        "id": f"kodcode-{row['question_id']}",
-        "group": f"kodcode-{group}",
+        "id": f"oci-{row['id']}",
+        "group": f"oci-{row['id']}",
         "split": split,
-        "bucket": f"kodcode/{row['subset'].lower()}",
-        "question": row["question"],
+        "bucket": f"oci/{row['domain']}",
+        "question": row["input"],
         "declaration": signature,
-        "solution": row["solution"].strip(),
-        "tests": row["test"],
-        "source": f"{KODCODE[0]}@{KODCODE[1]} {row['question_id']}",
-        "license": "CC-BY-NC-4.0",
+        "solution": solution,
+        "tests": assert_tests(tests),
+        "source": f"{OPENCODEINSTRUCT[0]}@{OPENCODEINSTRUCT[1]} {row['id']}",
+        "license": "CC-BY-4.0",
     }
 
 
 def mbpp_row(row, split):
-    names = re.findall(r"(\w+)\s*\(", row["test_list"][0].removeprefix("assert"))
-    signature = next((s for n in names if (s := declaration(row["code"], n))), None)
+    signature = called(row["code"], row["test_list"][0])
     if signature is None:
         return None
     return {
@@ -146,17 +168,17 @@ def benchmark_texts(mbpp_plus, humaneval_plus, mbpp_held_out):
     ]
 
 
-def build(kodcode_shards, mbpp_train, benchmarks, reserved_ids, output):
+def build(shards, mbpp_train, benchmarks, output):
     """Write `examples.jsonl` and `report.json` (as `math_sft.build`) to `output`.
 
-    `kodcode_shards` yields KodCode-V1 rows; KodCode IDs in `reserved_ids` (the RL pool)
-    are left out. A row sharing a 13-word n-gram with a benchmark problem in
-    `benchmarks` is dropped, as is a repeated problem statement. Two in 1,000 KodCode
-    groups, chosen by hash, are validation; MBPP train rows are all training.
+    `shards` yields the OpenCodeInstruct rows of `SFT_SHARDS`. A row sharing a 13-word
+    n-gram with a benchmark problem in `benchmarks` is dropped, as is a repeated problem
+    statement. Two in 1,000 OpenCodeInstruct problems, chosen by hash of their ID, are
+    validation; MBPP train rows are all training.
     """
     output = Path(output)
     blocked = set().union(*(ngrams(text) for text in benchmarks))
-    counts = {"kodcode": 0, "mbpp": 0, "contaminated": 0, "reserved": 0, "unusable": 0}
+    counts = {"opencodeinstruct": 0, "mbpp": 0, "contaminated": 0, "unusable": 0}
     rows, seen = [], set()
 
     def keep(row, name):
@@ -171,15 +193,11 @@ def build(kodcode_shards, mbpp_train, benchmarks, reserved_ids, output):
             rows.append(row)
             counts[name] += 1
 
-    for shard in kodcode_shards:
+    for shard in shards:
         for row in shard:
-            if row["question_id"] in reserved_ids:
-                counts["reserved"] += 1
-                continue
-            group = re.sub(r"_[A-Z]$", "", row["question_id"])
-            digest = int(hashlib.sha256(group.encode()).hexdigest()[:8], 16)
+            digest = int(hashlib.sha256(row["id"].encode()).hexdigest()[:8], 16)
             split = "validation" if digest % 1000 < 2 else "train"
-            keep(kodcode_row(row, split), "kodcode")
+            keep(opencodeinstruct_row(row, split), "opencodeinstruct")
     for row in mbpp_train:
         keep(mbpp_row(row, "train"), "mbpp")
     output.mkdir(parents=True, exist_ok=False)
@@ -188,7 +206,10 @@ def build(kodcode_shards, mbpp_train, benchmarks, reserved_ids, output):
     report = {
         "format": CodeSFT.FORMAT,
         "dataset_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-        "sources": {"kodcode": KODCODE, "mbpp": MBPP, "reserved": KODCODE_RL},
+        "sources": {
+            "opencodeinstruct": [*OPENCODEINSTRUCT, [shard_name(i) for i in SFT_SHARDS]],
+            "mbpp": MBPP,
+        },
         "decontamination": "13-word n-grams of MBPP test/validation/prompt, MBPP+ and "
         "HumanEval+ problems",
         "splits": {
