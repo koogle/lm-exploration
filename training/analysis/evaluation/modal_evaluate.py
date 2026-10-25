@@ -166,11 +166,15 @@ def open_checkpoint(path):
     source = run / "source"
     saved = torch.load(path, map_location="cpu", weights_only=False)
     architecture = saved["architecture"]
-    if str(source) not in sys.path:
-        sys.path.insert(0, str(source))
+    # Each run brings its own model code: drop the previous run's modules and path.
+    package = architecture["module"].split(".")[0]
+    for name in [n for n in sys.modules if n.split(".")[0] in (package, "model_10m")]:
+        del sys.modules[name]
+    sys.path[:] = [p for p in sys.path if not p.endswith("/source")]
+    sys.path.insert(0, str(source))
     module = importlib.import_module(architecture["module"])
     if not Path(module.__file__).is_relative_to(source):
-        raise ValueError("Model code must come from the checkpoint's own run")
+        raise ValueError(f"Model code must come from the checkpoint's own run: {module.__file__}")
     definitions = {"model": module.__file__, **getattr(module, "MODEL_DEPENDENCIES", {})}
     for key, file in definitions.items():
         if sha256(file) != saved["source_sha256"][key]:
