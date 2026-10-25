@@ -11,7 +11,7 @@ class Modern10MTests(unittest.TestCase):
     def setUp(self):
         torch.set_num_threads(1)
         torch.manual_seed(42)
-        self.config = model.ModelConfig(11, 8, 1, 3, 24)
+        self.config = model.ModelConfig(11, 8, 1, 3, 24, eos_id=2)
 
     # Both model sizes use these same implementations; exercise the 10M config too.
     test_rmsnorm_outputs_and_gradients_against_pytorch = (
@@ -26,6 +26,12 @@ class Modern10MTests(unittest.TestCase):
     test_combined_model_causality_gradients_and_context_bounds = (
         shared_tests.Modern100MTests.test_combined_model_causality_gradients_and_context_bounds
     )
+    test_documents_are_isolated_and_positions_restart = (
+        shared_tests.Modern100MTests.test_documents_are_isolated_and_positions_restart
+    )
+    test_document_attention_matches_explicit_attention_per_document = (
+        shared_tests.Modern100MTests.test_document_attention_matches_explicit_attention_per_document
+    )
 
     def test_modern_classes_are_standalone(self):
         self.assertEqual(model.ModelConfig.__bases__, (object,))
@@ -33,7 +39,7 @@ class Modern10MTests(unittest.TestCase):
             self.assertEqual(cls.__bases__, (torch.nn.Module,))
 
     def test_defaults_count_tying_and_checkpoint_roundtrip(self):
-        config = model.ModelConfig(65)
+        config = model.ModelConfig(65, eos_id=0)
         self.assertEqual((config.n_layer, config.n_embd, config.n_head), (6, 384, 6))
         with torch.device("meta"):
             instance = model.GPT(config)

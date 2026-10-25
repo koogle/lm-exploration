@@ -9,8 +9,9 @@ uv run --all-extras modal run -m kernels.modal_bench                      # corr
 ```
 
 Each launch is one function call on one H100 (30-minute timeout, no retries) that refuses
-to start once 24 hours have passed since launch. [`image.py`](image.py) is a CUDA 12.4
-devel image so the extension compiles with `nvcc`; outputs go to the ignored `artifacts/`.
+to start once 24 hours have passed since launch. [`image.py`](image.py) is a CUDA 13.0
+devel image with torch 2.14.1 so the extension compiles with `nvcc`; outputs go to the
+ignored `artifacts/`.
 
 ## What `fuse(model)` does
 
@@ -21,13 +22,14 @@ names, so checkpoints are interchangeable with the unfused model. It expects BF1
 | --- | --- | --- |
 | RMSNorm | FP32 residual in, BF16 out, one warp per row | input and weight gradients |
 | Residual add + RMSNorm | residual + sublayer output + its bias, then the next norm | residual, sublayer, bias and weight gradients |
-| QKV split + RoPE | adds the QKV bias, writes rotated q, k and v in attention layout | input and bias gradients |
+| QKV split + RoPE | adds the QKV bias, rotates by each token's position within its document, writes q, k and v in attention layout | input and bias gradients |
 | SwiGLU | adds both biases, `silu(gate) * up`, eight BF16 values per thread | input and both bias gradients |
 | LM head + cross-entropy | logits, loss and gradient 4,096 rows at a time, gradient written over the logits | precomputed in the forward |
 
 Linears run without bias; the kernel that consumes each output adds the bias and sums its
-gradient in registers, so no separate bias reductions run. Attention uses PyTorch's cuDNN
-kernel by default (`fuse(model, attention="flash")` selects FlashAttention-2).
+gradient in registers, so no separate bias reductions run. Attention is the model's own
+document-causal call (FlashAttention's varlen kernel), so packed documents stay isolated
+exactly as in the unfused model.
 
 ## Results (one H100, 16 x 2,048 tokens, BF16 autocast, fused AdamW, 2026-10-24)
 
