@@ -26,7 +26,8 @@ automatically, and no checkpoint is published. `settings.task` selects the data 
   ending in `#### N`, and EOS are supervised. Validation reports answer-token
   cross-entropy per source.
 
-Recorded runs, their settings and findings are in [EXPERIMENTS.md](EXPERIMENTS.md).
+Recorded repair runs, their settings and findings are in [EXPERIMENTS.md](EXPERIMENTS.md);
+math runs are in [MATH_EXPERIMENTS.md](MATH_EXPERIMENTS.md).
 
 ## Data format
 
