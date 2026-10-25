@@ -1,10 +1,11 @@
-# Repair SFT and CIG-SFT
+# SFT: code repair, CIG and math
 
-Post-training for the 124M Simple LLM models: supervised fine-tuning on code repairs,
-starting from an explicit `scholarly-ddp-v1` pretraining checkpoint on the private
-`lm-exploration-training` Modal volume. Model weights, architecture and the frozen
-`structured-code-v1` tokenizer are inherited; AdamW starts fresh. Nothing launches
-automatically, and no checkpoint is published.
+Post-training for the 124M Simple LLM models: supervised fine-tuning on code repairs or
+math word problems, starting from an explicit `scholarly-ddp-v1` pretraining checkpoint
+on the private `lm-exploration-training` Modal volume. Model weights, architecture and
+the parent's frozen tokenizer are inherited; AdamW starts fresh. Nothing launches
+automatically, and no checkpoint is published. `settings.task` selects the data format
+(`repair`, the default, or `math`).
 
 - **Repair SFT** ([`../trainer/repair_sft.py`](../trainer/repair_sft.py)): the prompt
   names the language and contains the task and the broken code; only the corrected
@@ -19,6 +20,11 @@ automatically, and no checkpoint is published.
   ratio sets projected-target weights with proximity lambda `cig_proximity`
   (default 0.3). Weighted losses divide by the supervised-token count, not the weight
   sum. Validation always uses ordinary cross-entropy, so both objectives are comparable.
+- **Math SFT** (`"task": "math"`, [`../data/math_sft.py`](../data/math_sft.py), format
+  `math-sft-v1`): the prompt is `Question: {question}\nAnswer:`, the zero-shot format of
+  [`analysis/evaluation`](../analysis/evaluation/README.md); only the worked solution,
+  ending in `#### N`, and EOS are supervised. Validation reports answer-token
+  cross-entropy per source.
 
 Recorded runs, their settings and findings are in [EXPERIMENTS.md](EXPERIMENTS.md).
 
@@ -84,6 +90,21 @@ Validate a local JSONL without Modal:
 uv run --extra corpus python -c 'from training_data.repair_sft import prepare; from training_data.subword import load_frozen; print({k: len(v) for k, v in prepare("artifacts/sft/repairs.jsonl", load_frozen(), 1024)[0].items()})'
 ```
 
+Math word problems (`math`) come from GSM8K's training split and MetaMathQA's
+GSM-derived rows (rephrasings, answer augmentation, self-verification and FOBAR
+rewrites; its MATH-derived rows are not used), both MIT and pinned to HF commits:
+
+```sh
+modal run -m modal_scripts.modal_sft_data::math --data-id <fresh-data-id> \
+  --report artifacts/sft/<fresh-data-id>.json
+```
+
+The first 500 GSM8K training problems are validation, and MetaMathQA rewrites of them
+are dropped. GSM8K's `<<a*b=c>>` calculator annotations are removed and MetaMathQA's
+closing `The answer is: N` becomes `#### N`. Any problem sharing a 13-word n-gram with a
+GSM8K or SVAMP test question is dropped. Each row's `group` is its original problem, so
+a problem and its rewrites never cross splits.
+
 ### Train
 
 [`../modal_scripts/modal_sft_train.py`](../modal_scripts/modal_sft_train.py) runs one
@@ -101,6 +122,7 @@ recipe on one L40S or H100. A recipe is JSON
 }
 ```
 
+Recipes for the math runs are in [`recipes/`](recipes/).
 `data` is `{"local": path}` (validated locally, uploaded, at most 20 MiB) or
 `{"volume": data-id}` (a prepared volume folder; its hash must match `report.json`).
 `settings` are `trainer.repair_sft.Settings`: `steps` (total target), `batch_size`,

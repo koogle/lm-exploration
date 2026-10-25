@@ -1,0 +1,22 @@
+{
+  "name": "math-metamath-20b",
+  "description": "Answer-only math SFT (GSM8K train + MetaMathQA GSM rows) of the WSD 20B end point",
+  "run_id": "math-sft-metamath-20b-r01",
+  "parent": "climbmix-124m-wsd20b-02-s02/step-000203724.pt",
+  "data": {
+    "volume": "math-gsm8k-metamath-02"
+  },
+  "gpu": "H100",
+  "settings": {
+    "task": "math",
+    "steps": 7500,
+    "batch_size": 32,
+    "context": 2048,
+    "lr": 5e-05,
+    "seed": 42,
+    "evaluate_every": 500,
+    "save_every": 2500,
+    "max_seconds": 14400,
+    "objective": "sft"
+  }
+}

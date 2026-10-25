@@ -19,9 +19,12 @@ uv run --all-extras modal run -m evaluation.modal_evaluate --name NAME \
   --checkpoints RUN-s01/step-000050000.pt,RUN-s02/step-000100000.pt
 ```
 
-Each checkpoint loads the model code its run copied to `RUN-sNN/source`, after checking
-the source and tokenizer hashes the checkpoint recorded, so any checkout can evaluate any
-checkpoint. The call refuses new work 24 hours after launch. Results go to
+Each checkpoint loads the model code its run copied, after checking the source and
+tokenizer hashes the checkpoint recorded, so any checkout can evaluate any checkpoint:
+pretraining checkpoints from `RUN-sNN/source`, SFT checkpoints
+([`sft/`](../../sft/README.md)) from the `model.py` and `shared_model.py` beside them.
+`--shots` sets the math exemplar count (default 5; use 0 for SFT models, whose training
+prompt is the zero-shot format). The call refuses new work 24 hours after launch. Results go to
 `/runs/evaluation/NAME.json` after each checkpoint and to `--output` (default
 `artifacts/evaluation/NAME.json`, ignored by Git); the HF results archive keeps them.
 
@@ -39,7 +42,7 @@ checkpoint. The call refuses new work 24 hours after launch. Results go to
 - **LAMBADA** (OpenAI test, 5,153): last-word accuracy (every target token greedy) and
   last-word perplexity.
 - **Few-shot math, greedy:** GSM8K test (first 500) and SVAMP test (300), each with the
-  first five training examples as `Question: ...\nAnswer: ...` exemplars. Generation stops
+  first `--shots` training examples as `Question: ...\nAnswer: ...` exemplars. Generation stops
   at a blank line, `Question:` or EOS (256 and 32 new tokens). GSM8K takes the number
   after `####`, else the last number; SVAMP takes the first number. Answers are kept in the
   result.

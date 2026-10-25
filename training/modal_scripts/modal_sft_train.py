@@ -135,11 +135,15 @@ def local_examples(recipe):
     """Validate local data before allocating a GPU; volume data is checked remotely."""
     if "volume" in recipe["data"]:
         return b""
-    from training_data.repair_sft import prepare
+    import importlib
+
     from training_data.subword import load_frozen
 
+    from trainer.repair_sft import TASKS
+
+    data = importlib.import_module(TASKS[recipe["settings"]["task"]])
     path = Path(recipe["data"]["local"])
-    prepare(path, load_frozen(), recipe["settings"]["context"])
+    data.prepare(path, load_frozen(), recipe["settings"]["context"])
     return path.read_bytes()
 
 

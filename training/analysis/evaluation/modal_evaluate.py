@@ -4,8 +4,9 @@ Run from training/:
     modal run -m evaluation.modal_evaluate --name NAME --snapshot ROOT/VERSION/snapshots/RUN \
         --checkpoints RUN-sNN/step-N.pt[,RUN-sMM/step-M.pt ...] [--output result.json]
 
-Each checkpoint loads the model code its own run copied to `RUN-sNN/source`, verified
-against the source hashes the checkpoint recorded, so any checkout can evaluate it. One
+Each checkpoint loads the model code its own run copied (`RUN-sNN/source`, or the files
+beside an SFT checkpoint), verified against the source hashes the checkpoint recorded, so
+any checkout can evaluate it. `--shots` sets the math exemplar count. One
 function call, a 3-hour hard timeout and no retries; the call refuses new work 24 hours
 after launch, including time spent queued. Results go to `/runs/evaluation/NAME.json`
 after each checkpoint and to `--output` (default `artifacts/evaluation/NAME.json`).
@@ -75,7 +76,6 @@ DATASETS = {
 SETTINGS = {
     "precision": "bf16-autocast",
     "heldout_windows_per_source": 64,
-    "shots": 5,
     "gsm8k_examples": 500,
     "gsm8k_max_new_tokens": 256,
     "svamp_max_new_tokens": 32,
@@ -153,36 +153,71 @@ def heldout_documents(snapshot, tokenizer, count):
     return manifest, documents
 
 
-def open_checkpoint(path):
-    """A verified model from a run's checkpoint, using the model code that run copied."""
+# SFT checkpoints (trainer/repair_sft.py) copy their model code as files beside them.
+SFT_FORMATS = ("math-sft-v1", "repair-sft-v2")
+
+
+def import_model(source, name):
+    """Import `name` from `source` only, dropping any previously evaluated run's modules."""
     import importlib
     import sys
+
+    for loaded in [n for n in sys.modules if n.split(".")[0] in ("model_100m", "model_10m")]:
+        del sys.modules[loaded]
+    sys.path[:] = [p for p in sys.path if not p.endswith("/source")]
+    sys.path.insert(0, str(source))
+    module = importlib.import_module(name)
+    if not Path(module.__file__).is_relative_to(source):
+        raise ValueError(f"Model code must come from the checkpoint's own run: {module.__file__}")
+    return module
+
+
+def pretraining_model(path, saved):
+    """Model module, config and identity of a pretraining checkpoint, from its run's source."""
+    run = path.parent
+    architecture = saved["architecture"]
+    module = import_model(run / "source", architecture["module"])
+    definitions = {"model": module.__file__, **getattr(module, "MODEL_DEPENDENCIES", {})}
+    for key, file in definitions.items():
+        if sha256(file) != saved["source_sha256"][key]:
+            raise ValueError(f"Model source differs from the checkpoint: {key}")
+    tokenizer = saved["data_identity"]["tokenizer_sha256"]
+    return module, architecture["config"], tokenizer, saved["source_sha256"]
+
+
+def sft_model(path, saved):
+    """The same for an SFT checkpoint, whose run copied model.py and shared_model.py."""
+    import tempfile
+
+    run, identity = path.parent, saved["identity"]
+    source = Path(tempfile.mkdtemp(prefix="sft-")) / "source"
+    for package, file, key in (
+        ("model_100m", "model.py", "model"),
+        ("model_10m", "shared_model.py", "shared_model"),
+    ):
+        if sha256(run / file) != identity["source_sha256"][key]:
+            raise ValueError(f"Model source differs from the checkpoint: {key}")
+        (source / package).mkdir(parents=True)
+        (source / package / "__init__.py").write_text("")
+        (source / package / "model.py").write_bytes((run / file).read_bytes())
+    module = import_model(source, "model_100m.model")
+    return module, saved["model_config"], identity["tokenizer_sha256"], identity["source_sha256"]
+
+
+def open_checkpoint(path):
+    """A verified model from a pretraining or SFT checkpoint, using its run's model code."""
     from types import SimpleNamespace
 
     import torch
     from tokenizers import Tokenizer
 
-    run = path.parent
-    source = run / "source"
     saved = torch.load(path, map_location="cpu", weights_only=False)
-    architecture = saved["architecture"]
-    # Each run brings its own model code: drop the previous run's modules and path.
-    package = architecture["module"].split(".")[0]
-    for name in [n for n in sys.modules if n.split(".")[0] in (package, "model_10m")]:
-        del sys.modules[name]
-    sys.path[:] = [p for p in sys.path if not p.endswith("/source")]
-    sys.path.insert(0, str(source))
-    module = importlib.import_module(architecture["module"])
-    if not Path(module.__file__).is_relative_to(source):
-        raise ValueError(f"Model code must come from the checkpoint's own run: {module.__file__}")
-    definitions = {"model": module.__file__, **getattr(module, "MODEL_DEPENDENCIES", {})}
-    for key, file in definitions.items():
-        if sha256(file) != saved["source_sha256"][key]:
-            raise ValueError(f"Model source differs from the checkpoint: {key}")
-    tokenizer_path = run / "tokenizer" / "tokenizer.json"
-    if sha256(tokenizer_path) != saved["data_identity"]["tokenizer_sha256"]:
+    opener = sft_model if saved.get("format") in SFT_FORMATS else pretraining_model
+    module, config, tokenizer_sha256, source_sha256 = opener(path, saved)
+    tokenizer_path = path.parent / "tokenizer" / "tokenizer.json"
+    if sha256(tokenizer_path) != tokenizer_sha256:
         raise ValueError("Tokenizer differs from the checkpoint")
-    model = module.GPT(module.ModelConfig(**architecture["config"]))
+    model = module.GPT(module.ModelConfig(**config))
     model.load_state_dict(saved["model"], strict=True)
     model = model.cuda().eval()
     if not all(torch.isfinite(p).all() for p in model.parameters()):
@@ -197,11 +232,13 @@ def open_checkpoint(path):
     info = {
         "checkpoint": str(path.relative_to("/runs")),
         "checkpoint_sha256": sha256(path),
+        "format": saved.get("format"),
         "step": saved.get("step"),
         "trained_tokens": saved.get("tokens"),
+        "sft_answer_tokens": saved.get("answer_tokens"),
         "parameters": sum(p.numel() for p in model.parameters()),
-        "model_source_sha256": saved["source_sha256"],
-        "tokenizer_sha256": saved["data_identity"]["tokenizer_sha256"],
+        "model_source_sha256": source_sha256,
+        "tokenizer_sha256": tokenizer_sha256,
     }
     wrapper = SimpleNamespace(
         forward=forward,
@@ -211,7 +248,7 @@ def open_checkpoint(path):
         eos_token_id=special["eos"],
         # Padding sits after every scored position; PAD is ID 0 in our tokenizers.
         pad_token_id=0,
-        block_size=architecture["config"]["block_size"],
+        block_size=config["block_size"],
         device="cuda",
     )
     return info, wrapper, tokenizer
@@ -232,7 +269,7 @@ def check_deadline(deadline):
     max_containers=1,
     volumes={"/runs": run_volume, "/data": data_volume},
 )
-def evaluate(name, snapshot, checkpoints, deadline):
+def evaluate(name, snapshot, checkpoints, deadline, shots):
     import torch
 
     from evaluation import tasks
@@ -242,7 +279,7 @@ def evaluate(name, snapshot, checkpoints, deadline):
     result = {
         "name": name,
         "snapshot": snapshot,
-        "settings": SETTINGS,
+        "settings": {**SETTINGS, "shots": shots},
         "datasets": {
             task: {"repo": r, "revision": v, "file": f, "exemplars": e}
             for task, (r, v, f, e) in DATASETS.items()
@@ -289,7 +326,7 @@ def evaluate(name, snapshot, checkpoints, deadline):
             check_deadline(deadline)
             evaluated, exemplars = data[task]
             scores[task], answers[task] = tasks.score_math(
-                model, task, evaluated[:count], exemplars[: SETTINGS["shots"]], tokens
+                model, task, evaluated[:count], exemplars[:shots], tokens
             )
         result["models"].append(
             {**info, "scores": scores, "answers": answers, "seconds": time.time() - started}
@@ -304,9 +341,11 @@ def evaluate(name, snapshot, checkpoints, deadline):
 
 
 @app.local_entrypoint()
-def main(name: str, snapshot: str, checkpoints: str, output: str = ""):
+def main(name: str, snapshot: str, checkpoints: str, output: str = "", shots: int = 5):
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    result = evaluate.remote(name, snapshot, checkpoints.split(","), deadline)
+    if not 0 <= shots <= 8:
+        raise ValueError("shots must be from 0 to 8")
+    result = evaluate.remote(name, snapshot, checkpoints.split(","), deadline, shots)
     path = Path(output or f"artifacts/evaluation/{name}.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, indent=2) + "\n")

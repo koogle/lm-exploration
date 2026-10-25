@@ -32,7 +32,13 @@ def encode(row, tokenizer, context):
         raise ValueError(f"Example {row['id']} exceeds context; refusing to truncate repair/EOS")
     tokens = prefix + answer
     labels = [LOSS_IGNORE_INDEX] * len(prefix) + answer
-    return {"id": row["id"], "language": language(row), "x": tokens[:-1], "y": labels[1:]}
+    return {
+        "id": row["id"],
+        "language": language(row),
+        "bucket": language(row),
+        "x": tokens[:-1],
+        "y": labels[1:],
+    }
 
 
 def prepare(path, tokenizer, context):
