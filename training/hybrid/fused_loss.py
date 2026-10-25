@@ -8,7 +8,7 @@ the weight gradient `dlogits^T h` in fp32, so the [rows, vocab] logits are never
 stored or recomputed. The backward only scales the saved gradients by the
 incoming gradient of the summed loss. Matmuls run in bf16 on CUDA (as under
 autocast) and in the input precision elsewhere. On CUDA the per-row statistics
-and the logit gradient come from one Triton kernel (softmax_kernel.py) that
+and the logit gradient come from our CUDA kernel (softmax_kernel.py) that
 overwrites the bf16 logits in place; elsewhere PyTorch computes them in fp32.
 """
 
