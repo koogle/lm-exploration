@@ -278,8 +278,9 @@ def math(data_id: str, report: str = ""):
     write(report, prepare_math.remote(data_id, deadline))
 
 
-def benchmark_problems():
-    """(math test questions, code benchmark problems) used for decontamination."""
+def benchmark_problems(mbpp_splits=("test", "validation", "prompt")):
+    """(math test questions, code benchmark problems) used for decontamination; MBPP
+    contributes `mbpp_splits`."""
     from training_data.code_sft import HUMANEVAL_PLUS, MBPP, MBPP_PLUS, benchmark_texts
     from training_data.hub_files import pinned_rows
     from training_data.math_sft import GSM8K, SVAMP
@@ -291,7 +292,7 @@ def benchmark_problems():
     ]
     held_out = [
         row
-        for split in ("test", "validation", "prompt")
+        for split in mbpp_splits
         for row in pinned_rows(*MBPP, f"full/{split}-00000-of-00001.parquet")
     ]
     code = benchmark_texts(
@@ -368,7 +369,8 @@ def prepare_rl_pool(data_id, deadline):
     check_deadline(deadline)
     volume.reload()
     output = fresh_output(data_id)
-    math_tests, code_tests = benchmark_problems()
+    # MBPP validation problems are the pool's code validation set.
+    math_tests, code_tests = benchmark_problems(("test", "prompt"))
     report = build(
         pinned_rows(*GSM8K, "main/train-00000-of-00001.parquet"),
         pinned_rows(*KODCODE_RL, "data/train-00000-of-00001.parquet"),

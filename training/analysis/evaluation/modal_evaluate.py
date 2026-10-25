@@ -23,6 +23,8 @@ TIMEOUT_SECONDS = 3 * 60 * 60
 DEFAULT_CONFIG = "analysis/evaluation/configs/benchmarks.json"
 # Benchmarks that show worked exemplars before each problem.
 MATH = ("gsm8k", "svamp")
+# Benchmarks that run model-written code in the code sandbox.
+CODE = ("mbpp_plus", "humaneval_plus")
 TASKS = (
     "heldout",
     "hellaswag",
@@ -32,6 +34,7 @@ TASKS = (
     "winogrande",
     "lambada",
     *MATH,
+    *CODE,
 )
 
 image = (
@@ -48,6 +51,8 @@ image = (
     .env({"PYTHONPATH": "/project"})
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("analysis/evaluation", "/project/evaluation", ignore=["__pycache__"])
+    .add_local_file("trainer/rollout.py", "/project/trainer/rollout.py")
+    .add_local_file("trainer/__init__.py", "/project/trainer/__init__.py")
 )
 app = modal.App("checkpoint-evaluation")
 run_volume = modal.Volume.from_name("lm-exploration-training")
@@ -113,7 +118,9 @@ def evaluate(name, snapshot, checkpoints, config, deadline, shots, selected):
                 pinned_rows(spec["repo"], spec["revision"], exemplars) if exemplars else [],
             )
     windows = None
-    for checkpoint in checkpoints:
+
+    def evaluate_checkpoint(checkpoint, sandbox):
+        nonlocal windows
         check_deadline(deadline)
         started = time.time()
         loaded = loader.load(Path("/runs") / checkpoint, device="cuda")
@@ -134,7 +141,10 @@ def evaluate(name, snapshot, checkpoints, config, deadline, shots, selected):
             check_deadline(deadline)
             settings = config["datasets"][task]
             benchmark = BENCHMARKS[task]
-            scores[task], generated = benchmark.score(model, rows, exemplars, settings, shots)
+            extra = (sandbox,) if getattr(benchmark, "SANDBOX", False) else ()
+            scores[task], generated = benchmark.score(
+                model, rows, exemplars, settings, shots, *extra
+            )
             if generated is not None:
                 answers[task] = generated
         result["models"].append(
@@ -146,6 +156,19 @@ def evaluate(name, snapshot, checkpoints, config, deadline, shots, selected):
         run_volume.commit()
         del loaded, model
         torch.cuda.empty_cache()
+
+    sandbox = None
+    if set(selected) & set(CODE):
+        from training_data.code_execution import Sandbox
+
+        # Model-written code runs only here: no network, volumes or secrets.
+        sandbox = Sandbox(app, min(TIMEOUT_SECONDS, deadline - time.time()), cpu=8)
+    try:
+        for checkpoint in checkpoints:
+            evaluate_checkpoint(checkpoint, sandbox)
+    finally:
+        if sandbox:
+            sandbox.close()
     return result
 
 
