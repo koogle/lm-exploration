@@ -41,8 +41,8 @@ The repair runs in [EXPERIMENTS.md](EXPERIMENTS.md) used `repair`.
   (default 0.3). Weighted losses divide by the supervised-token count, not the weight
   sum. Validation always uses ordinary cross-entropy, so both objectives are comparable.
 - **Math SFT** (`"task": "math"`, format `math-sft-v1`): the prompt is also the zero-shot
-  format the checkpoint benchmarks use. Validation reports answer-token cross-entropy per
-  source.
+  format of [`analysis/evaluation`](../analysis/evaluation/README.md). Validation reports
+  answer-token cross-entropy per source.
 
 ## Data format
 
