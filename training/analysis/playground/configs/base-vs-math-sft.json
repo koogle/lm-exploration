@@ -1,0 +1,46 @@
+{
+  "model_repo": "jfrick/climbmix-124m-base-vs-math-sft",
+  "space": "jfrick/climbmix-124m-playground",
+  "model_code": "climbmix-124m-wsd20b-02-s02/source/model_10m/model.py",
+  "models": [
+    {
+      "label": "Base 5.45B",
+      "checkpoint": "climbmix-124m-wsd20b-02-decay5b-s01/step-000055555.pt"
+    },
+    {
+      "label": "Base 10.9B",
+      "checkpoint": "climbmix-124m-wsd20b-02-decay10b-s01/step-000111111.pt"
+    },
+    {
+      "label": "Base 20B",
+      "checkpoint": "climbmix-124m-wsd20b-02-s02/step-000203724.pt"
+    },
+    {
+      "label": "Math SFT 5.45B",
+      "checkpoint": "math-sft-metamath-5b-r01/step-000007500.pt"
+    },
+    {
+      "label": "Math SFT 20B",
+      "checkpoint": "math-sft-metamath-20b-r01/step-000007500.pt"
+    }
+  ],
+  "layout": [
+    [
+      "Base 5.45B",
+      "Math SFT 5.45B"
+    ],
+    [
+      "Base 20B",
+      "Math SFT 20B"
+    ],
+    [
+      "Base 10.9B"
+    ]
+  ],
+  "evaluations": [
+    "climbmix-124m-wsd-20b-endpoints",
+    "climbmix-124m-wsd-20b-endpoints-math",
+    "math-sft-metamath-r01",
+    "math-sft-metamath-r01-math"
+  ]
+}
