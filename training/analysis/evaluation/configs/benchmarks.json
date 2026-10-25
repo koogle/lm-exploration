@@ -1,0 +1,51 @@
+{
+  "datasets": {
+    "hellaswag": {
+      "repo": "Rowan/hellaswag",
+      "revision": "218ec52e09a7e7462a5400043bb9a69a41d06b76",
+      "file": "data/validation-00000-of-00001.parquet"
+    },
+    "arc_easy": {
+      "repo": "allenai/ai2_arc",
+      "revision": "210d026faf9955653af8916fad021475a3f00453",
+      "file": "ARC-Easy/test-00000-of-00001.parquet"
+    },
+    "arc_challenge": {
+      "repo": "allenai/ai2_arc",
+      "revision": "210d026faf9955653af8916fad021475a3f00453",
+      "file": "ARC-Challenge/test-00000-of-00001.parquet"
+    },
+    "openbookqa": {
+      "repo": "allenai/openbookqa",
+      "revision": "388097ea7776314e93a529163e0fea805b8a6454",
+      "file": "main/test-00000-of-00001.parquet"
+    },
+    "winogrande": {
+      "repo": "allenai/winogrande",
+      "revision": "01e74176c63542e6b0bcb004dcdea22d94fb67b5",
+      "file": "winogrande_xl/validation-00000-of-00001.parquet"
+    },
+    "lambada": {
+      "repo": "EleutherAI/lambada_openai",
+      "revision": "900124bf3b8235c6daf21033af9948b3f07346c4",
+      "file": "data/lambada_test.jsonl"
+    },
+    "gsm8k": {
+      "repo": "openai/gsm8k",
+      "revision": "740312add88f781978c0658806c59bc2815b9866",
+      "file": "main/test-00000-of-00001.parquet",
+      "exemplars": "main/train-00000-of-00001.parquet",
+      "examples": 500,
+      "max_new_tokens": 256
+    },
+    "svamp": {
+      "repo": "ChilleD/SVAMP",
+      "revision": "5e0bf1e5e7c0e9c4bc39180d224f41f3f801b7ef",
+      "file": "data/test-00000-of-00001.parquet",
+      "exemplars": "data/train-00000-of-00001.parquet",
+      "max_new_tokens": 256
+    }
+  },
+  "heldout_windows_per_source": 64,
+  "precision": "bf16-autocast"
+}
