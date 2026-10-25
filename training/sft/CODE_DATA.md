@@ -29,7 +29,11 @@ tests locally; the rest read files or globals their example code created.
 Sandbox with `block_network=True`, no volumes or secrets, and a timeout that ends at the
 caller's launch deadline. [`../data/code_runner.py`](../data/code_runner.py) runs each
 program as `python -I -` in a fresh directory with 5 s of CPU, 1 GB of memory and a
-16 MB file-size limit. The program imports the solution, runs the tests, calls every
+16 MB file-size limit, in its own process group that is killed when it ends. Each
+concurrently running program has its own unprivileged user ID and a private directory, so
+it cannot change another program's files or the captured output; a program the runner
+cannot start fails on its own instead of stopping the batch. (A first full teacher run
+stopped when one generated program deleted the other programs' directories in `/tmp`.) The program imports the solution, runs the tests, calls every
 `test*` function the tests define and prints a random per-program nonce last; it passes
 only with exit code 0 and the nonce as its last line, so a solution that exits early or
 skips the tests fails.
@@ -44,7 +48,9 @@ shortest passing answer replaces the row's solution; problems without one are dr
 On a 64-problem trial (`code-teacher-smoke-04`, 2 samples) 59 problems kept a solution,
 with a median of 311 characters against 593 for the OpenCodeInstruct solutions.
 
-The orchestrator spawns one H100 call per shard only while the shard's timeout fits in
+Each shard's answers and kept rows are saved under `/runs/teacher-work/<data-id>/` as
+soon as they exist, so rerunning the same command after a failure resumes. The
+orchestrator spawns one H100 call per shard only while the shard's timeout fits in
 the 24-hour launch budget, cancels unfinished shard calls when it stops, and its sandbox
 times out at the deadline.
 
@@ -74,8 +80,8 @@ From `training/`:
 ```sh
 uv run --all-extras modal run -m modal_scripts.modal_sft_data::code --data-id code-oci-mbpp-01
 uv run --all-extras modal run -m modal_scripts.modal_teacher --source code-oci-mbpp-01 \
-  --data-id code-teacher-qwen35-01 --shards 8 --samples 2
+  --data-id code-teacher-qwen35-02 --shards 8 --samples 2
 uv run --all-extras modal run -m modal_scripts.modal_sft_data::mixture --data-id mixture-math-code-02 \
-  --math math-gsm8k-metamath-02 --code code-teacher-qwen35-01
+  --math math-gsm8k-metamath-02 --code code-teacher-qwen35-02
 uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool --data-id rl-pool-math-code-03
 ```

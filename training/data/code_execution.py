@@ -13,6 +13,7 @@ fixtures only.
 """
 
 import json
+import os
 import secrets
 import subprocess
 import sys
@@ -40,19 +41,24 @@ def program(solution, tests, nonce):
     )
 
 
-def _request(pairs, seconds):
+def _request(pairs, seconds, python=None):
     programs = []
     for solution, tests in pairs:
         nonce = secrets.token_hex(16)
         programs.append({"source": program(solution, tests, nonce), "nonce": nonce})
-    return json.dumps({"programs": programs, "timeout": seconds})
+    return json.dumps(
+        {"programs": programs, "timeout": seconds, **({"python": python} if python else {})}
+    )
 
 
 def run_local(pairs, seconds=PROGRAM_SECONDS):
-    """Results for (solution, tests) pairs, run by `code_runner.py` in a subprocess."""
+    """Results for (solution, tests) pairs, run by `code_runner.py` in a subprocess. As
+    root the runner gives programs unprivileged user IDs, which may not reach this
+    environment's interpreter, so programs then run with the system `/usr/bin/python3`."""
+    python = "/usr/bin/python3" if os.geteuid() == 0 else None
     result = subprocess.run(
         [sys.executable, str(RUNNER)],
-        input=_request(pairs, seconds),
+        input=_request(pairs, seconds, python),
         capture_output=True,
         text=True,
         check=True,
