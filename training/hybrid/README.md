@@ -235,8 +235,8 @@ Custom kernels in this family: the bit-exact attention kernel
 (`kernels/document_attention.cu`, the correctness reference and the
 `"exact"` training option; fp32 CUDA cores, 161 ms vs 3.1 ms for tensor-core
 attention per layer at 8 x 4,096 tokens, so not the default), the fused
-output-layer loss (+15% training throughput on one H100) and, inside it, a Triton
-kernel ([`softmax_kernel.py`](softmax_kernel.py)) that turns each bf16 logit row
+output-layer loss (+15% training throughput on one H100) and, inside it, a CUDA
+kernel ([`kernels/softmax_gradient.cu`](kernels/softmax_gradient.cu)) that turns each bf16 logit row
 into its cross-entropy/z-loss gradient in place in two passes, instead of several
 fp32 copies of the [rows, 154,880] block. FlexAttention and fla supply the
 tensor-core attention and KDA kernels.

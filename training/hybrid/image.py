@@ -2,7 +2,7 @@
 
 Construct from training/ so local source paths match the installed packages. The
 CUDA 13.0 devel base (matching torch 2.14.1+cu130) provides nvcc for our attention
-kernel, prebuilt here into /opt/hybrid_attention.
+kernels, prebuilt here into /opt/hybrid_attention and /opt/hybrid_softmax.
 """
 
 import modal
@@ -26,6 +26,13 @@ BUILD_KERNEL = (
     "build_directory='/opt/hybrid_attention', extra_cuda_cflags=['-O3', '-fmad=false'])\""
 )
 
+BUILD_SOFTMAX = (
+    'python -c "from torch.utils.cpp_extension import load; '
+    "load(name='hybrid_softmax_gradient', "
+    "sources=['/opt/hybrid_softmax/softmax_gradient.cu'], "
+    "build_directory='/opt/hybrid_softmax', extra_cuda_cflags=['-O3'])\""
+)
+
 image = (
     modal.Image.from_registry(CUDA_BASE, add_python="3.12")
     .pip_install(*PACKAGES)
@@ -35,7 +42,12 @@ image = (
         "/opt/hybrid_attention/document_attention.cu",
         copy=True,
     )
-    .run_commands(BUILD_KERNEL)
+    .add_local_file(
+        "hybrid/kernels/softmax_gradient.cu",
+        "/opt/hybrid_softmax/softmax_gradient.cu",
+        copy=True,
+    )
+    .run_commands(BUILD_KERNEL, BUILD_SOFTMAX)
     .add_local_dir("10m", "/project/model_10m", ignore=["__pycache__"])
     .add_local_file("workflows/__init__.py", "/project/workflows/__init__.py")
     .add_local_file("workflows/deadline.py", "/project/workflows/deadline.py")
