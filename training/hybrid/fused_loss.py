@@ -7,7 +7,9 @@ immediately reduces that to the hidden-state gradient `dlogits W` and accumulate
 the weight gradient `dlogits^T h` in fp32, so the [rows, vocab] logits are never
 stored or recomputed. The backward only scales the saved gradients by the
 incoming gradient of the summed loss. Matmuls run in bf16 on CUDA (as under
-autocast) and in the input precision elsewhere.
+autocast) and in the input precision elsewhere. On CUDA the per-row statistics
+and the logit gradient come from one Triton kernel (softmax_kernel.py) that
+overwrites the bf16 logits in place; elsewhere PyTorch computes them in fp32.
 """
 
 import torch
@@ -32,13 +34,20 @@ class FusedLinearCrossEntropy(torch.autograd.Function):
             y = targets[start : start + chunk_size]
             valid = y != IGNORE_INDEX
             index = y.clamp_min(0)[:, None]
-            logits = (h @ w.T).to(accumulate)
-            lse = logits.logsumexp(-1)
-            ce = ce + torch.where(valid, lse - logits.gather(-1, index).squeeze(-1), 0.0).sum()
+            if h.is_cuda:
+                from .softmax_kernel import softmax_gradient_
+
+                grad = h @ w.T
+                lse, target_logit = softmax_gradient_(grad, y, z_loss)
+            else:
+                logits = (h @ w.T).to(accumulate)
+                lse = logits.logsumexp(-1)
+                target_logit = logits.gather(-1, index).squeeze(-1)
+                grad = (logits - lse[:, None]).exp_().mul_((1 + 2 * z_loss * lse)[:, None])
+                grad.scatter_add_(-1, index, torch.full_like(lse[:, None], -1.0))
+                grad = grad.mul_(valid[:, None]).to(compute)
+            ce = ce + torch.where(valid, lse - target_logit, 0.0).sum()
             z = z + torch.where(valid, lse.square(), 0.0).sum()
-            grad = (logits - lse[:, None]).exp_().mul_((1 + 2 * z_loss * lse)[:, None])
-            grad.scatter_add_(-1, index, torch.full_like(lse[:, None], -1.0))
-            grad = grad.mul_(valid[:, None]).to(compute)
             grad_hidden[start : start + chunk_size] = grad @ w
             if compute == torch.bfloat16 and grad.is_cuda:
                 grad_weight += torch.mm(grad.T, h, out_dtype=torch.float32)
