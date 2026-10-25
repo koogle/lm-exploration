@@ -153,6 +153,8 @@ gradient descent, start with [the XOR example](examples/README.md).
   124,389,632 parameters with the frozen 32K tokenizer. The consolidated
   [`10m/model.py`](10m/model.py) owns the shared implementation at 6 layers,
   width 384 and 6 heads.
+- [`hybrid/`](hybrid/README.md): the KDA/full-attention hybrid family for the
+  [~720M pretraining plan](plans/HYBRID_720M.md).
 - [`analysis/sampling/`](analysis/sampling/README.md): recipe-driven sampling
   launcher, repetition metrics and report CLI. Study folders under `analysis/` hold only
   recipes and findings.

@@ -97,12 +97,12 @@ class Attention(nn.Module):
 
 
 class SwiGLU(nn.Module):
-    def __init__(self, width):
+    def __init__(self, width, hidden=None, bias=True):
         super().__init__()
-        self.hidden_width = (8 * width + 2) // 3
-        self.gate = nn.Linear(width, self.hidden_width)
-        self.up = nn.Linear(width, self.hidden_width)
-        self.down = nn.Linear(self.hidden_width, width)
+        self.hidden_width = hidden or (8 * width + 2) // 3
+        self.gate = nn.Linear(width, self.hidden_width, bias=bias)
+        self.up = nn.Linear(width, self.hidden_width, bias=bias)
+        self.down = nn.Linear(self.hidden_width, width, bias=bias)
 
     def forward(self, x):
         return self.down(F.silu(self.gate(x)) * self.up(x))
