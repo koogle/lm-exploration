@@ -14,7 +14,8 @@ from types import SimpleNamespace
 
 from training_data.subword import digest
 
-SFT_FORMATS = ("math-sft-v1", "repair-sft-v2", "code-sft-v1", "mixture-sft-v1")
+# Post-training checkpoints keep `model.py` and `shared_model.py` beside them.
+SFT_FORMATS = ("math-sft-v1", "repair-sft-v2", "code-sft-v1", "mixture-sft-v1", "rl-v1")
 # Padding sits after every scored position; PAD is ID 0 in our tokenizers.
 PAD_TOKEN_ID = 0
 
@@ -109,6 +110,7 @@ def scorer(checkpoint):
     tokenizer = checkpoint.tokenizer
     return SimpleNamespace(
         forward=forward,
+        network=checkpoint.model,
         encode=lambda text: tokenizer.encode(text, add_special_tokens=False).ids,
         decode=lambda ids: tokenizer.decode(ids, skip_special_tokens=True),
         bos_token_id=checkpoint.special["bos"],

@@ -1,9 +1,10 @@
 """Model-agnostic scoring: continuation log-likelihoods, greedy generation, few-shot
-answer checking and bits per byte. Dataset formats live in `benchmarks/`.
+answer checking, code pass rates and bits per byte. Dataset formats live in `benchmarks/`.
 
 A model is any object with `forward(tokens) -> logits` over a `[batch, time]` LongTensor,
 `encode(text) -> ids` (no special tokens), `decode(ids) -> text`, `bos_token_id`,
-`eos_token_id`, `pad_token_id`, `block_size` and `device`.
+`eos_token_id`, `pad_token_id`, `block_size` and `device`; code benchmarks also use
+`network`, the model itself, for batched cached sampling.
 """
 
 import math
@@ -119,6 +120,44 @@ def few_shot_answers(model, problems, exemplars, max_new_tokens):
         )
     accuracy = sum(o["correct"] for o in outcomes) / len(outcomes)
     return {"examples": len(problems), "shots": len(exemplars), "acc": accuracy}, outcomes
+
+
+def code_answers(model, problems, sandbox, max_new_tokens, batch=64):
+    """Greedy pass@1 of (question, declaration, tests, preamble) function problems.
+
+    The prompt is the code SFT format (`training_data.code_sft.code_prompt`) and the
+    completion, up to EOS, is the program; `preamble` (the benchmark's imports and
+    helpers) goes before it. A program passes if every test passes in `sandbox`
+    (`training_data.code_execution`); a completion without EOS fails.
+    """
+    from training_data.code_sft import code_prompt
+
+    from trainer.rollout import sample
+
+    completions, finished = [], []
+    for start in range(0, len(problems), batch):
+        chunk = problems[start : start + batch]
+        prompts = [
+            [model.bos_token_id, *model.encode(code_prompt(p["question"], p["declaration"]))]
+            for p in chunk
+        ]
+        samples = sample(model.network, prompts, max_new_tokens, model.eos_token_id, 0)
+        completions += [model.decode(i) for i in samples.completions]
+        finished += samples.finished
+    programs = [p["preamble"] + c for p, c in zip(problems, completions, strict=True)]
+    results = sandbox.run([(c, p["tests"]) for c, p in zip(programs, problems, strict=True)], 20)
+    outcomes = [
+        {
+            "question": p["question"],
+            "completion": c,
+            "finished": f,
+            "passed": f and r["passed"],
+            "status": r["status"],
+        }
+        for p, c, f, r in zip(problems, completions, finished, results, strict=True)
+    ]
+    accuracy = sum(o["passed"] for o in outcomes) / len(outcomes)
+    return {"examples": len(problems), "pass@1": accuracy}, outcomes
 
 
 def packed_windows(documents, bos, eos, context, count):

@@ -81,5 +81,5 @@ interrupted run is rerun from scratch rather than resumed.
 
 ## Next
 
-Reinforcement learning on GSM8K-style problems with a verifiable answer reward, starting
-from the better replay checkpoint.
+Reinforcement learning on math and code with verifiable rewards, after a joint math and
+code SFT stage: see [RL](../rl/README.md).
