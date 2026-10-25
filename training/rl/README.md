@@ -24,19 +24,32 @@ weights and takes one optimizer step, so the loop is on-policy:
    top-k or top-p, so samples follow the policy's probabilities: at most 256 new tokens
    for math and 384 for code. [`../trainer/rollout.py`](../trainer/rollout.py) samples a
    left-padded batch with a key/value cache; its greedy output matches unbatched,
-   uncached decoding exactly (`tests/test_rollout.py`).
+   uncached decoding exactly (`tests/test_rollout.py`). The sampler also records each
+   token's log-probability and its top-32 tokens.
 3. **Rewards** ([`../data/rl_tasks.py`](../data/rl_tasks.py)). 1 or 0; an answer
    without EOS within the limit scores 0. Code answers are checked in the sandbox in a
    background thread while math is sampled.
 4. **Advantages.** Reward minus the mean reward of the prompt's group, with no division
    by the group's standard deviation (Dr. GRPO, arXiv:2503.20783). Groups whose answers
    all score the same have zero advantage and are skipped; their share is logged.
-5. **Loss.** −advantage × log p(token) summed over answer tokens, divided by the number
-   of answers times the task's token limit (no per-answer length normalization). The
+5. **Loss.** −advantage × score summed over answer tokens, divided by the number of
+   answers times the task's token limit (no per-answer length normalization). The
    samples come from the weights being trained, so no importance ratio or clipping is
-   needed.
+   needed. The score is Score Centering's (`score_centering_top_k`, default 32;
+   [`../trainer/policy_loss.py`](../trainer/policy_loss.py), the method behind Tinker's
+   StableReinforce, [reference](../references/stable-reinforce-2026-10-25.md)):
+   ∇log p(y) − Σ_v q_v ∇log p_v, where q is the sampler's distribution from its top-32
+   with the rest of the mass spread like the learner's. On the logits its gradient is
+   onehot(y) − q instead of REINFORCE's onehot(y) − p (`tests/test_policy_loss.py`).
+   The sampler (cached one-token decoding) and the learner (a full forward pass) compute
+   probabilities with different kernels; centering cancels any bias between them. That
+   difference is logged every step as `sampler_mismatch`: in smoke runs from the r02
+   math checkpoint it averaged about 1e-4 nats per token, with a mean absolute
+   difference of about 0.015 per token. `score_centering_top_k: 0` gives plain
+   REINFORCE.
 6. **Anchors.** KL(policy ‖ parent) is estimated (k3) on the answer tokens every step and
-   added with `kl_coef` (default 0). Pretraining replay (`replay_*`, as in SFT) adds a
+   added with `kl_coef` (default 0); `sampler_kl_coef` (default 0) adds Tinker's
+   sampler–learner KL term. Pretraining replay (`replay_*`, as in SFT) adds a
    next-token loss on pretraining windows at `replay_weight`.
 7. **Optimizer.** AdamW without weight decay, LR 1e-6 after 20 warmup steps, gradient
    clipping at 1.0.
@@ -56,7 +69,8 @@ call ends. A run does not resume; an interrupted run is rerun from scratch.
 ### Logged
 
 Every step: reward, share of uniform groups, answer length and truncation rate per task;
-answers trained on; mean NLL of the sampled tokens; KL to the parent; replay loss; gradient
+answers trained on; mean NLL of the sampled tokens; KL to the parent; sampler–learner
+mismatch; replay loss; gradient
 norm; resting prompts; generation and training seconds. Every evaluation: validation
 accuracy and truncation per task, and replay validation loss per source.
 
