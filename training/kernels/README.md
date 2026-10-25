@@ -31,7 +31,25 @@ gradient in registers, so no separate bias reductions run. Attention is the mode
 document-causal call (FlashAttention's varlen kernel), so packed documents stay isolated
 exactly as in the unfused model.
 
-## Results (one H100, 16 x 2,048 tokens, BF16 autocast, fused AdamW, 2026-10-24)
+## Results with document masking (one H100, torch 2.14.1, 2026-10-25)
+
+16 x 2,048-token windows with an EOS every 1,000 tokens, BF16 autocast, fused AdamW.
+Every variant masks attention by document.
+
+| Step variant | Time | Tokens/s | Peak memory |
+| --- | ---: | ---: | ---: |
+| Eager PyTorch | 151 ms | 217K | 33.5 GB |
+| `torch.compile` | 88.4 ms | 371K | 18.2 GB |
+| Fused kernels | 83.7 ms | 392K | 16.0 GB |
+
+Every kernel, including QKV + RoPE with positions restarting at document boundaries,
+matches PyTorch to BF16 rounding; whole-model gradients agree with the unfused model at
+cosine 0.99995. Attention alone (forward + backward, 16 x 2,048 x 12 heads x 64):
+causal SDPA 1.57 ms, varlen with ~1,000-token documents 1.59 ms, varlen with one
+document per row 2.36 ms. Reports: HF dataset `jfrick/lm-exploration-results`,
+`training/results/document-masking-2026-10-25/`.
+
+## Results without document masking (one H100, 16 x 2,048 tokens, BF16 autocast, fused AdamW, torch 2.6.0, 2026-10-24)
 
 | Step variant | Time | Tokens/s | Peak memory |
 | --- | ---: | ---: | ---: |
