@@ -136,7 +136,9 @@ def train_segment(run_id, config, timeout, deadline, max_tokens=0, gpus=8, prove
 @app.function(
     image=image, gpu="H100:8", cpu=32, memory=262144, timeout=1800, retries=0, volumes=VOLUMES
 )
-def benchmark(config, gpus, steps, microbatch, global_rows, document_tokens, deadline):
+def benchmark(
+    config, gpus, steps, microbatch, global_rows, document_tokens, deadline, profile=False
+):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     from model_hybrid.benchmark import summarize
@@ -148,6 +150,8 @@ def benchmark(config, gpus, steps, microbatch, global_rows, document_tokens, dea
         args += ["--microbatch", str(microbatch)]
     if global_rows:
         args += ["--global-rows", str(global_rows)]
+    if profile:
+        args += ["--profile", "/tmp/profile.json"]
     code, lines = run_torchrun("model_hybrid.benchmark", args, gpus, 1500, Path("/tmp/bench.log"))
     if code:
         raise RuntimeError("".join(lines[-60:]))
@@ -158,6 +162,7 @@ def benchmark(config, gpus, steps, microbatch, global_rows, document_tokens, dea
         "microbatch": microbatch or config["microbatch"],
         "torch": torch.__version__,
         **summarize(lines),
+        **({"profile": json.loads(Path("/tmp/profile.json").read_text())} if profile else {}),
     }
 
 
@@ -197,8 +202,12 @@ def bench(
     microbatch: int = 0,
     global_rows: int = 0,
     document_tokens: int = 1000,
+    profile: bool = False,
 ):
-    """One bounded throughput benchmark; with one GPU the global batch shrinks to fit."""
+    """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
+
+    `--profile` adds GPU kernel time per category for a few steps (see benchmark.py).
+    """
     from workflows.deadline import MAX_LAUNCH_SECONDS
 
     settings = load_config(config)
@@ -206,7 +215,14 @@ def bench(
         settings["global_rows"] if gpus == 8 else 8 * (microbatch or settings["microbatch"]) * gpus
     )
     result = benchmark.with_options(gpu=f"H100:{gpus}").remote(
-        settings, gpus, steps, microbatch, rows, document_tokens, time.time() + MAX_LAUNCH_SECONDS
+        settings,
+        gpus,
+        steps,
+        microbatch,
+        rows,
+        document_tokens,
+        time.time() + MAX_LAUNCH_SECONDS,
+        profile,
     )
     print(json.dumps(result, indent=2))
 

@@ -305,8 +305,13 @@ def upload_export(lm, model_config, run_dir, progress, repo):
     return thread
 
 
-def train(config, run_dir, stop_unix, max_tokens=None, data_source=None, save_final=True):
-    """Train until target/max tokens, data exhaustion or stop_unix; returns final progress."""
+def train(
+    config, run_dir, stop_unix, max_tokens=None, data_source=None, save_final=True, on_step=None
+):
+    """Train until target/max tokens, data exhaustion or stop_unix; returns final progress.
+
+    `on_step(progress)` runs on every rank after each optimizer step.
+    """
     runtime = Runtime()
     torch.manual_seed(config.seed)
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -426,6 +431,8 @@ def train(config, run_dir, stop_unix, max_tokens=None, data_source=None, save_fi
         progress["step"] += 1
         progress["tokens"] += tokens_per_step
         progress["seconds"] += elapsed
+        if on_step:
+            on_step(progress)
         if runtime.main:
             record = None
             if progress["step"] % config.log_every_steps == 0 or progress["step"] == 1:
