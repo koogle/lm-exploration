@@ -12,8 +12,8 @@ RL can only reinforce answers the model already produces sometimes: a prompt the
 never solves gives no learning signal. So RL starts from an SFT checkpoint that has
 learned the answer formats (math and code, `trainer/sft.py` with `"task": "mixture"`).
 
-**Status:** the RL loop is smoke-tested on Modal; stage 0 SFT and the runs below are
-in progress, and no RL result has been measured yet.
+**Status:** stage 0 SFT and three RL runs are done ([results](#results-2026-10-26)): RL
+raised math slightly and did not measurably change code, with no forgetting.
 
 ## Starting point and targets
 
@@ -129,8 +129,46 @@ replay at weight 0.1:
 | R2 (`r2-code`) | Code-only RL, 300 steps | MBPP+ pass@1 rises; validates the sandbox reward |
 | R3 (`r3-joint`) | Joint RL, 1,000 steps | Both rise; general scores within the targets |
 
-Later ablations on R1: 8 vs 16 samples per prompt, replay on or off, LR 5e-7 / 1e-6 /
-3e-6, Score Centering on or off.
+## Results (2026-10-26)
+
+Single seed. Benchmarks from [`analysis/evaluation`](../analysis/evaluation/README.md),
+zero-shot greedy: GSM8K first 500 test problems, SVAMP 300, MBPP+ 378 and HumanEval+ 164
+pass@1; bits per byte on the snapshot's held-out windows.
+
+| Model | GSM8K | SVAMP | MBPP+ | HumanEval+ | ClimbMix bpb | Code bpb | HellaSwag | ARC-E | LAMBADA |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 20B base | 1.8 | 1.0 | — | — | 0.876 | 0.501 | 38.0 | 57.3 | 28.6 |
+| Math SFT + replay (r02) | 17.4 | 16.7 | — | — | 0.890 | 0.618 | 38.2 | 53.1 | 29.1 |
+| S0: math + code SFT + replay | 16.0 | 13.3 | 11.6 | 9.1 | 0.891 | 0.626 | 38.0 | 54.2 | 29.4 |
+| R1: S0 + 300 math RL steps | 17.0 | 13.7 | 11.1 | 11.0 | 0.891 | 0.627 | 38.0 | 54.0 | 29.9 |
+| R2: S0 + 300 code RL steps | 16.2 | 13.7 | 11.6 | 9.8 | 0.891 | 0.628 | 38.0 | 54.0 | 29.7 |
+| R3: S0 + 1,000 joint RL steps | 17.6 | 15.7 | 11.9 | 10.4 | 0.891 | 0.628 | 38.1 | 53.6 | 29.9 |
+
+- Stage 0 writes working functions where no earlier model could (11.6% MBPP+, 9.1%
+  HumanEval+ against the EvalPlus tests) and keeps r02's general scores; half its rows
+  being code costs 1.4 GSM8K and 3.4 SVAMP points against r02. It trained for 20,000
+  steps (about 2.5 hours on one H100).
+- RL raised training rewards steadily (math 22% → 30%, code 27% → 31% over R1 and R2)
+  but moved the benchmarks little: R3 gains 1.6 GSM8K and 2.4 SVAMP points, about one
+  standard error each, and code within one or two problems. General scores and bits per
+  byte did not move; KL to stage 0 stayed near 0.01 and the sampler–learner mismatch
+  near 1e-4 nats per token.
+- About 65% of code prompt groups (38% for math) were all right or all wrong, so they
+  gave no learning signal, and up to about 900 code problems rested at a time.
+- A math step took about 2.8 s and a code step about 11 s, mostly waiting on the
+  sandbox's tests.
+
+Result files (evaluations with every generated answer, training metrics and manifests,
+data reports) are in `jfrick/lm-exploration-results` under `pr-87/`. The checkpoints can
+be compared in the private playground Space (`jfrick/climbmix-124m-playground`).
+
+## Next
+
+1. Code problems matched to stage 0: keep those it solves sometimes but not always with 8
+   samples, so most groups carry signal.
+2. Larger learning rates (3e-6, 1e-5): KL stayed small at 1e-6.
+3. Check code answers on more sandbox CPUs in parallel.
+4. Repeat the best setting with a second seed before claiming a gain.
 
 ## Run
 
