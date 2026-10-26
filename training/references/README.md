@@ -10,7 +10,8 @@ results or changes to the agreed training plan.
 - [KV cache, step by step](kv-cache.md): causal attention with a KV cache in the
   10M model, illustrated by prefill and decode passes over "hello".
 - [Kimi Delta Attention, step by step](kda.md): the KDA recurrence of the hybrid
-  model on a toy head, mapped to the lines of `hybrid/kda.py` and its tests.
+  model on a toy head, mapped to the lines of `hybrid/kda.py` and its tests; its
+  relation to Mamba, Mamba-2 and Gated DeltaNet; and the short convolution.
 - [A fix for softmax and cross-entropy — 2026-10-24](softmax-fix-2026-10-24.md):
   Softmax Collapse/Cancellation (Barron et al.), a tested PyTorch port in
   `trainer/stable_softmax.py`, and the CUDA kernel our trainer now uses for its loss.
