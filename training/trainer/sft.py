@@ -1,7 +1,15 @@
-"""Bounded single-GPU repair SFT (ordinary or CIG-weighted) from a trusted pretraining checkpoint.
+"""Bounded single-GPU supervised fine-tuning from a pretraining checkpoint.
+
+Each step samples `batch_size` examples of the task's dataset (`TASKS`; see
+`training_data.sft`): a prompt and a complete written answer. The model is trained by
+teacher forcing to predict every answer token and EOS given the prompt and the answer so
+far; prompt tokens carry no loss. The loss is the mean answer-token cross-entropy
+(`objective: "sft"`), or for repair data optionally CIG-weighted (`objective: "cig"`,
+`trainer/cig.py`). The model never generates during training. Validation reports the same
+answer-token cross-entropy per bucket.
 
 The parent is an explicit `scholarly-ddp-v1` checkpoint on the private run volume; launchers
-pass it in. See `sft/README.md` for the data contract and launch commands.
+pass it in. See `sft/README.md` for the data formats and launch commands.
 """
 
 import json
@@ -11,8 +19,18 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from training_data.repair_sft import FORMAT, prepare
-from training_data.subword import LOSS_IGNORE_INDEX, TOKENIZER_SHA256, digest, load_frozen
+from training_data.repair_sft import REPAIR
+from training_data.subword import (
+    BOS_TOKEN_ID,
+    EOS_TOKEN_ID,
+    LOSS_IGNORE_INDEX,
+    TOKENIZER_SHA256,
+    digest,
+    load_frozen,
+)
+
+# The SFT dataset (`training_data.sft.SFTDataset`) of each task.
+TASKS = {"repair": REPAIR}
 
 
 @dataclass(frozen=True)
@@ -27,10 +45,15 @@ class Settings:
     max_seconds: int = 1200
     objective: str = "sft"
     cig_proximity: float = 0.3
+    task: str = "repair"
 
     def __post_init__(self):
         if self.objective not in ("sft", "cig"):
             raise ValueError("Unknown SFT objective")
+        if self.task not in TASKS:
+            raise ValueError(f"task must be one of {sorted(TASKS)}")
+        if self.objective == "cig" and self.task != "repair":
+            raise ValueError("CIG references are defined for repair prompts only")
         if not math.isfinite(self.cig_proximity) or self.cig_proximity < 0.01:
             raise ValueError("Invalid CIG proximity")
         for key in (
@@ -106,8 +129,12 @@ def train(
         raise RuntimeError("Training is CUDA/Modal only")
     if stop_after_step is not None and not 1 <= stop_after_step <= settings.steps:
         raise ValueError("Invalid qualification stop step")
+    import sys
+
+    data = TASKS[settings.task]
+    data_module = sys.modules[type(data).__module__]
     tokenizer = load_frozen()
-    splits, data_hash = prepare(dataset, tokenizer, settings.context)
+    splits, data_hash = data.prepare(dataset, tokenizer, settings.context)
     # Only load our trusted private run-volume checkpoints, never dataset-supplied files.
     base = torch.load(parent, map_location="cpu", weights_only=False)
     if base.get("format") != "scholarly-ddp-v1":
@@ -138,10 +165,11 @@ def train(
         cache = cig.reference_cache(model, splits, raw_rows, tokenizer, settings.context)
     import model_10m.model as shared_module
     import model_100m.model as model_module
-    import training_data.repair_sft as data_module
+    import training_data.sft as sft_data_module
 
     source_hashes.update(
         data=digest(data_module.__file__),
+        sft_data=digest(sft_data_module.__file__),
         model=digest(model_module.__file__),
         shared_model=digest(shared_module.__file__),
     )
@@ -157,7 +185,7 @@ def train(
     step, answer_tokens = 0, 0
     if resume:
         saved = torch.load(resume, map_location="cpu", weights_only=False)
-        if saved.get("format") != FORMAT:
+        if saved.get("format") != data.FORMAT:
             raise ValueError("SFT resume format mismatch")
         validate_resume_identity(saved["identity"], identity, saved["step"], extend=extend)
         model.load_state_dict(saved["model"])
@@ -195,6 +223,7 @@ def train(
         ("trainer", __file__),
         ("cig", cig.__file__),
         ("data", data_module.__file__),
+        ("sft_data", sft_data_module.__file__),
         ("model", model_module.__file__),
         ("shared_model", shared_module.__file__),
     ):
@@ -236,14 +265,14 @@ def train(
         with torch.inference_mode():
             for row in splits["validation"]:
                 value, n = loss([row])
-                bucket = totals.setdefault(row["language"], [0.0, 0])
+                bucket = totals.setdefault(row["bucket"], [0.0, 0])
                 bucket[0] += value.item()
                 bucket[1] += n.item()
         model.train()
         return {
             "validation_loss": sum(v[0] for v in totals.values())
             / sum(v[1] for v in totals.values()),
-            "validation_by_language": {
+            "validation_by_bucket": {
                 name: {"loss": total / count, "answer_tokens": count}
                 for name, (total, count) in sorted(totals.items())
             },
@@ -260,8 +289,9 @@ def train(
         temporary = target.with_suffix(".partial")
         torch.save(
             {
-                "format": FORMAT,
+                "format": data.FORMAT,
                 "identity": identity,
+                "special_tokens": {"bos": BOS_TOKEN_ID, "eos": EOS_TOKEN_ID},
                 "model_config": asdict(model.config),
                 "model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),

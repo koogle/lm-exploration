@@ -48,14 +48,14 @@ def reference_cache(model, splits, raw_rows, tokenizer, context):
     Empty task preserves language and prompt scaffolding, removes instruction and
     broken code. Cache is recomputed from the original parent on resume.
     """
-    from training_data.repair_sft import encode
+    from training_data.repair_sft import REPAIR
 
     model.eval()
     by_id = {r["id"]: r for r in raw_rows}
     cache = {}
     for row in splits["train"]:
         blank = dict(by_id[row["id"]], instruction="", broken="")
-        task_free = encode(blank, tokenizer, context)
+        task_free = REPAIR.encode(blank, tokenizer, context)
         # The two prompts differ in length, so answers sit at different offsets;
         # compare them through each encoding's own answer mask.
         scores, answers = [], []

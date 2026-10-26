@@ -1,15 +1,32 @@
-# Repair SFT and CIG-SFT
+# SFT: code repair and CIG
 
 Post-training for the 124M Simple LLM models: supervised fine-tuning on code repairs,
 starting from an explicit `scholarly-ddp-v1` pretraining checkpoint on the private
-`lm-exploration-training` Modal volume. Model weights, architecture and the frozen
-`structured-code-v1` tokenizer are inherited; AdamW starts fresh. Nothing launches
-automatically, and no checkpoint is published.
+`lm-exploration-training` Modal volume. Model weights, architecture and the parent's
+frozen tokenizer are inherited; AdamW starts fresh. Nothing launches automatically, and
+no checkpoint is published.
 
-- **Repair SFT** ([`../trainer/repair_sft.py`](../trainer/repair_sft.py)): the prompt
-  names the language and contains the task and the broken code; only the corrected
-  code and EOS are supervised. Validation reports ordinary answer-token
-  cross-entropy, overall and per language.
+## What SFT trains
+
+Every task trains the same way ([`../trainer/sft.py`](../trainer/sft.py)). An example is
+one prompt and one complete answer that people or another model wrote; the model being
+trained never generates during training. The model reads `BOS + prompt` and is trained
+by teacher forcing to predict each answer token, and EOS, from the prompt and the answer
+tokens before it. The prompt carries no loss. Each step samples `batch_size` examples
+with replacement and minimizes the mean answer-token cross-entropy; validation reports
+the same quantity per bucket.
+
+`settings.task` picks the dataset ([`../data/sft.py`](../data/sft.py) holds the shared
+`SFTDataset`; each task's subclass only says how a row becomes a prompt and an answer):
+
+| Task | Prompt | Answer the model learns to write | Data |
+| --- | --- | --- | --- |
+| `repair` (default) | language, task and broken code | the complete corrected code | [`../data/repair_sft.py`](../data/repair_sft.py) |
+
+The repair runs in [EXPERIMENTS.md](EXPERIMENTS.md) used `repair`.
+
+- **Repair SFT** (`"task": "repair"`): validation reports answer-token cross-entropy
+  overall and per language.
 - **CIG-SFT** ([`../trainer/cig.py`](../trainer/cig.py), `"objective": "cig"`): the
   token-weighted objective from
   [What Should SFT Learn? (arXiv:2610.12995v1)](https://arxiv.org/abs/2610.12995v1),
@@ -19,8 +36,6 @@ automatically, and no checkpoint is published.
   ratio sets projected-target weights with proximity lambda `cig_proximity`
   (default 0.3). Weighted losses divide by the supervised-token count, not the weight
   sum. Validation always uses ordinary cross-entropy, so both objectives are comparable.
-
-Recorded runs, their settings and findings are in [EXPERIMENTS.md](EXPERIMENTS.md).
 
 ## Data format
 
@@ -81,7 +96,7 @@ modal run -m modal_scripts.modal_sft_data::private_patches --sources <sources.js
 Validate a local JSONL without Modal:
 
 ```sh
-uv run --extra corpus python -c 'from training_data.repair_sft import prepare; from training_data.subword import load_frozen; print({k: len(v) for k, v in prepare("artifacts/sft/repairs.jsonl", load_frozen(), 1024)[0].items()})'
+uv run --extra corpus python -c 'from training_data.repair_sft import REPAIR; from training_data.subword import load_frozen; print({k: len(v) for k, v in REPAIR.prepare("artifacts/sft/repairs.jsonl", load_frozen(), 1024)[0].items()})'
 ```
 
 ### Train
@@ -103,7 +118,7 @@ recipe on one L40S or H100. A recipe is JSON
 
 `data` is `{"local": path}` (validated locally, uploaded, at most 20 MiB) or
 `{"volume": data-id}` (a prepared volume folder; its hash must match `report.json`).
-`settings` are `trainer.repair_sft.Settings`: `steps` (total target), `batch_size`,
+`settings` are `trainer.sft.Settings`: `steps` (total target), `batch_size`,
 `context`, `lr`, `seed`, `evaluate_every`, `save_every`, `max_seconds` (training-loop
 limit, at most 14,400), `objective` (`sft` or `cig`) and `cig_proximity`. `resume`
 continues from an SFT checkpoint with identical identity. Adding `"extend": true`
@@ -114,7 +129,7 @@ learning, data, model, objective or trainer source; lineage goes to `continuatio
 # Exact resume qualification: uninterrupted run vs. stop, fresh-container restore, continue.
 modal run -m modal_scripts.modal_sft_train::qualify --recipe <recipe.json> --run-prefix <fresh-prefix>
 # Train; command-line values override the recipe's parent, data, run ID and resume.
-modal run -m modal_scripts.modal_sft_train --recipe <recipe.json> \
+modal run -m modal_scripts.modal_sft_train::main --recipe <recipe.json> \
   --run-id <fresh-run-id> --parent <run>/step-NNNNNNNNN.pt [--dataset <jsonl> | --data-id <id>]
 ```
 

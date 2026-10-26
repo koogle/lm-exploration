@@ -66,7 +66,7 @@ def select(rows, limit_per_language):
 def generate(checkpoint, rows, deadline):
     import torch
     from model_100m.model import GPT, ModelConfig
-    from training_data.repair_sft import prompt
+    from training_data.repair_sft import REPAIR
     from training_data.subword import (
         BOS_TOKEN_ID,
         EOS_TOKEN_ID,
@@ -94,7 +94,7 @@ def generate(checkpoint, rows, deadline):
     tokenizer = load_frozen()
     results = []
     for row in rows:
-        ids = [BOS_TOKEN_ID] + tokenizer.encode(prompt(row), add_special_tokens=False).ids
+        ids = [BOS_TOKEN_ID] + tokenizer.encode(REPAIR.prompt(row), add_special_tokens=False).ids
         generated, eos = [], False
         with torch.inference_mode():
             for _ in range(128):

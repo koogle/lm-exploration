@@ -35,7 +35,7 @@ class ScriptLayoutTests(unittest.TestCase):
             "modal_scripts.modal_sft_train": "modal_scripts/modal_sft_train.py",
             "modal_scripts.modal_sft_eval": "modal_scripts/modal_sft_eval.py",
             "modal_scripts.modal_sft_data": "modal_scripts/modal_sft_data.py",
-            "trainer.repair_sft": "trainer/repair_sft.py",
+            "trainer.sft": "trainer/sft.py",
             "trainer.sft_recipe": "trainer/sft_recipe.py",
         }
         for name, relative in expected.items():

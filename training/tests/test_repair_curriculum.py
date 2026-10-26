@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from training_data.repair_curriculum import LANGUAGES, execute, oracle, rows, write_dataset
-from training_data.repair_sft import prepare
+from training_data.repair_sft import REPAIR
 from training_data.subword import load_frozen
 
 
@@ -13,7 +13,7 @@ class CurriculumTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "repairs.jsonl"
             write_dataset(path, records)
-            splits, _ = prepare(path, load_frozen(), 1024)
+            splits, _ = REPAIR.prepare(path, load_frozen(), 1024)
         self.assertEqual(len(splits["train"]), 576)
         self.assertEqual(len(splits["validation"]), 36)
         train = {r["family"] for r in records if r["split"] == "train"}
