@@ -4,8 +4,8 @@ Run from training/ (needs an HF token with write access, e.g. `hf auth login`):
     modal run -m playground.modal_export --config analysis/playground/configs/base-vs-math-sft.json \
         --name NAME
 
-The config names the model repository, the Space, the checkpoints (label and volume path),
-their display layout, the decoder file they share and the evaluation results to quote.
+The config names the model repository, the Space, the checkpoints (label, description and
+volume path), their display layout, the models selected by default, the decoder file they share and the evaluation results to quote.
 One CPU call (30-minute timeout, no retries; refuses work 24 hours after launch) loads each
 checkpoint with its run's own model code (`evaluation.checkpoints`), checks that the shared
 `model.py` reproduces its logits and writes float32 safetensors, the tokenizer and
@@ -50,6 +50,9 @@ def quoted_scores(names):
                 if task in values:
                     entry[task] = values[task]["acc"]
                     entry[f"{task}_shots"] = result["settings"]["shots"]
+            for task in ("mbpp_plus", "humaneval_plus"):
+                if task in values:
+                    entry[task] = values[task]["pass@1"]
             if "hellaswag" in values:
                 entry["hellaswag_acc_norm"] = values["hellaswag"]["acc_norm"]
                 entry["arc_easy_acc"] = values["arc_easy"]["acc"]
@@ -122,6 +125,7 @@ def export(name, config, deadline):
         **shared,
         "model_code": {"source": config["model_code"], "sha256": digest(output / "model.py")},
         "layout": config["layout"],
+        "default_models": config["default_models"],
         "models": entries,
     }
     (output / "models.json").write_text(json.dumps(manifest, indent=2) + "\n")
@@ -137,6 +141,8 @@ def main(config: str, name: str):
     labels = [item["label"] for item in settings["models"]]
     if sorted(labels) != sorted(label for row in settings["layout"] for label in row):
         raise ValueError("layout must name every model once")
+    if not set(settings["default_models"]) <= set(labels):
+        raise ValueError("default_models must name configured models")
     local = Path("artifacts/playground") / name
     if local.exists():
         raise ValueError(f"{local} already exists")
