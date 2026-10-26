@@ -61,7 +61,9 @@ attention mass. Curves, metrics and config: HF dataset
 | Second launch | 2026-10-25 ~05:15 UTC, 2 x H100, resumed from step 46; losses continue the pilot's trajectory |
 | Third launch | 2026-10-25 ~05:45 UTC, 2 x H100, resumed from step 95 with the CUDA gradient kernel |
 | Fourth launch | 2026-10-25 ~09:55 UTC, 8 x H100, resumed from step 1,466 (1.54B tokens) after the 124M run released its GPUs; uses the shared RMSNorm and SwiGLU |
-| Throughput | ~372.7K tokens/s on 8 x H100 (27.9% MFU); about 29 hours for the remaining 38.5B tokens |
+| Interruption | 2026-10-26 04:28 UTC at step ~24,018: the first launch's deadline supervisor cancelled every call recorded under the run ID, including the fourth launch's segment (the launcher records calls per launch since #81's fix). Resumed 06:50 UTC from the step-23,405 checkpoint (~0.6B tokens repeated) |
+| Fifth and sixth launches | 2026-10-26 06:50 UTC, 8 x H100, from step 23,405; stopped gracefully at step 26,142 (27.41B tokens) before the fourth launch's supervisor fired at 09:39; relaunched 09:53 UTC from step 26,142, all from commit `24692d1` (branch `claude/hybrid-720m-40b-01-run`) |
+| Throughput | ~372K tokens/s on 8 x H100 (about 28% MFU) |
 | Checkpoints | every 90 minutes and at each stop; bf16 exports to `jfrick/hybrid-720m-40b` (private) every 5B tokens |
 | Data | `capacity.json` and `screen.json` in `training/results/hybrid-40b-v1/` of the results dataset |
 
@@ -76,8 +78,22 @@ uv run modal run --detach -m model_hybrid.modal_train::launch --run-id hybrid-72
 ```
 
 The resumed segment keeps the 1,048,576-token global batch. Every launch stops
-within 24 hours; the 8-GPU segment ends about 09:30 UTC on 2026-10-26, and the
-last ~5 hours need one more launch with the same run ID.
+within 24 hours.
+
+Held-out loss (bits per byte) during the constant-learning-rate phase:
+
+| Step | Tokens | ClimbMix | Code | Math |
+| ---: | ---: | --- | --- | --- |
+| 2,500 | 2.6B | 3.051 (0.912) | 1.510 (0.546) | 2.224 (0.886) |
+| 5,000 | 5.2B | 2.961 (0.885) | 1.409 (0.510) | 2.142 (0.853) |
+| 10,000 | 10.5B | 2.913 (0.871) | 1.400 (0.506) | 2.106 (0.839) |
+| 15,000 | 15.7B | 2.891 (0.864) | 1.345 (0.487) | 2.082 (0.830) |
+| 26,142 | 27.4B | 2.872 (0.859) | 1.357 (0.491) | 2.061 (0.821) |
+
+Greedy samples at 27.4B tokens are fluent but factually loose and repetitive (for
+example "The first printing press was invented in 1796 by Thomas Jefferson"; the
+`fibonacci` prompt loops on a recursive call). Samples and metrics are in the run's
+`metrics.jsonl`.
 
 Cost estimate (Modal list price $3.95 per H100-hour, 2026-10-25): at the
 measured ~46K tokens/s per GPU, 40B tokens take about 240 H100-hours, about $950,
