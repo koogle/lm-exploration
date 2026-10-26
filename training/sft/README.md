@@ -16,6 +16,9 @@ tokens before it. The prompt carries no loss. Each step samples `batch_size` exa
 with replacement and minimizes the mean answer-token cross-entropy; validation reports
 the same quantity per bucket.
 
+`"schedule": "cosine"` warms the learning rate up over `warmup_steps` and decays it by
+a cosine to `min_lr_ratio * lr`; the default is a constant rate.
+
 `settings.task` picks the dataset ([`../data/sft.py`](../data/sft.py) holds the shared
 `SFTDataset`; each task's subclass only says how a row becomes a prompt and an answer):
 
