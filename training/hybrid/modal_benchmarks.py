@@ -27,7 +27,7 @@ image = build(
         "transformers==5.19.0",
         "accelerate==1.15.0",
         "datasets==4.8.5",
-        "evaluate==0.4.5",
+        "evaluate==0.4.6",
     ),
     {"HF_ALLOW_CODE_EVAL": "1"},
 )

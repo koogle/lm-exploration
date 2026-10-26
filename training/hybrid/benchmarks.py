@@ -28,7 +28,7 @@ class HybridHarnessModel(LM):
         self.eos = lm.config.eos_id
         self.context = lm.config.block_size
         self.generation_rows = generation_rows
-        self.device = lm.token_embedding.weight.device
+        self._device = lm.token_embedding.weight.device
 
     def encode(self, text):
         return self.tokenizer.encode(text, add_special_tokens=False).ids
