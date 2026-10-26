@@ -141,6 +141,14 @@ uv run --all-extras modal run -m modal_scripts.modal_sft_train::main --recipe sf
 uv run --all-extras modal run -m modal_scripts.modal_rl_train --recipe rl/recipes/r1-math.json
 ```
 
+To play with the stage 0 and RL checkpoints next to the base and math SFT models, export
+them to the private comparison Space ([`../analysis/playground`](../analysis/playground/README.md)):
+
+```sh
+uv run --all-extras modal run -m playground.modal_export \
+  --config analysis/playground/configs/post-training.json --name EXPORT-NAME
+```
+
 A recipe names `run_id`, `parent` (an SFT checkpoint, `run/step-N.pt` on the run
 volume), `pool` (an `rl_pool` data ID) and `settings` (`trainer.rl.Settings`). RL
 checkpoints (format `rl-v1`) keep the model code and tokenizer beside them, so

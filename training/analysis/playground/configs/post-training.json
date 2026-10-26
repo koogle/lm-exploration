@@ -1,0 +1,90 @@
+{
+  "model_repo": "jfrick/climbmix-124m-playground-weights",
+  "space": "jfrick/climbmix-124m-playground",
+  "model_code": "climbmix-124m-wsd20b-02-s02/source/model_10m/model.py",
+  "models": [
+    {
+      "label": "Base 5.45B",
+      "description": "Pretraining only, decayed at 5.45B tokens",
+      "checkpoint": "climbmix-124m-wsd20b-02-decay5b-s01/step-000055555.pt"
+    },
+    {
+      "label": "Base 10.9B",
+      "description": "Pretraining only, decayed at 10.9B tokens",
+      "checkpoint": "climbmix-124m-wsd20b-02-decay10b-s01/step-000111111.pt"
+    },
+    {
+      "label": "Base 20B",
+      "description": "Pretraining only, 20B tokens",
+      "checkpoint": "climbmix-124m-wsd20b-02-s02/step-000203724.pt"
+    },
+    {
+      "label": "Math SFT 5.45B",
+      "description": "Base 5.45B + one epoch of GSM8K/MetaMathQA SFT (r01)",
+      "checkpoint": "math-sft-metamath-5b-r01/step-000007500.pt"
+    },
+    {
+      "label": "Math SFT 20B",
+      "description": "Base 20B + one epoch of GSM8K/MetaMathQA SFT (r01)",
+      "checkpoint": "math-sft-metamath-20b-r01/step-000007500.pt"
+    },
+    {
+      "label": "Math SFT + replay 20B",
+      "description": "Base 20B + two epochs of math SFT with pretraining replay (r02)",
+      "checkpoint": "math-sft-metamath-replay-20b-r02/step-000015000.pt"
+    },
+    {
+      "label": "Math + code SFT 20B",
+      "description": "Base 20B + math and Qwen3.5-solved code SFT with replay (stage 0)",
+      "checkpoint": "math-code-sft-replay-20b-s0-r02/step-000020000.pt"
+    },
+    {
+      "label": "RL math",
+      "description": "Stage 0 + 300 steps of math-only RL (R1)",
+      "checkpoint": "rl-r1-math-20b-r01/step-000000300.pt"
+    },
+    {
+      "label": "RL code",
+      "description": "Stage 0 + 300 steps of code-only RL (R2)",
+      "checkpoint": "rl-r2-code-20b-r01/step-000000300.pt"
+    },
+    {
+      "label": "RL math + code",
+      "description": "Stage 0 + 1,000 steps of joint math and code RL (R3)",
+      "checkpoint": "rl-r3-joint-20b-r01/step-000001000.pt"
+    }
+  ],
+  "layout": [
+    [
+      "Math + code SFT 20B",
+      "RL math + code"
+    ],
+    [
+      "RL math",
+      "RL code"
+    ],
+    [
+      "Base 20B",
+      "Math SFT 20B",
+      "Math SFT + replay 20B"
+    ],
+    [
+      "Base 5.45B",
+      "Base 10.9B",
+      "Math SFT 5.45B"
+    ]
+  ],
+  "default_models": [
+    "Math + code SFT 20B",
+    "RL math + code"
+  ],
+  "evaluations": [
+    "climbmix-124m-wsd-20b-endpoints",
+    "climbmix-124m-wsd-20b-endpoints-math",
+    "math-sft-metamath-r01",
+    "math-sft-metamath-r01-math",
+    "math-sft-r01-r02-01",
+    "rl-s0-01",
+    "rl-r1-r3-01"
+  ]
+}
