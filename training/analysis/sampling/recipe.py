@@ -9,8 +9,18 @@ KINDS = ("checkpoint", "transformers", "volume")
 MODE_DEFAULTS = {"temperature": 0.0, "top_k": 0, "top_p": 1.0, "repetition_penalty": 1.0}
 
 
+# Prompt sets that several recipes share: `{"prompts": [...], "modes": [...]}`.
+PROMPT_SETS = Path(__file__).with_name("prompt-sets")
+
+
 def load_recipe(path):
+    """A recipe, with its `prompt_set`'s prompts and modes filled in."""
     recipe = json.loads(Path(path).read_text())
+    if "prompt_set" in recipe:
+        if "prompts" in recipe or "modes" in recipe:
+            raise ValueError("a recipe takes its prompts and modes from its prompt set")
+        shared = json.loads((PROMPT_SETS / f"{recipe['prompt_set']}.json").read_text())
+        recipe = {**recipe, "prompts": shared["prompts"], "modes": shared["modes"]}
     validate(recipe)
     return recipe
 
