@@ -94,7 +94,7 @@ def evaluate(model, revision, deadline, limit=0):
     else:
         from lm_eval.models.huggingface import HFLM
 
-        harness_model = HFLM(pretrained=model, revision=revision, dtype="bfloat16", batch_size=32)
+        harness_model = HFLM(pretrained=model, revision=revision, dtype="bfloat16", batch_size=8)
     out = {"model": model, "revision": revision, "limit": limit or None, "suites": []}
     for tasks, shots in SUITES:
         started = time.time()
@@ -134,7 +134,11 @@ def main(export: str = "tokens-039998980096", limit: int = 0, references: bool =
     stamp = int(time.time())
     folder = Path("artifacts/results/benchmarks")
     folder.mkdir(parents=True, exist_ok=True)
-    for result in evaluate.starmap([(m, r, deadline, limit) for m, r in models]):
+    calls = [(m, r, deadline, limit) for m, r in models]
+    for result in evaluate.starmap(calls, return_exceptions=True):
+        if isinstance(result, BaseException):
+            print(f"failed: {result!r}")
+            continue
         name = result["model"].replace("hybrid:", f"{RUN}-").replace("/", "--")
         path = folder / f"{name}-{stamp}{'-limit' if limit else ''}.json"
         path.write_text(json.dumps(result, indent=2, default=str) + "\n")
