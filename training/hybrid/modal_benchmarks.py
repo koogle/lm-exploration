@@ -23,13 +23,13 @@ runs_volume = modal.Volume.from_name("lm-exploration-hybrid-runs")
 secret = modal.Secret.from_name("simple-llm-hf")
 image = build(
     (
-        "lm-eval==0.4.9.1",
-        "transformers==4.56.2",
-        "accelerate==1.10.1",
-        "datasets==3.6.0",
+        "lm-eval==0.4.13",
+        "transformers==5.19.0",
+        "accelerate==1.15.0",
+        "datasets==4.8.5",
         "evaluate==0.4.5",
     ),
-    {"HF_ALLOW_CODE_EVAL": "1", "HF_DATASETS_TRUST_REMOTE_CODE": "1"},
+    {"HF_ALLOW_CODE_EVAL": "1"},
 )
 RUN = "hybrid-720m-40b-01"
 # (tasks, few-shot examples); None keeps the task's own default.
@@ -55,6 +55,12 @@ SUITES = (
 REFERENCES = {
     "HuggingFaceTB/SmolLM2-360M": "f8027fd0eaeea54caa13c31d31b9fdc459c38b49",
     "Qwen/Qwen3-0.6B-Base": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+    "Qwen/Qwen3.5-0.8B-Base": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+    "LiquidAI/LFM2.5-1.2B-Base": "7453bca97ca1e67754c4035a4b4c584e1c9dd725",
+    "allenai/OLMo-2-0425-1B": "a1847dff35000b4271fa70afc5db10fd29fedbdf",
+    "google/gemma-3-270m": "9b0cfec892e2bc2afd938c98eabe4e4a7b1e0ca1",
+    "google/gemma-3-1b-pt": "fcf18a2a879aab110ca39f8bffbccd5d49d8eb29",
+    "google/gemma-4-E2B": "d29ff6b45f081a49ee2733a859c9c9c2d95d1a6f",
 }
 
 
@@ -126,11 +132,14 @@ def evaluate(model, revision, deadline, limit=0):
 
 
 @app.local_entrypoint()
-def main(export: str = "tokens-039998980096", limit: int = 0, references: bool = True):
+def main(export: str = "tokens-039998980096", limit: int = 0, models: str = ""):
+    """`--models` (comma-separated, "hybrid" for the export) limits the run to those."""
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    models = [(f"hybrid:{export}", None)]
-    if references:
-        models += list(REFERENCES.items())
+    chosen = [(f"hybrid:{export}", None), *REFERENCES.items()]
+    if models:
+        wanted = set(models.split(","))
+        chosen = [(m, r) for m, r in chosen if m in wanted or (r is None and "hybrid" in wanted)]
+    models = chosen
     stamp = int(time.time())
     folder = Path("artifacts/results/benchmarks")
     folder.mkdir(parents=True, exist_ok=True)
