@@ -326,14 +326,20 @@ uv run --all-extras modal run -m model_hybrid.modal_sft_data
 
 `ChatMixture` packs whole conversations, in one seeded order across files, into
 4,097-token windows padded with EOS; labels are `-100` outside the loss mask, and
-the document mask keeps conversations apart. One pass is one epoch. `train.py`
+the document mask keeps conversations apart. One pass is one epoch. The recipe's
+`replay` takes a quarter of every batch's rows from the pretraining mixture
+(`hybrid-40b-v1`, read from the start of its order, every token a target), so
+fine-tuning keeps the pretraining objective; the run also evaluates the
+pretraining held-out sources with the same document counts as the 40B run, which
+measures what SFT costs there. `train.py`
 selects it for recipes with `"format": "chat-sft"`, evaluates loss and bits per
 byte on each file's held-out conversations, and samples greedy replies to fixed
 chat prompts (one with a tool) up to the end of the turn.
 [`configs/hybrid-720m-chat-sft.json`](configs/hybrid-720m-chat-sft.json) starts
 from the 40B export (`init_from`, trunk only, `mtp=False`) with a tenth of the
 pretraining learning rates, a 50M-token warmup and linear decay to 0 over one
-epoch, and launches like pretraining with
+epoch of the chat data (2,913 steps of 96 chat and 32 replay rows, from packing
+simulated with the run's seed), and launches like pretraining with
 `--config hybrid/configs/hybrid-720m-chat-sft.json`.
 
 ## Playground

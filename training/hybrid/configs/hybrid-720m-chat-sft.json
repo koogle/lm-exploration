@@ -22,7 +22,7 @@
     "loss_chunk_size": 2048,
     "mtp": false
   },
-  "target_tokens": 1145569280,
+  "target_tokens": 1527250944,
   "global_rows": 128,
   "microbatch": 4,
   "warmup_tokens": 50000000,
@@ -43,7 +43,10 @@
   "keep_checkpoints": 1,
   "eval_every_steps": 200,
   "eval_documents": {
-    "chat": 200
+    "chat": 200,
+    "climbmix": 1000,
+    "code": 300,
+    "math": 300
   },
   "sample_every_steps": 400,
   "log_every_steps": 10,

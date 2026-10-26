@@ -139,6 +139,49 @@ class PackingTests(unittest.TestCase):
             np.testing.assert_array_equal(second[1], again[1])
             self.assertFalse(np.array_equal(first[0], second[0]))
 
+    def test_replay_rows_are_pretraining_windows_after_the_chat_rows(self):
+        import tempfile
+        from pathlib import Path
+
+        class Pretraining:
+            wait_seconds = 0
+
+            def __init__(self):
+                self.position = 0
+
+            def next_batch(self, rows):
+                tokens = np.arange(self.position, self.position + rows * 12).reshape(rows, 12)
+                self.position += rows * 12
+                return tokens[:, :-1], tokens[:, 1:], ["climbmix"] * rows
+
+            def state_dict(self):
+                return {"position": self.position}
+
+            def load_state_dict(self, state):
+                self.position = state["position"]
+
+        with tempfile.TemporaryDirectory() as folder:
+            sft_data._write(Path(folder), "a", self.conversations())
+            sft_data._write(Path(folder), "b", self.conversations()[::-1])
+            recipe = {"files": ["a.parquet", "b.parquet"], "context": 11}
+            mixture = sft_data.ReplayMixture(
+                sft_data.ChatMixture(recipe, folder), Pretraining(), replay_rows=1
+            )
+            inputs, labels, names = mixture.next_batch(3)
+            self.assertEqual(names, ["chat", "chat", "climbmix"])
+            self.assertEqual(inputs.shape, (3, 11))
+            self.assertTrue((labels[2] >= 0).all())
+            self.assertTrue((labels[:2] == sft_data.IGNORE_INDEX).any())
+            state = mixture.state_dict()
+            second = mixture.next_batch(2)
+            resumed = sft_data.ReplayMixture(
+                sft_data.ChatMixture(recipe, folder), Pretraining(), replay_rows=1
+            )
+            resumed.load_state_dict(state)
+            again = resumed.next_batch(2)
+            np.testing.assert_array_equal(second[0], again[0])
+            np.testing.assert_array_equal(second[1], again[1])
+
 
 @unittest.skipUnless(template_available(), "GLM tokenizer or chat template not downloadable")
 class RenderingTests(unittest.TestCase):

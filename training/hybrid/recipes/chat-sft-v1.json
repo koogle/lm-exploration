@@ -28,5 +28,9 @@
   "context": 4096,
   "heldout_fraction": 0.005,
   "screen": "hybrid-40b-v1/screen.npy",
-  "screen_ngram": 13
+  "screen_ngram": 13,
+  "replay": {
+    "recipe": "hybrid-40b-v1",
+    "fraction": 0.25
+  }
 }

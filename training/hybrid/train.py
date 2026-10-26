@@ -563,12 +563,34 @@ def main():
     root = Path(args.data_root) / recipe["name"]
     if recipe.get("format") == "chat-sft":
         from . import sft_data
+        from .data import PreparedMixture, heldout_windows
+
+        replay = recipe.get("replay")
+        if replay:
+            replay_recipe = json.loads(
+                (Path(config.recipe).parent / f"{replay['recipe']}.json").read_text()
+            )
+            replay_root = Path(args.data_root) / replay_recipe["name"]
+            replay_rows = round(config.global_rows * replay["fraction"])
+
+        def data_source(recipe):
+            chat = sft_data.ChatMixture(recipe, root, config.seed)
+            if not replay:
+                return chat
+            pretraining = PreparedMixture(replay_recipe, replay_root)
+            return sft_data.ReplayMixture(chat, pretraining, replay_rows)
+
+        def heldout_source(recipe, mixture, context):
+            """Chat held-out per file, plus the pretraining held-out sources under replay."""
+            out = sft_data.heldout_windows(recipe, root, config.eval_documents["chat"])
+            for name, count in config.eval_documents.items():
+                if replay and name in replay_recipe["sources"]:
+                    out[name] = heldout_windows(replay_recipe, replay_root, name, context, count)
+            return out
 
         options = {
-            "data_source": lambda recipe: sft_data.ChatMixture(recipe, root, config.seed),
-            "heldout_source": lambda recipe, mixture, context: sft_data.heldout_windows(
-                recipe, root, config.eval_documents["chat"]
-            ),
+            "data_source": data_source,
+            "heldout_source": heldout_source,
             "sample_prompts": sft_data.sample_prompts(),
             "sample_stop_ids": sft_data.STOP_IDS,
             "sample_new_tokens": 160,
