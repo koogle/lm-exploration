@@ -295,6 +295,62 @@ ID and config resumes. MFU counts 6 x (matmul weights, including both
 output-layer uses) plus attention FLOPs over the mean attended keys, against
 989 TFLOPS per H100.
 
+## Chat SFT
+
+[`chat.py`](chat.py) maps OpenAI chat messages (`system`/`user`/`assistant`/`tool`,
+assistant `tool_calls`, a `tools` list of function schemas) onto GLM-4.7-Flash's
+own chat template, pinned by revision and SHA-256 like the tokenizer. Assistant
+turns render without reasoning (`<|assistant|></think>`); calls are GLM's
+`<tool_call>name<arg_key>…</arg_key><arg_value>…</arg_value></tool_call>` and
+results `<|observation|><tool_response>…</tool_response>`. `encode` returns token
+ids and a loss mask that covers each assistant turn after its prompt plus the token
+that ends it (the next role token, or the closing EOS); `parse_assistant` turns
+generated text back into an OpenAI assistant message.
+
+[`recipes/chat-sft-v1.json`](recipes/chat-sft-v1.json) takes the non-reasoning
+(`no_think`) files of `HuggingFaceTB/smoltalk2` SFT, pinned by revision: general
+chat and system prompts, rewriting and summarization, instruction following,
+tables, science, OpenThoughts3 answers and two tool-calling sets (xLAM traces,
+Hermes function calling). [`sft_data.py`](sft_data.py) converts each row to OpenAI
+messages (Hermes `<tool_call>` JSON or Python dicts become `tool_calls`, multiple
+`<tool_response>` blocks become separate `tool` turns, instructions around a
+`<tools>` block join the system prompt, turns after the last assistant reply are
+cut), drops rows with reasoning or unparsable calls, conversations longer than
+the context and those sharing a 13-gram with the pretraining benchmark screen,
+and holds out 0.5% by hash. [`modal_sft_data.py`](modal_sft_data.py) prepares
+each file in its own call (`retries=0`, refuses work 24 hours after launch):
+
+```sh
+uv run --all-extras modal run -m model_hybrid.modal_sft_data
+```
+
+`ChatMixture` packs whole conversations, in one seeded order across files, into
+4,097-token windows padded with EOS; labels are `-100` outside the loss mask, and
+the document mask keeps conversations apart. One pass is one epoch. `train.py`
+selects it for recipes with `"format": "chat-sft"`, evaluates loss and bits per
+byte on each file's held-out conversations, and samples greedy replies to fixed
+chat prompts (one with a tool) up to the end of the turn.
+[`configs/hybrid-720m-chat-sft.json`](configs/hybrid-720m-chat-sft.json) starts
+from the 40B export (`init_from`, trunk only, `mtp=False`) with a tenth of the
+pretraining learning rates, a 50M-token warmup and linear decay to 0 over one
+epoch, and launches like pretraining with
+`--config hybrid/configs/hybrid-720m-chat-sft.json`.
+
+## Playground
+
+[`generate.py`](generate.py) decodes incrementally in plain PyTorch (CPU or GPU):
+a KV cache for the full-attention layers, convolution history and fp32 state for
+KDA, one token per pass through the weights. [`playground/`](playground) is a
+Gradio app for a private Hugging Face Space: text continuation, and for chat
+exports a chat tab with OpenAI tools whose replies are parsed back into OpenAI
+messages. `playground/publish.py` uploads the app and the inference modules; the
+Space downloads the export from the private model repo with its `HF_TOKEN` secret.
+
+```sh
+uv run --all-extras python -m model_hybrid.playground.publish \
+  --space jfrick/hybrid-720m-playground --export tokens-039998980096 [--chat]
+```
+
 ## Tests
 
 From `training/`:
@@ -304,7 +360,7 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
   tests.test_hybrid_sink_gate tests.test_hybrid_kda \
   tests.test_hybrid_mtp tests.test_hybrid_optim \
   tests.test_hybrid_tokenizer tests.test_hybrid_data tests.test_hybrid_720m \
-  tests.test_hybrid_fused_loss -v
+  tests.test_hybrid_fused_loss tests.test_hybrid_chat tests.test_hybrid_generate -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):

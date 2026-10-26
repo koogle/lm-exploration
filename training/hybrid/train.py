@@ -69,6 +69,9 @@ class RunConfig:
     hf_repo: str = ""
     hf_every_tokens: int = 5_000_000_000
     seed: int = 1234
+    # An export folder (config.json, model.safetensors) whose trunk weights start the
+    # run when it has no checkpoint yet, e.g. a pretrained model for SFT.
+    init_from: str = ""
 
     @classmethod
     def load(cls, path):
@@ -231,9 +234,11 @@ def evaluate(lm, heldout, device, eos_id):
             for start in range(0, len(inputs), 4):
                 x = torch.from_numpy(inputs[start : start + 4]).to(device)
                 y = torch.from_numpy(labels[start : start + 4]).to(device)
-                targets = doc_utils.mtp_labels(x, y, eos_id)
+                targets = doc_utils.mtp_labels(x, y, eos_id) if lm.mtp is not None else None
                 with torch.autocast("cuda", dtype=torch.bfloat16):
                     losses = lm(x, y, targets)
+                losses.setdefault("mtp_ce", torch.zeros(()))
+                losses.setdefault("mtp_count", torch.zeros((), dtype=torch.long))
                 for key in sums:
                     sums[key] += losses[key].item() if key.endswith("ce") else int(losses[key])
                 activations.append(
@@ -257,17 +262,21 @@ def evaluate(lm, heldout, device, eos_id):
 
 
 @torch.no_grad()
-def samples(lm, tokenizer, device, new_tokens=48):
-    """Greedy continuations of fixed prompts (full recompute per token)."""
+def samples(lm, tokenizer, device, prompts=SAMPLE_PROMPTS, stop_ids=(), new_tokens=48):
+    """Greedy continuations of fixed prompts (full recompute per token), up to a stop id."""
     lm.eval()
     outputs = []
-    for prompt in SAMPLE_PROMPTS:
+    for prompt in prompts:
         ids = tokenizer.encode(prompt, add_special_tokens=False).ids
+        start = len(ids)
         for _ in range(new_tokens):
             x = torch.tensor([ids], device=device)
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 ids.append(int(lm(x)[0, -1].argmax()))
-        outputs.append({"prompt": prompt, "completion": tokenizer.decode(ids)})
+            if ids[-1] in stop_ids:
+                break
+        completion = tokenizer.decode(ids[start:], skip_special_tokens=False)
+        outputs.append({"prompt": prompt, "completion": completion})
     lm.train()
     return outputs
 
@@ -309,11 +318,23 @@ def upload_export(lm, model_config, run_dir, progress, repo):
 
 
 def train(
-    config, run_dir, stop_unix, max_tokens=None, data_source=None, save_final=True, on_step=None
+    config,
+    run_dir,
+    stop_unix,
+    max_tokens=None,
+    data_source=None,
+    save_final=True,
+    on_step=None,
+    heldout_source=None,
+    sample_prompts=SAMPLE_PROMPTS,
+    sample_stop_ids=(),
+    sample_new_tokens=48,
 ):
     """Train until target/max tokens, data exhaustion or stop_unix; returns final progress.
 
-    `on_step(progress)` runs on every rank after each optimizer step.
+    `heldout_source(recipe, mixture, context)` (rank 0) returns the held-out
+    windows {name: (inputs, labels, bytes)}; `on_step(progress)` runs on every rank
+    after each optimizer step.
     """
     runtime = Runtime()
     torch.manual_seed(config.seed)
@@ -339,6 +360,10 @@ def train(
         torch.set_rng_state(state["rng"]["torch"].cpu())
         torch.cuda.set_rng_state(state["rng"]["cuda"].cpu())
         del state
+    elif config.init_from:
+        from safetensors.torch import load_file
+
+        lm.load_state_dict(load_file(Path(config.init_from) / "model.safetensors", device="cpu"))
     compiled = torch.compile(lm) if config.compile else lm
     ddp = DistributedDataParallel(compiled, device_ids=[runtime.local], broadcast_buffers=False)
     rows_per_rank = config.global_rows // runtime.world
@@ -353,20 +378,8 @@ def train(
         (run_dir / "config.json").write_text(
             json.dumps(dataclasses.asdict(config), indent=2) + "\n"
         )
-        if recipe and data_source:
-            from .data import heldout_index, heldout_windows, shard_paths
-
-            for name, source in recipe["sources"].items():
-                meta = shard_paths(mixture.root, name, heldout_index(source))[2]
-                waited = time.monotonic()
-                while not meta.exists():
-                    if time.monotonic() - waited > mixture.wait_seconds:
-                        raise TimeoutError(f"Held-out shard for {name} was not prepared")
-                    time.sleep(15)
-            heldout = {
-                name: heldout_windows(recipe, mixture.root, name, context, count)
-                for name, count in config.eval_documents.items()
-            }
+        if recipe and heldout_source:
+            heldout = heldout_source(recipe, mixture, context)
             tokenizer = glm.load()
     metrics_file = open(run_dir / "metrics.jsonl", "a") if runtime.main else None  # noqa: SIM115
     last_checkpoint, uploads = time.monotonic(), []
@@ -466,7 +479,14 @@ def train(
                 }
             if tokenizer and progress["step"] % config.sample_every_steps == 0:
                 record = (record or {"step": progress["step"]}) | {
-                    "samples": samples(lm, tokenizer, runtime.device)
+                    "samples": samples(
+                        lm,
+                        tokenizer,
+                        runtime.device,
+                        sample_prompts,
+                        sample_stop_ids,
+                        sample_new_tokens,
+                    )
                 }
             if record:
                 metrics_file.write(json.dumps(record) + "\n")
@@ -489,7 +509,14 @@ def train(
                 "parameters": gate_sink_statistics(lm),
             }
             if tokenizer:
-                final["samples"] = samples(lm, tokenizer, runtime.device)
+                final["samples"] = samples(
+                    lm,
+                    tokenizer,
+                    runtime.device,
+                    sample_prompts,
+                    sample_stop_ids,
+                    sample_new_tokens,
+                )
             metrics_file.write(json.dumps(final) + "\n")
             metrics_file.close()
         if config.hf_repo and stop_reason == "target":
@@ -504,6 +531,25 @@ def train(
     return progress
 
 
+def pretraining_heldout(config):
+    def heldout(recipe, mixture, context):
+        from .data import heldout_index, heldout_windows, shard_paths
+
+        for name, source in recipe["sources"].items():
+            meta = shard_paths(mixture.root, name, heldout_index(source))[2]
+            waited = time.monotonic()
+            while not meta.exists():
+                if time.monotonic() - waited > mixture.wait_seconds:
+                    raise TimeoutError(f"Held-out shard for {name} was not prepared")
+                time.sleep(15)
+        return {
+            name: heldout_windows(recipe, mixture.root, name, context, count)
+            for name, count in config.eval_documents.items()
+        }
+
+    return heldout
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
@@ -512,16 +558,29 @@ def main():
     parser.add_argument("--stop-unix", type=float, required=True)
     parser.add_argument("--max-tokens", type=int)
     args = parser.parse_args()
-    from .data import PreparedMixture
-
     config = RunConfig.load(args.config)
-    train(
-        config,
-        args.run_dir,
-        args.stop_unix,
-        args.max_tokens,
-        data_source=lambda recipe: PreparedMixture(recipe, Path(args.data_root) / recipe["name"]),
-    )
+    recipe = json.loads(Path(config.recipe).read_text())
+    root = Path(args.data_root) / recipe["name"]
+    if recipe.get("format") == "chat-sft":
+        from . import sft_data
+
+        options = {
+            "data_source": lambda recipe: sft_data.ChatMixture(recipe, root, config.seed),
+            "heldout_source": lambda recipe, mixture, context: sft_data.heldout_windows(
+                recipe, root, config.eval_documents["chat"]
+            ),
+            "sample_prompts": sft_data.sample_prompts(),
+            "sample_stop_ids": sft_data.STOP_IDS,
+            "sample_new_tokens": 160,
+        }
+    else:
+        from .data import PreparedMixture
+
+        options = {
+            "data_source": lambda recipe: PreparedMixture(recipe, root),
+            "heldout_source": pretraining_heldout(config),
+        }
+    train(config, args.run_dir, args.stop_unix, args.max_tokens, **options)
 
 
 if __name__ == "__main__":

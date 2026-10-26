@@ -1,0 +1,32 @@
+{
+  "name": "chat-sft-v1",
+  "format": "chat-sft",
+  "description": "No-think English chat, tool calling (OpenAI-style, rendered in GLM's chat format), math, code and science from smoltalk2's SFT split.",
+  "repo": "HuggingFaceTB/smoltalk2",
+  "revision": "fc6cc2103c066455aade5d7fbb346039ae36ca5e",
+  "files": [
+    "SFT/smoltalk_smollm3_smol_magpie_ultra_no_think-00000-of-00006.parquet",
+    "SFT/smoltalk_smollm3_smol_magpie_ultra_no_think-00001-of-00006.parquet",
+    "SFT/smoltalk_smollm3_smol_magpie_ultra_no_think-00002-of-00006.parquet",
+    "SFT/smoltalk_smollm3_smol_magpie_ultra_no_think-00003-of-00006.parquet",
+    "SFT/smoltalk_smollm3_smol_magpie_ultra_no_think-00004-of-00006.parquet",
+    "SFT/smoltalk_smollm3_smol_magpie_ultra_no_think-00005-of-00006.parquet",
+    "SFT/smoltalk_smollm3_systemchats_30k_no_think-00000-of-00001.parquet",
+    "SFT/smoltalk_smollm3_everyday_conversations_no_think-00000-of-00001.parquet",
+    "SFT/smoltalk_smollm3_explore_instruct_rewriting_no_think-00000-of-00001.parquet",
+    "SFT/smoltalk_smollm3_smol_rewrite_no_think-00000-of-00001.parquet",
+    "SFT/smoltalk_smollm3_smol_summarize_no_think-00000-of-00001.parquet",
+    "SFT/tulu_3_sft_personas_instruction_following_no_think-00000-of-00001.parquet",
+    "SFT/table_gpt_no_think-00000-of-00001.parquet",
+    "SFT/xlam_traces_no_think-00000-of-00001.parquet",
+    "SFT/hermes_function_calling_v1_no_think-00000-of-00001.parquet",
+    "SFT/OpenThoughts3_1.2M_no_think_no_think-00000-of-00003.parquet",
+    "SFT/OpenThoughts3_1.2M_no_think_no_think-00001-of-00003.parquet",
+    "SFT/OpenThoughts3_1.2M_no_think_no_think-00002-of-00003.parquet",
+    "SFT/Mixture_of_Thoughts_science_no_think-00000-of-00001.parquet"
+  ],
+  "context": 4096,
+  "heldout_fraction": 0.005,
+  "screen": "hybrid-40b-v1/screen.npy",
+  "screen_ngram": 13
+}

@@ -26,7 +26,7 @@ class GenerateTests(unittest.TestCase):
 
     def test_greedy_generation_continues_the_argmax_and_stops_at_eos(self):
         prompt = [5, 9, 11]
-        out = list(generate.generate(self.lm, prompt, 6, EOS))
+        out = list(generate.generate(self.lm, prompt, 6, (EOS,)))
         tokens = list(prompt)
         for token in out:
             expected = int(self.lm(torch.tensor([tokens]))[0, -1].argmax())

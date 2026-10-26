@@ -99,8 +99,9 @@ def step(lm: HybridLM, token: int, cache: Cache):
 
 
 @torch.no_grad()
-def generate(lm, prompt_ids, max_new_tokens, eos_id, temperature=0.0, top_p=1.0, generator=None):
-    """Yield new token ids; greedy at temperature 0, else nucleus sampling."""
+def generate(lm, prompt_ids, max_new_tokens, stop_ids, temperature=0.0, top_p=1.0, generator=None):
+    """Yield new token ids up to and including one of `stop_ids`; greedy at temperature 0,
+    else nucleus sampling."""
     cache = Cache(lm)
     if not prompt_ids:
         raise ValueError("the prompt must contain at least one token")
@@ -120,7 +121,7 @@ def generate(lm, prompt_ids, max_new_tokens, eos_id, temperature=0.0, top_p=1.0,
             ordered = ordered * keep
             token = int(index[torch.multinomial(ordered / ordered.sum(), 1, generator=generator)])
         yield token
-        if token == eos_id:
+        if token in stop_ids:
             return
 
 
