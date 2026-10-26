@@ -128,6 +128,7 @@ document's tokens) and the recurrent state. On CUDA the recurrence is fla's
 `chunk_kda`, run over the flattened batch with `cu_seqlens` from the document ids;
 gate, beta and L2 normalization run inside the kernel. On CPU, `kda_reference`
 is an explicit per-token recurrence with fp32 (or fp64) state.
+[KDA, step by step](../references/kda.md) walks through the recurrence on a toy head.
 
 `torch.compile` traces through the fla call. On one H100, a small compiled hybrid
 model (4 layers, width 512, 4 x 1024 tokens, bf16) took 18.7–19.1 ms per training
