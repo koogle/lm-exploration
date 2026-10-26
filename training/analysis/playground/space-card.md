@@ -1,5 +1,5 @@
 ---
-title: ClimbMix 124M base vs math SFT
+title: ClimbMix 124M playground
 emoji: 🧮
 colorFrom: green
 colorTo: gray
@@ -10,10 +10,10 @@ app_file: app.py
 pinned: false
 ---
 
-# ClimbMix 124M: base vs math SFT
+# ClimbMix 124M playground
 
-One prompt, five 124M models from lm-exploration: the 5.45B-, 10.9B- and 20B-token
-end points of the ClimbMix + code warmup-stable-decay run, and the 5.45B and 20B end
-points after one epoch of answer-only SFT on GSM8K + MetaMathQA. `models.json` records
-each checkpoint, its SHA256 and its benchmark scores. The app and export code live in
+One prompt, several 124M models from lm-exploration, side by side: pretraining end points
+of the ClimbMix + code warmup-stable-decay run and the models fine-tuned from them.
+`models.json` records each checkpoint, its SHA256, what training it had and its benchmark
+scores. The app and export code live in
 [`training/analysis/playground`](https://github.com/koogle/lm-exploration/tree/main/training/analysis/playground).
