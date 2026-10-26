@@ -4,6 +4,7 @@ Run from training/:
     modal run -m model_hybrid.modal_train::bench --gpus 1 [--microbatch 4]
     modal run --detach -m model_hybrid.modal_train::launch --run-id <id> \\
         [--config hybrid/configs/hybrid-720m-40b.json] [--max-tokens N]
+    modal run --detach -m model_hybrid.modal_train::launch_rl --run-id <id> --config <rl config>
 
 `launch` fixes one deadline 24 hours ahead (less a supervisor margin), starts an
 independent supervisor that cancels every recorded call at that deadline, then
@@ -12,7 +13,9 @@ The segment stops itself SHUTDOWN_SECONDS before its timeout and saves a
 checkpoint; launching again with the same run ID resumes from the latest
 checkpoint in `lm-exploration-hybrid-runs/<run id>/`. Training reads prepared
 shards from `lm-exploration-hybrid-data` and waits for shards still being
-prepared. Each benchmark is one call with a 30-minute timeout and no retries.
+prepared. `launch_rl` runs model_hybrid.rl the same way (one supervised 8xH100
+segment, resumable), in an image that also grades completions. Each benchmark is
+one call with a 30-minute timeout and no retries.
 """
 
 import io
@@ -23,7 +26,7 @@ import time
 from pathlib import Path
 
 import modal
-from model_hybrid.image import image
+from model_hybrid.image import build, image
 
 app = modal.App("lm-exploration-hybrid-train")
 data_volume = modal.Volume.from_name("lm-exploration-hybrid-data", create_if_missing=True)
@@ -35,6 +38,8 @@ STOP_FILE = "/tmp/hybrid-stop"
 DEFAULT_CONFIG = "hybrid/configs/hybrid-720m-40b.json"
 SHUTDOWN_SECONDS = 900  # Final checkpoint (~7 GB) and exit.
 VOLUMES = {"/data": data_volume, "/runs": runs_volume}
+# RL also grades completions: math_verify, and pytest for generated code.
+rl_image = build(("math-verify==0.9.0", "pytest==8.4.2"))
 
 
 def run_torchrun(module, args, gpus, timeout, log_path, run_id=""):
@@ -76,17 +81,8 @@ def run_torchrun(module, args, gpus, timeout, log_path, run_id=""):
     return code, lines
 
 
-@app.function(
-    image=image,
-    gpu="H100:8",
-    cpu=32,
-    memory=262144,
-    timeout=86400,
-    retries=0,
-    secrets=[secret],
-    volumes=VOLUMES,
-)
-def train_segment(run_id, config, timeout, deadline, max_tokens=0, gpus=8, provenance=None):
+def run_segment(run_id, config, timeout, deadline, gpus, provenance, module, extra_args=()):
+    """One torchrun segment of `module` for a run folder, bounded by the launch deadline."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     started = time.time()
@@ -115,22 +111,47 @@ def train_segment(run_id, config, timeout, deadline, max_tokens=0, gpus=8, prove
         "/data",
         "--stop-unix",
         str(stop_unix),
+        *extra_args,
     ]
-    if max_tokens:
-        args += ["--max-tokens", str(max_tokens)]
     code, _ = run_torchrun(
-        "model_hybrid.train",
-        args,
-        gpus,
-        timeout - 300,
-        folder / "logs" / f"segment-{int(started)}.log",
-        run_id,
+        module, args, gpus, timeout - 300, folder / "logs" / f"segment-{int(started)}.log", run_id
     )
     summary = folder / "summary.json"
     result = json.loads(summary.read_text()) if summary.exists() else {}
     if code:
         raise RuntimeError(f"Training exited with {code}; last summary {result}")
     return result
+
+
+@app.function(
+    image=image,
+    gpu="H100:8",
+    cpu=32,
+    memory=262144,
+    timeout=86400,
+    retries=0,
+    secrets=[secret],
+    volumes=VOLUMES,
+)
+def train_segment(run_id, config, timeout, deadline, max_tokens=0, gpus=8, provenance=None):
+    extra = ["--max-tokens", str(max_tokens)] if max_tokens else []
+    return run_segment(
+        run_id, config, timeout, deadline, gpus, provenance, "model_hybrid.train", extra
+    )
+
+
+@app.function(
+    image=rl_image,
+    gpu="H100:8",
+    cpu=64,
+    memory=262144,
+    timeout=86400,
+    retries=0,
+    secrets=[secret],
+    volumes=VOLUMES,
+)
+def rl_segment(run_id, config, timeout, deadline, gpus=8, provenance=None):
+    return run_segment(run_id, config, timeout, deadline, gpus, provenance, "model_hybrid.rl")
 
 
 @app.function(
@@ -238,8 +259,8 @@ def stop(run_id: str):
     print(json.dumps({"run_id": run_id, "requested": "stop"}))
 
 
-@app.local_entrypoint()
-def launch(run_id: str, config: str = DEFAULT_CONFIG, max_tokens: int = 0, gpus: int = 8):
+def start(run_id, config, segment, kind, gpus, extra=(), notes=None):
+    """Fix the deadline, start the supervisor, spawn and record one segment."""
     import re
 
     from workflows.deadline import bounded_timeout, new_deadline
@@ -251,17 +272,17 @@ def launch(run_id: str, config: str = DEFAULT_CONFIG, max_tokens: int = 0, gpus:
         "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         "git_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], text=True)),
         "config_file": config,
-        "max_tokens": max_tokens,
+        **(notes or {}),
     }
     control[run_id] = "run"
     deadline = new_deadline()
     supervisor = enforce_deadline.spawn(run_id, deadline)
     timeout = bounded_timeout(deadline, 86400)
-    call = train_segment.with_options(timeout=timeout, gpu=f"H100:{gpus}").spawn(
-        run_id, settings, timeout, deadline, max_tokens, gpus, provenance
+    call = segment.with_options(timeout=timeout, gpu=f"H100:{gpus}").spawn(
+        run_id, settings, timeout, deadline, *extra, gpus=gpus, provenance=provenance
     )
     # Same record as workflows.deadline.track, which the supervisor reads.
-    record = {"call_id": call.object_id, "kind": "train_segment", "spawned_unix": time.time()}
+    record = {"call_id": call.object_id, "kind": kind, "spawned_unix": time.time()}
     with runs_volume.batch_upload(force=True) as upload:
         upload.put_file(
             io.BytesIO((json.dumps(record) + "\n").encode()),
@@ -272,8 +293,27 @@ def launch(run_id: str, config: str = DEFAULT_CONFIG, max_tokens: int = 0, gpus:
             {
                 "deadline_unix": deadline,
                 "supervisor": supervisor.object_id,
-                "train_segment": call.object_id,
+                "segment": call.object_id,
                 "timeout": timeout,
             }
         )
     )
+
+
+@app.local_entrypoint()
+def launch(run_id: str, config: str = DEFAULT_CONFIG, max_tokens: int = 0, gpus: int = 8):
+    start(
+        run_id,
+        config,
+        train_segment,
+        "train_segment",
+        gpus,
+        (max_tokens,),
+        {"max_tokens": max_tokens},
+    )
+
+
+@app.local_entrypoint()
+def launch_rl(run_id: str, config: str, gpus: int = 8):
+    """An RL run (model_hybrid.rl) with the same deadline supervision as training."""
+    start(run_id, config, rl_segment, "rl_segment", gpus)

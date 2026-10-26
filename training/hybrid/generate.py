@@ -122,6 +122,8 @@ def _sample(logits, temperature, top_p, generator):
     if temperature <= 0:
         return logits.argmax(-1)
     probs = torch.softmax(logits / temperature, -1)
+    if top_p >= 1:
+        return torch.multinomial(probs, 1, generator=generator)[:, 0]
     ordered, index = probs.sort(-1, descending=True)
     ordered = ordered * (ordered.cumsum(-1) - ordered < top_p)
     choice = torch.multinomial(ordered / ordered.sum(-1, keepdim=True), 1, generator=generator)
