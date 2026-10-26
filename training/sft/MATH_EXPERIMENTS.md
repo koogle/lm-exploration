@@ -76,6 +76,10 @@ Final checkpoints (`step-000015000.pt`) with r01 rescored in the same call
   parent loses 5 points on SVAMP. The r02 answer loss ends slightly higher (0.972 vs 0.948).
 - Math-Verify rescoring leaves r01 unchanged (20.4 / 20.3 and 15.8 / 14.3).
 
+The evaluation result (with every generated answer) and the r02 training metrics and
+manifests are in `jfrick/lm-exploration-results` under `pr-87/evaluation/` and
+`pr-87/training/`.
+
 Three-step resume qualifications on H100 (`qualify --steps 3`) did not match bit for bit,
 with replay and with the r01 recipe without it: step, sampling and RNG state matched,
 model and optimizer weights did not. Math runs take at most about two hours, so an
