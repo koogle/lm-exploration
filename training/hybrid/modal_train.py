@@ -163,10 +163,14 @@ def benchmark(config, gpus, steps, microbatch, global_rows, document_tokens, dea
 
 @app.function(image=image, cpu=0.25, memory=512, timeout=86400, retries=0, volumes=VOLUMES)
 def enforce_deadline(run_id, deadline):
-    """Independent supervisor: cancel every recorded call of this launch at its deadline."""
+    """Independent supervisor: cancel every recorded call of this launch at its deadline.
+
+    Calls are recorded per launch (keyed by its deadline), so a later launch of the
+    same run is never cancelled by an earlier launch's supervisor.
+    """
     from workflows.deadline import tracked_calls
 
-    calls = Path("/runs/.calls") / run_id
+    calls = Path("/runs/.calls") / run_id / launch_key(deadline)
     while (remaining := deadline - time.time()) > 0:
         time.sleep(min(remaining, 300))
     runs_volume.reload()
@@ -175,6 +179,10 @@ def enforce_deadline(run_id, deadline):
         modal.FunctionCall.from_id(call_id).cancel()
         cancelled.append(call_id)
     return {"cancelled": cancelled}
+
+
+def launch_key(deadline):
+    return str(int(deadline))
 
 
 def load_config(path):
@@ -237,7 +245,7 @@ def launch(run_id: str, config: str = DEFAULT_CONFIG, max_tokens: int = 0, gpus:
     with runs_volume.batch_upload(force=True) as upload:
         upload.put_file(
             io.BytesIO((json.dumps(record) + "\n").encode()),
-            f".calls/{run_id}/calls/{call.object_id}.json",
+            f".calls/{run_id}/{launch_key(deadline)}/calls/{call.object_id}.json",
         )
     print(
         json.dumps(
