@@ -5,23 +5,28 @@
   "models": [
     {
       "label": "Base 5.45B",
-      "checkpoint": "climbmix-124m-wsd20b-02-decay5b-s01/step-000055555.pt"
+      "checkpoint": "climbmix-124m-wsd20b-02-decay5b-s01/step-000055555.pt",
+      "description": "Pretraining only, decayed at 5.45B tokens"
     },
     {
       "label": "Base 10.9B",
-      "checkpoint": "climbmix-124m-wsd20b-02-decay10b-s01/step-000111111.pt"
+      "checkpoint": "climbmix-124m-wsd20b-02-decay10b-s01/step-000111111.pt",
+      "description": "Pretraining only, decayed at 10.9B tokens"
     },
     {
       "label": "Base 20B",
-      "checkpoint": "climbmix-124m-wsd20b-02-s02/step-000203724.pt"
+      "checkpoint": "climbmix-124m-wsd20b-02-s02/step-000203724.pt",
+      "description": "Pretraining only, 20B tokens"
     },
     {
       "label": "Math SFT 5.45B",
-      "checkpoint": "math-sft-metamath-5b-r01/step-000007500.pt"
+      "checkpoint": "math-sft-metamath-5b-r01/step-000007500.pt",
+      "description": "Base 5.45B + one epoch of GSM8K/MetaMathQA SFT"
     },
     {
       "label": "Math SFT 20B",
-      "checkpoint": "math-sft-metamath-20b-r01/step-000007500.pt"
+      "checkpoint": "math-sft-metamath-20b-r01/step-000007500.pt",
+      "description": "Base 20B + one epoch of GSM8K/MetaMathQA SFT"
     }
   ],
   "layout": [
@@ -42,5 +47,9 @@
     "climbmix-124m-wsd-20b-endpoints-math",
     "math-sft-metamath-r01",
     "math-sft-metamath-r01-math"
+  ],
+  "default_models": [
+    "Base 20B",
+    "Math SFT 20B"
   ]
 }
