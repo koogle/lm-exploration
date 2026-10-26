@@ -32,6 +32,8 @@ MODULES = (
     "softmax_kernel",
     "cuda_extension",
     "kda_convolution",
+    "chat",
+    "sft_data",
 )
 
 
@@ -42,6 +44,7 @@ def main():
     parser.add_argument("--export", required=True, help="export folder in the model repo")
     parser.add_argument("--name", default="Hybrid 720M, 40B tokens (base model)")
     parser.add_argument("--description", default="")
+    parser.add_argument("--chat", action="store_true", help="a chat SFT export: add the chat tab")
     parser.add_argument("--stage-only", action="store_true", help="assemble locally, no upload")
     args = parser.parse_args()
     local = TRAINING / "artifacts" / "playground" / args.export
@@ -56,6 +59,7 @@ def main():
         ),
         "repo": args.repo,
         "export": args.export,
+        "chat": args.chat,
     }
     stage = local / "space"
     if stage.exists():
