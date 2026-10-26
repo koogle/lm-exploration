@@ -9,7 +9,8 @@ import sys
 
 import matplotlib
 import torch
-from model_hybrid import kda
+from model_hybrid import documents, kda
+from torch.nn import functional as F
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -59,6 +60,29 @@ reference = kda.kda_reference(k, k, v, g, BETA_LOGITS[None, :, None], A_log, dt_
 torch.testing.assert_close(reference[0, :, 0], torch.stack(reads) * D**-0.5)
 assert torch.allclose(decay[0, 0, 0], ALPHA) and beta[0, 2, 0] == 1
 
+# One channel of short_convolution on two packed documents; document 2 starts at t = 4.
+CONV_X = torch.tensor([1, 2, 3, 4, 10, 20, 30], dtype=torch.float64)
+CONV_W = torch.tensor(
+    [0.1, 0.2, 0.3, 1.0], dtype=torch.float64
+)  # nn.Conv1d order: oldest tap first
+CONV_T = 5  # token whose window is drawn
+conv_positions = documents.document_positions(torch.tensor([[0] * 4 + [1] * 3]))
+
+
+def mix(positions):
+    taps = range(len(CONV_W))
+    return torch.stack(
+        [
+            sum(CONV_W[-1 - s] * CONV_X[t - s] for s in taps if positions[0, t] >= s)
+            for t in range(len(CONV_X))
+        ]
+    )
+
+
+mixed, mixed_one_document = mix(conv_positions), mix(torch.arange(len(CONV_X))[None])
+conv_out = kda.short_convolution(CONV_X[None, :, None], CONV_W[None, None], conv_positions)
+torch.testing.assert_close(conv_out[0, :, 0], F.silu(mixed))
+
 # Source lines are looked up in kda.py, so the figure follows the code.
 SOURCE = inspect.getsource(kda).splitlines()
 
@@ -75,7 +99,7 @@ OUT = sys.argv[1]
 SURFACE, PANEL, INK, MUTED, RULE = "#f7f6f2", "#ffffff", "#222222", "#666666", "#d8d6cf"
 ACCENT, CODE_FACE, CODE_EDGE, CODE_INK = "#a85c12", "#eef2f8", "#c9d3e3", "#1d3b6e"
 STEP_FACE, STEP_EDGE, READ_FACE, READ_EDGE = "#fff8e6", "#b58a1a", "#e5f3e1", "#4a9a3a"
-WIDTH, HEIGHT, C = 1500, 1494, 32  # canvas and cell size in pixels at 100 dpi
+WIDTH, HEIGHT, C = 1500, 1904, 32  # canvas and cell size in pixels at 100 dpi
 SANS, MONO = "DejaVu Sans", "DejaVu Sans Mono"
 
 fig = plt.figure(figsize=(WIDTH / 100, HEIGHT / 100), facecolor=SURFACE)
@@ -115,22 +139,22 @@ def fmt(value):
     return text.replace("0.", ".", 1) if text.lstrip("-").startswith("0.") else text
 
 
-def color(value):
-    t = min(abs(value), 1.0)
+def color(value, scale=1.0):
+    t = min(abs(value) / scale, 1.0)
     base = (217, 95, 60) if value > 0 else (47, 111, 208)
     rgb = tuple((255 + (c - 255) * t) / 255 for c in base)
     return rgb, "white" if t > 0.6 else INK
 
 
-def cells(values, x, y, vertical=False):
+def cells(values, x, y, vertical=False, size=C, scale=1.0):
     for i, value in enumerate(float(v) for v in values):
-        cx, cy = (x, y + i * C) if vertical else (x + i * C, y)
-        face, ink = color(value)
-        ax.add_patch(Rectangle((cx, cy), C, C, facecolor=face, edgecolor="#bbbbbb", lw=0.8))
+        cx, cy = (x, y + i * size) if vertical else (x + i * size, y)
+        face, ink = color(value, scale)
+        ax.add_patch(Rectangle((cx, cy), size, size, facecolor=face, edgecolor="#bbbbbb", lw=0.8))
         label = fmt(value)
         put(
-            cx + C / 2,
-            cy + C / 2,
+            cx + size / 2,
+            cy + size / 2,
             label,
             10 if len(label) > 3 else 11,
             ink,
@@ -362,15 +386,101 @@ put(
 )
 put(880, dy + 44, "o_t = q_tᵀ S_t", 13, mono=True)
 
-# Panel 3: where the inputs come from.
+# Panel 3: the short convolution on one channel.
+py, CW, x0 = 1146, 48, 200
+conv_def = line("def short_convolution(")[0]
 panel(
-    1146,
+    py,
+    390,
+    f"3 · short_convolution (L{conv_def}): before the recurrence, each channel of q, k and v mixes its last 4 tokens",
+)
+put(
+    60,
+    py + 56,
+    "One channel, two documents packed in one row. Weights are in nn.Conv1d order, oldest tap first;"
+    " the current token's weight is weight[:, 0, -1].",
+    12.5,
+    MUTED,
+)
+put(x0 + 2 * CW, py + 82, "document 1", 12.5, MUTED, ha="center")
+put(x0 + 5.5 * CW, py + 82, "document 2", 12.5, MUTED, ha="center")
+for t in range(len(CONV_X)):
+    put(x0 + (t + 0.5) * CW, py + 98, f"t = {t}", 11, MUTED, ha="center")
+    put(x0 + (t + 0.5) * CW, py + 174, str(int(conv_positions[0, t])), 12, mono=True, ha="center")
+put(60, py + 132, "x[:, t, c]", 14, mono=True)
+cells(CONV_X, x0, py + 106, size=CW, scale=30)
+start = CONV_T - len(CONV_W) + 1
+ax.add_patch(
+    Rectangle(
+        (x0 + start * CW - 2, py + 104),
+        len(CONV_W) * CW + 4,
+        CW + 4,
+        fill=False,
+        edgecolor="#111111",
+        lw=2.5,
+    )
+)
+put(60, py + 174, "positions", 14, mono=True)
+put(60, py + 214, f"weight, t = {CONV_T}", 14, mono=True)
+cells(CONV_W, x0 + start * CW, py + 186, size=CW)
+for s in range(len(CONV_W)):
+    if conv_positions[0, CONV_T] < s:
+        cx = x0 + (CONV_T - s) * CW
+        ax.plot(
+            [cx + 6, cx + CW - 6], [py + 192, py + 186 + CW - 6], color="#c94a4a", lw=1.5, alpha=0.7
+        )
+        ax.plot(
+            [cx + 6, cx + CW - 6], [py + 186 + CW - 6, py + 192], color="#c94a4a", lw=1.5, alpha=0.7
+        )
+terms = " + ".join(
+    f"{fmt(CONV_W[-1 - s].item())}·{fmt(CONV_X[CONV_T - s].item()) if conv_positions[0, CONV_T] >= s else 0}"
+    for s in range(len(CONV_W))
+)
+put(60, py + 258, f"t = {CONV_T}:  {terms} = {fmt(mixed[CONV_T].item())}", 13, mono=True)
+masked = " and ".join(
+    str(t) for t in range(start, CONV_T + 1) if conv_positions[0, CONV_T] < CONV_T - t
+)
+put(60, py + 276, f"taps at t = {masked} would read document 1, so they are zeroed", 12.5, MUTED)
+put(60, py + 310, "before SiLU", 14, mono=True)
+cells(mixed, x0, py + 288, size=CW, scale=40)
+put(60, py + 360, "q[:, t, c]", 14, mono=True)
+cells(conv_out[0, :, 0], x0, py + 338, size=CW, scale=40)
+put(x0 + 7 * CW + 14, py + 360, "after SiLU", 12.5, MUTED)
+ax.plot([x0 + 4 * CW] * 2, [py + 68, py + 104], color="#999999", lw=1.2, ls="--")
+cx = 640
+put(cx, py + 98, "The same steps in short_convolution:", 14, weight="bold")
+steps_code = [
+    ("out = x * weight[:, 0, -1]", "the current token"),
+    ("for shift in range(1, width)", "shifts 1 … 3"),
+    ("previous = F.pad(x", "x[t − shift], 0 before t = 0"),
+    ("previous = previous.masked_fill(", "drop the previous document"),
+    ("out = out + previous * weight", "add the weighted tap"),
+    ("return F.silu(out)", "SiLU"),
+]
+for i, (fragment, note) in enumerate(steps_code):
+    y = py + 132 + i * 34
+    chip(cx, y, 590, fragment, conv_def)
+    put(cx + 606, y, note, 12.5, MUTED)
+calls = ", ".join(f"L{line(f'self.{n}_conv', line('def forward(')[0])[0]}" for n in "qkv")
+put(cx, py + 338, f"{calls}: q, k and v each run this with their own weights.", 12.5, MUTED)
+put(
+    cx,
+    py + 360,
+    f"Without the document reset, t = 4 and 5 would read document 1:"
+    f" {fmt(mixed_one_document[4].item())} and {fmt(mixed_one_document[5].item())} before SiLU.",
+    12.5,
+    MUTED,
+)
+
+# Panel 4: where the inputs come from.
+panel(
+    1556,
     332,
-    "3 · Where q, k, v, α, β come from: KimiDeltaAttention.forward, then the top of kda_reference",
+    "4 · Where q, k, v, α, β come from: KimiDeltaAttention.forward, then the top of kda_reference",
 )
 forward = line("def forward(")[0]
 rows = [
-    ("q, k, v", "self.q_proj(x)", forward, "projections, then the 4-tap causal conv + SiLU"),
+    ("q, k, v", "self.q_proj(x)", forward, "projections, then short_convolution (panel 3)"),
     ("q, k", "q = F.normalize(", 0, "unit-length q and k, q scaled by d^−½"),
     ("α", "g = self.f_proj(x)", forward, "raw gate, low-rank projection"),
     ("α", "g = g.float() + dt_bias", 0, "inside kda_gate: add the per-channel bias"),
@@ -396,7 +506,7 @@ rows = [
     ),
 ]
 for i, (symbol, fragment, after, note) in enumerate(rows):
-    y = 1210 + i * 31
+    y = 1620 + i * 31
     put(60, y, symbol, 14, mono=True, weight="bold")
     chip(140, y, 720, fragment, after)
     put(876, y, note, 12.5, MUTED)
