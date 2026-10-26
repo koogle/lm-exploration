@@ -42,8 +42,9 @@ def download(repo, file, revision):
     )
 
 
-def calls_folder(run_id):
-    return ROOT / ".calls" / run_id
+def calls_folder(run_id, deadline):
+    """This launch's call records; a later launch of the same run gets its own folder."""
+    return ROOT / ".calls" / run_id / str(int(deadline))
 
 
 def status(run_id, **fields):
@@ -142,13 +143,13 @@ def schedule(recipe):
 def coordinate(run_id, recipe, deadline, parallel):
     from workflows.deadline import bounded_timeout, track
 
-    track(calls_folder(run_id), modal.current_function_call_id(), "coordinate")
+    track(calls_folder(run_id, deadline), modal.current_function_call_id(), "coordinate")
     folder = ROOT / recipe["name"]
     if not (folder / "screen.npy").exists():
         call = build_screen.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
             recipe, deadline
         )
-        track(calls_folder(run_id), call.object_id, "build_screen")
+        track(calls_folder(run_id, deadline), call.object_id, "build_screen")
         volume.commit()
         call.get()
     volume.reload()
@@ -159,7 +160,7 @@ def coordinate(run_id, recipe, deadline, parallel):
             call = prepare.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
                 recipe, name, index, deadline
             )
-            track(calls_folder(run_id), call.object_id, f"prepare {name} {index}")
+            track(calls_folder(run_id, deadline), call.object_id, f"prepare {name} {index}")
             running[call.object_id] = (name, index, call)
         volume.commit()
         for call_id, (name, index, call) in list(running.items()):
@@ -222,7 +223,7 @@ def enforce_deadline(run_id, deadline):
             return {"stage": "completed"}
     volume.reload()
     cancelled = []
-    for call_id in tracked_calls(calls_folder(run_id)):
+    for call_id in tracked_calls(calls_folder(run_id, deadline)):
         modal.FunctionCall.from_id(call_id).cancel()
         cancelled.append(call_id)
     return {"stage": "deadline_cancelled", "cancelled": cancelled}
