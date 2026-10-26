@@ -79,7 +79,7 @@ __device__ __forceinline__ void load_weights(const float* w, int c0, float (&out
 }
 
 template <typename T>
-__global__ void forward_kernel(Tensors tensors, const int64_t* positions, int64_t tokens,
+__global__ void kda_conv_forward(Tensors tensors, const int64_t* positions, int64_t tokens,
                                int channels) {
   const int c0 = (blockIdx.x * THREADS + threadIdx.x) * VEC;
   if (c0 >= channels) return;
@@ -116,7 +116,7 @@ __global__ void forward_kernel(Tensors tensors, const int64_t* positions, int64_
 // d[u] = dy[u] * silu'(pre[u]); dx[t] = sum_s w[3 - s] * d[t + s] * (position[t + s] >= s);
 // dw[3 - s] += d[u] * x[u - s] * (position[u] >= s), for u in this strip.
 template <typename T>
-__global__ void backward_kernel(Tensors tensors, const int64_t* positions, int64_t tokens,
+__global__ void kda_conv_backward(Tensors tensors, const int64_t* positions, int64_t tokens,
                                 int channels) {
   const int c0 = (blockIdx.x * THREADS + threadIdx.x) * VEC;
   if (c0 >= channels) return;
@@ -235,10 +235,10 @@ std::vector<torch::Tensor> forward(std::vector<torch::Tensor> xs, std::vector<to
   const int channels = xs[0].size(2);
   auto stream = at::cuda::getCurrentCUDAStream();
   if (xs[0].scalar_type() == torch::kBFloat16)
-    forward_kernel<__nv_bfloat16><<<grid(xs[0]), THREADS, 0, stream>>>(
+    kda_conv_forward<__nv_bfloat16><<<grid(xs[0]), THREADS, 0, stream>>>(
         tensors, positions.data_ptr<int64_t>(), tokens, channels);
   else if (xs[0].scalar_type() == torch::kFloat32)
-    forward_kernel<float><<<grid(xs[0]), THREADS, 0, stream>>>(
+    kda_conv_forward<float><<<grid(xs[0]), THREADS, 0, stream>>>(
         tensors, positions.data_ptr<int64_t>(), tokens, channels);
   else
     TORCH_CHECK(false, "x must be bf16 or fp32");
@@ -268,10 +268,10 @@ std::vector<torch::Tensor> backward(std::vector<torch::Tensor> xs, std::vector<t
   const int channels = xs[0].size(2);
   auto stream = at::cuda::getCurrentCUDAStream();
   if (xs[0].scalar_type() == torch::kBFloat16)
-    backward_kernel<__nv_bfloat16><<<grid(xs[0]), THREADS, 0, stream>>>(
+    kda_conv_backward<__nv_bfloat16><<<grid(xs[0]), THREADS, 0, stream>>>(
         tensors, positions.data_ptr<int64_t>(), tokens, channels);
   else
-    backward_kernel<float><<<grid(xs[0]), THREADS, 0, stream>>>(
+    kda_conv_backward<float><<<grid(xs[0]), THREADS, 0, stream>>>(
         tensors, positions.data_ptr<int64_t>(), tokens, channels);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
   dxs.insert(dxs.end(), dws.begin(), dws.end());
