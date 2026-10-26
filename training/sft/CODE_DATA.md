@@ -46,7 +46,10 @@ skips the tests fails.
 times. Each answer's code runs against the problem's tests in the sandbox, and the
 shortest passing answer replaces the row's solution; problems without one are dropped.
 On a 64-problem trial (`code-teacher-smoke-04`, 2 samples) 59 problems kept a solution,
-with a median of 311 characters against 593 for the OpenCodeInstruct solutions.
+with a median of 311 characters against 593 for the OpenCodeInstruct solutions. The full
+run (`code-teacher-qwen35-02`, 8 H100 shards, 2 samples) kept 204,554 of the 227,390
+problems (204,149 train, 405 validation); 22,758 had no passing answer and 78 no
+extractable code.
 
 Each shard's answers and kept rows are saved under `/runs/teacher-work/<data-id>/` as
 soon as they exist, so rerunning the same command after a failure resumes. The
@@ -60,6 +63,8 @@ times out at the deadline.
 `mixture-sft-v1`: the rows of a math and a code dataset in one file, each tagged with its
 task, which decides its prompt and answer. The trainer samples rows uniformly, so each
 task's share is its share of rows; validation buckets are `task/bucket`.
+`mixture-math-code-02` holds the 224,533 math rows of `math-gsm8k-metamath-02` and the
+204,554 code rows of `code-teacher-qwen35-02`.
 
 ## RL prompt pool
 
@@ -85,3 +90,5 @@ uv run --all-extras modal run -m modal_scripts.modal_sft_data::mixture --data-id
   --math math-gsm8k-metamath-02 --code code-teacher-qwen35-02
 uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool --data-id rl-pool-math-code-03
 ```
+
+Preparation reports are in `jfrick/lm-exploration-results` under `pr-87/data/`.
