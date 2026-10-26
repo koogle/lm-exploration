@@ -33,25 +33,34 @@ def build_kernel(kernel):
     )
 
 
-image = (
-    modal.Image.from_registry(CUDA_BASE, add_python="3.12")
-    .pip_install(*PACKAGES)
-    .env({"PYTHONPATH": "/project", "TORCH_CUDA_ARCH_LIST": "9.0"})
-)
-for kernel in KERNELS:
-    image = image.add_local_file(
-        f"hybrid/kernels/{kernel}.cu", f"/opt/hybrid_kernels/{kernel}/{kernel}.cu", copy=True
-    ).run_commands(build_kernel(kernel))
-image = (
-    image.add_local_dir("10m", "/project/model_10m", ignore=["__pycache__"])
-    .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
-    .add_local_file("workflows/__init__.py", "/project/workflows/__init__.py")
-    .add_local_file("workflows/deadline.py", "/project/workflows/deadline.py")
-    .add_local_file("trainer/__init__.py", "/project/trainer/__init__.py")
-    .add_local_file("trainer/optimizers.py", "/project/trainer/optimizers.py")
-    .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__"])
-    .add_local_dir("tests", "/project/tests", ignore=["__pycache__", "fixtures"])
-)
+def build(extra_packages=(), env=None):
+    """The family's image; `extra_packages` and `env` go in before the local sources."""
+    built = (
+        modal.Image.from_registry(CUDA_BASE, add_python="3.12")
+        .pip_install(*PACKAGES)
+        .env({"PYTHONPATH": "/project", "TORCH_CUDA_ARCH_LIST": "9.0"})
+    )
+    for kernel in KERNELS:
+        built = built.add_local_file(
+            f"hybrid/kernels/{kernel}.cu", f"/opt/hybrid_kernels/{kernel}/{kernel}.cu", copy=True
+        ).run_commands(build_kernel(kernel))
+    if extra_packages:
+        built = built.pip_install(*extra_packages)
+    if env:
+        built = built.env(env)
+    return (
+        built.add_local_dir("10m", "/project/model_10m", ignore=["__pycache__"])
+        .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
+        .add_local_file("workflows/__init__.py", "/project/workflows/__init__.py")
+        .add_local_file("workflows/deadline.py", "/project/workflows/deadline.py")
+        .add_local_file("trainer/__init__.py", "/project/trainer/__init__.py")
+        .add_local_file("trainer/optimizers.py", "/project/trainer/optimizers.py")
+        .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__"])
+        .add_local_dir("tests", "/project/tests", ignore=["__pycache__", "fixtures"])
+    )
+
+
+image = build()
 
 # One function call per launch: no retries, and the call refuses to start once 24
 # hours have passed since launch (queue time included).
