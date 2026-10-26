@@ -1,14 +1,15 @@
 """Standard benchmarks (lm-evaluation-harness) for a hybrid export and reference models.
 
 Run from training/:
-    modal run -m model_hybrid.modal_benchmarks [--export tokens-039998980096] [--limit N]
+    modal run --detach -m model_hybrid.modal_benchmarks [--export tokens-039998980096] [--limit N]
 
 One H100 call per model, in parallel: the hybrid export through `benchmarks.py`
 and each reference model through the harness's Hugging Face backend, all with the
-same tasks, shot counts and greedy decoding. Each call has `retries=0`, a 3-hour
+same tasks, shot counts and greedy decoding. Each call has `retries=0`, a 6-hour
 timeout and refuses to start 24 hours after launch. Code tasks execute the
 generated programs inside the call's container. Results (harness JSON without
-per-sample logs) are written to the ignored artifacts/results/.
+per-sample logs) are written to `lm-exploration-hybrid-runs/benchmarks/<launch>/` by
+each call, so a `--detach` launch keeps them, and to the ignored artifacts/results/.
 """
 
 import json
@@ -81,12 +82,12 @@ def _summary(results):
     gpu="H100",
     cpu=8,
     memory=65536,
-    timeout=3 * 60 * 60,
+    timeout=6 * 60 * 60,
     retries=0,
     secrets=[secret],
     volumes={"/runs": runs_volume},
 )
-def evaluate(model, revision, deadline, limit=0):
+def evaluate(model, revision, deadline, folder, limit=0):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     import lm_eval
@@ -128,7 +129,14 @@ def evaluate(model, revision, deadline, limit=0):
             }
         )
         print(json.dumps({"model": model, "tasks": tasks, **out["suites"][-1]["summary"]}))
-    return out
+    # Plain JSON (the harness's configs hold its own objects), also on the volume so a
+    # detached launch keeps every finished model.
+    text = json.dumps(out, indent=2, default=str) + "\n"
+    path = Path("/runs/benchmarks", folder, f"{model.replace('/', '--')}.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    runs_volume.commit()
+    return json.loads(text)
 
 
 @app.local_entrypoint()
@@ -141,9 +149,11 @@ def main(export: str = "tokens-039998980096", limit: int = 0, models: str = ""):
         chosen = [(m, r) for m, r in chosen if m in wanted or (r is None and "hybrid" in wanted)]
     models = chosen
     stamp = int(time.time())
+    run_folder = f"{stamp}{'-limit' if limit else ''}"
+    print(f"results also go to lm-exploration-hybrid-runs/benchmarks/{run_folder}/")
     folder = Path("artifacts/results/benchmarks")
     folder.mkdir(parents=True, exist_ok=True)
-    calls = [(m, r, deadline, limit) for m, r in models]
+    calls = [(m, r, deadline, run_folder, limit) for m, r in models]
     for result in evaluate.starmap(calls, return_exceptions=True):
         if isinstance(result, BaseException):
             print(f"failed: {result!r}")

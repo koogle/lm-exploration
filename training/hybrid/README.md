@@ -372,10 +372,11 @@ model for the export and pinned reference models through the harness's Hugging
 Face backend (SmolLM2-360M, Qwen3-0.6B, Qwen3.5-0.8B, LFM2.5-1.2B, OLMo-2-1B,
 Gemma 3 270M and 1B, Gemma 4 E2B; `--models` picks a subset): HellaSwag, ARC-Easy/Challenge, PIQA, WinoGrande, OpenBookQA, SciQ and
 LAMBADA zero-shot, MMLU 5-shot, GSM8K 5-shot, HumanEval zero-shot and MBPP 3-shot
-(`retries=0`, 3-hour timeout, refuses work 24 hours after launch):
+(`retries=0`, 6-hour timeout, refuses work 24 hours after launch; each call writes its
+results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
 
 ```sh
-uv run --all-extras modal run -m model_hybrid.modal_benchmarks [--export tokens-039998980096]
+uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--export tokens-039998980096]
 ```
 
 ## Tests
