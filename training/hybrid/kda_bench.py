@@ -89,28 +89,65 @@ def time_recurrence(implementation, dtype=torch.bfloat16, mean_document=1000):
     return {"forward": kernel_times(forward), "forward_backward": kernel_times(forward_backward)}
 
 
-def time_convolutions(dtype=torch.bfloat16, mean_document=1000):
-    """The three short convolutions of one layer, compiled as in training."""
-    generator = torch.Generator().manual_seed(1)
+def convolution_inputs(dtype, generator, batch=None, length=None, mean_document=1000):
     s = SHAPE
-    documents = packed_documents(s["batch"], s["length"], mean_document, generator)
-    positions = document_positions(documents)
+    batch, length = batch or s["batch"], length or s["length"]
+    documents = packed_documents(batch, length, mean_document, generator)
     channels = s["heads"] * s["width"]
     xs = [
-        torch.randn(s["batch"], s["length"], channels, generator=generator)
-        .cuda()
-        .to(dtype)
-        .requires_grad_()
+        torch.randn(batch, length, channels, generator=generator).cuda().to(dtype).requires_grad_()
         for _ in range(3)
     ]
-    weights = [torch.randn(channels, 1, 4).cuda().requires_grad_() for _ in range(3)]
+    weights = [
+        (0.5 * torch.randn(channels, 1, 4, generator=generator)).cuda().requires_grad_()
+        for _ in range(3)
+    ]
+    return xs, weights, document_positions(documents)
+
+
+def compiled_convolutions():
     convolution = torch.compile(kda.short_convolution)
 
+    def run(xq, xk, xv, wq, wk, wv, positions):
+        return tuple(
+            convolution(x, w, positions) for x, w in zip((xq, xk, xv), (wq, wk, wv), strict=True)
+        )
+
+    return run
+
+
+def time_convolutions(implementation, dtype=torch.bfloat16):
+    """Forward+backward of one layer's three short convolutions."""
+    xs, weights, positions = convolution_inputs(dtype, torch.Generator().manual_seed(1))
+
     def forward_backward():
-        outs = [convolution(x, w, positions) for x, w in zip(xs, weights, strict=True)]
+        outs = implementation(*xs, *weights, positions)
         torch.autograd.grad(outs, [*xs, *weights], [torch.ones_like(o) for o in outs])
 
     return kernel_times(forward_backward)
+
+
+def convolution_accuracy(implementation, dtype, tolerance):
+    """Relative max error of outputs and x/w gradients against fp64 short_convolution."""
+    generator = torch.Generator().manual_seed(3)
+    xs, weights, positions = convolution_inputs(
+        dtype, generator, batch=2, length=777, mean_document=40
+    )
+    outs = implementation(*xs, *weights, positions)
+    upstream = [torch.randn(o.shape, generator=generator).cuda() for o in outs]
+    grads = torch.autograd.grad(
+        outs, [*xs, *weights], [u.to(o.dtype) for u, o in zip(upstream, outs)]
+    )
+    leaves = [t.detach().double().requires_grad_() for t in (*xs, *weights)]
+    expected = [kda.short_convolution(x, w, positions) for x, w in zip(leaves[:3], leaves[3:])]
+    expected_grads = torch.autograd.grad(expected, leaves, [u.double() for u in upstream])
+    errors = {}
+    names = ("q", "k", "v", "dq", "dk", "dv", "dwq", "dwk", "dwv")
+    for name, a, b in zip(names, (*outs, *grads), (*expected, *expected_grads), strict=True):
+        errors[name] = ((a.double() - b).abs().max() / b.abs().max().clamp_min(1e-12)).item()
+    if max(errors.values()) > tolerance:
+        raise AssertionError(f"Convolutions differ from the reference: {errors}")
+    return errors
 
 
 def accuracy(implementation, dtype, length=512, tolerance=5e-2):
@@ -135,7 +172,10 @@ def accuracy(implementation, dtype, length=512, tolerance=5e-2):
 
 
 def run(implementations=None):
+    from .kda_convolution import kda_convolutions
+
     implementations = implementations or {"fla": kda.kda_kernel}
+    convolutions = {"compiled_torch": compiled_convolutions(), "cuda_kernel": kda_convolutions}
     return {
         "gpu": torch.cuda.get_device_name(),
         "torch": torch.__version__,
@@ -146,5 +186,10 @@ def run(implementations=None):
             for dtype in (torch.float32, torch.bfloat16)
         },
         "recurrence": {name: time_recurrence(f) for name, f in implementations.items()},
-        "short_convolutions": time_convolutions(),
+        "convolution_accuracy": {
+            f"{name}_{str(dtype)[6:]}": convolution_accuracy(function, dtype, tolerance)
+            for name, function in convolutions.items()
+            for dtype, tolerance in ((torch.float32, 1e-5), (torch.bfloat16, 2e-2))
+        },
+        "short_convolutions": {name: time_convolutions(f) for name, f in convolutions.items()},
     }
