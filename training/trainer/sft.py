@@ -19,6 +19,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from training_data.math_sft import MATH
 from training_data.repair_sft import REPAIR
 from training_data.subword import (
     BOS_TOKEN_ID,
@@ -30,7 +31,7 @@ from training_data.subword import (
 )
 
 # The SFT dataset (`training_data.sft.SFTDataset`) of each task.
-TASKS = {"repair": REPAIR}
+TASKS = {"repair": REPAIR, "math": MATH}
 
 
 @dataclass(frozen=True)
