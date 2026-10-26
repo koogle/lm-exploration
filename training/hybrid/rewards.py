@@ -56,12 +56,14 @@ def extract_code(completion):
     return blocks[-1] if blocks else None
 
 
-def _limits():
-    import resource
-
-    resource.setrlimit(resource.RLIMIT_AS, (MEMORY_BYTES, MEMORY_BYTES))
-    resource.setrlimit(resource.RLIMIT_CPU, (TIMEOUT_SECONDS, TIMEOUT_SECONDS))
-    os.setsid()
+# Applies the limits, then becomes pytest: limits are set in the child itself, which
+# is safe from a multithreaded parent (unlike subprocess's preexec_fn).
+LIMITED_PYTEST = (
+    "import resource, sys; "
+    f"resource.setrlimit(resource.RLIMIT_AS, ({MEMORY_BYTES}, {MEMORY_BYTES})); "
+    f"resource.setrlimit(resource.RLIMIT_CPU, ({TIMEOUT_SECONDS}, {TIMEOUT_SECONDS})); "
+    "import pytest; sys.exit(pytest.main(['-x', '-q', '-p', 'no:cacheprovider']))"
+)
 
 
 def code_reward(completion, tests):
@@ -71,15 +73,14 @@ def code_reward(completion, tests):
     with tempfile.TemporaryDirectory() as folder:
         Path(folder, "solution.py").write_text(code)
         Path(folder, "test_solution.py").write_text(tests)
-        command = [sys.executable, "-I", "-m", "pytest", "-x", "-q", "-p", "no:cacheprovider"]
         try:
             result = subprocess.run(
-                command,
+                [sys.executable, "-I", "-c", LIMITED_PYTEST],
                 cwd=folder,
                 capture_output=True,
                 check=False,
                 timeout=TIMEOUT_SECONDS,
-                preexec_fn=_limits,
+                start_new_session=True,
                 env={"PATH": os.environ.get("PATH", "")},
             )
         except subprocess.TimeoutExpired:
