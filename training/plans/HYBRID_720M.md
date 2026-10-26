@@ -63,7 +63,8 @@ attention mass. Curves, metrics and config: HF dataset
 | Fourth launch | 2026-10-25 ~09:55 UTC, 8 x H100, resumed from step 1,466 (1.54B tokens) after the 124M run released its GPUs; uses the shared RMSNorm and SwiGLU |
 | Interruption | 2026-10-26 04:28 UTC at step ~24,018: the first launch's deadline supervisor cancelled every call recorded under the run ID, including the fourth launch's segment (the launcher records calls per launch since #81's fix). Resumed 06:50 UTC from the step-23,405 checkpoint (~0.6B tokens repeated) |
 | Fifth and sixth launches | 2026-10-26 06:50 UTC, 8 x H100, from step 23,405; stopped gracefully at step 26,142 (27.41B tokens) before the fourth launch's supervisor fired at 09:39; relaunched 09:53 UTC from step 26,142, all from commit `24692d1` (branch `claude/hybrid-720m-40b-01-run`) |
-| Throughput | ~372K tokens/s on 8 x H100 (about 28% MFU) |
+| Throughput | median 371.8K tokens/s on 8 x H100, 27.9% MFU |
+| Finished | 2026-10-26 19:55 UTC at step 38,146 (39,998,980,096 tokens, `stop_reason: target`); final bf16 export `tokens-039998980096/` in `jfrick/hybrid-720m-40b` |
 | Checkpoints | every 90 minutes and at each stop; bf16 exports to `jfrick/hybrid-720m-40b` (private) every 5B tokens |
 | Data | `capacity.json` and `screen.json` in `training/results/hybrid-40b-v1/` of the results dataset |
 
@@ -80,7 +81,8 @@ uv run modal run --detach -m model_hybrid.modal_train::launch --run-id hybrid-72
 The resumed segment keeps the 1,048,576-token global batch. Every launch stops
 within 24 hours.
 
-Held-out loss (bits per byte) during the constant-learning-rate phase:
+Held-out loss (bits per byte); the learning rate is constant until 34B tokens and
+then decays linearly to 0:
 
 | Step | Tokens | ClimbMix | Code | Math |
 | ---: | ---: | --- | --- | --- |
@@ -89,18 +91,32 @@ Held-out loss (bits per byte) during the constant-learning-rate phase:
 | 10,000 | 10.5B | 2.913 (0.871) | 1.400 (0.506) | 2.106 (0.839) |
 | 15,000 | 15.7B | 2.891 (0.864) | 1.345 (0.487) | 2.082 (0.830) |
 | 26,142 | 27.4B | 2.872 (0.859) | 1.357 (0.491) | 2.061 (0.821) |
+| 32,000 | 33.6B | 2.862 (0.856) | 1.332 (0.482) | 2.059 (0.820) |
+| 36,000 | 37.7B | 2.713 (0.811) | 1.191 (0.431) | 1.898 (0.756) |
+| 38,146 (final) | 40.0B | **2.558 (0.765)** | **1.055 (0.382)** | **1.742 (0.694)** |
 
-Greedy samples at 27.4B tokens are fluent but factually loose and repetitive (for
-example "The first printing press was invented in 1796 by Thomas Jefferson"; the
-`fibonacci` prompt loops on a recursive call). Samples and metrics are in the run's
-`metrics.jsonl`.
+The decay phase (the last 6B tokens) lowered held-out bits per byte by 11% on
+ClimbMix, 21% on code and 15% on math. Final MTP held-out loss: 2.80 / 1.23 / 1.96.
+Greedy samples at 27.4B tokens were fluent but factually loose and repetitive
+(for example "The first printing press was invented in 1796 by Thomas Jefferson").
+At 40B the same prompts give a Gutenberg-centred printing-press paragraph, the
+correct recursive `fibonacci(n-1)+fibonacci(n-2)` (repeated), the train question
+worked as 120 km / 2 h = 60 km/h, and a prime-number definition with 2 and 3 as the
+first primes. Metrics, samples, configs, launch records and segment logs:
+`training/results/hybrid-720m-40b-01/` in `jfrick/lm-exploration-results`.
+
+Compute, from the launch records and segment end times: 256.1 H100-hours over six
+segments (17.1 on 2 GPUs, 239.0 on 8), 35.4 segment-hours of wall time. At Modal's
+list $3.95 per H100-hour that is about $1,012 of GPU time plus about $127 for each
+segment's 32 CPU cores and 256 GiB of memory, about $1,140 in total; the
+interruption repeated about 0.6B tokens (about 3.5 H100-hours).
 
 Cost estimate (Modal list price $3.95 per H100-hour, 2026-10-25): at the
 measured ~46K tokens/s per GPU, 40B tokens take about 240 H100-hours, about $950,
 plus roughly $3.60 per wall-clock hour for the segment's 32 CPU cores and 256 GiB
 of memory (about $110 over 30 hours on 8 GPUs). Data preparation used 718 calls of
 8 cores for about 17 minutes of wall time. The final measured MFU, GPU-hours and
-cost are recorded here when the run completes.
+cost are recorded above.
 
 Studies that spend compute or touch data at scale (token counts, contamination
 screens, benchmarks, pilots, the launch) are run only after the user approves
