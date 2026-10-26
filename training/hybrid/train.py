@@ -86,10 +86,13 @@ def learning_rate_factor(config, tokens):
 
 
 def flops_per_token(model_config, lm, attended_keys):
-    """Training FLOPs per token: 6 x matmul weights (incl. both output-layer uses) + attention."""
+    """Training FLOPs per token: 6 x matmul weights (incl. both output-layer uses) + attention.
+
+    The MTP module reuses the output layer for its sampled fraction of positions.
+    """
     matmul = sum(p.numel() for n, p in lm.named_parameters() if p.ndim == 2)
-    heads = 1 if model_config.mtp else 0
-    matmul += heads * lm.output_weight.numel()  # MTP reuses the output layer.
+    if model_config.mtp:
+        matmul += model_config.mtp_loss_fraction * lm.output_weight.numel()
     full_layers = model_config.layer_kinds.count("full") + (
         1 if model_config.mtp and model_config.mtp_layer_kind == "full" else 0
     )
@@ -386,7 +389,8 @@ def train(
             break
         inputs, labels, mtp_labels = batch_tensors(batch, model_config.eos_id)
         ntp_count = (labels != -100).sum()
-        mtp_count = (mtp_labels != -100).sum().clamp_min(1)
+        # Expected number of sampled valid MTP targets (see HybridLM.forward).
+        mtp_count = (mtp_labels != -100).sum().clamp_min(1) * model_config.mtp_loss_fraction
         fraction = progress["tokens"] / config.target_tokens
         mtp_weight = hybrid.mtp_weight(model_config, fraction) if model_config.mtp else 0.0
         lr_factor = learning_rate_factor(config, progress["tokens"] + tokens_per_step)

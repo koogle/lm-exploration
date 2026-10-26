@@ -138,6 +138,7 @@ class HybridConfig:
     mtp_layer_kind: str = "full"
     mtp_weight_start: float = 0.3
     mtp_weight_end: float = 0.1
+    mtp_loss_fraction: float = 1.0
     gate_bias_init: float = 3.0
     rope_base: float = 1_000_000.0
     norm_eps: float = 1e-5
@@ -159,6 +160,8 @@ class HybridConfig:
             raise ValueError("eos_id must be a token id")
         if not self.layer_pattern or set(self.layer_pattern) - {"kda", "full"}:
             raise ValueError("layer_pattern must list 'kda' and 'full' layers")
+        if not 0 < self.mtp_loss_fraction <= 1:
+            raise ValueError("mtp_loss_fraction must be in (0, 1]")
         if self.mtp_layer_kind not in ("kda", "full"):
             raise ValueError("mtp_layer_kind must be 'kda' or 'full'")
         if self.n_layer % len(self.layer_pattern):
@@ -408,7 +411,11 @@ class HybridLM(nn.Module):
         valid targets; divide by the global valid-target count to get the mean.
         With `mtp_labels` (targets for t+2, see `documents.mtp_labels`), also
         returns the same sums for the MTP module under an `mtp_` prefix. Without
-        them the MTP module does not run, as in inference.
+        them the MTP module does not run, as in inference. In training mode with
+        `mtp_loss_fraction < 1`, the MTP module runs over every position but only a
+        uniformly random `mtp_loss_fraction` of them (fixed count) go through the
+        output layer and loss; divide `mtp_loss` by the expected valid count
+        (all valid MTP targets times the fraction).
         """
         x, rope, mask = self.trunk(tokens)
         hidden = self.final_norm(x)
@@ -422,5 +429,12 @@ class HybridLM(nn.Module):
             # labels never feed a valid MTP target, so any in-vocabulary id works.
             next_tokens = torch.cat((tokens[:, 1:], labels[:, -1:].clamp_min(0)), 1)
             future = self.mtp(x, self.token_embedding(next_tokens), rope, mask)
+            if self.training and self.config.mtp_loss_fraction < 1:
+                future, mtp_labels = future.flatten(0, 1), mtp_labels.flatten()
+                keep = max(1, round(future.size(0) * self.config.mtp_loss_fraction))
+                # Indices of the `keep` largest uniform keys: a random subset, without
+                # randperm (which torch.compile cannot trace).
+                rows = torch.rand(future.size(0), device=future.device).topk(keep).indices
+                future, mtp_labels = future[rows], mtp_labels[rows]
             losses |= self.loss_sums(future, mtp_labels, "mtp_")
         return losses

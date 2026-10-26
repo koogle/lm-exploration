@@ -203,14 +203,18 @@ def bench(
     global_rows: int = 0,
     document_tokens: int = 1000,
     profile: bool = False,
+    mtp_loss_fraction: float = 0.0,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
-    `--profile` adds GPU kernel time per category for a few steps (see benchmark.py).
+    `--profile` adds GPU kernel time per category for a few steps (see benchmark.py);
+    `--mtp-loss-fraction` overrides the model's MTP loss fraction.
     """
     from workflows.deadline import MAX_LAUNCH_SECONDS
 
     settings = load_config(config)
+    if mtp_loss_fraction:
+        settings["model"]["mtp_loss_fraction"] = mtp_loss_fraction
     rows = global_rows or (
         settings["global_rows"] if gpus == 8 else 8 * (microbatch or settings["microbatch"]) * gpus
     )
