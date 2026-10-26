@@ -340,7 +340,10 @@ epoch, and launches like pretraining with
 
 [`generate.py`](generate.py) decodes incrementally in plain PyTorch (CPU or GPU):
 a KV cache for the full-attention layers, convolution history and fp32 state for
-KDA, one token per pass through the weights. [`playground/`](playground) is a
+KDA, one token per row per pass through the weights. Rows follow the model's
+document rule (after EOS the next token starts a new document), so
+`generate_batch` left-pads prompts of different lengths with EOS and each row
+decodes exactly as it would alone. [`playground/`](playground) is a
 Gradio app for a private Hugging Face Space: text continuation, and for chat
 exports a chat tab with OpenAI tools whose replies are parsed back into OpenAI
 messages. `playground/publish.py` uploads the app and the inference modules; the
@@ -349,6 +352,23 @@ Space downloads the export from the private model repo with its `HF_TOKEN` secre
 ```sh
 uv run --all-extras python -m model_hybrid.playground.publish \
   --space jfrick/hybrid-720m-playground --export tokens-039998980096 [--chat]
+```
+
+## Benchmarks
+
+[`benchmarks.py`](benchmarks.py) wraps an export as an lm-evaluation-harness
+model. Multiple-choice and perplexity requests are scored with the model's
+document-masked forward pass on CUDA (each request is `[EOS] + context +
+continuation`, grouped into five fixed shapes so the compiled attention reuses its
+graphs); generation is greedy `generate_batch` cut at the task's stop strings.
+[`modal_benchmarks.py`](modal_benchmarks.py) runs the same suite on one H100 per
+model for the export and pinned reference models through the harness's Hugging
+Face backend: HellaSwag, ARC-Easy/Challenge, PIQA, WinoGrande, OpenBookQA, SciQ and
+LAMBADA zero-shot, MMLU 5-shot, GSM8K 5-shot, HumanEval zero-shot and MBPP 3-shot
+(`retries=0`, 3-hour timeout, refuses work 24 hours after launch):
+
+```sh
+uv run --all-extras modal run -m model_hybrid.modal_benchmarks [--export tokens-039998980096]
 ```
 
 ## Tests
