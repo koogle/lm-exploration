@@ -30,6 +30,7 @@ PROFILE_SKIP, PROFILE_STEPS = 6, 3
 KERNEL_CATEGORIES = (
     ("communication", r"nccl"),
     ("flex_attention", r"flex_attention|triton_tem_fused"),
+    ("kda_convolution", r"kda_conv_"),
     (
         "kda_fla",
         r"chunk_kda|kda|chunk_gated_delta|chunk_fwd|chunk_bwd|chunk_local|solve_tril|wy_|l2norm",
