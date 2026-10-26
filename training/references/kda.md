@@ -115,8 +115,8 @@ out[t, c] = SiLU(w₃ x[t, c] + w₂ x[t−1, c] + w₁ x[t−2, c] + w₀ x[t�
   `test_short_convolution_matches_conv1d_and_resets` checks.
 - Weights start uniform in ±1/√4, `nn.Conv1d`'s default.
 
-With one channel, weights `[0.1, 0.2, 0.3, 1.0]` (oldest to current) and a second
-document starting at token 4, before SiLU:
+Panel 3 of the figure draws this example: one channel, weights `[0.1, 0.2, 0.3, 1.0]`
+(oldest to current) and a second document starting at token 4, before SiLU:
 
 ```
 x              [1,   2,   3,   4,   | 10,   20,   30  ]
