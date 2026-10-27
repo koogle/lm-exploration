@@ -188,7 +188,19 @@ weather question with a `get_weather` tool the call
 `<tool_call>get_weather<arg_key>city</arg_key><arg_value>Berlin</arg_value></tool_call>`.
 The base model looped or echoed on the same prompts.
 
-The ablation without replay (`chat-sft-v1-no-replay`) hung twice on 8 GPUs
-before its first step (`hybrid-720m-chat-sft-no-replay-01`, `-02`) and ran
-normally on 1 and 8 GPUs for 2 steps; the trainer now dumps every thread's stack
-when a step exceeds 20 minutes.
+Replay ablation: `chat-sft-v1-no-replay` trains the same chat data without
+replay rows (2,185 steps of 128 chat rows, `hybrid-720m-chat-sft-no-replay-03`).
+Pretraining held-out loss of each export, measured with
+`modal_train::heldout` (the 40B run's document counts; the base export
+reproduces its final values):
+
+| Export | ClimbMix | Code | Math | Chat held-out (mean of 19 files) |
+| --- | ---: | ---: | ---: | ---: |
+| Base, 40B tokens | 2.558 | 1.055 | 1.742 | |
+| SFT with 25% replay | 2.599 (+1.6%) | 1.080 (+2.4%) | 1.770 (+1.6%) | 0.835 |
+| SFT without replay | 2.881 (+12.6%) | 1.240 (+17.5%) | 2.070 (+18.8%) | 0.829 |
+
+Replay keeps about 85–90% of the pretraining loss that chat-only fine-tuning
+gives up, at 0.006 nats of chat held-out loss. The first two launches of the
+no-replay run (`-01`, `-02`) hung on 8 GPUs before their first step and were
+stopped; the third ran normally.
