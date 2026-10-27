@@ -16,6 +16,7 @@ from hybrid.modal_study import app, benchmark, registry, supervise
 parser = argparse.ArgumentParser()
 parser.add_argument("--run", required=True)
 parser.add_argument("--long", action="store_true")
+parser.add_argument("--inspect-dtypes", action="store_true")
 args = parser.parse_args()
 run = args.run
 config = variants = None
@@ -23,16 +24,22 @@ if args.long:
     from hybrid.long_study import CONFIG, VARIANTS
 
     config, variants = CONFIG, VARIANTS
-key = run + "-benchmark-" + str(int(time.time()))
+kind = "dtypes" if args.inspect_dtypes else "benchmark"
+key = run + "-" + kind + "-" + str(int(time.time()))
 deadline = time.time() + 3600
 folder = Path("artifacts/results") / run
 with modal.enable_output(), app.run():
     supervisor = supervise.spawn(key, deadline)
     while not registry.get(key + "/ready", False):
         time.sleep(1)
-    call = benchmark.spawn(run, deadline, config, variants)
+    if args.inspect_dtypes:
+        from hybrid.long_study import inspect_inputs
+
+        call = inspect_inputs.spawn(deadline)
+    else:
+        call = benchmark.spawn(run, deadline, config, variants)
     registry[key + "/calls"] = [call.object_id]
-    (folder / "benchmark-launch.json").write_text(
+    (folder / f"{kind}-launch.json").write_text(
         json.dumps(
             {
                 "deadline": deadline,
@@ -47,7 +54,7 @@ with modal.enable_output(), app.run():
         )
     )
     try:
-        (folder / "benchmark.json").write_text(json.dumps(call.get(), indent=2))
+        (folder / f"{kind}.json").write_text(json.dumps(call.get(), indent=2))
     finally:
         call.cancel()
         registry[key + "/done"] = True

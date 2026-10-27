@@ -26,6 +26,40 @@ TOKENS_PER_STEP = BATCH * CONFIG["block_size"]
 EVAL_BATCHES = 32
 
 
+@app.function(image=image, gpu="H100", cpu=2, memory=8192, timeout=300, retries=0)
+def inspect_inputs(deadline):
+    """Record actual recurrence input dtypes under the study's CUDA autocast."""
+    import model_hybrid.study_mixers as mixers
+    import torch
+    from model_hybrid.model import DocumentMask, HybridConfig, HybridLM, rope_tables
+
+    assert time.time() < deadline - 60
+    torch.set_num_threads(2)
+    records = {}
+    model = HybridLM(HybridConfig(**CONFIG))
+    x = torch.randn(2, 16, 768, device="cuda")
+    mask = DocumentMask(torch.zeros(2, 16, dtype=torch.long, device="cuda"))
+    tables = rope_tables(16, 64, 1e6, "cuda")
+    for variant in ["baseline", "none", "rope"]:
+        import copy
+
+        selected = mixers.configure(copy.deepcopy(model), variant).blocks[0].mixer.cuda()
+
+        def capture(q, k, v, *args, variant=variant):
+            records[variant] = {name: str(t.dtype) for name, t in zip(["q", "k", "v"], [q, k, v])}
+            return torch.zeros_like(v)
+
+        original = mixers.kda_kernel
+        mixers.kda_kernel = capture
+        try:
+            with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
+                selected(x, tables, mask)
+        finally:
+            mixers.kda_kernel = original
+        del selected
+    return {"input_dtypes": records, "torch": str(torch.__version__)}
+
+
 @app.function(image=image, cpu=2, memory=4096, timeout=1200, retries=0, volumes={"/runs": runs})
 def copy_prepared(source, run, deadline):
     """Copy an explicitly selected, hash-verified corpus after a launcher failure."""
