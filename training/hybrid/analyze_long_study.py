@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import time
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -100,4 +101,29 @@ def analyze(folder):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("results", type=Path)
-    analyze(parser.parse_args().results)
+    parser.add_argument("--wait-seconds", type=int, default=0)
+    parser.add_argument("--publish", action="store_true")
+    args = parser.parse_args()
+    launch = json.loads((args.results / "launch.json").read_text())
+    stop = min(time.time() + args.wait_seconds, launch["deadline"] + 120)
+    expected = [
+        args.results / f"{variant}-{seed}.json"
+        for variant in launch["variants"]
+        for seed in launch["seeds"]
+    ]
+    while time.time() < stop and not all(path.exists() for path in expected):
+        time.sleep(min(10, max(0, stop - time.time())))
+    analyze(args.results)
+    if args.publish:
+        import truststore
+
+        truststore.inject_into_ssl()
+        from huggingface_hub import HfApi
+
+        HfApi().upload_folder(
+            repo_id="jfrick/lm-exploration-results",
+            repo_type="dataset",
+            folder_path=str(args.results),
+            path_in_repo="training/results/" + launch["run"],
+            commit_message="Archive paired 100M KDA study comparisons",
+        )
