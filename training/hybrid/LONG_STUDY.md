@@ -37,7 +37,7 @@ four-mode rotating memory, RoPE without convolution, and RoPE replacing the
 convolution in the middle KDA layer of each group. Full-attention layers are
 unchanged. Rotating memory uses the custom Triton training implementation.
 
-The planned architecture has 12 layers, width 768, SwiGLU width 1792, 12 KDA
+The architecture has 12 layers, width 768, SwiGLU width 1792, 12 KDA
 heads of width 64, and full attention with 12 query / 4 KV heads. Its repeating
 layout is KDA/KDA/KDA/full. Vocabulary size is 32,768 with tied embeddings.
 Measured parameter counts range from 104,314,704 (no convolution and RoPE)
@@ -97,7 +97,8 @@ preserved in the HF results archive.
 
 Run `kda-100m-1793059841` uses the corrected collector and hash-verified copies
 of those exact prepared arrays. It retains the first launch's overall deadline.
-Training results are pending. An automatic collector writes paired summaries
+The main training runs completed; precision controls are still running.
+An automatic collector writes paired summaries
 and plots to the same HF results folder when the worker results arrive.
 
 After collection, run `python -m hybrid.analyze_long_study artifacts/results/<run-id>`
