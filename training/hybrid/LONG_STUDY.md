@@ -2,16 +2,18 @@
 
 ## Main experiment results
 
-All ten main runs completed 100,663,296 input token positions each. No
-convolution is the fastest variant; RoPE without convolution has the lowest
-observed mean held-out loss. Its additional gain over no convolution is small
-and positive in both seeds. The precision-matched baseline controls are still
-running, so comparisons with the original PR77 baseline currently include the
-precision difference described below.
+All twelve runs, including two precision controls, completed 100,663,296 input
+token positions each. RoPE without convolution has the lowest observed mean
+held-out loss, and its fused kernel runs at essentially no-convolution speed.
+Its additional loss gain over no convolution is small and positive in both
+seeds. The precision-matched baseline controls preserve this ranking.
+
+[Archived metrics, checks, logs and learning curves](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/results/kda-100m-1793059841).
 
 | Variant | Seed 17 CE | Seed 29 CE | Mean CE |
 | --- | ---: | ---: | ---: |
 | Original baseline | 3.773981 | 3.802101 | 3.788041 |
+| BF16-input baseline control | 3.801982 | 3.801073 | 3.801527 |
 | No convolution | 3.666530 | 3.669406 | 3.667968 |
 | RoPE without convolution | 3.644643 | 3.665334 | 3.654988 |
 | Rotating memory, Triton | 3.666716 | 3.658386 | 3.662551 |
@@ -98,9 +100,9 @@ preserved in the HF results archive.
 
 Run `kda-100m-1793059841` uses the corrected collector and hash-verified copies
 of those exact prepared arrays. It retains the first launch's overall deadline.
-The main training runs completed; precision controls are still running.
-An automatic collector writes paired summaries
-and plots to the same HF results folder when the worker results arrive.
+All twelve training runs completed. The collector saved paired summaries and
+plots to the same HF results folder. Each run has the complete 25-point
+evaluation curve and its final model/optimizer checkpoint on the Modal volume.
 
 After collection, run `python -m hybrid.analyze_long_study artifacts/results/<run-id>`
 from `training/` to produce structured comparisons and learning-curve plots.
@@ -147,7 +149,10 @@ data and training schedule while casting convolution outputs back to the
 projection dtype before the recurrence. They use the original overall study
 deadline. Their launch is recorded in `precision-launch.json`; a new six-variant
 same-GPU benchmark is stored in `benchmark-precision.json`, preserving the
-initial five-variant benchmark. These controls are in progress.
+initial five-variant benchmark. Both controls completed the full budget:
+3.801982 and 3.801073 CE, averaging 3.801527. No convolution and RoPE without
+convolution both beat this precision-matched baseline in each seed. Their
+gains therefore persist when recurrence input precision is matched.
 
 ## Fused RoPE kernel
 
