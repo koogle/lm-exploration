@@ -54,7 +54,7 @@ def launch(q, k, cos, sin, backward):
         half,
         backward,
         1024,
-        enable_fp_fusion=False,
+        enable_fp_fusion=False,  # Preserve separate FP32 product rounding in the reference.
     )
     return oq, ok
 
@@ -63,6 +63,7 @@ class _RoPE(torch.autograd.Function):
     @staticmethod
     def forward(ctx, q, k, cos, sin):
         assert q.is_cuda and k.is_cuda and q.shape == k.shape and q.dtype == k.dtype
+        assert q.ndim == 4 and q.dtype in (torch.float32, torch.bfloat16)
         assert q.shape[-1] % 2 == 0
         assert not cos.requires_grad and not sin.requires_grad
         assert cos.numel() == sin.numel() == q.shape[0] * q.shape[1] * q.shape[-1] // 2

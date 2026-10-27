@@ -23,8 +23,9 @@ over no convolution does not repeat in both seeds, and its measured runtime
 is substantially greater. Middle-only RoPE also has opposite-sign changes
 relative to the original baseline across seeds.
 
-RoPE and no convolution are the two useful candidates for further testing:
-one favors loss per training token, the other runtime. The RoPE advantage is
+RoPE and no convolution are the two useful candidates for further testing.
+The fused RoPE kernel described below brings RoPE's runtime to parity with
+the no-convolution control in its separate same-GPU benchmark. The RoPE advantage is
 larger during parts of training than at the final checkpoint. This budget is
 approximately one training token per parameter; final convergence and
 behavior at larger context lengths remain untested.
@@ -147,3 +148,32 @@ projection dtype before the recurrence. They use the original overall study
 deadline. Their launch is recorded in `precision-launch.json`; a new six-variant
 same-GPU benchmark is stored in `benchmark-precision.json`, preserving the
 initial five-variant benchmark. These controls are in progress.
+
+## Fused RoPE kernel
+
+`kernels/rope.py` fuses the q/k rotations and implements their adjoint while
+retaining the KDA `[B,T,H,D]` layout. It uses the existing document-position
+RoPE tables. Separate FP32 product rounding preserves the reference arithmetic.
+Use study variant `rope_triton` for this implementation; `rope` is its PyTorch
+reference. The long-run loss table above comes from the PyTorch reference.
+
+The kernel had zero measured output and input-gradient error against that
+reference in FP32 and BF16 at lengths 1, 17 and 1024, including the full
+8 × 1024 × 12 × 64 training shape. A matched 100-update, 104M-model training
+check on actual study batches recorded zero CE difference at every update.
+This qualification does not constitute another full 100M-token training run.
+
+A separate warmed H100 benchmark compared these three implementations on the
+same device, with four alternating-order rounds of twenty updates each:
+
+| Implementation | Mean milliseconds per update |
+| --- | ---: |
+| No convolution | 83.93 |
+| PyTorch RoPE without convolution | 92.43 |
+| Fused RoPE without convolution | 84.15 |
+
+The fused path improves throughput by 9.8% relative to PyTorch RoPE in this
+benchmark and is within timing variability of no convolution. Its absolute
+times should be compared within this three-model run. The six-model timing
+comparison above is a separate benchmark. Raw checks, the 100-update trace
+and round timings are in `rope-kernel.json` in the study archive.
