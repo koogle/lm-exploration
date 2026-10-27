@@ -1,15 +1,16 @@
 """Standard benchmarks (lm-evaluation-harness) for a hybrid export and reference models.
 
 Run from training/:
-    modal run --detach -m model_hybrid.modal_benchmarks [--export tokens-039998980096] [--limit N]
+    modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-A,tokens-B] [--models M,...]
 
 One H100 call per model, in parallel: the hybrid export through `benchmarks.py`
 and each reference model through the harness's Hugging Face backend, all with the
 same tasks, shot counts and greedy decoding. Each call has `retries=0`, a 6-hour
 timeout and refuses to start 24 hours after launch. Code tasks execute the
-generated programs inside the call's container. Results (harness JSON without
-per-sample logs) are written to `lm-exploration-hybrid-runs/benchmarks/<launch>/` by
-each call, so a `--detach` launch keeps them, and to the ignored artifacts/results/.
+generated programs inside the call's container. Each call writes its results
+(harness JSON without per-sample logs) to
+`lm-exploration-hybrid-runs/benchmarks/<launch>/`; an independent supervisor cancels
+any call still running 24 hours after launch.
 """
 
 import json
@@ -139,26 +140,40 @@ def evaluate(model, revision, deadline, folder, limit=0):
     return json.loads(text)
 
 
+@app.function(image=image, cpu=0.25, memory=512, timeout=86400, retries=0)
+def enforce_deadline(call_ids, deadline):
+    """Independent supervisor: cancel every call of this launch still running at its deadline."""
+    while (remaining := deadline - time.time()) > 0:
+        time.sleep(min(remaining, 300))
+    for call_id in call_ids:
+        modal.FunctionCall.from_id(call_id).cancel()
+    return {"cancelled": call_ids}
+
+
 @app.local_entrypoint()
-def main(export: str = "tokens-039998980096", limit: int = 0, models: str = ""):
-    """`--models` (comma-separated, "hybrid" for the export) limits the run to those."""
+def main(exports: str = "tokens-039998980096", limit: int = 0, models: str = ""):
+    """Spawn one evaluation per model; results land on the runs volume as each finishes.
+
+    `--exports` (comma-separated) names hybrid exports; `--models` (comma-separated,
+    "hybrid" for the exports) limits the launch to those. Calls are spawned, not
+    mapped, so they keep running after this client exits.
+    """
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    chosen = [(f"hybrid:{export}", None), *REFERENCES.items()]
+    chosen = [(f"hybrid:{e}", None) for e in exports.split(",")] + list(REFERENCES.items())
     if models:
         wanted = set(models.split(","))
         chosen = [(m, r) for m, r in chosen if m in wanted or (r is None and "hybrid" in wanted)]
-    models = chosen
-    stamp = int(time.time())
-    run_folder = f"{stamp}{'-limit' if limit else ''}"
-    print(f"results also go to lm-exploration-hybrid-runs/benchmarks/{run_folder}/")
-    folder = Path("artifacts/results/benchmarks")
-    folder.mkdir(parents=True, exist_ok=True)
-    calls = [(m, r, deadline, run_folder, limit) for m, r in models]
-    for result in evaluate.starmap(calls, return_exceptions=True):
-        if isinstance(result, BaseException):
-            print(f"failed: {result!r}")
-            continue
-        name = result["model"].replace("hybrid:", f"{RUN}-").replace("/", "--")
-        path = folder / f"{name}-{stamp}{'-limit' if limit else ''}.json"
-        path.write_text(json.dumps(result, indent=2, default=str) + "\n")
-        print(path)
+    run_folder = f"{int(time.time())}{'-limit' if limit else ''}"
+    calls = [evaluate.spawn(m, r, deadline, run_folder, limit) for m, r in chosen]
+    supervisor = enforce_deadline.spawn([c.object_id for c in calls], deadline)
+    print(
+        json.dumps(
+            {
+                "results": f"lm-exploration-hybrid-runs/benchmarks/{run_folder}/",
+                "calls": {m: c.object_id for (m, _), c in zip(chosen, calls, strict=True)},
+                "supervisor": supervisor.object_id,
+                "deadline_unix": deadline,
+            },
+            indent=1,
+        )
+    )

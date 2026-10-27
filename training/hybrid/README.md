@@ -376,7 +376,7 @@ LAMBADA zero-shot, MMLU 5-shot, GSM8K 5-shot, HumanEval zero-shot and MBPP 3-sho
 results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
 
 ```sh
-uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--export tokens-039998980096]
+uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
 ```
 
 ## Tests
