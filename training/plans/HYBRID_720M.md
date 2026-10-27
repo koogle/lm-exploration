@@ -121,3 +121,31 @@ cost are recorded above.
 Studies that spend compute or touch data at scale (token counts, contamination
 screens, benchmarks, pilots, the launch) are run only after the user approves
 each one.
+
+## Chat SFT record
+
+| | |
+| --- | --- |
+| Run ID | `hybrid-720m-chat-sft-01`, from the final 40B export |
+| Config | [`configs/hybrid-720m-chat-sft.json`](../hybrid/configs/hybrid-720m-chat-sft.json), recipe [`chat-sft-v1`](../hybrid/recipes/chat-sft-v1.json) |
+| Data | 1,130,204 conversations (970M tokens, 718M of them targets) from 19 smoltalk2 `no_think` SFT files; 110,664 dropped by the benchmark screen (80K of them OpenThoughts math), 7,704 unparsable, 1,999 over 4,096 tokens |
+| Batch | 128 x 4,096 tokens: 96 chat rows plus 32 replay rows from `hybrid-40b-v1` |
+| Schedule | 2,913 steps (one chat epoch, 1.53B tokens), Muon 0.002 / AdamW 3e-5, 50M-token warmup, linear decay to 0 |
+| Pilot | `hybrid-720m-chat-sft-pilot-01`, 40 steps: init, replay, held-out and chat sampling checked |
+| Run | 2026-10-27 23:49–01:25 UTC on 8 x H100, ~290K tokens/s, 96 minutes |
+| Export | `tokens-001527250944/` in `jfrick/hybrid-720m-chat-sft` (private) |
+
+Held-out loss at the end (pretraining sources: base model → after SFT): ClimbMix
+2.558 → 2.599, code 1.055 → 1.080, math 1.742 → 1.770; with replay, SFT costs
+1.6–2.4% there. Chat held-out loss over the 19 files averages 0.835, with tool
+calling at 0.077 (xLAM) and 0.31 (Hermes). Greedy replies to the sample
+prompts: "The capital of France is Paris." (then the turn ends), a correct
+`is_prime` with a square-root bound, "$3 × 7 … 7 pens cost $21.", and for the
+weather question with a `get_weather` tool the call
+`<tool_call>get_weather<arg_key>city</arg_key><arg_value>Berlin</arg_value></tool_call>`.
+The base model looped or echoed on the same prompts.
+
+The ablation without replay (`chat-sft-v1-no-replay`) hung twice on 8 GPUs
+before its first step (`hybrid-720m-chat-sft-no-replay-01`, `-02`) and ran
+normally on 1 and 8 GPUs for 2 steps; the trainer now dumps every thread's stack
+when a step exceeds 20 minutes.
