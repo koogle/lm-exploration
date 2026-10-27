@@ -32,3 +32,25 @@ Run `python launch_kda_branch.py` from `training/`. The current run is
 private HF dataset `jfrick/lm-exploration-results`. Detailed runtime provenance
 and source hashes live in that folder's launch manifest. Use
 `python collect_kda_continuation.py <run>` to collect and archive durable metrics.
+
+## Completed results
+
+All six workers completed 122,070 updates (999,997,440 positions per model).
+Final mean held-out CE over two seeds was 3.747991 for baseline KDA, 3.756886
+without convolution, and 3.754909 for fused RoPE without convolution. Baseline
+won on loss in both seeds. RoPE beat the no-convolution control in only one seed;
+its small mean advantage is not a consistent quality improvement.
+
+Measured optimizer throughput averaged 54,001 positions/second for baseline,
+61,983 for no convolution, and 63,088 for fused RoPE. These are separate-worker
+training measurements, not a controlled same-GPU benchmark. Mean wall times were
+5.61, 5.02, and 4.91 hours respectively. Fused RoPE therefore offers a speed/quality
+tradeoff here, not a demonstrated quality gain over baseline. The final RoPE CE
+gap is approximately 0.0069 nats/token (about 0.69% higher perplexity).
+
+These results differ from the earlier short 32K-tokenizer pilot. Tokenizer,
+data mixture, model dimensions, and training duration changed between studies,
+so the reversal cannot be attributed to training duration alone. Within this
+study the three arms used matched architecture, data, optimizer, and budgets.
+Detailed curves, per-seed results, completion records, and summary are archived
+in `jfrick/lm-exploration-results/training/results/kda-glm-1b-1793107241`.
