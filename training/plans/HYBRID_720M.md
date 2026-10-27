@@ -132,7 +132,7 @@ each one.
 | Batch | 128 x 4,096 tokens: 96 chat rows plus 32 replay rows from `hybrid-40b-v1` |
 | Schedule | 2,913 steps (one chat epoch, 1.53B tokens), Muon 0.002 / AdamW 3e-5, 50M-token warmup, linear decay to 0 |
 | Pilot | `hybrid-720m-chat-sft-pilot-01`, 40 steps: init, replay, held-out and chat sampling checked |
-| Run | 2026-10-27 23:49–01:25 UTC on 8 x H100, ~290K tokens/s, 96 minutes |
+| Run | 2026-10-26 23:49 to 2026-10-27 01:25 UTC on 8 x H100, ~290K tokens/s, 96 minutes |
 | Export | `tokens-001527250944/` in `jfrick/hybrid-720m-chat-sft` (private) |
 
 Held-out loss at the end (pretraining sources: base model → after SFT): ClimbMix
