@@ -98,7 +98,9 @@ def evaluate(model, revision, deadline, folder, limit=0):
     if model.startswith("hybrid:"):
         from model_hybrid import benchmarks
 
-        harness_model = benchmarks.load(Path("/runs") / RUN / "export" / model.split(":", 1)[1])
+        export = model.split(":", 1)[1]
+        run, export = export.split("/") if "/" in export else (RUN, export)
+        harness_model = benchmarks.load(Path("/runs") / run / "export" / export)
     else:
         from lm_eval.models.huggingface import HFLM
 
@@ -154,7 +156,8 @@ def enforce_deadline(call_ids, deadline):
 def main(exports: str = "tokens-039998980096", limit: int = 0, models: str = ""):
     """Spawn one evaluation per model; results land on the runs volume as each finishes.
 
-    `--exports` (comma-separated) names hybrid exports; `--models` (comma-separated,
+    `--exports` (comma-separated) names hybrid exports of the 40B run, or of another run
+    as `<run id>/<export>`; `--models` (comma-separated,
     "hybrid" for the exports) limits the launch to those. Calls are spawned, not
     mapped, so they keep running after this client exits.
     """
