@@ -11,7 +11,7 @@ from .modal_study import SNAP, app, data, image, registry, runs
 
 TOTAL_STEPS = 1_000_000_000 // TOKENS_PER_STEP
 SOURCE = "kda-100m-1793059841"
-VARIANTS = ["baseline", "rope_triton"]
+VARIANTS = ["baseline", "none", "rope_triton"]
 
 
 @app.function(timeout=39600, retries=0)
@@ -130,7 +130,7 @@ def prepare_continuation(run, deadline):
     memory=32768,
     timeout=32400,
     retries=0,
-    max_containers=4,
+    max_containers=6,
     volumes={"/runs": runs},
 )
 def train_continuation(run, variant, seed, deadline):
@@ -138,3 +138,33 @@ def train_continuation(run, variant, seed, deadline):
 
     assert variant in VARIANTS
     return train_impl(run, variant, seed, deadline, source=SOURCE, steps=TOTAL_STEPS, runtime=31800)
+
+
+@app.function(image=image, timeout=36000, retries=0, volumes={"/runs": runs})
+def continue_after_preparation(run, deadline, preparation_call):
+    """Keep preparation-to-training orchestration alive independently of the client."""
+    assert time.time() < deadline - 300
+    modal.FunctionCall.from_id(preparation_call).get()
+    workers = []
+    for seed in [17, 29]:
+        for variant in VARIANTS:
+            assert time.time() < deadline - 300
+            call = train_continuation.spawn(run, variant, seed, deadline)
+            calls = registry[run + "/calls"]
+            calls.append(call.object_id)
+            registry[run + "/calls"] = calls
+            workers.append({"variant": variant, "seed": seed, "call": call.object_id})
+    registry[run + "/workers"] = workers
+    outcomes = []
+    for worker in workers:
+        try:
+            result = modal.FunctionCall.from_id(worker["call"]).get()
+        except Exception as error:  # noqa: BLE001
+            result = {**worker, "status": "failed", "error": repr(error)}
+        outcomes.append(result)
+    runs.reload()
+    folder = Path("/runs") / run
+    (folder / "completion.json").write_text(json.dumps({"workers": workers, "outcomes": outcomes}))
+    runs.commit()
+    registry[run + "/done"] = True
+    return outcomes

@@ -16,9 +16,9 @@ from hybrid.continuation_study import (
     SOURCE,
     TOTAL_STEPS,
     VARIANTS,
+    continue_after_preparation,
     prepare_continuation,
     supervise_continuation,
-    train_continuation,
 )
 from hybrid.long_study import CONFIG, TOKENS_PER_STEP
 from hybrid.modal_study import app, registry
@@ -66,37 +66,17 @@ with modal.enable_output(), app.run(detach=True):
 
     try:
         prep = tracked(prepare_continuation, run, deadline)
-        (folder / "data.json").write_text(json.dumps(prep.get(), indent=2))
-        workers = [
-            (variant, seed, tracked(train_continuation, run, variant, seed, deadline))
-            for seed in [17, 29]
-            for variant in VARIANTS
-        ]
-        provenance["workers"] = [
-            {"variant": v, "seed": s, "call": c.object_id} for v, s, c in workers
-        ]
+        controller = tracked(continue_after_preparation, run, deadline, prep.object_id)
+        provenance["controller"] = controller.object_id
         (folder / "launch.json").write_text(json.dumps(provenance, indent=2))
-        pending = list(workers)
-        while pending:
-            for item in list(pending):
-                variant, seed, call = item
-                try:
-                    result = call.get(timeout=0)
-                except TimeoutError:
-                    continue
-                except Exception as error:  # noqa: BLE001
-                    result = {
-                        "variant": variant,
-                        "seed": seed,
-                        "status": "failed",
-                        "error": repr(error),
-                    }
-                (folder / f"{variant}-{seed}.json").write_text(json.dumps(result, indent=2))
-                pending.remove(item)
-            if pending:
-                time.sleep(10)
+        (folder / "data.json").write_text(json.dumps(prep.get(), indent=2))
+        outcomes = controller.get()
+        for result in outcomes:
+            (folder / f"{result['variant']}-{result['seed']}.json").write_text(
+                json.dumps(result, indent=2)
+            )
     finally:
-        for cid in calls:
+        for cid in registry.get(run + "/calls", []):
             try:
                 modal.FunctionCall.from_id(cid).cancel()
             except Exception as error:  # noqa: BLE001
