@@ -1,0 +1,51 @@
+{
+  "recipe": "/project/model_hybrid/recipes/rl-v1.json",
+  "model": {
+    "vocab_size": 154880,
+    "eos_id": 154820,
+    "block_size": 4096,
+    "n_layer": 16,
+    "n_embd": 1536,
+    "n_head": 12,
+    "n_kv_head": 4,
+    "head_dim": 128,
+    "mlp_hidden": 4224,
+    "layer_pattern": [
+      "kda",
+      "kda",
+      "kda",
+      "full"
+    ],
+    "n_kda_head": 12,
+    "rope_base": 1000000.0,
+    "z_loss": 0.0001,
+    "loss_chunk_size": 2048,
+    "mtp": false
+  },
+  "init_from": "/runs/hybrid-720m-chat-sft-01/export/tokens-001527250944",
+  "steps": 400,
+  "prompts_per_rank": 16,
+  "group_size": 8,
+  "max_new_tokens": 768,
+  "temperature": 1.0,
+  "microbatch": 8,
+  "optimizer": {
+    "muon_lr": 0.0001,
+    "muon_momentum": 0.95,
+    "adamw_lr": 1.5e-06,
+    "adam_betas": [
+      0.9,
+      0.95
+    ],
+    "weight_decay": 0.0
+  },
+  "warmup_steps": 10,
+  "gradient_clip": 1.0,
+  "eval_every_steps": 25,
+  "eval_prompts": 400,
+  "checkpoint_seconds": 3600,
+  "keep_checkpoints": 1,
+  "log_every_steps": 1,
+  "hf_repo": "jfrick/hybrid-720m-rl-lr-low",
+  "seed": 1234
+}
