@@ -24,3 +24,13 @@ An independent remote supervisor enforces ten hours from launch, including queue
 time, cancelling tracked calls. Workers save partial results before the deadline.
 Metrics live on the training volume and are collected into the private HF dataset
 `jfrick/lm-exploration-results` under `training/results/kda-1b-*`.
+
+The first continuation launch failed during preparation: after excluding earlier
+selected documents, `code_mit` provided only 9,461,633 fresh positions against a
+149,889,025-position quota. No training workers started. The corrected recipe
+keeps the curated-code quota at one sixth of the requested positions, obtains
+the remainder equally from the four ClimbMix sources, and adds the available fresh
+MIT-code documents before shuffling. All six continuations use the same resulting
+array. Its source proportions differ from the initial 100M-token study; this must
+be considered when interpreting changes across training stages. Preparation errors
+are now persisted as terminal completion records and in the remote registry.

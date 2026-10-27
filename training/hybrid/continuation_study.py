@@ -58,9 +58,14 @@ def prepare_continuation(run, deadline):
     db = sqlite3.connect(f"file:/data/{SNAP}/raw.sqlite?mode=ro&immutable=1", uri=True)
     sources = old["sources"]
     needed = (TOTAL_STEPS - STEPS) * TOKENS_PER_STEP + 1
-    per = (needed + len(sources) - 1) // len(sources)
+    curated_quota = (needed + len(sources) - 1) // len(sources)
+    climb_quota = (needed - curated_quota + 3) // 4
+    quotas = {
+        name: climb_quota if name.startswith("climbmix_") else curated_quota for name in sources
+    }
     documents, counts, seen = [], {}, set()
-    for source in sources:
+    for source in sorted(sources, key=lambda name: name != "code_mit"):
+        per = quotas[source]
         count = 0
         cursor = db.execute(
             "SELECT hash,text FROM documents WHERE source=? AND split='train' AND conflict=0 ORDER BY rowid",
@@ -84,12 +89,13 @@ def prepare_continuation(run, deadline):
                 count += len(ids)
                 if count >= per:
                     break
-        assert count >= per, (source, count, per)
+        assert count >= per or (source == "code_mit" and count > 0), (source, count, per)
         counts[source] = count
         print("Prepared fresh tokens", source, count, flush=True)
     assert not seen & excluded
     random.Random(2027).shuffle(documents)
     total = sum(counts.values())
+    assert total >= needed
     arr = np.lib.format.open_memmap(folder / "train.npy", mode="w+", dtype=np.int32, shape=(total,))
     digest = hashlib.sha256()
     offset = 0
@@ -108,6 +114,7 @@ def prepare_continuation(run, deadline):
         "training_ready": old["training_ready"],
         "manifest_sha256": old["manifest_sha256"],
         "sources": sources,
+        "mixture_policy": "curated one-sixth quota; four ClimbMix sources cover remainder; available fresh code_mit added",
         "train": {
             "tokens": total,
             "sources": counts,
@@ -144,7 +151,23 @@ def train_continuation(run, variant, seed, deadline):
 def continue_after_preparation(run, deadline, preparation_call):
     """Keep preparation-to-training orchestration alive independently of the client."""
     assert time.time() < deadline - 300
-    modal.FunctionCall.from_id(preparation_call).get()
+    try:
+        modal.FunctionCall.from_id(preparation_call).get()
+    except Exception as error:  # noqa: BLE001
+        failure = {
+            "status": "preparation_failed",
+            "error": repr(error),
+            "workers": [],
+            "outcomes": [],
+        }
+        runs.reload()
+        folder = Path("/runs") / run
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "completion.json").write_text(json.dumps(failure))
+        runs.commit()
+        registry[run + "/failure"] = failure
+        registry[run + "/done"] = True
+        raise
     workers = []
     for seed in [17, 29]:
         for variant in VARIANTS:
