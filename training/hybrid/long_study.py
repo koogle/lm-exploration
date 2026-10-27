@@ -26,6 +26,33 @@ TOKENS_PER_STEP = BATCH * CONFIG["block_size"]
 EVAL_BATCHES = 32
 
 
+@app.function(image=image, cpu=2, memory=4096, timeout=1200, retries=0, volumes={"/runs": runs})
+def copy_prepared(source, run, deadline):
+    """Copy an explicitly selected, hash-verified corpus after a launcher failure."""
+    import hashlib
+    import shutil
+
+    import numpy as np
+
+    assert time.time() < deadline - 300
+    runs.reload()
+    origin, target = Path("/runs") / source, Path("/runs") / run
+    info = json.loads((origin / "data.json").read_text())
+    target.mkdir(parents=True, exist_ok=True)
+    for split, minimum in [
+        ("train", STEPS * TOKENS_PER_STEP),
+        ("validation", EVAL_BATCHES * TOKENS_PER_STEP),
+    ]:
+        arr = np.load(origin / f"{split}.npy", mmap_mode="r")
+        assert len(arr) > minimum
+        assert hashlib.sha256(arr.tobytes()).hexdigest() == info[split]["tokens_sha256"]
+        shutil.copyfile(origin / f"{split}.npy", target / f"{split}.npy")
+    assert not set(info["train"]["document_hashes"]) & set(info["validation"]["document_hashes"])
+    shutil.copyfile(origin / "data.json", target / "data.json")
+    runs.commit()
+    return info
+
+
 @app.function(
     image=image, gpu="H100", cpu=8, memory=32768, timeout=1800, retries=0, volumes={"/runs": runs}
 )

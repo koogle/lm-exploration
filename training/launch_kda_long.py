@@ -3,6 +3,7 @@
 import truststore
 
 truststore.inject_into_ssl()
+import argparse
 import hashlib
 import json
 import subprocess
@@ -12,15 +13,33 @@ from pathlib import Path
 import modal
 from huggingface_hub import HfApi
 
-from hybrid.long_study import CONFIG, STEPS, TOKENS_PER_STEP, VARIANTS, qualify_long, train_long
+from hybrid.long_study import (
+    CONFIG,
+    STEPS,
+    TOKENS_PER_STEP,
+    VARIANTS,
+    copy_prepared,
+    qualify_long,
+    train_long,
+)
 from hybrid.modal_study import app, prepare, registry, supervise
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--prepared-run")
+args = parser.parse_args()
 run = "kda-100m-" + str(int(time.time()))
-deadline = time.time() + 12600
+deadline = (
+    json.loads((Path("artifacts/results") / args.prepared_run / "launch.json").read_text())[
+        "deadline"
+    ]
+    if args.prepared_run
+    else time.time() + 12600
+)
 folder = Path("artifacts/results") / run
 folder.mkdir(parents=True)
 provenance = {
     "run": run,
+    "prepared_run": args.prepared_run,
     "deadline": deadline,
     "config": CONFIG,
     "steps": STEPS,
@@ -55,7 +74,11 @@ with modal.enable_output(), app.run():
         return call
 
     try:
-        prep = tracked(prepare, run, deadline, 101000000, 524288)
+        prep = (
+            tracked(copy_prepared, args.prepared_run, run, deadline)
+            if args.prepared_run
+            else tracked(prepare, run, deadline, 101000000, 524288)
+        )
         qualification = tracked(qualify_long, run, deadline)
         (folder / "qualification.json").write_text(json.dumps(qualification.get(), indent=2))
         (folder / "data.json").write_text(json.dumps(prep.get(), indent=2))
@@ -74,14 +97,14 @@ with modal.enable_output(), app.run():
                 variant, seed, call = item
                 try:
                     result = call.get(timeout=0)
-                except modal.exception.TimeoutError:
+                except TimeoutError:
                     continue
                 except Exception as error:  # noqa: BLE001
                     result = {
                         "variant": variant,
                         "seed": seed,
                         "status": "failed",
-                        "error": str(error),
+                        "error": repr(error),
                     }
                 (folder / f"{variant}-{seed}.json").write_text(json.dumps(result, indent=2))
                 pending.remove(item)
