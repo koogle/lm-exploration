@@ -153,7 +153,7 @@ def continue_after_preparation(run, deadline, preparation_call):
     assert time.time() < deadline - 300
     try:
         modal.FunctionCall.from_id(preparation_call).get()
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         failure = {
             "status": "preparation_failed",
             "error": repr(error),

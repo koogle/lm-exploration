@@ -181,7 +181,18 @@ def train_long(run, variant, seed, deadline):
     return train_impl(run, variant, seed, deadline)
 
 
-def train_impl(run, variant, seed, deadline, *, source=None, steps=STEPS, runtime=10200):
+def train_impl(
+    run,
+    variant,
+    seed,
+    deadline,
+    *,
+    source=None,
+    steps=STEPS,
+    runtime=10200,
+    config=None,
+    prepared_recipe=None,
+):
     import math
     from dataclasses import asdict
 
@@ -200,11 +211,22 @@ def train_impl(run, variant, seed, deadline, *, source=None, steps=STEPS, runtim
     root = Path("/runs") / run
     folder = root / f"{variant}-{seed}"
     folder.mkdir(parents=True, exist_ok=True)
-    arrays = {s: np.load(root / f"{s}.npy", mmap_mode="r") for s in ["train", "validation"]}
     start_step = STEPS if source else 0
-    assert len(arrays["train"]) > (steps - start_step) * TOKENS_PER_STEP
-    assert len(arrays["validation"]) > EVAL_BATCHES * TOKENS_PER_STEP
-    cfg = HybridConfig(**CONFIG)
+    cfg = HybridConfig(**(config or CONFIG))
+    if prepared_recipe:
+        from model_hybrid.prepared_data import PreparedMixture, heldout_index
+
+        recipe = dict(prepared_recipe, context=cfg.block_size)
+        stream = PreparedMixture(recipe, "/data/" + recipe["name"], wait_seconds=120)
+        validation = PreparedMixture(recipe, "/data/" + recipe["name"], wait_seconds=120)
+        validation.orders = {
+            name: [heldout_index(recipe["sources"][name])] for name in validation.names
+        }
+        validation_batches = [validation.next_batch(BATCH)[:2] for _ in range(EVAL_BATCHES)]
+    else:
+        arrays = {s: np.load(root / f"{s}.npy", mmap_mode="r") for s in ["train", "validation"]}
+        assert len(arrays["train"]) > (steps - start_step) * TOKENS_PER_STEP
+        assert len(arrays["validation"]) > EVAL_BATCHES * TOKENS_PER_STEP
     model = configure(HybridLM(cfg), variant).cuda()
     opt = torch.optim.AdamW(
         model.parameters(), lr=3e-4, betas=(0.9, 0.95), weight_decay=0.1, fused=True
@@ -224,6 +246,12 @@ def train_impl(run, variant, seed, deadline, *, source=None, steps=STEPS, runtim
         del checkpoint
 
     def batch(split, index):
+        if prepared_recipe:
+            x, y = stream.next_batch(BATCH)[:2] if split == "train" else validation_batches[index]
+            return (
+                torch.tensor(x, device="cuda", dtype=torch.long),
+                torch.tensor(y, device="cuda", dtype=torch.long),
+            )
         start = index * TOKENS_PER_STEP
         arr = arrays[split]
         assert start + TOKENS_PER_STEP + 1 <= len(arr)
@@ -252,6 +280,7 @@ def train_impl(run, variant, seed, deadline, *, source=None, steps=STEPS, runtim
         "steps_planned": steps,
         "token_positions_planned": steps * TOKENS_PER_STEP,
         "source_run": source,
+        "prepared_recipe": prepared_recipe,
         "start_step": start_step,
         "parameters": sum(p.numel() for p in model.parameters()),
         "gpu": torch.cuda.get_device_name(),
@@ -280,6 +309,7 @@ def train_impl(run, variant, seed, deadline, *, source=None, steps=STEPS, runtim
                     "model": model.state_dict(),
                     "optimizer": opt.state_dict(),
                     "step": step,
+                    "data_state": stream.state_dict() if prepared_recipe else None,
                     "config": asdict(cfg),
                     "variant": variant,
                     "seed": seed,
@@ -300,7 +330,7 @@ def train_impl(run, variant, seed, deadline, *, source=None, steps=STEPS, runtim
         lr = (
             3e-4
             * min(1.0, (step + 1) / 400)
-            * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * step / STEPS)))
+            * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * step / steps)))
         )
         if source:
             local_step = step - start_step
