@@ -54,7 +54,7 @@ def supervise(run, deadline):
     cpu=4,
     memory=16384,
 )
-def prepare(run, deadline):
+def prepare(run, deadline, train_tokens=5000000, validation_tokens=262144):
     assert time.time() < deadline
     import hashlib
     import random
@@ -82,7 +82,7 @@ def prepare(run, deadline):
         "training_ready": manifest.get("training_ready"),
         "sources": sources,
     }
-    for split, total in [("train", 5000000), ("validation", 262144)]:
+    for split, total in [("train", train_tokens), ("validation", validation_tokens)]:
         documents = []
         per = max(1, total // len(sources))
         counts = {}
@@ -98,9 +98,11 @@ def prepare(run, deadline):
                 if count >= per:
                     break
             counts[source] = count
+            assert count >= per, (split, source, count, per)
+            print("Prepared", split, source, count, flush=True)
         assert documents, split
         random.Random(2026).shuffle(documents)
-        tokens = np.array([t for _, ids in documents for t in ids], dtype=np.int32)
+        tokens = np.fromiter((t for _, ids in documents for t in ids), dtype=np.int32)
         np.save(folder / f"{split}.npy", tokens)
         info[split] = {
             "tokens": len(tokens),
