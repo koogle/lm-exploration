@@ -269,6 +269,32 @@ far below the models trained on much more math. The final export,
 playground Space. Metrics, configs and launch records:
 `training/results/hybrid-720m-rl/` in `jfrick/lm-exploration-results`.
 
+### LiveCodeBench v6
+
+[`modal_livecodebench.py`](../hybrid/modal_livecodebench.py) (2026-10-27): the 175
+problems of release v6 (2025-01-04 to 2025-04-06; 43 easy, 52 medium, 80 hard), one
+greedy completion each, no reasoning, up to 2,048 new tokens, graded on all public
+and private tests. Base models: LiveCodeBench's prompt after one worked example;
+SFT and RL exports: the zero-shot question in the chat format.
+
+| Model | Solved | pass@1 | Easy |
+| --- | ---: | ---: | ---: |
+| Qwen3-0.6B-Base | 11 | 6.3 | 23.3 |
+| Gemma 4 E2B | 6 | 3.4 | 14.0 |
+| Hybrid 720M + SFT | 3 | 1.7 | 7.0 |
+| Qwen3.5-0.8B-Base | 2 | 1.1 | 4.7 |
+| LFM2.5-1.2B-Base | 1 | 0.6 | 2.3 |
+| Hybrid 720M base, + SFT + RL; SmolLM2-360M; Gemma 3 270M and 1B; OLMo-2-1B | 0 | 0.0 | 0.0 |
+
+No model solves a hard problem. Differences of a few problems are within noise
+(one problem is 0.6 points). A first launch with a zero-shot base prompt and
+1,024-token answers scored lower for most base models, which mostly repeated the
+prompt's `# YOUR CODE HERE` block or ran out of tokens while explaining; that
+launch is archived in `zero-shot-1024/` beside the results below. RL on KodCode did not carry over: the RL export
+writes code for every problem but solves none, against three for SFT. Results and
+the Pareto chart: `training/results/hybrid-720m-40b-01/benchmarks/livecodebench-v6/`
+in `jfrick/lm-exploration-results`.
+
 ## Data licensing
 
 The models in this plan are research models, not commercially clean, and that is
