@@ -19,6 +19,8 @@ LABELS = {
 
 def analyze(folder):
     launch = json.loads((folder / "launch.json").read_text())
+    benchmark_path = folder / "benchmark.json"
+    benchmark = json.loads(benchmark_path.read_text()) if benchmark_path.exists() else None
     runs = {}
     statuses = []
     for variant in launch["variants"]:
@@ -61,6 +63,12 @@ def analyze(folder):
             "tokens_per_second": [curve[endpoint]["tokens_per_second"] for curve in curves],
             "peak_memory_bytes": [run["max_memory_bytes"] for run in selected],
         }
+        if benchmark is not None:
+            seconds = benchmark["seconds_per_step"]
+            row["same_gpu_ms_per_step"] = float(np.mean(seconds[variant]) * 1000)
+            row["same_gpu_speedup_vs_baseline"] = float(
+                np.mean(seconds["baseline"]) / np.mean(seconds[variant])
+            )
         baselines = [runs.get(("baseline", seed)) for seed in launch["seeds"]]
         if all(baseline is not None for baseline in baselines):
             base_curves = [{p["step"]: p for p in baseline["curve"]} for baseline in baselines]

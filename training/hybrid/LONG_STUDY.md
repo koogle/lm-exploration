@@ -71,3 +71,10 @@ and plots to the same HF results folder when the worker results arrive.
 
 After collection, run `python -m hybrid.analyze_long_study artifacts/results/<run-id>`
 from `training/` to produce structured comparisons and learning-curve plots.
+
+The speed benchmark runs all five variants on one H100 at the same batch and
+context sizes, with ten warmup updates each followed by four rounds of twenty
+updates in alternating forward/reverse variant order. All models stay resident;
+timings cover forward/backward/clipping/AdamW and exclude data transfer,
+evaluation and compilation. Launch it with
+`python launch_kda_benchmark.py --run <run-id> --long` from `training/`.

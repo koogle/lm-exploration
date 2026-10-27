@@ -5,6 +5,7 @@ import truststore
 truststore.inject_into_ssl()
 import argparse
 import json
+import subprocess
 import time
 from pathlib import Path
 
@@ -33,7 +34,16 @@ with modal.enable_output(), app.run():
     registry[key + "/calls"] = [call.object_id]
     (folder / "benchmark-launch.json").write_text(
         json.dumps(
-            {"deadline": deadline, "call": call.object_id, "supervisor": supervisor.object_id}
+            {
+                "deadline": deadline,
+                "call": call.object_id,
+                "supervisor": supervisor.object_id,
+                "source_commit": subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"], text=True
+                ).strip(),
+                "config": config,
+                "variants": variants,
+            }
         )
     )
     try:
