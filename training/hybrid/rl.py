@@ -251,6 +251,8 @@ def train(config, run_dir, root, stop_unix):
             ]
         )
         scored = time.perf_counter()
+        # Generation leaves its per-row caches in the allocator; training needs that memory.
+        torch.cuda.empty_cache()
         groups = torch.tensor(scores).view(-1, config.group_size)
         advantages = (groups - groups.mean(1, keepdim=True)).flatten().tolist()
         factor = min(1.0, (progress["step"] + 1) / max(1, config.warmup_steps))
