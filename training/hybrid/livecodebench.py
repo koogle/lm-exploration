@@ -81,11 +81,43 @@ def question(problem):
     return f"Question: {problem['question_content']}\n\n{form}"
 
 
+# One worked example per test mode for base models, which otherwise often echo the
+# placeholder block; LiveCodeBench's base-model prompts likewise carry one example.
+STDIN_EXAMPLE = {
+    "question_content": (
+        "You are given N integers A_1, ..., A_N. Print the difference between the largest "
+        "and the smallest of them.\n\nInput\n\nN\nA_1 A_2 ... A_N\n\nOutput\n\n"
+        "Print the answer.\n\nSample Input 1\n\n3\n4 9 2\n\nSample Output 1\n\n7"
+    ),
+    "starter_code": "",
+    "answer": (
+        "n = int(input())\nvalues = list(map(int, input().split()))\n"
+        "print(max(values) - min(values))"
+    ),
+}
+STARTER_EXAMPLE = {
+    "question_content": (
+        "You are given a string s. Return the number of vowels ('a', 'e', 'i', 'o', 'u') "
+        'in s.\n\nExample 1:\n\nInput: s = "banana"\nOutput: 3'
+    ),
+    "starter_code": "class Solution:\n    def countVowels(self, s: str) -> int:\n        ",
+    "answer": (
+        "class Solution:\n    def countVowels(self, s: str) -> int:\n"
+        "        return sum(1 for c in s if c in 'aeiou')"
+    ),
+}
+
+
+def _base_turn(problem):
+    return f"{question(problem)}\n\nAnswer: (use the provided format with backticks)\n\n"
+
+
 def base_prompt(problem):
-    """LiveCodeBench's plain prompt for base models; the answer starts with a code fence."""
-    return (
-        f"{SYSTEM}\n\n{question(problem)}\n\nAnswer: (use the provided format with backticks)\n\n"
-    )
+    """LiveCodeBench's plain prompt for base models, after one worked example of the
+    same test mode; the answer starts with a code fence."""
+    example = STARTER_EXAMPLE if problem["starter_code"] else STDIN_EXAMPLE
+    shot = f"{_base_turn(example)}```python\n{example['answer']}\n```\n\n"
+    return f"{SYSTEM}\n\n{shot}{_base_turn(problem)}"
 
 
 def chat_messages(problem):

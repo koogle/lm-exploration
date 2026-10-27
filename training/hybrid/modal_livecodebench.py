@@ -28,7 +28,7 @@ app.include(modal_benchmarks.app)  # the deadline supervisor
 DATASET = "livecodebench/code_generation_lite"
 DATASET_REVISION = "0fe84c3912ea0c4d4a78037083943e8f0c4dd505"
 RELEASE_FILE = "test6.jsonl"
-MAX_NEW_TOKENS = 1024
+MAX_NEW_TOKENS = 2048
 # Hybrid exports as "<run>/<export>", with whether they take the chat format.
 EXPORTS = {
     "hybrid-720m-40b-01/tokens-039998980096": False,
