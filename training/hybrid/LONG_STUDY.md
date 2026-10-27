@@ -9,7 +9,8 @@ unchanged. Rotating memory uses the custom Triton training implementation.
 The planned architecture has 12 layers, width 768, SwiGLU width 1792, 12 KDA
 heads of width 64, and full attention with 12 query / 4 KV heads. Its repeating
 layout is KDA/KDA/KDA/full. Vocabulary size is 32,768 with tied embeddings.
-The launcher measures exact parameter counts before training.
+Measured parameter counts range from 104,314,704 (no convolution and RoPE)
+to 104,397,864 (rotating memory); baseline has 104,397,648 parameters.
 
 Each of two seeds (17, 29) receives 12,288 updates of eight 1,024-token
 sequences: 100,663,296 input token positions. The shared initial parameters,
@@ -55,4 +56,9 @@ budgets, throughput and memory. Two seeds and 100M tokens can identify a
 promising follow-up; they do not establish the ranking of fully pretrained
 models or behavior beyond the trained context length.
 
-Status: implemented; qualification and measured results pending.
+The actual-shape kernel check passed: maximum relative L2 output/gradient
+error was 0.0000265 (about 0.003%). Original FP32/BF16 checks also passed.
+Run `kda-100m-1793059455` is launched; training results are pending.
+
+After collection, run `python -m hybrid.analyze_long_study artifacts/results/<run-id>`
+from `training/` to produce structured comparisons and learning-curve plots.
