@@ -268,3 +268,18 @@ far below the models trained on much more math. The final export,
 `jfrick/hybrid-720m-rl-lr-low/tokens-000158595563`, is the chat model in the
 playground Space. Metrics, configs and launch records:
 `training/results/hybrid-720m-rl/` in `jfrick/lm-exploration-results`.
+
+## Data licensing
+
+The models in this plan are research models, not commercially clean, and that is
+accepted (2026-10-27). The binding terms: ClimbMix (the pretraining majority) is
+CC BY-NC 4.0 upstream (`nvidia/Nemotron-ClimbMix`, research and development
+only), KodCode-Light-RL-10K (RL) and the smoltalk2 `explore_instruct_rewriting`
+subset (SFT) are CC BY-NC 4.0, and the Magpie-Ultra and everyday-conversation SFT
+subsets were generated with Llama 3.1, whose license applies to models trained on
+its outputs ("Built with Llama" notice and name prefix when distributed). The
+permissive-code shard keeps per-repository license fields; FineMath and the Tulu
+persona subset are ODC-By. The code collections `jfrick/curated-oss-code-20261019`
+(public, includes GPL projects such as Linux) and
+`jfrick/mit-claude-codex-code-20261019` keep repository license evidence; including
+GPL code is accepted.
