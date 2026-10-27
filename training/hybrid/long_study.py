@@ -178,6 +178,10 @@ def qualify_long(run, deadline):
     volumes={"/runs": runs},
 )
 def train_long(run, variant, seed, deadline):
+    return train_impl(run, variant, seed, deadline)
+
+
+def train_impl(run, variant, seed, deadline, *, source=None, steps=STEPS, runtime=10200):
     import math
     from dataclasses import asdict
 
@@ -186,7 +190,7 @@ def train_long(run, variant, seed, deadline):
     from model_hybrid.model import HybridConfig, HybridLM
     from model_hybrid.study_mixers import configure
 
-    assert variant in VARIANTS or variant == "baseline_bf16"
+    assert variant in VARIANTS or variant in {"baseline_bf16", "rope_triton"}
     assert time.time() < deadline - 300
     torch.set_num_threads(4)
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -197,13 +201,27 @@ def train_long(run, variant, seed, deadline):
     folder = root / f"{variant}-{seed}"
     folder.mkdir(parents=True, exist_ok=True)
     arrays = {s: np.load(root / f"{s}.npy", mmap_mode="r") for s in ["train", "validation"]}
-    assert len(arrays["train"]) > STEPS * TOKENS_PER_STEP
+    start_step = STEPS if source else 0
+    assert len(arrays["train"]) > (steps - start_step) * TOKENS_PER_STEP
     assert len(arrays["validation"]) > EVAL_BATCHES * TOKENS_PER_STEP
     cfg = HybridConfig(**CONFIG)
     model = configure(HybridLM(cfg), variant).cuda()
     opt = torch.optim.AdamW(
         model.parameters(), lr=3e-4, betas=(0.9, 0.95), weight_decay=0.1, fused=True
     )
+
+    if source:
+        original_variant = "rope" if variant == "rope_triton" else variant
+        origin = Path("/runs") / source / f"{original_variant}-{seed}"
+        checkpoint = torch.load(origin / "checkpoint.pt", map_location="cpu", weights_only=True)
+        assert checkpoint["step"] == start_step
+        assert checkpoint["config"] == asdict(cfg)
+        assert checkpoint["variant"] == original_variant and checkpoint["seed"] == seed
+        model.load_state_dict(checkpoint["model"], strict=True)
+        opt.load_state_dict(checkpoint["optimizer"])
+        torch.set_rng_state(checkpoint["rng"])
+        torch.cuda.set_rng_state_all(checkpoint["cuda_rng"])
+        del checkpoint
 
     def batch(split, index):
         start = index * TOKENS_PER_STEP
@@ -231,8 +249,10 @@ def train_long(run, variant, seed, deadline):
         "variant": variant,
         "seed": seed,
         "config": asdict(cfg),
-        "steps_planned": STEPS,
-        "token_positions_planned": STEPS * TOKENS_PER_STEP,
+        "steps_planned": steps,
+        "token_positions_planned": steps * TOKENS_PER_STEP,
+        "source_run": source,
+        "start_step": start_step,
         "parameters": sum(p.numel() for p in model.parameters()),
         "gpu": torch.cuda.get_device_name(),
         "torch": str(torch.__version__),
@@ -240,6 +260,9 @@ def train_long(run, variant, seed, deadline):
         "curve": [],
         "status": "running",
     }
+    if source:
+        previous = json.loads((origin / "metrics.json").read_text())["curve"][-1]["validation_ce"]
+        assert abs(result["initial_ce"] - previous) < 0.002, (result["initial_ce"], previous)
     started = time.time()
     elapsed = train_ce = train_count = timed_targets = 0.0
     interval_steps = 0
@@ -268,9 +291,9 @@ def train_long(run, variant, seed, deadline):
             temp.replace(folder / "checkpoint.pt")
         runs.commit()
 
-    save(0)
-    for step in range(STEPS):
-        if time.time() > deadline - 180 or time.time() - started > 10200:
+    save(start_step)
+    for step in range(start_step, steps):
+        if time.time() > deadline - 180 or time.time() - started > runtime:
             result["status"] = "deadline"
             save(step, checkpoint=True)
             return result
@@ -279,9 +302,16 @@ def train_long(run, variant, seed, deadline):
             * min(1.0, (step + 1) / 400)
             * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * step / STEPS)))
         )
+        if source:
+            local_step = step - start_step
+            warm = min(1.0, (local_step + 1) / 400)
+            progress = max(0.0, (local_step - 400) / (steps - start_step - 400))
+            lr = (3e-5 + (3e-4 - 3e-5) * warm) * (
+                0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * progress))
+            )
         for group in opt.param_groups:
             group["lr"] = lr
-        x, y = batch("train", step)
+        x, y = batch("train", step - start_step)
         torch.cuda.synchronize()
         tick = time.perf_counter()
         opt.zero_grad(set_to_none=True)
@@ -301,10 +331,10 @@ def train_long(run, variant, seed, deadline):
         train_ce += out["ce"].item()
         train_count += count
         interval_steps += 1
-        if step >= 10:
+        if step >= start_step + 10:
             elapsed += seconds
             timed_targets += count
-        if (step + 1) % 512 == 0 or step == 0 or step + 1 == STEPS:
+        if (step + 1) % (2048 if source else 512) == 0 or step == start_step or step + 1 == steps:
             row = {
                 "step": step + 1,
                 "token_positions": (step + 1) * TOKENS_PER_STEP,
@@ -318,9 +348,12 @@ def train_long(run, variant, seed, deadline):
                 "wall_seconds": time.time() - started,
             }
             result["curve"].append(row)
-            result["status"] = "complete" if step + 1 == STEPS else "running"
+            result["status"] = "complete" if step + 1 == steps else "running"
             print(variant, seed, row, flush=True)
-            save(step + 1, checkpoint=(step + 1) % 2048 == 0 or step == 0)
+            save(
+                step + 1,
+                checkpoint=(step + 1) % 2048 == 0 or step == start_step or step + 1 == steps,
+            )
             train_ce = train_count = 0.0
             interval_steps = 0
     return result
