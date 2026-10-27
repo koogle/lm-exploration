@@ -58,7 +58,16 @@ models or behavior beyond the trained context length.
 
 The actual-shape kernel check passed: maximum relative L2 output/gradient
 error was 0.0000265 (about 0.003%). Original FP32/BF16 checks also passed.
-Run `kda-100m-1793059455` is launched; training results are pending.
+The first launch, `kda-100m-1793059455`, prepared 101,016,001 training tokens
+and 527,104 validation tokens and passed qualification. Its local collector
+caught the wrong timeout type when polling Modal and cancelled pending
+workers before training. The failure logs and qualification evidence are
+preserved in the HF results archive.
+
+Run `kda-100m-1793059841` uses the corrected collector and hash-verified copies
+of those exact prepared arrays. It retains the first launch's overall deadline.
+Training results are pending. An automatic collector writes paired summaries
+and plots to the same HF results folder when the worker results arrive.
 
 After collection, run `python -m hybrid.analyze_long_study artifacts/results/<run-id>`
 from `training/` to produce structured comparisons and learning-curve plots.
