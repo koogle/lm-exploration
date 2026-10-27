@@ -247,7 +247,7 @@ def train(run, variant, deadline, steps=800):
 @app.function(
     image=image, gpu="H100", cpu=8, memory=32768, timeout=1200, retries=0, volumes={"/runs": runs}
 )
-def benchmark(run, deadline):
+def benchmark(run, deadline, config=None, variants=None):
     import numpy as np
     import torch
     from model_hybrid.model import HybridConfig, HybridLM
@@ -260,7 +260,8 @@ def benchmark(run, deadline):
     torch.backends.cuda.matmul.allow_tf32 = True
     runs.reload()
     arr = np.load(Path("/runs") / run / "train.npy")
-    rows = np.stack([arr[i * 512 : (i + 1) * 512 + 1] for i in range(8)])
+    length = config["block_size"] if config is not None else 512
+    rows = np.stack([arr[i * length : (i + 1) * length + 1] for i in range(8)])
     x = torch.tensor(rows[:, :-1], device="cuda", dtype=torch.long)
     y = torch.tensor(rows[:, 1:], device="cuda", dtype=torch.long)
     y[y == 1] = -100
@@ -277,11 +278,17 @@ def benchmark(run, deadline):
         mlp_hidden=768,
         loss_chunk_size=1024,
     )
+    if config is not None:
+        cfg = HybridConfig(**config)
     models = {}
-    for variant in ["baseline", "none", "rope", "middle_rope", "middle_rope_conv", "rotating"]:
+    if variants is None:
+        variants = ["baseline", "none", "rope", "middle_rope", "middle_rope_conv", "rotating"]
+    for variant in variants:
         torch.manual_seed(123)
         model = configure(HybridLM(cfg), variant).cuda()
-        optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, fused=True)
+        optimizer = torch.optim.AdamW(
+            model.parameters(), lr=3e-4, betas=(0.9, 0.95), weight_decay=0.1, fused=True
+        )
         models[variant] = (model, optimizer)
 
     def step(variant):
@@ -314,7 +321,8 @@ def benchmark(run, deadline):
         "checks": checked,
         "gpu": torch.cuda.get_device_name(),
         "seconds_per_step": times,
-        "token_positions_per_step": 4096,
+        "token_positions_per_step": 8 * length,
+        "config": config,
         "torch": str(torch.__version__),
     }
 

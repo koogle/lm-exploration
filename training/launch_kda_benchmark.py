@@ -14,7 +14,14 @@ from hybrid.modal_study import app, benchmark, registry, supervise
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--run", required=True)
-run = parser.parse_args().run
+parser.add_argument("--long", action="store_true")
+args = parser.parse_args()
+run = args.run
+config = variants = None
+if args.long:
+    from hybrid.long_study import CONFIG, VARIANTS
+
+    config, variants = CONFIG, VARIANTS
 key = run + "-benchmark-" + str(int(time.time()))
 deadline = time.time() + 3600
 folder = Path("artifacts/results") / run
@@ -22,7 +29,7 @@ with modal.enable_output(), app.run():
     supervisor = supervise.spawn(key, deadline)
     while not registry.get(key + "/ready", False):
         time.sleep(1)
-    call = benchmark.spawn(run, deadline)
+    call = benchmark.spawn(run, deadline, config, variants)
     registry[key + "/calls"] = [call.object_id]
     (folder / "benchmark-launch.json").write_text(
         json.dumps(
