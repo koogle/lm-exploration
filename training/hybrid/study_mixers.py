@@ -64,6 +64,10 @@ class StudyKDA(KimiDeltaAttention):
         else:
             values = [F.silu(u) for u in raw]
         q, k, v = [u.view(shape) for u in values]
+        if self.mode == "rope_triton":
+            from .kernels.rope import rope_pair
+
+            q, k = rope_pair(q, k, *rope)
         if self.mode in ("rope", "conv_rope"):
             q, k = [apply_rope(u.transpose(1, 2), *rope).transpose(1, 2) for u in (q, k)]
         args = (q, k, v, self.f_proj(x).view(shape), self.b_proj(x), self.A_log, self.dt_bias)

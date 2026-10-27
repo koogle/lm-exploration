@@ -26,6 +26,37 @@ TOKENS_PER_STEP = BATCH * CONFIG["block_size"]
 EVAL_BATCHES = 32
 
 
+@app.function(
+    image=image, gpu="H100", cpu=8, memory=32768, timeout=900, retries=0, volumes={"/runs": runs}
+)
+def rope_kernel_study(run, deadline):
+    import numpy as np
+    import torch
+    from model_hybrid.modal_study import benchmark
+    from model_hybrid.rope_kernel_study import compare_training, qualify
+
+    torch.set_num_threads(4)
+    torch.backends.cuda.matmul.allow_tf32 = True
+    assert time.time() < deadline - 120
+    result = {"correctness": qualify()}
+    runs.reload()
+    folder = Path("/runs") / run
+    (folder / "rope-kernel-checks.json").write_text(json.dumps(result))
+    runs.commit()
+    print("RoPE kernel numerical checks passed", flush=True)
+    result["training"] = compare_training(
+        np.load(folder / "train.npy", mmap_mode="r"), CONFIG, deadline
+    )
+    (folder / "rope-kernel-checks.json").write_text(json.dumps(result))
+    runs.commit()
+    assert result["training"]["max_ce_difference"] < 0.01, result["training"]["max_ce_difference"]
+    torch.cuda.empty_cache()
+    result["benchmark"] = benchmark.local(run, deadline, CONFIG, ["none", "rope", "rope_triton"])
+    (folder / "rope-kernel.json").write_text(json.dumps(result))
+    runs.commit()
+    return result
+
+
 @app.function(image=image, gpu="H100", cpu=2, memory=8192, timeout=300, retries=0)
 def inspect_inputs(deadline):
     """Record actual recurrence input dtypes under the study's CUDA autocast."""
