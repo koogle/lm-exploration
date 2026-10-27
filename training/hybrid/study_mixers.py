@@ -21,6 +21,7 @@ class RotatingMemory(nn.Module):
     def forward(self, u, positions):
         if u.is_cuda and getattr(self, "use_kernel", False):
             from .kernels.rotating import rotating_memory
+
             return rotating_memory(u, positions, self.log_tau, self.theta, self.mix)
         original_dtype = u.dtype
         z = torch.view_as_complex(u.float().reshape(*u.shape[:-1], -1, 2).contiguous())
@@ -40,7 +41,7 @@ class RotatingMemory(nn.Module):
 class StudyKDA(KimiDeltaAttention):
     def configure(self, mode, width):
         self.mode = mode
-        if mode not in ("baseline", "conv_rope"):
+        if mode not in ("baseline", "baseline_bf16", "conv_rope"):
             for name in ("q_conv", "k_conv", "v_conv"):
                 delattr(self, name)
         if mode in ("rotating", "rotating_triton"):
@@ -51,11 +52,13 @@ class StudyKDA(KimiDeltaAttention):
     def forward(self, x, rope, mask):
         shape = (*x.shape[:2], self.heads, self.head_dim)
         raw = [self.q_proj(x), self.k_proj(x), self.v_proj(x)]
-        if self.mode in ("baseline", "conv_rope"):
+        if self.mode in ("baseline", "baseline_bf16", "conv_rope"):
             values = [
                 short_convolution(u, w, mask.positions)
                 for u, w in zip(raw, (self.q_conv, self.k_conv, self.v_conv))
             ]
+            if self.mode == "baseline_bf16":
+                values = [value.to(u.dtype) for value, u in zip(values, raw)]
         elif self.mode in ("rotating", "rotating_triton"):
             values = [F.silu(m(u, mask.positions)) for m, u in zip(self.memories, raw)]
         else:

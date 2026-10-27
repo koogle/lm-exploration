@@ -10,6 +10,7 @@ import numpy as np
 
 LABELS = {
     "baseline": "Original conv-4",
+    "baseline_bf16": "Conv-4, BF16 recurrence inputs",
     "none": "No convolution",
     "rotating_triton": "Rotating memory (Triton)",
     "rope": "RoPE without convolution",
@@ -17,9 +18,20 @@ LABELS = {
 }
 
 
-def analyze(folder):
+def load_launch(folder):
     launch = json.loads((folder / "launch.json").read_text())
-    benchmark_path = folder / "benchmark.json"
+    if (folder / "precision-launch.json").exists():
+        launch["variants"] = [*launch["variants"], "baseline_bf16"]
+    return launch
+
+
+def analyze(folder):
+    launch = load_launch(folder)
+    benchmark_path = folder / (
+        "benchmark-precision.json"
+        if (folder / "precision-launch.json").exists()
+        else "benchmark.json"
+    )
     benchmark = json.loads(benchmark_path.read_text()) if benchmark_path.exists() else None
     runs = {}
     statuses = []
@@ -112,7 +124,7 @@ if __name__ == "__main__":
     parser.add_argument("--wait-seconds", type=int, default=0)
     parser.add_argument("--publish", action="store_true")
     args = parser.parse_args()
-    launch = json.loads((args.results / "launch.json").read_text())
+    launch = load_launch(args.results)
     stop = min(time.time() + args.wait_seconds, launch["deadline"] + 120)
     expected = [
         args.results / f"{variant}-{seed}.json"

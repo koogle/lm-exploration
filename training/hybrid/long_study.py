@@ -40,7 +40,7 @@ def inspect_inputs(deadline):
     x = torch.randn(2, 16, 768, device="cuda")
     mask = DocumentMask(torch.zeros(2, 16, dtype=torch.long, device="cuda"))
     tables = rope_tables(16, 64, 1e6, "cuda")
-    for variant in ["baseline", "none", "rope"]:
+    for variant in ["baseline", "baseline_bf16", "none", "rope"]:
         import copy
 
         selected = mixers.configure(copy.deepcopy(model), variant).blocks[0].mixer.cuda()
@@ -155,7 +155,7 @@ def train_long(run, variant, seed, deadline):
     from model_hybrid.model import HybridConfig, HybridLM
     from model_hybrid.study_mixers import configure
 
-    assert variant in VARIANTS
+    assert variant in VARIANTS or variant == "baseline_bf16"
     assert time.time() < deadline - 300
     torch.set_num_threads(4)
     torch.backends.cuda.matmul.allow_tf32 = True

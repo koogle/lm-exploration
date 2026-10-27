@@ -17,14 +17,19 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--run", required=True)
 parser.add_argument("--long", action="store_true")
 parser.add_argument("--inspect-dtypes", action="store_true")
+parser.add_argument("--precision-control", action="store_true")
 args = parser.parse_args()
 run = args.run
 config = variants = None
-if args.long:
+if args.long or args.inspect_dtypes or args.precision_control:
     from hybrid.long_study import CONFIG, VARIANTS
 
     config, variants = CONFIG, VARIANTS
+    if args.precision_control:
+        variants = [*variants, "baseline_bf16"]
 kind = "dtypes" if args.inspect_dtypes else "benchmark"
+if args.precision_control:
+    kind = "benchmark-precision"
 key = run + "-" + kind + "-" + str(int(time.time()))
 deadline = time.time() + 3600
 folder = Path("artifacts/results") / run
