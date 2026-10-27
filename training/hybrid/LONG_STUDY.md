@@ -97,3 +97,18 @@ PR77's unfused short-convolution operations, so the speed difference is not a
 lower bound on the cost of convolution. The rotating-memory implementation
 uses custom forward and backward kernels. Raw round timings are in the
 study's `benchmark.json` artifact.
+
+## Precision control
+
+A CUDA autocast inspection confirmed that PR77's FP32 convolution weights
+promote its q/k/v activations to FP32, whereas the no-convolution and plain
+RoPE variants present BF16 q/k/v to the recurrence. This means their comparisons
+with the original baseline include an input-precision difference. RoPE versus
+no convolution has matching precision.
+
+Two additional `baseline_bf16` runs retain the same convolution, initial weights,
+data and training schedule while casting convolution outputs back to the
+projection dtype before the recurrence. They use the original overall study
+deadline. Their launch is recorded in `precision-launch.json`; a new six-variant
+same-GPU benchmark is stored in `benchmark-precision.json`, preserving the
+initial five-variant benchmark. These controls are in progress.

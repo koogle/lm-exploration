@@ -81,6 +81,10 @@ def analyze(folder):
             row["same_gpu_speedup_vs_baseline"] = float(
                 np.mean(seconds["baseline"]) / np.mean(seconds[variant])
             )
+            if "baseline_bf16" in seconds:
+                row["same_gpu_speedup_vs_bf16_baseline"] = float(
+                    np.mean(seconds["baseline_bf16"]) / np.mean(seconds[variant])
+                )
         baselines = [runs.get(("baseline", seed)) for seed in launch["seeds"]]
         if all(baseline is not None for baseline in baselines):
             base_curves = [{p["step"]: p for p in baseline["curve"]} for baseline in baselines]
@@ -103,6 +107,16 @@ def analyze(folder):
                 row["paired_comparison_step"] = paired_steps[-1]
                 row["paired_ce_delta_vs_baseline"] = deltas[:, -1].tolist()
         rows.append(row)
+        matched = [runs.get(("baseline_bf16", seed)) for seed in launch["seeds"]]
+        if all(control is not None for control in matched):
+            reference = [{p["step"]: p for p in control["curve"]} for control in matched]
+            shared = sorted(set(common).intersection(*(set(c) for c in reference)))
+            if shared:
+                row["paired_bf16_comparison_step"] = shared[-1]
+                row["paired_ce_delta_vs_bf16_baseline"] = [
+                    curve[shared[-1]]["validation_ce"] - control[shared[-1]]["validation_ce"]
+                    for curve, control in zip(curves, reference)
+                ]
     for ax in axes:
         ax.set_xlabel("Training token positions (millions)")
         ax.grid(alpha=0.2)
