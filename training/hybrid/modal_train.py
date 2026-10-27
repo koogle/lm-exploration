@@ -14,7 +14,8 @@ checkpoint; launching again with the same run ID resumes from the latest
 checkpoint in `lm-exploration-hybrid-runs/<run id>/`. Training reads prepared
 shards from `lm-exploration-hybrid-data` and waits for shards still being
 prepared. `launch_rl` runs model_hybrid.rl the same way (one supervised 8xH100
-segment, resumable), in an image that also grades completions. Each benchmark is
+segment, resumable, and extendable by relaunching with a larger `steps`), in an
+image that also grades completions. Each benchmark is
 one call with a 30-minute timeout and no retries.
 """
 
@@ -81,16 +82,25 @@ def run_torchrun(module, args, gpus, timeout, log_path, run_id=""):
     return code, lines
 
 
-def run_segment(run_id, config, timeout, deadline, gpus, provenance, module, extra_args=()):
-    """One torchrun segment of `module` for a run folder, bounded by the launch deadline."""
+def run_segment(
+    run_id, config, timeout, deadline, gpus, provenance, module, extra_args=(), extendable=()
+):
+    """One torchrun segment of `module` for a run folder, bounded by the launch deadline.
+
+    A run resumes only with its original config, except for `extendable` keys (such
+    as an RL run's step count, which does not change its schedule).
+    """
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     started = time.time()
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=True)
     config_path = folder / "run-config.json"
-    if config_path.exists() and json.loads(config_path.read_text()) != config:
-        raise ValueError("A run resumes only with its original config")
+    if config_path.exists():
+        original = json.loads(config_path.read_text())
+        fixed = {k: v for k, v in original.items() if k not in extendable}
+        if fixed != {k: v for k, v in config.items() if k not in extendable}:
+            raise ValueError("A run resumes only with its original config")
     config_path.write_text(json.dumps(config, indent=2) + "\n")
     launch = {
         **(provenance or {}),
@@ -151,7 +161,16 @@ def train_segment(run_id, config, timeout, deadline, max_tokens=0, gpus=8, prove
     volumes=VOLUMES,
 )
 def rl_segment(run_id, config, timeout, deadline, gpus=8, provenance=None):
-    return run_segment(run_id, config, timeout, deadline, gpus, provenance, "model_hybrid.rl")
+    return run_segment(
+        run_id,
+        config,
+        timeout,
+        deadline,
+        gpus,
+        provenance,
+        "model_hybrid.rl",
+        extendable=("steps",),
+    )
 
 
 @app.function(

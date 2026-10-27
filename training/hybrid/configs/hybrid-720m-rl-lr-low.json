@@ -23,7 +23,7 @@
     "mtp": false
   },
   "init_from": "/runs/hybrid-720m-chat-sft-01/export/tokens-001527250944",
-  "steps": 400,
+  "steps": 1000,
   "prompts_per_rank": 16,
   "group_size": 8,
   "max_new_tokens": 768,
