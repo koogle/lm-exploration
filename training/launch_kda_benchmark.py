@@ -16,8 +16,9 @@ from hybrid.modal_study import app, benchmark, registry, supervise
 parser = argparse.ArgumentParser()
 parser.add_argument("--run", required=True)
 parser.add_argument("--long", action="store_true")
-parser.add_argument("--inspect-dtypes", action="store_true")
-parser.add_argument("--precision-control", action="store_true")
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument("--inspect-dtypes", action="store_true")
+mode.add_argument("--precision-control", action="store_true")
 args = parser.parse_args()
 run = args.run
 config = variants = None

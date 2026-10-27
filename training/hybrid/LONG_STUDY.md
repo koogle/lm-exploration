@@ -1,5 +1,36 @@
 # 100M-class KDA mixer comparison
 
+## Main experiment results
+
+All ten main runs completed 100,663,296 input token positions each. No
+convolution is the fastest variant; RoPE without convolution has the lowest
+observed mean held-out loss. Its additional gain over no convolution is small
+and positive in both seeds. The precision-matched baseline controls are still
+running, so comparisons with the original PR77 baseline currently include the
+precision difference described below.
+
+| Variant | Seed 17 CE | Seed 29 CE | Mean CE |
+| --- | ---: | ---: | ---: |
+| Original baseline | 3.773981 | 3.802101 | 3.788041 |
+| No convolution | 3.666530 | 3.669406 | 3.667968 |
+| RoPE without convolution | 3.644643 | 3.665334 | 3.654988 |
+| Rotating memory, Triton | 3.666716 | 3.658386 | 3.662551 |
+| Middle-layer RoPE | 3.778278 | 3.778374 | 3.778326 |
+
+RoPE reduces CE by 0.021887 and 0.004073 relative to no convolution in the
+paired seeds, averaging 0.012980. Rotating memory's small mean improvement
+over no convolution does not repeat in both seeds, and its measured runtime
+is substantially greater. Middle-only RoPE also has opposite-sign changes
+relative to the original baseline across seeds.
+
+RoPE and no convolution are the two useful candidates for further testing:
+one favors loss per training token, the other runtime. The RoPE advantage is
+larger during parts of training than at the final checkpoint. This budget is
+approximately one training token per parameter; final convergence and
+behavior at larger context lengths remain untested.
+
+## Setup
+
 Follow-up to [the short mixer pilot](STUDY.md), based on PR77. The four best
 pilot variants compete with the original conv-4 KDA baseline: no convolution,
 four-mode rotating memory, RoPE without convolution, and RoPE replacing the
@@ -72,7 +103,7 @@ and plots to the same HF results folder when the worker results arrive.
 After collection, run `python -m hybrid.analyze_long_study artifacts/results/<run-id>`
 from `training/` to produce structured comparisons and learning-curve plots.
 
-The speed benchmark runs all five variants on one H100 at the same batch and
+The speed benchmark runs the selected variants on one H100 at the same batch and
 context sizes, with ten warmup updates each followed by four rounds of twenty
 updates in alternating forward/reverse variant order. All models stay resident;
 timings cover forward/backward/clipping/AdamW and exclude data transfer,
@@ -81,22 +112,25 @@ evaluation and compilation. Launch it with
 
 ## Controlled speed results
 
-The H100 80GB HBM3 benchmark completed on torch 2.14.1+cu130. Mean optimizer
-step times across its four warmed rounds were:
+The H100 80GB HBM3 benchmark completed on torch 2.14.1+cu130. The six-variant
+repeat includes the precision control. Mean optimizer step times across its
+four warmed rounds were:
 
 | Variant | Milliseconds per update | Throughput relative to baseline |
 | --- | ---: | ---: |
-| Baseline | 119.53 | 1.00× |
-| No convolution | 90.21 | 1.32× |
-| RoPE without convolution | 100.48 | 1.19× |
-| Middle-layer RoPE | 111.39 | 1.07× |
-| Rotating memory, Triton | 140.15 | 0.85× |
+| Original baseline | 126.82 | 1.00× |
+| BF16-input baseline | 128.38 | 0.99× |
+| No convolution | 99.47 | 1.27× |
+| RoPE without convolution | 108.46 | 1.17× |
+| Middle-layer RoPE | 119.86 | 1.06× |
+| Rotating memory, Triton | 142.99 | 0.89× |
 
 These compare the current implementations. In particular, the baseline uses
 PR77's unfused short-convolution operations, so the speed difference is not a
 lower bound on the cost of convolution. The rotating-memory implementation
 uses custom forward and backward kernels. Raw round timings are in the
-study's `benchmark.json` artifact.
+study's `benchmark-precision.json` artifact. The initial five-variant timing
+run is preserved in `benchmark.json`; it had the same speed ordering.
 
 ## Precision control
 
