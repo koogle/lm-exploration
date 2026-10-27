@@ -18,6 +18,7 @@ import argparse
 import contextlib
 import dataclasses
 import datetime
+import faulthandler
 import json
 import math
 import os
@@ -142,6 +143,7 @@ def batch_tensors(batch, eos_id):
 
 
 STOP_REASONS = ("", "stop_time", "data_exhausted", "data_late", "stop_requested")
+HANG_DUMP_SECONDS = 1200
 # The launcher creates this file when a graceful stop is requested.
 STOP_FILE = os.environ.get("HYBRID_STOP_FILE", "/tmp/hybrid-stop")
 
@@ -393,6 +395,8 @@ def train(
             save_checkpoint(run_dir, lm, optimizer, state, dict(progress), config.keep_checkpoints)
 
     while progress["tokens"] + tokens_per_step <= limit:
+        # A step that takes this long is stuck: print every thread's stack (repeatedly).
+        faulthandler.dump_traceback_later(HANG_DUMP_SECONDS, repeat=True)
         start = time.perf_counter()
         batch, names, reason = broadcast_batch(
             runtime, mixture, config.global_rows, context, stop_unix
