@@ -86,7 +86,6 @@ def analyze(folder):
         ax.set_xlabel("Training token positions (millions)")
         ax.grid(alpha=0.2)
     axes[0].set_ylabel("Held-out cross-entropy (nats/token)")
-    axes[0].set_ylim(top=8)
     axes[0].legend(fontsize=8)
     axes[1].set_ylabel("Paired CE difference from baseline (lower is better)")
     axes[1].axhline(0, color="black", linewidth=0.6)
