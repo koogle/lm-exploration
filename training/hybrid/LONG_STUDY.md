@@ -78,3 +78,22 @@ updates in alternating forward/reverse variant order. All models stay resident;
 timings cover forward/backward/clipping/AdamW and exclude data transfer,
 evaluation and compilation. Launch it with
 `python launch_kda_benchmark.py --run <run-id> --long` from `training/`.
+
+## Controlled speed results
+
+The H100 80GB HBM3 benchmark completed on torch 2.14.1+cu130. Mean optimizer
+step times across its four warmed rounds were:
+
+| Variant | Milliseconds per update | Throughput relative to baseline |
+| --- | ---: | ---: |
+| Baseline | 119.53 | 1.00× |
+| No convolution | 90.21 | 1.32× |
+| RoPE without convolution | 100.48 | 1.19× |
+| Middle-layer RoPE | 111.39 | 1.07× |
+| Rotating memory, Triton | 140.15 | 0.85× |
+
+These compare the current implementations. In particular, the baseline uses
+PR77's unfused short-convolution operations, so the speed difference is not a
+lower bound on the cost of convolution. The rotating-memory implementation
+uses custom forward and backward kernels. Raw round timings are in the
+study's `benchmark.json` artifact.
