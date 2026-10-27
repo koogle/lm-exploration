@@ -309,6 +309,49 @@ def heldout(export: str, recipe: str = "hybrid/recipes/hybrid-40b-v1.json"):
     print(json.dumps({"export": export, "heldout": result}, indent=1))
 
 
+@app.function(image=image, cpu=8, memory=65536, timeout=1800, retries=0, volumes=VOLUMES)
+def export_checkpoint(run_id):
+    """bf16 trunk export (config.json, model.safetensors) of a run's latest checkpoint."""
+    import dataclasses
+
+    import torch
+    from model_hybrid import tokenizer as glm
+    from model_hybrid.train import checkpoint_paths
+    from safetensors.torch import save_file
+
+    folder = Path("/runs") / run_id
+    latest = checkpoint_paths(folder)[-1]
+    state = torch.load(latest, map_location="cpu", weights_only=False)
+    settings = json.loads((folder / "run-config.json").read_text())["model"]
+    from model_hybrid.model import HybridConfig
+
+    model_config = HybridConfig(
+        **{k: tuple(v) if isinstance(v, list) else v for k, v in settings.items()}
+    )
+    out = folder / "export" / latest.stem
+    out.mkdir(parents=True, exist_ok=True)
+    weights = {
+        k: v.to(torch.bfloat16).contiguous()
+        for k, v in state["model"].items()
+        if not k.startswith("mtp.")
+    }
+    save_file(weights, out / "model.safetensors")
+    config = dataclasses.asdict(model_config) | {
+        "tokenizer": glm.SOURCE,
+        "tokenizer_sha256": glm.SHA256,
+    }
+    (out / "config.json").write_text(json.dumps(config, indent=2) + "\n")
+    (out / "progress.json").write_text(json.dumps(state["progress"], indent=2) + "\n")
+    runs_volume.commit()
+    return {"export": f"{run_id}/{latest.stem}", "progress": state["progress"]}
+
+
+@app.local_entrypoint()
+def export(run_id: str):
+    """Export a run's latest checkpoint for evaluation (`<run id>/export/step-N/`)."""
+    print(json.dumps(export_checkpoint.remote(run_id)))
+
+
 @app.local_entrypoint()
 def stop(run_id: str):
     """Ask the run's segment to checkpoint and exit at its next step."""
