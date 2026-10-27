@@ -47,7 +47,7 @@ def probe_states(run, deadline):
             del cp
             captured = []
 
-            def capture(q, k, v, g, beta, A_log, dt_bias, documents):
+            def capture(q, k, v, g, beta, A_log, dt_bias, documents, captured=captured):
                 captured.append(
                     tuple(t.detach() for t in [q, k, v, g, beta, A_log, dt_bias, documents])
                 )
