@@ -232,8 +232,8 @@ decay, 10-step warmup, then constant.
 
 | Run | Learning rates (Muon / AdamW) | Steps | Outcome |
 | --- | --- | ---: | --- |
-| `hybrid-720m-rl-lr-low-01` | 1e-4 / 1.5e-6 | 1,000 | best held-out rates; export `tokens-000158595563` |
-| `hybrid-720m-rl-02` | 2e-4 / 3e-6 | 1,000 | slightly behind the low rate throughout |
+| `hybrid-720m-rl-lr-low-01` | 1e-4 / 1.5e-6 | 1,000 | steps 925–1,000: KodCode 43.5, GSM8K 14.6, MATH 17.4; export `tokens-000158595563` (the Space's model) |
+| `hybrid-720m-rl-02` | 2e-4 / 3e-6 | 1,000 | behind the low rate until step ~700, level at the end (steps 925–1,000: KodCode 43.4, GSM8K 15.4, MATH 21.0) |
 | `hybrid-720m-rl-lr-high-01` | 4e-4 / 6e-6 | 202 | stopped: completions collapsed to ~100 tokens and held-out GSM8K and code fell |
 
 The first base-rate run (`hybrid-720m-rl-01`) ran out of memory in its first
