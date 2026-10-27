@@ -201,6 +201,17 @@ reproduces its final values):
 | SFT without replay | 2.881 (+12.6%) | 1.240 (+17.5%) | 2.070 (+18.8%) | 0.829 |
 
 Replay keeps about 85–90% of the pretraining loss that chat-only fine-tuning
-gives up, at 0.006 nats of chat held-out loss. The first two launches of the
+gives up, at 0.006 nats of chat held-out loss. The same benchmark suite on the exports (as above,
+base-model prompts):
+
+| Export | HellaSwag | ARC-E | ARC-C | PIQA | WinoG | OBQA | SciQ | LAMBADA | MMLU | GSM8K | HumanEval | MBPP |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Base, 40B tokens | 51.4 | 63.4 | 35.4 | 72.7 | 57.4 | 38.8 | 87.8 | 41.2 | 26.4 | 3.5 | 4.3 | 5.0 |
+| SFT with replay | 50.2 | 63.7 | 35.0 | 72.0 | 56.0 | 36.6 | 88.3 | 41.1 | 27.0 | 3.6 | 10.4 | 8.4 |
+| SFT without replay | 48.6 | 59.1 | 32.8 | 71.3 | 56.0 | 36.2 | 83.5 | 35.6 | 24.4 | 3.7 | 12.2 | 6.2 |
+
+With replay the commonsense and knowledge scores stay within about 2 points of
+the base model while HumanEval rises from 4.3 to 10.4; without replay LAMBADA
+drops 5.6 points and ARC-Easy and SciQ about 4. The first two launches of the
 no-replay run (`-01`, `-02`) hung on 8 GPUs before their first step and were
 stopped; the third ran normally.
