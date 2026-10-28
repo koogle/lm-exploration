@@ -304,6 +304,47 @@ writes code for every problem but solves none, against three for SFT. Results an
 the Pareto chart: `training/results/hybrid-720m-40b-01/benchmarks/livecodebench-v6/`
 in `jfrick/lm-exploration-results`.
 
+## PR-to-task pilot (2026-10-28)
+
+Repository tasks for agentic coding, built from commits in
+`jfrick/mit-claude-codex-code-20261019` (revision `b157d0be`) by
+[`modal_pr_tasks.py`](../hybrid/modal_pr_tasks.py): the repository at the parent
+commit, an issue written by Qwen3-Coder-30B-A3B-Instruct (Apache-2.0), the commit's
+own test changes as the hidden check and the commit as the reference patch.
+
+| Stage | Kept | Notes |
+| --- | ---: | --- |
+| Changes rows scanned | 47,393 | 793 shards; merges, non-code and out-of-limit commits rejected |
+| Candidates | 10,023 | one language (Python, JS/TS, Go); 1–3 source files with 3–200 changed lines and 1–3 test files |
+| Selected | 797 | at most 40 per repository; only 24 repositories qualify |
+| Verified in sandboxes | 559 (70%) | Python 285/338, Go 161/183, JS/TS 113/276 |
+| Verified with a clean issue | 502 (63%) | Python 265, Go 137, JS/TS 100; 21 repositories |
+
+Verification installs dependencies with network, then runs the commit's test files
+without network twice: with source files reverted to the parent and at the commit. A
+task is verified when at least one test fails before and passes after and none
+regresses. 797 tasks took 15 minutes on 1,580 sandboxes, 48 at a time; the median
+task has 3 fail-to-pass tests. Unverified: 214 without a fail-to-pass test (155 of
+them JS/TS, mostly jest/vitest setups the harness cannot run), 14 sandbox timeouts, 8
+regressions, 2 without results. A Go package that fails to compile before the change
+makes all of its tests fail-to-pass, so some Go tasks list unrelated tests.
+
+Issue writing needed three versions (all kept on HF):
+1. Commit message plus full diff: 778 of 797 passed the first leak check (quoted
+   added lines), but rereading showed about half named new internal helpers or
+   constants and described the tests.
+2. The same input with a stricter prompt: 406 of 797 still leaked (names of new
+   internal code that the tests never use, mentions of tests); prompting alone did not
+   stop it.
+3. Commit message (without trailers) plus the test changes only, four drafts, the
+   first clean one kept: 679 of 797 clean; 110 of the 118 leaks mention tests.
+
+Commit messages can still describe the fix; the checks only catch names and quoted
+lines. The 21 repositories limit diversity more than the commit count does; the next
+collection should add repositories rather than commits. Outputs (candidates,
+selection, per-task verification logs, the three issue versions, `tasks.jsonl`):
+`training/results/pr-tasks-pilot/` in `jfrick/lm-exploration-results`.
+
 ## Data licensing
 
 The models in this plan are research models, not commercially clean, and that is
