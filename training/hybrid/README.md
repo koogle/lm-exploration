@@ -380,8 +380,8 @@ uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--expor
 ```
 
 [`modal_livecodebench.py`](modal_livecodebench.py) scores LiveCodeBench v6
-(`test6.jsonl`, 175 problems, pinned revision) for the base, SFT and RL exports and
-the same reference models: one greedy completion per problem (up to 2,048 tokens,
+(`test6.jsonl`, 175 problems, pinned revision) for the base, SFT and RL exports, the
+same reference models and the dense Qwen3 (1.7–14B) and Qwen3.5 (2–9B) base models: one greedy completion per problem (up to 2,048 tokens,
 stopping once a code block closes), graded inside the call's container by
 [`livecodebench.py`](livecodebench.py) on every public and private test. Base models
 get LiveCodeBench's prompt after one worked example of the same test mode; chat

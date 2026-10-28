@@ -277,17 +277,26 @@ greedy completion each, no reasoning, up to 2,048 new tokens, graded on all publ
 and private tests. Base models: LiveCodeBench's prompt after one worked example;
 SFT and RL exports: the zero-shot question in the chat format.
 
-| Model | Solved | pass@1 | Easy |
-| --- | ---: | ---: | ---: |
-| Qwen3-0.6B-Base | 11 | 6.3 | 23.3 |
-| Gemma 4 E2B | 6 | 3.4 | 14.0 |
-| Hybrid 720M + SFT | 3 | 1.7 | 7.0 |
-| Qwen3.5-0.8B-Base | 2 | 1.1 | 4.7 |
-| LFM2.5-1.2B-Base | 1 | 0.6 | 2.3 |
-| Hybrid 720M base, + SFT + RL; SmolLM2-360M; Gemma 3 270M and 1B; OLMo-2-1B | 0 | 0.0 | 0.0 |
+| Model | Params | Solved | pass@1 | Easy | Medium | Hard |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Qwen3.5-9B-Base | 9.7B | 42 | 24.0 | 79.1 | 11.5 | 2.5 |
+| Qwen3-14B-Base | 14.8B | 41 | 23.4 | 74.4 | 11.5 | 3.8 |
+| Qwen3-8B-Base | 8.2B | 33 | 18.9 | 62.8 | 7.7 | 2.5 |
+| Qwen3-4B-Base | 4.0B | 30 | 17.1 | 58.1 | 5.8 | 2.5 |
+| Qwen3.5-4B-Base | 4.7B | 28 | 16.0 | 55.8 | 7.7 | 0.0 |
+| Qwen3-1.7B-Base | 1.7B | 12 | 6.9 | 25.6 | 0.0 | 1.3 |
+| Qwen3-0.6B-Base | 0.6B | 11 | 6.3 | 23.3 | 1.9 | 0.0 |
+| Qwen3.5-2B-Base | 2.3B | 11 | 6.3 | 25.6 | 0.0 | 0.0 |
+| Gemma 4 E2B | 5.1B | 6 | 3.4 | 14.0 | 0.0 | 0.0 |
+| Hybrid 720M + SFT | 0.7B | 3 | 1.7 | 7.0 | 0.0 | 0.0 |
+| Qwen3.5-0.8B-Base | 0.9B | 2 | 1.1 | 4.7 | 0.0 | 0.0 |
+| LFM2.5-1.2B-Base | 1.2B | 1 | 0.6 | 2.3 | 0.0 | 0.0 |
+| Hybrid 720M base, + SFT + RL; SmolLM2-360M; Gemma 3 270M and 1B; OLMo-2-1B | | 0 | 0.0 | 0.0 | 0.0 | 0.0 |
 
-No model solves a hard problem. Differences of a few problems are within noise
-(one problem is 0.6 points). A first launch with a zero-shot base prompt and
+Below 1.7B no model solves a hard problem, and the dense Qwen base models solve at
+most 3 of 80. Easy problems separate the models: Qwen reaches about 25% of them at
+0.6–2B and 55–80% at 4–15B; the largest step is between 2B and 4B. Differences of a
+few problems are within noise (one problem is 0.6 points). A first launch with a zero-shot base prompt and
 1,024-token answers scored lower for most base models, which mostly repeated the
 prompt's `# YOUR CODE HERE` block or ran out of tokens while explaining; that
 launch is archived in `zero-shot-1024/` beside the results below. RL on KodCode did not carry over: the RL export
