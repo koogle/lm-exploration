@@ -45,12 +45,15 @@ class Scheduler:
 @dataclass
 class Batch:
     """Answers to `rows` (pool rows, a prompt's group consecutive): new token IDs
-    without EOS, whether each ended in EOS, and its reward."""
+    without EOS, whether each ended in EOS, and its reward. When sampled (not greedy),
+    `sampler[i]` holds the sampler's log-probabilities of answer i's tokens (EOS
+    included) and, if recorded, its top tokens and their log-probabilities at each."""
 
     rows: list
     completions: list
     finished: list
     rewards: list
+    sampler: list
 
     def sequences(self):
         """(inputs, targets) of prompt + answer (+ EOS); only answer tokens are targets."""
@@ -63,10 +66,12 @@ class Batch:
         return result
 
 
-def collect(model, rows, rollouts, temperature, generator, tokenizer, sandbox):
+def collect(model, rows, rollouts, temperature, generator, tokenizer, sandbox, top_k=0):
     """A `Batch` for `rows`, sampled at `temperature` (0 is greedy), one sampler batch per
-    task; code answers are checked in a background thread while math is sampled."""
+    task, recording the sampler's `top_k` likeliest tokens; code answers are checked in a
+    background thread while math is sampled."""
     completions, finished = [None] * len(rows), [None] * len(rows)
+    sampler = [None] * len(rows)
     rewards = [0.0] * len(rows)
     model.eval()
     with ThreadPoolExecutor(max_workers=1) as checker:
@@ -82,9 +87,19 @@ def collect(model, rows, rollouts, temperature, generator, tokenizer, sandbox):
                 EOS_TOKEN_ID,
                 temperature,
                 generator,
+                record_top_k=top_k,
             )
-            for i, c, d in zip(indices, samples.completions, samples.finished, strict=True):
+            for j, (i, c, d) in enumerate(
+                zip(indices, samples.completions, samples.finished, strict=True)
+            ):
                 completions[i], finished[i] = c, d
+                if samples.logprobs is not None:
+                    n = len(c) + d
+                    sampler[i] = (
+                        samples.logprobs[j, :n],
+                        None if samples.top_ids is None else samples.top_ids[j, :n],
+                        None if samples.top_ids is None else samples.top_logprobs[j, :n],
+                    )
             chosen = [rows[i] for i in indices]
             texts = [tokenizer.decode(c, skip_special_tokens=True) for c in samples.completions]
             scores = (rl_tasks.rewards, chosen, texts, samples.finished, sandbox)
@@ -97,4 +112,4 @@ def collect(model, rows, rollouts, temperature, generator, tokenizer, sandbox):
             for i, r in zip(pending[0], pending[1].result(), strict=True):
                 rewards[i] = r
     model.train()
-    return Batch(rows, completions, finished, rewards)
+    return Batch(rows, completions, finished, rewards, sampler)

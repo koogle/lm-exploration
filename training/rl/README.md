@@ -59,6 +59,15 @@ are the recipe's `algorithm` options. `grpo` is the one implemented:
 - Loss: PPO's clipped surrogate −min(r·A, clip(r, 1 ± `clip`)·A) per answer token, with
   r = p / p_old: gradient −r·A·∇log p where the ratio is not clipped. On-policy r is 1,
   so the gradient is the plain policy gradient −A·∇log p (`tests/test_rl.py`).
+- Score (`score`): `"plain"` pushes up ∇log p(y). `"centered"` uses Score Centering's
+  ∇log p(y) − Σ_v q_v ∇log p_v ([`../trainer/rl/scores.py`](../trainer/rl/scores.py),
+  the method behind Tinker's StableReinforce,
+  [reference](../references/stable-reinforce-2026-10-25.md)). Here q is the sampler's
+  distribution from its top `centering_top_k` (32) tokens, with the rest of the mass
+  spread like the learner's. On the logits its gradient is onehot(y) − q instead of
+  onehot(y) − p (`tests/test_rl_scores.py`). The sampler (cached one-token decoding) and
+  the learner (a full forward pass) compute probabilities with different kernels;
+  centering cancels any bias between them. Centering needs temperature 1.
 
 ## The loop
 
@@ -72,7 +81,8 @@ are the recipe's `algorithm` options. `grpo` is the one implemented:
    for math and 384 for code. The shared sampler
    [`../trainer/rollout.py`](../trainer/rollout.py) samples a left-padded batch with a
    key/value cache; its greedy output matches unbatched, uncached decoding exactly
-   (`tests/test_rollout.py`).
+   (`tests/test_rollout.py`). It also records each sampled token's log-probability and,
+   for a centered score, the sampler's top tokens.
 3. **Rewards** ([`../data/rl_tasks.py`](../data/rl_tasks.py)). 1 or 0; an answer
    without EOS within the limit scores 0. Code answers are checked in the sandbox in a
    background thread while math is sampled.
@@ -82,7 +92,8 @@ are the recipe's `algorithm` options. `grpo` is the one implemented:
    number of answers per update times the task's token limit (no per-answer length
    normalization).
 6. **Anchors.** KL(policy ‖ parent) is estimated (k3) on the answer tokens every update and
-   added with `kl_coef` (default 0). Pretraining replay (`"replay": true`, the hook SFT
+   added with `kl_coef` (default 0); `sampler_kl_coef` (default 0) adds Tinker's
+   sampler–learner KL term. Pretraining replay (`"replay": true`, the hook SFT
    also uses, [`../trainer/replay_hook.py`](../trainer/replay_hook.py)) adds a
    next-token loss on pretraining windows at `replay_weight` to every update.
 7. **Optimizer.** AdamW without weight decay, LR 1e-6 after 20 warmup updates, gradient
@@ -104,7 +115,8 @@ call ends. A run does not resume; an interrupted run is rerun from scratch.
 
 Every step: reward, share of uniform groups, answer length and truncation rate per task;
 answers trained on; optimizer updates so far; the algorithm's statistics (for `grpo`, the share of
-clipped tokens); mean NLL of the sampled tokens; KL to the parent; replay loss; gradient
+clipped tokens); mean NLL of the sampled tokens; KL to the parent; sampler–learner
+mismatch (mean sampler minus learner log-probability of the sampled tokens); replay loss; gradient
 norm; resting prompts; generation and training seconds. Every evaluation: validation
 accuracy and truncation per task, and replay validation loss per source.
 

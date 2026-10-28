@@ -87,6 +87,8 @@ class Settings(ReplaySettings):
     optimizer: Optimizer = field(default_factory=Optimizer)
     # KL(policy ‖ parent), k3 estimate on answer tokens; always measured, added at kl_coef.
     kl_coef: float = 0.0
+    # KL(sampler ‖ learner), k3 estimate on the sampled tokens, added at sampler_kl_coef.
+    sampler_kl_coef: float = 0.0
     # Answers per forward and backward pass.
     micro_batch: int = 16
     seed: int = 42
@@ -106,8 +108,11 @@ class Settings(ReplaySettings):
 
     def __post_init__(self):
         positive_int(self, "steps", "micro_batch", "evaluate_every", "save_every", "max_seconds")
-        if not math.isfinite(self.kl_coef) or self.kl_coef < 0:
-            raise ValueError("Invalid KL coefficient")
+        for coef in (self.kl_coef, self.sampler_kl_coef):
+            if not math.isfinite(coef) or coef < 0:
+                raise ValueError("Invalid KL coefficient")
+        if self.algorithm.sampler_top_k and self.rollouts.temperature != 1:
+            raise ValueError("Score centering needs sampling at temperature 1")
         if self.optimizer.warmup_steps >= self.steps * self.algorithm.updates_per_batch:
             raise ValueError("Warmup must end before the last update")
         if self.max_seconds > 20 * 60 * 60:

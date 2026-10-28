@@ -12,7 +12,11 @@ before its first update.
 Each answer's token loss is divided by a constant, the answers per update times the
 task's token limit (no per-answer length normalization, as in Dr. GRPO,
 arXiv:2503.20783). `kl_coef` adds the k3 estimate of KL(policy ‖ parent) on the answer
-tokens, which is always measured and logged; pretraining replay (`replay_*`, the hook
+tokens, which is always measured and logged; `sampler_kl_coef` adds that of
+KL(sampler ‖ learner). The sampler (cached one-token decoding) and the learner (a full
+forward pass) compute probabilities with different kernels, so they differ slightly; the
+mean sampler minus learner log-probability of the sampled tokens is logged as
+`sampler_mismatch`. Pretraining replay (`replay_*`, the hook
 `trainer/replay_hook.py` that SFT also uses) adds its loss at `replay_weight` to every
 update. Gradients are clipped to norm 1.
 
@@ -43,6 +47,7 @@ from training_data.subword import (
 from trainer import batches, rollout
 from trainer.batches import collate
 from trainer.replay_hook import ReplayHook
+from trainer.rl import scores
 from trainer.rl.algorithms import Tokens
 from trainer.rl.rollouts import Scheduler, collect
 
@@ -217,15 +222,32 @@ def train(
                 device="cuda",
             )
             weight = torch.tensor([advantage[i] for i in chosen], device="cuda")
-            loss, stats = algorithm.loss(
-                Tokens(logits, y, mask, logp, old_logp.detach(), weight, scale)
-            )
-            del logits
+            # The sampler's records at each answer target position.
+            top = algorithm.sampler_top_k
+            sampled = torch.zeros(y.shape, device="cuda")
+            top_ids = torch.zeros((*y.shape, top), dtype=torch.long, device="cuda")
+            top_logprobs = torch.zeros((*y.shape, top), device="cuda")
+            for b, i in enumerate(chosen):
+                at = len(batch.rows[i]["prompt_ids"]) - 1
+                logprobs, ids, values = batch.sampler[i]
+                sampled[b, at : at + len(logprobs)] = logprobs
+                if top:
+                    top_ids[b, at : at + len(ids)] = ids
+                    top_logprobs[b, at : at + len(ids)] = values
+            tokens = Tokens(logits, y, mask, logp, old_logp.detach(), weight, scale)
+            if top:
+                tokens.sampler_top_ids, tokens.sampler_top_logprobs = top_ids, top_logprobs
+            loss, stats = algorithm.loss(tokens)
+            del logits, tokens
             delta = (reference_logp - logp) * mask
             kl = (delta.exp() - delta - 1) * mask
             if settings.kl_coef:
                 loss = loss + settings.kl_coef * (scale[:, None] * kl).sum()
+            if settings.sampler_kl_coef:
+                drift = scores.sampler_kl(logp, sampled, mask)
+                loss = loss + settings.sampler_kl_coef * (scale[:, None] * drift).sum()
             loss.backward()
+            totals["mismatch"] += ((sampled - logp.detach()) * mask).sum().item()
             for key, value in stats.items():
                 totals[key] = totals.get(key, 0) + value
             totals["kl"] += kl.detach().sum().item()
@@ -282,7 +304,16 @@ def train(
             "code", rollouts.prompts_per_step - math_prompts, step
         )
         rows = [row for row in drawn for _ in range(group)]
-        batch = collect(model, rows, rollouts, rollouts.temperature, generator, tokenizer, sandbox)
+        batch = collect(
+            model,
+            rows,
+            rollouts,
+            rollouts.temperature,
+            generator,
+            tokenizer,
+            sandbox,
+            algorithm.sampler_top_k,
+        )
         timings["generate_seconds"] = time.monotonic() - clock
         clock = time.monotonic()
         advantage = algorithm.advantages(batch.rewards, group)
@@ -293,7 +324,14 @@ def train(
         trained = [i for i, a in enumerate(advantage) if a != 0]
         rng.shuffle(trained)
         old = old_logprobs(sequences, trained) if algorithm.policy == "off" else None
-        totals = {"kl": 0.0, "nll": 0.0, "tokens": 0, "grad_norm": 0.0, "replay_loss": 0.0}
+        totals = {
+            "kl": 0.0,
+            "nll": 0.0,
+            "mismatch": 0.0,
+            "tokens": 0,
+            "grad_norm": 0.0,
+            "replay_loss": 0.0,
+        }
         shares = algorithm.updates_per_batch
         for share in range(shares):
             answers = trained[share * len(trained) // shares : (share + 1) * len(trained) // shares]
@@ -319,6 +357,7 @@ def train(
             trained_answers=len(trained),
             sampled_nll=totals.pop("nll") / tokens,
             kl=totals.pop("kl") / tokens,
+            sampler_mismatch=totals.pop("mismatch") / tokens,
             grad_norm=totals.pop("grad_norm") / shares,
             lr=settings.optimizer.learning_rate(update - 1),
             updates=update,

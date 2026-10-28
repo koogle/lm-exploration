@@ -19,6 +19,8 @@ from dataclasses import dataclass
 
 import torch
 
+from trainer.rl import scores
+
 POLICIES = ("on", "off")
 
 
@@ -28,7 +30,9 @@ class Tokens:
     noted: the learner's `logits` `[batch, time, vocab]` and its log-probabilities `logp`
     of the `targets` (both with gradient), `old_logp` of the weights that sampled the
     batch (detached; on-policy, `logp` itself), the answer-token `mask`, and per answer its
-    `advantage` and constant normalization `scale` `[batch]` (see `loop.py`)."""
+    `advantage` and constant normalization `scale` `[batch]` (see `loop.py`). When the
+    algorithm asks the sampler to record its top tokens (`sampler_top_k`), the sampler's
+    `sampler_top_ids` and `sampler_top_logprobs` `[batch, time, k]` at each target."""
 
     logits: torch.Tensor
     targets: torch.Tensor
@@ -37,6 +41,8 @@ class Tokens:
     old_logp: torch.Tensor
     advantage: torch.Tensor
     scale: torch.Tensor
+    sampler_top_ids: torch.Tensor | None = None
+    sampler_top_logprobs: torch.Tensor | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +55,11 @@ class GRPO:
     answer token, with r = p / p_old, written by its gradient −r·A·∇log p on tokens whose
     ratio is not clipped. On-policy p_old is p itself (detached), so r = 1 and the
     gradient is the plain policy gradient −A·∇log p.
+
+    `score`: `"plain"` pushes up ∇log p as above; `"centered"` replaces it by Score
+    Centering's ∇log p − E_q[∇log p] over the sampler's distribution q, estimated from the
+    sampler's `centering_top_k` likeliest tokens (`scores.py`). Centering needs answers
+    sampled from the plain policy (temperature 1).
     """
 
     name: str = "grpo"
@@ -56,11 +67,22 @@ class GRPO:
     updates_per_batch: int = 1
     clip: float = 0.2
     scale_by_std: bool = False
+    score: str = "plain"
+    centering_top_k: int = 32
 
     def __post_init__(self):
         check_policy(self)
         if not 0 < self.clip < 1:
             raise ValueError("clip must be between 0 and 1")
+        if self.score not in ("plain", "centered"):
+            raise ValueError("score must be plain or centered")
+        if type(self.centering_top_k) is not int or self.centering_top_k < 1:
+            raise ValueError("centering_top_k must be a positive integer")
+
+    @property
+    def sampler_top_k(self):
+        """Top tokens per answer token the sampler records for this algorithm."""
+        return self.centering_top_k if self.score == "centered" else 0
 
     def advantages(self, rewards, group):
         result = []
@@ -80,7 +102,12 @@ class GRPO:
             (advantage < 0) & (ratio < 1 - self.clip)
         )
         weight = tokens.scale[:, None] * ratio * advantage * (~clipped & tokens.mask)
-        loss = -(weight * tokens.logp).sum()
+        score = tokens.logp
+        if self.score == "centered":
+            score = scores.centered(
+                tokens.logits, tokens.targets, tokens.sampler_top_ids, tokens.sampler_top_logprobs
+            )
+        loss = -(weight * score).sum()
         return loss, {"clipped_tokens": (clipped & tokens.mask).sum().item()}
 
 
