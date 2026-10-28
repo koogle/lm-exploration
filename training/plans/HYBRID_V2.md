@@ -29,6 +29,8 @@ Each stage has a gate; a failed gate stops the plan for a decision.
    *Gate:* held-out loss on long documents keeps falling with in-document position
    up to 32K (`loss_by_position`), and the short-context benchmarks stay within one
    point of the 40B export.
+   *Measured:* 32K training fits one H100 at microbatch 1: 62,700 tokens/s, 31.9% MFU
+   (synthetic 30K-token documents, 2026-10-28).
 2. **Code-heavy base.** Continue pretraining with code at about 40% (permissive
    GitHub code plus the repository collections), math 15%, web 45%, for 40–60B more
    tokens at 32K. Before scaling, an ablation at 2B tokens compares 720M with a
@@ -63,3 +65,11 @@ Each stage has a gate; a failed gate stops the plan for a decision.
 - Licenses: permissive code only for pretraining (github-code-clean allowlist, MIT
   collection); PG19 is public domain; GLM-5.3 outputs (MIT-style weights license)
   may be used to train.
+
+## Mid-training run (`hybrid-mid32k-v1`)
+
+One run addresses the three v1 gaps together: context (long documents at 32K), code
+(a code-heavy share of unseen permissive GitHub files) and reasoning (thinking traces,
+added by the reasoning PR). Sources prepared by `hybrid-long32k-v1` are reused through
+`prepared_in`. 3B tokens from the 40B export with 30% replay of `hybrid-40b-v1`;
+config `hybrid/configs/hybrid-720m-mid32k.json`.

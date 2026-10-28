@@ -10,7 +10,8 @@ shard of each source is held out for evaluation.
 A source may group rows into longer documents (`group_by`, e.g. one document per
 code repository) and keep only documents of at least `min_tokens`; `file_offset`
 shifts which upstream files its shards read. A source names its files by `pattern`
-(with `{index}`) or lists them in `files`.
+(with `{index}`) or lists them in `files`. A source with `prepared_in` reuses the
+shards another recipe prepared under the same source name (`source_root`).
 
 Preparation drops documents that share any token n-gram (n = 13) with the
 recipe's benchmark test sets, and code outside `PERMISSIVE_LICENSES` when a source sets
@@ -109,6 +110,13 @@ def contaminated(ids, screen, n):
         return False
     positions = np.searchsorted(screen, hashes).clip(max=screen.size - 1)
     return bool((screen[positions] == hashes).any())
+
+
+def source_root(recipe, root, name):
+    """Folder holding a source's shards: the recipe's own, or that of the recipe named in
+    the source's `prepared_in` (a sibling folder), whose shards it reuses."""
+    other = recipe["sources"][name].get("prepared_in")
+    return Path(root).parent / other if other else Path(root)
 
 
 def shard_paths(root, name, index):
@@ -239,7 +247,9 @@ class PreparedMixture:
         index = self.orders[name][position]
         key = (name, index)
         if key not in self.loaded:
-            bin_path, _, meta_path = shard_paths(self.root, name, index)
+            bin_path, _, meta_path = shard_paths(
+                source_root(self.recipe, self.root, name), name, index
+            )
             start = time.monotonic()
             while not meta_path.exists():
                 if time.monotonic() - start > self.wait_seconds:
@@ -346,7 +356,9 @@ def heldout_windows(recipe, root, name, context, max_documents):
     """One source's whole held-out documents in one stream of windows (labels -100 only
     past its end): (inputs, labels, total UTF-8 bytes)."""
     source = recipe["sources"][name]
-    bin_path, docs_path, _ = shard_paths(root, name, heldout_index(source))
+    bin_path, docs_path, _ = shard_paths(
+        source_root(recipe, root, name), name, heldout_index(source)
+    )
     lengths = np.load(docs_path)[:max_documents]
     count = int(lengths[:, 0].sum())
     tokens = np.fromfile(bin_path, dtype=np.uint32, count=count).astype(np.int64)

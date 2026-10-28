@@ -123,6 +123,19 @@ class HybridDataTests(unittest.TestCase):
         self.assertEqual(meta["tokens"], len(expected) + 1)
         self.assertEqual(meta["bytes"], len(expected.encode()))
 
+    def test_sources_prepared_under_another_recipe(self):
+        self.prepare()
+        other = dict(self.recipe, name="other-recipe")
+        other["sources"] = {
+            "web": dict(self.recipe["sources"]["web"], prepared_in="out", weight=1.0)
+        }
+        mixture = data.PreparedMixture(other, self.root / "other-recipe")
+        name, window = mixture.next_window()
+        self.assertEqual(name, "web")
+        first = data.training_order(other, "web")[0]
+        tokens = np.fromfile(data.shard_paths(self.root / "out", "web", first)[0], np.uint32)
+        np.testing.assert_array_equal(window, tokens[: len(window)])
+
     def test_ngram_hashes_and_screen(self):
         ids = list(range(20))
         hashes = data.ngram_hashes(ids, 13)

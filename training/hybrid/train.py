@@ -596,10 +596,11 @@ def heldout_windows(recipe, root, name, context, max_documents):
 
 def pretraining_heldout(config):
     def heldout(recipe, mixture, context):
-        from training_data.packed_shards import heldout_index, shard_paths
+        from training_data.packed_shards import heldout_index, shard_paths, source_root
 
         for name, source in recipe["sources"].items():
-            meta = shard_paths(mixture.root, name, heldout_index(source))[2]
+            folder = source_root(recipe, mixture.root, name)
+            meta = shard_paths(folder, name, heldout_index(source))[2]
             waited = time.monotonic()
             while not meta.exists():
                 if time.monotonic() - waited > mixture.wait_seconds:

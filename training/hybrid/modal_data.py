@@ -131,8 +131,10 @@ def schedule(recipe):
     """(source, index) in the order they are needed: held-out shards, then by expected use."""
     from training_data import packed_shards as data
 
-    jobs = [(-1.0, name, data.heldout_index(s)) for name, s in recipe["sources"].items()]
-    for name, source in recipe["sources"].items():
+    # Sources prepared under another recipe (`prepared_in`) are not prepared again.
+    own = {n: s for n, s in recipe["sources"].items() if "prepared_in" not in s}
+    jobs = [(-1.0, name, data.heldout_index(s)) for name, s in own.items()]
+    for name, source in own.items():
         scale = source["estimated_tokens_per_shard"] / source["weight"]
         jobs += [(p * scale, name, i) for p, i in enumerate(data.training_order(recipe, name))]
     return [(name, index) for _, name, index in sorted(jobs)]
@@ -192,10 +194,13 @@ def coordinate(run_id, recipe, deadline, parallel):
             failed=failed,
         )
         time.sleep(10)
+    from training_data.packed_shards import source_root
+
     volume.reload()  # shard workers created the recipe folder after this call started
     capacity = {}
     for name in recipe["sources"]:
-        metas = [m for m in done.values() if m["source"] == name]
+        shards = source_root(recipe, folder, name) / name
+        metas = [json.loads(p.read_text()) for p in sorted(shards.glob("*.json"))]
         train = [m for m in metas if not m["heldout"]]
         capacity[name] = {
             "train_shards": len(train),
