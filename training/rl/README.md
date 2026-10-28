@@ -12,47 +12,80 @@ RL can only reinforce answers the model already produces sometimes: a prompt the
 never solves gives no learning signal. So RL starts from an SFT checkpoint that has
 learned the answer formats (math and code, `trainer/sft.py` with `"task": "mixture"`).
 
+## Code layout
+
+[`../trainer/rl/`](../trainer/rl/__init__.py) keeps the parts of RL apart, so an
+algorithm or a sampling regime can change without touching the rest:
+
+| File | Owns |
+| --- | --- |
+| `settings.py` | What a recipe sets, in sections: `rollouts`, `algorithm`, `optimizer`, plus the shared `replay_*` fields |
+| `rollouts.py` | Which prompts are drawn, how answers are sampled and rewarded |
+| `algorithms.py` | How rewards become advantages and a loss; `ALGORITHMS` by name; on- or off-policy |
+| `loop.py` | The training loop, checkpoints and provenance |
+
+A recipe's `settings` reads top-down; omitted fields take the defaults in `settings.py`:
+
+```json
+{
+  "steps": 300,
+  "rollouts": {"prompts_per_step": 64, "samples_per_prompt": 8, "math_share": 1.0},
+  "algorithm": {"name": "grpo", "policy": "on"},
+  "optimizer": {"lr": 1e-6, "warmup_steps": 20},
+  "replay": true, "replay_snapshot": "...", "replay_sources": {"...": 1.0},
+  "replay_batch_size": 8, "replay_weight": 0.1
+}
+```
+
+`uv run python -m trainer.rl --recipe RECIPE.json` prints the settings with every
+default filled in, without Modal, data or a GPU.
+
+**On- and off-policy.** `"policy": "on"` takes one optimizer update per rollout batch, so
+every answer comes from the weights being updated. `"policy": "off"` with
+`updates_per_batch: N` (at least 2) splits the batch's answers into N shares and takes
+one update on each; after the first, answers come from older weights. The log-probabilities
+of the weights that sampled the batch are computed before its first update, and the
+algorithm corrects for the difference. Only algorithms listed in `OFF_POLICY` may run
+off-policy.
+
+**Algorithms.** An algorithm is a frozen dataclass registered in `ALGORITHMS`. It has
+`advantages(rewards, group)` and `loss(tokens)`, where `tokens` is one micro-batch of
+answers (`Tokens`: logits, log-probabilities now and when sampled, advantages). Its fields
+are the recipe's `algorithm` options. `grpo` is the one implemented:
+
+- Advantage: reward minus its group's mean. With `scale_by_std` it is also divided by
+  the group's standard deviation; that is off by default, as in Dr. GRPO
+  (arXiv:2503.20783).
+- Loss: PPO's clipped surrogate −min(r·A, clip(r, 1 ± `clip`)·A) per answer token, with
+  r = p / p_old: gradient −r·A·∇log p where the ratio is not clipped. On-policy r is 1,
+  so the gradient is the plain policy gradient −A·∇log p (`tests/test_rl.py`).
+
 ## The loop
 
-[`../trainer/rl.py`](../trainer/rl.py) on one H100. Each step samples with the current
-weights and takes one optimizer step, so the loop is on-policy:
+[`../trainer/rl/loop.py`](../trainer/rl/loop.py) on one H100:
 
 1. **Prompts.** Draw `prompts_per_step` (64) training problems of the pool,
    `math_share` (half) math. A prompt solved by none or all of its group on two visits in
    a row rests for `rest_steps` (50) steps.
 2. **Rollouts.** `samples_per_prompt` (8) answers per prompt at temperature 1, without
-   top-k or top-p, so samples follow the policy's probabilities: at most 256 new tokens
-   for math and 384 for code. [`../trainer/rollout.py`](../trainer/rollout.py) samples a
-   left-padded batch with a key/value cache; its greedy output matches unbatched,
-   uncached decoding exactly (`tests/test_rollout.py`). The sampler also records each
-   token's log-probability and its top-32 tokens.
+   top-k or top-p, so samples follow the policy's probabilities. At most 256 new tokens
+   for math and 384 for code. The shared sampler
+   [`../trainer/rollout.py`](../trainer/rollout.py) samples a left-padded batch with a
+   key/value cache; its greedy output matches unbatched, uncached decoding exactly
+   (`tests/test_rollout.py`).
 3. **Rewards** ([`../data/rl_tasks.py`](../data/rl_tasks.py)). 1 or 0; an answer
    without EOS within the limit scores 0. Code answers are checked in the sandbox in a
    background thread while math is sampled.
-4. **Advantages.** Reward minus the mean reward of the prompt's group, with no division
-   by the group's standard deviation (Dr. GRPO, arXiv:2503.20783). Groups whose answers
-   all score the same have zero advantage and are skipped; their share is logged.
-5. **Loss.** −advantage × score summed over answer tokens, divided by the number of
-   answers times the task's token limit (no per-answer length normalization). The
-   samples come from the weights being trained, so no importance ratio or clipping is
-   needed. The score is Score Centering's (`score_centering_top_k`, default 32;
-   [`../trainer/policy_loss.py`](../trainer/policy_loss.py), the method behind Tinker's
-   StableReinforce, [reference](../references/stable-reinforce-2026-10-25.md)):
-   ∇log p(y) − Σ_v q_v ∇log p_v, where q is the sampler's distribution from its top-32
-   with the rest of the mass spread like the learner's. On the logits its gradient is
-   onehot(y) − q instead of REINFORCE's onehot(y) − p (`tests/test_policy_loss.py`).
-   The sampler (cached one-token decoding) and the learner (a full forward pass) compute
-   probabilities with different kernels; centering cancels any bias between them. That
-   difference is logged every step as `sampler_mismatch`: in smoke runs from the r02
-   math checkpoint it averaged about 1e-4 nats per token, with a mean absolute
-   difference of about 0.015 per token. `score_centering_top_k: 0` gives plain
-   REINFORCE.
-6. **Anchors.** KL(policy ‖ parent) is estimated (k3) on the answer tokens every step and
-   added with `kl_coef` (default 0); `sampler_kl_coef` (default 0) adds Tinker's
-   sampler–learner KL term. Pretraining replay (`replay_*`, the hook SFT also uses,
-   [`../trainer/replay_hook.py`](../trainer/replay_hook.py)) adds a
-   next-token loss on pretraining windows at `replay_weight`.
-7. **Optimizer.** AdamW without weight decay, LR 1e-6 after 20 warmup steps, gradient
+4. **Advantages** from the algorithm. Groups whose answers all score the same have zero
+   advantage and are skipped; their share is logged.
+5. **Updates.** The algorithm's loss is summed over answer tokens and divided by the
+   number of answers per update times the task's token limit (no per-answer length
+   normalization).
+6. **Anchors.** KL(policy ‖ parent) is estimated (k3) on the answer tokens every update and
+   added with `kl_coef` (default 0). Pretraining replay (`"replay": true`, the hook SFT
+   also uses, [`../trainer/replay_hook.py`](../trainer/replay_hook.py)) adds a
+   next-token loss on pretraining windows at `replay_weight` to every update.
+7. **Optimizer.** AdamW without weight decay, LR 1e-6 after 20 warmup updates, gradient
    clipping at 1.0.
 
 Validation is greedy accuracy on the pool's validation problems plus replay validation
@@ -70,8 +103,8 @@ call ends. A run does not resume; an interrupted run is rerun from scratch.
 ### Logged
 
 Every step: reward, share of uniform groups, answer length and truncation rate per task;
-answers trained on; mean NLL of the sampled tokens; KL to the parent; sampler–learner
-mismatch; replay loss; gradient
+answers trained on; optimizer updates so far; the algorithm's statistics (for `grpo`, the share of
+clipped tokens); mean NLL of the sampled tokens; KL to the parent; replay loss; gradient
 norm; resting prompts; generation and training seconds. Every evaluation: validation
 accuracy and truncation per task, and replay validation loss per source.
 
@@ -94,6 +127,6 @@ uv run --all-extras modal run -m modal_scripts.modal_rl_train --recipe RECIPE.js
 ```
 
 A recipe names `run_id`, `parent` (an SFT checkpoint, `run/step-N.pt` on the run
-volume), `pool` (an `rl_pool` data ID) and `settings` (`trainer.rl.Settings`). RL
+volume), `pool` (an `rl_pool` data ID) and `settings` ([code layout](#code-layout)). RL
 checkpoints (format `rl-v1`) keep the model code and tokenizer beside them, so
 `analysis/evaluation` loads them like SFT checkpoints.

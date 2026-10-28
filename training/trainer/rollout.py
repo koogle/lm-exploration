@@ -1,14 +1,16 @@
-"""Batched key/value-cached sampling for our decoders (`model_10m.model.GPT` family).
+"""Batched key/value-cached decoding for our decoders (`model_10m.model.GPT` family).
 
-Prompts of different lengths are left-padded into one batch. Each row's positions count
-from its first real token, padded keys are masked out, and every new token is computed
-once and cached, so a row's logits equal those of the model run on that row alone (up to
-numerical precision). Sampling uses the plain softmax at `temperature` (no top-k or
-nucleus), so samples follow the policy's own probabilities; temperature 0 is greedy.
+The one sampler the repository uses for generation: checkpoint benchmarks, the playground
+Space and RL rollouts. Prompts of different lengths are left-padded into one batch. Each
+row's positions count from its first real token, padded keys are masked out, and every
+new token is computed once and cached, so a row's logits equal those of the model run on
+that row alone (up to numerical precision). It runs on CPU or CUDA (BF16 autocast).
 
-When sampling, the sampler also returns its own log-probability of each sampled token
-and, with `top_k`, its `top_k` most likely tokens and their log-probabilities: the
-sampler-side information that Score Centering (`trainer/rl.py`) needs.
+Choosing a token: the repetition penalty divides positive and multiplies negative
+logits of tokens the row already generated; temperature 0 is greedy; otherwise logits
+are divided by the temperature, cut to the `top_k` largest (0 keeps all) and to the
+smallest set whose probability reaches `top_p` (keeping the token that crosses it), and
+sampled.
 """
 
 from dataclasses import dataclass
@@ -63,23 +65,53 @@ def forward(model, tokens, positions, cache, start, valid):
     return model.lm_head(model.final_norm(x[:, -1])).float()
 
 
+def choose(logits, seen, temperature, top_k, top_p, penalty, generator):
+    """Next token per row from `[batch, vocab]` logits; `seen` marks generated tokens."""
+    if penalty != 1.0:
+        logits = torch.where(
+            seen, torch.where(logits > 0, logits / penalty, logits * penalty), logits
+        )
+    if temperature == 0:
+        return logits.argmax(-1)
+    logits = logits / temperature
+    if top_k:
+        cutoff = logits.topk(min(top_k, logits.size(-1)), -1).values[:, -1:]
+        logits = logits.masked_fill(logits < cutoff, float("-inf"))
+    probabilities = logits.softmax(-1)
+    if top_p < 1.0:
+        ordered, order = probabilities.sort(-1, descending=True)
+        # Keep the tokens up to and including the one that crosses top_p.
+        drop = ordered.cumsum(-1) - ordered >= top_p
+        probabilities = probabilities.scatter(-1, order, ordered.masked_fill(drop, 0))
+        probabilities = probabilities / probabilities.sum(-1, keepdim=True)
+    return torch.multinomial(probabilities, 1, generator=generator)[:, 0]
+
+
 @dataclass
 class Samples:
-    """New token IDs per prompt (without EOS), whether each ended in EOS, and for
-    sampled (not greedy) tokens the sampler's log-probabilities: of each new token
-    (EOS included) `[batch, steps]`, and of its `top_k` likeliest tokens
-    `top_ids`/`top_logprobs` `[batch, steps, top_k]` (None without `top_k`)."""
+    """New token IDs per prompt (without EOS) and whether each ended in EOS."""
 
     completions: list
     finished: list
-    logprobs: torch.Tensor | None = None
-    top_ids: torch.Tensor | None = None
-    top_logprobs: torch.Tensor | None = None
 
 
 @torch.no_grad()
-def sample(model, prompts, max_new_tokens, eos, temperature=1.0, generator=None, top_k=0):
-    """Sample up to `max_new_tokens` after each prompt; see `Samples`."""
+def sample(
+    model,
+    prompts,
+    max_new_tokens,
+    eos,
+    temperature=1.0,
+    generator=None,
+    top_k=0,
+    top_p=1.0,
+    penalty=1.0,
+    stop=None,
+):
+    """Decode up to `max_new_tokens` after each prompt (token ID lists); see `Samples`.
+
+    A row also ends once `stop(generated IDs)` is true; its completion keeps those IDs.
+    """
     device = model.token_embedding.weight.device
     batch, width = len(prompts), max(map(len, prompts))
     total = width + max_new_tokens
@@ -95,29 +127,24 @@ def sample(model, prompts, max_new_tokens, eos, temperature=1.0, generator=None,
     cache = [None] * len(model.blocks)
     autocast = torch.autocast("cuda", dtype=torch.bfloat16, enabled=device.type == "cuda")
     generated = torch.zeros((batch, max_new_tokens), dtype=torch.long, device=device)
-    greedy = temperature == 0
-    logprobs = None if greedy else torch.zeros((batch, max_new_tokens), device=device)
-    if top_k and not greedy:
-        top_ids = torch.zeros((batch, max_new_tokens, top_k), dtype=torch.long, device=device)
-        top_logprobs = torch.zeros((batch, max_new_tokens, top_k), device=device)
+    seen = torch.zeros((batch, model.config.vocab_size), dtype=torch.bool, device=device)
     done = torch.zeros(batch, dtype=torch.bool, device=device)
+    ended = torch.zeros(batch, dtype=torch.bool, device=device)
     with autocast:
         logits = forward(model, tokens, positions, cache, 0, valid)
     steps = 0
     for step in range(max_new_tokens):
-        if greedy:
-            chosen = logits.argmax(-1)
-        else:
-            scores = torch.log_softmax(logits / temperature, -1)
-            chosen = torch.multinomial(scores.exp(), 1, generator=generator)[:, 0]
-            logprobs[:, step] = scores.gather(1, chosen[:, None])[:, 0]
-            if top_k:
-                top_logprobs[:, step], top_ids[:, step] = scores.topk(top_k, -1)
-        chosen = torch.where(done, eos, chosen)
+        chosen = choose(logits, seen, temperature, top_k, top_p, penalty, generator)
+        chosen = torch.where(done | ended, eos, chosen)
         generated[:, step] = chosen
-        done |= chosen == eos
+        seen[torch.arange(batch, device=device), chosen] = True
+        done |= (chosen == eos) & ~ended
         steps = step + 1
-        if bool(done.all()):
+        if stop is not None:
+            for row in (~done & ~ended).nonzero()[:, 0].tolist():
+                if stop(generated[row, :steps].tolist()):
+                    ended[row] = True
+        if bool((done | ended).all()):
             break
         valid[:, width + step] = True
         with autocast:
@@ -127,9 +154,4 @@ def sample(model, prompts, max_new_tokens, eos, temperature=1.0, generator=None,
     completions = []
     for row in generated[:, :steps].tolist():
         completions.append(row[: row.index(eos)] if eos in row else row)
-    result = Samples(completions, done.tolist())
-    if not greedy:
-        result.logprobs = logprobs[:, :steps]
-        if top_k:
-            result.top_ids, result.top_logprobs = top_ids[:, :steps], top_logprobs[:, :steps]
-    return result
+    return Samples(completions, done.tolist())
