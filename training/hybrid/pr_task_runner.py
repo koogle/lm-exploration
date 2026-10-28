@@ -44,58 +44,101 @@ def run(command, cwd=REPO, seconds=TEST_SECONDS, env=None):
 
 
 # Setup.
-def _python_setup(log):
+def _nearest(path, marker):
+    """The closest folder above `path` (inside the repository) holding `marker`, or None."""
+    folder = (REPO / path).parent
+    while folder != REPO.parent:
+        if (folder / marker).exists():
+            return folder
+        folder = folder.parent
+    return None
+
+
+VENV_PYTHON = REPO / ".venv/bin/python"
+
+
+def _python_project(paths):
+    """The folder of the project that owns the tests (nearest pyproject.toml or setup.py)."""
+    for path in paths:
+        for marker in ("pyproject.toml", "setup.py"):
+            if folder := _nearest(path, marker):
+                return folder
+    return REPO
+
+
+def _python_setup(task, log):
+    project = _python_project(task["test_paths"])
     log.append(
         run("uv venv --python-preference only-managed -q .venv || uv venv -q .venv", seconds=300)
     )
-    pip = "uv pip install -q --python .venv/bin/python"
-    if (REPO / "uv.lock").exists():
+    pip = f"uv pip install -q --python {VENV_PYTHON}"
+    if (project / "uv.lock").exists():
         log.append(
             run(
                 "uv sync -q --all-extras --all-groups --frozen",
+                cwd=project,
                 seconds=INSTALL_SECONDS,
-                env={"UV_PROJECT_ENVIRONMENT": ".venv"},
+                env={"UV_PROJECT_ENVIRONMENT": str(REPO / ".venv")},
             )
         )
-    elif (REPO / "pyproject.toml").exists() or (REPO / "setup.py").exists():
+    elif (project / "pyproject.toml").exists() or (project / "setup.py").exists():
         for extras in ("[test,tests,testing,dev]", "[test]", "[dev]", ""):
-            code, out = run(f"{pip} -e '.{extras}'", seconds=INSTALL_SECONDS)
+            code, out = run(f"{pip} -e '.{extras}'", cwd=project, seconds=INSTALL_SECONDS)
             log.append((code, out))
             if code == 0:
                 break
-    for name in (
-        "requirements.txt",
-        "requirements-dev.txt",
-        "requirements-test.txt",
-        "requirements_dev.txt",
-        "test-requirements.txt",
-    ):
-        if (REPO / name).exists():
-            log.append(run(f"{pip} -r {name}", seconds=INSTALL_SECONDS))
+    for folder in sorted({project, REPO}):
+        for name in (
+            "requirements.txt",
+            "requirements-dev.txt",
+            "requirements-test.txt",
+            "requirements_dev.txt",
+            "test-requirements.txt",
+        ):
+            if (folder / name).exists():
+                log.append(run(f"{pip} -r {name}", cwd=folder, seconds=INSTALL_SECONDS))
     log.append(run(f"{pip} pytest", seconds=300))
 
 
-def _javascript_setup(log):
-    if (REPO / "pnpm-lock.yaml").exists():
-        command = "corepack pnpm install --frozen-lockfile || corepack pnpm install"
-    elif (REPO / "yarn.lock").exists():
-        command = "corepack yarn install --immutable || corepack yarn install"
-    elif (REPO / "bun.lock").exists() or (REPO / "bun.lockb").exists():
-        command = "bun install --frozen-lockfile || bun install"
-    elif (REPO / "package-lock.json").exists():
-        command = "npm ci --no-audit --no-fund || npm install --no-audit --no-fund"
-    else:
-        command = "npm install --no-audit --no-fund"
-    log.append(run(command, seconds=INSTALL_SECONDS, env={"COREPACK_ENABLE_DOWNLOAD_PROMPT": "0"}))
+LOCKFILES = (
+    ("pnpm-lock.yaml", "corepack pnpm install --frozen-lockfile || corepack pnpm install"),
+    ("yarn.lock", "corepack yarn install --immutable || corepack yarn install"),
+    ("bun.lock", "bun install --frozen-lockfile || bun install"),
+    ("bun.lockb", "bun install --frozen-lockfile || bun install"),
+    ("package-lock.json", "npm ci --no-audit --no-fund || npm install --no-audit --no-fund"),
+)
 
 
-def _go_setup(log):
-    log.append(
-        run(
-            "go mod download && go build ./... && go vet ./... >/dev/null 2>&1; true",
-            seconds=INSTALL_SECONDS,
+def _install_root(package):
+    """The outermost folder from `package` up to the repository holding a lockfile."""
+    root, folder = package, package
+    while folder != REPO.parent:
+        if any((folder / name).exists() for name, _ in LOCKFILES):
+            root = folder
+        folder = folder.parent
+    return root
+
+
+def _javascript_setup(task, log):
+    packages = {_nearest(p, "package.json") for p in task["test_paths"]} - {None}
+    for root in sorted({_install_root(p) for p in packages}):
+        command = next(
+            (c for name, c in LOCKFILES if (root / name).exists()),
+            "npm install --no-audit --no-fund",
         )
-    )
+        log.append(
+            run(
+                command,
+                cwd=root,
+                seconds=INSTALL_SECONDS,
+                env={"COREPACK_ENABLE_DOWNLOAD_PROMPT": "0"},
+            )
+        )
+
+
+def _go_setup(task, log):
+    for module in sorted({_nearest(p, "go.mod") for p in task["test_paths"]} - {None}):
+        log.append(run("go mod download && go build ./...", cwd=module, seconds=INSTALL_SECONDS))
 
 
 def setup(task):
@@ -111,23 +154,18 @@ def setup(task):
     if log[0][0] != 0:
         return {"stage": "checkout", "log": [{"code": c, "tail": t[-1500:]} for c, t in log]}
     {"python": _python_setup, "javascript": _javascript_setup, "go": _go_setup}[task["language"]](
-        log
+        task, log
     )
     return {"stage": "installed", "log": [{"code": c, "tail": t[-1500:]} for c, t in log]}
 
 
 # Tests.
-def _nearest_package(path):
-    folder = (REPO / path).parent
-    while folder != REPO.parent:
-        if (folder / "package.json").exists():
-            return folder
-        folder = folder.parent
-    return REPO
-
-
 def _javascript_runner(package):
-    manifest = json.loads((package / "package.json").read_text())
+    manifest = (
+        json.loads((package / "package.json").read_text())
+        if (package / "package.json").exists()
+        else {}
+    )
     root = (
         json.loads((REPO / "package.json").read_text()) if (REPO / "package.json").exists() else {}
     )
@@ -143,8 +181,11 @@ def _javascript_runner(package):
 
 
 def _python_tests(paths):
+    project = _python_project(paths)
+    relative = [str((REPO / p).relative_to(project)) for p in paths]
     code, out = run(
-        [".venv/bin/python", "-m", "pytest", "-rA", "-p", "no:cacheprovider", "-q", *paths]
+        [str(VENV_PYTHON), "-m", "pytest", "-rA", "-p", "no:cacheprovider", "-q", *relative],
+        cwd=project,
     )
     results = {}
     for status, test in re.findall(r"^(PASSED|FAILED|ERROR) (\S+)", out, re.MULTILINE):
@@ -156,7 +197,7 @@ def _javascript_tests(paths):
     results, codes, outs = {}, [], []
     groups = {}
     for path in paths:
-        groups.setdefault(_nearest_package(path), []).append(path)
+        groups.setdefault(_nearest(path, "package.json") or REPO, []).append(path)
     for package, files in groups.items():
         relative = [str((REPO / f).relative_to(package)) for f in files]
         runner = _javascript_runner(package)
@@ -225,19 +266,28 @@ def _javascript_tests(paths):
 
 
 def _go_tests(paths):
-    packages = sorted({"./" + str(Path(p).parent) for p in paths})
-    code, out = run(["go", "test", "-json", "-count=1", *packages], seconds=TEST_SECONDS)
-    results = {}
-    for line in out.splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if event.get("Test") and event.get("Action") in ("pass", "fail", "skip"):
-            results[f"{event['Package']}::{event['Test']}"] = event["Action"]
-    if not results and code != 0:
-        results = {f"{p}::<package>": "fail" for p in packages}
-    return results, code, out
+    modules = {}
+    for path in paths:
+        module = _nearest(path, "go.mod") or REPO
+        package = "./" + str((REPO / path).parent.relative_to(module))
+        modules.setdefault(module, set()).add(package)
+    results, codes, outs = {}, [], []
+    for module, packages in sorted(modules.items()):
+        code, out = run(["go", "test", "-json", "-count=1", *sorted(packages)], cwd=module)
+        codes.append(code)
+        outs.append(out)
+        found = 0
+        for line in out.splitlines():
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event.get("Test") and event.get("Action") in ("pass", "fail", "skip"):
+                results[f"{event['Package']}::{event['Test']}"] = event["Action"]
+                found += 1
+        if not found and code != 0:
+            results.update({f"{module.name}/{p}::<package>": "fail" for p in packages})
+    return results, codes, "\n".join(outs)
 
 
 TESTERS = {"python": _python_tests, "javascript": _javascript_tests, "go": _go_tests}
