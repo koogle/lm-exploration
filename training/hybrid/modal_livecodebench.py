@@ -35,6 +35,16 @@ EXPORTS = {
     "hybrid-720m-chat-sft-01/tokens-001527250944": True,
     "hybrid-720m-rl-lr-low-01/tokens-000158595563": True,
 }
+# Larger dense Qwen base models, beyond the shared benchmark references.
+LARGER_QWEN = {
+    "Qwen/Qwen3-1.7B-Base": "ea980cb0a6c2ae4b936e82123acc929f1cec04c1",
+    "Qwen/Qwen3-4B-Base": "906bfd4b4dc7f14ee4320094d8b41684abff8539",
+    "Qwen/Qwen3-8B-Base": "49e3418fbbbca6ecbdf9608b4d22e5a407081db4",
+    "Qwen/Qwen3-14B-Base": "0b0bd3732e2c374d483664439ea334928b65f304",
+    "Qwen/Qwen3.5-2B-Base": "b1485b2fa6dfa1287294f269f5fb618e03d52d7c",
+    "Qwen/Qwen3.5-4B-Base": "1001bb4d826a52d1f399e183466143f4da7b741b",
+    "Qwen/Qwen3.5-9B-Base": "68c46c4b3498877f3ef123c856ecfde50c39f404",
+}
 
 
 def _hybrid_completions(export, chat_format, problems):
@@ -167,7 +177,11 @@ def main(limit: int = 0, models: str = ""):
     """Spawn one call per model (all exports and references, or the comma-separated
     `--models`, "hybrid:<run>/<export>" for exports); calls outlive this client."""
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    chosen = [(f"hybrid:{e}", None) for e in EXPORTS] + list(REFERENCES.items())
+    chosen = (
+        [(f"hybrid:{e}", None) for e in EXPORTS]
+        + list(REFERENCES.items())
+        + list(LARGER_QWEN.items())
+    )
     if models:
         wanted = set(models.split(","))
         chosen = [(m, r) for m, r in chosen if m in wanted]
