@@ -168,17 +168,17 @@ def enforce_deadline(run_id, deadline):
     Calls are recorded per launch (keyed by its deadline), so a later launch of the
     same run is never cancelled by an earlier launch's supervisor.
     """
-    from workflows.deadline import tracked_calls
+    from workflows.deadline import calls_finished, cancel_at_deadline, tracked_calls
 
-    calls = Path("/runs/.calls") / run_id / launch_key(deadline)
-    while (remaining := deadline - time.time()) > 0:
-        time.sleep(min(remaining, 300))
-    runs_volume.reload()
-    cancelled = []
-    for call_id in tracked_calls(calls):
-        modal.FunctionCall.from_id(call_id).cancel()
-        cancelled.append(call_id)
-    return {"cancelled": cancelled}
+    folder = Path("/runs/.calls") / run_id / launch_key(deadline)
+
+    def calls():
+        runs_volume.reload()
+        return tracked_calls(folder)
+
+    # The launch is over once its recorded calls have all finished.
+    cancelled = cancel_at_deadline(deadline, calls, done=lambda: calls_finished(calls()))
+    return {"stage": "completed"} if cancelled is None else {"cancelled": cancelled}
 
 
 def launch_key(deadline):
