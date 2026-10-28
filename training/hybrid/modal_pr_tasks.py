@@ -18,7 +18,7 @@ from the read-only mirror volume and installs dependencies (network on), its
 filesystem snapshot then runs the commit's test files without network with source
 files reverted to the parent and at the commit (`pr_task_runner.py`). A task is
 verified when at least one test fails before and passes after and none regresses.
-`issues` has GLM-5.3 (through OpenRouter; key in the Modal secret `openrouter` as
+`issues` has GLM-5.3 (through OpenRouter, with the launching shell's
 `OPENROUTER_API_KEY`) draft the issue of every selected task from the commit message
 and the test changes only (never the source changes), up to four drafts until one
 parses, quotes no added source line, names no new internal code the tests never use
@@ -30,6 +30,7 @@ call at that deadline.
 
 import base64
 import json
+import os
 import time
 from pathlib import Path
 
@@ -62,7 +63,10 @@ sandbox_image = (
     .env({"PATH": "/usr/local/go/bin:/root/go/bin:/usr/local/bin:/usr/bin:/bin"})
     .add_local_file(Path(__file__).with_name("pr_task_runner.py"), "/runner/pr_task_runner.py")
 )
-openrouter = modal.Secret.from_name("openrouter")
+# The key comes from the launching shell's OPENROUTER_API_KEY and lives only for the run.
+openrouter = modal.Secret.from_dict(
+    {"OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY", "")}
+)
 DRAFTS = 4  # teacher drafts per task, requested until one is clean
 # GLM-5.3 (zai-org/GLM-5.3, MIT-style license) through OpenRouter; outputs may train models.
 TEACHER = "z-ai/glm-5.3"
@@ -339,7 +343,6 @@ def verify_tasks(name, limit, workers, deadline):
 
 def _teacher_draft(messages):
     """One teacher answer and its token usage, through OpenRouter's chat API."""
-    import os
     import urllib.request
 
     body = {
@@ -376,6 +379,8 @@ def write_issues(name, deadline, limit=0):
     """The teacher drafts each task's issue until one is clean (at most DRAFTS drafts)."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        raise RuntimeError("Launch with OPENROUTER_API_KEY set")
     import urllib.error
     from concurrent.futures import ThreadPoolExecutor
 
