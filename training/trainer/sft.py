@@ -8,8 +8,11 @@ far; prompt tokens carry no loss. The loss is the mean answer-token cross-entrop
 `trainer/cig.py`). The model never generates during training. Validation reports the same
 answer-token cross-entropy per bucket.
 
-The learning rate is constant, or warms up linearly over `warmup_steps` and follows a
-cosine to `min_lr_ratio * lr` (`schedule: "cosine"`).
+Optional pretraining replay (`"replay": true` and the `replay_*` settings, the shared
+`trainer/replay_hook.py`) adds `replay_batch_size` windows of pretraining text to every
+step, trained with the ordinary next-token loss: the step backpropagates
+`(1 - replay_weight) * answer loss`, then the hook adds `replay_weight * replay loss`. The learning rate is constant, or warms up linearly over
+`warmup_steps` and follows a cosine to `min_lr_ratio * lr` (`schedule: "cosine"`).
 
 The parent is an explicit `scholarly-ddp-v1` checkpoint on the private run volume; launchers
 pass it in. See `sft/README.md` for the data formats and launch commands.
@@ -33,12 +36,16 @@ from training_data.subword import (
     load_frozen,
 )
 
+from trainer import batches
+from trainer.batches import collate
+from trainer.replay_hook import ReplayHook, ReplaySettings
+
 # The SFT dataset (`training_data.sft.SFTDataset`) of each task.
 TASKS = {"repair": REPAIR, "math": MATH}
 
 
 @dataclass(frozen=True)
-class Settings:
+class Settings(ReplaySettings):
     steps: int = 200
     batch_size: int = 4
     context: int = 1024
@@ -85,6 +92,7 @@ class Settings:
             self.min_lr_ratio == 1 and self.warmup_steps == 0
         ):
             raise ValueError("Only a cosine schedule warms up or decays (min_lr_ratio in (0, 1])")
+        self.check_replay()
 
     def learning_rate(self, step):
         """The rate for update `step` (0-based)."""
@@ -114,18 +122,6 @@ def validate_resume_identity(saved, current, step, extend=False):
         raise ValueError("Extension changed source/model/data/objective/optimizer identity")
 
 
-def collate(rows, device):
-    import torch
-
-    width = max(len(row["x"]) for row in rows)
-    x = torch.zeros((len(rows), width), dtype=torch.long, device=device)
-    y = torch.full_like(x, LOSS_IGNORE_INDEX)
-    for i, row in enumerate(rows):
-        x[i, : len(row["x"])] = torch.tensor(row["x"], device=device)
-        y[i, : len(row["y"])] = torch.tensor(row["y"], device=device)
-    return x, y
-
-
 def train(
     parent,
     dataset,
@@ -136,8 +132,11 @@ def train(
     stop_after_step=None,
     extend=False,
     deadline=None,
+    data_root=Path("/data"),
 ):
     """Train until the step target, `settings.max_seconds` or the absolute `deadline`.
+
+    `data_root` holds `settings.replay_snapshot`.
 
     `deadline` is a Unix time from the launcher's 24-hour launch budget; the loop stops
     taking updates once it passes, then evaluates and saves a final checkpoint.
@@ -181,7 +180,11 @@ def train(
     optimizer = torch.optim.AdamW(model.parameters(), lr=settings.lr, weight_decay=0.01)
     from trainer import cig
 
-    source_hashes = {"trainer": digest(__file__), "cig": digest(cig.__file__)}
+    source_hashes = {
+        "trainer": digest(__file__),
+        "batches": digest(batches.__file__),
+        "cig": digest(cig.__file__),
+    }
     cache = {}
     if settings.objective == "cig":
         raw_rows = [
@@ -192,7 +195,9 @@ def train(
     import model_100m.model as model_module
     import training_data.sft as sft_data_module
 
+    replay = ReplayHook.attach(settings, data_root, cfg["context"])
     source_hashes.update(
+        **{name: digest(file) for name, file in ReplayHook.SOURCES.items()},
         data=digest(data_module.__file__),
         sft_data=digest(sft_data_module.__file__),
         model=digest(model_module.__file__),
@@ -201,6 +206,7 @@ def train(
     identity = {
         "dataset_sha256": data_hash,
         "parent_sha256": digest(parent),
+        "replay": replay.identity() if replay else None,
         "tokenizer_sha256": TOKENIZER_SHA256,
         "settings": asdict(settings),
         "source_sha256": source_hashes,
@@ -216,6 +222,8 @@ def train(
         model.load_state_dict(saved["model"])
         optimizer.load_state_dict(saved["optimizer"])
         rng.setstate(saved["sampling_rng"])
+        if replay:
+            replay.load_state(saved["replay_state"])
         torch.set_rng_state(saved["torch_rng"])
         torch.cuda.set_rng_state_all(saved["cuda_rng"])
         step, answer_tokens = saved["step"], saved["answer_tokens"]
@@ -246,9 +254,11 @@ def train(
     shutil.copytree(DEFAULT_FOLDER, output / "tokenizer")
     for name, module in (
         ("trainer", __file__),
+        ("batches", batches.__file__),
         ("cig", cig.__file__),
         ("data", data_module.__file__),
         ("sft_data", sft_data_module.__file__),
+        *ReplayHook.SOURCES.items(),
         ("model", model_module.__file__),
         ("shared_model", shared_module.__file__),
     ):
@@ -293,8 +303,9 @@ def train(
                 bucket = totals.setdefault(row["bucket"], [0.0, 0])
                 bucket[0] += value.item()
                 bucket[1] += n.item()
+            replayed = replay.validation(model) if replay else None
         model.train()
-        return {
+        metrics = {
             "validation_loss": sum(v[0] for v in totals.values())
             / sum(v[1] for v in totals.values()),
             "validation_by_bucket": {
@@ -302,6 +313,9 @@ def train(
                 for name, (total, count) in sorted(totals.items())
             },
         }
+        if replayed:
+            metrics["replay_validation_by_source"] = replayed
+        return metrics
 
     def record(**values):
         with (output / "metrics.jsonl").open("a") as handle:
@@ -323,6 +337,7 @@ def train(
                 "step": step,
                 "answer_tokens": answer_tokens,
                 "sampling_rng": rng.getstate(),
+                "replay_state": replay.state() if replay else None,
                 "torch_rng": torch.get_rng_state(),
                 "cuda_rng": torch.cuda.get_rng_state_all(),
             },
@@ -349,15 +364,18 @@ def train(
             group["lr"] = learning_rate
         optimizer.zero_grad(set_to_none=True)
         value, count = loss(rows, training=True)
-        objective = value / count
-        if not torch.isfinite(objective):
+        answer_loss = value / count
+        if not torch.isfinite(answer_loss):
             raise RuntimeError("Non-finite SFT loss")
-        objective.backward()
+        values = {"train_loss": answer_loss.item()}
+        (answer_loss * (1 - settings.replay_weight if replay else 1)).backward()
+        if replay:
+            values["replay_loss"] = replay.backward(model)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True)
         optimizer.step()
         step += 1
         answer_tokens += count.item()
-        record(train_loss=objective.item(), lr=learning_rate)
+        record(**values, lr=learning_rate)
         if step % settings.evaluate_every == 0:
             metrics = evaluate()
             record(**metrics)

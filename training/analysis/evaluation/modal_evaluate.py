@@ -48,6 +48,8 @@ image = (
     .env({"PYTHONPATH": "/project"})
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("analysis/evaluation", "/project/evaluation", ignore=["__pycache__"])
+    .add_local_file("trainer/rollout.py", "/project/trainer/rollout.py")
+    .add_local_file("trainer/__init__.py", "/project/trainer/__init__.py")
 )
 app = modal.App("checkpoint-evaluation")
 run_volume = modal.Volume.from_name("lm-exploration-training")

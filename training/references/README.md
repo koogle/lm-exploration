@@ -4,6 +4,9 @@ Source-backed reading notes and proposed experiments for our from-scratch models
 External results are attributed to their authors; proposals are not measured
 results or changes to the agreed training plan.
 
+- [Mirendil Fern 0.1 and 10M-token context — 2026-10-26](mirendil-fern-2026-10-26.md):
+  context-length BPB, RULER to 10M and agentic benchmarks, with a proposed
+  byte-windowed context-length evaluation for our models.
 - [StableReinforce is Reinforce + Score Centering — 2026-10-25](stable-reinforce-2026-10-25.md):
   Martin Marek's gradient-recovery reverse-engineering of Tinker's off-policy RL loss,
   and the Score Centering correction for training–inference mismatch.

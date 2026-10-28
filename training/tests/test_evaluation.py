@@ -85,15 +85,36 @@ class HeldoutTests(unittest.TestCase):
 
 
 class GenerationTests(unittest.TestCase):
-    def test_greedy_generation_stops_at_a_stop_string(self):
-        model = toy_model()
-        self.assertEqual(scoring.generate(model, "a", 20, ["e"]), "bcd")
-        self.assertEqual(scoring.generate(model, "a", 3, ["\n\n"]), "bcd")
+    def test_greedy_completions_are_batched_and_cut_at_the_first_stop(self):
+        from trainer.rollout import Samples
+
+        calls = []
+
+        def fake_sample(network, prompts, max_new_tokens, eos, temperature, stop):
+            calls.append((prompts, max_new_tokens, eos, temperature))
+            self.assertTrue(stop([ord(c) for c in "x\n\n"]))
+            self.assertFalse(stop([ord(c) for c in "x\n"]))
+            texts = ["bcd\n\nxyz", "Question: next", "plain"]
+            return Samples([[ord(c) for c in t] for t in texts[: len(prompts)]], [True] * 3)
+
+        model = SimpleNamespace(**vars(toy_model(block_size=8)), network=None)
+        with mock.patch("trainer.rollout.sample", fake_sample):
+            texts = scoring.greedy_completions(
+                model, ["a", "b", "abcdefghij"], 4, ["\n\n", "Question:"]
+            )
+        self.assertEqual(texts, ["bcd", "", "plain"])
+        prompts, max_new_tokens, eos, temperature = calls[0]
+        # BOS + text, left-truncated to the context left for 4 new tokens.
+        self.assertEqual(prompts[:2], [[1, ord("a")], [1, ord("b")]])
+        self.assertEqual(prompts[2], [ord(c) for c in "ghij"])
+        self.assertEqual((max_new_tokens, eos, temperature), (4, 2, 0))
 
     def test_few_shot_answers_are_checked_with_math_verify(self):
         completions = iter([" 2+2=4\n#### 4", " The answer is 1,234.", " 15 - 19 = 2\n#### 2"])
         problems = [("Two plus two?", "4"), ("Big?", "1234"), ("Fish?", "4")]
-        with mock.patch.object(scoring, "generate", lambda *args: next(completions)):
+        with mock.patch.object(
+            scoring, "greedy_completions", lambda *args: [next(completions) for _ in problems]
+        ):
             result, outcomes = scoring.few_shot_answers(None, problems, [("q", "a #### 1")], 8)
         self.assertEqual([o["correct"] for o in outcomes], [True, True, False])
         self.assertEqual((result["acc"], result["shots"]), (2 / 3, 1))

@@ -109,6 +109,7 @@ def scorer(checkpoint):
     tokenizer = checkpoint.tokenizer
     return SimpleNamespace(
         forward=forward,
+        network=checkpoint.model,
         encode=lambda text: tokenizer.encode(text, add_special_tokens=False).ids,
         decode=lambda ids: tokenizer.decode(ids, skip_special_tokens=True),
         bos_token_id=checkpoint.special["bos"],
