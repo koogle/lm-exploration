@@ -9,7 +9,7 @@ from pathlib import Path
 
 import torch
 
-from trainer.rl.algorithms import GRPO, make
+from trainer.rl.algorithms import GRPO, Tokens, make
 from trainer.rl.rollouts import Scheduler
 from trainer.rl.settings import Settings
 
@@ -25,29 +25,36 @@ class AlgorithmTests(unittest.TestCase):
         self.assertAlmostEqual(scaled[0], (2 / 3) / (1 / 3) ** 0.5, places=4)
         self.assertEqual(scaled[3:], [0, 0, 0])
 
+    def tokens(self, logits, targets, advantage, old_logp=None):
+        logp = logits.log_softmax(-1).gather(-1, targets[..., None])[..., 0]
+        mask = torch.ones(targets.shape, dtype=torch.bool)
+        old = logp.detach() if old_logp is None else old_logp
+        return Tokens(logits, targets, mask, logp, old, advantage, torch.ones(len(targets)))
+
     def test_on_policy_grpo_is_the_plain_policy_gradient(self):
         torch.manual_seed(0)
-        logits = torch.randn(2, 5, requires_grad=True)
-        logp = logits.log_softmax(-1)[:, :3]
-        mask = torch.tensor([[True, True, False], [True, True, True]])
-        advantage, scale = torch.tensor([0.5, -1.0]), torch.tensor([0.1, 0.2])
-        loss, stats = GRPO().loss(logp, logp.detach(), advantage, mask, scale)
+        logits = torch.randn(2, 3, 5, requires_grad=True)
+        targets = torch.tensor([[1, 4, 0], [2, 2, 3]])
+        tokens = self.tokens(logits, targets, torch.tensor([0.5, -1.0]))
+        loss, stats = GRPO().loss(tokens)
         (grad,) = torch.autograd.grad(loss, logits, retain_graph=True)
-        plain = -(scale[:, None] * advantage[:, None] * logp * mask).sum()
+        plain = -(tokens.advantage[:, None] * tokens.logp).sum()
         (expected,) = torch.autograd.grad(plain, logits)
         torch.testing.assert_close(grad, expected)
         self.assertEqual(stats["clipped_tokens"], 0)
 
-    def test_off_policy_grpo_clips_the_ratio(self):
-        logp = torch.zeros(1, 2, requires_grad=True)
-        old = torch.tensor([[-0.5, 0.0]])
-        loss, stats = GRPO(policy="off", updates_per_batch=2).loss(
-            logp, old, torch.tensor([1.0]), torch.ones(1, 2, dtype=torch.bool), torch.ones(1)
-        )
-        (grad,) = torch.autograd.grad(loss, logp)
-        # Ratio e^0.5 lies above 1 + clip for a positive advantage: no gradient there.
-        self.assertEqual(grad[0, 0].item(), 0)
-        self.assertEqual(grad[0, 1].item(), -1)
+    def test_off_policy_grpo_weights_by_the_ratio_and_clips_it(self):
+        logits = torch.zeros(1, 3, 4, requires_grad=True)
+        targets = torch.tensor([[0, 1, 2]])
+        # Ratios e^0.5 (clipped for a positive advantage), e^0.1 and 1.
+        old = torch.log(torch.tensor([[0.25, 0.25, 0.25]])) - torch.tensor([[0.5, 0.1, 0.0]])
+        tokens = self.tokens(logits, targets, torch.tensor([1.0]), old)
+        loss, stats = GRPO(policy="off", updates_per_batch=2).loss(tokens)
+        (grad,) = torch.autograd.grad(loss, logits)
+        onehot = torch.nn.functional.one_hot(targets, 4).float()
+        expected = -torch.tensor([0.0, 0.1, 0.0]).exp()[:, None] * (onehot[0] - 0.25)
+        expected[0] = 0
+        torch.testing.assert_close(grad[0], expected)
         self.assertEqual(stats["clipped_tokens"], 1)
 
     def test_policies_and_names_are_checked(self):

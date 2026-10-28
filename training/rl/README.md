@@ -49,15 +49,16 @@ algorithm corrects for the difference. Only algorithms listed in `OFF_POLICY` ma
 off-policy.
 
 **Algorithms.** An algorithm is a frozen dataclass registered in `ALGORITHMS`. It has
-`advantages(rewards, group)` and `loss(logp, old_logp, advantage, mask, scale)`, and its
-fields are the recipe's `algorithm` options. `grpo` is the one implemented:
+`advantages(rewards, group)` and `loss(tokens)`, where `tokens` is one micro-batch of
+answers (`Tokens`: logits, log-probabilities now and when sampled, advantages). Its fields
+are the recipe's `algorithm` options. `grpo` is the one implemented:
 
 - Advantage: reward minus its group's mean. With `scale_by_std` it is also divided by
   the group's standard deviation; that is off by default, as in Dr. GRPO
   (arXiv:2503.20783).
-- Loss: the clipped surrogate −min(r·A, clip(r, 1 ± `clip`)·A) per answer token, with
-  r = p / p_old. On-policy r is 1, so the gradient is the plain policy gradient
-  −A·∇log p (`tests/test_rl.py`).
+- Loss: PPO's clipped surrogate −min(r·A, clip(r, 1 ± `clip`)·A) per answer token, with
+  r = p / p_old: gradient −r·A·∇log p where the ratio is not clipped. On-policy r is 1,
+  so the gradient is the plain policy gradient −A·∇log p (`tests/test_rl.py`).
 
 ## The loop
 

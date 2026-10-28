@@ -43,6 +43,7 @@ from training_data.subword import (
 from trainer import batches, rollout
 from trainer.batches import collate
 from trainer.replay_hook import ReplayHook
+from trainer.rl.algorithms import Tokens
 from trainer.rl.rollouts import Scheduler, collect
 
 FORMAT = "rl-v1"
@@ -199,7 +200,10 @@ def train(
         for start in range(0, len(answers), settings.micro_batch):
             chosen = answers[start : start + settings.micro_batch]
             x, y = collate([sequences[i] for i in chosen], "cuda")
-            logp, mask = token_logprobs(model, x, y)
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                logits = model(x).float()
+            mask = y != LOSS_IGNORE_INDEX
+            logp = logits.log_softmax(-1).gather(-1, y.clamp(min=0)[..., None])[..., 0] * mask
             if old is None:
                 old_logp = logp.detach()
             else:
@@ -213,7 +217,10 @@ def train(
                 device="cuda",
             )
             weight = torch.tensor([advantage[i] for i in chosen], device="cuda")
-            loss, stats = algorithm.loss(logp, old_logp, weight, mask, scale)
+            loss, stats = algorithm.loss(
+                Tokens(logits, y, mask, logp, old_logp.detach(), weight, scale)
+            )
+            del logits
             delta = (reference_logp - logp) * mask
             kl = (delta.exp() - delta - 1) * mask
             if settings.kl_coef:

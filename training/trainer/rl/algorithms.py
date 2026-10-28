@@ -10,11 +10,9 @@ recipe's `"algorithm": {"name": ...}`) and a `policy`:
   that (`OFF_POLICY` algorithms only).
 
 `advantages(rewards, group)` maps the rewards of consecutive groups of `group` answers
-to the same prompt to one advantage per answer. `loss(logp, old_logp, advantage, mask,
-scale)` is the scalar to minimize for a micro-batch: `logp` are the learner's
-log-probabilities of the answer tokens (with gradient), `old_logp` those of the weights
-that the batch was sampled from (detached), `mask` marks answer tokens and `scale` is each
-answer's constant normalization (see `loop.py`). It returns (loss, {statistic: sum}).
+to the same prompt to one advantage per answer. `loss(tokens)` takes one micro-batch of
+answers (`Tokens`) and returns the scalar to minimize, whose gradient is what matters,
+and {statistic: sum over answer tokens}.
 """
 
 from dataclasses import dataclass
@@ -24,15 +22,33 @@ import torch
 POLICIES = ("on", "off")
 
 
+@dataclass
+class Tokens:
+    """One micro-batch of answers as an algorithm's loss sees it, `[batch, time]` unless
+    noted: the learner's `logits` `[batch, time, vocab]` and its log-probabilities `logp`
+    of the `targets` (both with gradient), `old_logp` of the weights that sampled the
+    batch (detached; on-policy, `logp` itself), the answer-token `mask`, and per answer its
+    `advantage` and constant normalization `scale` `[batch]` (see `loop.py`)."""
+
+    logits: torch.Tensor
+    targets: torch.Tensor
+    mask: torch.Tensor
+    logp: torch.Tensor
+    old_logp: torch.Tensor
+    advantage: torch.Tensor
+    scale: torch.Tensor
+
+
 @dataclass(frozen=True)
 class GRPO:
     """Group-relative policy optimization (arXiv:2402.03300).
 
     Advantage: reward minus the mean reward of the prompt's group, divided by the
     group's standard deviation only with `scale_by_std` (off by default, as in Dr. GRPO,
-    arXiv:2503.20783). Loss: the clipped surrogate −min(r·A, clip(r, 1 ± clip)·A) per
-    answer token, with r = p / p_old. On-policy p_old is p itself (detached), so r = 1 and
-    the gradient is the plain policy gradient −A·∇log p.
+    arXiv:2503.20783). Loss: PPO's clipped surrogate −min(r·A, clip(r, 1 ± clip)·A) per
+    answer token, with r = p / p_old, written by its gradient −r·A·∇log p on tokens whose
+    ratio is not clipped. On-policy p_old is p itself (detached), so r = 1 and the
+    gradient is the plain policy gradient −A·∇log p.
     """
 
     name: str = "grpo"
@@ -56,14 +72,16 @@ class GRPO:
             result += [(r - mean) / divisor for r in chunk]
         return result
 
-    def loss(self, logp, old_logp, advantage, mask, scale):
-        ratio = (logp - old_logp).exp()
-        advantage = advantage[:, None]
-        bounded = ratio.clamp(1 - self.clip, 1 + self.clip)
-        surrogate = torch.minimum(ratio * advantage, bounded * advantage)
-        loss = -(scale[:, None] * surrogate * mask).sum()
-        clipped = ((ratio - bounded).abs() > 0) & mask
-        return loss, {"clipped_tokens": clipped.sum().item()}
+    def loss(self, tokens):
+        ratio = (tokens.logp - tokens.old_logp).detach().exp()
+        advantage = tokens.advantage[:, None]
+        # PPO zeroes the gradient where the ratio left the band in the advantage's direction.
+        clipped = ((advantage > 0) & (ratio > 1 + self.clip)) | (
+            (advantage < 0) & (ratio < 1 - self.clip)
+        )
+        weight = tokens.scale[:, None] * ratio * advantage * (~clipped & tokens.mask)
+        loss = -(weight * tokens.logp).sum()
+        return loss, {"clipped_tokens": (clipped & tokens.mask).sum().item()}
 
 
 ALGORITHMS = {"grpo": GRPO}
