@@ -271,7 +271,16 @@ class PreparedMixture:
 
 
 def heldout_windows(recipe, root, name, context, max_documents):
-    """Whole held-out documents packed into windows, with their total UTF-8 bytes."""
+    """Held-out windows of one source or chat subset: (inputs, labels, total UTF-8 bytes).
+
+    Pretraining sources concatenate whole held-out documents into one stream (labels
+    -100 only past its end). Chat recipes pack whole conversations and train only the
+    assistant tokens (`sft_data.chat_heldout_windows`; None for an empty subset).
+    """
+    if recipe.get("format") == "chat-sft":
+        from .sft_data import chat_heldout_windows
+
+        return chat_heldout_windows(recipe, root, name, context, max_documents)
     source = recipe["sources"][name]
     bin_path, docs_path, _ = shard_paths(root, name, heldout_index(source))
     lengths = np.load(docs_path)[:max_documents]

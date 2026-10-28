@@ -145,11 +145,10 @@ def evaluate(model, revision, deadline, folder, limit=0):
 @app.function(image=image, cpu=0.25, memory=512, timeout=86400, retries=0)
 def enforce_deadline(call_ids, deadline):
     """Independent supervisor: cancel every call of this launch still running at its deadline."""
-    while (remaining := deadline - time.time()) > 0:
-        time.sleep(min(remaining, 300))
-    for call_id in call_ids:
-        modal.FunctionCall.from_id(call_id).cancel()
-    return {"cancelled": call_ids}
+    from workflows.deadline import calls_finished, cancel_at_deadline
+
+    cancelled = cancel_at_deadline(deadline, lambda: call_ids, lambda: calls_finished(call_ids))
+    return {"stage": "completed"} if cancelled is None else {"cancelled": cancelled}
 
 
 @app.local_entrypoint()
