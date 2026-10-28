@@ -46,6 +46,7 @@ playground = "analysis/playground"
 
 [tool.setuptools.package-data]
 trainer = ["kernels/*.cu"]
+model_hybrid = ["kernels/*.cu"]
 workflows = ["*.json", "model_configs/*.json", "model_configs/historical/*.json", "datasets/*.json"]
 
 [dependency-groups]

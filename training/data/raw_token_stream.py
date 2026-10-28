@@ -37,9 +37,15 @@ PART_BITS = 40
 
 
 class RawTokenMixture(TokenMixture):
-    """The same token-deficit scheduler, with resumable raw-document cursors."""
+    """The same token-deficit scheduler, with resumable raw-document cursors.
 
-    def __init__(self, manifest_path, context=2048, split="train", allow_unreviewed=False):
+    `weights` ({source: positive weight}) reads only those sources, mixed by those weights
+    instead of the manifest's and without its source token targets (pretraining replay).
+    """
+
+    def __init__(
+        self, manifest_path, context=2048, split="train", allow_unreviewed=False, weights=None
+    ):
         self.path = Path(manifest_path)
         self.manifest = json.loads(self.path.read_text())
         if self.manifest.get("format") not in ("raw-text-v1", GROWING_FORMAT):
@@ -66,6 +72,21 @@ class RawTokenMixture(TokenMixture):
             "tokenizer_sha256": TOKENIZER_SHA256,
         }
         self.sources = self.manifest["sources"]
+        if weights is not None:
+            if (
+                not weights
+                or set(weights) - set(self.sources)
+                or not all(type(w) in (int, float) and w > 0 for w in weights.values())
+            ):
+                raise ValueError("Weights must name snapshot sources with positive weights")
+            self.sources = {
+                name: {
+                    **{k: v for k, v in self.sources[name].items() if k != "target_tokens"},
+                    "weight_percent": weight,
+                }
+                for name, weight in sorted(weights.items())
+            }
+            self.identity["weights"] = dict(sorted(weights.items()))
         if any(s["splits"][split]["loss_tokens"] <= 0 for s in self.sources.values()):
             raise ValueError("Every mixture source needs data for this split")
         self.passes = {}

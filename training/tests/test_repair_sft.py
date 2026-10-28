@@ -127,7 +127,7 @@ class RepairTests(unittest.TestCase):
 
 class TensorBatchTests(unittest.TestCase):
     def test_padding_does_not_become_supervision(self):
-        from trainer.sft import collate
+        from trainer.batches import collate
 
         rows = [{"x": [1, 5, 6], "y": [-100, 6, 2]}, {"x": [1], "y": [2]}]
         x, y = collate(rows, "cpu")
