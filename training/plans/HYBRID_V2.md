@@ -81,3 +81,38 @@ reused through `prepared_in`. 3B tokens from the 40B export with 30% replay of
 | PG19 books | 10% |
 | Unseen permissive GitHub files | 30% |
 | Thinking traces (OpenThoughts3) | 25% |
+
+### Result: `hybrid-720m-mid32k-01` (2026-10-28)
+
+8×H100, 2,861 steps, 3.0B tokens in 1.7 hours (median 513K tokens/s, 31.4% MFU), from
+the 40B export. Long-document loss falls with in-document position, so the model uses
+context up to 32K; the replayed short-document sources improved too.
+
+| Held-out source | Loss, step 200 → end | Loss by position, 0–1K → 16–32K (end) |
+| --- | --- | --- |
+| Repository code | 1.044 → 0.901 | 1.183 → 0.610 |
+| Unseen GitHub files | 1.002 → 0.886 | 1.160 → 0.341 |
+| PG19 books | 3.178 → 2.868 | 2.945 → 2.838 |
+| Thinking traces | 1.949 → 1.647 | 1.281 → 1.819 (rises: later trace text is harder) |
+| ClimbMix / code / math (replay) | 2.636 / 1.019 / 1.794 → 2.575 / 0.894 / 1.724 | — |
+
+Benchmarks (same harness and shots as the 40B record), 40B export → mid-training:
+
+| HellaSwag | ARC-E | ARC-C | PIQA | WinoG | OBQA | SciQ | LAMBADA | MMLU | GSM8K | HumanEval | MBPP |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 51.4 → 48.7 | 63.4 → 60.7 | 35.4 → 32.8 | 72.7 → 73.0 | 57.4 → 55.6 | 38.8 → 38.0 | 87.8 → 85.9 | 41.2 → 43.9 | 26.4 → 24.8 | 3.5 → 2.4 | 4.3 → 6.1 | 5.0 → 8.0 |
+
+LiveCodeBench v6 (base prompt): 0/175, as for the 40B export.
+
+**Gate not met.** Code improved (HumanEval +1.8, MBPP +3.0) and long context works,
+but commonsense benchmarks fell 2–3 points (HellaSwag, ARC), beyond the one-point
+limit. Web text was 21% of training tokens here (ClimbMix inside the 30% replay)
+against 70% in the 40B run. Next, before more stages: raise replay to 50% and keep
+the code share by lowering books, compared on the same 3B tokens.
+
+A second, accidental launch of the same run trained independently for about 500
+steps, then failed out of memory before its first checkpoint; it wrote no
+checkpoint and the recorded metrics are the completed launch's only.
+
+Outputs (metrics, configs, capacity, benchmarks, LiveCodeBench):
+`training/results/hybrid-720m-mid32k-01/` in `jfrick/lm-exploration-results`.
