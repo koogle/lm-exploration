@@ -107,8 +107,10 @@ ISSUE_SYSTEM = (
     "behavior. Include a short reproduction or usage example when it helps.\n"
     "- Name every public function, class, method, option, CLI flag or error message that the "
     "tests in the diff rely on, with the exact names and signatures they use.\n"
-    "- Do not describe the implementation, do not quote lines added by the diff, and do not "
-    "mention the tests, the diff or the commit.\n"
+    "- Describe only observable behavior. Do not say which functions, helpers, constants or "
+    "files to add, remove or refactor; never name internal or private code that the tests do "
+    "not use. Do not quote lines added by the diff.\n"
+    "- Never mention tests, test files, the diff, the commit or that a change was made.\n"
     "- Write as a person reporting the issue, in plain Markdown, at most 250 words.\n"
     'Answer with JSON only: {"title": "...", "body": "...", "self_contained": true|false} '
     "where self_contained says whether the issue alone specifies the change well enough."
@@ -158,7 +160,45 @@ def added_source_lines(patch, source_paths, min_chars=25):
     return lines
 
 
-def leaks(issue, patch, source_paths):
-    """Added source lines that appear verbatim in the issue."""
-    body = " ".join(f"{issue['title']}\n{issue['body']}".split())
-    return sorted(line for line in added_source_lines(patch, source_paths) if line in body)
+DEFINITION = re.compile(
+    r"\b(?:def|class|function|func|const|let|var|type|interface)\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w{2,})"
+)
+META = re.compile(
+    r"\b(tests?|test files?|unit tests?|the diff|this commit|the commit)\b", re.IGNORECASE
+)
+
+
+def _hunks(patch, paths, added_only):
+    """Lines of the patch belonging to `paths` (added lines only, or all hunk lines)."""
+    out, current = [], None
+    for line in patch.splitlines():
+        if line.startswith("+++ "):
+            path = line[4:].removeprefix("b/")
+            current = path if path in paths else None
+        elif current and not line.startswith(("---", "diff ", "index ", "@@")):
+            if not added_only or line.startswith("+"):
+                out.append(line[1:])
+    return out
+
+
+def hidden_names(patch, source_paths, test_paths):
+    """Names the commit defines in its source files that its tests never mention."""
+    defined = set()
+    for line in _hunks(patch, set(source_paths), added_only=True):
+        defined.update(DEFINITION.findall(line))
+    tests = "\n".join(_hunks(patch, set(test_paths), added_only=False))
+    return sorted(n for n in defined if not re.search(rf"\b{re.escape(n)}\b", tests))
+
+
+def leaks(issue, patch, source_paths, test_paths=()):
+    """What the issue gives away: quoted added source lines, names of new internal code
+    the tests never use, and mentions of tests or the commit."""
+    text = f"{issue['title']}\n{issue['body']}"
+    body = " ".join(text.split())
+    lines = sorted(line for line in added_source_lines(patch, source_paths) if line in body)
+    names = [
+        n
+        for n in hidden_names(patch, source_paths, test_paths)
+        if re.search(rf"\b{re.escape(n)}\b", text)
+    ]
+    return {"lines": lines, "names": names, "meta": sorted({m.lower() for m in META.findall(text)})}
