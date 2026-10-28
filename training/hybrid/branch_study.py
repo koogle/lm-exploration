@@ -82,7 +82,7 @@ def preflight(run, deadline):
 def train_branch(run, variant, seed, deadline):
     from model_hybrid.long_study import train_impl
 
-    assert variant in VARIANTS
+    assert variant in VARIANTS or variant == "rope_v_conv"
     return train_impl(
         run,
         variant,
@@ -96,12 +96,12 @@ def train_branch(run, variant, seed, deadline):
 
 
 @app.function(image=image, timeout=36000, retries=0, volumes={"/runs": runs})
-def coordinate(run, deadline, preparation_call):
+def coordinate(run, deadline, preparation_call, variants=None):
     workers, outcomes = [], []
     try:
         modal.FunctionCall.from_id(preparation_call).get()
         for seed in [17, 29]:
-            for variant in VARIANTS:
+            for variant in VARIANTS if variants is None else variants:
                 assert time.time() < deadline - 300
                 call = train_branch.spawn(run, variant, seed, deadline)
                 calls = registry[run + "/calls"]
