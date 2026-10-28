@@ -25,7 +25,14 @@ secret = modal.Secret.from_name("simple-llm-hf")
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install("numpy", "pyarrow==26.0.0", "tokenizers==0.22.2", "huggingface-hub==1.33.0")
-    .env({"PYTHONPATH": "/project", "HF_HUB_DISABLE_PROGRESS_BARS": "1"})
+    # Downloads land in /tmp/upstream, which each shard call clears when it finishes.
+    .env(
+        {
+            "PYTHONPATH": "/project",
+            "HF_HUB_DISABLE_PROGRESS_BARS": "1",
+            "HF_HUB_CACHE": "/tmp/upstream",
+        }
+    )
     .add_local_file("workflows/__init__.py", "/project/workflows/__init__.py")
     .add_local_file("workflows/deadline.py", "/project/workflows/deadline.py")
     .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
