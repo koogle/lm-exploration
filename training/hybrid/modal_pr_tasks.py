@@ -18,9 +18,10 @@ from the read-only mirror volume and installs dependencies (network on), its
 filesystem snapshot then runs the commit's test files without network with source
 files reverted to the parent and at the commit (`pr_task_runner.py`). A task is
 verified when at least one test fails before and passes after and none regresses.
-`issues` has Qwen3-Coder (vLLM, one H100) write the issue for every selected task
-and flags answers that quote added source lines, name new internal code the
-tests never use, or mention tests or the commit. Every call has `retries=0`, a
+`issues` has Qwen3-Coder (vLLM, one H100) write four drafts of the issue for every
+selected task from the commit message and the test changes only (never the source
+changes), and keeps the first draft that parses, quotes no added source line, names
+no new internal code the tests never use and does not mention tests or the commit. Every call has `retries=0`, a
 timeout of at most 6 hours and refuses work 24 hours after launch; sandboxes are
 capped at one hour and at the launch deadline, and a supervisor cancels the spawned
 call at that deadline.
@@ -68,6 +69,7 @@ teacher_image = (
     .env({"PYTHONPATH": "/project", "HF_HUB_DISABLE_PROGRESS_BARS": "1"})
     .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__", "kernels"])
 )
+DRAFTS = 4  # teacher drafts per task; the first with the best status is kept
 TEACHER = ("Qwen/Qwen3-Coder-30B-A3B-Instruct", "b2cff646eb4bb1d68355c01b18ae02e7cf42d120")
 COLLECTION = "jfrick/mit-claude-codex-code-20261019"
 SANDBOX_SECONDS = 60 * 60
@@ -360,24 +362,12 @@ def write_issues(name, deadline):
     tasks = [json.loads(line) for line in (folder / "selected.jsonl").read_text().splitlines()]
     model, revision = TEACHER
     llm = LLM(model=model, revision=revision, max_model_len=16384, gpu_memory_utilization=0.9)
-    params = SamplingParams(temperature=0.3, top_p=0.9, max_tokens=1024, seed=0)
+    params = SamplingParams(n=DRAFTS, temperature=0.7, top_p=0.9, max_tokens=1024, seed=0)
     started = time.time()
     outputs = llm.chat([pr_tasks.issue_messages(t) for t in tasks], params)
     rows, counts = [], {}
     for task, output in zip(tasks, outputs, strict=True):
-        text = output.outputs[0].text
-        issue = pr_tasks.parse_issue(text)
-        if issue is None:
-            status = "unparsed"
-        else:
-            issue["leaks"] = pr_tasks.leaks(
-                issue, task["patch"], task["source_paths"], task["test_paths"]
-            )
-            status = (
-                "leaked"
-                if any(issue["leaks"].values())
-                else ("ok" if issue["self_contained"] else "not_self_contained")
-            )
+        status, issue, text = pr_tasks.best_issue([o.text for o in output.outputs], task)
         counts[status] = counts.get(status, 0) + 1
         rows.append(
             {
