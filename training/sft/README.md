@@ -27,7 +27,8 @@ a cosine to `min_lr_ratio * lr`; the default is a constant rate.
 | `repair` (default) | language, task and broken code | the complete corrected code | [`../data/repair_sft.py`](../data/repair_sft.py) |
 | `math` | `Question: {question}\nAnswer:` | the full worked solution, ending in `#### N` | [`../data/math_sft.py`](../data/math_sft.py): GSM8K and MetaMathQA solutions |
 
-The repair runs in [EXPERIMENTS.md](EXPERIMENTS.md) used `repair`.
+The math runs in [MATH_EXPERIMENTS.md](MATH_EXPERIMENTS.md) used `math`; the earlier
+repair runs in [EXPERIMENTS.md](EXPERIMENTS.md) used `repair`.
 
 - **Repair SFT** (`"task": "repair"`): validation reports answer-token cross-entropy
   overall and per language.
@@ -138,6 +139,7 @@ recipe on one L40S or H100. A recipe is JSON
 }
 ```
 
+Recipes for the math runs are in [`recipes/`](recipes/).
 `data` is `{"local": path}` (validated locally, uploaded, at most 20 MiB) or
 `{"volume": data-id}` (a prepared volume folder; its hash must match `report.json`).
 `settings` are `trainer.sft.Settings`: `steps` (total target), `batch_size`,

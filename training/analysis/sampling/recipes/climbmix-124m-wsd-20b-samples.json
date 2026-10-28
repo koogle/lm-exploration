@@ -1,0 +1,141 @@
+{
+  "name": "climbmix-124m-wsd-20b-samples",
+  "precision": "bf16-autocast",
+  "max_new_tokens": 160,
+  "prompts": [
+    {
+      "text": "The solar system consists of",
+      "group": "prose"
+    },
+    {
+      "text": "In mathematics, a prime number is",
+      "group": "prose"
+    },
+    {
+      "text": "The purpose of an experiment is to",
+      "group": "prose"
+    },
+    {
+      "text": "Once upon a time,",
+      "group": "prose"
+    },
+    {
+      "text": "def add(a, b):\n    ",
+      "group": "python"
+    },
+    {
+      "text": "def factorial(n):\n    ",
+      "group": "python"
+    },
+    {
+      "text": "import json\n\ndef read_config(path):\n    ",
+      "group": "python"
+    },
+    {
+      "text": "The capital of France is",
+      "group": "prose"
+    },
+    {
+      "text": "2 + 2 =",
+      "group": "prose"
+    },
+    {
+      "text": "A language model predicts",
+      "group": "prose"
+    },
+    {
+      "text": "Photosynthesis is the process by which",
+      "group": "prose"
+    },
+    {
+      "text": "The French Revolution began in",
+      "group": "prose"
+    },
+    {
+      "text": "Here is a short explanation of why the sky is blue:",
+      "group": "prose"
+    },
+    {
+      "text": "How to make a cup of tea:\n1.",
+      "group": "prose"
+    },
+    {
+      "text": "In 1969,",
+      "group": "prose"
+    },
+    {
+      "text": "12 + 7 =",
+      "group": "math"
+    },
+    {
+      "text": "The derivative of x^2 is",
+      "group": "math"
+    },
+    {
+      "text": "Question: Tom has 3 apples and buys 5 more. How many apples does he have?\nAnswer:",
+      "group": "math"
+    },
+    {
+      "text": "Question: A train travels 60 miles in 2 hours. What is its average speed?\nAnswer:",
+      "group": "math"
+    },
+    {
+      "text": "def is_prime(n):\n    ",
+      "group": "python"
+    }
+  ],
+  "modes": [
+    {
+      "name": "greedy",
+      "temperature": 0.0,
+      "seed_offsets": [
+        1000
+      ]
+    },
+    {
+      "name": "sampled",
+      "temperature": 0.8,
+      "top_k": 50,
+      "seed_offsets": [
+        1000,
+        2000,
+        3000
+      ]
+    },
+    {
+      "name": "nucleus_rp",
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "repetition_penalty": 1.1,
+      "seed_offsets": [
+        1000
+      ]
+    }
+  ],
+  "models": [
+    {
+      "kind": "volume",
+      "name": "climbmix-124m-wsd-5.5b",
+      "checkpoint": "climbmix-124m-wsd20b-02-decay5b-s01/step-000055555.pt",
+      "tokenizer": "climbmix-code-v1",
+      "tokenizer_sha256": "48aa6fb6d01d04067570637ca8a5ecced608f5df5585f9ce44a12c05c5281ae5",
+      "parameters": 124389632
+    },
+    {
+      "kind": "volume",
+      "name": "climbmix-124m-wsd-10.9b",
+      "checkpoint": "climbmix-124m-wsd20b-02-decay10b-s01/step-000111111.pt",
+      "tokenizer": "climbmix-code-v1",
+      "tokenizer_sha256": "48aa6fb6d01d04067570637ca8a5ecced608f5df5585f9ce44a12c05c5281ae5",
+      "parameters": 124389632
+    },
+    {
+      "kind": "volume",
+      "name": "climbmix-124m-wsd-20b",
+      "checkpoint": "climbmix-124m-wsd20b-02-s02/step-000203724.pt",
+      "tokenizer": "climbmix-code-v1",
+      "tokenizer_sha256": "48aa6fb6d01d04067570637ca8a5ecced608f5df5585f9ce44a12c05c5281ae5",
+      "parameters": 124389632
+    }
+  ]
+}
