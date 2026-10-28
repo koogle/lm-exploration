@@ -2,11 +2,12 @@
 
 Replay trains on windows of pretraining text from a raw snapshot
 (`training_data.replay`) next to the task, to limit forgetting. A trainer's settings
-inherit `ReplaySettings` and call `check_replay()`; `ReplayHook.attach` returns None when
-replay is off. The hook owns the window sampling and its RNG state, the next-token loss
-on every target except BOS, and the fixed validation windows; the trainer only decides
-how `loss(model)` enters its objective and records `identity()`, `state()` and the
-`SOURCES` it hashes and copies into the run.
+inherit `ReplaySettings` and call `check_replay()`; `"replay": true` switches replay on,
+and `ReplayHook.attach` returns None when it is off. The hook owns the window sampling and its RNG state, the next-token loss
+on every target except BOS, and the fixed validation windows. A trainer backpropagates
+its own loss scaled by `1 - replay_weight`, then calls `backward(model)`, which adds
+`replay_weight` × the replay loss to the same gradients before the optimizer step; it
+records `identity()`, `state()` and the `SOURCES` it hashes and copies into the run.
 """
 
 import math
@@ -22,7 +23,9 @@ from trainer.batches import collate
 
 @dataclass(frozen=True)
 class ReplaySettings:
-    # A raw snapshot under the data volume, its source weights, and windows per step.
+    # `replay` switches replay on; it then needs a raw snapshot under the data volume,
+    # its source weights, windows per step and the replay loss weight.
+    replay: bool = False
     replay_snapshot: str = ""
     replay_sources: dict = field(default_factory=dict)
     replay_batch_size: int = 0
@@ -31,25 +34,23 @@ class ReplaySettings:
     replay_validation_windows: int = 4
 
     def check_replay(self):
-        enabled = (
-            self.replay_snapshot,
-            self.replay_sources,
-            self.replay_batch_size,
-            self.replay_weight,
-        )
-        if any(enabled) and not (
-            all(enabled[:3])
-            and type(self.replay_batch_size) is int
-            and math.isfinite(self.replay_weight)
-            and 0 < self.replay_weight < 1
+        if type(self.replay) is not bool:
+            raise ValueError("replay must be true or false")
+        if self.replay and not (
+            self.replay_snapshot
+            and self.replay_sources
             and all(type(w) in (int, float) and w > 0 for w in self.replay_sources.values())
+            and type(self.replay_batch_size) is int
+            and self.replay_batch_size > 0
             and type(self.replay_context) is int
             and self.replay_context > 0
+            and math.isfinite(self.replay_weight)
+            and 0 < self.replay_weight < 1
             and type(self.replay_validation_windows) is int
             and self.replay_validation_windows > 0
         ):
             raise ValueError(
-                "Replay needs a snapshot, positive source weights and batch size, "
+                "Replay needs a snapshot, positive source weights, batch size and context, "
                 "and a weight between 0 and 1"
             )
 
@@ -77,6 +78,7 @@ class ReplayHook:
         if settings.replay_context > max_context:
             raise ValueError("Replay context exceeds the model's context")
         self.batch_size = settings.replay_batch_size
+        self.weight = settings.replay_weight
         self.data = replay_data.Replay(
             Path(data_root) / settings.replay_snapshot,
             settings.replay_sources,
@@ -89,7 +91,7 @@ class ReplayHook:
     @classmethod
     def attach(cls, settings, data_root, tokenizer, max_context, seed):
         """A hook for `settings`, or None when replay is off."""
-        if not settings.replay_batch_size:
+        if not settings.replay:
             return None
         return cls(settings, data_root, tokenizer, max_context, seed)
 
@@ -102,10 +104,17 @@ class ReplayHook:
     def load_state(self, state):
         self.data.rng.setstate(state)
 
-    def loss(self, model):
-        """Mean next-token loss of `replay_batch_size` new windows; differentiable."""
+    def backward(self, model):
+        """Add `replay_weight` × the mean next-token loss of `replay_batch_size` new
+        windows to the model's gradients; returns that loss."""
+        import torch
+
         value, count = summed_loss(model, [self.data.sample() for _ in range(self.batch_size)])
-        return value / count
+        loss = value / count
+        if not torch.isfinite(loss):
+            raise RuntimeError("Non-finite replay loss")
+        (self.weight * loss).backward()
+        return loss.item()
 
     def validation(self, model):
         """{source: mean next-token loss} over the fixed validation windows."""

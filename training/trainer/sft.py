@@ -8,10 +8,10 @@ far; prompt tokens carry no loss. The loss is the mean answer-token cross-entrop
 `trainer/cig.py`). The model never generates during training. Validation reports the same
 answer-token cross-entropy per bucket.
 
-Optional pretraining replay (`replay_*` settings, the shared `trainer/replay_hook.py`)
-adds `replay_batch_size` windows of pretraining text to every step, trained with the
-ordinary next-token loss; the step loss is `(1 - replay_weight) * answer loss +
-replay_weight * replay loss`. The learning rate is constant, or warms up linearly over
+Optional pretraining replay (`"replay": true` and the `replay_*` settings, the shared
+`trainer/replay_hook.py`) adds `replay_batch_size` windows of pretraining text to every
+step, trained with the ordinary next-token loss: the step backpropagates
+`(1 - replay_weight) * answer loss`, then the hook adds `replay_weight * replay loss`. The learning rate is constant, or warms up linearly over
 `warmup_steps` and follows a cosine to `min_lr_ratio * lr` (`schedule: "cosine"`).
 
 The parent is an explicit `scholarly-ddp-v1` checkpoint on the private run volume; launchers
@@ -365,15 +365,12 @@ def train(
         optimizer.zero_grad(set_to_none=True)
         value, count = loss(rows, training=True)
         answer_loss = value / count
-        objective, values = answer_loss, {"train_loss": answer_loss.item()}
-        if replay:
-            replay_loss = replay.loss(model)
-            weight = settings.replay_weight
-            objective = (1 - weight) * answer_loss + weight * replay_loss
-            values["replay_loss"] = replay_loss.item()
-        if not torch.isfinite(objective):
+        if not torch.isfinite(answer_loss):
             raise RuntimeError("Non-finite SFT loss")
-        objective.backward()
+        values = {"train_loss": answer_loss.item()}
+        (answer_loss * (1 - settings.replay_weight if replay else 1)).backward()
+        if replay:
+            values["replay_loss"] = replay.backward(model)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True)
         optimizer.step()
         step += 1

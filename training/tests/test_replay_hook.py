@@ -7,9 +7,10 @@ from model_10m.model import GPT, ModelConfig
 from training_data.subword import load_frozen
 
 from tests.test_replay import snapshot
-from trainer.replay_hook import ReplayHook, ReplaySettings
+from trainer.replay_hook import ReplayHook, ReplaySettings, summed_loss
 
 ON = ReplaySettings(
+    replay=True,
     replay_snapshot="snapshot",
     replay_sources={"code": 1, "web": 1},
     replay_batch_size=2,
@@ -36,19 +37,31 @@ class ReplayHookTests(unittest.TestCase):
     def hook(self, settings=ON):
         return ReplayHook.attach(settings, self.folder.name, self.tokenizer, 16, 0)
 
-    def test_off_unless_configured(self):
+    def test_off_unless_switched_on_and_complete(self):
         self.assertIsNone(self.hook(ReplaySettings()))
+        self.assertIsNone(self.hook(ReplaySettings(**{**ON.__dict__, "replay": False})))
         with self.assertRaises(ValueError):
-            ReplaySettings(replay_batch_size=2).check_replay()
+            ReplaySettings(replay=True).check_replay()
+        with self.assertRaises(ValueError):
+            ReplaySettings(**{**ON.__dict__, "replay_weight": 0.0}).check_replay()
         with self.assertRaises(ValueError):
             self.hook(ReplaySettings(**{**ON.__dict__, "replay_context": 32}))
 
-    def test_loss_is_differentiable_and_validation_is_per_source(self):
+    def test_backward_adds_weighted_replay_gradients(self):
         hook = self.hook()
-        loss = hook.loss(self.model)
-        loss.backward()
-        self.assertTrue(torch.isfinite(loss))
-        self.assertIsNotNone(self.model.token_embedding.weight.grad)
+        state = hook.state()
+        loss = hook.backward(self.model)
+        added = self.model.token_embedding.weight.grad.clone()
+        self.model.zero_grad()
+        hook.load_state(state)
+        rows = [hook.data.sample() for _ in range(ON.replay_batch_size)]
+        value, count = summed_loss(self.model, rows)
+        (value / count).backward()
+        self.assertAlmostEqual(loss, (value / count).item(), places=5)
+        torch.testing.assert_close(added, ON.replay_weight * self.model.token_embedding.weight.grad)
+
+    def test_validation_is_per_source(self):
+        hook = self.hook()
         validation = hook.validation(self.model)
         self.assertEqual(sorted(validation), ["code", "web"])
         self.assertEqual(validation, hook.validation(self.model))
