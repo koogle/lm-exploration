@@ -62,7 +62,7 @@ def profile(deadline, batch, prompt, new, checkpoint):
 
     for engine in rollout.ENGINES:
         for top_k in (0, 32):
-            ms = timed(engine, top_k=top_k)
+            ms = timed(engine, record_top_k=top_k)
             results[f"{engine}_top{top_k}_ms_per_token"] = ms / new
     with torch_profile(activities=[ProfilerActivity.CUDA]) as trace:
         rollout.sample(model, prompts, 32, -1, engine="eager")

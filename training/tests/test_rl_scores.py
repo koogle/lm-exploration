@@ -2,25 +2,33 @@ import unittest
 
 import torch
 
-from trainer.policy_loss import sampler_kl, surrogate
+from trainer.rl.algorithms import GRPO, Tokens
+from trainer.rl.scores import sampler_kl
 
 
 def logits_grad(logits, targets, top_ids=None, top_logprobs=None):
+    """Gradient on the logits of on-policy GRPO with advantage 1 on every token."""
     logits = logits.clone().requires_grad_(True)
-    mask = torch.ones(targets.shape)
-    loss, _ = surrogate(logits, targets, mask, torch.ones(1), top_ids, top_logprobs)
+    logp = logits.log_softmax(-1).gather(-1, targets[..., None])[..., 0]
+    mask = torch.ones(targets.shape, dtype=torch.bool)
+    tokens = Tokens(logits, targets, mask, logp, logp.detach(), torch.ones(1), torch.ones(1))
+    algorithm = GRPO()
+    if top_ids is not None:
+        algorithm = GRPO(score="centered", centering_top_k=top_ids.size(-1))
+        tokens.sampler_top_ids, tokens.sampler_top_logprobs = top_ids, top_logprobs
+    loss, _ = algorithm.loss(tokens)
     loss.backward()
     return logits.grad
 
 
-class PolicyLossTests(unittest.TestCase):
+class ScoreTests(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(0)
         self.logits = torch.randn(1, 3, 10)
         self.targets = torch.tensor([[2, 7, 0]])
         self.onehot = torch.nn.functional.one_hot(self.targets, 10).float()
 
-    def test_reinforce_gradient_is_p_minus_onehot(self):
+    def test_plain_gradient_is_p_minus_onehot(self):
         p = self.logits.softmax(-1)
         torch.testing.assert_close(logits_grad(self.logits, self.targets), p - self.onehot)
 
@@ -63,6 +71,19 @@ class PolicyLossTests(unittest.TestCase):
         mask = torch.ones(1, 2)
         self.assertEqual(sampler_kl(logp, logp, mask).abs().sum().item(), 0)
         self.assertGreater(sampler_kl(logp, logp - 0.3, mask).sum().item(), 0)
+
+    def test_centering_needs_temperature_one(self):
+        from trainer.rl.settings import Settings
+
+        self.assertEqual(GRPO(score="centered").sampler_top_k, 32)
+        self.assertEqual(GRPO().sampler_top_k, 0)
+        with self.assertRaises(ValueError):
+            Settings.from_dict(
+                {
+                    "algorithm": {"name": "grpo", "score": "centered"},
+                    "rollouts": {"temperature": 0.7},
+                }
+            )
 
 
 if __name__ == "__main__":

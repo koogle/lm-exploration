@@ -6,13 +6,23 @@
   "pool": "rl-pool-math-code-03",
   "settings": {
     "steps": 1000,
-    "math_share": 0.5,
-    "prompts_per_step": 64,
-    "samples_per_prompt": 8,
-    "lr": 1e-06,
-    "warmup_steps": 20,
+    "rollouts": {
+      "prompts_per_step": 64,
+      "samples_per_prompt": 8,
+      "math_share": 0.5
+    },
+    "algorithm": {
+      "name": "grpo",
+      "policy": "on",
+      "score": "centered"
+    },
+    "optimizer": {
+      "lr": 1e-06,
+      "warmup_steps": 20
+    },
     "evaluate_every": 50,
     "save_every": 100,
+    "replay": true,
     "replay_snapshot": "climbmix-code/climbmix-code-v6/snapshots/climbmix-124m-wsd20b-02",
     "replay_sources": {
       "climbmix_0": 0.15,

@@ -21,6 +21,7 @@
     "schedule": "cosine",
     "warmup_steps": 300,
     "min_lr_ratio": 0.1,
+    "replay": true,
     "replay_snapshot": "climbmix-code/climbmix-code-v6/snapshots/climbmix-124m-wsd20b-02",
     "replay_sources": {
       "climbmix_0": 0.15,

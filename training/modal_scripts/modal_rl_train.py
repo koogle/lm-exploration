@@ -1,11 +1,12 @@
-"""Bounded RL (`trainer/rl.py`) on one Modal H100. Importing this module never starts a job.
+"""Bounded RL (`trainer/rl/`) on one Modal H100. Importing this module never starts a job.
 
 Run from training/:
     modal run -m modal_scripts.modal_rl_train --recipe <recipe.json> [--run-id <fresh-id>] \
         [--output <result.json>]
 
 A recipe names `run_id`, `parent` (an SFT checkpoint, `run/step-N.pt` on the run volume),
-`pool` (an `rl_pool` data ID), and `trainer.rl.Settings` as `settings`.
+`pool` (an `rl_pool` data ID), and `settings` (`trainer/rl/settings.py`; print a
+recipe's resolved settings with `python -m trainer.rl --recipe <recipe.json>`).
 
 The launcher records a deadline 24 hours after launch and spawns one training call (no
 retries, 21-hour timeout) and one supervisor call. The training call refuses work after
@@ -42,7 +43,7 @@ def validate_recipe(recipe):
 
     if not isinstance(recipe, dict) or set(recipe) - FIELDS:
         raise ValueError(f"Recipe fields must be among {sorted(FIELDS)}")
-    Settings(**recipe["settings"])
+    Settings.from_dict(recipe["settings"])
     run_id(recipe["run_id"])
     run_id(recipe["pool"], "pool")
     checkpoint(recipe["parent"], "parent")
@@ -67,7 +68,7 @@ def train(recipe, deadline):
     from training_data.code_execution import Sandbox
 
     from trainer.rl import Settings
-    from trainer.rl import train as run
+    from trainer.rl.loop import train as run
 
     stop = deadline - FINAL_RESERVE_SECONDS
     if time.time() >= stop:
@@ -91,7 +92,7 @@ def train(recipe, deadline):
             runs / recipe["parent"],
             pool / "pool.jsonl",
             runs / recipe["run_id"],
-            Settings(**recipe["settings"]),
+            Settings.from_dict(recipe["settings"]),
             sandbox,
             run_volume.commit,
             deadline=stop,

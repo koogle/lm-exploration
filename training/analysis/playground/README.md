@@ -7,7 +7,7 @@ private CPU Hugging Face Space. uv installs this folder as `playground`.
 | --- | --- |
 | `configs/base-vs-math-sft.json` | Export config: checkpoints and labels, layout, model and Space repositories |
 | `modal_export.py` | Exports the configured checkpoints and publishes the Space |
-| `app.py`, `generation.py` | The Space: model loading, UI and key/value-cached sampling |
+| `app.py` | The Space: model loading and UI; sampling uses the shared [`trainer/rollout.py`](../../trainer/rollout.py), copied into the Space |
 | `intro.md`, `space-card.md`, `requirements.txt` | Space text, card and dependencies |
 
 ## Publish
