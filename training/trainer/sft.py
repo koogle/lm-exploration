@@ -33,6 +33,9 @@ from training_data.subword import (
     load_frozen,
 )
 
+from trainer import batches
+from trainer.batches import collate
+
 # The SFT dataset (`training_data.sft.SFTDataset`) of each task.
 TASKS = {"repair": REPAIR, "math": MATH}
 
@@ -114,18 +117,6 @@ def validate_resume_identity(saved, current, step, extend=False):
         raise ValueError("Extension changed source/model/data/objective/optimizer identity")
 
 
-def collate(rows, device):
-    import torch
-
-    width = max(len(row["x"]) for row in rows)
-    x = torch.zeros((len(rows), width), dtype=torch.long, device=device)
-    y = torch.full_like(x, LOSS_IGNORE_INDEX)
-    for i, row in enumerate(rows):
-        x[i, : len(row["x"])] = torch.tensor(row["x"], device=device)
-        y[i, : len(row["y"])] = torch.tensor(row["y"], device=device)
-    return x, y
-
-
 def train(
     parent,
     dataset,
@@ -181,7 +172,11 @@ def train(
     optimizer = torch.optim.AdamW(model.parameters(), lr=settings.lr, weight_decay=0.01)
     from trainer import cig
 
-    source_hashes = {"trainer": digest(__file__), "cig": digest(cig.__file__)}
+    source_hashes = {
+        "trainer": digest(__file__),
+        "batches": digest(batches.__file__),
+        "cig": digest(cig.__file__),
+    }
     cache = {}
     if settings.objective == "cig":
         raw_rows = [
@@ -246,6 +241,7 @@ def train(
     shutil.copytree(DEFAULT_FOLDER, output / "tokenizer")
     for name, module in (
         ("trainer", __file__),
+        ("batches", batches.__file__),
         ("cig", cig.__file__),
         ("data", data_module.__file__),
         ("sft_data", sft_data_module.__file__),
