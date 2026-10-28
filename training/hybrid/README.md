@@ -392,6 +392,31 @@ exports get the question as a system and user turn. Results go to
 uv run --all-extras modal run --detach -m model_hybrid.modal_livecodebench [--models M,...] [--limit N]
 ```
 
+## PR-to-task data
+
+[`pr_tasks.py`](pr_tasks.py) turns collected commits into repository tasks: the
+repository at the parent commit, an issue, the commit's own test changes as the
+hidden check and the commit as the reference patch. [`modal_pr_tasks.py`](modal_pr_tasks.py)
+runs three stages on the `lm-exploration-hybrid-data` volume under `<name>/`:
+
+- `select` keeps single-language commits (Python, JS/TS, Go) that change 1–3 source
+  and 1–3 test files within `pr_tasks.LIMITS`, capped per repository. It runs no
+  repository code.
+- `verify` gives each task two disposable sandboxes: one installs dependencies with
+  network, and its filesystem snapshot runs the test files without network with source
+  files reverted to the parent and at the commit ([`pr_task_runner.py`](pr_task_runner.py)).
+  Verified tasks have at least one fail-to-pass test and no regression.
+- `issues` has Qwen3-Coder write four issue drafts per task from the commit message
+  and the test changes only, and keeps the first draft without leaks (quoted added
+  source lines, new internal names the tests never use, mentions of tests or the
+  commit).
+
+```sh
+uv run modal run -m model_hybrid.modal_pr_tasks::select [--count 1000] [--name pr-tasks-pilot]
+uv run modal run --detach -m model_hybrid.modal_pr_tasks::verify [--limit N] [--workers 48]
+uv run modal run --detach -m model_hybrid.modal_pr_tasks::issues
+```
+
 ## Tests
 
 From `training/`:
@@ -401,7 +426,7 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
   tests.test_hybrid_sink_gate tests.test_hybrid_kda \
   tests.test_hybrid_mtp tests.test_hybrid_optim \
   tests.test_hybrid_tokenizer tests.test_hybrid_data tests.test_hybrid_720m \
-  tests.test_hybrid_livecodebench \
+  tests.test_hybrid_livecodebench tests.test_hybrid_pr_tasks \
   tests.test_hybrid_fused_loss tests.test_hybrid_chat tests.test_hybrid_generate -v
 ```
 
