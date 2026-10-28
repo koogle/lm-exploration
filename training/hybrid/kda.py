@@ -19,6 +19,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from .documents import cu_seqlens
+from .roles import declare
 
 __all__ = [
     "KimiDeltaAttention",
@@ -121,6 +122,22 @@ class KimiDeltaAttention(nn.Module):
         self.o_norm_weight = nn.Parameter(torch.ones(width))
         self.norm_eps = config.norm_eps
         self.o_proj = nn.Linear(inner, config.n_embd, bias=False)
+
+    def optimizer(self):
+        yield from declare(
+            "muon", self.q_proj, self.k_proj, self.v_proj, self.f_proj, self.g_proj, self.o_proj
+        )
+        # One row per head: a write strength per head, not a hidden matrix.
+        yield from declare("adamw_decay", self.b_proj)
+        yield from declare(
+            "adamw_no_decay",
+            self.q_conv,
+            self.k_conv,
+            self.v_conv,
+            self.A_log,
+            self.dt_bias,
+            self.o_norm_weight,
+        )
         self.o_proj.residual_output = True
 
     def forward(self, x, rope, mask):

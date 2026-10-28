@@ -22,6 +22,7 @@ from torch.utils.checkpoint import checkpoint
 
 from .documents import document_ids, document_positions
 from .kda import KimiDeltaAttention
+from .roles import declare
 
 __all__ = [
     "Attention",
@@ -213,6 +214,12 @@ class Attention(nn.Module):
         self.o_proj = nn.Linear(config.n_head * config.head_dim, config.n_embd, bias=False)
         self.o_proj.residual_output = True
 
+    def optimizer(self):
+        yield from declare(
+            "muon", self.q_proj, self.k_proj, self.v_proj, self.gate_proj, self.o_proj
+        )
+        yield from declare("adamw_no_decay", self.q_norm, self.k_norm, self.sink, self.gate_bias)
+
     def project(self, x, rope):
         batch, length, _ = x.shape
         query = self.q_proj(x).view(batch, length, self.n_head, self.head_dim)
@@ -246,6 +253,11 @@ class Block(nn.Module):
         self.mlp_norm = RMSNorm(config.n_embd, config.norm_eps)
         self.mlp = SwiGLU(config.n_embd, config.mlp_hidden, bias=False)
         self.mlp.down.residual_output = True
+
+    def optimizer(self):
+        # The mixer declares its own parameters.
+        yield from declare("muon", self.mlp)
+        yield from declare("adamw_no_decay", self.mixer_norm, self.mlp_norm)
 
     def forward(self, x, rope, mask):
         x = x + self.mixer(self.mixer_norm(x), rope, mask)
@@ -294,6 +306,13 @@ class MultiTokenPrediction(nn.Module):
         self.block = Block(config, config.mtp_layer_kind)
         self.output_norm = RMSNorm(config.n_embd, config.norm_eps)
 
+    def optimizer(self):
+        # The block declares its own parameters.
+        yield from declare("muon", self.fuse)
+        yield from declare(
+            "adamw_no_decay", self.hidden_norm, self.embedding_norm, self.output_norm
+        )
+
     def forward(self, hidden, next_embeddings, rope, mask):
         fused = torch.cat((self.hidden_norm(hidden), self.embedding_norm(next_embeddings)), -1)
         return self.output_norm(self.block(self.fuse(fused), rope, mask))
@@ -321,6 +340,12 @@ class HybridLM(nn.Module):
     @property
     def output_weight(self):
         return self.token_embedding.weight
+
+    def optimizer(self):
+        # Blocks and the MTP module declare their own parameters. The tied
+        # embedding/output table has per-token rows, so it stays on AdamW.
+        yield from declare("adamw_decay", self.token_embedding)
+        yield from declare("adamw_no_decay", self.final_norm)
 
     def initialize(self, module):
         """Normal(0, 0.02); residual output projections scaled by 1/sqrt(2 * n_layer)."""

@@ -161,6 +161,28 @@ Inference does not run the module: `forward(tokens)` returns trunk logits, and
 a model built with `mtp=False` loads the trunk weights (all keys outside `mtp.`)
 and produces identical logits.
 
+## Optimizer grouping
+
+Each module declares the optimizer role of the parameters it creates, next to its
+`__init__`: `optimizer()` in [`model.py`](model.py) and [`kda.py`](kda.py)
+yields `(parameter, role)` pairs (helper `declare` in [`roles.py`](roles.py)).
+[`optim.py`](optim.py) collects them by parameter identity:
+
+| Role | Optimizer | Parameters |
+| --- | --- | --- |
+| `muon` | Muon, LR 0.02, momentum 0.95, weight decay 0.1 | 2D hidden matrices in blocks and MTP: q/k/v/o, attention `gate_proj`, KDA `f_proj`/`g_proj`, SwiGLU, MTP `fuse` |
+| `adamw_decay` | AdamW, LR 3e-4, betas (0.9, 0.95), weight decay 0.1 | tied embedding/output table, KDA beta projection `b_proj` |
+| `adamw_no_decay` | AdamW, LR 3e-4, betas (0.9, 0.95), no weight decay | norm scales, attention sinks, gate biases, KDA `A_log`, `dt_bias`, convolution kernels |
+
+Muon is `trainer.optimizers.Muon` (five-step Newton–Schulz with the original
+aspect-ratio scaling); its weight decay is decoupled, `p *= 1 - lr * 0.1`.
+The learning rates are the 124M comparison's
+([MUON_COMPARISON.md](../distributed/MUON_COMPARISON.md)), starting values for
+the 720M pilot rather than tuned at this scale. `HybridOptimizer` keeps Muon
+groups at `lr_scale = muon_lr / adamw_lr`, so `trainer.optimizers.set_learning_rate`
+applies one schedule factor to both. A parameter that no module declares, one
+declared twice, or a non-matrix declared for Muon raises.
+
 The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
 placeholders until the 720M configuration is fixed in PR 8.
 
@@ -170,7 +192,8 @@ From `training/`:
 
 ```sh
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
-  tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp -v
+  tests.test_hybrid_sink_gate tests.test_hybrid_kda \
+  tests.test_hybrid_mtp tests.test_hybrid_optim -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
@@ -192,7 +215,9 @@ bf16 training steps of a small compiled hybrid model with the fla call outside t
 compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
 The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it.
 
-`test_hybrid_mtp` checks target alignment and boundary masking, the loss
+`test_hybrid_optim` checks that every parameter lands in exactly one group, the
+role of each parameter kind, the learning rates and decay per group, and a step
+plus state round trip. `test_hybrid_mtp` checks target alignment and boundary masking, the loss
 against an explicit computation, that the module never sees its own target,
 the weight schedule and inference without MTP. `test_hybrid_kda` compares the KDA recurrence with an independent matrix form
 `S_t = (I - b k k^T) diag(a) S_(t-1) + b k v^T`, the short convolution with
