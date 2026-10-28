@@ -280,8 +280,7 @@ def heldout_loss(export, recipe, counts, deadline):
         raise TimeoutError("Launch deadline passed; refusing work")
     import torch
     from model_hybrid import generate
-    from model_hybrid.data import heldout_windows
-    from model_hybrid.train import evaluate
+    from model_hybrid.train import evaluate, heldout_windows
 
     lm = generate.load_export(Path("/runs") / export, device="cuda")
     root = Path("/data") / recipe["name"]

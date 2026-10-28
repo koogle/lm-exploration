@@ -535,9 +535,25 @@ def train(
     return progress
 
 
+def heldout_windows(recipe, root, name, context, max_documents):
+    """Held-out windows of a pretraining source or a chat subset: (inputs, labels, bytes).
+
+    Pretraining sources concatenate whole documents into one stream
+    (`packed_shards.heldout_windows`); chat subsets pack whole conversations and train
+    only assistant tokens (`sft_data.chat_heldout_windows`, None when empty).
+    """
+    if recipe.get("format") == "chat-sft":
+        from .sft_data import chat_heldout_windows
+
+        return chat_heldout_windows(recipe, root, name, context, max_documents)
+    from training_data.packed_shards import heldout_windows as source_windows
+
+    return source_windows(recipe, root, name, context, max_documents)
+
+
 def pretraining_heldout(config):
     def heldout(recipe, mixture, context):
-        from .data import heldout_index, heldout_windows, shard_paths
+        from training_data.packed_shards import heldout_index, shard_paths
 
         for name, source in recipe["sources"].items():
             meta = shard_paths(mixture.root, name, heldout_index(source))[2]
@@ -566,8 +582,9 @@ def main():
     recipe = json.loads(Path(config.recipe).read_text())
     root = Path(args.data_root) / recipe["name"]
     if recipe.get("format") == "chat-sft":
+        from training_data.packed_shards import PreparedMixture
+
         from . import sft_data
-        from .data import PreparedMixture, heldout_windows
 
         replay = recipe.get("replay")
         if replay:
@@ -605,7 +622,7 @@ def main():
             "sample_new_tokens": 160,
         }
     else:
-        from .data import PreparedMixture
+        from training_data.packed_shards import PreparedMixture
 
         options = {
             "data_source": lambda recipe: PreparedMixture(recipe, root),

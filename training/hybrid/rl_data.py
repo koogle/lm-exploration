@@ -64,7 +64,7 @@ def is_heldout(text, fraction):
 
 def prepare(recipe, rows_by_source, root, tokenizer, screen=None):
     """Write the prompt files; returns the summary."""
-    from .data import contaminated
+    from training_data.packed_shards import contaminated
 
     folder = Path(root) / recipe["name"]
     folder.mkdir(parents=True, exist_ok=True)

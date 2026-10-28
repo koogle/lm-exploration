@@ -5,6 +5,7 @@ import json
 import struct
 from pathlib import Path
 
+from .mixture import deficit_source
 from .subword import (
     BOS_TOKEN_ID,
     EOS_TOKEN_ID,
@@ -140,8 +141,8 @@ class TokenMixture:
                         )
 
     def next_block(self):
-        name = min(
-            self.sources, key=lambda n: (self.exposures[n] / self.sources[n]["weight_percent"], n)
+        name = deficit_source(
+            self.exposures, {n: s["weight_percent"] for n, s in self.sources.items()}
         )
         if name not in self.iterators:
             self.iterators[name] = self._blocks(name, self.cursors[name])
