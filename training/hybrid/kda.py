@@ -123,7 +123,7 @@ class KimiDeltaAttention(nn.Module):
         self.norm_eps = config.norm_eps
         self.o_proj = nn.Linear(inner, config.n_embd, bias=False)
 
-    def optimizer_roles(self):
+    def optimizer(self):
         yield from declare(
             "muon", self.q_proj, self.k_proj, self.v_proj, self.f_proj, self.g_proj, self.o_proj
         )

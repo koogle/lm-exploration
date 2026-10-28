@@ -164,7 +164,7 @@ and produces identical logits.
 ## Optimizer grouping
 
 Each module declares the optimizer role of the parameters it creates, next to its
-`__init__`: `optimizer_roles()` in [`model.py`](model.py) and [`kda.py`](kda.py)
+`__init__`: `optimizer()` in [`model.py`](model.py) and [`kda.py`](kda.py)
 yields `(parameter, role)` pairs (helper `declare` in [`roles.py`](roles.py)).
 [`optim.py`](optim.py) collects them by parameter identity:
 

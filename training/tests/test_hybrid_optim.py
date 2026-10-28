@@ -81,16 +81,16 @@ class OptimizerGroupingTests(unittest.TestCase):
         del self.lm.extra
 
         block = self.lm.blocks[0]
-        original = type(block).optimizer_roles
+        original = type(block).optimizer
         try:
-            type(block).optimizer_roles = lambda b: (*original(b), *declare("muon", b.mixer.q_proj))
+            type(block).optimizer = lambda b: (*original(b), *declare("muon", b.mixer.q_proj))
             with self.assertRaisesRegex(ValueError, "twice"):
                 optim.parameter_groups(self.lm)
-            type(block).optimizer_roles = lambda b: declare("muon", b.mlp, b.mixer_norm, b.mlp_norm)
+            type(block).optimizer = lambda b: declare("muon", b.mlp, b.mixer_norm, b.mlp_norm)
             with self.assertRaisesRegex(ValueError, "matrix"):
                 optim.parameter_groups(self.lm)
         finally:
-            type(block).optimizer_roles = original
+            type(block).optimizer = original
 
     def test_learning_rates_and_step(self):
         optimizer = optim.HybridOptimizer(self.lm)

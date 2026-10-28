@@ -1,6 +1,6 @@
 """Muon/AdamW parameter grouping for the hybrid family.
 
-Roles are declared by the modules that create the parameters (`optimizer_roles()`
+Roles are declared by the modules that create the parameters (`optimizer()`
 in model.py and kda.py, see roles.py):
 
 - `muon`: 2D hidden weight matrices (attention and KDA q/k/v/o projections,
@@ -43,7 +43,7 @@ def parameter_groups(model):
     """
     declared = {}
     for module_name, module in model.named_modules():
-        for parameter, role in getattr(module, "optimizer_roles", tuple)():
+        for parameter, role in getattr(module, "optimizer", tuple)():
             if id(parameter) in declared:
                 raise ValueError(f"{module_name or 'model'} declares a parameter twice")
             declared[id(parameter)] = role

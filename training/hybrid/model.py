@@ -214,7 +214,7 @@ class Attention(nn.Module):
         self.o_proj = nn.Linear(config.n_head * config.head_dim, config.n_embd, bias=False)
         self.o_proj.residual_output = True
 
-    def optimizer_roles(self):
+    def optimizer(self):
         yield from declare(
             "muon", self.q_proj, self.k_proj, self.v_proj, self.gate_proj, self.o_proj
         )
@@ -254,7 +254,7 @@ class Block(nn.Module):
         self.mlp = SwiGLU(config.n_embd, config.mlp_hidden, bias=False)
         self.mlp.down.residual_output = True
 
-    def optimizer_roles(self):
+    def optimizer(self):
         # The mixer declares its own parameters.
         yield from declare("muon", self.mlp)
         yield from declare("adamw_no_decay", self.mixer_norm, self.mlp_norm)
@@ -306,7 +306,7 @@ class MultiTokenPrediction(nn.Module):
         self.block = Block(config, config.mtp_layer_kind)
         self.output_norm = RMSNorm(config.n_embd, config.norm_eps)
 
-    def optimizer_roles(self):
+    def optimizer(self):
         # The block declares its own parameters.
         yield from declare("muon", self.fuse)
         yield from declare(
@@ -341,7 +341,7 @@ class HybridLM(nn.Module):
     def output_weight(self):
         return self.token_embedding.weight
 
-    def optimizer_roles(self):
+    def optimizer(self):
         # Blocks and the MTP module declare their own parameters. The tied
         # embedding/output table has per-token rows, so it stays on AdamW.
         yield from declare("adamw_decay", self.token_embedding)
