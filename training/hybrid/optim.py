@@ -1,14 +1,14 @@
 """Muon/AdamW parameter grouping for the hybrid family.
 
-Every parameter gets exactly one role, by name and shape:
+Roles are declared by the modules that create the parameters (`optimizer_roles()`
+in model.py and kda.py, see roles.py):
 
-- `muon`: 2D hidden weight matrices inside blocks and the MTP module (attention
-  and KDA q/k/v/o projections, attention gate, KDA low-rank decay and output-gate
-  projections, SwiGLU, MTP fuse).
+- `muon`: 2D hidden weight matrices (attention and KDA q/k/v/o projections,
+  attention gate, KDA low-rank decay and output-gate projections, SwiGLU, MTP fuse).
 - `adamw_decay`: the tied embedding/output table and the KDA beta projection
   (one row per head, not a hidden matrix).
 - `adamw_no_decay`: norm scales, attention sinks, gate biases, KDA `A_log`,
-  `dt_bias`, depthwise convolution kernels and any other scalar or vector.
+  `dt_bias` and depthwise convolution kernels.
 
 Muon is trainer.optimizers.Muon (five-step Newton–Schulz, original aspect-ratio
 scaling). Base learning rates follow the 124M Muon comparison
@@ -21,8 +21,9 @@ import torch
 
 from trainer.optimizers import Muon
 
-__all__ = ["HybridOptimizer", "OptimizerConfig", "optimizer_role", "parameter_groups"]
-ROLES = ("muon", "adamw_decay", "adamw_no_decay")
+from .roles import ROLES
+
+__all__ = ["HybridOptimizer", "OptimizerConfig", "parameter_groups"]
 
 
 @dataclass(frozen=True)
@@ -34,23 +35,26 @@ class OptimizerConfig:
     weight_decay: float = 0.1
 
 
-def optimizer_role(name, parameter):
-    leaf = name.rsplit(".", 1)[-1]
-    if parameter.ndim <= 1 or leaf in ("q_conv", "k_conv", "v_conv"):
-        return "adamw_no_decay"
-    if parameter.ndim == 2:
-        if name == "token_embedding.weight" or name.endswith("mixer.b_proj.weight"):
-            return "adamw_decay"
-        if name.startswith(("blocks.", "mtp.")) and leaf == "weight":
-            return "muon"
-    raise ValueError(f"No optimizer role for {name} with shape {tuple(parameter.shape)}")
-
-
 def parameter_groups(model):
-    """{role: [(name, parameter)]}; tied parameters appear once."""
+    """{role: [(name, parameter)]} from the modules' declarations; tied parameters appear once.
+
+    Raises for a parameter that no module declares, that is declared twice, or that
+    is declared `muon` without being a matrix.
+    """
+    declared = {}
+    for module_name, module in model.named_modules():
+        for parameter, role in getattr(module, "optimizer_roles", tuple)():
+            if id(parameter) in declared:
+                raise ValueError(f"{module_name or 'model'} declares a parameter twice")
+            declared[id(parameter)] = role
     groups = {role: [] for role in ROLES}
     for name, parameter in model.named_parameters():
-        groups[optimizer_role(name, parameter)].append((name, parameter))
+        role = declared.get(id(parameter))
+        if role is None:
+            raise ValueError(f"No module declares an optimizer role for {name}")
+        if role == "muon" and parameter.ndim != 2:
+            raise ValueError(f"Muon needs a matrix; {name} has shape {tuple(parameter.shape)}")
+        groups[role].append((name, parameter))
     return groups
 
 

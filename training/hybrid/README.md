@@ -163,7 +163,10 @@ and produces identical logits.
 
 ## Optimizer grouping
 
-[`optim.py`](optim.py) assigns every parameter exactly one role:
+Each module declares the optimizer role of the parameters it creates, next to its
+`__init__`: `optimizer_roles()` in [`model.py`](model.py) and [`kda.py`](kda.py)
+yields `(parameter, role)` pairs (helper `declare` in [`roles.py`](roles.py)).
+[`optim.py`](optim.py) collects them by parameter identity:
 
 | Role | Optimizer | Parameters |
 | --- | --- | --- |
@@ -177,7 +180,8 @@ The learning rates are the 124M comparison's
 ([MUON_COMPARISON.md](../distributed/MUON_COMPARISON.md)), starting values for
 the 720M pilot rather than tuned at this scale. `HybridOptimizer` keeps Muon
 groups at `lr_scale = muon_lr / adamw_lr`, so `trainer.optimizers.set_learning_rate`
-applies one schedule factor to both. Unclassified parameters raise.
+applies one schedule factor to both. A parameter that no module declares, one
+declared twice, or a non-matrix declared for Muon raises.
 
 The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
 placeholders until the 720M configuration is fixed in PR 8.

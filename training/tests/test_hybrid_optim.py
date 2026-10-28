@@ -4,6 +4,7 @@ import unittest
 
 import torch
 from model_hybrid import model, optim
+from model_hybrid.roles import declare
 
 from trainer.optimizers import set_learning_rate
 
@@ -73,11 +74,23 @@ class OptimizerGroupingTests(unittest.TestCase):
         muon = [p for n, p in self.lm.named_parameters() if roles[n] == "muon"]
         self.assertTrue(all(p.ndim == 2 for p in muon))
 
-    def test_unknown_parameters_are_rejected(self):
-        with self.assertRaises(ValueError):
-            optim.optimizer_role("extra.weight", torch.zeros(3, 3))
-        with self.assertRaises(ValueError):
-            optim.optimizer_role("blocks.0.odd", torch.zeros(2, 2, 2, 2))
+    def test_undeclared_and_double_declared_parameters_are_rejected(self):
+        self.lm.extra = torch.nn.Parameter(torch.zeros(3, 3))
+        with self.assertRaisesRegex(ValueError, "extra"):
+            optim.parameter_groups(self.lm)
+        del self.lm.extra
+
+        block = self.lm.blocks[0]
+        original = type(block).optimizer_roles
+        try:
+            type(block).optimizer_roles = lambda b: (*original(b), *declare("muon", b.mixer.q_proj))
+            with self.assertRaisesRegex(ValueError, "twice"):
+                optim.parameter_groups(self.lm)
+            type(block).optimizer_roles = lambda b: declare("muon", b.mlp, b.mixer_norm, b.mlp_norm)
+            with self.assertRaisesRegex(ValueError, "matrix"):
+                optim.parameter_groups(self.lm)
+        finally:
+            type(block).optimizer_roles = original
 
     def test_learning_rates_and_step(self):
         optimizer = optim.HybridOptimizer(self.lm)
