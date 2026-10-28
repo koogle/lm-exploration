@@ -108,6 +108,38 @@ input. `gate_bias` (per channel) starts at `gate_bias_init = 3.0`, so the gate
 starts about 95% open. With the gate fully open and the sink at -inf the layer
 reduces exactly to plain document-causal attention.
 
+## Kimi Delta Attention and the hybrid layout
+
+[`kda.py`](kda.py) implements KDA layers following flash-linear-attention's
+`KimiDeltaAttention` ([Kimi Linear](https://arxiv.org/abs/2510.26692)), without
+biases:
+
+- q/k/v projections to `n_kda_head` heads of width `head_dim`, each followed by a
+  causal depthwise convolution (kernel `kda_conv_size = 4`) and SiLU.
+- L2-normalized q and k (q further scaled by `1/sqrt(head_dim)`), sigmoid beta
+  from `b_proj`, and a per-channel decay `-exp(A_log) * softplus(f_proj(x) + dt_bias)`
+  with a low-rank `f_proj`.
+- Per-head output RMSNorm, a sigmoid gate from a low-rank `g_proj`, and `o_proj`
+  (a residual output projection for initialization).
+- No positional encoding; the recurrent state is fp32.
+
+Document boundaries reset both the convolutions (they never read a previous
+document's tokens) and the recurrent state. On CUDA the recurrence is fla's
+`chunk_kda`, run over the flattened batch with `cu_seqlens` from the document ids;
+gate, beta and L2 normalization run inside the kernel. On CPU, `kda_reference`
+is an explicit per-token recurrence with fp32 (or fp64) state.
+[KDA, step by step](../references/kda.md) walks through the recurrence on a toy head.
+
+`torch.compile` traces through the fla call. On one H100, a small compiled hybrid
+model (4 layers, width 512, 4 x 1024 tokens, bf16) took 18.7–19.1 ms per training
+step that way and 19.0–19.5 ms with fla excluded by `torch.compiler.disable`
+(three alternating rounds after warming up both), so the graph stays unbroken.
+
+`HybridConfig.layer_pattern` lists `"kda"` and `"full"` layers and repeats to
+`n_layer`; the default `("kda", "kda", "kda", "full")` puts full attention at
+layers 3, 7, 11 and 15 of 16. Full-attention layers keep RoPE, the sink and the
+output gate.
+
 The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
 placeholders until the 720M configuration is fixed in PR 8.
 
@@ -117,7 +149,7 @@ From `training/`:
 
 ```sh
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
-  tests.test_hybrid_sink_gate -v
+  tests.test_hybrid_sink_gate tests.test_hybrid_kda -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
@@ -133,7 +165,17 @@ softmax attention (fp32 and bf16, GQA, packed documents, a one-token document,
 lengths that are not block multiples, head dimensions 64 and 128), checks document
 isolation in a compiled bf16 model, and times FlexAttention against causal SDPA.
 
-`test_hybrid_sink_gate` compares the sink with an explicit softmax that has an
+The same check compares fla's `chunk_kda` with `cu_seqlens` against
+`kda_reference` (output and all input gradients, within TF32 tolerance) and times
+bf16 training steps of a small compiled hybrid model with the fla call outside the
+compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
+The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it.
+
+`test_hybrid_kda` compares the KDA recurrence with an independent matrix form
+`S_t = (I - b k k^T) diag(a) S_(t-1) + b k v^T`, the short convolution with
+`F.conv1d`, checks state and convolution resets at document boundaries, the
+layout, document isolation and causality through mixed KDA/full stacks, and that
+every parameter receives a gradient. `test_hybrid_sink_gate` compares the sink with an explicit softmax that has an
 extra zero-value key, checks that an open gate and a -inf sink reproduce plain
 attention exactly, and that the gate starts mostly open and receives gradients.
 `test_hybrid_documents` checks document ids, positions and `cu_seqlens`, and that
