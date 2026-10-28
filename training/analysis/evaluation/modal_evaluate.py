@@ -159,7 +159,7 @@ def evaluate(name, snapshot, checkpoints, config, deadline, shots, selected):
 
     sandbox = None
     if set(selected) & set(CODE):
-        from training_data.code_execution import Sandbox
+        from training_data.sandbox import Sandbox
 
         # Model-written code runs only here: no network, volumes or secrets.
         sandbox = Sandbox(app, min(TIMEOUT_SECONDS, deadline - time.time()), cpu=8)

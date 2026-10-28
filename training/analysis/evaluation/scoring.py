@@ -137,7 +137,7 @@ def code_answers(model, problems, sandbox, max_new_tokens):
     The prompt is the code SFT format (`training_data.code_sft.code_prompt`) and the
     completion, up to EOS, is the program; `preamble` (the benchmark's imports and
     helpers) goes before it. A program passes if every test passes in `sandbox`
-    (`training_data.code_execution`); a completion without EOS fails.
+    (`training_data.sandbox`); a completion without EOS fails.
     """
     from training_data.code_sft import code_prompt
 

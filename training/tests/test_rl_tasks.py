@@ -1,7 +1,7 @@
 import unittest
 
 from training_data import rl_tasks
-from training_data.code_execution import run_local
+from training_data.sandbox import run_local
 
 
 class LocalSandbox:

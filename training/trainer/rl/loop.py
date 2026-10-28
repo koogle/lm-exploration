@@ -71,7 +71,8 @@ def source_files():
     """{name: path} of the code a run depends on, hashed and copied into the run."""
     import model_10m.model as shared_module
     import model_100m.model as model_module
-    import training_data.code_execution as execution_module
+    import training_data.sandbox.execution as execution_module
+    import training_data.sandbox.runner as runner_module
 
     package = Path(__file__).parent
     return {
@@ -81,7 +82,8 @@ def source_files():
         "rl_tasks": rl_tasks.__file__,
         "math_sft": sys.modules["training_data.math_sft"].__file__,
         "code_sft": sys.modules["training_data.code_sft"].__file__,
-        "code_execution": execution_module.__file__,
+        "sandbox_execution": execution_module.__file__,
+        "sandbox_runner": runner_module.__file__,
         **ReplayHook.SOURCES,
         "model": model_module.__file__,
         "shared_model": shared_module.__file__,
