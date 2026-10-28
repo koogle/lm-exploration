@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from .autoresearch_specs import VARIANTS
+from .autoresearch_specs import PROXY, TARGET, VARIANTS
 
 
 def paired(candidate, baseline):
@@ -78,6 +78,21 @@ def analyze(folder):
             arm[stage] = {"pairs": pairs, "verdict": verdict(pairs, complete)}
         if qualification and "benchmark" in qualification:
             arm["layer_slowdown"] = qualification["benchmark"]["slowdown"]
+        if qualification and "counts" in qualification:
+            arm["costs"] = qualification["counts"]
+            for scale, config in (("proxy", PROXY), ("target", TARGET)):
+                counts = arm["costs"][scale]
+                counts["analytic_bf16_kv_bytes_at_128k"] = (
+                    counts["full_layers"]
+                    * config["n_kv_head"]
+                    * config["head_dim"]
+                    * 2
+                    * 2
+                    * 131072
+                )
+            arm["cost_note"] = (
+                "KV bytes are analytic batch-one storage, not a measured decoding implementation."
+            )
         result["arms"].append(arm)
     (folder / "analysis.json").write_text(json.dumps(result, indent=2))
     return result
