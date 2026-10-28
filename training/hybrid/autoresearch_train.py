@@ -9,7 +9,7 @@ from pathlib import Path
 import torch
 
 from .autoresearch_model import build, state_bytes
-from .autoresearch_specs import PROXY, FINAL_STEPS, SCREEN_STEPS, TOKENS_PER_STEP
+from .autoresearch_specs import FINAL_STEPS, PROXY, SCREEN_STEPS, TOKENS_PER_STEP
 from .prepared_data import PreparedMixture, heldout_index
 
 

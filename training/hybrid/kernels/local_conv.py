@@ -23,7 +23,7 @@ def _forward(
     t = i // C % T
     pos = tl.load(P + i // C, i < N, other=0)
     z = tl.full((B,), 0, tl.float32)
-    for lag in tr.static_range(K):
+    for lag in tl.static_range(K):
         x = tl.load(X + i - lag * C, (i < N) & (t >= lag) & (pos >= lag), other=0).to(tl.float32)
         w = tl.load(W + c * K + K - 1 - lag)
         z = z + x * w
@@ -55,7 +55,7 @@ def _dx(
     i = tl.program_id(0) * B + tl.arange(0, B)
     c, t = i % C, i // C % T
     acc = tl.full((B,), 0, tl.float32)
-    for lag in tr.static_range(K):
+    for lag in tl.static_range(K):
         valid = (i < N) & (t + lag < T)
         pos = tl.load(P + i // C + lag, valid, other=0)
         d = tl.load(DZ + i + lag * C, valid & (pos >= lag), other=0)

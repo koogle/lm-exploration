@@ -12,6 +12,7 @@ from pathlib import Path
 import modal
 from huggingface_hub import HfApi
 
+from hybrid.autoresearch_analysis import analyze
 from hybrid.autoresearch_specs import VARIANTS
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -49,6 +50,7 @@ while True:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(raw)
     (folder / "workers.json").write_text(json.dumps(workers))
+    analyze(folder)
     print(
         HfApi().upload_folder(
             repo_id="jfrick/lm-exploration-results",
