@@ -46,5 +46,19 @@ supervisor enforces ten hours from launch including queue time. Metrics and
 checkpoints persist on the training volume; the collector archives outputs to
 the private `jfrick/lm-exploration-results` dataset.
 
-Quality results are pending. A zero-initialized branch and additional memory
-capacity do not guarantee better loss or throughput.
+## Active run
+
+Run `kda-value-timescales-1b-1793182716` is on
+[Modal](https://modal.com/apps/radiantai/main/ap-0WrZP4CIpXYgDu26tlNO0V).
+GPU qualification and full data preflight passed. Across the four shape/dtype
+cases, the largest relative L2 discrepancy was 0.0000332 (BF16 input gradient).
+The initial KDA-layer output exactly matched the local-only control. Causality,
+document reset, and nonzero mixture gradients passed. Parameter count is
+98,279,736. Artifacts are under `training/results/kda-value-timescales-1b-1793182716`
+in the private HF dataset.
+
+Quality results are pending. At approximately 856–860M tokens the local-only
+RoPE/value-convolution control was worse than original KDA at matching steps by
+0.0255 nats (seed 17) and 0.0193 (seed 29). These are interim results; the new
+timescale arm tests whether additional value memory helps that variant, and does
+not presume that the local-only change improves the original baseline.
