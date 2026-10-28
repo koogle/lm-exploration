@@ -1,8 +1,9 @@
 """Run untrusted Python programs and report which finished cleanly. Standard library only.
 
-This file is copied into the code sandbox (`training_data.code_execution`) and run there
-as `python code_runner.py`: it reads `{"programs": [{"source", "nonce"}], "timeout"}`
-(and optionally `"python"`, the interpreter for programs; default this one) as JSON on stdin and writes one result per program as JSON on stdout. Each program runs as
+This file is copied into the code sandbox (`execution.py`) and run there as
+`python runner.py`: it reads `{"programs": [{"source", "nonce"}], "timeout"}` (and
+optionally `"python"`, the interpreter for programs; default this one) as JSON on stdin
+and writes one result per program as JSON on stdout. Each program runs as
 `python -I -` (source on stdin, so it has no `__file__`) in its own empty directory with
 CPU, memory and file-size limits, in its own process group, which is killed when it ends.
 When the runner is root (as in the sandbox), each concurrently running program gets its
