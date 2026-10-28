@@ -5,14 +5,8 @@ linear-attention layer of the hybrid model. One head is shrunk to width 4 with
 one-hot keys, so every row of the state is one memory slot. Three tokens write
 into it: token 1 and token 3 share a key with different values. α and β are set
 directly through the raw gate inputs (`A_log = 0`, `dt_bias = 0`).
-[`kda/figures.py`](kda/figures.py) computes the states with the loop body of
-`kda_reference`, checks that `kda_reference` itself returns the same reads, and
-takes the line numbers and code shown in the figure from `kda.py`:
-
-```sh
-cd training
-uv run --with matplotlib python references/kda/figures.py references/kda
-```
+The figure shows the states that the loop body of `kda_reference` computes for
+these tokens, next to the lines of `kda.py` that produce them.
 
 ![KDA recurrence mapped to kda.py](kda/kda_recurrence.png)
 
