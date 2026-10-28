@@ -25,18 +25,7 @@ tests locally; the rest read files or globals their example code created.
 
 ## Running model-written code
 
-[`../data/code_execution.py`](../data/code_execution.py) runs code only in a Modal
-Sandbox with `block_network=True`, no volumes or secrets, and a timeout that ends at the
-caller's launch deadline. [`../data/code_runner.py`](../data/code_runner.py) runs each
-program as `python -I -` in a fresh directory with 5 s of CPU, 1 GB of memory and a
-16 MB file-size limit, in its own process group that is killed when it ends. Each
-concurrently running program has its own unprivileged user ID and a private directory, so
-it cannot change another program's files or the captured output; a program the runner
-cannot start fails on its own instead of stopping the batch. (A first full teacher run
-stopped when one generated program deleted the other programs' directories in `/tmp`.) The program imports the solution, runs the tests, calls every
-`test*` function the tests define and prints a random per-program nonce last; it passes
-only with exit code 0 and the nonce as its last line, so a solution that exits early or
-skips the tests fails.
+Code runs only in the sandbox described in [`../data/sandbox/`](../data/sandbox/README.md).
 
 ## Teacher solutions
 

@@ -65,7 +65,7 @@ def launch_record(run):
     volumes={"/runs": run_volume, "/data": data_volume},
 )
 def train(recipe, deadline):
-    from training_data.code_execution import Sandbox
+    from training_data.sandbox import Sandbox
 
     from trainer.rl import Settings
     from trainer.rl.loop import train as run

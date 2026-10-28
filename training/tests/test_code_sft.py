@@ -4,7 +4,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from training_data.code_execution import run_local
 from training_data.code_sft import (
     CODE,
     assert_tests,
@@ -14,6 +13,7 @@ from training_data.code_sft import (
     opencodeinstruct_row,
 )
 from training_data.mixture_sft import MIXTURE, combine
+from training_data.sandbox import run_local
 from training_data.subword import LOSS_IGNORE_INDEX, load_frozen
 
 OCI = {

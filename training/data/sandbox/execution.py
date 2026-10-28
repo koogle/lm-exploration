@@ -2,9 +2,9 @@
 
 `program` joins a solution and its tests into one script: the solution becomes the
 module `solution` and its names are visible to the tests, the tests run, every `test*` function they define (not ones imported
-from the solution) is called, and the script prints a nonce last. `code_runner.py` runs the scripts with resource limits
-and passes a script only if it exits cleanly and prints its nonce, so a solution that
-exits early, raises or skips the tests fails.
+from the solution) is called, and the script prints a nonce last. `runner.py` runs the
+scripts with resource limits and passes a script only if it exits cleanly and prints its
+nonce, so a solution that exits early, raises or skips the tests fails.
 
 `Sandbox` runs batches in one network-blocked sandbox with no volumes or secrets, whose
 lifetime is capped by its `timeout` (at most the caller's remaining launch budget).
@@ -19,8 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-RUNNER = Path(__file__).with_name("code_runner.py")
-SANDBOX_RUNNER = "/runner/code_runner.py"
+RUNNER = Path(__file__).with_name("runner.py")
+SANDBOX_RUNNER = "/runner/runner.py"
 # Seconds each program may run.
 PROGRAM_SECONDS = 5
 
@@ -52,7 +52,7 @@ def _request(pairs, seconds, python=None):
 
 
 def run_local(pairs, seconds=PROGRAM_SECONDS):
-    """Results for (solution, tests) pairs, run by `code_runner.py` in a subprocess. As
+    """Results for (solution, tests) pairs, run by `runner.py` in a subprocess. As
     root the runner gives programs unprivileged user IDs, which may not reach this
     environment's interpreter, so programs then run with the system `/usr/bin/python3`."""
     python = "/usr/bin/python3" if os.geteuid() == 0 else None
