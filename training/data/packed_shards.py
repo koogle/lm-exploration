@@ -1,4 +1,4 @@
-"""Token shards for the hybrid family: preparation, contamination screen, loader.
+"""Packed uint32 token shards: preparation, contamination screen, loader.
 
 Each upstream parquet file of a recipe source becomes one prepared shard:
 `<root>/<source>/<index>.bin` (uint32 GLM token ids, every document followed by
@@ -22,8 +22,10 @@ import time
 from pathlib import Path
 
 import numpy as np
-from training_data.hub_files import download as hub_download
-from training_data.licenses import PERMISSIVE_LICENSES
+
+from .hub_files import download as hub_download
+from .licenses import PERMISSIVE_LICENSES
+from .mixture import deficit_source
 
 HASH_BASE = np.uint64(0x9E3779B97F4A7C15)
 
@@ -241,8 +243,10 @@ class PreparedMixture:
         state["tokens"] += self.context
 
     def next_window(self):
-        weights = self.recipe["sources"]
-        name = min(self.names, key=lambda n: (self.state[n]["tokens"] / weights[n]["weight"], n))
+        name = deficit_source(
+            {n: self.state[n]["tokens"] for n in self.names},
+            {n: self.recipe["sources"][n]["weight"] for n in self.names},
+        )
         window = self._take(name, self.context + 1)
         self._advance(name, self.context)
         return name, window
@@ -271,16 +275,8 @@ class PreparedMixture:
 
 
 def heldout_windows(recipe, root, name, context, max_documents):
-    """Held-out windows of one source or chat subset: (inputs, labels, total UTF-8 bytes).
-
-    Pretraining sources concatenate whole held-out documents into one stream (labels
-    -100 only past its end). Chat recipes pack whole conversations and train only the
-    assistant tokens (`sft_data.chat_heldout_windows`; None for an empty subset).
-    """
-    if recipe.get("format") == "chat-sft":
-        from .sft_data import chat_heldout_windows
-
-        return chat_heldout_windows(recipe, root, name, context, max_documents)
+    """One source's whole held-out documents in one stream of windows (labels -100 only
+    past its end): (inputs, labels, total UTF-8 bytes)."""
     source = recipe["sources"][name]
     bin_path, docs_path, _ = shard_paths(root, name, heldout_index(source))
     lengths = np.load(docs_path)[:max_documents]

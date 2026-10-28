@@ -212,11 +212,12 @@ The last shard of each source is held out for evaluation. Preparation drops any
 document sharing a 13-token n-gram with the test sets of GSM8K, MATH, HumanEval,
 MBPP, MMLU, ARC and HellaSwag (validation), all pinned by revision.
 
-[`data.py`](data.py) turns each upstream parquet file into a shard of uint32 GLM
+[`data/packed_shards.py`](../data/packed_shards.py) turns each upstream parquet file into a shard of uint32 GLM
 ids (documents shuffled within the shard, each ending in EOS) plus per-document
 token and byte counts. `PreparedMixture` reads each source's shards in a seeded
 order and packs 4,097-token windows (consecutive windows share one token), each
-from the source furthest below its weight; it is resumable and waits for shards
+from the source furthest below its weight (`data.mixture.deficit_source`, the rule
+`TokenMixture` uses too); it is resumable and waits for shards
 that are still being prepared, so training can start while preparation runs.
 
 [`modal_data.py`](modal_data.py) prepares shards on Modal CPUs (8 cores, one call
@@ -425,7 +426,7 @@ From `training/`:
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
   tests.test_hybrid_sink_gate tests.test_hybrid_kda \
   tests.test_hybrid_mtp tests.test_hybrid_optim \
-  tests.test_hybrid_tokenizer tests.test_hybrid_data tests.test_hybrid_720m \
+  tests.test_hybrid_tokenizer tests.test_packed_shards tests.test_hybrid_720m \
   tests.test_hybrid_livecodebench tests.test_hybrid_pr_tasks \
   tests.test_hybrid_fused_loss tests.test_hybrid_chat tests.test_hybrid_generate -v
 ```
@@ -452,7 +453,7 @@ The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it
 `test_hybrid_720m` checks the configuration, parameter count, schedule, FLOP
 accounting and gate/sink statistics;
 `test_hybrid_fused_loss` checks the fused loss and its gradients against autograd.
-`test_hybrid_data` prepares shards from small parquet files (license filter,
+`test_packed_shards` prepares shards from small parquet files (license filter,
 empty documents, contamination drops, EOS layout, byte counts) and checks the
 mixture's weights, contiguity across shards, resume and the held-out windows;
 `test_hybrid_tokenizer` checks the pinned constants and the recipe, and the GLM

@@ -65,7 +65,8 @@ def status(run_id, **fields):
 )
 def build_screen(recipe, deadline):
     import numpy as np
-    from model_hybrid import data, tokenizer
+    from model_hybrid import tokenizer
+    from training_data import packed_shards as data
 
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -103,7 +104,8 @@ def prepare(recipe, name, index, deadline):
     import shutil
 
     import numpy as np
-    from model_hybrid import data, tokenizer
+    from model_hybrid import tokenizer
+    from training_data import packed_shards as data
 
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -122,7 +124,7 @@ def prepare(recipe, name, index, deadline):
 
 def schedule(recipe):
     """(source, index) in the order they are needed: held-out shards, then by expected use."""
-    from model_hybrid import data
+    from training_data import packed_shards as data
 
     jobs = [(-1.0, name, data.heldout_index(s)) for name, s in recipe["sources"].items()]
     for name, source in recipe["sources"].items():
@@ -235,7 +237,7 @@ def enforce_deadline(run_id, deadline):
 def main(run_id: str, recipe: str = DEFAULT_RECIPE, parallel: int = 48):
     import re
 
-    from model_hybrid.data import load_recipe
+    from training_data.packed_shards import load_recipe
 
     from workflows.deadline import new_deadline
 
@@ -261,7 +263,7 @@ def main(run_id: str, recipe: str = DEFAULT_RECIPE, parallel: int = 48):
 @app.local_entrypoint()
 def smoke(recipe: str = DEFAULT_RECIPE):
     """Build the screen and prepare each source's held-out shard (one bounded call each)."""
-    from model_hybrid.data import heldout_index, load_recipe
+    from training_data.packed_shards import heldout_index, load_recipe
 
     from workflows.deadline import new_deadline
 

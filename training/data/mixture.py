@@ -19,6 +19,14 @@ def open_mixture(manifest, *, loader, context, split="train", allow_unreviewed=F
     return mixture(manifest, context=context, split=split, allow_unreviewed=allow_unreviewed)
 
 
+def deficit_source(exposures, weights):
+    """The source furthest below its weight: lowest exposure / weight, ties by name.
+
+    Both token loaders schedule with this rule; `weights` may be fractions or percents.
+    """
+    return min(exposures, key=lambda name: (exposures[name] / weights[name], name))
+
+
 def check_capacity(mixture, target_tokens):
     """Reject a token target the snapshot cannot supply within each source's pass cap.
 

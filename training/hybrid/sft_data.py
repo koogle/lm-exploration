@@ -175,7 +175,7 @@ def _write(folder, stem, conversations):
 
 def prepare_subset(recipe, name, rows, folder, tokenizer, screen=None):
     """Convert, encode, screen and write one subset; returns its counts."""
-    from .data import contaminated
+    from training_data.packed_shards import contaminated
 
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
@@ -340,7 +340,7 @@ class ReplayMixture:
 
 def chat_heldout_windows(recipe, root, name, context, max_conversations):
     """One subset's held-out conversations packed whole into windows (see
-    `data.heldout_windows`); None when the subset has no held-out conversations.
+    `train.heldout_windows`); None when the subset has no held-out conversations.
 
     The byte count is the UTF-8 length of the trained target tokens' text.
     """

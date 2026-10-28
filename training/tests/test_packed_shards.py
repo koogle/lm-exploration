@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-from model_hybrid import data
+from training_data import packed_shards as data
 
 EOS = 99
 
