@@ -192,6 +192,7 @@ def coordinate(run_id, recipe, deadline, parallel):
             failed=failed,
         )
         time.sleep(10)
+    volume.reload()  # shard workers created the recipe folder after this call started
     capacity = {}
     for name in recipe["sources"]:
         metas = [m for m in done.values() if m["source"] == name]
