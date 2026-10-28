@@ -56,7 +56,7 @@ sandbox_image = (
         "pip install uv==0.9.5",
     )
     .env({"PATH": "/usr/local/go/bin:/root/go/bin:/usr/local/bin:/usr/bin:/bin"})
-    .add_local_file("hybrid/pr_task_runner.py", "/runner/pr_task_runner.py")
+    .add_local_file(Path(__file__).with_name("pr_task_runner.py"), "/runner/pr_task_runner.py")
 )
 teacher_image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -283,7 +283,9 @@ def verify_tasks(name, limit, workers, deadline):
     folder = Path("/data", name)
     selection = json.loads((folder / "selection.json").read_text())
     lines = (folder / "selected.jsonl").read_text().splitlines()
-    tasks = [json.loads(line) for line in lines][: limit or None]
+    tasks = [json.loads(line) for line in lines]
+    if limit:  # evenly spaced, so a small run covers every repository and language
+        tasks = tasks[:: max(1, len(tasks) // limit)][:limit]
     for path in sorted({t["mirror"] for t in tasks}):
         target = Path("/mirrors", Path(path).name)
         if not target.exists():
