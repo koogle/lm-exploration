@@ -17,7 +17,17 @@ def compose(ar, ai, br, bi, cr, ci, dr, di):
 
 @tr.jit
 def forward_kernel(
-    U, POS, LOGTAU, THETA, MIX, M, Y, T: tl.constexpr, D: tl.constexpr, BLOCK: tl.constexpr
+    U,
+    POS,
+    LOGTAU,
+    THETA,
+    MIX,
+    M,
+    Y,
+    T: tl.constexpr,
+    D: tl.constexpr,
+    BLOCK: tl.constexpr,
+    RESIDUAL: tl.constexpr,
 ):
     b = tl.program_id(0)
     p = tl.program_id(1)
@@ -40,8 +50,11 @@ def forward_kernel(
     tl.store(M + offset + 1, mi, t < T)
     wr = tl.load(MIX + s * D + 2 * p)
     wi = tl.load(MIX + s * D + 2 * p + 1)
-    yr = tl.sum(mr * wr, 1) + tl.sum(ur, 1)
-    yi = tl.sum(mi * wi, 1) + tl.sum(ui, 1)
+    yr = tl.sum(mr * wr, 1)
+    yi = tl.sum(mi * wi, 1)
+    if RESIDUAL:
+        yr += tl.sum(ur, 1)
+        yi += tl.sum(ui, 1)
     tt = tl.arange(0, BLOCK)
     tl.store(Y + (b * T + tt) * D + 2 * p, yr, tt < T)
     tl.store(Y + (b * T + tt) * D + 2 * p + 1, yi, tt < T)
@@ -62,6 +75,7 @@ def backward_kernel(
     T: tl.constexpr,
     D: tl.constexpr,
     BLOCK: tl.constexpr,
+    RESIDUAL: tl.constexpr,
 ):
     b = tl.program_id(0)
     p = tl.program_id(1)
@@ -88,12 +102,12 @@ def backward_kernel(
     # residual branch. Preserve that BF16 accumulation boundary.
     tl.store(
         DU + (b * T + tt) * D + 2 * p,
-        tl.sum((1 - rho) * rr, 1).to(U.dtype.element_ty).to(tl.float32) + tl.sum(dr, 1),
+        tl.sum((1 - rho) * rr, 1).to(U.dtype.element_ty).to(tl.float32) + tl.sum(dr, 1) * RESIDUAL,
         tt < T,
     )
     tl.store(
         DU + (b * T + tt) * D + 2 * p + 1,
-        tl.sum((1 - rho) * ri, 1).to(U.dtype.element_ty).to(tl.float32) + tl.sum(di, 1),
+        tl.sum((1 - rho) * ri, 1).to(U.dtype.element_ty).to(tl.float32) + tl.sum(di, 1) * RESIDUAL,
         tt < T,
     )
     offset = ((b * T + t) * 4 + s) * D + 2 * p
@@ -118,7 +132,7 @@ def backward_kernel(
 
 class _Rotating(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, u, positions, log_tau, theta, mix):
+    def forward(ctx, u, positions, log_tau, theta, mix, residual):
         u = u.contiguous()
         positions = positions.contiguous()
         b, t, d = u.shape
@@ -127,9 +141,21 @@ class _Rotating(torch.autograd.Function):
         memory = torch.empty((b, t, 4, d), device=u.device, dtype=torch.float32)
         y = torch.empty_like(u)
         forward_kernel[(b, d // 2)](
-            u, positions, log_tau, theta, mix, memory, y, t, d, tr.next_power_of_2(t), num_warps=8
+            u,
+            positions,
+            log_tau,
+            theta,
+            mix,
+            memory,
+            y,
+            t,
+            d,
+            tr.next_power_of_2(t),
+            residual,
+            num_warps=8,
         )
         ctx.save_for_backward(u, positions, log_tau, theta, mix, memory)
+        ctx.residual = residual
         return y
 
     @staticmethod
@@ -153,12 +179,13 @@ class _Rotating(torch.autograd.Function):
             t,
             d,
             tr.next_power_of_2(t),
+            ctx.residual,
             num_warps=8,
         )
         grads = gp.sum((0, 1))
         mixgrad = gw.sum(0).permute(1, 0, 2).reshape(4, d)
-        return du, None, grads[:, 0], grads[:, 1], mixgrad
+        return du, None, grads[:, 0], grads[:, 1], mixgrad, None
 
 
-def rotating_memory(u, positions, log_tau, theta, mix):
-    return _Rotating.apply(u, positions, log_tau, theta, mix)
+def rotating_memory(u, positions, log_tau, theta, mix, residual=True):
+    return _Rotating.apply(u, positions, log_tau, theta, mix, residual)

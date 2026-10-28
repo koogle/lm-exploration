@@ -43,8 +43,12 @@ class StudyKDA(KimiDeltaAttention):
         self.mode = mode
         if mode not in ("baseline", "baseline_bf16", "conv_rope"):
             for name in ("q_conv", "k_conv", "v_conv"):
-                if mode != "rope_v_conv" or name != "v_conv":
+                if mode not in ("rope_v_conv", "rope_v_timescales") or name != "v_conv":
                     delattr(self, name)
+        if mode == "rope_v_timescales":
+            from .value_timescales import ValueTimescales
+
+            self.value_timescales = ValueTimescales(width)
         if mode in ("rotating", "rotating_triton"):
             self.memories = nn.ModuleList(RotatingMemory(width) for _ in range(3))
             for memory in self.memories:
@@ -60,18 +64,20 @@ class StudyKDA(KimiDeltaAttention):
             ]
             if self.mode == "baseline_bf16":
                 values = [value.to(u.dtype) for value, u in zip(values, raw)]
-        elif self.mode == "rope_v_conv":
+        elif self.mode in ("rope_v_conv", "rope_v_timescales"):
             values = [
                 F.silu(raw[0]),
                 F.silu(raw[1]),
-                short_convolution(raw[2], self.v_conv, mask.positions).to(raw[2].dtype),
+                self.value_timescales(raw[2], self.v_conv, mask.positions)
+                if self.mode == "rope_v_timescales"
+                else short_convolution(raw[2], self.v_conv, mask.positions).to(raw[2].dtype),
             ]
         elif self.mode in ("rotating", "rotating_triton"):
             values = [F.silu(m(u, mask.positions)) for m, u in zip(self.memories, raw)]
         else:
             values = [F.silu(u) for u in raw]
         q, k, v = [u.view(shape) for u in values]
-        if self.mode in ("rope_triton", "rope_v_conv"):
+        if self.mode in ("rope_triton", "rope_v_conv", "rope_v_timescales"):
             from .kernels.rope import rope_pair
 
             q, k = rope_pair(q, k, *rope)

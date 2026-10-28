@@ -201,7 +201,12 @@ def train_impl(
     from model_hybrid.model import HybridConfig, HybridLM
     from model_hybrid.study_mixers import configure
 
-    assert variant in VARIANTS or variant in {"baseline_bf16", "rope_triton", "rope_v_conv"}
+    assert variant in VARIANTS or variant in {
+        "baseline_bf16",
+        "rope_triton",
+        "rope_v_conv",
+        "rope_v_timescales",
+    }
     assert time.time() < deadline - 300
     torch.set_num_threads(4)
     torch.backends.cuda.matmul.allow_tf32 = True

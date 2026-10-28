@@ -82,7 +82,7 @@ def preflight(run, deadline):
 def train_branch(run, variant, seed, deadline):
     from model_hybrid.long_study import train_impl
 
-    assert variant in VARIANTS or variant == "rope_v_conv"
+    assert variant in VARIANTS or variant in {"rope_v_conv", "rope_v_timescales"}
     return train_impl(
         run,
         variant,
