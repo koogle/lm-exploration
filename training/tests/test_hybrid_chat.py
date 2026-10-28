@@ -186,6 +186,18 @@ class PackingTests(unittest.TestCase):
 
 @unittest.skipUnless(template_available(), "GLM tokenizer or chat template not downloadable")
 class RenderingTests(unittest.TestCase):
+    def test_thinking_render_keeps_every_turn_reasoning(self):
+        messages = [
+            {"role": "user", "content": "Q?"},
+            {"role": "assistant", "content": "<think> step one </think>\nAnswer 42."},
+            {"role": "user", "content": "again"},
+            {"role": "assistant", "content": "<think>x</think> final"},
+        ]
+        text = chat.render(messages, thinking=True)
+        self.assertIn("<|assistant|><think>step one</think>Answer 42.", text)
+        self.assertIn("<|assistant|><think>x</think>final", text)
+        self.assertNotIn("<think>", chat.render(messages).split("again")[0])
+
     def test_loss_mask_covers_assistant_output_and_turn_ends(self):
         tokenizer = glm.load()
         conversation = sft_data.convert(HERMES_ROW)

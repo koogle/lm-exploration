@@ -136,6 +136,31 @@ class HybridDataTests(unittest.TestCase):
         tokens = np.fromfile(data.shard_paths(self.root / "out", "web", first)[0], np.uint32)
         np.testing.assert_array_equal(window, tokens[: len(window)])
 
+    def test_rendered_message_documents(self):
+        messages = [
+            [{"role": "user", "content": f"q{i}"}, {"role": "assistant", "content": "a"}]
+            for i in range(3)
+        ]
+        pq.write_table(pa.table({"messages": messages}), self.root / "chat-1.parquet")
+        source = {
+            "weight": 1.0,
+            "repo": "s",
+            "revision": "r",
+            "files": ["x", "chat-1.parquet"],
+            "shards": 2,
+            "column": "messages",
+            "render": "test",
+            "max_passes": 1,
+        }
+        self.recipe["sources"] = {"chat": source}
+        args = (self.recipe, "chat", 1, self.root / "out", self.tokenizer, np.empty(0, np.uint64))
+        with self.assertRaisesRegex(ValueError, "renderer"):
+            data.prepare_shard(*args, EOS, self.download)
+        render = lambda m: "".join(f"<{t['role']}>{t['content']}" for t in m)
+        meta = data.prepare_shard(*args, EOS, self.download, render=render)
+        self.assertEqual(meta["documents"], 3)
+        self.assertEqual(meta["bytes"], 3 * len("<user>q0<assistant>a"))
+
     def test_ngram_hashes_and_screen(self):
         ids = list(range(20))
         hashes = data.ngram_hashes(ids, 13)

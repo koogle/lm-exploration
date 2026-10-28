@@ -1,6 +1,6 @@
 {
   "name": "hybrid-mid32k-v1",
-  "description": "32K mid-training for the next version: long documents (repository-level code and PG19 books, prepared by hybrid-long32k-v1), a code-heavy slice of unseen permissive GitHub files, and 30% replay of hybrid-40b-v1.",
+  "description": "32K mid-training for the next version: long documents (repository-level code and PG19 books, prepared by hybrid-long32k-v1), a code-heavy slice of unseen permissive GitHub files, math/code/science thinking traces in GLM's chat format, and 30% replay of hybrid-40b-v1.",
   "target_tokens": 3000000000,
   "context": 32768,
   "seed": 20261029,
@@ -12,7 +12,7 @@
   "screen": "hybrid-40b-v1/screen.npy",
   "sources": {
     "repos": {
-      "weight": 0.45,
+      "weight": 0.35,
       "repo": "codeparrot/github-code-clean",
       "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
       "pattern": "data/train-{index:05d}-of-00880.parquet",
@@ -28,7 +28,7 @@
       "prepared_in": "hybrid-long32k-v1"
     },
     "books": {
-      "weight": 0.15,
+      "weight": 0.1,
       "repo": "emozilla/pg19",
       "revision": "c021754c8e01c5b1cc83a1f549c1f97fbbb756b8",
       "files": [
@@ -47,7 +47,7 @@
       "prepared_in": "hybrid-long32k-v1"
     },
     "github_code": {
-      "weight": 0.4,
+      "weight": 0.3,
       "repo": "codeparrot/github-code-clean",
       "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
       "pattern": "data/train-{index:05d}-of-00880.parquet",
@@ -57,6 +57,26 @@
       "permissive_licenses_only": true,
       "max_passes": 1,
       "estimated_tokens_per_shard": 139000000
+    },
+    "reasoning": {
+      "weight": 0.25,
+      "repo": "HuggingFaceTB/smoltalk2",
+      "revision": "fc6cc2103c066455aade5d7fbb346039ae36ca5e",
+      "files": [
+        "SFT/OpenThoughts3_1.2M_think-00000-of-00113.parquet",
+        "SFT/OpenThoughts3_1.2M_think-00001-of-00113.parquet",
+        "SFT/OpenThoughts3_1.2M_think-00002-of-00113.parquet",
+        "SFT/OpenThoughts3_1.2M_think-00003-of-00113.parquet",
+        "SFT/OpenThoughts3_1.2M_think-00004-of-00113.parquet",
+        "SFT/OpenThoughts3_1.2M_think-00005-of-00113.parquet",
+        "SFT/OpenThoughts3_1.2M_think-00006-of-00113.parquet",
+        "SFT/OpenThoughts3_1.2M_think-00007-of-00113.parquet"
+      ],
+      "shards": 8,
+      "column": "messages",
+      "render": "glm_chat_thinking",
+      "max_passes": 1,
+      "estimated_tokens_per_shard": 100000000
     }
   },
   "contamination": {

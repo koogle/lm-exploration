@@ -66,15 +66,21 @@ def normalize(messages):
     return out
 
 
-def render(messages, tools=None, add_generation_prompt=False):
-    """The conversation as GLM chat text."""
+def render(messages, tools=None, add_generation_prompt=False, thinking=False):
+    """The conversation as GLM chat text; with `thinking`, every assistant turn keeps
+    its reasoning (`<think>…</think>` in its content or `reasoning_content`)."""
     text = template().render(
         messages=normalize(messages),
         tools=tools or None,
         add_generation_prompt=add_generation_prompt,
-        enable_thinking=False,
+        enable_thinking=thinking,
+        clear_thinking=not thinking,
     )
     return text
+
+
+# Renderers a prepared source can name (`"render"`) to turn message rows into text.
+RENDERERS = {"glm_chat_thinking": lambda messages: render(messages, thinking=True)}
 
 
 def encode(tokenizer, messages, tools=None):

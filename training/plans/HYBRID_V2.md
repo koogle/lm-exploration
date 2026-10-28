@@ -70,6 +70,14 @@ Each stage has a gate; a failed gate stops the plan for a decision.
 
 One run addresses the three v1 gaps together: context (long documents at 32K), code
 (a code-heavy share of unseen permissive GitHub files) and reasoning (thinking traces,
-added by the reasoning PR). Sources prepared by `hybrid-long32k-v1` are reused through
-`prepared_in`. 3B tokens from the 40B export with 30% replay of `hybrid-40b-v1`;
-config `hybrid/configs/hybrid-720m-mid32k.json`.
+OpenThoughts3 math, code and science traces from smoltalk2, rendered in GLM's chat
+format with every turn's `<think>` kept). Sources prepared by `hybrid-long32k-v1` are
+reused through `prepared_in`. 3B tokens from the 40B export with 30% replay of
+`hybrid-40b-v1`; config `hybrid/configs/hybrid-720m-mid32k.json`.
+
+| Non-replay source | Share |
+| --- | ---: |
+| Repository-level code (≥ 4,096 tokens) | 35% |
+| PG19 books | 10% |
+| Unseen permissive GitHub files | 30% |
+| Thinking traces (OpenThoughts3) | 25% |

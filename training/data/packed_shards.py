@@ -128,7 +128,7 @@ def shard_paths(root, name, index):
     )
 
 
-def _text_batches(source, parquet, dropped):
+def _text_batches(source, parquet, dropped, render=None):
     """Document texts of one upstream file, one list per row group.
 
     With `group_by` (e.g. `repo_name`), the file's rows are grouped first and each
@@ -147,6 +147,8 @@ def _text_batches(source, parquet, dropped):
             allowed = [row["license"].lower() in PERMISSIVE_LICENSES for row in rows]
             dropped["license"] += allowed.count(False)
             rows = [row for row, keep in zip(rows, allowed, strict=True) if keep]
+        if render:
+            rows = [{**row, source["column"]: render(row[source["column"]])} for row in rows]
         empty = [not row[source["column"]] or not row[source["column"]].strip() for row in rows]
         dropped["empty"] += sum(empty)
         rows = [row for row, e in zip(rows, empty, strict=True) if not e]
@@ -167,8 +169,14 @@ def _text_batches(source, parquet, dropped):
             yield texts[start : start + 256]
 
 
-def prepare_shard(recipe, name, index, root, tokenizer, screen, eos_id, download=hub_download):
-    """Tokenize one upstream file into a prepared shard; returns its metadata."""
+def prepare_shard(
+    recipe, name, index, root, tokenizer, screen, eos_id, download=hub_download, render=None
+):
+    """Tokenize one upstream file into a prepared shard; returns its metadata.
+
+    `render` turns a row's value into text for sources that name a renderer (`render`,
+    e.g. chat messages rendered in the model's chat format).
+    """
     import pyarrow.parquet as pq
 
     source = recipe["sources"][name]
@@ -181,7 +189,9 @@ def prepare_shard(recipe, name, index, root, tokenizer, screen, eos_id, download
     min_tokens = source.get("min_tokens", 1)
     documents = []
     dropped = {"license": 0, "empty": 0, "short": 0, "contaminated": 0}
-    for texts in _text_batches(source, pq.ParquetFile(path), dropped):
+    if source.get("render") and render is None:
+        raise ValueError(f"{name} needs its {source['render']} renderer")
+    for texts in _text_batches(source, pq.ParquetFile(path), dropped, render):
         for text, encoding in zip(
             texts, tokenizer.encode_batch(texts, add_special_tokens=False), strict=True
         ):
