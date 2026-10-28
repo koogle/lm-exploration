@@ -17,6 +17,8 @@ from typing import ClassVar
 from training_data import replay as replay_data
 from training_data.subword import LOSS_IGNORE_INDEX
 
+from trainer.batches import collate
+
 
 @dataclass(frozen=True)
 class ReplaySettings:
@@ -50,18 +52,6 @@ class ReplaySettings:
                 "Replay needs a snapshot, positive source weights and batch size, "
                 "and a weight between 0 and 1"
             )
-
-
-def collate(rows, device):
-    import torch
-
-    width = max(len(row["x"]) for row in rows)
-    x = torch.zeros((len(rows), width), dtype=torch.long, device=device)
-    y = torch.full_like(x, LOSS_IGNORE_INDEX)
-    for i, row in enumerate(rows):
-        x[i, : len(row["x"])] = torch.tensor(row["x"], device=device)
-        y[i, : len(row["y"])] = torch.tensor(row["y"], device=device)
-    return x, y
 
 
 def summed_loss(model, rows):
