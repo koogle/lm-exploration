@@ -31,6 +31,7 @@ image = (
         "pytest==8.4.2",
     )
     .env({"PYTHONPATH": "/project", "HF_HUB_DISABLE_PROGRESS_BARS": "1"})
+    .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
     .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__", "kernels"])
 )
 DEFAULT_RECIPE = "hybrid/recipes/rl-v1.json"

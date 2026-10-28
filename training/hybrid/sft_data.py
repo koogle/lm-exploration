@@ -338,25 +338,22 @@ class ReplayMixture:
         self.pretraining.load_state_dict(state["replay"])
 
 
-def heldout_windows(recipe, root, max_conversations):
-    """Held-out conversations packed into windows per subset: {subset: (inputs, labels, bytes)}.
+def chat_heldout_windows(recipe, root, name, context, max_conversations):
+    """One subset's held-out conversations packed whole into windows (see
+    `data.heldout_windows`); None when the subset has no held-out conversations.
 
-    `bytes` is the UTF-8 length of the target tokens' text, for bits per byte.
+    The byte count is the UTF-8 length of the trained target tokens' text.
     """
-    tokenizer = glm.load()
-    out = {}
-    for name in subset_names(recipe):
-        tokens, mask, docs = _load(root, f"{name}.heldout")
-        conversations = [
-            (np.asarray(tokens[s : s + n]), np.asarray(mask[s : s + n]))
-            for s, n in docs[:max_conversations]
-        ]
-        if not conversations:
-            continue
-        windows = list(pack(conversations, recipe["context"]))
-        inputs = np.stack([x for x, _ in windows])
-        labels = np.stack([y for _, y in windows])
-        targets = labels[labels != IGNORE_INDEX]
-        total_bytes = len(tokenizer.decode(targets.tolist(), skip_special_tokens=False).encode())
-        out[name] = (inputs, labels, total_bytes)
-    return out
+    tokens, mask, docs = _load(root, f"{name}.heldout")
+    conversations = [
+        (np.asarray(tokens[s : s + n]), np.asarray(mask[s : s + n]))
+        for s, n in docs[:max_conversations]
+    ]
+    if not conversations:
+        return None
+    windows = list(pack(conversations, context))
+    inputs = np.stack([x for x, _ in windows])
+    labels = np.stack([y for _, y in windows])
+    targets = labels[labels != IGNORE_INDEX]
+    total_bytes = len(glm.load().decode(targets.tolist(), skip_special_tokens=False).encode())
+    return inputs, labels, total_bytes

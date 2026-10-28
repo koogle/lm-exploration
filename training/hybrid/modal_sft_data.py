@@ -29,6 +29,7 @@ image = (
         "numpy", "pyarrow==26.0.0", "tokenizers==0.22.2", "huggingface-hub==1.33.0", "jinja2==3.1.6"
     )
     .env({"PYTHONPATH": "/project", "HF_HUB_DISABLE_PROGRESS_BARS": "1"})
+    .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
     .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__", "kernels"])
 )
 ROOT = Path("/data")

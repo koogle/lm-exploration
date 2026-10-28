@@ -586,7 +586,12 @@ def main():
 
         def heldout_source(recipe, mixture, context):
             """Chat held-out per file, plus the pretraining held-out sources under replay."""
-            out = sft_data.heldout_windows(recipe, root, config.eval_documents["chat"])
+            count = config.eval_documents["chat"]
+            out = {
+                name: windows
+                for name in sft_data.subset_names(recipe)
+                if (windows := heldout_windows(recipe, root, name, context, count)) is not None
+            }
             for name, count in config.eval_documents.items():
                 if replay and name in replay_recipe["sources"]:
                     out[name] = heldout_windows(replay_recipe, replay_root, name, context, count)
