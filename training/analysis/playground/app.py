@@ -5,7 +5,8 @@ benchmark scores, the display layout, and the private model
 repository and commit holding the weights (downloaded with the Space's `HF_TOKEN` secret).
 Weights load into `model.py`, the decoder code the checkpoints were trained with (copied by
 `modal_export.py`, which also checked that it reproduces each checkpoint's logits).
-Generation runs token by token with a per-layer key/value cache, one selected model after
+Generation uses the repository's shared cached sampler (`rollout.py`, copied from
+`trainer/rollout.py` by `modal_export.py`), one selected model after
 another. A prompt format wraps the text the way the SFT and RL models were trained.
 """
 
@@ -15,9 +16,9 @@ from pathlib import Path
 
 import gradio as gr
 import torch
-from generation import complete
 from huggingface_hub import hf_hub_download
 from model import GPT, ModelConfig
+from rollout import sample
 from safetensors.torch import load_file
 from tokenizers import Tokenizer
 
@@ -80,20 +81,21 @@ def generate(
         if label not in selected:
             continue
         ids = [BOS, *tokenizer.encode(prompt, add_special_tokens=False).ids]
-        generated = complete(
+        # Keep the end of a prompt too long to leave room for the new tokens.
+        ids = ids[-(BUNDLE["config"]["block_size"] - int(tokens)) :]
+        samples = sample(
             model,
-            ids,
+            [ids],
             int(tokens),
-            temperature,
-            int(top_k),
-            top_p,
-            penalty,
-            int(seed),
             EOS,
-            BUNDLE["config"]["block_size"],
+            temperature,
+            torch.Generator().manual_seed(int(seed)),
+            top_k=int(top_k),
+            top_p=top_p,
+            penalty=penalty,
             stop=(lambda g: "\n\n" in tokenizer.decode(g)) if blank else None,
         )
-        text = tokenizer.decode(generated)
+        text = tokenizer.decode(samples.completions[0])
         outputs[index] = text.split("\n\n")[0] if blank else text
         yield outputs
 

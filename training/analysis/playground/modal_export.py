@@ -23,7 +23,9 @@ from pathlib import Path
 import modal
 
 LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
-APP_FILES = ["app.py", "generation.py", "intro.md", "requirements.txt"]
+APP_FILES = ["app.py", "intro.md", "requirements.txt"]
+# The shared cached sampler, served next to the app.
+SAMPLER = Path(__file__).resolve().parents[2] / "trainer" / "rollout.py"
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -166,6 +168,7 @@ def main(config: str, name: str):
     here = Path(__file__).parent
     for file in APP_FILES:
         shutil.copyfile(here / file, space / file)
+    shutil.copyfile(SAMPLER, space / "rollout.py")
     shutil.copyfile(here / "space-card.md", space / "README.md")
     for file in ("model.py", "tokenizer.json"):
         shutil.copyfile(local / "model" / file, space / file)
