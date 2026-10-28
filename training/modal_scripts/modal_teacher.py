@@ -106,7 +106,7 @@ def generate(rows, samples, deadline):
 def distill(source, data_id, shards, samples, limit, deadline):
     import hashlib
 
-    from training_data.code_execution import Sandbox
+    from training_data.sandbox import Sandbox
     from training_data.subword import digest
     from training_data.teacher import TEACHER, choose, extract
 

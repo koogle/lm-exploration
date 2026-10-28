@@ -8,7 +8,7 @@ task, so an SFT model answers in the trained format:
 - math: `Question: ...\\nAnswer:`; the completion is correct if Math-Verify finds its
   final answer equal to `answer`.
 - code: `code_prompt`; the completion is the program, correct if every test passes in
-  the code sandbox (`training_data.code_execution`).
+  the code sandbox (`training_data.sandbox`).
 
 A completion that does not end in EOS within the token limit scores 0 regardless.
 """

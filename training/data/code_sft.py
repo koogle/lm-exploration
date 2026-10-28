@@ -7,7 +7,7 @@ OpenCodeInstruct (CC-BY-4.0) is teacher-generated: Qwen2.5-Coder-32B-Instruct
 (Apache-2.0) wrote each solution and ten unit tests, and NVIDIA ran the tests; only
 solutions that pass all ten are kept, without their example-usage code. Each row also
 keeps its unit tests (`tests`, importing the solution as the module `solution`), which
-SFT ignores and RL runs (`training_data.code_execution`).
+SFT ignores and RL runs (`training_data.sandbox`).
 """
 
 import ast
