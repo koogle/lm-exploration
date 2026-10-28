@@ -15,7 +15,7 @@ than small CUDA correctness checks.
 | 2 | Document masking: document ids from EOS / `cu_seqlens`; FlexAttention with a document-causal block mask | Implemented |
 | 3 | Attention sink and sigmoid output gate | Implemented, CPU-tested |
 | 4 | KDA layers via flash-linear-attention, document state reset, `[KDA, KDA, KDA, full]` layout | Implemented, CPU-tested, H100 check passed |
-| 5 | One DeepSeek/GLM-style MTP module predicting t+2 | Planned |
+| 5 | One DeepSeek/GLM-style MTP module predicting t+2 | Implemented, CPU-tested |
 | 6 | Muon/AdamW parameter grouping | Planned |
 | 7 | GLM-4.7-Flash tokenizer and 40B recipe (70% ClimbMix, 20% code, 10% math) | Planned |
 | 8 | 720M config, throughput benchmark, ~200M-token pilot | Planned |

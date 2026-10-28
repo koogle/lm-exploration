@@ -7,6 +7,8 @@ padding after a final EOS forms its own document, and its targets are ignored.
 
 import torch
 
+IGNORE_INDEX = -100
+
 
 def document_ids(input_ids, eos_id):
     """[B, T] long ids; position t starts a new document when input t-1 is EOS."""
@@ -35,3 +37,16 @@ def cu_seqlens(documents):
     starts = boundary.flatten().nonzero().squeeze(1)
     end = torch.tensor([batch * length], device=documents.device)
     return torch.cat((starts, end)).to(torch.int32)
+
+
+def mtp_labels(inputs, labels, eos_id):
+    """Targets x_(t+2) for the MTP module at each position t, [B, T].
+
+    The target is labels[t + 1]. It is ignored when x_t or x_(t+1) is EOS (it
+    would belong to the next document) and at the last position, whose x_(t+2)
+    lies outside the window.
+    """
+    targets = torch.full_like(labels, IGNORE_INDEX)
+    within = (inputs[:, :-1] != eos_id) & (inputs[:, 1:] != eos_id)
+    targets[:, :-1] = labels[:, 1:].masked_fill(~within, IGNORE_INDEX)
+    return targets
