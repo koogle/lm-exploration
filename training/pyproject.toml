@@ -36,7 +36,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["model_10m", "model_100m", "model_hybrid", "training_data", "training_data.fetching", "trainer", "tokenizer", "modal_scripts", "distributed", "workflows", "sampling", "evaluation", "evaluation.benchmarks", "playground"]
+packages = ["model_10m", "model_100m", "model_hybrid", "training_data", "training_data.fetching", "training_data.sandbox", "trainer", "tokenizer", "modal_scripts", "distributed", "workflows", "sampling", "evaluation", "evaluation.benchmarks", "playground"]
 
 [tool.setuptools.package-dir]
 model_10m = "10m"
