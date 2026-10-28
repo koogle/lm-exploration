@@ -61,7 +61,7 @@ such as `gsm8k,svamp`. The call refuses new work 24 hours after launch. Results 
   SFT prompt format (`training_data.code_sft.code_prompt`: the problem, or HumanEval's
   docstring, and the function's signature). The completion up to EOS is the program
   (after HumanEval's imports and helpers); it passes if every EvalPlus test passes, run
-  only in a network-blocked Modal Sandbox (`training_data.code_execution`, 20 s per
+  only in a network-blocked Modal Sandbox (`training_data.sandbox`, 20 s per
   program). A completion without EOS within 512 tokens fails. SFT and RL models only.
 
 Datasets are pinned to HF commits in `configs/benchmarks.json`. Inference uses BF16 autocast with FP32
