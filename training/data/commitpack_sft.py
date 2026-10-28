@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from training_data import repair_sft
+from training_data.licenses import PERMISSIVE_LICENSES
 from training_data.subword import digest, load_frozen
 
 REPO = "bigcode/commitpackft"
@@ -22,7 +23,7 @@ LANGUAGES = {
     "java": "java",
     "shell": "bash",
 }
-LICENSES = {"mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc", "cc0-1.0", "unlicense"}
+LICENSES = PERMISSIVE_LICENSES
 REPAIR = re.compile(
     r"\b(fix(?:es|ed|ing)?|bug|correct(?:ly|ion)?|repair|prevent|avoid|handle|ensure|resolve|support|allow|check|return|use|remove|replace|add|implement)\b",
     re.IGNORECASE,

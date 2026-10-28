@@ -14,6 +14,7 @@ image = (
     .pip_install(*PACKAGES)
     .env({"PYTHONPATH": "/project", "TORCH_CUDA_ARCH_LIST": "9.0"})
     .add_local_dir("10m", "/project/model_10m", ignore=["__pycache__"])
+    .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
     .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__"])
     .add_local_dir("tests", "/project/tests", ignore=["__pycache__", "fixtures"])
 )

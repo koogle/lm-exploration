@@ -46,7 +46,7 @@ def recipe(shards=3):
                 "pattern": "code-{index}.parquet",
                 "shards": shards,
                 "column": "code",
-                "licenses": ["mit"],
+                "permissive_licenses_only": True,
                 "max_passes": 1,
             },
         },
@@ -67,7 +67,7 @@ class HybridDataTests(unittest.TestCase):
             pq.write_table(
                 pa.table({"code": code, "license": licenses}), self.root / f"code-{i}.parquet"
             )
-        self.download = lambda repo, file, revision: self.root / file
+        self.download = lambda repo, revision, file: self.root / file
         self.tokenizer = CharTokenizer()
 
     def tearDown(self):
@@ -77,7 +77,7 @@ class HybridDataTests(unittest.TestCase):
         screen = np.empty(0, np.uint64) if screen is None else screen
         return [
             data.prepare_shard(
-                self.recipe, name, i, self.root / "out", self.tokenizer, screen, self.download, EOS
+                self.recipe, name, i, self.root / "out", self.tokenizer, screen, EOS, self.download
             )
             for name in ("web", "code")
             for i in range(3)
