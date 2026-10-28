@@ -309,7 +309,7 @@ in `jfrick/lm-exploration-results`.
 Repository tasks for agentic coding, built from commits in
 `jfrick/mit-claude-codex-code-20261019` (revision `b157d0be`) by
 [`modal_pr_tasks.py`](../hybrid/modal_pr_tasks.py): the repository at the parent
-commit, an issue written by Qwen3-Coder-30B-A3B-Instruct (Apache-2.0), the commit's
+commit, an issue written by a teacher model, the commit's
 own test changes as the hidden check and the commit as the reference patch.
 
 | Stage | Kept | Notes |
@@ -318,7 +318,7 @@ own test changes as the hidden check and the commit as the reference patch.
 | Candidates | 10,023 | one language (Python, JS/TS, Go); 1–3 source files with 3–200 changed lines and 1–3 test files |
 | Selected | 797 | at most 40 per repository; only 24 repositories qualify |
 | Verified in sandboxes | 559 (70%) | Python 285/338, Go 161/183, JS/TS 113/276 |
-| Verified with a clean issue | 502 (63%) | Python 265, Go 137, JS/TS 100; 21 repositories |
+| Verified with a clean issue | 506 (63%) | GLM-5.3 issues: Python 263, Go 142, JS/TS 101; 21 repositories |
 
 Verification installs dependencies with network, then runs the commit's test files
 without network twice: with source files reverted to the parent and at the commit. A
@@ -329,7 +329,7 @@ them JS/TS, mostly jest/vitest setups the harness cannot run), 14 sandbox timeou
 regressions, 2 without results. A Go package that fails to compile before the change
 makes all of its tests fail-to-pass, so some Go tasks list unrelated tests.
 
-Issue writing needed three versions (all kept on HF):
+Issue writing needed four versions (all kept on HF):
 1. Commit message plus full diff: 778 of 797 passed the first leak check (quoted
    added lines), but rereading showed about half named new internal helpers or
    constants and described the tests.
@@ -338,6 +338,12 @@ Issue writing needed three versions (all kept on HF):
    stop it.
 3. Commit message (without trailers) plus the test changes only, four drafts, the
    first clean one kept: 679 of 797 clean; 110 of the 118 leaks mention tests.
+
+4. The same input written by GLM-5.3 (`z-ai/glm-5.3` through OpenRouter, MIT-style
+   weights license), drafts requested until one is clean: 700 of 797 clean with 1,229
+   drafts, 2.0M prompt and 0.6M completion tokens (about $1) in 3.3 minutes. With
+   verification, **506 tasks** (Python 263, Go 142, JS/TS 101); `tasks.jsonl` uses
+   these issues.
 
 Commit messages can still describe the fix; the checks only catch names and quoted
 lines. The 21 repositories limit diversity more than the commit count does; the next
