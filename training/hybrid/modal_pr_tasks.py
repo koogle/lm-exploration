@@ -25,6 +25,7 @@ capped at one hour and at the launch deadline, and a supervisor cancels the spaw
 call at that deadline.
 """
 
+import base64
 import json
 import time
 from pathlib import Path
@@ -223,8 +224,9 @@ def _verify_one(task, deadline, record):
         setup_box.exec(
             "bash", "-c", f"mkdir -p /work/mirror.git && tar -xzf {mirror} -C /work/mirror.git"
         ).wait()
-        with setup_box.open("/work/task.json", "w") as handle:
-            handle.write(json.dumps(task))
+        fields = ("sha", "parent", "language", "source_paths", "test_paths")
+        brief = base64.b64encode(json.dumps({k: task[k] for k in fields}).encode()).decode()
+        setup_box.exec("bash", "-c", f"echo {brief} | base64 -d > /work/task.json").wait()
         setup = _sandbox_stage(setup_box, "setup")
         if setup.get("stage") != "installed":
             return {"status": setup.get("stage", "setup_error"), "setup": setup}
