@@ -18,13 +18,17 @@ the same quantity per bucket.
 
 Two settings make training gentler on what pretraining learned:
 
-- **Replay** (`"replay": true` with the `replay_*` settings, [`../trainer/replay_hook.py`](../trainer/replay_hook.py), the
-  hook every post-training loop shares, over [`../data/replay.py`](../data/replay.py)): each step also
-  trains on `replay_batch_size` windows of `replay_context` tokens of pretraining text
-  from a raw snapshot on the data volume (`replay_snapshot`), with sources drawn by
-  `replay_sources` weights. Replay windows use the ordinary pretraining loss on every
-  token. The step backpropagates `(1 - replay_weight) * answer loss`, then the hook adds
-  the gradient of `replay_weight * replay loss` before the optimizer step, and validation adds replay loss per source on fixed validation windows.
+- **Replay** (`"replay": true` with the `replay_*` settings,
+  [`../trainer/replay_hook.py`](../trainer/replay_hook.py), the hook every post-training
+  loop shares): each step also trains on `replay_batch_size` windows of
+  `replay_context` tokens of pretraining text from a raw snapshot on the data volume
+  (`replay_snapshot`). The pretraining loader
+  ([`../data/raw_token_stream.py`](../data/raw_token_stream.py)) reads them, mixing
+  sources by the `replay_sources` weights. Replay windows use the ordinary pretraining
+  loss on every token. The step backpropagates `(1 - replay_weight) * answer loss`, then
+  the hook adds the gradient of `replay_weight * replay loss` before the optimizer
+  step. Validation adds replay loss per source on each source's first validation
+  windows.
 - **Schedule**: `"schedule": "cosine"` warms the learning rate up over `warmup_steps`
   and decays it by a cosine to `min_lr_ratio * lr`; the default is a constant rate.
 

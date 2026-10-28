@@ -195,7 +195,7 @@ def train(
     import model_100m.model as model_module
     import training_data.sft as sft_data_module
 
-    replay = ReplayHook.attach(settings, data_root, tokenizer, cfg["context"], settings.seed)
+    replay = ReplayHook.attach(settings, data_root, cfg["context"])
     source_hashes.update(
         **{name: digest(file) for name, file in ReplayHook.SOURCES.items()},
         data=digest(data_module.__file__),
@@ -223,7 +223,7 @@ def train(
         optimizer.load_state_dict(saved["optimizer"])
         rng.setstate(saved["sampling_rng"])
         if replay:
-            replay.load_state(saved["replay_rng"])
+            replay.load_state(saved["replay_state"])
         torch.set_rng_state(saved["torch_rng"])
         torch.cuda.set_rng_state_all(saved["cuda_rng"])
         step, answer_tokens = saved["step"], saved["answer_tokens"]
@@ -337,7 +337,7 @@ def train(
                 "step": step,
                 "answer_tokens": answer_tokens,
                 "sampling_rng": rng.getstate(),
-                "replay_rng": replay.state() if replay else None,
+                "replay_state": replay.state() if replay else None,
                 "torch_rng": torch.get_rng_state(),
                 "cuda_rng": torch.cuda.get_rng_state_all(),
             },
