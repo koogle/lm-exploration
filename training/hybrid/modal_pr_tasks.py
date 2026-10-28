@@ -32,6 +32,7 @@ from pathlib import Path
 
 import modal
 from model_hybrid import modal_benchmarks
+from model_hybrid.image import CUDA_BASE
 
 app = modal.App("lm-exploration-hybrid-pr-tasks")
 app.include(modal_benchmarks.app)  # the deadline supervisor
@@ -60,7 +61,8 @@ sandbox_image = (
     .add_local_file(Path(__file__).with_name("pr_task_runner.py"), "/runner/pr_task_runner.py")
 )
 teacher_image = (
-    modal.Image.debian_slim(python_version="3.12")
+    # vLLM compiles its MoE kernels on first use, which needs nvcc.
+    modal.Image.from_registry(CUDA_BASE, add_python="3.12")
     .pip_install("vllm==0.30.0")
     .env({"PYTHONPATH": "/project", "HF_HUB_DISABLE_PROGRESS_BARS": "1"})
     .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__", "kernels"])
