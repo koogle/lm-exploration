@@ -8,7 +8,8 @@ Documents are shuffled within a shard with a seed from the recipe. The last
 shard of each source is held out for evaluation.
 
 Preparation drops documents that share any token n-gram (n = 13) with the
-recipe's benchmark test sets, and code outside the license allowlist.
+recipe's benchmark test sets, and code outside `PERMISSIVE_LICENSES` when a source sets
+`permissive_licenses_only`.
 
 `PreparedMixture` packs each source's shards, in a seeded order, into windows of
 `context + 1` tokens; the next window starts at the previous window's last
@@ -21,6 +22,8 @@ import time
 from pathlib import Path
 
 import numpy as np
+from training_data.hub_files import download as hub_download
+from training_data.licenses import PERMISSIVE_LICENSES
 
 HASH_BASE = np.uint64(0x9E3779B97F4A7C15)
 
@@ -68,7 +71,7 @@ def benchmark_texts(benchmark, table):
             yield from (str(v) for v in values if v)
 
 
-def build_screen(recipe, tokenizer, download):
+def build_screen(recipe, tokenizer, download=hub_download):
     """Sorted unique n-gram hashes of every benchmark text, with per-benchmark counts."""
     import pyarrow.parquet as pq
 
@@ -77,7 +80,7 @@ def build_screen(recipe, tokenizer, download):
     for benchmark in recipe["contamination"]["benchmarks"]:
         texts = []
         for file in benchmark["files"]:
-            path = download(benchmark["repo"], file, benchmark["revision"])
+            path = download(benchmark["repo"], benchmark["revision"], file)
             texts.extend(benchmark_texts(benchmark, pq.read_table(path)))
         encodings = tokenizer.encode_batch(texts, add_special_tokens=False)
         found = [ngram_hashes(e.ids, n) for e in encodings]
@@ -110,23 +113,25 @@ def shard_paths(root, name, index):
     )
 
 
-def prepare_shard(recipe, name, index, root, tokenizer, screen, download, eos_id):
+def prepare_shard(recipe, name, index, root, tokenizer, screen, eos_id, download=hub_download):
     """Tokenize one upstream file into a prepared shard; returns its metadata."""
     import pyarrow.parquet as pq
 
     source = recipe["sources"][name]
     file = source["pattern"].format(index=index)
-    path = download(source["repo"], file, source["revision"])
+    path = download(source["repo"], source["revision"], file)
     parquet = pq.ParquetFile(path)
     n = recipe["contamination"]["ngram"]
-    licenses = set(source.get("licenses", []))
+    licenses = source.get("permissive_licenses_only", False)
     documents, dropped = [], {"license": 0, "empty": 0, "contaminated": 0}
     columns = [source["column"], *(["license"] if licenses else [])]
     for group in range(parquet.num_row_groups):
         table = parquet.read_row_group(group, columns=columns)
         texts = table.column(source["column"]).to_pylist()
         if licenses:
-            allowed = [lic in licenses for lic in table.column("license").to_pylist()]
+            allowed = [
+                lic.lower() in PERMISSIVE_LICENSES for lic in table.column("license").to_pylist()
+            ]
             dropped["license"] += allowed.count(False)
             texts = [t for t, keep in zip(texts, allowed, strict=True) if keep]
         empty = [not t or not t.strip() for t in texts]

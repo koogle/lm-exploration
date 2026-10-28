@@ -546,7 +546,7 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
 )
 def enforce_deadline(run_id, deadline_unix):
     """Independent supervisor: cancel every recorded call of this launch at its deadline."""
-    from workflows.deadline import tracked_calls
+    from workflows.deadline import cancel_at_deadline, tracked_calls
 
     status = Path("/runs") / run_id / "workflow.json"
     preparation = status.with_name("preparation.json")
@@ -554,17 +554,18 @@ def enforce_deadline(run_id, deadline_unix):
     def stage(path):
         return json.loads(path.read_text())["stage"] if path.exists() else None
 
-    while (remaining := deadline_unix - time.time()) > 0:
-        time.sleep(min(remaining, 300))
+    def done():
         run_volume.reload()
         # Overlapped preparation can outlast training only if it is still preparing.
-        if stage(status) == "completed" and stage(preparation) != "preparing":
-            return {"stage": "completed"}
-    run_volume.reload()
-    cancelled = []
-    for call_id in tracked_calls(Path("/runs/.calls") / run_id):
-        modal.FunctionCall.from_id(call_id).cancel()
-        cancelled.append(call_id)
+        return stage(status) == "completed" and stage(preparation) != "preparing"
+
+    def calls():
+        run_volume.reload()
+        return tracked_calls(Path("/runs/.calls") / run_id)
+
+    cancelled = cancel_at_deadline(deadline_unix, calls, done)
+    if cancelled is None:
+        return {"stage": "completed"}
     record(run_id, "deadline_cancelled", cancelled_calls=cancelled)
     return {"stage": "deadline_cancelled", "cancelled_calls": cancelled}
 

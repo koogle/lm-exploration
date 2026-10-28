@@ -22,15 +22,7 @@
       "pattern": "data/train-{index:05d}-of-00880.parquet",
       "shards": 80,
       "column": "code",
-      "licenses": [
-        "mit",
-        "apache-2.0",
-        "bsd-2-clause",
-        "bsd-3-clause",
-        "isc",
-        "cc0-1.0",
-        "unlicense"
-      ],
+      "permissive_licenses_only": true,
       "max_passes": 1,
       "estimated_tokens_per_shard": 139000000
     },

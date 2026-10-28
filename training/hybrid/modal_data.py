@@ -28,18 +28,11 @@ image = (
     .env({"PYTHONPATH": "/project", "HF_HUB_DISABLE_PROGRESS_BARS": "1"})
     .add_local_file("workflows/__init__.py", "/project/workflows/__init__.py")
     .add_local_file("workflows/deadline.py", "/project/workflows/deadline.py")
+    .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
     .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__", "kernels"])
 )
 ROOT = Path("/data")
 DEFAULT_RECIPE = "hybrid/recipes/hybrid-40b-v1.json"
-
-
-def download(repo, file, revision):
-    from huggingface_hub import hf_hub_download
-
-    return hf_hub_download(
-        repo, file, revision=revision, repo_type="dataset", local_dir="/tmp/upstream"
-    )
 
 
 def calls_folder(run_id, deadline):
@@ -72,7 +65,7 @@ def build_screen(recipe, deadline):
     folder = ROOT / recipe["name"]
     folder.mkdir(parents=True, exist_ok=True)
     glm = tokenizer.load(tokenizer.tokenizer_file("/tmp/tokenizer"))
-    screen, report = data.build_screen(recipe, glm, download)
+    screen, report = data.build_screen(recipe, glm)
     np.save(folder / "screen.npy", screen)
     (folder / "screen.json").write_text(
         json.dumps(
@@ -114,7 +107,7 @@ def prepare(recipe, name, index, deadline):
     os.environ["RAYON_NUM_THREADS"] = "8"
     glm = tokenizer.load(tokenizer.tokenizer_file("/tmp/tokenizer"))
     screen = np.load(folder / "screen.npy")
-    meta = data.prepare_shard(recipe, name, index, folder, glm, screen, download, tokenizer.EOS_ID)
+    meta = data.prepare_shard(recipe, name, index, folder, glm, screen, tokenizer.EOS_ID)
     shutil.rmtree("/tmp/upstream", ignore_errors=True)
     volume.commit()
     return meta
@@ -213,19 +206,21 @@ def coordinate(run_id, recipe, deadline, parallel):
 )
 def enforce_deadline(run_id, deadline):
     """Independent supervisor: cancel every recorded call of this launch at its deadline."""
-    from workflows.deadline import tracked_calls
+    from workflows.deadline import cancel_at_deadline, tracked_calls
 
     path = ROOT / ".runs" / f"{run_id}.json"
-    while (remaining := deadline - time.time()) > 0:
-        time.sleep(min(remaining, 300))
+
+    def done():
         volume.reload()
-        if path.exists() and json.loads(path.read_text())["stage"].startswith("completed"):
-            return {"stage": "completed"}
-    volume.reload()
-    cancelled = []
-    for call_id in tracked_calls(calls_folder(run_id, deadline)):
-        modal.FunctionCall.from_id(call_id).cancel()
-        cancelled.append(call_id)
+        return path.exists() and json.loads(path.read_text())["stage"].startswith("completed")
+
+    def calls():
+        volume.reload()
+        return tracked_calls(calls_folder(run_id, deadline))
+
+    cancelled = cancel_at_deadline(deadline, calls, done)
+    if cancelled is None:
+        return {"stage": "completed"}
     return {"stage": "deadline_cancelled", "cancelled": cancelled}
 
 

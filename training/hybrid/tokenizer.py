@@ -7,8 +7,9 @@ special tokens are GLM's own. The model's embedding table pads the 154,856
 tokenizer entries to 154,880 rows.
 """
 
-import hashlib
 from pathlib import Path
+
+from training_data.subword import digest
 
 SOURCE = {
     "repo": "zai-org/GLM-4.7-Flash",
@@ -47,10 +48,6 @@ SPECIAL_TOKENS = {
 }
 
 
-def sha256(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
-
-
 def tokenizer_file(local_dir=None):
     """Download the pinned tokenizer.json (cached) and verify its hash."""
     from huggingface_hub import hf_hub_download
@@ -58,7 +55,7 @@ def tokenizer_file(local_dir=None):
     path = hf_hub_download(
         SOURCE["repo"], SOURCE["file"], revision=SOURCE["revision"], local_dir=local_dir
     )
-    if sha256(path) != SHA256:
+    if digest(path) != SHA256:
         raise ValueError(f"{path} does not match the pinned GLM tokenizer hash")
     return Path(path)
 
@@ -68,7 +65,7 @@ def load(path=None):
     from tokenizers import Tokenizer
 
     path = Path(path) if path else tokenizer_file()
-    if sha256(path) != SHA256:
+    if digest(path) != SHA256:
         raise ValueError(f"{path} does not match the pinned GLM tokenizer hash")
     tokenizer = Tokenizer.from_file(str(path))
     if tokenizer.get_vocab_size(with_added_tokens=True) != TOKENIZER_SIZE:
