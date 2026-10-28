@@ -19,7 +19,8 @@ filesystem snapshot then runs the commit's test files without network with sourc
 files reverted to the parent and at the commit (`pr_task_runner.py`). A task is
 verified when at least one test fails before and passes after and none regresses.
 `issues` has Qwen3-Coder (vLLM, one H100) write the issue for every selected task
-and flags answers that quote added source lines. Every call has `retries=0`, a
+and flags answers that quote added source lines, name new internal code the
+tests never use, or mention tests or the commit. Every call has `retries=0`, a
 timeout of at most 6 hours and refuses work 24 hours after launch; sandboxes are
 capped at one hour and at the launch deadline, and a supervisor cancels the spawned
 call at that deadline.
@@ -369,10 +370,12 @@ def write_issues(name, deadline):
         if issue is None:
             status = "unparsed"
         else:
-            issue["leaked_lines"] = pr_tasks.leaks(issue, task["patch"], task["source_paths"])
+            issue["leaks"] = pr_tasks.leaks(
+                issue, task["patch"], task["source_paths"], task["test_paths"]
+            )
             status = (
                 "leaked"
-                if issue["leaked_lines"]
+                if any(issue["leaks"].values())
                 else ("ok" if issue["self_contained"] else "not_self_contained")
             )
         counts[status] = counts.get(status, 0) + 1
