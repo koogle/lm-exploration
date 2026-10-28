@@ -99,30 +99,49 @@ def sample(candidates, count, per_repository, seed=0):
 
 # Issue writing (teacher model) and the leak check.
 ISSUE_SYSTEM = (
-    "You write GitHub issues. Given a commit (message and diff), write the issue that a "
-    "user or maintainer would have filed before the change existed, so that a developer "
-    "reading only the issue and the repository could make the change.\n"
+    "You write GitHub issues. You are shown a commit message and the checks that the "
+    "finished work must satisfy (not the implementation). Write the issue a user or "
+    "maintainer would have filed beforehand, so that a developer reading only the issue and "
+    "the repository could do the work.\n"
     "Rules:\n"
-    "- Describe the problem or the requested behavior, the current behavior and the expected "
-    "behavior. Include a short reproduction or usage example when it helps.\n"
-    "- Name every public function, class, method, option, CLI flag or error message that the "
-    "tests in the diff rely on, with the exact names and signatures they use.\n"
-    "- Describe only observable behavior. Do not say which functions, helpers, constants or "
-    "files to add, remove or refactor; never name internal or private code that the tests do "
-    "not use. Do not quote lines added by the diff.\n"
-    "- Never mention tests, test files, the diff, the commit or that a change was made.\n"
+    "- Describe the problem or the requested behavior: what happens now and what should "
+    "happen. Include a short reproduction or usage example when it helps.\n"
+    "- Name every public function, class, method, option, CLI flag, field or error message "
+    "the checks use, with their exact names and signatures.\n"
+    "- Describe only observable behavior, never how to implement it.\n"
+    "- Never mention tests, checks, test files, assertions, the diff or the commit; write as "
+    "if none of them exist yet.\n"
     "- Write as a person reporting the issue, in plain Markdown, at most 250 words.\n"
     'Answer with JSON only: {"title": "...", "body": "...", "self_contained": true|false} '
-    "where self_contained says whether the issue alone specifies the change well enough."
+    "where self_contained says whether the issue alone specifies the work well enough."
 )
 MAX_DIFF_CHARS = 24000
 
 
+def test_diff(task):
+    """The commit's diff restricted to its test files."""
+    sections = re.split(r"(?m)^(?=diff --git )", task["patch"])
+    keep = [
+        s
+        for s in sections
+        if any(f" b/{p}\n" in s.split("\n", 1)[0] + "\n" for p in task["test_paths"])
+    ]
+    return "".join(keep)
+
+
+TRAILER = re.compile(r"(?im)^(co-authored-by|signed-off-by|claude-session|generated with|🤖).*$")
+
+
 def issue_messages(task):
-    diff = task["patch"]
+    """The teacher sees the commit message and the test changes, never the source changes."""
+    diff = test_diff(task)
     if len(diff) > MAX_DIFF_CHARS:
-        diff = diff[:MAX_DIFF_CHARS] + "\n[diff truncated]"
-    user = f"Repository: {task['repository']}\n\nCommit message:\n{task['message'].strip()}\n\nDiff:\n{diff}"
+        diff = diff[:MAX_DIFF_CHARS] + "\n[truncated]"
+    user = (
+        f"Repository: {task['repository']}\n\n"
+        f"Commit message:\n{TRAILER.sub('', task['message']).strip()}\n\n"
+        f"Checks the finished work must pass:\n{diff}"
+    )
     return [{"role": "system", "content": ISSUE_SYSTEM}, {"role": "user", "content": user}]
 
 
@@ -164,7 +183,8 @@ DEFINITION = re.compile(
     r"\b(?:def|class|function|func|const|let|var|type|interface)\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w{2,})"
 )
 META = re.compile(
-    r"\b(tests?|test files?|unit tests?|the diff|this commit|the commit)\b", re.IGNORECASE
+    r"\b(tests?|test files?|unit tests?|test suite|assertions?|the diff|this commit|the commit)\b",
+    re.IGNORECASE,
 )
 
 
@@ -187,7 +207,30 @@ def hidden_names(patch, source_paths, test_paths):
     for line in _hunks(patch, set(source_paths), added_only=True):
         defined.update(DEFINITION.findall(line))
     tests = "\n".join(_hunks(patch, set(test_paths), added_only=False))
-    return sorted(n for n in defined if not re.search(rf"\b{re.escape(n)}\b", tests))
+    distinctive = {
+        n for n in defined if "_" in n.strip("_") or re.search(r"[a-z][A-Z]", n) or len(n) >= 10
+    }
+    return sorted(n for n in distinctive if not re.search(rf"\b{re.escape(n)}\b", tests))
+
+
+RANK = ("ok", "not_self_contained", "leaked", "unparsed")
+
+
+def judge(text, task):
+    """(status, issue) for one teacher answer; status is one of RANK."""
+    issue = parse_issue(text)
+    if issue is None:
+        return "unparsed", None
+    issue["leaks"] = leaks(issue, task["patch"], task["source_paths"], task["test_paths"])
+    if any(issue["leaks"].values()):
+        return "leaked", issue
+    return ("ok" if issue["self_contained"] else "not_self_contained"), issue
+
+
+def best_issue(texts, task):
+    """The first answer with the best status among several drafts."""
+    judged = [(*judge(t, task), t) for t in texts]
+    return min(judged, key=lambda j: RANK.index(j[0]))
 
 
 def leaks(issue, patch, source_paths, test_paths=()):
