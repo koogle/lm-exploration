@@ -34,6 +34,7 @@ EXPORTS = {
     "hybrid-720m-40b-01/tokens-039998980096": False,
     "hybrid-720m-chat-sft-01/tokens-001527250944": True,
     "hybrid-720m-rl-lr-low-01/tokens-000158595563": True,
+    "hybrid-720m-mid32k-01/tokens-002999975936": False,
 }
 # Larger dense Qwen base models, beyond the shared benchmark references.
 LARGER_QWEN = {
