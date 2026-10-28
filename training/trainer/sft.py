@@ -8,10 +8,10 @@ far; prompt tokens carry no loss. The loss is the mean answer-token cross-entrop
 `trainer/cig.py`). The model never generates during training. Validation reports the same
 answer-token cross-entropy per bucket.
 
-Optional pretraining replay (`replay_*` settings, the shared `trainer/replay_hook.py`)
-adds `replay_batch_size` windows of pretraining text to every step, trained with the
-ordinary next-token loss; the step loss is `(1 - replay_weight) * answer loss +
-replay_weight * replay loss`. The learning rate is constant, or warms up linearly over
+Optional pretraining replay (`"replay": true` and the `replay_*` settings, the shared
+`trainer/replay_hook.py`) adds `replay_batch_size` windows of pretraining text to every
+step, trained with the ordinary next-token loss: the step backpropagates
+`(1 - replay_weight) * answer loss`, then the hook adds `replay_weight * replay loss`. The learning rate is constant, or warms up linearly over
 `warmup_steps` and follows a cosine to `min_lr_ratio * lr` (`schedule: "cosine"`).
 
 The parent is an explicit `scholarly-ddp-v1` checkpoint on the private run volume; launchers
@@ -38,6 +38,8 @@ from training_data.subword import (
     load_frozen,
 )
 
+from trainer import batches
+from trainer.batches import collate
 from trainer.replay_hook import ReplayHook, ReplaySettings
 
 # The SFT dataset (`training_data.sft.SFTDataset`) of each task.
@@ -122,18 +124,6 @@ def validate_resume_identity(saved, current, step, extend=False):
         raise ValueError("Extension changed source/model/data/objective/optimizer identity")
 
 
-def collate(rows, device):
-    import torch
-
-    width = max(len(row["x"]) for row in rows)
-    x = torch.zeros((len(rows), width), dtype=torch.long, device=device)
-    y = torch.full_like(x, LOSS_IGNORE_INDEX)
-    for i, row in enumerate(rows):
-        x[i, : len(row["x"])] = torch.tensor(row["x"], device=device)
-        y[i, : len(row["y"])] = torch.tensor(row["y"], device=device)
-    return x, y
-
-
 def train(
     parent,
     dataset,
@@ -195,7 +185,11 @@ def train(
     optimizer = torch.optim.AdamW(model.parameters(), lr=settings.lr, weight_decay=0.01)
     from trainer import cig
 
-    source_hashes = {"trainer": digest(__file__), "cig": digest(cig.__file__)}
+    source_hashes = {
+        "trainer": digest(__file__),
+        "batches": digest(batches.__file__),
+        "cig": digest(cig.__file__),
+    }
     cache = {}
     if settings.objective == "cig":
         raw_rows = [
@@ -206,7 +200,7 @@ def train(
     import model_100m.model as model_module
     import training_data.sft as sft_data_module
 
-    replay = ReplayHook.attach(settings, data_root, tokenizer, cfg["context"], settings.seed)
+    replay = ReplayHook.attach(settings, data_root, cfg["context"])
     source_hashes.update(
         **{name: digest(file) for name, file in ReplayHook.SOURCES.items()},
         **{name: digest(file) for name, file in data_modules.items()},
@@ -234,7 +228,7 @@ def train(
         optimizer.load_state_dict(saved["optimizer"])
         rng.setstate(saved["sampling_rng"])
         if replay:
-            replay.load_state(saved["replay_rng"])
+            replay.load_state(saved["replay_state"])
         torch.set_rng_state(saved["torch_rng"])
         torch.cuda.set_rng_state_all(saved["cuda_rng"])
         step, answer_tokens = saved["step"], saved["answer_tokens"]
@@ -265,6 +259,7 @@ def train(
     shutil.copytree(DEFAULT_FOLDER, output / "tokenizer")
     for name, module in (
         ("trainer", __file__),
+        ("batches", batches.__file__),
         ("cig", cig.__file__),
         *data_modules.items(),
         ("sft_data", sft_data_module.__file__),
@@ -347,7 +342,7 @@ def train(
                 "step": step,
                 "answer_tokens": answer_tokens,
                 "sampling_rng": rng.getstate(),
-                "replay_rng": replay.state() if replay else None,
+                "replay_state": replay.state() if replay else None,
                 "torch_rng": torch.get_rng_state(),
                 "cuda_rng": torch.cuda.get_rng_state_all(),
             },
@@ -375,15 +370,12 @@ def train(
         optimizer.zero_grad(set_to_none=True)
         value, count = loss(rows, training=True)
         answer_loss = value / count
-        objective, values = answer_loss, {"train_loss": answer_loss.item()}
-        if replay:
-            replay_loss = replay.loss(model)
-            weight = settings.replay_weight
-            objective = (1 - weight) * answer_loss + weight * replay_loss
-            values["replay_loss"] = replay_loss.item()
-        if not torch.isfinite(objective):
+        if not torch.isfinite(answer_loss):
             raise RuntimeError("Non-finite SFT loss")
-        objective.backward()
+        values = {"train_loss": answer_loss.item()}
+        (answer_loss * (1 - settings.replay_weight if replay else 1)).backward()
+        if replay:
+            values["replay_loss"] = replay.backward(model)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True)
         optimizer.step()
         step += 1

@@ -12,8 +12,13 @@ generated outputs belong on Hugging Face. uv installs this folder as `sampling`.
 | `modal_sample.py` | Modal launcher: one H100 call per recipe |
 | `report.py` | Summary, metrics table and all-completions dump from result JSONs |
 | `recipes/` | Recipes without a study folder |
+| `prompt-sets/` | Prompts and modes several recipes share |
 
 ## Recipe
+
+A recipe either lists its `prompts` and `modes` or names a shared `prompt_set` (a file in
+`prompt-sets/` holding both), so recipes that compare checkpoints on the same prompts
+only list their models.
 
 ```json
 {

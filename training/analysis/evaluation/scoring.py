@@ -1,15 +1,18 @@
-"""Model-agnostic scoring: continuation log-likelihoods, greedy generation, few-shot
-answer checking and bits per byte. Dataset formats live in `benchmarks/`.
+"""Model-agnostic scoring: continuation log-likelihoods, batched greedy generation,
+few-shot answer checking and bits per byte. Dataset formats live in `benchmarks/`.
 
 A model is any object with `forward(tokens) -> logits` over a `[batch, time]` LongTensor,
 `encode(text) -> ids` (no special tokens), `decode(ids) -> text`, `bos_token_id`,
-`eos_token_id`, `pad_token_id`, `block_size` and `device`.
+`eos_token_id`, `pad_token_id`, `block_size` and `device`; generation also uses
+`network`, the decoder itself, which the shared sampler (`trainer/rollout.py`) runs.
 """
 
 import math
 
 # Requests per forward pass are bounded by total padded tokens, not by count.
 TOKENS_PER_BATCH = 16384
+# Prompts decoded together by the shared sampler.
+GENERATION_BATCH = 64
 
 
 def loglikelihoods(model, requests):
@@ -47,26 +50,29 @@ def loglikelihoods(model, requests):
     return results
 
 
-def generate(model, prompt, max_new_tokens, stop):
-    """Greedy continuation of `prompt` until EOS, `max_new_tokens` or any `stop` string."""
-    import torch
+def greedy_completions(model, prompts, max_new_tokens, stops):
+    """Greedy continuations of text `prompts`, each ending at EOS or `max_new_tokens` and
+    cut before the first of the `stops` strings. Prompts keep their last tokens if they
+    would not fit the context with the new tokens."""
+    from trainer.rollout import sample
 
-    tokens = [model.bos_token_id, *model.encode(prompt)]
-    generated = []
-    for _ in range(max_new_tokens):
-        window = torch.tensor([tokens[-model.block_size :]], device=model.device)
-        with torch.no_grad():
-            token = int(model.forward(window)[0, -1].argmax())
-        if token == model.eos_token_id:
-            break
-        tokens.append(token)
-        generated.append(token)
-        text = model.decode(generated)
-        if any(s in text for s in stop):
-            break
-    text = model.decode(generated)
-    cut = min((text.index(s) for s in stop if s in text), default=len(text))
-    return text[:cut]
+    def stopped(ids):
+        text = model.decode(ids)
+        return any(stop in text for stop in stops)
+
+    limit = model.block_size - max_new_tokens
+    texts = []
+    for start in range(0, len(prompts), GENERATION_BATCH):
+        chunk = [
+            [model.bos_token_id, *model.encode(prompt)][-limit:]
+            for prompt in prompts[start : start + GENERATION_BATCH]
+        ]
+        samples = sample(model.network, chunk, max_new_tokens, model.eos_token_id, 0, stop=stopped)
+        for ids in samples.completions:
+            text = model.decode(ids)
+            cut = min((text.index(stop) for stop in stops if stop in text), default=len(text))
+            texts.append(text[:cut])
+    return texts
 
 
 def choice_accuracy(model, items):
@@ -103,10 +109,13 @@ def few_shot_answers(model, problems, exemplars, max_new_tokens):
 
     shots = "".join(f"{question_prompt(q)} {worked}\n\n" for q, worked in exemplars)
     outcomes = []
-    for question, gold in problems:
-        completion = generate(
-            model, shots + question_prompt(question), max_new_tokens, ["\n\n", "Question:"]
-        )
+    completions = greedy_completions(
+        model,
+        [shots + question_prompt(question) for question, _ in problems],
+        max_new_tokens,
+        ["\n\n", "Question:"],
+    )
+    for (question, gold), completion in zip(problems, completions, strict=True):
         answer, correct = answer_matches(completion, gold)
         outcomes.append(
             {

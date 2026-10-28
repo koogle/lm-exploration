@@ -126,7 +126,7 @@ def compare(left, right, deadline):
         "step",
         "answer_tokens",
         "sampling_rng",
-        "replay_rng",
+        "replay_state",
         "torch_rng",
         "cuda_rng",
     )
