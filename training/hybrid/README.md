@@ -406,15 +406,15 @@ runs three stages on the `lm-exploration-hybrid-data` volume under `<name>/`:
   network, and its filesystem snapshot runs the test files without network with source
   files reverted to the parent and at the commit ([`pr_task_runner.py`](pr_task_runner.py)).
   Verified tasks have at least one fail-to-pass test and no regression.
-- `issues` has Qwen3-Coder write four issue drafts per task from the commit message
-  and the test changes only, and keeps the first draft without leaks (quoted added
-  source lines, new internal names the tests never use, mentions of tests or the
-  commit).
+- `issues` has GLM-5.3 (through OpenRouter) draft each task's issue from the commit
+  message and the test changes only, up to four drafts until one has no leaks (quoted
+  added source lines, new internal names the tests never use, mentions of tests or the
+  commit). It needs the Modal secret `openrouter` with `OPENROUTER_API_KEY`.
 
 ```sh
 uv run modal run -m model_hybrid.modal_pr_tasks::select [--count 1000] [--name pr-tasks-pilot]
 uv run modal run --detach -m model_hybrid.modal_pr_tasks::verify [--limit N] [--workers 48]
-uv run modal run --detach -m model_hybrid.modal_pr_tasks::issues
+uv run modal run --detach -m model_hybrid.modal_pr_tasks::issues [--limit N]
 ```
 
 ## Tests

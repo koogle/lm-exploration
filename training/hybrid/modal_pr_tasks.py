@@ -3,7 +3,7 @@
 Run from training/, in order:
     modal run -m model_hybrid.modal_pr_tasks::select [--count 1000] [--name pr-tasks-pilot]
     modal run --detach -m model_hybrid.modal_pr_tasks::verify [--limit N] [--workers 48]
-    modal run --detach -m model_hybrid.modal_pr_tasks::issues
+    modal run --detach -m model_hybrid.modal_pr_tasks::issues [--limit N]
 
 `select` reads the `changes` rows of the MIT collection at its current revision
 (recorded), keeps single-language commits that change both source and test files
@@ -18,10 +18,11 @@ from the read-only mirror volume and installs dependencies (network on), its
 filesystem snapshot then runs the commit's test files without network with source
 files reverted to the parent and at the commit (`pr_task_runner.py`). A task is
 verified when at least one test fails before and passes after and none regresses.
-`issues` has Qwen3-Coder (vLLM, one H100) write four drafts of the issue for every
-selected task from the commit message and the test changes only (never the source
-changes), and keeps the first draft that parses, quotes no added source line, names
-no new internal code the tests never use and does not mention tests or the commit. Every call has `retries=0`, a
+`issues` has GLM-5.3 (through OpenRouter; key in the Modal secret `openrouter` as
+`OPENROUTER_API_KEY`) draft the issue of every selected task from the commit message
+and the test changes only (never the source changes), up to four drafts until one
+parses, quotes no added source line, names no new internal code the tests never use
+and does not mention tests or the commit. Every call has `retries=0`, a
 timeout of at most 6 hours and refuses work 24 hours after launch; sandboxes are
 capped at one hour and at the launch deadline, and a supervisor cancels the spawned
 call at that deadline.
@@ -34,7 +35,6 @@ from pathlib import Path
 
 import modal
 from model_hybrid import modal_benchmarks
-from model_hybrid.image import CUDA_BASE
 
 app = modal.App("lm-exploration-hybrid-pr-tasks")
 app.include(modal_benchmarks.app)  # the deadline supervisor
@@ -62,15 +62,11 @@ sandbox_image = (
     .env({"PATH": "/usr/local/go/bin:/root/go/bin:/usr/local/bin:/usr/bin:/bin"})
     .add_local_file(Path(__file__).with_name("pr_task_runner.py"), "/runner/pr_task_runner.py")
 )
-teacher_image = (
-    # vLLM compiles its MoE kernels on first use, which needs nvcc.
-    modal.Image.from_registry(CUDA_BASE, add_python="3.12")
-    .pip_install("vllm==0.30.0")
-    .env({"PYTHONPATH": "/project", "HF_HUB_DISABLE_PROGRESS_BARS": "1"})
-    .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__", "kernels"])
-)
-DRAFTS = 4  # teacher drafts per task; the first with the best status is kept
-TEACHER = ("Qwen/Qwen3-Coder-30B-A3B-Instruct", "b2cff646eb4bb1d68355c01b18ae02e7cf42d120")
+openrouter = modal.Secret.from_name("openrouter")
+DRAFTS = 4  # teacher drafts per task, requested until one is clean
+# GLM-5.3 (zai-org/GLM-5.3, MIT-style license) through OpenRouter; outputs may train models.
+TEACHER = "z-ai/glm-5.3"
+TEACHER_WORKERS = 32
 COLLECTION = "jfrick/mit-claude-codex-code-20261019"
 SANDBOX_SECONDS = 60 * 60
 LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
@@ -341,60 +337,113 @@ def verify_tasks(name, limit, workers, deadline):
     return summary
 
 
+def _teacher_draft(messages):
+    """One teacher answer and its token usage, through OpenRouter's chat API."""
+    import os
+    import urllib.request
+
+    body = {
+        "model": TEACHER,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 4096,
+        "reasoning": {"effort": "low", "exclude": True},
+    }
+    request = urllib.request.Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=json.dumps(body).encode(),
+        headers={
+            "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=300) as response:
+        data = json.loads(response.read())
+    text = (data["choices"][0]["message"].get("content") or "") if data.get("choices") else ""
+    return text, data.get("usage", {}), data.get("provider")
+
+
 @app.function(
-    image=teacher_image,
-    gpu="H100",
-    cpu=8,
-    memory=65536,
+    image=image,
+    cpu=2,
+    memory=4096,
     timeout=2 * 60 * 60,
     retries=0,
-    secrets=[secret],
+    secrets=[openrouter],
     volumes={"/data": volume},
 )
-def write_issues(name, deadline):
-    """The teacher writes one issue per selected task; parse failures and leaks are recorded."""
+def write_issues(name, deadline, limit=0):
+    """The teacher drafts each task's issue until one is clean (at most DRAFTS drafts)."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
+    import urllib.error
+    from concurrent.futures import ThreadPoolExecutor
+
     from model_hybrid import pr_tasks
-    from vllm import LLM, SamplingParams
 
     folder = Path("/data", name)
     tasks = [json.loads(line) for line in (folder / "selected.jsonl").read_text().splitlines()]
-    model, revision = TEACHER
-    llm = LLM(model=model, revision=revision, max_model_len=16384, gpu_memory_utilization=0.9)
-    params = SamplingParams(n=DRAFTS, temperature=0.7, top_p=0.9, max_tokens=1024, seed=0)
+    if limit:
+        tasks = tasks[:: max(1, len(tasks) // limit)][:limit]
+
+    def write(task):
+        messages = pr_tasks.issue_messages(task)
+        drafts, usage, providers, best = [], {"prompt_tokens": 0, "completion_tokens": 0}, [], None
+        for _ in range(DRAFTS):
+            if time.time() >= deadline - 300:
+                break
+            try:
+                text, used, provider = _teacher_draft(messages)
+            except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as error:
+                drafts.append(f"<request failed: {type(error).__name__}: {error}>"[:500])
+                continue
+            for key in usage:
+                usage[key] += int(used.get(key) or 0)
+            providers.append(provider)
+            drafts.append(text)
+            best = pr_tasks.best_issue(drafts, task)
+            if best[0] == "ok":
+                break
+        status, issue, text = best or ("unparsed", None, drafts[-1] if drafts else "")
+        return {
+            "repository": task["repository"],
+            "sha": task["sha"],
+            "status": status,
+            "issue": issue,
+            "drafts": len(drafts),
+            "usage": usage,
+            "providers": sorted({p for p in providers if p}),
+            "raw": None if issue else text[-2000:],
+        }
+
     started = time.time()
-    outputs = llm.chat([pr_tasks.issue_messages(t) for t in tasks], params)
-    rows, counts = [], {}
-    for task, output in zip(tasks, outputs, strict=True):
-        status, issue, text = pr_tasks.best_issue([o.text for o in output.outputs], task)
-        counts[status] = counts.get(status, 0) + 1
-        rows.append(
-            {
-                "repository": task["repository"],
-                "sha": task["sha"],
-                "status": status,
-                "issue": issue,
-                "raw": None if issue else text[-2000:],
-            }
-        )
-    with open(folder / "issues.jsonl", "w") as handle:
+    with ThreadPoolExecutor(TEACHER_WORKERS) as pool:
+        rows = list(pool.map(write, tasks))
+    counts = {}
+    for row in rows:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+    suffix = f"-limit{limit}" if limit else ""
+    with open(folder / f"issues{suffix}.jsonl", "w") as handle:
         handle.writelines(json.dumps(r) + "\n" for r in rows)
     summary = {
-        "teacher": {"model": model, "revision": revision},
+        "teacher": {"model": TEACHER, "via": "openrouter"},
         "tasks": len(rows),
         "status": dict(sorted(counts.items())),
+        "drafts": sum(r["drafts"] for r in rows),
+        "tokens": {
+            k: sum(r["usage"][k] for r in rows) for k in ("prompt_tokens", "completion_tokens")
+        },
         "seconds": round(time.time() - started),
     }
-    (folder / "issues.json").write_text(json.dumps(summary, indent=2) + "\n")
+    (folder / f"issues{suffix}.json").write_text(json.dumps(summary, indent=2) + "\n")
     volume.commit()
     return summary
 
 
 @app.local_entrypoint()
-def issues(name: str = "pr-tasks-pilot"):
+def issues(name: str = "pr-tasks-pilot", limit: int = 0):
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    call = write_issues.spawn(name, deadline)
+    call = write_issues.spawn(name, deadline, limit)
     supervisor = modal_benchmarks.enforce_deadline.spawn([call.object_id], deadline)
     print(
         json.dumps(
