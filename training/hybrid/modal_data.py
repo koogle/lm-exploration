@@ -5,9 +5,9 @@ Run from training/:
 
 The launch fixes one deadline 24 hours ahead (less a supervisor margin). An
 independent supervisor cancels every recorded call at that deadline. The
-coordinator builds the contamination screen once, then prepares shards (held-out
-shards first, then by when training will read them) with at most `parallel`
-workers. Every call has `retries=0` and a timeout bounded by the deadline; shards
+coordinator builds the contamination screen once (or uses the one the recipe's
+`screen` names), then prepares shards (held-out shards first, then by when training
+will read them) with at most `parallel` workers. Every call has `retries=0` and a timeout bounded by the deadline; shards
 that already exist are skipped, so a later launch continues the preparation.
 Shards land on the `lm-exploration-hybrid-data` volume under `<recipe name>/`,
 with `screen.json` and `capacity.json` reports beside them.
@@ -40,6 +40,11 @@ image = (
 )
 ROOT = Path("/data")
 DEFAULT_RECIPE = "hybrid/recipes/hybrid-40b-v1.json"
+
+
+def screen_path(recipe):
+    """The recipe's contamination screen: its own, or another recipe's named by `screen`."""
+    return ROOT / recipe.get("screen", f"{recipe['name']}/screen.npy")
 
 
 def calls_folder(run_id, deadline):
@@ -115,7 +120,7 @@ def prepare(recipe, name, index, deadline):
         return json.loads(meta_path.read_text())
     os.environ["RAYON_NUM_THREADS"] = "8"
     glm = tokenizer.load(tokenizer.tokenizer_file("/tmp/tokenizer"))
-    screen = np.load(folder / "screen.npy")
+    screen = np.load(screen_path(recipe))
     meta = data.prepare_shard(recipe, name, index, folder, glm, screen, tokenizer.EOS_ID)
     shutil.rmtree("/tmp/upstream", ignore_errors=True)
     volume.commit()
@@ -147,7 +152,9 @@ def coordinate(run_id, recipe, deadline, parallel):
 
     track(calls_folder(run_id, deadline), modal.current_function_call_id(), "coordinate")
     folder = ROOT / recipe["name"]
-    if not (folder / "screen.npy").exists():
+    if "screen" in recipe and not screen_path(recipe).exists():
+        raise FileNotFoundError(f"Screen {recipe['screen']} is not prepared")
+    if not screen_path(recipe).exists():
         call = build_screen.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
             recipe, deadline
         )
@@ -195,9 +202,14 @@ def coordinate(run_id, recipe, deadline, parallel):
             "heldout_tokens": sum(m["tokens"] for m in metas if m["heldout"]),
             "documents": sum(m["documents"] for m in metas),
             "dropped": {
-                k: sum(m["dropped"][k] for m in metas) for k in ("license", "empty", "contaminated")
+                k: sum(m["dropped"].get(k, 0) for m in metas)
+                for k in ("license", "empty", "short", "contaminated")
             },
-            "needed_tokens": round(recipe["target_tokens"] * recipe["sources"][name]["weight"]),
+            "needed_tokens": round(
+                recipe["target_tokens"]
+                * (1 - recipe.get("replay", {}).get("fraction", 0))
+                * recipe["sources"][name]["weight"]
+            ),
         }
     (folder / "capacity.json").write_text(json.dumps(capacity, indent=2) + "\n")
     status(

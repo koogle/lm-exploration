@@ -83,6 +83,46 @@ class HybridDataTests(unittest.TestCase):
             for i in range(3)
         ]
 
+    def test_repository_documents(self):
+        rows = {
+            "code": ["b = 2", "a = 1", "z = 26", "solo"],
+            "license": ["mit", "mit", "mit", "mit"],
+            "repo_name": ["r1", "r1", "r2", "r3"],
+            "path": ["b.py", "a.py", "z.py", "s.py"],
+        }
+        pq.write_table(pa.table(rows), self.root / "repo-12.parquet")
+        source = {
+            "weight": 1.0,
+            "repo": "c",
+            "revision": "r",
+            "pattern": "repo-{index}.parquet",
+            "file_offset": 10,
+            "shards": 3,
+            "column": "code",
+            "permissive_licenses_only": True,
+            "group_by": "repo_name",
+            "order_by": "path",
+            "min_tokens": 20,
+            "max_passes": 1,
+        }
+        self.recipe["sources"] = {"repos": source}
+        meta = data.prepare_shard(
+            self.recipe,
+            "repos",
+            2,
+            self.root / "out",
+            self.tokenizer,
+            np.empty(0, np.uint64),
+            EOS,
+            self.download,
+        )
+        # r1 joins its files in path order; r2 and r3 are shorter than 20 tokens.
+        self.assertEqual((meta["documents"], meta["dropped"]["short"]), (1, 2))
+        self.assertEqual(meta["upstream"]["file"], "repo-12.parquet")
+        expected = "### a.py\na = 1\n\n### b.py\nb = 2\n\n"
+        self.assertEqual(meta["tokens"], len(expected) + 1)
+        self.assertEqual(meta["bytes"], len(expected.encode()))
+
     def test_ngram_hashes_and_screen(self):
         ids = list(range(20))
         hashes = data.ngram_hashes(ids, 13)

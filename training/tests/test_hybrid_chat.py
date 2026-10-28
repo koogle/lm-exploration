@@ -6,6 +6,7 @@ import unittest
 import numpy as np
 from model_hybrid import chat, sft_data
 from model_hybrid import tokenizer as glm
+from training_data import packed_shards
 
 XLAM_ROW = {
     "messages": [
@@ -164,7 +165,7 @@ class PackingTests(unittest.TestCase):
             sft_data._write(Path(folder), "a", self.conversations())
             sft_data._write(Path(folder), "b", self.conversations()[::-1])
             recipe = {"files": ["a.parquet", "b.parquet"], "context": 11}
-            mixture = sft_data.ReplayMixture(
+            mixture = packed_shards.ReplayMixture(
                 sft_data.ChatMixture(recipe, folder), Pretraining(), replay_rows=1
             )
             inputs, labels, names = mixture.next_batch(3)
@@ -174,7 +175,7 @@ class PackingTests(unittest.TestCase):
             self.assertTrue((labels[:2] == sft_data.IGNORE_INDEX).any())
             state = mixture.state_dict()
             second = mixture.next_batch(2)
-            resumed = sft_data.ReplayMixture(
+            resumed = packed_shards.ReplayMixture(
                 sft_data.ChatMixture(recipe, folder), Pretraining(), replay_rows=1
             )
             resumed.load_state_dict(state)

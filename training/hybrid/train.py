@@ -19,6 +19,7 @@ import contextlib
 import dataclasses
 import datetime
 import faulthandler
+import itertools
 import json
 import math
 import os
@@ -223,9 +224,45 @@ def gate_sink_statistics(lm):
     return stats
 
 
+# In-document position buckets for long-context evaluation (used above 4K context).
+POSITION_EDGES = (0, 1024, 4096, 16384, 32768)
+
+
+def document_positions(inputs, eos_id):
+    """Each input token's position within its document; EOS ends a document."""
+    positions = np.zeros(inputs.shape, dtype=np.int64)
+    for row, tokens in enumerate(inputs):
+        position = 0
+        for column, token in enumerate(tokens):
+            positions[row, column] = position
+            position = 0 if token == eos_id else position + 1
+    return positions
+
+
+def position_losses(lm, inputs, labels, device, eos_id, edges):
+    """Held-out loss of the targets whose input sits in each in-document position bucket."""
+    positions = document_positions(inputs, eos_id)
+    out = {}
+    for low, high in itertools.pairwise(edges):
+        keep = (positions >= low) & (positions < high) & (labels != -100)
+        if not keep.any():
+            continue
+        ce, count = 0.0, 0
+        for start in range(0, len(inputs), 4):
+            x = torch.from_numpy(inputs[start : start + 4]).to(device)
+            y = torch.from_numpy(np.where(keep, labels, -100)[start : start + 4]).to(device)
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                losses = lm(x, y)
+            ce, count = ce + losses["ce"].item(), count + int(losses["count"])
+        if count:
+            out[f"{low}-{high}"] = ce / count
+    return out
+
+
 @torch.no_grad()
 def evaluate(lm, heldout, device, eos_id):
-    """Held-out loss, bits per byte and MTP loss per source; gate/sink activations."""
+    """Held-out loss, bits per byte and MTP loss per source; gate/sink activations; above
+    4K context also the loss per in-document position bucket."""
     lm.eval()
     results = {}
     hybrid.Attention.record_statistics = True
@@ -257,6 +294,12 @@ def evaluate(lm, heldout, device, eos_id):
                     float(np.mean([s["sink_weight"] for s in layer])) for layer in layers
                 ],
             }
+            if lm.config.block_size > POSITION_EDGES[2]:
+                edges = [e for e in POSITION_EDGES if e < lm.config.block_size]
+                edges.append(lm.config.block_size)
+                results[name]["loss_by_position"] = position_losses(
+                    lm, inputs, labels, device, eos_id, edges
+                )
     finally:
         hybrid.Attention.record_statistics = False
         lm.train()
@@ -565,6 +608,7 @@ def pretraining_heldout(config):
         return {
             name: heldout_windows(recipe, mixture.root, name, context, count)
             for name, count in config.eval_documents.items()
+            if name in recipe["sources"]
         }
 
     return heldout
@@ -581,52 +625,59 @@ def main():
     config = RunConfig.load(args.config)
     recipe = json.loads(Path(config.recipe).read_text())
     root = Path(args.data_root) / recipe["name"]
-    if recipe.get("format") == "chat-sft":
-        from training_data.packed_shards import PreparedMixture
+    from training_data.packed_shards import PreparedMixture, ReplayMixture
 
+    # Replay of an earlier recipe's prepared shards, read at this recipe's context.
+    replay = recipe.get("replay")
+    if replay:
+        replay_recipe = json.loads(
+            (Path(config.recipe).parent / f"{replay['recipe']}.json").read_text()
+        )
+        replay_recipe["context"] = recipe["context"]
+        replay_root = Path(args.data_root) / replay_recipe["name"]
+        replay_rows = round(config.global_rows * replay["fraction"])
+
+    def with_replay(primary):
+        if not replay:
+            return primary
+        return ReplayMixture(primary, PreparedMixture(replay_recipe, replay_root), replay_rows)
+
+    def replay_heldout(context):
+        return {
+            name: heldout_windows(replay_recipe, replay_root, name, context, count)
+            for name, count in config.eval_documents.items()
+            if replay and name in replay_recipe["sources"]
+        }
+
+    if recipe.get("format") == "chat-sft":
         from . import sft_data
 
-        replay = recipe.get("replay")
-        if replay:
-            replay_recipe = json.loads(
-                (Path(config.recipe).parent / f"{replay['recipe']}.json").read_text()
-            )
-            replay_root = Path(args.data_root) / replay_recipe["name"]
-            replay_rows = round(config.global_rows * replay["fraction"])
-
-        def data_source(recipe):
-            chat = sft_data.ChatMixture(recipe, root, config.seed)
-            if not replay:
-                return chat
-            pretraining = PreparedMixture(replay_recipe, replay_root)
-            return sft_data.ReplayMixture(chat, pretraining, replay_rows)
-
         def heldout_source(recipe, mixture, context):
-            """Chat held-out per file, plus the pretraining held-out sources under replay."""
+            """Chat held-out per file, plus the replayed sources' held-out shards."""
             count = config.eval_documents["chat"]
             out = {
                 name: windows
                 for name in sft_data.subset_names(recipe)
                 if (windows := heldout_windows(recipe, root, name, context, count)) is not None
             }
-            for name, count in config.eval_documents.items():
-                if replay and name in replay_recipe["sources"]:
-                    out[name] = heldout_windows(replay_recipe, replay_root, name, context, count)
-            return out
+            return out | replay_heldout(context)
 
         options = {
-            "data_source": data_source,
+            "data_source": lambda recipe: with_replay(
+                sft_data.ChatMixture(recipe, root, config.seed)
+            ),
             "heldout_source": heldout_source,
             "sample_prompts": sft_data.sample_prompts(),
             "sample_stop_ids": sft_data.STOP_IDS,
             "sample_new_tokens": 160,
         }
     else:
-        from training_data.packed_shards import PreparedMixture
-
+        own = pretraining_heldout(config)
         options = {
-            "data_source": lambda recipe: PreparedMixture(recipe, root),
-            "heldout_source": pretraining_heldout(config),
+            "data_source": lambda recipe: with_replay(PreparedMixture(recipe, root)),
+            "heldout_source": lambda recipe, mixture, context: (
+                own(recipe, getattr(mixture, "primary", mixture), context) | replay_heldout(context)
+            ),
         }
     train(config, args.run_dir, args.stop_unix, args.max_tokens, **options)
 

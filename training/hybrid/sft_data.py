@@ -17,7 +17,7 @@ a hash-selected fraction, and writes per subset:
 subset, into windows of context + 1 tokens (the tail padded with EOS and ignored),
 and serves (inputs, labels) where a label is the next token if it is a target and
 -100 otherwise. A recipe's `replay` names a pretraining recipe and the fraction of
-each batch's rows taken from it (`ReplayMixture`). Documents never mix: each conversation ends with EOS, which the
+each batch's rows taken from it (`packed_shards.ReplayMixture`). Documents never mix: each conversation ends with EOS, which the
 model's document mask respects.
 """
 
@@ -305,37 +305,6 @@ class ChatMixture:
 
     def load_state_dict(self, state):
         self.position = state["position"]
-
-
-class ReplayMixture:
-    """Chat batches whose last `replay_rows` rows are pretraining windows (replay).
-
-    Replay keeps the pretraining objective in every step so fine-tuning does not
-    trade away what pretraining learned. Pretraining rows train on every token;
-    the run ends when the chat data does.
-    """
-
-    def __init__(self, chat, pretraining, replay_rows):
-        self.chat, self.pretraining, self.replay_rows = chat, pretraining, replay_rows
-        self.wait_seconds = pretraining.wait_seconds
-
-    def next_batch(self, rows):
-        if not 0 < self.replay_rows < rows:
-            raise ValueError("replay must take some but not all rows of a batch")
-        inputs, labels, names = self.chat.next_batch(rows - self.replay_rows)
-        replay_inputs, replay_labels, replay_names = self.pretraining.next_batch(self.replay_rows)
-        return (
-            np.concatenate((inputs, replay_inputs)),
-            np.concatenate((labels, replay_labels)),
-            names + replay_names,
-        )
-
-    def state_dict(self):
-        return {"chat": self.chat.state_dict(), "replay": self.pretraining.state_dict()}
-
-    def load_state_dict(self, state):
-        self.chat.load_state_dict(state["chat"])
-        self.pretraining.load_state_dict(state["replay"])
 
 
 def chat_heldout_windows(recipe, root, name, context, max_conversations):
