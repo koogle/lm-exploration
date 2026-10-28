@@ -409,7 +409,7 @@ runs three stages on the `lm-exploration-hybrid-data` volume under `<name>/`:
 - `issues` has GLM-5.3 (through OpenRouter) draft each task's issue from the commit
   message and the test changes only, up to four drafts until one has no leaks (quoted
   added source lines, new internal names the tests never use, mentions of tests or the
-  commit). It needs the Modal secret `openrouter` with `OPENROUTER_API_KEY`.
+  commit). Launch it with `OPENROUTER_API_KEY` set; the key is passed to that run only.
 
 ```sh
 uv run modal run -m model_hybrid.modal_pr_tasks::select [--count 1000] [--name pr-tasks-pilot]
