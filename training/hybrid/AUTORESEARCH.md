@@ -90,3 +90,19 @@ the private `jfrick/lm-exploration-results` dataset, under `training/results/RUN
 Weights and optimizer states remain in the persistent Modal training volume.
 The source branch and hashes are stored with each launch. Failed qualification,
 failed training, timeout, and systems rejection are distinct outcomes.
+
+## Active campaign
+
+`kda-autoresearch-1793189544` is the corrected campaign on
+[Modal](https://modal.com/apps/radiantai/main/ap-TFgQs7IvKsL9SLWohLLDf7).
+The earlier `kda-autoresearch-1793189229` was canceled before training after
+qualification caught an incorrect Triton namespace for `static_range`; its
+failure and cancellation were archived. This was an implementation failure,
+not evidence about convolution quality. No timed-out training was restarted.
+
+The collector emits `analysis.json` using equal-step comparisons. Three local
+decision tests cover unequal checkpoints, incomplete runs, and disagreeing seeds.
+An improvement label requires both completed seeds to favor a candidate and a
+mean CE reduction greater than 0.003 nats. This is a practical threshold, not a
+claim of statistical significance or target-scale transfer. The results retain
+all per-seed gaps and raw metrics for review.
