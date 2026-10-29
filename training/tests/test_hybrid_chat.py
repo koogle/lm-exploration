@@ -152,10 +152,15 @@ class PackingTests(unittest.TestCase):
             recipe = {
                 "name": "agentic",
                 "context": 11,
-                "subsets": [{"name": "a", "prepared_in": "chat"}, {"name": "b", "repeat": 3}],
+                "subsets": [
+                    {"name": "a", "prepared_in": "chat", "repeat": 0.4},
+                    {"name": "b", "repeat": 3},
+                ],
             }
             mixture = sft_data.ChatMixture(recipe, Path(folder, "agentic"))
-            self.assertEqual(len(mixture.order), 5 + 3 * 2)
+            self.assertEqual(len(mixture.order), 2 + 3 * 2)
+            again = sft_data.ChatMixture(recipe, Path(folder, "agentic"))
+            self.assertEqual(mixture.order, again.order)
             self.assertEqual(
                 sft_data.subset_folder(recipe, Path(folder, "agentic"), "a"), Path(folder, "chat")
             )

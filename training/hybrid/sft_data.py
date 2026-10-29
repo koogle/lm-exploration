@@ -3,9 +3,10 @@
 A recipe (recipes/chat-sft-*.json) names a Hugging Face dataset at a pinned revision
 and its parquet files, each one subset named by its file stem; `subsets` adds
 subsets prepared elsewhere (`prepared_in` another recipe's folder, or written into
-this recipe's folder by another stage), each read `repeat` times per pass. `convert` turns a smoltalk2 row (Hermes-style tool calls in the
-text, tool schemas in `chat_template_kwargs.xml_tools`) into OpenAI messages and
-tools; `prepare_subset` renders each conversation with `chat.encode`, drops those
+this recipe's folder by another stage), each read `repeat` times per pass (a
+fraction reads a seeded sample of that share). `convert` turns a smoltalk2 row
+(Hermes-style tool calls in the text, tool schemas in
+`chat_template_kwargs.xml_tools`) into OpenAI messages and tools; `prepare_subset` renders each conversation with `chat.encode`, drops those
 longer than the context or sharing a 13-gram with the benchmark screen, holds out
 a hash-selected fraction, and writes per subset:
 
@@ -269,23 +270,22 @@ class ChatMixture:
     """Packed training windows over every subset of a prepared chat recipe, one pass.
 
     The order is a seeded permutation of all conversations (a subset with `repeat`
-    appears that many times); the state is the number of conversations consumed, so
-    a resumed run continues exactly.
+    appears that many times, its fractional part as a seeded sample); the state is
+    the number of conversations consumed, so a resumed run continues exactly.
     """
 
     def __init__(self, recipe, root, seed=0):
         self.recipe, self.root, self.context = recipe, Path(root), recipe["context"]
         listed = subsets(recipe)
         self.subsets = [_load(subset_folder(recipe, root, name), name) for name, _, _ in listed]
-        index = [
-            (s, i)
-            for s, ((_, _, docs), (_, _, repeat)) in enumerate(
-                zip(self.subsets, listed, strict=True)
-            )
-            for _ in range(repeat)
-            for i in range(len(docs))
-        ]
-        order = np.random.default_rng(seed).permutation(len(index))
+        rng = np.random.default_rng(seed)
+        index = []
+        for s, ((_, _, docs), (_, _, repeat)) in enumerate(zip(self.subsets, listed, strict=True)):
+            whole, part = int(repeat), repeat - int(repeat)
+            chosen = list(range(len(docs))) * whole
+            chosen += sorted(rng.choice(len(docs), round(part * len(docs)), replace=False))
+            index.extend((s, int(i)) for i in chosen)
+        order = rng.permutation(len(index))
         self.order = [index[i] for i in order]
         self.position = 0
         self.wait_seconds = 0

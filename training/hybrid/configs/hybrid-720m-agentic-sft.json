@@ -22,7 +22,7 @@
     "loss_chunk_size": 2048,
     "mtp": false
   },
-  "target_tokens": 1200000000,
+  "target_tokens": 400000000,
   "global_rows": 32,
   "microbatch": 1,
   "warmup_tokens": 50000000,
