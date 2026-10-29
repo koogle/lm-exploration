@@ -8,7 +8,7 @@ bias and returns the bias gradient, so no separate bias reductions run:
     x0 = embed(tokens)                                # FP32 residual stream
     y  = RMSNorm(x0)
     per block:
-        a       = projection(attention(QKV+RoPE(qkv(y) + b_qkv)))   # bias-free linears
+        a       = projection(attention(QKV+RoPE(qkv(y) + b_qkv)))   # per-document RoPE and attention
         x, y    = AddRMSNorm(x, a + b_projection)                    # residual add + next norm
         m       = down(SwiGLU(gate(y) + b_gate, up(y) + b_up))
         x, y    = AddRMSNorm(x, m + b_down)
@@ -20,6 +20,7 @@ from pathlib import Path
 
 import torch
 import torch.nn.functional as F
+from model_10m.model import document_attention, find_documents
 
 _ops = None
 LOSS_CHUNK_ROWS = 4096
@@ -78,14 +79,18 @@ class AddRMSNormFunction(torch.autograd.Function):
 
 
 class QKVRopeFunction(torch.autograd.Function):
+    """q, k, v in [B, H, T, D]; `positions` [B, T] are positions within each document."""
+
     @staticmethod
-    def forward(ctx, qkv, bias, heads):
-        return tuple(ops().qkv_rope_forward(qkv.contiguous(), bias, heads))
+    def forward(ctx, qkv, bias, positions, heads):
+        ctx.save_for_backward(positions)
+        return tuple(ops().qkv_rope_forward(qkv.contiguous(), bias, positions, heads))
 
     @staticmethod
     def backward(ctx, dq, dk, dv):
-        dqkv, dbias = ops().qkv_rope_backward(dq, dk, dv)
-        return dqkv, dbias, None
+        (positions,) = ctx.saved_tensors
+        dqkv, dbias = ops().qkv_rope_backward(dq, dk, dv, positions)
+        return dqkv, dbias, None, None
 
 
 class SwiGLUFunction(torch.autograd.Function):
@@ -129,19 +134,13 @@ class LinearCrossEntropyFunction(torch.autograd.Function):
         return d_hidden * grad_output.to(d_hidden.dtype), d_weight * grad_output, None
 
 
-def attention(options, module, y):
+def attention(module, y, documents):
     batch, length, width = y.shape
     query, key, value = QKVRopeFunction.apply(
-        F.linear(y, module.qkv.weight), module.qkv.bias, module.n_head
+        F.linear(y, module.qkv.weight), module.qkv.bias, documents.positions, module.n_head
     )
-    from torch.nn.attention import SDPBackend, sdpa_kernel
-
-    backend = {"flash": SDPBackend.FLASH_ATTENTION, "cudnn": SDPBackend.CUDNN_ATTENTION}
-    with sdpa_kernel(backend[options["attention"]]):
-        attended = F.scaled_dot_product_attention(query, key, value, is_causal=True)
-    return F.linear(
-        attended.transpose(1, 2).reshape(batch, length, width), module.projection.weight
-    )
+    attended = document_attention(*(t.transpose(1, 2) for t in (query, key, value)), documents)
+    return F.linear(attended.reshape(batch, length, width), module.projection.weight)
 
 
 def mlp(module, y):
@@ -157,13 +156,14 @@ def mlp(module, y):
 def gpt_forward(self, tokens, labels=None, loss_chunk_size=0):
     if loss_chunk_size:
         raise ValueError("The fused loss always chunks; loss_chunk_size is not used")
+    documents = find_documents(tokens, self.config.eos_id)
     blocks = list(self.blocks)
     norms = [b.mlp_norm for b in blocks]
     following = [b.attention_norm for b in blocks[1:]] + [self.final_norm]
     x = self.token_embedding(tokens)
     y = RMSNormFunction.apply(x, blocks[0].attention_norm.weight, blocks[0].attention_norm.eps)
     for block, mlp_norm, next_norm in zip(blocks, norms, following):
-        a = attention(self.fused_options, block.attention, y)
+        a = attention(block.attention, y, documents)
         x, y = AddRMSNormFunction.apply(
             x, a, block.attention.projection.bias, mlp_norm.weight, mlp_norm.eps
         )
@@ -174,14 +174,10 @@ def gpt_forward(self, tokens, labels=None, loss_chunk_size=0):
     return LinearCrossEntropyFunction.apply(y.flatten(0, 1), self.lm_head.weight, labels.flatten())
 
 
-def fuse(model, *, attention="cudnn"):
+def fuse(model):
     """Route a GPT's forward through the fused kernels, in place.
 
-    `attention` selects PyTorch's cuDNN ("cudnn", faster on H100) or FlashAttention-2
-    ("flash") kernel.
+    Attention is the model's own document-causal FlashAttention varlen call.
     """
-    if attention not in ("flash", "cudnn"):
-        raise ValueError("attention must be cudnn or flash")
-    model.fused_options = {"attention": attention}
     model.forward = types.MethodType(gpt_forward, model)
     return model
