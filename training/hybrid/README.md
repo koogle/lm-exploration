@@ -227,6 +227,34 @@ total in the plan assumes the GLM tokenizer's larger embedding table. From
 uv run modal run --detach -m model_hybrid.modal_hint_pilot --run-id hint-pilot-01
 ```
 
+### Pilot `hint-pilot-01` (2026-10-29)
+
+Both arms trained for 1900 steps (248,697,079 target tokens), seed 1234. Mean
+validation cross-entropy over the first 512 validation rows (1,047,109 targets):
+
+| Model | Hints at evaluation | Hinted targets | Validation loss |
+| --- | --- | --- | --- |
+| Baseline | none | — | 3.1401 |
+| Hinted | none | — | 3.1470 |
+| Hinted | its training rows (249M tokens) | 10.9% | 3.0614 |
+| Hinted | first 500M training-split tokens | 12.9% | 3.0473 |
+| Hinted | first 1B | 15.4% | 3.0269 |
+| Hinted | first 2B | 18.4% | 3.0038 |
+
+The training-row table rebuilt offline reproduced the online index's validation
+hints exactly. With hints from its own training rows the hinted arm is 0.079 nats
+below the baseline. Each doubling of the hint corpus took off another 0.014–0.023,
+reaching −0.136 at 2B tokens. Without hints, the hinted arm is 0.007 worse than the
+baseline, as the record also reports. Throughput was the same (about 47k tokens/s
+on one H100 per arm, about 88 minutes per arm). The learned site scales stayed near
+their starting values (0.062, 8.2, 7.4 at the end).
+
+The gains depend on how much validation text recurs in the training split. Part of
+the gain from larger corpora may come from near-duplicate documents across the
+split, so it is retrieval, not model quality. Downstream evaluation has not been
+run. Metrics, logs, checkpoints and tables are on the `lm-exploration-training`
+Modal volume under `hint-pilot/hint-pilot-01/`.
+
 The supervisor records the call ids and deadline in
 `/runs/hint-pilot/<run>/supervisor.json` on the `lm-exploration-training` volume
 and cancels outstanding calls 24 hours after launch. Every function refuses to
