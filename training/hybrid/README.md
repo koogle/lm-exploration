@@ -249,10 +249,30 @@ baseline, as the record also reports. Throughput was the same (about 47k tokens/
 on one H100 per arm, about 88 minutes per arm). The learned site scales stayed near
 their starting values (0.062, 8.2, 7.4 at the end).
 
-The gains depend on how much validation text recurs in the training split. Part of
-the gain from larger corpora may come from near-duplicate documents across the
-split, so it is retrieval, not model quality. Downstream evaluation has not been
-run. Metrics, logs, both checkpoints (safetensors with their configuration) and
+#### Where the gain comes from
+
+`overlap_study` scores every validation target with both arms. It groups targets
+by segment, one document's span within a row. A segment's overlap is the share of
+its targets whose 20-token context occurs verbatim in the 2B-token table:
+
+| Segment overlap | Targets | Baseline | Hinted, own rows | Hinted, 2B | Share of the 2B gain |
+| --- | --- | --- | --- | --- | --- |
+| none | 76.0% | 3.2355 | 3.2262 | 3.2174 | 10% |
+| up to 10% | 16.6% | 2.8099 | 2.6915 | 2.5970 | 26% |
+| 10–50% | 5.8% | 2.9640 | 2.3743 | 2.0637 | 38% |
+| over 50% | 1.7% | 2.6837 | 1.6180 | 0.5843 | 26% |
+
+On the three quarters of validation text with no verbatim 20-token overlap, hints
+gain 0.009 (own rows) to 0.018 nats (2B). Most of the 0.136 total comes from the
+7.5% of targets in segments that substantially recur in the training split. There,
+hints mostly retrieve the continuation. Per position, the 2B table gives 20-token
+matches on 2.8% of targets: their loss falls from 2.87 to 0.31. Targets with no
+match at all move from 3.230 to 3.227. Without hints the hinted arm is no better on
+any group. This is exact-repeat retrieval, and the clean-text gain is small.
+Downstream evaluation has not been run.
+
+`model_hybrid.modal_hint_pilot::overlap_main --run-id <run>` reruns the study (one
+H100) and writes `overlap/overlap.json` and per-target `overlap/overlap-tokens.npz`. Metrics, logs, both checkpoints (safetensors with their configuration) and
 the hint tables are in the HF dataset `jfrick/lm-exploration-results` under
 `pr-109/hint-pilot-01/`. [`publish_hint_pilot.py`](publish_hint_pilot.py) copies a
 run there from the Modal volume:

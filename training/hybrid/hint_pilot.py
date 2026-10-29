@@ -322,3 +322,117 @@ def evaluate_corpora(manifest, arm, tables, settings):
             )
         results.append(entry)
     return results
+
+
+def load_arm(arm, settings):
+    import torch
+
+    saved = torch.load(Path(arm) / "model.pt", map_location="cuda", weights_only=True)
+    lm = build_model(settings, saved["hinted"])
+    lm.load_state_dict({k: v.float() for k, v in saved["model"].items()})
+    return lm.eval()
+
+
+def token_losses(lm, rows, settings, tables=None):
+    """Per-target cross-entropy [N, T] (NaN where ignored) and hint cells [N, T]."""
+    import torch
+    from torch.nn import functional as F
+    from training_data.subword import EOS_TOKEN_ID
+
+    losses, cells = [], []
+    with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
+        for x, y in micro_batches(*rows, settings["micro_rows"]):
+            found = None if tables is None else hints.lookup(tables, x, EOS_TOKEN_ID)
+            cells.append(np.zeros_like(x) if found is None else found.cells)
+            logits = lm(
+                torch.from_numpy(x).cuda(), hints=None if found is None else found.to("cuda")
+            )
+            target = torch.from_numpy(y).cuda()
+            ce = F.cross_entropy(
+                logits.float().flatten(0, 1), target.flatten(), reduction="none", ignore_index=-100
+            ).view_as(target)
+            losses.append(ce.masked_fill(target == hints.IGNORE_INDEX, float("nan")).cpu().numpy())
+    return np.concatenate(losses), np.concatenate(cells)
+
+
+OVERLAP_BINS = (0.0, 0.1, 0.5, 1.0)  # share of a segment's contexts whose 20-gram matched
+
+
+def overlap_study(manifest, root, settings, output):
+    """Per-token losses of both arms, split by how much of the text recurs in the corpus.
+
+    Writes `overlap-tokens.npz` (per-target losses and cells) and returns a summary:
+    losses by each position's own hint bucket for every corpus table, and by segment
+    overlap (a segment is one document's span within a row) measured with the largest
+    table: the share of the segment's positions whose 20-token context matched.
+    """
+    from training_data.subword import EOS_TOKEN_ID
+
+    from .documents import document_ids
+
+    root, output = Path(root), Path(output)
+    rows = validation_rows(manifest, settings)
+    tables = sorted((root / "corpus").glob("corpus-*.npz"), key=lambda p: int(p.stem.split("-")[1]))
+    arrays = {}
+    arrays["baseline"], _ = token_losses(load_arm(root / "baseline", settings), rows, settings)
+    hinted = load_arm(root / "hinted", settings)
+    arrays["hinted_none"], _ = token_losses(hinted, rows, settings)
+    names = []
+    for path in tables:
+        name = path.stem
+        names.append(name)
+        arrays[f"hinted_{name}"], arrays[f"cells_{name}"] = token_losses(
+            hinted, rows, settings, hints.load_tables(path)
+        )
+    np.savez(output / "overlap-tokens.npz", inputs=rows[0], labels=rows[1], **arrays)
+
+    target = rows[1] != hints.IGNORE_INDEX
+    per_bucket = (len(hints.COUNT_EDGES) + 1) * (len(hints.PURITY_EDGES) + 1)
+
+    def means(mask):
+        entry = {"tokens": int(mask.sum())}
+        for key in ["baseline", "hinted_none", *(f"hinted_{n}" for n in names)]:
+            entry[key] = float(arrays[key][mask].mean()) if mask.any() else None
+        return entry
+
+    by_bucket = {}
+    for name in names:
+        bucket = arrays[f"cells_{name}"] // per_bucket
+        by_bucket[name] = {
+            label: means(target & (bucket == b))
+            for b, label in enumerate(["none", *(f"length_{n}" for n in hints.LENGTHS)])
+        }
+
+    import torch
+
+    segments = document_ids(torch.from_numpy(rows[0]), EOS_TOKEN_ID).numpy()
+    segment_key = np.arange(len(segments))[:, None] * (segments.max() + 1) + segments
+    deepest = arrays[f"cells_{names[-1]}"] // per_bucket == len(hints.LENGTHS)
+    _, inverse = np.unique(segment_key, return_inverse=True)
+    inverse = inverse.reshape(segment_key.shape)
+    size = int(inverse.max()) + 1
+    hits = np.bincount(inverse[target], weights=deepest[target], minlength=size)
+    counts = np.bincount(inverse[target], minlength=size)
+    share = np.divide(hits, counts, out=np.zeros_like(hits), where=counts > 0)
+    by_overlap = []
+    edges = np.array(OVERLAP_BINS)
+    labels = np.searchsorted(edges, share, "left")  # 0: no match, then (e_i-1, e_i]
+    for b in range(len(edges)):
+        segment_mask = labels == b
+        mask = target & segment_mask[inverse]
+        low = None if b == 0 else float(edges[b - 1])
+        by_overlap.append(
+            {
+                "share_above": low,
+                "share_at_most": float(edges[b]),
+                "segments": int((segment_mask & (counts > 0)).sum()),
+                **means(mask),
+            }
+        )
+    return {
+        "tables": names,
+        "overlap_table": names[-1],
+        "all": means(target),
+        "by_hint_bucket": by_bucket,
+        "by_segment_overlap": by_overlap,
+    }

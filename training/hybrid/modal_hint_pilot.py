@@ -185,6 +185,39 @@ def supervise(run_id, settings, deadline):
     return results
 
 
+@app.function(
+    image=image,
+    gpu="H100",
+    cpu=8,
+    memory=65536,
+    timeout=EVALUATE_TIMEOUT,
+    retries=0,
+    secrets=secrets,
+    volumes={"/data": data_volume, "/runs": run_volume},
+)
+def overlap(run_id, deadline):
+    refuse_late(deadline, EVALUATE_TIMEOUT)
+    from model_hybrid.hint_pilot import overlap_study
+
+    run_volume.reload()
+    root = folder(run_id)
+    settings = json.loads((root / "supervisor.json").read_text())["settings"]
+    output = root / "overlap"
+    output.mkdir(exist_ok=True)
+    try:
+        summary = overlap_study(MANIFEST, root, settings, output)
+        (output / "overlap.json").write_text(json.dumps(summary, indent=2) + "\n")
+    finally:
+        run_volume.commit()
+    return summary
+
+
+@app.local_entrypoint()
+def overlap_main(run_id: str):
+    """Loss split by corpus overlap for a finished pilot (one H100, under two hours)."""
+    print(json.dumps(overlap.remote(run_id, time.time() + LAUNCH_LIMIT_SECONDS), indent=2))
+
+
 @app.local_entrypoint()
 def main(run_id: str, steps: int = 0, corpus_tokens: str = "", validation_rows: int = 0):
     from model_hybrid.hint_pilot import SETTINGS
