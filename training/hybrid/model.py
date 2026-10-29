@@ -7,7 +7,7 @@ configurable base. Every forward pass masks attention by document: documents
 end in EOS (`HybridConfig.eos_id`) and a token sees only earlier tokens of its
 own document. On CUDA attention is compiled FlexAttention with that document-causal
 block mask; on CPU an explicit masked softmax. The loss is a chunked cross-entropy
-with a z-loss.
+with a z-loss. With `hints=True`, n-gram hints (hints.py) join the residual stream.
 """
 
 import math
@@ -21,6 +21,7 @@ from torch.nn.attention.flex_attention import AuxRequest, create_block_mask, fle
 from torch.utils.checkpoint import checkpoint
 
 from .documents import document_ids, document_positions
+from .hints import CELLS
 from .kda import KimiDeltaAttention
 from .roles import declare
 
@@ -28,6 +29,7 @@ __all__ = [
     "Attention",
     "Block",
     "DocumentMask",
+    "HintInjection",
     "HybridConfig",
     "HybridLM",
     "RMSNorm",
@@ -143,6 +145,7 @@ class HybridConfig:
     init_std: float = 0.02
     z_loss: float = 1e-4
     loss_chunk_size: int = 8192
+    hints: bool = False
 
     def __post_init__(self):
         for name in POSITIVE_FIELDS:
@@ -324,6 +327,40 @@ def mtp_weight(config, progress):
     return config.mtp_weight_start + (config.mtp_weight_end - config.mtp_weight_start) * progress
 
 
+class HintInjection(nn.Module):
+    """N-gram hints (hints.py) added to the residual stream, after modded-nanogpt PR 367.
+
+    A position's hint is the count-weighted mean embedding of its candidate next
+    tokens, read without a gradient, times its cell's learned scale, plus its cell's
+    learned embedding; zero without a match. It joins the residual stream after the
+    embedding, after the middle block and before the final norm, each with its own
+    scale. Scales start warm, as in the record, and train at a higher learning rate
+    (`adamw_fast`).
+    """
+
+    def __init__(self, config):
+        super().__init__()
+        self.next_scale = nn.Parameter(torch.full((CELLS,), 4.0))
+        self.cell_embedding = nn.Parameter(torch.zeros(CELLS, config.n_embd))
+        self.site_scales = nn.Parameter(torch.tensor([0.1, 8.0, 8.0]))
+        self.middle = config.n_layer // 2 - 1
+
+    def optimizer(self):
+        yield from declare("adamw_fast", self.next_scale, self.site_scales)
+        yield from declare("adamw_no_decay", self.cell_embedding)
+
+    def forward(self, hints, embedding):
+        """[B, T, D] hint vectors from `Hints.to(device)` and the embedding table."""
+        cells = hints["cells"]
+        terms = embedding.detach()[hints["token"]].float() * hints["weight"][:, None]
+        mean = terms.new_zeros(cells.numel(), embedding.size(1)).index_add_(
+            0, hints["position"], terms
+        )
+        cells = cells.flatten()
+        vector = mean * self.next_scale[cells, None] + self.cell_embedding[cells]
+        return (vector * (cells > 0)[:, None]).view(*hints["cells"].shape, -1)
+
+
 class HybridLM(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -332,6 +369,7 @@ class HybridLM(nn.Module):
         self.blocks = nn.ModuleList(Block(config, kind) for kind in config.layer_kinds)
         self.final_norm = RMSNorm(config.n_embd, config.norm_eps)
         self.mtp = MultiTokenPrediction(config) if config.mtp else None
+        self.hint = HintInjection(config) if config.hints else None
         self.apply(self.initialize)
         cos, sin = rope_tables(config.block_size, config.head_dim, config.rope_base, None)
         self.register_buffer("rope_cos", cos, persistent=False)
@@ -355,11 +393,12 @@ class HybridLM(nn.Module):
                 std /= math.sqrt(2 * self.config.n_layer)
             nn.init.normal_(module.weight, std=std)
 
-    def trunk(self, tokens):
+    def trunk(self, tokens, hints=None):
         """Residual stream after the last block, with the shared mask and RoPE tables.
 
         Each EOS ends a document: attention, convolutions, KDA state and RoPE
-        positions restart after it.
+        positions restart after it. `hints` (hints.Hints on the device) needs a model
+        built with `hints=True`; without them that model runs as if nothing matched.
         """
         length = tokens.size(1)
         if not 0 < length <= self.config.block_size:
@@ -368,12 +407,22 @@ class HybridLM(nn.Module):
         mask = DocumentMask(documents)
         rope = (self.rope_cos[mask.positions][:, None], self.rope_sin[mask.positions][:, None])
         x = self.token_embedding(tokens)
-        for block in self.blocks:
+        if hints is not None and self.hint is None:
+            raise ValueError("this model was built without hints")
+        vector = None if hints is None else self.hint(hints, self.output_weight).to(x.dtype)
+        scales = None if vector is None else self.hint.site_scales.to(x.dtype)
+        if vector is not None:
+            x = x + scales[0] * vector
+        for index, block in enumerate(self.blocks):
             x = block(x, rope, mask)
+            if vector is not None and index == self.hint.middle:
+                x = x + scales[1] * vector
+        if vector is not None:
+            x = x + scales[2] * vector
         return x, rope, mask
 
-    def hidden_states(self, tokens):
-        return self.final_norm(self.trunk(tokens)[0])
+    def hidden_states(self, tokens, hints=None):
+        return self.final_norm(self.trunk(tokens, hints)[0])
 
     def loss_sums(self, hidden, labels, prefix=""):
         ce, z = chunked_cross_entropy(
@@ -386,16 +435,16 @@ class HybridLM(nn.Module):
             f"{prefix}count": (labels != IGNORE_INDEX).sum(),
         }
 
-    def forward(self, tokens, labels=None, mtp_labels=None):
+    def forward(self, tokens, labels=None, mtp_labels=None, hints=None):
         """Logits, or summed losses when `labels` are given.
 
         Returns {"loss", "ce", "z", "count"}: `loss = ce + z_loss * z` summed over
         valid targets; divide by the global valid-target count to get the mean.
         With `mtp_labels` (targets for t+2, see `documents.mtp_labels`), also
         returns the same sums for the MTP module under an `mtp_` prefix. Without
-        them the MTP module does not run, as in inference.
+        them the MTP module does not run, as in inference. `hints` as in `trunk`.
         """
-        x, rope, mask = self.trunk(tokens)
+        x, rope, mask = self.trunk(tokens, hints)
         hidden = self.final_norm(x)
         if labels is None:
             return F.linear(hidden, self.output_weight)

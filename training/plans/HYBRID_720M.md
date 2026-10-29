@@ -21,6 +21,10 @@ than small CUDA correctness checks.
 | 8 | 720M config, throughput benchmark, ~200M-token pilot | Planned |
 | 9 | 40B launch on 8×H100 in 24-hour segments | Planned |
 
+A side study, the [n-gram hint pilot](../hybrid/README.md#n-gram-hints), trains
+the default configuration with and without speedrun-style n-gram hints on the
+existing 32K ClimbMix/code snapshot ahead of PRs 7 and 8.
+
 Studies that spend compute or touch data at scale (token counts, contamination
 screens, benchmarks, pilots, the launch) are run only after the user approves
 each one.

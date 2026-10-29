@@ -9,7 +9,7 @@ undeclared or declared twice.
 
 from torch import nn
 
-ROLES = ("muon", "adamw_decay", "adamw_no_decay")
+ROLES = ("muon", "adamw_decay", "adamw_no_decay", "adamw_fast")
 
 
 def declare(role, *owners):

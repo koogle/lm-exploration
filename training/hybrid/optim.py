@@ -8,7 +8,9 @@ in model.py and kda.py, see roles.py):
 - `adamw_decay`: the tied embedding/output table and the KDA beta projection
   (one row per head, not a hidden matrix).
 - `adamw_no_decay`: norm scales, attention sinks, gate biases, KDA `A_log`,
-  `dt_bias` and depthwise convolution kernels.
+  `dt_bias` and depthwise convolution kernels, the n-gram hint cell embeddings.
+- `adamw_fast`: the n-gram hints' trust scales, without decay at `fast_lr_scale`
+  times the AdamW learning rate (as in the speedrun record).
 
 Muon is trainer.optimizers.Muon (five-step Newton–Schulz, original aspect-ratio
 scaling). Base learning rates follow the 124M Muon comparison
@@ -33,6 +35,7 @@ class OptimizerConfig:
     adamw_lr: float = 3e-4
     adam_betas: tuple[float, float] = (0.9, 0.95)
     weight_decay: float = 0.1
+    fast_lr_scale: float = 10.0
 
 
 def parameter_groups(model):
@@ -74,11 +77,21 @@ class HybridOptimizer:
             momentum=config.muon_momentum,
             weight_decay=config.weight_decay,
         )
+        adamw_groups = [
+            {"params": [p for _, p in groups["adamw_decay"]]},
+            {"params": [p for _, p in groups["adamw_no_decay"]], "weight_decay": 0.0},
+        ]
+        if groups["adamw_fast"]:
+            adamw_groups.append(
+                {
+                    "params": [p for _, p in groups["adamw_fast"]],
+                    "weight_decay": 0.0,
+                    "lr": config.adamw_lr * config.fast_lr_scale,
+                    "lr_scale": config.fast_lr_scale,
+                }
+            )
         self.adamw = torch.optim.AdamW(
-            [
-                {"params": [p for _, p in groups["adamw_decay"]]},
-                {"params": [p for _, p in groups["adamw_no_decay"]], "weight_decay": 0.0},
-            ],
+            adamw_groups,
             lr=config.adamw_lr,
             betas=config.adam_betas,
             weight_decay=config.weight_decay,

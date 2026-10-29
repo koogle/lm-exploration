@@ -172,7 +172,8 @@ yields `(parameter, role)` pairs (helper `declare` in [`roles.py`](roles.py)).
 | --- | --- | --- |
 | `muon` | Muon, LR 0.02, momentum 0.95, weight decay 0.1 | 2D hidden matrices in blocks and MTP: q/k/v/o, attention `gate_proj`, KDA `f_proj`/`g_proj`, SwiGLU, MTP `fuse` |
 | `adamw_decay` | AdamW, LR 3e-4, betas (0.9, 0.95), weight decay 0.1 | tied embedding/output table, KDA beta projection `b_proj` |
-| `adamw_no_decay` | AdamW, LR 3e-4, betas (0.9, 0.95), no weight decay | norm scales, attention sinks, gate biases, KDA `A_log`, `dt_bias`, convolution kernels |
+| `adamw_no_decay` | AdamW, LR 3e-4, betas (0.9, 0.95), no weight decay | norm scales, attention sinks, gate biases, KDA `A_log`, `dt_bias`, convolution kernels, hint cell embeddings |
+| `adamw_fast` | AdamW, LR 3e-3, betas (0.9, 0.95), no weight decay | n-gram hint scales (models built with `hints=True`) |
 
 Muon is `trainer.optimizers.Muon` (five-step Newton–Schulz with the original
 aspect-ratio scaling); its weight decay is decoupled, `p *= 1 - lr * 0.1`.
@@ -186,6 +187,51 @@ declared twice, or a non-matrix declared for Muon raises.
 The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
 placeholders until the 720M configuration is fixed in PR 8.
 
+## N-gram hints
+
+[`hints.py`](hints.py) implements the n-gram hints of the NanoGPT speedrun record
+([write-up](https://brunborg.com/n-gram-hinted-lm),
+[KellerJordan/modded-nanogpt PR 367](https://github.com/KellerJordan/modded-nanogpt/pull/367)).
+A position's contexts are its last 6, 10 and 20 input tokens within its document
+and row. A hint lists the tokens that followed the deepest matching context in an
+indexed corpus, with their counts. The deepest length, the total count (7 bins) and
+the top token's share (6 bins) form one of 168 cells (cell 0: no match).
+
+Keys are 48-bit context hashes with the 16-bit next token below them, held in
+sorted uint64 arrays with counts; a context's candidates form one range.
+`HintIndex` indexes training rows after their optimizer step, in background
+log-structured merges. It answers a step only from strictly earlier steps
+(typically lagging by up to `flush_steps`) and raises otherwise. A lookup reads a
+row's inputs up to the hinted position, never its labels, so a hint cannot carry a
+target. Evaluation tables come from training-split text only; `Table.filtered`
+keeps the contexts of a fixed validation set, so prefixes of billions of tokens fit
+in memory.
+
+`HybridConfig(hints=True)` adds `HintInjection`: the count-weighted mean of the
+candidates' (detached) embeddings times a per-cell scale, plus a per-cell
+embedding. The result joins the residual stream after the embedding, after the
+middle block and before the final norm, each with a learned scale. The scales use the
+record's warm starting values (4.0; 0.1, 8.0, 8.0) and the `adamw_fast` optimizer
+role at 10x the AdamW learning rate. Without hints, or where nothing matched, the
+model computes exactly what the same weights compute without the hint module.
+
+[`hint_pilot.py`](hint_pilot.py) trains two arms of the default configuration, one
+with hints from its own earlier steps, on the `climbmix-code-v6` snapshot (32K
+tokenizer). It then evaluates fixed validation rows without hints, with hints from
+the training rows, and with hints from longer training-split prefixes. With the
+32K vocabulary the default configuration has about 0.53B parameters; the 720M
+total in the plan assumes the GLM tokenizer's larger embedding table. From
+`training/` (one CPU supervisor, a CPU corpus job and two H100s):
+
+```sh
+uv run modal run --detach -m model_hybrid.modal_hint_pilot --run-id hint-pilot-01
+```
+
+The supervisor records the call ids and deadline in
+`/runs/hint-pilot/<run>/supervisor.json` on the `lm-exploration-training` volume
+and cancels outstanding calls 24 hours after launch. Every function refuses to
+start unless its timeout ends before that deadline.
+
 ## Tests
 
 From `training/`:
@@ -193,7 +239,7 @@ From `training/`:
 ```sh
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
   tests.test_hybrid_sink_gate tests.test_hybrid_kda \
-  tests.test_hybrid_mtp tests.test_hybrid_optim -v
+  tests.test_hybrid_mtp tests.test_hybrid_optim tests.test_hybrid_hints -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
@@ -215,6 +261,12 @@ bf16 training steps of a small compiled hybrid model with the fla call outside t
 compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
 The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it.
 
+`test_hybrid_hints` compares lookups with a brute-force count over packed
+documents (all three lengths, cells and candidate weights). It checks that hints
+at positions up to t do not change when later tokens change, that contexts stop at
+document and row starts, and that the index refuses steps it holds. Filtered and
+saved tables must give identical hints. An all-unmatched batch must reproduce the
+model without hints exactly.
 `test_hybrid_optim` checks that every parameter lands in exactly one group, the
 role of each parameter kind, the learning rates and decay per group, and a step
 plus state round trip. `test_hybrid_mtp` checks target alignment and boundary masking, the loss
