@@ -332,7 +332,19 @@ def evaluate_export(export, name, run, limit, workers, deadline):
     lm = generate.load_export(
         Path("/runs", run_name, "export", export_name), dtype=torch.bfloat16, device="cuda"
     )
-    policy = agent.LocalPolicy(lm, glm.load(), rows=96)
+    local = agent.LocalPolicy(lm, glm.load(), rows=96)
+    turn = [0]
+
+    def policy(conversations):
+        replies = local(conversations)
+        turn[0] += 1
+        progress = {
+            "turn": turn[0],
+            "active": len(conversations),
+            "seconds": round(time.time() - started),
+        }
+        print(json.dumps(progress), flush=True)
+        return replies
 
     def start(task):
         try:
