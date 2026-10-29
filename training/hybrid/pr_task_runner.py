@@ -1,7 +1,11 @@
 """Runs inside a disposable PR-task sandbox; standard library only. Not imported elsewhere.
 
-    python3 pr_task_runner.py setup <task.json>   # network on: check out, install
-    python3 pr_task_runner.py test <task.json>    # network off: run tests twice
+    python3 pr_task_runner.py setup <task.json>      # network on: check out, install
+    python3 pr_task_runner.py test <task.json>       # network off: run tests twice
+    python3 pr_task_runner.py workspace <task.json>  # network off: the agent's start
+    python3 pr_task_runner.py tool -                 # one agent tool call (JSON on stdin)
+    python3 pr_task_runner.py patch -                # the agent's changes as a diff
+    python3 pr_task_runner.py grade <task.json>      # apply /work/patch.diff, run tests
 
 `setup` clones the bare mirror into /work/repo at the commit and installs the
 project's dependencies with heuristics per language (uv for Python, the lockfile's
@@ -9,6 +13,12 @@ package manager for JavaScript/TypeScript, module download for Go). `test` runs
 the commit's test files with source files reverted to the parent ("before") and at
 the commit ("after"), and prints one JSON line: per-test outcomes for both states
 plus the commands and log tails. The caller decides which tests are fail-to-pass.
+
+`workspace` turns an installed sandbox into the agent's starting point: source and
+test files at the parent, the mirror, the task file and the git history removed,
+and a fresh one-commit repository so `patch` can diff the agent's work. `grade`
+runs in a separate sandbox from the installed snapshot: tests at the commit,
+sources at the parent plus the agent's patch (its test-file changes dropped).
 """
 
 import json
@@ -25,11 +35,11 @@ TEST_SECONDS = 600
 TAIL = 4000
 
 
-def run(command, cwd=REPO, seconds=TEST_SECONDS, env=None):
+def run(command, cwd=None, seconds=TEST_SECONDS, env=None):
     try:
         done = subprocess.run(
             command,
-            cwd=cwd,
+            cwd=cwd or REPO,
             shell=isinstance(command, str),
             capture_output=True,
             text=True,
@@ -312,7 +322,113 @@ def test(task):
     return out
 
 
+# Agent workspace, tools and grading.
+GIT = ["git", "-c", "user.name=agent", "-c", "user.email=agent@localhost"]
+IGNORED = (".venv/", "node_modules/", "__pycache__/", "*.pyc", ".pytest_cache/")
+TOOL_SECONDS = 180
+OUTPUT_CHARS = 4000
+READ_LINES = 400
+
+
+def workspace(task):
+    _state(task, before=True)
+    for path in task["test_paths"]:
+        code, _ = run(["git", "checkout", "-q", task["parent"], "--", path])
+        if code != 0:  # added by the commit
+            (REPO / path).unlink(missing_ok=True)
+    shutil.rmtree(REPO / ".git")
+    shutil.rmtree("/work/mirror.git", ignore_errors=True)
+    Path("/work/task.json").unlink(missing_ok=True)
+    log = [run(["git", "init", "-q"])]
+    (REPO / ".git/info/exclude").write_text("\n".join(IGNORED) + "\n")
+    log.append(run(GIT + ["add", "-A"]))
+    log.append(run(GIT + ["commit", "-q", "-m", "start"]))
+    ok = all(code == 0 for code, _ in log)
+    return {"stage": "ready" if ok else "workspace_error", "tail": log[-1][1][-1500:]}
+
+
+def _clip(text, limit=OUTPUT_CHARS):
+    if len(text) <= limit:
+        return text
+    half = limit // 2
+    return f"{text[:half]}\n[... {len(text) - limit} characters omitted ...]\n{text[-half:]}"
+
+
+def _path(arguments):
+    path = (REPO / str(arguments.get("path", ""))).resolve()
+    if path != REPO and REPO not in path.parents:
+        raise ValueError("paths must stay inside the repository")
+    return path
+
+
+def tool(name, arguments):
+    """One tool call's result text (errors are results the agent can read)."""
+    try:
+        if name == "bash":
+            venv = REPO / ".venv"
+            env = {"PATH": f"{venv}/bin:{os.environ['PATH']}"} if venv.exists() else {}
+            code, out = run(str(arguments["command"]), seconds=TOOL_SECONDS, env=env)
+            return f"exit code: {code}\n{_clip(out)}"
+        path = _path(arguments)
+        if name == "read_file":
+            lines = path.read_text(errors="replace").splitlines()
+            start = max(1, int(arguments.get("start_line") or 1))
+            end = min(len(lines), int(arguments.get("end_line") or start + READ_LINES - 1))
+            end = min(end, start + READ_LINES - 1)
+            shown = "\n".join(f"{i:>5}  {lines[i - 1]}" for i in range(start, end + 1))
+            more = f"\n[{len(lines)} lines in total]" if end < len(lines) or start > 1 else ""
+            return _clip(shown, 4 * OUTPUT_CHARS) + more
+        if name == "write_file":
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(str(arguments["content"]))
+            return f"wrote {path.relative_to(REPO)}"
+        if name == "edit_file":
+            text = path.read_text()
+            old, new = str(arguments["old"]), str(arguments["new"])
+            count = text.count(old)
+            if count != 1:
+                return f"error: `old` occurs {count} times in {path.relative_to(REPO)}; it must occur once"
+            path.write_text(text.replace(old, new))
+            return f"edited {path.relative_to(REPO)}"
+        return f"error: unknown tool {name}"
+    except (KeyError, ValueError, OSError) as error:
+        return f"error: {type(error).__name__}: {error}"
+
+
+def patch():
+    run(GIT + ["add", "-A"])
+    code, out = run(["git", "diff", "--cached", "--binary", "HEAD"])
+    return {"patch": out if code == 0 else "", "code": code}
+
+
+def grade(task):
+    _state(task, before=True)
+    diff = Path("/work/patch.diff")
+    applied = {"code": 0, "tail": ""}
+    if diff.read_text().strip():
+        excludes = [f"--exclude={p}" for p in task["test_paths"]]
+        code, out = run(["git", "apply", "--whitespace=nowarn", *excludes, str(diff)])
+        applied = {"code": code, "tail": out[-1500:]}
+        if code != 0:
+            return {"stage": "patch_failed", "apply": applied}
+    results, code, log = TESTERS[task["language"]](task["test_paths"])
+    return {
+        "stage": "graded",
+        "apply": applied,
+        "results": results,
+        "code": code,
+        "tail": log[-TAIL:],
+    }
+
+
 if __name__ == "__main__":
-    stage, path = sys.argv[1], sys.argv[2]
-    task = json.loads(Path(path).read_text())
-    print("PR_TASK_RESULT " + json.dumps(setup(task) if stage == "setup" else test(task)))
+    stage, argument = sys.argv[1], sys.argv[2]
+    if stage == "tool":
+        call = json.loads(sys.stdin.read())
+        result = {"output": tool(call["name"], call["arguments"])}
+    elif stage == "patch":
+        result = patch()
+    else:
+        task = json.loads(Path(argument).read_text())
+        result = {"setup": setup, "test": test, "workspace": workspace, "grade": grade}[stage](task)
+    print("PR_TASK_RESULT " + json.dumps(result))

@@ -658,7 +658,7 @@ def main():
             count = config.eval_documents["chat"]
             out = {
                 name: windows
-                for name in sft_data.subset_names(recipe)
+                for name, _, _ in sft_data.subsets(recipe)
                 if (windows := heldout_windows(recipe, root, name, context, count)) is not None
             }
             return out | replay_heldout(context)

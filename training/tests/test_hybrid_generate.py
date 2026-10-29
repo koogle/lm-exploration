@@ -33,6 +33,22 @@ class GenerateTests(unittest.TestCase):
         steps = torch.stack([generate.step(self.lm, column, cache) for column in tokens.T], 1)
         torch.testing.assert_close(steps.double(), full.double(), rtol=1e-6, atol=1e-6)
 
+    def test_prefill_continues_like_the_full_forward(self):
+        prompts = [[5, 9, 11, 4, 20, 6], [7, 3], [12, 3, 30, 8]]
+        following = [[17, 2], [21, 22], [8, 8]]
+        logits, cache = generate.prefill(self.lm, prompts)
+        steps = [generate.step(self.lm, [f[i] for f in following], cache) for i in range(2)]
+        for row, (prompt, after) in enumerate(zip(prompts, following, strict=True)):
+            full = self.lm(torch.tensor([prompt + after]))[0]
+            last = len(prompt) - 1
+            torch.testing.assert_close(
+                logits[row].double(), full[last].double(), rtol=1e-5, atol=1e-5
+            )
+            for i, logit in enumerate(steps):
+                torch.testing.assert_close(
+                    logit[row].double(), full[last + 1 + i].double(), rtol=1e-5, atol=1e-5
+                )
+
     def test_batched_generation_matches_one_row_at_a_time(self):
         prompts = [[5, 9, 11], [7], [12, 3, 30, 8, 4]]
         batched = generate.generate_batch(self.lm, prompts, 5, (EOS,))

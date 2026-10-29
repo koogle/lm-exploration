@@ -51,11 +51,12 @@ def kda_gate(g, A_log, dt_bias):
     return -A_log.float().exp()[:, None] * F.softplus(g)
 
 
-def kda_reference(q, k, v, g, beta, A_log, dt_bias, positions):
+def kda_reference(q, k, v, g, beta, A_log, dt_bias, positions, final_state=False):
     """Naive KDA recurrence; same raw inputs as `kda_kernel`, fp32 (or fp64) state.
 
     q, k [B, T, H, K]; v [B, T, H, V]; g raw gate [B, T, H, K]; beta raw logits
-    [B, T, H]. The state resets wherever `positions` is 0.
+    [B, T, H]. The state resets wherever `positions` is 0. With `final_state`, also
+    returns the state after the last token, [B, H, K, V].
     """
     dtype = torch.float64 if v.dtype == torch.float64 else torch.float32
     q = F.normalize(q.to(dtype), dim=-1) * q.size(-1) ** -0.5
@@ -72,16 +73,18 @@ def kda_reference(q, k, v, g, beta, A_log, dt_bias, positions):
         error = v[:, t] - torch.einsum("bhk,bhkv->bhv", k_t, state)
         state = state + torch.einsum("bhk,bhv->bhkv", beta[:, t, :, None] * k_t, error)
         outputs.append(torch.einsum("bhk,bhkv->bhv", q[:, t], state))
-    return torch.stack(outputs, 1)
+    out = torch.stack(outputs, 1)
+    return (out, state) if final_state else out
 
 
-def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents):
-    """fla's chunked KDA over the flattened batch, one sequence per document."""
+def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False):
+    """fla's chunked KDA over the flattened batch, one sequence per document. With
+    `final_state`, also returns each document's last state, [documents, H, K, V]."""
     from fla.ops.kda import chunk_kda
 
     batch, length = documents.shape
     offsets = cu_seqlens(documents).long()
-    out, _ = chunk_kda(
+    out, state = chunk_kda(
         *(t.reshape(1, batch * length, *t.shape[2:]) for t in (q, k, v, g, beta)),
         A_log=A_log,
         dt_bias=dt_bias,
@@ -89,8 +92,10 @@ def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents):
         use_gate_in_kernel=True,
         use_beta_sigmoid_in_kernel=True,
         cu_seqlens=offsets,
+        output_final_state=final_state,
     )
-    return out.view(batch, length, *out.shape[2:])
+    out = out.view(batch, length, *out.shape[2:])
+    return (out, state) if final_state else out
 
 
 class KimiDeltaAttention(nn.Module):
@@ -141,7 +146,10 @@ class KimiDeltaAttention(nn.Module):
         )
         self.o_proj.residual_output = True
 
-    def forward(self, x, rope, mask):
+    def forward(self, x, rope, mask, cache=None):
+        """With a `cache` dict (one row), also stores what incremental decoding needs to
+        continue the row's first document: the last `kda_conv_size - 1` q/k/v
+        projections and the recurrent state after its last token."""
         batch, length, _ = x.shape
         heads = (batch, length, self.heads, self.head_dim)
         positions = mask.positions
@@ -159,10 +167,21 @@ class KimiDeltaAttention(nn.Module):
         q, k, v = q.view(heads), k.view(heads), v.view(heads)
         g = self.f_proj(x).view(heads)
         beta = self.b_proj(x)
+        keep = cache is not None
         if x.is_cuda:
-            out = kda_kernel(q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents)
+            out = kda_kernel(q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents, keep)
         else:
-            out = kda_reference(q, k, v, g, beta, self.A_log, self.dt_bias, positions)
+            out = kda_reference(q, k, v, g, beta, self.A_log, self.dt_bias, positions, keep)
+        if keep:
+            out, state = out
+            first = int((mask.documents[0] == 0).sum())
+            history = self.q_conv.size(-1) - 1
+            for name, projection in zip("qkv", projections, strict=True):
+                padded = F.pad(projection[:, :first], (0, 0, history, 0))
+                cache[name] = padded[:, first : first + history].clone()
+            if not x.is_cuda and int(mask.documents.max()) > 0:
+                raise ValueError("the reference keeps only the last state: one document only")
+            cache["state"] = state[:1].float().clone()  # decoding keeps an fp32 state
         values = out.float() if out.dtype in (torch.float16, torch.bfloat16) else out
         values = values * torch.rsqrt(values.square().mean(-1, keepdim=True) + self.norm_eps)
         values = values * self.o_norm_weight.to(values.dtype)

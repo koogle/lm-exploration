@@ -1,7 +1,9 @@
 """Chat SFT data: OpenAI-style conversations in GLM's chat format, packed for training.
 
 A recipe (recipes/chat-sft-*.json) names a Hugging Face dataset at a pinned revision
-and its parquet files, each one subset named by its file stem. `convert` turns a smoltalk2 row (Hermes-style tool calls in the
+and its parquet files, each one subset named by its file stem; `subsets` adds
+subsets prepared elsewhere (`prepared_in` another recipe's folder, or written into
+this recipe's folder by another stage), each read `repeat` times per pass. `convert` turns a smoltalk2 row (Hermes-style tool calls in the
 text, tool schemas in `chat_template_kwargs.xml_tools`) into OpenAI messages and
 tools; `prepare_subset` renders each conversation with `chat.encode`, drops those
 longer than the context or sharing a 13-gram with the benchmark screen, holds out
@@ -154,7 +156,22 @@ def sample_prompts():
 
 
 def subset_names(recipe):
-    return [Path(file).stem for file in recipe["files"]]
+    """The subsets this recipe prepares from its parquet files."""
+    return [Path(file).stem for file in recipe.get("files", [])]
+
+
+def subsets(recipe):
+    """(name, prepared_in or None, repeat) of every subset the recipe trains on."""
+    own = [(name, None, 1) for name in subset_names(recipe)]
+    return own + [
+        (s["name"], s.get("prepared_in"), s.get("repeat", 1)) for s in recipe.get("subsets", [])
+    ]
+
+
+def subset_folder(recipe, root, name):
+    """The folder holding a subset: the recipe's own `root`, or a sibling recipe's."""
+    prepared_in = next(p for n, p, _ in subsets(recipe) if n == name)
+    return Path(root) if prepared_in is None else Path(root).parent / prepared_in
 
 
 def is_heldout(messages, fraction):
@@ -173,8 +190,9 @@ def _write(folder, stem, conversations):
     return int(tokens.size), int(mask.sum())
 
 
-def prepare_subset(recipe, name, rows, folder, tokenizer, screen=None):
-    """Convert, encode, screen and write one subset; returns its counts."""
+def prepare_subset(recipe, name, rows, folder, tokenizer, screen=None, converter=convert):
+    """Convert (`converter`: row -> {"messages", "tools"} or None), encode, screen and
+    write one subset; returns its counts."""
     from training_data.packed_shards import contaminated
 
     folder = Path(folder)
@@ -182,7 +200,7 @@ def prepare_subset(recipe, name, rows, folder, tokenizer, screen=None):
     kept, heldout = [], []
     dropped = {"unparsed": 0, "too_long": 0, "contaminated": 0}
     for row in rows:
-        conversation = convert(row)
+        conversation = converter(row)
         if conversation is None:
             dropped["unparsed"] += 1
             continue
@@ -250,14 +268,23 @@ def _finish(window, targets, context):
 class ChatMixture:
     """Packed training windows over every subset of a prepared chat recipe, one pass.
 
-    The order is a seeded permutation of all conversations; the state is the
-    number of conversations consumed, so a resumed run continues exactly.
+    The order is a seeded permutation of all conversations (a subset with `repeat`
+    appears that many times); the state is the number of conversations consumed, so
+    a resumed run continues exactly.
     """
 
     def __init__(self, recipe, root, seed=0):
         self.recipe, self.root, self.context = recipe, Path(root), recipe["context"]
-        self.subsets = [_load(self.root, name) for name in subset_names(recipe)]
-        index = [(s, i) for s, (_, _, docs) in enumerate(self.subsets) for i in range(len(docs))]
+        listed = subsets(recipe)
+        self.subsets = [_load(subset_folder(recipe, root, name), name) for name, _, _ in listed]
+        index = [
+            (s, i)
+            for s, ((_, _, docs), (_, _, repeat)) in enumerate(
+                zip(self.subsets, listed, strict=True)
+            )
+            for _ in range(repeat)
+            for i in range(len(docs))
+        ]
         order = np.random.default_rng(seed).permutation(len(index))
         self.order = [index[i] for i in order]
         self.position = 0
@@ -313,7 +340,7 @@ def chat_heldout_windows(recipe, root, name, context, max_conversations):
 
     The byte count is the UTF-8 length of the trained target tokens' text.
     """
-    tokens, mask, docs = _load(root, f"{name}.heldout")
+    tokens, mask, docs = _load(subset_folder(recipe, root, name), f"{name}.heldout")
     conversations = [
         (np.asarray(tokens[s : s + n]), np.asarray(mask[s : s + n]))
         for s, n in docs[:max_conversations]

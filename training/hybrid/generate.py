@@ -6,8 +6,12 @@ recurrent state. One token per row then costs one pass through the weights inste
 of a forward over the whole prefix. The arithmetic mirrors `HybridLM.forward`
 (tests check logits against it), including documents: after a row feeds EOS, its
 next token starts a new document (attention reads only keys from there on, the
-convolutions and state reset and RoPE positions restart). `generate_batch` uses
-that to left-pad prompts of different lengths with EOS.
+convolutions and state reset and RoPE positions restart).
+
+`prefill` reads each prompt with one forward pass instead and builds the same cache
+for every row, left-padded to the longest prompt (pad keys are masked through each
+row's document start), so `generate_batch` costs one forward per prompt plus one
+step per new token.
 """
 
 import math
@@ -16,7 +20,9 @@ import torch
 from torch.nn import functional as F
 
 from .kda import kda_gate
-from .model import HybridLM
+from .model import DocumentMask, HybridLM
+
+PREFILL_MIN = 1024
 
 
 class Cache:
@@ -37,18 +43,18 @@ def _attention_step(attention, x, cache, layer, cos, sin):
         key = torch.cat((layer["key"], key), 2)
         value = torch.cat((layer["value"], value), 2)
     layer["key"], layer["value"] = key, value
-    groups = query.size(1) // key.size(1)
-    keys = key.repeat_interleave(groups, 1).float()
-    values = value.repeat_interleave(groups, 1).float()
-    scores = query.float() @ keys.transpose(-1, -2) / math.sqrt(query.size(-1))
+    # Query heads grouped by their shared key head: [rows, kv heads, group, width].
+    rows, heads, kv_heads = x.size(0), query.size(1), key.size(1)
+    grouped = query.view(rows, kv_heads, heads // kv_heads, query.size(-1))
+    scores = (grouped @ key.transpose(-1, -2)).float() / math.sqrt(query.size(-1))
     index = torch.arange(key.size(2), device=x.device)
     other_documents = index[None, :] < cache.starts[:, None]
     scores = scores.masked_fill(other_documents[:, None, None], float("-inf"))
     lse = scores.logsumexp(-1)
-    attended = (scores - lse[..., None]).exp() @ values
-    kept = torch.sigmoid(lse - attention.sink.float()[:, None])
-    rows = x.size(0)
-    attended = (attended * kept[..., None]).to(x.dtype).transpose(1, 2).reshape(rows, 1, -1)
+    weights = (scores - lse[..., None]).exp().to(value.dtype)
+    attended = (weights @ value).float().view(rows, heads, 1, -1)
+    kept = torch.sigmoid(lse.view(rows, heads) - attention.sink.float())[..., None, None]
+    attended = (attended * kept).to(x.dtype).transpose(1, 2).reshape(rows, 1, -1)
     gate = torch.sigmoid(attention.gate_proj(x) + attention.gate_bias)
     return attention.o_proj(attended * gate.to(attended.dtype))
 
@@ -130,40 +136,94 @@ def _sample(logits, temperature, top_p, generator):
     return index.gather(-1, choice)[:, 0]
 
 
+def _prefill_row(lm, prompt, device):
+    """Next-token logits [vocab] after one prompt and its per-layer cache entries.
+
+    On CUDA the prompt is padded to a power of two (at least PREFILL_MIN, at most the
+    context), so compiled attention sees few shapes; the padding is one second
+    document and changes nothing in the prompt.
+    """
+    length = len(prompt)
+    width = length
+    if lm.token_embedding.weight.is_cuda:
+        width = min(max(PREFILL_MIN, 1 << (length - 1).bit_length()), lm.config.block_size)
+    tokens = torch.tensor([list(prompt) + [lm.config.eos_id] * (width - length)], device=device)
+    documents = (torch.arange(width, device=device) >= length).long()[None]
+    mask = DocumentMask(documents)
+    rope = (lm.rope_cos[mask.positions][:, None], lm.rope_sin[mask.positions][:, None])
+    x = lm.token_embedding(tokens)
+    layers = []
+    for block in lm.blocks:
+        normed = block.mixer_norm(x)
+        layer = {}
+        if block.kind == "kda":
+            mixed = block.mixer(normed, rope, mask, cache=layer)
+        else:
+            _, key, value = block.mixer.project(normed, rope)
+            layer["key"], layer["value"] = key[:, :, :length].clone(), value[:, :, :length].clone()
+            mixed = block.mixer(normed, rope, mask)
+        x = x + mixed
+        x = x + block.mlp(block.mlp_norm(x))
+        layers.append(layer)
+    logits = F.linear(lm.final_norm(x[:, length - 1]), lm.output_weight)[0].float()
+    return logits, layers
+
+
+@torch.no_grad()
+def prefill(lm, prompts):
+    """Logits [rows, vocab] after each prompt and the batched Cache that continues them.
+
+    Each prompt is one document (it may not contain EOS).
+    """
+    if not prompts or not all(prompts):
+        raise ValueError("every prompt must contain at least one token")
+    if any(lm.config.eos_id in p for p in prompts):
+        raise ValueError("prompts are single documents and may not contain EOS")
+    if max(len(p) for p in prompts) > lm.config.block_size:
+        raise ValueError("a prompt is longer than the model's context")
+    device = lm.token_embedding.weight.device
+    rows = [_prefill_row(lm, p, device) for p in prompts]
+    width = max(len(p) for p in prompts)
+    cache = Cache(lm, len(prompts))
+    cache.length = width
+    cache.positions = torch.tensor([len(p) for p in prompts], device=device)
+    cache.starts = width - cache.positions
+    cache.fresh = torch.zeros(len(prompts), dtype=torch.bool, device=device)
+    for index, layer in enumerate(cache.layers):
+        for name in rows[0][1][index]:
+            parts = [entry[index][name] for _, entry in rows]
+            if name in ("key", "value"):
+                parts = [F.pad(part, (0, 0, width - part.size(2), 0)) for part in parts]
+            layer[name] = torch.cat(parts)
+    return torch.stack([logits for logits, _ in rows]), cache
+
+
 @torch.no_grad()
 def generate_batch(
     lm, prompts, max_new_tokens, stop_ids, temperature=0.0, top_p=1.0, generator=None, done=None
 ):
     """New token ids per prompt, each up to and including its first stop id.
 
-    Prompts are left-padded with EOS, which ends a document, so each row decodes
-    exactly as it would alone. `done(row, ids)` may end a row early (for example on
-    a stop string).
+    Prompts are read by `prefill` (one document each), so each row decodes as it
+    would alone. `done(row, ids)` may end a row early (for example on a stop string).
     """
-    if not prompts or not all(prompts):
-        raise ValueError("every prompt must contain at least one token")
-    width = max(len(p) for p in prompts)
-    padded = [[lm.config.eos_id] * (width - len(p)) + list(p) for p in prompts]
-    if width + max_new_tokens > lm.config.block_size + 1:
-        max_new_tokens = lm.config.block_size + 1 - width
-    cache = Cache(lm, len(prompts))
-    columns = torch.tensor(padded, device=cache.positions.device).T
-    for column in columns[:-1]:
-        step(lm, column, cache)
-    token = columns[-1]
+    logits, cache = prefill(lm, prompts)
+    room = lm.config.block_size + 1 - max(len(p) for p in prompts)
     outputs = [[] for _ in prompts]
     finished = [False] * len(prompts)
-    stops = torch.tensor(sorted(stop_ids), device=columns.device)
-    for _ in range(max(0, max_new_tokens)):
-        token = _sample(step(lm, token, cache), temperature, top_p, generator)
+    stops = torch.tensor(sorted(stop_ids), device=logits.device)
+    limit = max(0, min(max_new_tokens, room))
+    for index in range(limit):
+        token = _sample(logits, temperature, top_p, generator)
         stopped = torch.isin(token, stops).tolist()
         for row, value in enumerate(token.tolist()):
             if finished[row]:
                 continue
             outputs[row].append(value)
             finished[row] = stopped[row] or bool(done and done(row, outputs[row]))
-        if all(finished):
+        if all(finished) or index == limit - 1:
             break
+        logits = step(lm, token, cache)
     return outputs
 
 

@@ -140,6 +140,26 @@ class PackingTests(unittest.TestCase):
             np.testing.assert_array_equal(second[1], again[1])
             self.assertFalse(np.array_equal(first[0], second[0]))
 
+    def test_subsets_prepared_elsewhere_are_read_with_repeats(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as folder:
+            for name in ("chat", "agentic"):
+                Path(folder, name).mkdir()
+            sft_data._write(Path(folder, "chat"), "a", self.conversations())
+            sft_data._write(Path(folder, "agentic"), "b", self.conversations()[:2])
+            recipe = {
+                "name": "agentic",
+                "context": 11,
+                "subsets": [{"name": "a", "prepared_in": "chat"}, {"name": "b", "repeat": 3}],
+            }
+            mixture = sft_data.ChatMixture(recipe, Path(folder, "agentic"))
+            self.assertEqual(len(mixture.order), 5 + 3 * 2)
+            self.assertEqual(
+                sft_data.subset_folder(recipe, Path(folder, "agentic"), "a"), Path(folder, "chat")
+            )
+
     def test_replay_rows_are_pretraining_windows_after_the_chat_rows(self):
         import tempfile
         from pathlib import Path

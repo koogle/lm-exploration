@@ -190,8 +190,13 @@ def select_candidates(name, count, per_repository, deadline):
     return summary
 
 
-def _sandbox_stage(sandbox, stage):
-    process = sandbox.exec("python3", "/runner/pr_task_runner.py", stage, "/work/task.json")
+def sandbox_stage(sandbox, stage, argument="/work/task.json", stdin=None):
+    """The runner's PR_TASK_RESULT for one stage (`stdin` text is sent to it)."""
+    process = sandbox.exec("python3", "/runner/pr_task_runner.py", stage, argument)
+    if stdin is not None:
+        process.stdin.write(stdin.encode())
+        process.stdin.write_eof()
+        process.stdin.drain()
     out = process.stdout.read()
     process.wait()
     for line in out.splitlines():
@@ -210,13 +215,15 @@ def classify(before, after):
     }
 
 
-def _verify_one(task, deadline, record):
+def installed_snapshot(sandbox_app, task, deadline, record):
+    """(filesystem snapshot, setup result) of the task's repository checked out at the
+    commit with dependencies installed; the snapshot is None when setup failed."""
     seconds = int(min(SANDBOX_SECONDS, deadline - time.time()))
     if seconds < 600:
-        return {"status": "deadline"}
+        return None, {"stage": "deadline"}
     mirror = f"/mirrors/{Path(task['mirror']).name}"
     setup_box = modal.Sandbox.create(
-        app=app,
+        app=sandbox_app,
         image=sandbox_image,
         timeout=seconds,
         cpu=2,
@@ -232,12 +239,18 @@ def _verify_one(task, deadline, record):
         fields = ("sha", "parent", "language", "source_paths", "test_paths")
         brief = base64.b64encode(json.dumps({k: task[k] for k in fields}).encode()).decode()
         setup_box.exec("bash", "-c", f"echo {brief} | base64 -d > /work/task.json").wait()
-        setup = _sandbox_stage(setup_box, "setup")
+        setup = sandbox_stage(setup_box, "setup")
         if setup.get("stage") != "installed":
-            return {"status": setup.get("stage", "setup_error"), "setup": setup}
-        snapshot = setup_box.snapshot_filesystem()
+            return None, setup
+        return setup_box.snapshot_filesystem(), setup
     finally:
         setup_box.terminate()
+
+
+def _verify_one(task, deadline, record):
+    snapshot, setup = installed_snapshot(app, task, deadline, record)
+    if snapshot is None:
+        return {"status": setup.get("stage", "setup_error"), "setup": setup}
     seconds = int(min(SANDBOX_SECONDS, deadline - time.time()))
     if seconds < 300:
         return {"status": "deadline", "setup": setup}
@@ -252,7 +265,7 @@ def _verify_one(task, deadline, record):
     )
     record(test_box.object_id)
     try:
-        runs = _sandbox_stage(test_box, "test")
+        runs = sandbox_stage(test_box, "test")
     finally:
         test_box.terminate()
     if "before" not in runs:
