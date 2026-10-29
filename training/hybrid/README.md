@@ -183,6 +183,57 @@ groups at `lr_scale = muon_lr / adamw_lr`, so `trainer.optimizers.set_learning_r
 applies one schedule factor to both. A parameter that no module declares, one
 declared twice, or a non-matrix declared for Muon raises.
 
+## Tokenizer and data recipe
+
+[`tokenizer.py`](tokenizer.py) pins zai-org/GLM-4.7-Flash's `tokenizer.json`
+(revision `7dd20894`, SHA-256 `19e77364…a82d`). On 2026-10-25 it was
+byte-identical to zai-org/GLM-5.3-Flash's (revision `46a050be`). It has 154,856
+entries; the model pads its embedding to 154,880. Documents end with
+`<|endoftext|>` (154820); GLM's chat (`<|system|>`, `<|user|>`, `<|assistant|>`,
+`<|observation|>`), reasoning (`<think>`) and tool (`<tool_call>`, `<arg_key>`, …)
+tokens keep their GLM ids, which `load()` verifies.
+
+[`recipes/hybrid-40b-v1.json`](recipes/hybrid-40b-v1.json) targets 40B tokens,
+each source read once (`max_passes: 1`):
+
+| Source | Share | Pinned input | Shards |
+| --- | ---: | --- | ---: |
+| ClimbMix | 70% | `karpathy/climbmix-400b-shuffle` | 600 |
+| Permissive code | 20% | `codeparrot/github-code-clean`, licenses MIT, Apache-2.0, BSD-2/3, ISC, CC0, Unlicense | 80 |
+| Math | 10% | `HuggingFaceTB/finemath` `finemath-4plus` | 38 |
+
+The last shard of each source is held out for evaluation. Preparation drops any
+document sharing a 13-token n-gram with the test sets of GSM8K, MATH, HumanEval,
+MBPP, MMLU, ARC and HellaSwag (validation), all pinned by revision.
+
+[`data.py`](data.py) turns each upstream parquet file into a shard of uint32 GLM
+ids (documents shuffled within the shard, each ending in EOS) plus per-document
+token and byte counts. `PreparedMixture` reads each source's shards in a seeded
+order and packs 4,097-token windows (consecutive windows share one token), each
+from the source furthest below its weight; it is resumable and waits for shards
+that are still being prepared, so training can start while preparation runs.
+
+[`modal_data.py`](modal_data.py) prepares shards on Modal CPUs (8 cores, one call
+per shard, up to 48 in parallel), held-out shards first and then in the order
+training reads them, onto the `lm-exploration-hybrid-data` volume:
+
+```sh
+uv run modal run --detach -m model_hybrid.modal_data::main --run-id <id>
+```
+
+The launch fixes a deadline 24 hours ahead; an independent supervisor cancels
+every recorded call then, and each call has `retries=0` and a timeout bounded by
+the deadline. Finished shards are skipped, so another launch continues. The
+coordinator writes `capacity.json` (train/held-out tokens, documents and drops
+per source) and the screen writes `screen.json`.
+
+Measured on the held-out shards (2026-10-25): ClimbMix 52.6M tokens per shard
+(103 of 84,992 documents screened out), code 139M (43,776 of 126,925 files outside
+the license allowlist, 740 screened out), FineMath-4+ 125M (8,281 of 104,680
+screened out). The screen holds 3,225,682 unique 13-grams. At those sizes the
+training shards hold about 31B ClimbMix, 11B code and 4.6B math tokens, above
+the 28B/8B/4B shares.
+
 The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
 placeholders until the 720M configuration is fixed in PR 8.
 
@@ -193,7 +244,8 @@ From `training/`:
 ```sh
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
   tests.test_hybrid_sink_gate tests.test_hybrid_kda \
-  tests.test_hybrid_mtp tests.test_hybrid_optim -v
+  tests.test_hybrid_mtp tests.test_hybrid_optim \
+  tests.test_hybrid_tokenizer tests.test_hybrid_data -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
@@ -215,7 +267,11 @@ bf16 training steps of a small compiled hybrid model with the fla call outside t
 compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
 The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it.
 
-`test_hybrid_optim` checks that every parameter lands in exactly one group, the
+`test_hybrid_data` prepares shards from small parquet files (license filter,
+empty documents, contamination drops, EOS layout, byte counts) and checks the
+mixture's weights, contiguity across shards, resume and the held-out windows;
+`test_hybrid_tokenizer` checks the pinned constants and the recipe, and the GLM
+file itself when downloaded. `test_hybrid_optim` checks that every parameter lands in exactly one group, the
 role of each parameter kind, the learning rates and decay per group, and a step
 plus state round trip. `test_hybrid_mtp` checks target alignment and boundary masking, the loss
 against an explicit computation, that the module never sees its own target,

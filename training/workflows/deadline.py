@@ -52,3 +52,26 @@ def tracked_calls(run_folder, kind=None):
         return []
     records = [json.loads(p.read_text()) for p in folder.glob("*.json")]
     return sorted(r["call_id"] for r in records if kind is None or r["kind"] == kind)
+
+
+def cancel_at_deadline(deadline_unix, calls, done=lambda: False, poll_seconds=300, cancel=None):
+    """Independent supervisor body: wait for the deadline, then cancel outstanding calls.
+
+    `calls()` returns the call IDs to cancel (read after any volume reload it needs);
+    `done()` ends the wait early once the work has finished. Returns the cancelled IDs,
+    or None when the work finished first.
+    """
+    if cancel is None:
+        import modal
+
+        def cancel(call_id):
+            modal.FunctionCall.from_id(call_id).cancel()
+
+    while (remaining := deadline_unix - time.time()) > 0:
+        time.sleep(min(remaining, poll_seconds))
+        if done():
+            return None
+    cancelled = list(calls())
+    for call_id in cancelled:
+        cancel(call_id)
+    return cancelled
