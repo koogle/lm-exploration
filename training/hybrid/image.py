@@ -44,6 +44,8 @@ def build(extra_packages=(), env=None):
         built = built.add_local_file(
             f"hybrid/kernels/{kernel}.cu", f"/opt/hybrid_kernels/{kernel}/{kernel}.cu", copy=True
         ).run_commands(build_kernel(kernel))
+    # 32K microbatches vary in document layout; expandable segments avoid fragmentation.
+    built = built.env({"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
     if extra_packages:
         built = built.pip_install(*extra_packages)
     if env:
