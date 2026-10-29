@@ -252,8 +252,14 @@ their starting values (0.062, 8.2, 7.4 at the end).
 The gains depend on how much validation text recurs in the training split. Part of
 the gain from larger corpora may come from near-duplicate documents across the
 split, so it is retrieval, not model quality. Downstream evaluation has not been
-run. Metrics, logs, checkpoints and tables are on the `lm-exploration-training`
-Modal volume under `hint-pilot/hint-pilot-01/`.
+run. Metrics, logs, both checkpoints (safetensors with their configuration) and
+the hint tables are in the HF dataset `jfrick/lm-exploration-results` under
+`pr-109/hint-pilot-01/`. [`publish_hint_pilot.py`](publish_hint_pilot.py) copies a
+run there from the Modal volume:
+
+```sh
+uv run modal run -m model_hybrid.publish_hint_pilot --run-id hint-pilot-01
+```
 
 The supervisor records the call ids and deadline in
 `/runs/hint-pilot/<run>/supervisor.json` on the `lm-exploration-training` volume
