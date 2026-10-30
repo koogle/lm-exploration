@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 PRECISIONS = ("bf16-autocast", "fp32")
-KINDS = ("checkpoint", "transformers", "volume")
+KINDS = ("checkpoint", "transformers", "volume", "hybrid")
 MODE_DEFAULTS = {"temperature": 0.0, "top_k": 0, "top_p": 1.0, "repetition_penalty": 1.0}
 
 
@@ -40,11 +40,13 @@ def validate(recipe):
     for model in recipe["models"]:
         if model["kind"] not in KINDS:
             raise ValueError(f"model kind must be one of {KINDS}")
-        revisions = [model["revision"]] if model["kind"] == "transformers" else []
+        revisions = [model["revision"]] if model["kind"] in ("transformers", "hybrid") else []
         if model["kind"] == "checkpoint":
             revisions = [model["source_revision"], *(c["revision"] for c in model["checkpoints"])]
         if not all(re.fullmatch(r"[0-9a-f]{40}", r) for r in revisions):
             raise ValueError(f"{model['name']}: revisions must be full commit hashes")
+        if not 0 < model.get("max_new_tokens", 1) <= 1024:
+            raise ValueError(f"{model['name']}: max_new_tokens must be in 1..1024")
         if model["kind"] == "volume" and not re.fullmatch(
             r"[A-Za-z0-9_-]+/step-[0-9]{9}\.pt", model["checkpoint"]
         ):

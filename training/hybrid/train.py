@@ -6,7 +6,9 @@ loop: the hybrid model with role-declared Muon/AdamW, prepared-shard data
 next-token loss plus the decaying MTP weight times mean MTP loss (each over its
 global target count), held-out loss, bits per byte, gate and sink statistics,
 fixed-prompt samples, and bf16 exports to the run's HF repo every
-`hf_every_tokens` and at the end.
+`hf_every_tokens` and at the end. `HNetFamily` does the same for a run config with
+`"architecture": "hnet"`: the byte-level H-Net (hnet.py) on the recipe's shards
+decoded to UTF-8 bytes (byte_data.py); budget, context and batch rows count bytes.
 
     torchrun --nproc_per_node=8 -m model_hybrid.train --config <run.json> \\
         --run-dir <dir> --data-root <dir> --stop-unix <time> [--max-tokens N] \\
@@ -21,13 +23,13 @@ import dataclasses
 import json
 import math
 import os
-import time
 from pathlib import Path
 
 import numpy as np
 import torch
 
 from . import documents as doc_utils
+from . import hnet
 from . import model as hybrid
 from . import tokenizer as glm
 
@@ -45,6 +47,7 @@ class RunConfig:
     recipe: str
     model: dict
     target_tokens: int
+    architecture: str = "hybrid"
     global_rows: int = 256
     microbatch: int = 4
     warmup_tokens: int = 500_000_000
@@ -67,6 +70,10 @@ class RunConfig:
     @classmethod
     def load(cls, path):
         return cls(**json.loads(Path(path).read_text()))
+
+    def __post_init__(self):
+        if self.architecture not in ("hybrid", "hnet"):
+            raise ValueError("architecture must be 'hybrid' or 'hnet'")
 
 
 def learning_rate_factor(config, tokens):
@@ -99,6 +106,8 @@ def mean_attended_keys(positions):
 
 
 def model_config_of(config):
+    if config.architecture == "hnet":
+        return hnet.HNetConfig(**config.model)
     model_config = hybrid.HybridConfig(
         **{k: tuple(v) if isinstance(v, list) else v for k, v in config.model.items()}
     )
@@ -137,15 +146,20 @@ def evaluate(lm, heldout, device, eos_id):
     try:
         for name, (inputs, labels, total_bytes) in heldout.items():
             sums = {"ce": 0.0, "count": 0, "mtp_ce": 0.0, "mtp_count": 0}
+            chunking = {"chunks": 0, "positions": 0}
             activations = []
             for start in range(0, len(inputs), 4):
                 x = torch.from_numpy(inputs[start : start + 4]).to(device)
                 y = torch.from_numpy(labels[start : start + 4]).to(device)
-                targets = doc_utils.mtp_labels(x, y, eos_id)
+                targets = doc_utils.mtp_labels(x, y, eos_id) if lm.config.mtp else None
                 with torch.autocast("cuda", dtype=torch.bfloat16):
                     losses = lm(x, y, targets)
+                # Models without MTP (the H-Net) return no mtp_ sums; chunk counts are H-Net only.
                 for key in sums:
-                    sums[key] += losses[key].item() if key.endswith("ce") else int(losses[key])
+                    if key in losses:
+                        sums[key] += losses[key].item() if key.endswith("ce") else int(losses[key])
+                for key in chunking:
+                    chunking[key] += int(losses.get(key, 0))
                 activations.append(
                     [m.statistics for m in lm.modules() if isinstance(m, hybrid.Attention)]
                 )
@@ -160,6 +174,8 @@ def evaluate(lm, heldout, device, eos_id):
                     float(np.mean([s["sink_weight"] for s in layer])) for layer in layers
                 ],
             }
+            if chunking["chunks"]:
+                results[name]["bytes_per_chunk"] = chunking["positions"] / chunking["chunks"]
     finally:
         hybrid.Attention.record_statistics = False
         lm.train()
@@ -167,7 +183,7 @@ def evaluate(lm, heldout, device, eos_id):
 
 
 @torch.no_grad()
-def samples(lm, tokenizer, device, new_tokens=48):
+def samples(lm, tokenizer, device, new_tokens):
     """Greedy continuations of fixed prompts (full recompute per token)."""
     lm.eval()
     outputs = []
@@ -182,7 +198,7 @@ def samples(lm, tokenizer, device, new_tokens=48):
     return outputs
 
 
-def upload_export(lm, model_config, run_dir, progress, repo):
+def upload_export(lm, model_config, run_dir, progress, repo, private=True):
     """bf16 trunk weights and config under `<run_dir>/export/`, and to the HF model repo
     with the run's metrics in a background thread."""
     import threading
@@ -197,10 +213,17 @@ def upload_export(lm, model_config, run_dir, progress, repo):
         if not k.startswith("mtp.")
     }
     save_file(weights, folder / "model.safetensors")
-    config = dataclasses.asdict(model_config) | {
-        "tokenizer": glm.SOURCE,
-        "tokenizer_sha256": glm.SHA256,
-    }
+    if isinstance(model_config, hnet.HNetConfig):
+        config = dataclasses.asdict(model_config) | {
+            "architecture": "hnet",
+            "tokenizer": "utf-8 bytes, EOS 256",
+        }
+    else:
+        config = dataclasses.asdict(model_config) | {
+            "architecture": "hybrid",
+            "tokenizer": glm.SOURCE,
+            "tokenizer_sha256": glm.SHA256,
+        }
     (folder / "config.json").write_text(json.dumps(config, indent=2) + "\n")
     (folder / "progress.json").write_text(json.dumps(progress, indent=2) + "\n")
     logs = [Path(run_dir, name) for name in ("metrics.jsonl", "validation.jsonl")]
@@ -209,7 +232,7 @@ def upload_export(lm, model_config, run_dir, progress, repo):
         from huggingface_hub import HfApi
 
         api = HfApi()
-        api.create_repo(repo, private=True, exist_ok=True)
+        api.create_repo(repo, private=private, exist_ok=True)
         api.upload_folder(repo_id=repo, folder_path=folder, path_in_repo=folder.name)
         for log in logs:
             if log.exists():
@@ -223,19 +246,13 @@ def upload_export(lm, model_config, run_dir, progress, repo):
 def recipe_data(config, data_root):
     """(identity, mixture factory, held-out factory(mixture, context)) for a run config's
     prepared-shard recipe; held-out windows wait for each source's held-out shard."""
-    from .data import PreparedMixture, heldout_index, heldout_windows, shard_paths
+    from .data import PreparedMixture, heldout_windows, wait_for_heldout
 
     recipe = json.loads(Path(config.recipe).read_text())
     root = Path(data_root) / recipe["name"]
 
     def heldout(mixture, context):
-        for name, source in recipe["sources"].items():
-            meta = shard_paths(mixture.root, name, heldout_index(source))[2]
-            waited = time.monotonic()
-            while not meta.exists():
-                if time.monotonic() - waited > mixture.wait_seconds:
-                    raise TimeoutError(f"Held-out shard for {name} was not prepared")
-                time.sleep(15)
+        wait_for_heldout(recipe, mixture)
         return {
             name: heldout_windows(recipe, mixture.root, name, context, count)
             for name, count in config.eval_documents.items()
@@ -284,11 +301,16 @@ class HybridFamily:
         self.keep_checkpoints = config.keep_checkpoints
         self.collective_timeout_seconds = 3600
         if data is None:
-            self.identity, self.factory, self.heldout_factory = recipe_data(config, data_root)
+            self.identity, self.factory, self.heldout_factory = self.recipe_data(data_root)
         else:
             (self.identity, self.factory), self.heldout_factory = data, None
         self.lm, self.uploads = None, []
         self.next_upload = None
+
+    sample_length = 48
+
+    def recipe_data(self, data_root):
+        return recipe_data(self.config, data_root)
 
     def learning_rate_factor(self, tokens):
         return learning_rate_factor(self.config, tokens)
@@ -372,7 +394,7 @@ class HybridFamily:
             "parameters": gate_sink_statistics(model),
         }
         if final or progress["step"] % self.config.sample_every_steps == 0:
-            result["samples"] = samples(model, heldout["tokenizer"], device)
+            result["samples"] = samples(model, heldout["tokenizer"], device, self.sample_length)
         return result
 
     def prepare(self, inputs, labels):
@@ -437,6 +459,81 @@ class HybridFamily:
         return {"export": exported}
 
 
+class HNetFamily(HybridFamily):
+    """The byte-level H-Net for trainer.loop.
+
+    Data are the recipe's prepared shards decoded to UTF-8 bytes in the same order and
+    document mix (`byte_data.ByteMixture`); every window byte counts toward the budget.
+    The objective is the mean next-byte loss plus the weighted ratio loss, which the
+    model folds into its summed loss. Logs add the ratio loss and bytes per chunk.
+    """
+
+    sample_length = 192
+
+    def recipe_data(self, data_root):
+        from .byte_data import recipe_data as byte_recipe_data
+
+        return byte_recipe_data(self.config, data_root)
+
+    def build(self, device):
+        torch.backends.cuda.matmul.allow_tf32 = True
+        hnet.static_compilation(self.model_config)
+        self.lm = hnet.HNetLM(self.model_config).to(device)
+        return self.lm
+
+    def metadata(self):
+        return {
+            "architecture": {
+                "module": hnet.HNetConfig.__module__,
+                "config": dataclasses.asdict(self.model_config),
+            },
+            "tokenizer": "utf-8 bytes, EOS 256",
+        }
+
+    def source_files(self):
+        from . import byte_data
+
+        files = {"hybrid.hnet": Path(hnet.__file__), "hybrid.byte_data": Path(byte_data.__file__)}
+        return super().source_files() | files
+
+    def heldout(self, data):
+        if self.heldout_factory is None:
+            return None
+        windows = self.heldout_factory(data.mixture, self.model_config.block_size)
+        return {"windows": windows, "tokenizer": hnet.ByteTokenizer()}
+
+    def prepare(self, inputs, labels):
+        return {}, {"ntp": (labels != -100).sum()}
+
+    def loss(self, model, inputs, labels, extras, counts, progress):
+        losses = model(inputs, labels)
+        sums = {key: losses[key].detach().float() for key in ("ce", "z", "ratio", "chunks")}
+        return losses["loss"] / counts["ntp"], sums
+
+    def log(self, sums, counts):
+        microbatches = self.global_rows // self.microbatch
+        self.bytes_per_chunk = (
+            self.global_rows * self.model_config.block_size / float(sums["chunks"])
+        )
+        return {
+            "loss": float(sums["ce"] / counts["ntp"]),
+            "z": float(sums["z"] / counts["ntp"]),
+            "ratio_loss": float(sums["ratio"]) / microbatches,
+            "bytes_per_chunk": self.bytes_per_chunk,
+        }
+
+    def step_metrics(self, inputs, seconds, budget, world):
+        documents = doc_utils.document_ids(inputs[:8], self.model_config.eos_id)
+        keys = mean_attended_keys(doc_utils.document_positions(documents))
+        ratio = self.bytes_per_chunk
+        flops = hnet.flops_per_byte(self.lm, ratio, keys / ratio)
+        return {"mfu": budget / seconds * flops / (world * H100_BF16_FLOPS)}
+
+
+def family_of(config):
+    return HNetFamily if config.architecture == "hnet" else HybridFamily
+
+
 def main():
     from distributed.config import DistributedRuntime
     from trainer import loop
@@ -451,8 +548,14 @@ def main():
     parser.add_argument("--resume", help="A checkpoint to resume (default: the run's latest)")
     parser.add_argument("--stop-file", default=STOP_FILE)
     args = parser.parse_args()
+    config = RunConfig.load(args.config)
+    if config.architecture == "hnet":
+        # The main network's length changes with the chunk count; expandable segments
+        # keep the varying activation sizes from fragmenting the allocator. Set before
+        # the first CUDA allocation.
+        os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     loop.train(
-        HybridFamily(RunConfig.load(args.config), args.run_dir, args.data_root),
+        family_of(config)(config, args.run_dir, args.data_root),
         args.run_dir,
         runtime=DistributedRuntime.from_torchrun(os.environ),
         resume=args.resume,
