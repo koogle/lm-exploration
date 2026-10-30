@@ -470,6 +470,31 @@ results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
 uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
 ```
 
+## PR-to-task data
+
+[`pr_tasks.py`](pr_tasks.py) turns collected commits into repository tasks: the
+repository at the parent commit, an issue, the commit's own test changes as the
+hidden check and the commit as the reference patch. [`modal_pr_tasks.py`](modal_pr_tasks.py)
+runs three stages on the `lm-exploration-hybrid-data` volume under `<name>/`:
+
+- `select` keeps single-language commits (Python, JS/TS, Go) that change 1–3 source
+  and 1–3 test files within `pr_tasks.LIMITS`, capped per repository. It runs no
+  repository code.
+- `verify` gives each task two disposable sandboxes: one installs dependencies with
+  network, and its filesystem snapshot runs the test files without network with source
+  files reverted to the parent and at the commit ([`pr_task_runner.py`](pr_task_runner.py)).
+  Verified tasks have at least one fail-to-pass test and no regression.
+- `issues` has GLM-5.3 (through OpenRouter) draft each task's issue from the commit
+  message and the test changes only, up to four drafts until one has no leaks (quoted
+  added source lines, new internal names the tests never use, mentions of tests or the
+  commit). Launch it with `OPENROUTER_API_KEY` set; the key is passed to that run only.
+
+```sh
+uv run modal run -m model_hybrid.modal_pr_tasks::select [--count 1000] [--name pr-tasks-pilot]
+uv run modal run --detach -m model_hybrid.modal_pr_tasks::verify [--limit N] [--workers 48]
+uv run modal run --detach -m model_hybrid.modal_pr_tasks::issues [--limit N]
+```
+
 ## Tests
 
 From `training/`:
@@ -479,7 +504,8 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
   tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
   tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
   tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet \
-  tests.test_hybrid_chat tests.test_hybrid_long_context -v
+  tests.test_hybrid_chat tests.test_hybrid_long_context tests.test_hybrid_pr_tasks \
+  tests.test_hybrid_agent -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):

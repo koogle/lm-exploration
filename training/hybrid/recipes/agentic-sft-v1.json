@@ -1,0 +1,115 @@
+{
+  "name": "agentic-sft-v1",
+  "format": "chat-sft",
+  "description": "Agent trajectories on PR tasks (GLM-5.3 episodes resolved on training repositories, read 4 times) with a seeded 30% of chat-sft-v1's conversations, at 32K context, for the 32K mid-training export.",
+  "trajectories": "pr-tasks-pilot/agentic/glm-5.3-1793298716/trajectories.jsonl",
+  "subsets": [
+    {
+      "name": "smoltalk_smollm3_smol_magpie_ultra_no_think-00000-of-00006",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "smoltalk_smollm3_smol_magpie_ultra_no_think-00001-of-00006",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "smoltalk_smollm3_smol_magpie_ultra_no_think-00002-of-00006",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "smoltalk_smollm3_smol_magpie_ultra_no_think-00003-of-00006",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "smoltalk_smollm3_smol_magpie_ultra_no_think-00004-of-00006",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "smoltalk_smollm3_smol_magpie_ultra_no_think-00005-of-00006",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "smoltalk_smollm3_systemchats_30k_no_think-00000-of-00001",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "smoltalk_smollm3_everyday_conversations_no_think-00000-of-00001",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "smoltalk_smollm3_explore_instruct_rewriting_no_think-00000-of-00001",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "smoltalk_smollm3_smol_rewrite_no_think-00000-of-00001",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "smoltalk_smollm3_smol_summarize_no_think-00000-of-00001",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "tulu_3_sft_personas_instruction_following_no_think-00000-of-00001",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "table_gpt_no_think-00000-of-00001",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "xlam_traces_no_think-00000-of-00001",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "hermes_function_calling_v1_no_think-00000-of-00001",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "OpenThoughts3_1.2M_no_think_no_think-00000-of-00003",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "OpenThoughts3_1.2M_no_think_no_think-00001-of-00003",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "OpenThoughts3_1.2M_no_think_no_think-00002-of-00003",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "Mixture_of_Thoughts_science_no_think-00000-of-00001",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.3
+    },
+    {
+      "name": "agentic",
+      "repeat": 4
+    }
+  ],
+  "context": 32768,
+  "heldout_fraction": 0.02,
+  "screen": "hybrid-40b-v1/screen.npy",
+  "screen_ngram": 13,
+  "replay": {
+    "recipe": "hybrid-40b-v1",
+    "fraction": 0.25
+  }
+}
