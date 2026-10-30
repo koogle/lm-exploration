@@ -2,8 +2,9 @@
 
     {
       "steps": 300,
+      "algorithm": {"name": "on_policy/grpo"},
+      "trajectories": {"source": "sampler"},
       "rollouts": {"prompts_per_step": 64, "samples_per_prompt": 8, "math_share": 0.5},
-      "algorithm": {"name": "grpo", "policy": "on"},
       "optimizer": {"lr": 1e-6, "warmup_steps": 20},
       "replay": true, "replay_snapshot": "...", ...
     }
@@ -57,6 +58,35 @@ class Rollouts:
         return self.math_tokens if task == "math" else self.code_tokens
 
 
+SOURCES = ("sampler", "reuse", "file")
+
+
+@dataclass(frozen=True)
+class Trajectories:
+    """Where the answers trained on come from:
+
+    - `"sampler"`: sampled by the current weights every step (`rollouts`), one update.
+    - `"reuse"`: sampled the same way, then split into `updates_per_batch` (at least 2)
+      shares with one update each.
+    - `"file"`: `answers_per_step` answers per step from the trajectory file of `data`
+      (a data ID on the run volume, `training_data.rl_trajectories`).
+    """
+
+    source: str = "sampler"
+    updates_per_batch: int = 1
+    data: str = ""
+    answers_per_step: int = 256
+
+    def __post_init__(self):
+        if self.source not in SOURCES:
+            raise ValueError(f"trajectories source must be one of {SOURCES}")
+        positive_int(self, "updates_per_batch", "answers_per_step")
+        if (self.source == "reuse") != (self.updates_per_batch > 1):
+            raise ValueError("Only the reuse source takes more than one update per batch")
+        if (self.source == "file") != bool(self.data):
+            raise ValueError("The file source, and only it, names trajectory data")
+
+
 @dataclass(frozen=True)
 class Optimizer:
     """AdamW; the learning rate warms up linearly over `warmup_steps` updates."""
@@ -80,10 +110,12 @@ class Optimizer:
 
 @dataclass(frozen=True)
 class Settings(ReplaySettings):
-    # Rollout batches; each takes the algorithm's `updates_per_batch` optimizer updates.
+    # Batches of answers; each takes the source's `updates_per_batch` optimizer updates.
     steps: int = 300
+    algorithm: object = field(default_factory=lambda: algorithms.make({"name": "on_policy/grpo"}))
+    trajectories: Trajectories = field(default_factory=Trajectories)
+    # Sampling of answers (sampler and reuse sources) and of validation answers.
     rollouts: Rollouts = field(default_factory=Rollouts)
-    algorithm: algorithms.GRPO = field(default_factory=algorithms.GRPO)
     optimizer: Optimizer = field(default_factory=Optimizer)
     # KL(policy ‖ parent), k3 estimate on answer tokens; always measured, added at kl_coef.
     kl_coef: float = 0.0
@@ -98,8 +130,9 @@ class Settings(ReplaySettings):
     def from_dict(cls, values):
         values = dict(values)
         return cls(
+            algorithm=algorithms.make(values.pop("algorithm", {"name": "on_policy/grpo"})),
+            trajectories=Trajectories(**values.pop("trajectories", {})),
             rollouts=Rollouts(**values.pop("rollouts", {})),
-            algorithm=algorithms.make(values.pop("algorithm", {"name": "grpo"})),
             optimizer=Optimizer(**values.pop("optimizer", {})),
             **values,
         )
@@ -108,7 +141,11 @@ class Settings(ReplaySettings):
         positive_int(self, "steps", "micro_batch", "evaluate_every", "save_every", "max_seconds")
         if not math.isfinite(self.kl_coef) or self.kl_coef < 0:
             raise ValueError("Invalid KL coefficient")
-        if self.optimizer.warmup_steps >= self.steps * self.algorithm.updates_per_batch:
+        if self.trajectories.source not in self.algorithm.SOURCES:
+            raise ValueError(
+                f"{self.algorithm.name} trains on trajectories from {self.algorithm.SOURCES}"
+            )
+        if self.optimizer.warmup_steps >= self.steps * self.trajectories.updates_per_batch:
             raise ValueError("Warmup must end before the last update")
         if self.max_seconds > 20 * 60 * 60:
             raise ValueError("RL capped at 20 hours per invocation")

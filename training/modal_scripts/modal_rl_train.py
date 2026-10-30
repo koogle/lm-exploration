@@ -80,6 +80,16 @@ def train(recipe, deadline):
 
     if digest(pool / "pool.jsonl") != report["pool_sha256"]:
         raise ValueError("Pool differs from its preparation report")
+    settings = Settings.from_dict(recipe["settings"])
+    trajectories = None
+    if settings.trajectories.source == "file":
+        folder = runs / settings.trajectories.data
+        trajectories = folder / "trajectories.jsonl"
+        if (
+            digest(trajectories)
+            != json.loads((folder / "report.json").read_text())["trajectories_sha256"]
+        ):
+            raise ValueError("Trajectories differ from their report")
     sandbox = Sandbox(app, deadline - time.time())
     try:
         record = launch_record(recipe["run_id"])
@@ -90,10 +100,11 @@ def train(recipe, deadline):
             runs / recipe["parent"],
             pool / "pool.jsonl",
             runs / recipe["run_id"],
-            Settings.from_dict(recipe["settings"]),
+            settings,
             sandbox,
             run_volume.commit,
             deadline=stop,
+            trajectories_path=trajectories,
         )
         (runs / recipe["run_id"] / "result.json").write_text(json.dumps(result, indent=2))
         return result

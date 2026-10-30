@@ -3,6 +3,8 @@
 Run from training/:
     modal run -m modal_scripts.modal_teacher --source <code-data-id> --data-id <fresh-id> \
         [--shards 8] [--samples 2] [--limit 0] [--report <report.json>]
+    modal run -m modal_scripts.modal_teacher::trajectories --teacher <teacher-data-id> \
+        --data-id <fresh-id> [--limit 0]
 
 One CPU orchestrator call reads `/runs/<source>/examples.jsonl` (a `code-sft-v1` dataset),
 spawns one H100 vLLM call per shard (after one call caches the teacher weights in the
@@ -14,6 +16,12 @@ after a failure reuses them instead of generating again. The launcher records a 
 orchestrator refuses work after it, spawns a shard only if the shard's timeout ends
 before it, cancels its unfinished shard calls when it stops, and its sandbox's own
 timeout ends at the deadline. No call retries.
+
+`trajectories` turns a finished teacher run's saved answers into off-policy RL
+trajectories (`training_data.rl_trajectories`): every training problem's answers whose
+code defines the declared name, checked again in the sandbox so failing answers keep
+reward 0, written to `/runs/<data-id>/trajectories.jsonl` with `report.json`. `--limit`
+keeps the first that many problems.
 """
 
 import json
@@ -122,10 +130,7 @@ def distill(source, data_id, shards, samples, limit, deadline):
     output = Path("/runs") / run_id(data_id, "data_id")
     if output.exists():
         raise ValueError("Use a fresh data ID")
-    rows = [json.loads(line) for line in (folder / "examples.jsonl").read_text().splitlines()]
-    rows = rows[:limit] if limit else rows
-    size = -(-len(rows) // shards)
-    chunks = [rows[i : i + size] for i in range(0, len(rows), size)]
+    chunks = teacher_shards(folder, shards, limit)
     work = Path("/runs/teacher-work") / data_id
     work.mkdir(parents=True, exist_ok=True)
     settings = {"source": digest(folder / "examples.jsonl"), "shards": shards}
@@ -143,7 +148,7 @@ def distill(source, data_id, shards, samples, limit, deadline):
         fetch.remote()
         calls = {i: generate.spawn(chunks[i], samples, deadline) for i in pending}
     sandbox = Sandbox(app, deadline - time.time(), cpu=32)
-    kept, counts = [], {"problems": len(rows), "kept": 0, "no_code": 0, "no_pass": 0}
+    kept, counts = [], {"problems": sum(map(len, chunks)), "kept": 0, "no_code": 0, "no_pass": 0}
     try:
         for index, chunk in enumerate(chunks):
             done = work / f"kept-{index}.json"
@@ -212,6 +217,80 @@ def distill(source, data_id, shards, samples, limit, deadline):
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     volume.commit()
     return report
+
+
+@app.function(
+    image=cpu_image,
+    cpu=2,
+    memory=16384,
+    timeout=ORCHESTRATOR_SECONDS,
+    retries=0,
+    volumes={"/runs": volume},
+)
+def build_trajectories(teacher, data_id, limit, deadline):
+    import hashlib
+
+    from training_data import rl_trajectories
+    from training_data.sandbox import Sandbox
+    from training_data.subword import digest
+
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing trajectory work")
+    volume.reload()
+    report = json.loads((Path("/runs") / run_id(teacher, "teacher") / "report.json").read_text())
+    folder = Path("/runs") / report["source"]["data_id"]
+    if digest(folder / "examples.jsonl") != report["source"]["sha256"]:
+        raise ValueError("Teacher source differs from the one it answered")
+    output = Path("/runs") / run_id(data_id, "data_id")
+    if output.exists():
+        raise ValueError("Use a fresh data ID")
+    work = Path("/runs/teacher-work") / teacher
+    settings = json.loads((work / "settings.json").read_text())
+    chunks = teacher_shards(folder, settings["shards"], settings["limit"])
+    sandbox = Sandbox(app, deadline - time.time(), cpu=32)
+    rows, problems = [], 0
+    author = "@".join(report["teacher"])
+    try:
+        for index, chunk in enumerate(chunks):
+            answers = json.loads((work / f"answers-{index}.json").read_text())
+            if limit:
+                chunk, answers = chunk[: limit - problems], answers[: limit - problems]
+            rows += rl_trajectories.from_teacher(chunk, answers, sandbox, author)
+            problems += len(chunk)
+            print(json.dumps({"shard": index, "problems": problems, "answers": len(rows)}))
+            if limit and problems >= limit:
+                break
+    finally:
+        sandbox.close()
+    output.mkdir(parents=True)
+    path = output / "trajectories.jsonl"
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    result = {
+        "format": rl_trajectories.FORMAT,
+        "trajectories_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "teacher": {"data_id": teacher, "author": author},
+        "problems": problems,
+        "answers": len(rows),
+        "passed": sum(r["reward"] for r in rows),
+    }
+    (output / "report.json").write_text(json.dumps(result, indent=2) + "\n")
+    volume.commit()
+    return result
+
+
+def teacher_shards(folder, shards, limit):
+    """The source rows of each teacher shard, as the teacher run split them."""
+    rows = [json.loads(line) for line in (folder / "examples.jsonl").read_text().splitlines()]
+    rows = rows[:limit] if limit else rows
+    size = -(-len(rows) // shards)
+    return [rows[i : i + size] for i in range(0, len(rows), size)]
+
+
+@app.local_entrypoint()
+def trajectories(teacher: str, data_id: str, limit: int = 0):
+    run_id(data_id, "data_id")
+    deadline = time.time() + LAUNCH_LIMIT_SECONDS
+    print(json.dumps(build_trajectories.remote(teacher, data_id, limit, deadline), indent=2))
 
 
 @app.local_entrypoint()
