@@ -434,15 +434,20 @@ simulated with the run's seed), and trains like pretraining
 
 ## Playground
 
-[`playground/`](playground) is a
-Gradio app for a private Hugging Face Space: text continuation, and for chat
-exports a chat tab with OpenAI tools whose replies are parsed back into OpenAI
-messages. `playground/publish.py` uploads the app and the inference modules; the
-Space downloads the export from the private model repo with its `HF_TOKEN` secret.
+[`playground/`](playground) is a Gradio app for a private Hugging Face Space on a GPU:
+text continuation, and for chat exports a chat tab with OpenAI tools whose replies
+are parsed back into OpenAI messages. It decodes with `generate.py` in bf16, one
+request at a time, and warms up (compiled prefill attention, captured decode graph)
+before serving. `playground/publish.py` uploads a Docker Space
+([`playground/Dockerfile`](playground/Dockerfile): CUDA 13.0 devel, torch 2.14.1, the
+family kernels prebuilt) with the inference modules and kernels, on L4 hardware by
+default (`--hardware`), sleeping after an hour without visitors (`--sleep-seconds`);
+GPU time is billed to the Space owner. The Space downloads the export from the
+private model repo with its `HF_TOKEN` secret.
 
 ```sh
 uv run --all-extras python -m model_hybrid.playground.publish \
-  --space jfrick/hybrid-720m-playground --export tokens-039998980096 [--chat]
+  --space jfrick/hybrid-720m-playground --export tokens-039998980096 [--chat] [--hardware l4x1]
 ```
 
 ## Benchmarks
@@ -464,21 +469,6 @@ results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
 uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
 ```
 
-## LiveCodeBench
-
-[`modal_livecodebench.py`](modal_livecodebench.py) scores LiveCodeBench v6
-(`test6.jsonl`, 175 problems, pinned revision) for the base, SFT and RL exports, the
-same reference models and the dense Qwen3 (1.7–14B) and Qwen3.5 (2–9B) base models: one greedy completion per problem (up to 2,048 tokens,
-stopping once a code block closes), graded inside the call's container by
-[`livecodebench.py`](livecodebench.py) on every public and private test. Base models
-get LiveCodeBench's prompt after one worked example of the same test mode; chat
-exports get the question as a system and user turn. Results go to
-`lm-exploration-hybrid-runs/benchmarks/lcb-<launch>/`:
-
-```sh
-uv run --all-extras modal run --detach -m model_hybrid.modal_livecodebench [--models M,...] [--limit N]
-```
-
 ## Tests
 
 From `training/`:
@@ -488,7 +478,7 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
   tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
   tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
   tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet \
-  tests.test_hybrid_chat tests.test_hybrid_livecodebench tests.test_hybrid_rl -v
+  tests.test_hybrid_chat tests.test_hybrid_rl -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
