@@ -30,29 +30,23 @@ from pathlib import Path
 import modal
 
 from workflows.checks import run_id
+from workflows.images import add_project
 
 LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
 
 app = modal.App("simple-llm-sft-data")
 volume = modal.Volume.from_name("lm-exploration-training")
-runtime_image = (
+runtime_image = add_project(
     modal.Image.debian_slim(python_version="3.12")
     .apt_install(
         "gcc", "g++", "rustc", "golang-go", "default-jdk-headless", "nodejs", "node-typescript"
     )
     .env({"PYTHONPATH": "/project"})
-    .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
-    .add_local_dir("trainer", "/project/trainer", ignore=["__pycache__"])
-    .add_local_dir("modal_scripts", "/project/modal_scripts", ignore=["__pycache__"])
 )
-data_image = (
+data_image = add_project(
     modal.Image.debian_slim(python_version="3.12")
     .pip_install("tokenizers==0.22.2", "huggingface-hub==1.33.0", "pyarrow==26.0.0")
     .env({"PYTHONPATH": "/project"})
-    .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
-    .add_local_dir("tokenizer", "/project/tokenizer", ignore=["__pycache__"])
-    .add_local_dir("trainer", "/project/trainer", ignore=["__pycache__"])
-    .add_local_dir("modal_scripts", "/project/modal_scripts", ignore=["__pycache__"])
 )
 
 

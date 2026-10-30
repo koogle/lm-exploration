@@ -222,9 +222,11 @@ stopped; the third ran normally.
 
 ## RL record
 
-RL with verifiable rewards ([`rl.py`](../hybrid/rl.py), launched with
-`modal_tools::launch_rl`) from the SFT export. Prompts: recipe
-[`rl-v1`](../hybrid/recipes/rl-v1.json), 16,211 training and 357 held-out
+RL with verifiable rewards from the SFT export, with the hybrid RL loop of commit
+`4c04614` (`hybrid/rl.py`, 8xH100 DDP, launched with `modal_tools::launch_rl`).
+Hybrid RL now runs through the shared RL trainer
+([`workflows/hybrid-720m-rl.json`](../workflows/hybrid-720m-rl.json), see the
+[RL guide](../rl/README.md)). Prompts: recipe `rl-v1`, 16,211 training and 357 held-out
 prompts from GSM8K train, MATH train levels 1–3 and KodCode-Light-RL-10K
 easy/medium (code problems kept only when their reference solution passes in the
 grading sandbox; 1,721 prompts dropped by the benchmark screen). Rewards: 1 for a
