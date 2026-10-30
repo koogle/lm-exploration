@@ -48,9 +48,10 @@ from training_data.subword import LOSS_IGNORE_INDEX, digest
 from trainer import batches, checkpoints, optimizers
 from trainer.batches import collate
 from trainer.replay_hook import ReplayHook
-from trainer.rl.batch import Tokens
+from trainer.rl.batch import Batch, Tokens
 from trainer.rl.off_policy.sources import Reuse, TrajectoryFile
 from trainer.rl.off_policy.stable_reinforce import StableReinforce
+from trainer.rl.ranks import Ranks
 from trainer.rl.rollouts import Sampler, Scheduler, collect
 
 FORMAT = "rl-v1"
@@ -108,12 +109,16 @@ def train(
     data_root=Path("/data"),
     trajectories_path=None,
     should_stop=lambda: False,
+    ranks=None,
 ):
     """Train, or resume `output`'s latest checkpoint, until a stop (see the module
     docstring). `sandbox.run` checks code answers; `trajectories_path` is the trajectory
-    file of the `"file"` source."""
+    file of the `"file"` source. With `ranks` (a process group per GPU), every rank draws
+    the same prompts and samples and trains its share; gradients are averaged before
+    clipping, and rank 0 logs, saves and exports."""
     import torch
 
+    ranks = ranks or Ranks()
     if deadline is not None and time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing RL work")
     if not torch.cuda.is_available():
@@ -158,9 +163,11 @@ def train(
     family.load(reference, saved["model"])
     reference.requires_grad_(False)
     del saved
-    torch.manual_seed(settings.seed)
+    torch.manual_seed(settings.seed + ranks.rank)
+    # The same draws of prompts on every rank; each rank's own sampling.
     rng = random.Random(settings.seed)
-    generator = torch.Generator(device="cuda").manual_seed(settings.seed)
+    shuffler = random.Random(settings.seed + ranks.rank)
+    generator = torch.Generator(device="cuda").manual_seed(settings.seed + ranks.rank)
     optimizer = settings.optimizer.make(model)
     replay = ReplayHook.attach(settings, data_root, family.context(model))
     stable = StableReinforce.attach(settings)
@@ -176,11 +183,12 @@ def train(
         "tokenizer_sha256": family.tokenizer_sha256,
         "replay": replay.identity() if replay else None,
         "settings": asdict(settings),
+        "world_size": ranks.world,
         "source_sha256": source_hashes,
     }
     output = Path(output)
     resumed = latest_checkpoint(output)
-    if resumed is None:
+    if resumed is None and ranks.main:
         # A run stopped before its first checkpoint starts again.
         if output.exists():
             shutil.rmtree(output)
@@ -190,6 +198,7 @@ def train(
         family.copy_tokenizer(output / "tokenizer")
         for name, path in files.items():
             shutil.copyfile(path, output / f"{name}{Path(path).suffix}")
+    ranks.barrier()
 
     def sample(rows):
         return collect(
@@ -206,12 +215,16 @@ def train(
 
     scheduler = Scheduler(pool["train"], rollouts.rest_steps, rng)
     source = {
-        "sampler": lambda: Sampler(rollouts, scheduler, sample),
+        "sampler": lambda: Sampler(rollouts, scheduler, sample, ranks),
         "reuse": lambda: Reuse(
-            rollouts, scheduler, sample, settings.trajectories.updates_per_batch
+            rollouts, scheduler, sample, settings.trajectories.updates_per_batch, ranks
         ),
         "file": lambda: TrajectoryFile(
-            trajectories, settings.trajectories.answers_per_step, rng, family.stop_ids[0]
+            trajectories,
+            settings.trajectories.answers_per_step,
+            rng,
+            family.stop_ids[0],
+            ranks,
         ),
     }[settings.trajectories.source]()
     step, update, trained_tokens = 0, 0, 0
@@ -228,16 +241,18 @@ def train(
         if replay:
             replay.load_state(state["replay_state"])
         rng.setstate(state["rng"])
-        torch.set_rng_state(state["torch_rng"])
-        torch.cuda.set_rng_state(state["cuda_rng"])
-        generator.set_state(state["generator"])
+        own = state["rank_rng"][ranks.rank]
+        shuffler.setstate(own["shuffler"])
+        torch.set_rng_state(own["torch"])
+        torch.cuda.set_rng_state(own["cuda"])
+        generator.set_state(own["generator"])
         del state
 
     def evaluate():
         metrics = {}
-        batch = collect(
-            family, model, pool["validation"], rollouts, 0, generator, tokenizer, sandbox
-        )
+        mine = pool["validation"][ranks.rank :: ranks.world]
+        local = collect(family, model, mine, rollouts, 0, generator, tokenizer, sandbox)
+        batch = merged(local, ranks)
         for task in rl_tasks.TASKS:
             picked = [i for i, row in enumerate(batch.rows) if row["task"] == task]
             if picked:
@@ -275,7 +290,7 @@ def train(
 
     def optimize(batch, sequences, advantage, answers, old, totals):
         """One optimizer update on `answers`; adds token statistics to `totals`."""
-        nonlocal update, trained_tokens
+        nonlocal update
         optimizers.set_learning_rate(optimizer, settings.optimizer.factor(update))
         optimizer.zero_grad(set_to_none=True)
         # Dr. GRPO's constant: the answers per update times the task's token limit.
@@ -315,19 +330,33 @@ def train(
             totals["kl"] += kl.detach().sum().item()
             totals["nll"] += -logp.detach().sum().item()
             totals["tokens"] += int(mask.sum())
-            trained_tokens += int(mask.sum())
         if replay:
             totals["replay_loss"] += replay.backward(model)
+        ranks.average_gradients(model)
         grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         if not torch.isfinite(grad_norm):
             raise RuntimeError("Non-finite RL gradient")
-        if answers or replay:
+        # Gradients are averaged over ranks, so every rank steps if any rank trained.
+        if ranks.sum(len(answers)) or replay:
             optimizer.step()
         totals["grad_norm"] += grad_norm.item()
         update += 1
 
     def save():
+        """Every rank's generators, then rank 0 writes the checkpoint (all ranks call it)."""
         target = output / f"step-{step:09d}.pt"
+        rank_rng = ranks.gather(
+            [
+                {
+                    "shuffler": shuffler.getstate(),
+                    "torch": torch.get_rng_state(),
+                    "cuda": torch.cuda.get_rng_state(),
+                    "generator": generator.get_state(),
+                }
+            ]
+        )
+        if not ranks.main:
+            return str(target)
         temporary = target.with_suffix(".partial")
         torch.save(
             {
@@ -345,9 +374,7 @@ def train(
                 "source_state": source.state() if hasattr(source, "state") else None,
                 "replay_state": replay.state() if replay else None,
                 "rng": rng.getstate(),
-                "torch_rng": torch.get_rng_state(),
-                "cuda_rng": torch.cuda.get_rng_state(),
-                "generator": generator.get_state(),
+                "rank_rng": rank_rng,
             },
             temporary,
         )
@@ -359,14 +386,18 @@ def train(
         return str(target)
 
     def record(**values):
-        with (output / "metrics.jsonl").open("a") as handle:
-            handle.write(json.dumps({"step": step, **values}) + "\n")
+        if ranks.main:
+            with (output / "metrics.jsonl").open("a") as handle:
+                handle.write(json.dumps({"step": step, **values}) + "\n")
+            print(json.dumps({"step": step, **values}), flush=True)
 
     started = time.monotonic()
     if resumed is None:
         record(**evaluate(), phase="baseline")
-        commit()
-    print(json.dumps({"stage": "training", "step": step, "target": settings.steps}), flush=True)
+        if ranks.main:
+            commit()
+    if ranks.main:
+        print(json.dumps({"stage": "training", "step": step, "target": settings.steps}), flush=True)
     last_saved, saved_at = step if resumed is not None else -1, time.monotonic()
 
     def stop_reason():
@@ -381,7 +412,7 @@ def train(
         return None
 
     shares = source.updates_per_batch
-    while (reason := stop_reason()) is None:
+    while (reason := ranks.broadcast(stop_reason())) is None:
         timings = {}
         clock = time.monotonic()
         batch = source.batch(step)
@@ -392,7 +423,7 @@ def train(
         trained = [
             i for i, a in enumerate(advantage) if a != 0 or not algorithm.skips_zero_advantage
         ]
-        rng.shuffle(trained)
+        shuffler.shuffle(trained)
         old = old_logprobs(sequences, trained) if algorithm.needs_behaviour else None
         totals = {"kl": 0.0, "nll": 0.0, "tokens": 0, "grad_norm": 0.0, "replay_loss": 0.0}
         for share in range(shares):
@@ -400,6 +431,9 @@ def train(
             optimize(batch, sequences, advantage, sorted(answers), old, totals)
         step += 1
         timings["train_seconds"] = time.monotonic() - clock
+        totals = {key: ranks.sum(value) for key, value in totals.items()}
+        trained_tokens += totals["tokens"]
+        batch = merged(batch, ranks)
         values = {}
         for task in rl_tasks.TASKS:
             picked = [i for i, row in enumerate(batch.rows) if row["task"] == task]
@@ -417,43 +451,64 @@ def train(
             values[f"{task}_truncated"] = 1 - sum(batch.finished[i] for i in picked) / len(picked)
         tokens = max(1, totals.pop("tokens"))
         values.update(
-            trained_answers=len(trained),
+            trained_answers=ranks.sum(len(trained)),
             sampled_nll=totals.pop("nll") / tokens,
             kl=totals.pop("kl") / tokens,
             **(stable.statistics() if stable else {}),
-            grad_norm=totals.pop("grad_norm") / shares,
+            # Every rank clips the same averaged gradients.
+            grad_norm=totals.pop("grad_norm") / shares / ranks.world,
             lr=settings.optimizer.learning_rate(update - 1),
             updates=update,
             **source.statistics(step),
-            **({"replay_loss": totals.pop("replay_loss") / shares} if replay else {}),
+            **({"replay_loss": totals.pop("replay_loss") / shares / ranks.world} if replay else {}),
             **{key: value / tokens for key, value in totals.items() if key != "replay_loss"},
             **timings,
         )
         record(**values)
-        print(json.dumps({"step": step, **values}), flush=True)
         if step % settings.evaluate_every == 0:
-            metrics = evaluate()
-            record(**metrics)
-            print(json.dumps({"step": step, **metrics}), flush=True)
+            record(**evaluate())
         if step % settings.save_every == 0 or time.monotonic() - saved_at >= settings.save_seconds:
             save()
             last_saved, saved_at = step, time.monotonic()
     if reason == "steps":
         record(**evaluate(), phase="final")
     path = str(output / f"step-{step:09d}.pt") if last_saved == step else save()
-    if reason == "steps":
+    if reason == "steps" and ranks.main:
         upload = family.export(
             model, output, {"step": step, "tokens": trained_tokens}, settings.hf_repo
         )
         if upload is not None:
             upload.join()
-    commit()
+    if ranks.main:
+        commit()
+    ranks.barrier()
     return {
         "checkpoint": path,
         "step": step,
         "stop_reason": reason,
         "seconds": time.monotonic() - started,
     }
+
+
+def merged(batch, ranks):
+    """Every rank's answers of a `Batch` for statistics, in rank order (rows, completions,
+    finished and rewards; groups stay whole)."""
+    if ranks.world == 1:
+        return batch
+    parts = ranks.gather(
+        [
+            (
+                [{k: r[k] for k in ("id", "task")} for r in batch.rows],
+                batch.completions,
+                batch.finished,
+                batch.rewards,
+            )
+        ]
+    )
+    rows, completions, finished, rewards = (
+        [x for part in parts for x in part[i]] for i in range(4)
+    )
+    return Batch(rows, completions, finished, rewards, [None] * len(rows), group=batch.group)
 
 
 # Settings a resumed run may change: the step target and when it saves, validates, stops.

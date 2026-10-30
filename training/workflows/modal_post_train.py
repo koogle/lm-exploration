@@ -108,6 +108,7 @@ def train_rl(recipe, deadline, launch, runs_volume, pools):
 
     from trainer.rl import Settings
     from trainer.rl.loop import train
+    from trainer.rl.ranks import Services, run_ranks, serve
     from workflows.stages import validate
 
     stop = deadline - FINAL_RESERVE_SECONDS
@@ -128,26 +129,51 @@ def train_rl(recipe, deadline, launch, runs_volume, pools):
         report = json.loads((folder / "report.json").read_text())
         if digest(trajectories) != report["trajectories_sha256"]:
             raise ValueError("Trajectories differ from their report")
+    gpus = recipe["gpus"]
+    if settings.rollouts.prompts_per_step % gpus:
+        raise ValueError("prompts_per_step must split evenly over the GPUs")
     sandbox = Sandbox(app, deadline - time.time())
+    # The workflow's `stop` entrypoint: checkpoint and pause at the next step.
+    services = Services(sandbox, runs_volume.commit, lambda: control.get(launch) == "stop")
+    run = {
+        "parent": runs / recipe["parent"],
+        "pool_path": pool / "pool.jsonl",
+        "output": runs / recipe["run_id"],
+        "settings": settings,
+        "deadline": stop,
+        "trajectories_path": trajectories,
+    }
     try:
         track_call(launch, sandbox.object_id, "sandbox")
-        result = train(
-            runs / recipe["parent"],
-            pool / "pool.jsonl",
-            runs / recipe["run_id"],
-            settings,
-            sandbox,
-            runs_volume.commit,
-            deadline=stop,
-            trajectories_path=trajectories,
-            # The workflow's `stop` entrypoint: checkpoint and pause at the next step.
-            should_stop=lambda: control.get(launch) == "stop",
-        )
+        if gpus == 1:
+            result = train(
+                **run,
+                sandbox=sandbox,
+                commit=services.commit,
+                should_stop=services.should_stop,
+            )
+        else:
+            result = run_ranks(gpus, train_rank, *serve(services), run)
         (runs / recipe["run_id"] / "result.json").write_text(json.dumps(result, indent=2))
         return result
     finally:
         sandbox.close()
         runs_volume.commit()
+
+
+def train_rank(ranks, address, key, run):
+    """One rank of a multi-GPU RL run, using the launching process's services."""
+    from trainer.rl.loop import train
+    from trainer.rl.ranks import connect
+
+    services = connect(address, key)
+    return train(
+        **run,
+        sandbox=services,
+        commit=services.commit,
+        should_stop=services.should_stop,
+        ranks=ranks,
+    )
 
 
 @app.function(
@@ -170,16 +196,24 @@ def rl_h100_hybrid(recipe, examples, deadline, launch):
     return train_rl(recipe, deadline, launch, hybrid_runs, "/pools")
 
 
+def rl_worker(recipe, family):
+    """The family's RL function on the stage's `gpus` H100s."""
+    function = {"subword": rl_h100, "hybrid": rl_h100_hybrid}[family]
+    gpus = recipe["gpus"]
+    if gpus == 1:
+        return function
+    return function.with_options(
+        gpu=f"H100:{gpus}", cpu=8.0 * gpus, memory=min(65536 * gpus, 524288)
+    )
+
+
 # {stage: (the worker for a recipe and family, seconds it may run)}
 WORKERS = {
     "sft": (
         lambda recipe, family: {"L40S": sft_l40s, "H100": sft_h100}[recipe["gpu"]],
         SFT_SECONDS,
     ),
-    "rl": (
-        lambda recipe, family: {"subword": rl_h100, "hybrid": rl_h100_hybrid}[family],
-        RL_SECONDS,
-    ),
+    "rl": (lambda recipe, family: rl_worker(recipe, family), RL_SECONDS),
 }
 
 

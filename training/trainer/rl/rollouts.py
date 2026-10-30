@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from training_data import rl_tasks
 
 from trainer.rl.batch import Batch
+from trainer.rl.ranks import Ranks
 
 
 class Scheduler:
@@ -102,12 +103,14 @@ def collect(family, model, rows, rollouts, temperature, generator, tokenizer, sa
 
 class Sampler:
     """Every step: `prompts_per_step` training prompts, `math_share` of them math, and
-    `samples_per_prompt` answers to each from the current weights, trained in one update."""
+    `samples_per_prompt` answers to each from the current weights, trained in one update.
+    Every rank draws the same prompts and samples its share of them."""
 
     updates_per_batch = 1
 
-    def __init__(self, rollouts, scheduler, sample):
+    def __init__(self, rollouts, scheduler, sample, ranks=None):
         self.rollouts, self.scheduler, self.sample = rollouts, scheduler, sample
+        self.ranks = ranks or Ranks()
 
     def batch(self, step):
         rollouts, group = self.rollouts, self.rollouts.samples_per_prompt
@@ -115,9 +118,14 @@ class Sampler:
         drawn = self.scheduler.draw("math", math_prompts, step) + self.scheduler.draw(
             "code", rollouts.prompts_per_step - math_prompts, step
         )
-        batch = self.sample([row for row in drawn for _ in range(group)])
-        for index, row in enumerate(drawn):
-            mean = sum(batch.rewards[index * group : (index + 1) * group]) / group
+        mine = self.ranks.shard(drawn)
+        batch = self.sample([row for row in mine for _ in range(group)])
+        means = [
+            sum(batch.rewards[index * group : (index + 1) * group]) / group
+            for index in range(len(mine))
+        ]
+        # Every rank updates the scheduler with every prompt's mean, so they stay equal.
+        for row, mean in zip(drawn, self.ranks.unshard(means), strict=True):
             self.scheduler.update(row, mean, step)
         batch.group = group
         return batch

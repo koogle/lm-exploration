@@ -9,24 +9,26 @@
 """
 
 from trainer.rl.batch import Batch
+from trainer.rl.ranks import Ranks
 from trainer.rl.rollouts import Sampler
 
 
 class Reuse(Sampler):
-    def __init__(self, rollouts, scheduler, sample, updates_per_batch):
-        super().__init__(rollouts, scheduler, sample)
+    def __init__(self, rollouts, scheduler, sample, updates_per_batch, ranks=None):
+        super().__init__(rollouts, scheduler, sample, ranks)
         self.updates_per_batch = updates_per_batch
 
 
 class TrajectoryFile:
     updates_per_batch = 1
 
-    def __init__(self, rows, answers_per_step, rng, stop):
-        """`stop`: the token that ends each (finished) written answer."""
+    def __init__(self, rows, answers_per_step, rng, stop, ranks=None):
+        """`stop`: the token that ends each (finished) written answer. Every rank draws the
+        same answers and trains its share."""
         if len(rows) < answers_per_step:
             raise ValueError("Fewer trajectories than answers_per_step")
         self.rows, self.answers_per_step, self.rng = rows, answers_per_step, rng
-        self.stop = stop
+        self.stop, self.ranks = stop, ranks or Ranks()
         self.order, self.passes = [], 0
 
     def batch(self, step):
@@ -34,7 +36,7 @@ class TrajectoryFile:
             self.order = list(range(len(self.rows)))
             self.rng.shuffle(self.order)
             self.passes += 1
-        chosen = [self.rows[i] for i in self.order[: self.answers_per_step]]
+        chosen = self.ranks.shard([self.rows[i] for i in self.order[: self.answers_per_step]])
         del self.order[: self.answers_per_step]
         return Batch(
             chosen,
