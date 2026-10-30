@@ -1,4 +1,4 @@
-"""Token shards for the hybrid family: preparation, contamination screen, loader.
+"""Packed uint32 token shards: preparation, contamination screen, loader.
 
 Each upstream parquet file of a recipe source becomes one prepared shard:
 `<root>/<source>/<index>.bin` (uint32 GLM token ids, every document followed by
@@ -6,6 +6,12 @@ EOS), `<index>.docs.npy` (int64 [documents, 2]: tokens including EOS, UTF-8 byte
 and `<index>.json`, written last, whose presence marks the shard complete.
 Documents are shuffled within a shard with a seed from the recipe. The last
 shard of each source is held out for evaluation.
+
+A source may group rows into longer documents (`group_by`, e.g. one document per
+code repository) and keep only documents of at least `min_tokens`; `file_offset`
+shifts which upstream files its shards read. A source names its files by `pattern`
+(with `{index}`) or lists them in `files`. A source with `prepared_in` reuses the
+shards another recipe prepared under the same source name (`source_root`).
 
 Preparation drops documents that share any token n-gram (n = 13) with the
 recipe's benchmark test sets, and code outside `PERMISSIVE_LICENSES` when a source sets
@@ -22,8 +28,10 @@ import time
 from pathlib import Path
 
 import numpy as np
-from training_data.hub_files import download as hub_download
-from training_data.licenses import PERMISSIVE_LICENSES
+
+from .hub_files import download as hub_download
+from .licenses import PERMISSIVE_LICENSES
+from .mixture import deficit_source
 
 HASH_BASE = np.uint64(0x9E3779B97F4A7C15)
 
@@ -104,6 +112,13 @@ def contaminated(ids, screen, n):
     return bool((screen[positions] == hashes).any())
 
 
+def source_root(recipe, root, name):
+    """Folder holding a source's shards: the recipe's own, or that of the recipe named in
+    the source's `prepared_in` (a sibling folder), whose shards it reuses."""
+    other = recipe["sources"][name].get("prepared_in")
+    return Path(root).parent / other if other else Path(root)
+
+
 def shard_paths(root, name, index):
     folder = Path(root) / name
     return (
@@ -113,38 +128,80 @@ def shard_paths(root, name, index):
     )
 
 
-def prepare_shard(recipe, name, index, root, tokenizer, screen, eos_id, download=hub_download):
-    """Tokenize one upstream file into a prepared shard; returns its metadata."""
+def _text_batches(source, parquet, dropped, render=None):
+    """Document texts of one upstream file, one list per row group.
+
+    With `group_by` (e.g. `repo_name`), the file's rows are grouped first and each
+    group becomes one document: its rows in `order_by` order, each under a
+    `### <order_by value>` header line (repository-level code, one file after another).
+    """
+    licenses = source.get("permissive_licenses_only", False)
+    group_by, order_by = source.get("group_by"), source.get("order_by")
+    columns = [source["column"], *(["license"] if licenses else [])]
+    columns += [c for c in (group_by, order_by) if c]
+    groups = {}
+    for index in range(parquet.num_row_groups):
+        table = parquet.read_row_group(index, columns=columns)
+        rows = table.to_pylist()
+        if licenses:
+            allowed = [row["license"].lower() in PERMISSIVE_LICENSES for row in rows]
+            dropped["license"] += allowed.count(False)
+            rows = [row for row, keep in zip(rows, allowed, strict=True) if keep]
+        if render:
+            rows = [{**row, source["column"]: render(row[source["column"]])} for row in rows]
+        empty = [not row[source["column"]] or not row[source["column"]].strip() for row in rows]
+        dropped["empty"] += sum(empty)
+        rows = [row for row, e in zip(rows, empty, strict=True) if not e]
+        if not group_by:
+            yield [row[source["column"]] for row in rows]
+            continue
+        for row in rows:
+            groups.setdefault(row[group_by], []).append(row)
+    if group_by:
+        texts = [
+            "".join(
+                f"### {row[order_by]}\n{row[source['column']]}\n\n"
+                for row in sorted(rows, key=lambda r: r[order_by])
+            )
+            for _, rows in sorted(groups.items())
+        ]
+        for start in range(0, len(texts), 256):
+            yield texts[start : start + 256]
+
+
+def prepare_shard(
+    recipe, name, index, root, tokenizer, screen, eos_id, download=hub_download, render=None
+):
+    """Tokenize one upstream file into a prepared shard; returns its metadata.
+
+    `render` turns a row's value into text for sources that name a renderer (`render`,
+    e.g. chat messages rendered in the model's chat format).
+    """
     import pyarrow.parquet as pq
 
     source = recipe["sources"][name]
-    file = source["pattern"].format(index=index)
+    if "files" in source:
+        file = source["files"][index]
+    else:
+        file = source["pattern"].format(index=index + source.get("file_offset", 0))
     path = download(source["repo"], source["revision"], file)
-    parquet = pq.ParquetFile(path)
     n = recipe["contamination"]["ngram"]
-    licenses = source.get("permissive_licenses_only", False)
-    documents, dropped = [], {"license": 0, "empty": 0, "contaminated": 0}
-    columns = [source["column"], *(["license"] if licenses else [])]
-    for group in range(parquet.num_row_groups):
-        table = parquet.read_row_group(group, columns=columns)
-        texts = table.column(source["column"]).to_pylist()
-        if licenses:
-            allowed = [
-                lic.lower() in PERMISSIVE_LICENSES for lic in table.column("license").to_pylist()
-            ]
-            dropped["license"] += allowed.count(False)
-            texts = [t for t, keep in zip(texts, allowed, strict=True) if keep]
-        empty = [not t or not t.strip() for t in texts]
-        dropped["empty"] += sum(empty)
-        texts = [t for t, e in zip(texts, empty, strict=True) if not e]
+    min_tokens = source.get("min_tokens", 1)
+    documents = []
+    dropped = {"license": 0, "empty": 0, "short": 0, "contaminated": 0}
+    if source.get("render") and render is None:
+        raise ValueError(f"{name} needs its {source['render']} renderer")
+    for texts in _text_batches(source, pq.ParquetFile(path), dropped, render):
         for text, encoding in zip(
             texts, tokenizer.encode_batch(texts, add_special_tokens=False), strict=True
         ):
             ids = np.asarray(encoding.ids, dtype=np.uint32)
-            if contaminated(ids, screen, n):
+            if len(ids) < min_tokens:
+                dropped["short"] += 1
+            elif contaminated(ids, screen, n):
                 dropped["contaminated"] += 1
-                continue
-            documents.append((ids, len(text.encode())))
+            else:
+                documents.append((ids, len(text.encode())))
     order = np.random.default_rng([recipe["seed"], sum(map(ord, name)), index]).permutation(
         len(documents)
     )
@@ -204,7 +261,9 @@ class PreparedMixture:
         index = self.orders[name][position]
         key = (name, index)
         if key not in self.loaded:
-            bin_path, _, meta_path = shard_paths(self.root, name, index)
+            bin_path, _, meta_path = shard_paths(
+                source_root(self.recipe, self.root, name), name, index
+            )
             start = time.monotonic()
             while not meta_path.exists():
                 if time.monotonic() - start > self.wait_seconds:
@@ -245,7 +304,7 @@ class PreparedMixture:
         state["tokens"] += self.context
 
     def next_window(self):
-        name = min(self.names, key=lambda n: (self.state[n]["tokens"] / self.weights[n], n))
+        name = deficit_source({n: self.state[n]["tokens"] for n in self.names}, self.weights)
         window = self._take(name, self.context + 1)
         self._advance(name, self.context)
         return name, window
@@ -273,10 +332,44 @@ class PreparedMixture:
         self.loaded = {}
 
 
+class ReplayMixture:
+    """Batches whose last `replay_rows` rows come from a replay mixture.
+
+    Replay keeps an earlier training objective (for example the pretraining mix) in
+    every step, so later training does not trade away what it learned. The primary
+    mixture's exhaustion ends the run.
+    """
+
+    def __init__(self, primary, replay, replay_rows):
+        self.primary, self.replay, self.replay_rows = primary, replay, replay_rows
+        self.wait_seconds = replay.wait_seconds
+
+    def next_batch(self, rows):
+        if not 0 < self.replay_rows < rows:
+            raise ValueError("replay must take some but not all rows of a batch")
+        inputs, labels, names = self.primary.next_batch(rows - self.replay_rows)
+        replay_inputs, replay_labels, replay_names = self.replay.next_batch(self.replay_rows)
+        return (
+            np.concatenate((inputs, replay_inputs)),
+            np.concatenate((labels, replay_labels)),
+            names + replay_names,
+        )
+
+    def state_dict(self):
+        return {"primary": self.primary.state_dict(), "replay": self.replay.state_dict()}
+
+    def load_state_dict(self, state):
+        self.primary.load_state_dict(state["primary"])
+        self.replay.load_state_dict(state["replay"])
+
+
 def heldout_windows(recipe, root, name, context, max_documents):
-    """Whole held-out documents packed into windows, with their total UTF-8 bytes."""
+    """One source's whole held-out documents in one stream of windows (labels -100 only
+    past its end): (inputs, labels, total UTF-8 bytes)."""
     source = recipe["sources"][name]
-    bin_path, docs_path, _ = shard_paths(root, name, heldout_index(source))
+    bin_path, docs_path, _ = shard_paths(
+        source_root(recipe, root, name), name, heldout_index(source)
+    )
     lengths = np.load(docs_path)[:max_documents]
     count = int(lengths[:, 0].sum())
     tokens = np.fromfile(bin_path, dtype=np.uint32, count=count).astype(np.int64)
@@ -298,7 +391,8 @@ def pack_windows(stream, context):
 def wait_for_heldout(recipe, mixture):
     """Wait (up to the mixture's wait_seconds) until every source's held-out shard exists."""
     for name, source in recipe["sources"].items():
-        meta = shard_paths(mixture.root, name, heldout_index(source))[2]
+        folder = source_root(recipe, mixture.root, name)
+        meta = shard_paths(folder, name, heldout_index(source))[2]
         waited = time.monotonic()
         while not meta.exists():
             if time.monotonic() - waited > mixture.wait_seconds:

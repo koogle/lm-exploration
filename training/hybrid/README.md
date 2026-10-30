@@ -213,11 +213,12 @@ The last shard of each source is held out for evaluation. Preparation drops any
 document sharing a 13-token n-gram with the test sets of GSM8K, MATH, HumanEval,
 MBPP, MMLU, ARC and HellaSwag (validation), all pinned by revision.
 
-[`data.py`](data.py) turns each upstream parquet file into a shard of uint32 GLM
+[`data/packed_shards.py`](../data/packed_shards.py) turns each upstream parquet file into a shard of uint32 GLM
 ids (documents shuffled within the shard, each ending in EOS) plus per-document
 token and byte counts. `PreparedMixture` reads each source's shards in a seeded
 order and packs 4,097-token windows (consecutive windows share one token), each
-from the source furthest below its weight; it is resumable and waits for shards
+from the source furthest below its weight (`data.mixture.deficit_source`, the rule
+`TokenMixture` uses too); it is resumable and waits for shards
 that are still being prepared, so training can start while preparation runs.
 
 [`modal_data.py`](modal_data.py) is the family's data stage: it prepares shards on
@@ -270,22 +271,22 @@ tensor-core attention and KDA kernels.
 
 [`train.py`](train.py) is the hybrid family for the common loop
 ([`trainer/loop.py`](../trainer/loop.py), see [trainer/README.md](../trainer/README.md)),
-run as `torchrun -m model_hybrid.train`: rank 0 reads the recipe's
-`PreparedMixture` and scatters each batch; every rank derives MTP targets (the
-model derives its own document ids from `eos_id`, which must be the GLM EOS), and
-DDP averages gradients. Each loss is normalized by its global target count. Rank 0
-writes `metrics.jsonl` (loss, z, MTP loss, learning-rate factor, gradient norm,
-tokens/s, MFU, rows per source, peak memory per rank), and at start, every
-`eval_every_steps` and at the end `validation.jsonl`: held-out loss, bits per byte
-and MTP loss per source with per-layer gate openness and sink weight, sink,
-gate-bias and KDA-decay parameters, and (every `sample_every_steps` and at the end)
-greedy continuations of fixed prompts. Checkpoints (`step-<step>.pt`: model,
-optimizer, data cursor, every rank's RNG; the last `keep_checkpoints` kept) are
-written every `checkpoint_seconds` and at stop, and a run directory resumes from
-its `latest.json` with the same config, GPU count and source files. `report.json`
-closes each session. With `hf_repo` set, bf16 trunk weights and config (under
-`export/`) and the logs go to that private HF model repo every `hf_every_tokens`
-and at the end.
+run as `torchrun -m model_hybrid.train`: rank 0 reads the recipe's mixture
+(`PreparedMixture`, with replay rows when the recipe names one) and scatters each batch; every
+rank derives MTP targets (the model derives its own document ids from `eos_id`,
+which must be the GLM EOS), and DDP averages gradients. Each loss is normalized by
+its global target count. Rank 0 writes `metrics.jsonl` (loss, z, MTP loss,
+learning-rate factor, gradient norm, tokens/s, MFU, rows per source, peak memory per
+rank), and at start, every `eval_every_steps` and at the end `validation.jsonl`:
+held-out loss, bits per byte and MTP loss per source with per-layer gate openness
+and sink weight, sink, gate-bias and KDA-decay parameters, and (every
+`sample_every_steps` and at the end) greedy continuations of fixed prompts.
+Checkpoints (`step-<step>.pt`: model, optimizer, data cursor, every rank's RNG;
+the last `keep_checkpoints` kept) are written every `checkpoint_seconds` and at
+stop, and a run directory resumes from its `latest.json` with the same config,
+GPU count and source files. `report.json` closes each session. With `hf_repo`
+set, bf16 trunk weights and config (under `export/`) and the logs go to that
+private HF model repo every `hf_every_tokens` and at the end.
 
 Training runs through the workflows like every model family
 ([workflows/README.md](../workflows/README.md)); a stage's `model_config` selects
@@ -371,10 +372,9 @@ From `training/`:
 
 ```sh
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
-  tests.test_hybrid_sink_gate tests.test_hybrid_kda \
-  tests.test_hybrid_mtp tests.test_hybrid_optim \
-  tests.test_hybrid_tokenizer tests.test_hybrid_data tests.test_hybrid_720m \
-  tests.test_hybrid_fused_loss tests.test_hybrid_hnet -v
+  tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
+  tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
+  tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
@@ -400,7 +400,7 @@ The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it
 `test_hybrid_720m` checks the configuration, parameter count, schedule, FLOP
 accounting and gate/sink statistics;
 `test_hybrid_fused_loss` checks the fused loss and its gradients against autograd.
-`test_hybrid_data` prepares shards from small parquet files (license filter,
+`test_packed_shards` prepares shards from small parquet files (license filter,
 empty documents, contamination drops, EOS layout, byte counts) and checks the
 mixture's weights, contiguity across shards, resume and the held-out windows;
 `test_hybrid_tokenizer` checks the pinned constants and the recipe, and the GLM
