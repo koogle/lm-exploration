@@ -28,7 +28,10 @@ TEXT, PROMPT = "hello", 3
 ids = [VOCAB.index(c) for c in TEXT]
 
 torch.manual_seed(0)
-config = m.ModelConfig(vocab_size=len(VOCAB), block_size=32, n_layer=2, n_head=2, n_embd=8)
+# The character vocabulary has no EOS; newline stands in, and "hello" is one document.
+config = m.ModelConfig(
+    vocab_size=len(VOCAB), block_size=32, n_layer=2, n_head=2, n_embd=8, eos_id=VOCAB.index("\n")
+)
 model = m.GPT(config).eval()
 with torch.no_grad():  # illustration: larger random qkv weights so scores are not all ~0
     for block in model.blocks:
@@ -42,7 +45,8 @@ def attention_step(attn, x, cache, record):
         t.view(batch, length, attn.n_head, width // attn.n_head).transpose(1, 2) for t in (q, k, v)
     ]
     past = 0 if cache["k"] is None else cache["k"].size(-2)
-    q, k = m.rotary(q, offset=past), m.rotary(k, offset=past)
+    positions = torch.arange(past, past + length)
+    q, k = m.rotary(q, positions), m.rotary(k, positions)
     if cache["k"] is not None:
         k, v = torch.cat([cache["k"], k], -2), torch.cat([cache["v"], v], -2)
     cache["k"], cache["v"] = k, v

@@ -185,7 +185,7 @@ def losses(model, inputs, labels, top_ids, top_lp):
     """Summed (CE, soft CE, teacher entropy) with vocabulary logits recomputed per chunk."""
     # Several dense [chunk, vocabulary] FP32 tensors are live per chunk.
     chunk = 4096 if model.lm_head.out_features <= 65536 else 1024
-    hidden = model.final_norm(model.blocks(model.token_embedding(inputs))).flatten(0, 1)
+    hidden = model.final_norm(model.trunk(inputs)[0]).flatten(0, 1)
     parts = zip(
         hidden.split(chunk),
         labels.flatten().split(chunk),
@@ -212,11 +212,20 @@ def learning_rate(step, steps, peak, warmup):
     return peak * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * progress)))
 
 
-def train(settings, train_shards, vocab, out_dir, log, deadline=None, device="cuda"):
-    """Train one student for ``settings['positions']`` input positions; no repeats."""
+def train(
+    settings, train_shards, vocab, eos_id, out_dir, log, deadline=None, device="cuda"
+):
+    """Train one student for ``settings['positions']`` input positions; no repeats.
+
+    ``eos_id`` (the student id of the teacher's end-of-document token) separates
+    packed documents for the model's document-causal attention.
+    """
     torch.manual_seed(settings["seed"])
     config = ModelConfig(
-        vocab_size=vocab.size, block_size=settings["window"], **SIZES[settings["size"]]
+        vocab_size=vocab.size,
+        block_size=settings["window"],
+        eos_id=eos_id,
+        **SIZES[settings["size"]],
     )
     model = GPT(config).to(device)
     parameters = sum(p.numel() for p in model.parameters())

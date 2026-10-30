@@ -93,6 +93,7 @@ def build(config):
         n_layer=config.n_layer,
         n_head=config.n_head,
         n_embd=config.n_embd,
+        eos_id=2,
     )
     model = GPT(model_config)
     return model, make_optimizer(model, config), model_config
