@@ -19,8 +19,9 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from trainer.roles import declare
+
 from .documents import cu_seqlens
-from .roles import declare
 
 __all__ = [
     "KimiDeltaAttention",

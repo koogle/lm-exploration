@@ -1,11 +1,24 @@
-"""Muon for hidden matrices with an AdamW companion for all other parameters.
+"""Muon for hidden matrices and AdamW for every other parameter, by declared role.
 
-Five-step quintic Newton–Schulz Muon, following Keller Jordan's Muon reference
+Roles come from the modules that create the parameters (`optimizer()` methods, see
+roles.py):
+
+- `muon`: 2D hidden weight matrices.
+- `adamw_decay`: AdamW with weight decay (embeddings and other non-hidden weights).
+- `adamw_no_decay`: AdamW without weight decay (norm scales, sinks, gate biases, ...).
+
+Muon is five-step quintic Newton–Schulz, following Keller Jordan's Muon reference
 (https://github.com/KellerJordan/Muon). Each DDP rank updates the same reduced
-gradients locally; no extra optimizer collectives or parameter sharding.
+gradients locally; no extra optimizer collectives or parameter sharding. Every
+parameter group keeps its `base_lr`; `set_learning_rate(optimizer, factor)` applies
+one schedule factor to all of them.
 """
 
+from dataclasses import dataclass
+
 import torch
+
+from .roles import ROLES
 
 
 def orthogonalize(update, steps=5):
@@ -45,61 +58,110 @@ class Muon(torch.optim.Optimizer):
                 p.add_(update, alpha=-group["lr"] * scale)
 
 
-class HybridMuon:
-    def __init__(self, model, config, *, fused):
-        hidden, auxiliary = [], []
-        for name, parameter in model.named_parameters():
-            (hidden if name.startswith("blocks.") and parameter.ndim == 2 else auxiliary).append(
-                parameter
+@dataclass(frozen=True)
+class OptimizerConfig:
+    muon_lr: float = 0.02
+    muon_momentum: float = 0.95
+    adamw_lr: float = 3e-4
+    adam_betas: tuple[float, float] = (0.9, 0.95)
+    weight_decay: float = 0.1
+    # False trains `muon` matrices with AdamW (with weight decay) instead.
+    use_muon: bool = True
+
+
+def parameter_groups(model):
+    """{role: [(name, parameter)]} from the modules' declarations; tied parameters appear once.
+
+    Raises for a parameter that no module declares, that is declared twice, or that
+    is declared `muon` without being a matrix.
+    """
+    declared = {}
+    for module_name, module in model.named_modules():
+        for parameter, role in getattr(module, "optimizer", tuple)():
+            if id(parameter) in declared:
+                raise ValueError(f"{module_name or 'model'} declares a parameter twice")
+            declared[id(parameter)] = role
+    groups = {role: [] for role in ROLES}
+    for name, parameter in model.named_parameters():
+        role = declared.get(id(parameter))
+        if role is None:
+            raise ValueError(f"No module declares an optimizer role for {name}")
+        if role == "muon" and parameter.ndim != 2:
+            raise ValueError(f"Muon needs a matrix; {name} has shape {tuple(parameter.shape)}")
+        groups[role].append((name, parameter))
+    return groups
+
+
+class RoleOptimizer:
+    """Muon for `muon` parameters and AdamW for the rest; empty groups are left out."""
+
+    def __init__(self, model, config=None, *, fused=False):
+        config = config or OptimizerConfig()
+        groups = {r: [p for _, p in members] for r, members in parameter_groups(model).items()}
+        if not config.use_muon:
+            groups["adamw_decay"] = groups.pop("muon") + groups["adamw_decay"]
+        adamw = [
+            {"params": groups["adamw_decay"], "base_lr": config.adamw_lr},
+            {"params": groups["adamw_no_decay"], "base_lr": config.adamw_lr, "weight_decay": 0.0},
+        ]
+        self.parts = {}
+        if groups.get("muon"):
+            self.parts["muon"] = Muon(
+                [{"params": groups["muon"], "base_lr": config.muon_lr}],
+                lr=config.muon_lr,
+                momentum=config.muon_momentum,
+                weight_decay=config.weight_decay,
             )
-        if not hidden or not auxiliary:
-            raise ValueError("Muon requires hidden matrices and auxiliary parameters")
-        self.muon = Muon(
-            hidden,
-            lr=config.muon_lr,
-            momentum=config.muon_momentum,
-            weight_decay=config.weight_decay,
-        )
-        self.adamw = torch.optim.AdamW(
-            auxiliary,
-            lr=config.peak_lr,
-            betas=(config.adam_beta1, config.adam_beta2),
+        self.parts["adamw"] = torch.optim.AdamW(
+            [g for g in adamw if g["params"]],
+            lr=config.adamw_lr,
+            betas=config.adam_betas,
             weight_decay=config.weight_decay,
             fused=fused,
         )
-        self.param_groups = self.muon.param_groups + self.adamw.param_groups
-        for group in self.muon.param_groups:
-            group["lr_scale"] = config.muon_lr / config.peak_lr
+        self.param_groups = [g for part in self.parts.values() for g in part.param_groups]
+
+    @property
+    def muon(self):
+        return self.parts["muon"]
+
+    @property
+    def adamw(self):
+        return self.parts["adamw"]
 
     def zero_grad(self, set_to_none=True):
-        self.muon.zero_grad(set_to_none=set_to_none)
-        self.adamw.zero_grad(set_to_none=set_to_none)
+        for part in self.parts.values():
+            part.zero_grad(set_to_none=set_to_none)
 
     def step(self):
-        self.muon.step()
-        self.adamw.step()
+        for part in self.parts.values():
+            part.step()
 
     def state_dict(self):
-        return {"muon": self.muon.state_dict(), "adamw": self.adamw.state_dict()}
+        return {name: part.state_dict() for name, part in self.parts.items()}
 
     def load_state_dict(self, state):
-        self.muon.load_state_dict(state["muon"])
-        self.adamw.load_state_dict(state["adamw"])
-        self.param_groups = self.muon.param_groups + self.adamw.param_groups
+        if set(state) != set(self.parts):
+            raise ValueError("Optimizer state belongs to a different optimizer layout")
+        for name, part in self.parts.items():
+            part.load_state_dict(state[name])
+        self.param_groups = [g for part in self.parts.values() for g in part.param_groups]
+
+
+def set_learning_rate(optimizer, factor):
+    """Every parameter group's learning rate to `factor` times its base rate."""
+    for group in optimizer.param_groups:
+        group["lr"] = factor * group["base_lr"]
 
 
 def make_optimizer(model, config, *, fused=True):
-    if config.optimizer == "muon":
-        return HybridMuon(model, config, fused=fused)
-    return torch.optim.AdamW(
-        model.parameters(),
-        lr=config.peak_lr,
-        betas=(config.adam_beta1, config.adam_beta2),
+    """The optimizer a subword `DistributedConfig` names: Muon plus AdamW, or AdamW only."""
+    settings = OptimizerConfig(
+        muon_lr=config.muon_lr,
+        muon_momentum=config.muon_momentum,
+        adamw_lr=config.peak_lr,
+        adam_betas=(config.adam_beta1, config.adam_beta2),
         weight_decay=config.weight_decay,
-        fused=fused,
+        use_muon=config.optimizer == "muon",
     )
-
-
-def set_learning_rate(optimizer, lr):
-    for group in optimizer.param_groups:
-        group["lr"] = lr * group.get("lr_scale", 1.0)
+    return RoleOptimizer(model, settings, fused=fused)

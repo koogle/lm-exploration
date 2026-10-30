@@ -10,6 +10,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from trainer.roles import declare
+
 __all__ = ["GPT", "Attention", "Block", "ModelConfig", "RMSNorm", "SwiGLU", "causal_attention"]
 MODEL_DEPENDENCIES = {}
 
@@ -68,6 +70,10 @@ class Attention(nn.Module):
         self.qkv = nn.Linear(config.n_embd, 3 * config.n_embd)
         self.projection = nn.Linear(config.n_embd, config.n_embd)
 
+    def optimizer(self):
+        yield from declare("muon", self.qkv.weight, self.projection.weight)
+        yield from declare("adamw_decay", self.qkv.bias, self.projection.bias)
+
     def cache_rotary(self, length):
         width = self.qkv.in_features // self.n_head
         frequencies = 10000.0 ** (
@@ -116,6 +122,17 @@ class Block(nn.Module):
         self.mlp_norm = RMSNorm(config.n_embd)
         self.mlp = SwiGLU(config.n_embd)
 
+    def optimizer(self):
+        # The block declares its shared children (RMSNorm, SwiGLU); attention its own.
+        linears = (self.mlp.gate, self.mlp.up, self.mlp.down)
+        yield from declare("muon", *(linear.weight for linear in linears))
+        yield from declare(
+            "adamw_decay",
+            *(linear.bias for linear in linears if linear.bias is not None),
+            self.attention_norm,
+            self.mlp_norm,
+        )
+
     def forward(self, x):
         x = x + self.attention(self.attention_norm(x))
         return x + self.mlp(self.mlp_norm(x))
@@ -131,6 +148,11 @@ class GPT(nn.Module):
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.apply(self.initialize)
         self.lm_head.weight = self.token_embedding.weight
+
+    def optimizer(self):
+        # Blocks declare their own parameters; the tied embedding/output table and the
+        # final norm are not hidden matrices.
+        yield from declare("adamw_decay", self.token_embedding, self.final_norm)
 
     @staticmethod
     def initialize(module):

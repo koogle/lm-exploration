@@ -1,28 +1,47 @@
 # Trainer implementation
 
-[`loop.py`](loop.py) is the single active training loop for one, two or three GPUs
-on one host. It owns model/optimizer construction, token-weighted gradient
-accumulation, evaluation, logging, durable checkpoints and exact resume checks.
-Both raw and seekable-token mixtures use this loop. Training runs on Modal CUDA
-workers; local tests check mathematical correctness separately from GPU performance.
+[`loop.py`](loop.py) is the training loop for every model family on one host (1–8
+GPUs): rank-zero data reading and batch scatter, token-weighted gradient
+accumulation under DDP, the learning-rate factor, clipping, evaluation, logging,
+durable checkpoints and exact resume checks. A family adapter supplies the model,
+data, loss, evaluation and exports (the interface is in the module docstring):
 
-[`../distributed/`](../distributed/README.md) owns shared configuration, per-rank
-runtime/rendezvous settings, the Modal image, GPU qualification and the launcher.
-Its worker runs `torchrun -m trainer.loop`; the trainer accepts an explicit
-`DistributedRuntime`. Training recipes live in [`../workflows/model_configs/`](../workflows/model_configs/README.md),
-and preparation/qualification/continuation live in [`../workflows/`](../workflows/README.md).
+| Family | Adapter and entry point | Settings | Token budget |
+| --- | --- | --- | --- |
+| Subword GPT (10M/100M/124M) | [`subword.py`](subword.py), `torchrun -m trainer.subword` | `distributed.config.DistributedConfig` | loss targets |
+| Hybrid KDA/attention | [`../hybrid/train.py`](../hybrid/train.py), `torchrun -m model_hybrid.train` | `model_hybrid.train.RunConfig` | window tokens |
+
+[`optimizers.py`](optimizers.py) is the one optimizer: Muon for the matrices a
+module declares `muon` and AdamW for the rest (`adamw_decay`, `adamw_no_decay`),
+from the `optimizer()` declarations of the modules that own the parameters
+([`roles.py`](roles.py)); each group keeps a base rate and the loop applies one
+schedule factor to all of them. Hybrid RL ([`../hybrid/rl.py`](../hybrid/rl.py)) is
+its own on-policy loop with the same optimizer.
+
+A run folder holds `config.json`, `metrics.jsonl` (one row per step),
+`validation.jsonl` (start, every `evaluate_every` steps, end), `step-<step>.pt`
+checkpoints with `latest.json`, and `report.json`. A session resumes from an
+explicit checkpoint or from the folder's `latest.json`, only with the same
+settings, GPU count, data identity, source files (loop, optimizer, family, model,
+loaders) and PyTorch version, or a change the family accepts (a subword WSD decay
+branch).
+
+[`../distributed/`](../distributed/README.md) owns the subword configuration, per-rank
+runtime/rendezvous settings, the Modal image, GPU qualification and the launcher;
+its worker runs `torchrun -m trainer.subword`. Training recipes live in
+[`../workflows/model_configs/`](../workflows/model_configs/README.md), and
+preparation/qualification/continuation live in [`../workflows/`](../workflows/README.md).
 
 Run commands from `training/`:
 
 ```sh
-uv run python -m trainer.loop --help
+uv run python -m trainer.subword --help
 uv run python -m unittest discover -s tests -p 'test_distributed_*.py' -v
 ```
 
 See the [distributed launch guide](../distributed/README.md) for job and resume
-commands. No training behavior or checkpoint compatibility checks were relaxed by
-moving the loop; source identity must still match for exact resume. Use original
-source and settings for historical runs.
+commands. Source identity must match for exact resume; use original source and
+settings for historical runs.
 
 ## Evaluation during training
 
