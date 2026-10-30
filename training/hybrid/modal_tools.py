@@ -1,22 +1,18 @@
-"""Hybrid pretraining, benchmarks and pilots on Modal H100s.
+"""Hybrid tools on Modal H100s: benchmarks, held-out evaluation, export and RL.
 
-Run from training/:
-    modal run -m model_hybrid.modal_train::bench --gpus 1 [--microbatch 4]
-    modal run --detach -m model_hybrid.modal_train::launch --run-id <id> \\
-        [--config hybrid/configs/hybrid-720m-40b.json] [--max-tokens N]
-    modal run --detach -m model_hybrid.modal_train::launch_rl --run-id <id> --config <rl config>
+Pretraining and SFT run through the workflows like every model family
+(workflows/README.md). Run from training/:
+    modal run -m model_hybrid.modal_tools::bench --gpus 1 [--microbatch 4]
+    modal run -m model_hybrid.modal_tools::heldout --export <run>/export/<name>
+    modal run -m model_hybrid.modal_tools::export --run-id <run folder>
+    modal run --detach -m model_hybrid.modal_tools::launch_rl --run-id <id> --config <rl config>
 
-`launch` fixes one deadline 24 hours ahead (less a supervisor margin), starts an
-independent supervisor that cancels every recorded call at that deadline, then
-starts one 8xH100 training segment (`retries=0`, timeout bounded by the deadline).
-The segment stops itself SHUTDOWN_SECONDS before its timeout and saves a
-checkpoint; launching again with the same run ID resumes from the latest
-checkpoint in `lm-exploration-hybrid-runs/<run id>/`. Training reads prepared
-shards from `lm-exploration-hybrid-data` and waits for shards still being
-prepared. `launch_rl` runs model_hybrid.rl the same way (one supervised 8xH100
-segment, resumable, and extendable by relaunching with a larger `steps`), in an
-image that also grades completions. Each benchmark is
-one call with a 30-minute timeout and no retries.
+`launch_rl` fixes one deadline 24 hours ahead (less a supervisor margin), starts an
+independent supervisor that cancels every recorded call at that deadline, then runs
+model_hybrid.rl as one 8xH100 segment (`retries=0`, timeout bounded by the
+deadline, stopping SHUTDOWN_SECONDS early with a checkpoint) in an image that also
+grades completions; relaunching resumes, also with a larger `steps`. Each
+benchmark is one call with a 30-minute timeout and no retries.
 """
 
 import io
@@ -29,7 +25,7 @@ from pathlib import Path
 import modal
 from model_hybrid.image import build, image
 
-app = modal.App("lm-exploration-hybrid-train")
+app = modal.App("lm-exploration-hybrid-tools")
 data_volume = modal.Volume.from_name("lm-exploration-hybrid-data", create_if_missing=True)
 runs_volume = modal.Volume.from_name("lm-exploration-hybrid-runs", create_if_missing=True)
 secret = modal.Secret.from_name("simple-llm-hf")
@@ -126,29 +122,11 @@ def run_segment(
     code, _ = run_torchrun(
         module, args, gpus, timeout - 300, folder / "logs" / f"segment-{int(started)}.log", run_id
     )
-    report = folder / ("summary.json" if module == "model_hybrid.rl" else "report.json")
-    result = json.loads(report.read_text()) if report.exists() else {}
+    summary = folder / "summary.json"
+    result = json.loads(summary.read_text()) if summary.exists() else {}
     if code:
-        raise RuntimeError(f"Training exited with {code}; last report {result.get('stop_reason')}")
-    keys = ("steps", "tokens", "stop_reason", "elapsed_seconds", "final_checkpoint", "export")
-    return {k: result[k] for k in keys if k in result} or result
-
-
-@app.function(
-    image=image,
-    gpu="H100:8",
-    cpu=32,
-    memory=262144,
-    timeout=86400,
-    retries=0,
-    secrets=[secret],
-    volumes=VOLUMES,
-)
-def train_segment(run_id, config, timeout, deadline, max_tokens=0, gpus=8, provenance=None):
-    extra = ["--max-tokens", str(max_tokens)] if max_tokens else []
-    return run_segment(
-        run_id, config, timeout, deadline, gpus, provenance, "model_hybrid.train", extra
-    )
+        raise RuntimeError(f"RL exited with {code}; last summary {result}")
+    return result
 
 
 @app.function(
@@ -356,7 +334,7 @@ def export(run_id: str):
 
 @app.local_entrypoint()
 def stop(run_id: str):
-    """Ask the run's segment to checkpoint and exit at its next step."""
+    """Ask an RL run's segment to checkpoint and exit at its next step."""
     control[run_id] = "stop"
     print(json.dumps({"run_id": run_id, "requested": "stop"}))
 
@@ -399,19 +377,6 @@ def start(run_id, config, segment, kind, gpus, extra=(), notes=None):
                 "timeout": timeout,
             }
         )
-    )
-
-
-@app.local_entrypoint()
-def launch(run_id: str, config: str = DEFAULT_CONFIG, max_tokens: int = 0, gpus: int = 8):
-    start(
-        run_id,
-        config,
-        train_segment,
-        "train_segment",
-        gpus,
-        (max_tokens,),
-        {"max_tokens": max_tokens},
     )
 
 

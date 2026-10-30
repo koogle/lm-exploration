@@ -15,8 +15,9 @@ def main():
     payload = load_workflow(
         args.workflow, model_config=args.model_config, dataset_config=args.dataset_config
     )
-    _, _, training = resolve_payload(payload)
-    print(json.dumps({**payload, "resolved_training": training.as_dict()}, indent=2))
+    policy, _, training = resolve_payload(payload)
+    resolved = training if policy.family == "hybrid" else training.as_dict()
+    print(json.dumps({**payload, "resolved_training": resolved}, indent=2))
 
 
 if __name__ == "__main__":

@@ -1,28 +1,48 @@
-"""Generic prepare/reuse -> qualify -> continue training workflow.
+"""Training workflows for every model family: launch, qualify and continue sessions.
 
-No job launches on import/deployment. Start prepare_and_launch.spawn explicitly.
+    modal run --detach -m workflows.modal_train::main --workflow <workflow.json> --run-id <id> \\
+        [--model-config <config>] [--resume <run>/step-NNNNNNNNN.pt]
+    modal run -m workflows.modal_train::stop --run-id <id>
+
+One deadline supervisor, one session chain (`continue_training`) and one stop request
+serve every family; a family supplies its session runner (`train_segment` for
+subword GPTs, `hybrid_segment` for the hybrid, each `torchrun -m <family trainer>`
+in a fresh `<run id>-sNN` folder resuming the previous session's final checkpoint)
+and its launch preflight. Workflow state (status, session reports, tracked calls)
+lives on the `lm-exploration-training` volume for every family; each family's run
+folders live on its own runs volume.
+
+No job launches on import/deployment.
 """
 
 import json
+import subprocess
+import threading
 import time
 from pathlib import Path
 
 import modal
+from model_hybrid.image import image as hybrid_image
 
 from distributed.image import image as gpu_image
-from modal_scripts.modal_prepare_simple_llm import image as cpu_image
+from workflows.images import add_project
 
-# Both images must be able to resolve this module's canonical package imports.
-cpu_image = (
-    cpu_image.add_local_dir("distributed", "/project/distributed")
-    .add_local_dir("workflows", "/project/workflows")
-    .add_local_dir("trainer", "/project/trainer")
-    .add_local_dir("modal_scripts", "/project/modal_scripts")
+cpu_image = add_project(
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install(
+        "tokenizers==0.22.2", "requests==2.34.2", "pyarrow==26.0.0", "huggingface-hub==1.33.0"
+    )
+    .env({"PYTHONPATH": "/project"})
 )
-gpu_image = gpu_image.add_local_dir("modal_scripts", "/project/modal_scripts")
 app = modal.App("lm-exploration-training-workflows")
 data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
 run_volume = modal.Volume.from_name("lm-exploration-training")
+hybrid_data = modal.Volume.from_name("lm-exploration-hybrid-data", create_if_missing=True)
+hybrid_runs = modal.Volume.from_name("lm-exploration-hybrid-runs", create_if_missing=True)
+hf_secret = modal.Secret.from_name("simple-llm-hf")
+# run id -> "stop" asks the running session to checkpoint and exit at its next step.
+control = modal.Dict.from_name("lm-exploration-training-control", create_if_missing=True)
+STOP_FILE = "/tmp/training-stop"
 
 
 # Audits a prepared snapshot still needs; allow_unreviewed_data accepts them explicitly.
@@ -71,6 +91,25 @@ def started_chain(run_id, wait):
     return None
 
 
+def watch(run_id, every, sync=()):
+    """Every `every` seconds until the returned event is set: create the trainer's stop
+    file once the run's stop is requested, and run each `sync` action."""
+    done = threading.Event()
+
+    def loop():
+        while not done.wait(every):
+            if control.get(run_id) == "stop":
+                Path(STOP_FILE).touch()
+            for action in sync:
+                try:
+                    action()
+                except Exception as error:  # noqa: BLE001 - retried on the next pass.
+                    print(f"volume sync: {error}", flush=True)
+
+    threading.Thread(target=loop, daemon=True).start()
+    return done
+
+
 def record(run_id, stage, *, status_file="workflow.json", **details):
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -99,18 +138,86 @@ def train_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_s
     from workflows.config import resolve_payload
 
     _, dataset, config = resolve_payload(bundle)
-    # While preparation still appends, copy each persisted database to local disk.
-    with serve(Path("/data") / dataset.root / snapshot, data_volume.reload):
-        return worker.local(
-            run_id,
-            snapshot,
-            config.as_dict(),
-            provenance,
-            resume,
-            max_seconds,
-            max_steps,
-            dataset_root=dataset.root,
-        )
+    watching = watch(provenance["workflow_run_id"], 30)
+    try:
+        # While preparation still appends, copy each persisted database to local disk.
+        with serve(Path("/data") / dataset.root / snapshot, data_volume.reload):
+            return worker.local(
+                run_id,
+                snapshot,
+                config.as_dict(),
+                provenance,
+                resume,
+                max_seconds,
+                max_steps,
+                dataset_root=dataset.root,
+                stop_file=STOP_FILE,
+            )
+    finally:
+        watching.set()
+
+
+@app.function(
+    image=hybrid_image,
+    gpu="H100:8",
+    cpu=32,
+    memory=262144,
+    timeout=86400,
+    retries=0,
+    max_containers=1,
+    volumes={"/data": hybrid_data, "/runs": hybrid_runs},
+    secrets=[hf_secret],
+)
+def hybrid_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_seconds):
+    """One hybrid session in `/runs/<run_id>` (torchrun -m model_hybrid.train); its report.
+
+    The run config owns the data recipe (prepared on the hybrid data volume) and
+    the token target; `resume` names the previous session's final checkpoint.
+    """
+    from workflows.checks import validate_paths
+    from workflows.config import resolve_payload
+
+    policy, _, settings = resolve_payload(bundle)
+    validate_paths(run_id, None, resume)
+    output = Path("/runs") / run_id
+    output.mkdir(parents=True, exist_ok=False)
+    (output / "run-config.json").write_text(json.dumps(settings, indent=2) + "\n")
+    (output / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
+    command = [
+        "torchrun",
+        "--standalone",
+        f"--nproc_per_node={policy.world_size}",
+        "-m",
+        "model_hybrid.train",
+        "--config",
+        str(output / "run-config.json"),
+        "--run-dir",
+        str(output),
+        "--data-root",
+        "/data",
+        "--stop-unix",
+        str(time.time() + max_seconds),
+        "--stop-file",
+        STOP_FILE,
+    ]
+    if resume:
+        command += ["--resume", str(Path("/runs") / resume)]
+    if max_steps:
+        command += ["--max-steps", str(max_steps)]
+    hybrid_runs.commit()
+    watching = watch(provenance["workflow_run_id"], 60, (hybrid_data.reload, hybrid_runs.commit))
+    try:
+        with (output / "torchrun.log").open("w") as log:
+            code = subprocess.run(
+                command, cwd="/project", stdout=log, stderr=subprocess.STDOUT, check=False
+            ).returncode
+    finally:
+        watching.set()
+        hybrid_runs.commit()
+    if code:
+        tail = (output / "torchrun.log").read_text()[-3000:]
+        raise RuntimeError(f"Training failed; inspect {output}/torchrun.log: {tail}")
+    return json.loads((output / "report.json").read_text())
 
 
 @app.function(
@@ -132,17 +239,20 @@ def continue_training(
     initial_resume="",
 ):
     from workflows.checks import check_progress, check_resume, validate_paths
-    from workflows.config import resolve_payload
+    from workflows.config import resolve_payload, step_tokens
     from workflows.deadline import bounded_timeout, segment_seconds
 
     policy, dataset, config = resolve_payload(bundle)
-    settings = config.as_dict()
+    settings = config if policy.family == "hybrid" else config.as_dict()
+    session = {"subword": train_segment, "hybrid": hybrid_segment}[policy.family]
+    # Hybrid evaluation kernels are not bit-reproducible across processes.
+    tolerance = 1e-3 if policy.family == "hybrid" else 0.0
     deadline = provenance["deadline_unix"]
     track_call(run_id, modal.current_function_call_id(), "continue_training")
     if type(first_segment) is not int or not 0 <= first_segment < policy.max_segments:
         raise ValueError("Invalid first segment")
     validate_paths(f"{run_id}-s{first_segment:02d}", snapshot, initial_resume)
-    if dataset.mode == "snapshot" and snapshot != dataset.snapshot:
+    if dataset and dataset.mode == "snapshot" and snapshot != dataset.snapshot:
         raise ValueError("Snapshot differs from the selected dataset")
     resume = (
         str(Path(previous["final_checkpoint"]).relative_to("/runs")) if previous else initial_resume
@@ -163,7 +273,7 @@ def continue_training(
                 pending_data_audits=provenance.get("pending_data_audits", []),
             )
             timeout = bounded_timeout(deadline, policy.worker_timeout_seconds)
-            call = train_segment.with_options(
+            call = session.with_options(
                 gpu=f"{policy.gpu}:{policy.world_size}",
                 cpu=4 * policy.world_size,
                 timeout=timeout,
@@ -178,16 +288,21 @@ def continue_training(
             )
             track_call(run_id, call.object_id, "train_segment")
             report = call.get()
+            if report["stop_reason"] == "stop_requested":
+                record(
+                    run_id,
+                    "stopped",
+                    trained_tokens=report["tokens"],
+                    final_checkpoint=report["final_checkpoint"],
+                )
+                return report
             if previous:
-                check_resume(previous, report)
+                check_resume(previous, report, tolerance)
             previous_tokens = previous["tokens"] if previous else 0
             if initial_resume and previous is None:
                 previous_tokens = report["tokens"] - report["session_tokens"]
             done = check_progress(
-                report,
-                previous_tokens,
-                target,
-                settings["global_windows"] * settings["context"],
+                report, previous_tokens, target, step_tokens(policy.family, settings)
             )
             run_volume.reload()
             (Path("/runs") / run_id / f"segment-{segment:02d}.json").write_text(
@@ -538,6 +653,39 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
 
 @app.function(
     image=cpu_image,
+    cpu=1,
+    memory=2048,
+    timeout=3600,
+    retries=0,
+    max_containers=1,
+    volumes={"/runs": run_volume, "/hybrid-data": hybrid_data, "/hybrid-runs": hybrid_runs},
+)
+def launch_hybrid(run_id, bundle, provenance, resume=""):
+    """Preflight a hybrid workflow (recipe prepared, resume checkpoint present), then
+    start its session chain."""
+    from workflows.checks import validate_paths
+    from workflows.config import resolve_payload
+    from workflows.deadline import bounded_timeout
+
+    _, _, settings = resolve_payload(bundle)
+    bounded_timeout(provenance["deadline_unix"], 3600)
+    track_call(run_id, modal.current_function_call_id(), "launch_hybrid")
+    validate_paths(run_id + "-s00", None, resume)
+    recipe = json.loads(Path(settings["recipe"]).read_text())
+    if not (Path("/hybrid-data") / recipe["name"]).is_dir():
+        raise ValueError(f"Prepare the {recipe['name']} recipe on the hybrid data volume first")
+    if resume and not (Path("/hybrid-runs") / resume).exists():
+        raise ValueError(f"No checkpoint {resume} on the hybrid runs volume")
+    folder = Path("/runs") / run_id
+    folder.mkdir(parents=True, exist_ok=False)
+    provenance = {**provenance, "resolved_workflow": bundle}
+    record(run_id, "launched", recipe=recipe["name"], resume=resume, provenance=provenance)
+    call_id = spawn_training(run_id, None, bundle, provenance, initial_resume=resume)
+    return {"training_call_id": call_id, "recipe": recipe["name"]}
+
+
+@app.function(
+    image=cpu_image,
     cpu=0.25,
     memory=512,
     timeout=86400,
@@ -587,19 +735,26 @@ def main(
     from workflows.config import load_workflow, resolve_payload
 
     bundle = load_workflow(workflow, model_config=model_config, dataset_config=dataset_config)
-    _, dataset, _ = resolve_payload(bundle)
-    snapshot = (
-        f"{version}/snapshots/{run_id}" if dataset.mode == "prepare_raw" else dataset.snapshot
-    )
+    policy, dataset, _ = resolve_payload(bundle)
+    if policy.family == "hybrid":
+        if version or resume_preparation or phase_from:
+            raise ValueError("Hybrid workflows take only a run config and an optional resume")
+        snapshot = None
+    elif dataset.mode == "prepare_raw":
+        snapshot = f"{version}/snapshots/{run_id}"
+    else:
+        snapshot = dataset.snapshot
     validate_paths(run_id + "-s00", snapshot, resume or phase_from)
     from workflows.deadline import new_deadline
 
     provenance = {
         "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+        "workflow_run_id": run_id,
         "resolved_workflow": bundle,
         # Every call this launch starts stops by this time.
         "deadline_unix": new_deadline(),
     }
+    control[run_id] = "run"
     # The supervisor starts first so no work runs unsupervised.
     supervisor = enforce_deadline.spawn(run_id, provenance["deadline_unix"])
     print(
@@ -607,7 +762,9 @@ def main(
             {"deadline_unix": provenance["deadline_unix"], "supervisor": supervisor.object_id}
         )
     )
-    if dataset.mode == "prepare_raw":
+    if policy.family == "hybrid":
+        print(launch_hybrid.spawn(run_id, bundle, provenance, resume).get())
+    elif dataset.mode == "prepare_raw":
         if resume or phase_from:
             raise ValueError("Checkpoint resume requires a prepared snapshot dataset")
         call = prepare_and_launch.spawn(run_id, version, bundle, provenance, resume_preparation)
@@ -617,3 +774,10 @@ def main(
             raise ValueError("Snapshot datasets do not use version or resume_preparation")
         call = launch_snapshot.spawn(run_id, bundle, provenance, resume, phase_from)
         print(call.get())
+
+
+@app.local_entrypoint()
+def stop(run_id: str):
+    """Ask the run's current session to checkpoint and exit at its next step."""
+    control[run_id] = "stop"
+    print(json.dumps({"run_id": run_id, "requested": "stop"}))

@@ -76,9 +76,10 @@ deadline, so the first segments ran on the 2 free H100s. Moving between GPU
 counts uses:
 
 ```sh
-uv run modal run -m model_hybrid.modal_train::stop --run-id hybrid-720m-40b-01
-uv run modal run -m model_hybrid.modal_train::bench --gpus 8
-uv run modal run --detach -m model_hybrid.modal_train::launch --run-id hybrid-720m-40b-01 --gpus 8
+uv run modal run -m workflows.modal_train::stop --run-id <id>
+uv run modal run -m model_hybrid.modal_tools::bench --gpus 8
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
+    --run-id <id> --resume <run>-sNN/step-N.pt
 ```
 
 The resumed segment keeps the 1,048,576-token global batch. Every launch stops
@@ -194,7 +195,7 @@ The base model looped or echoed on the same prompts.
 Replay ablation: `chat-sft-v1-no-replay` trains the same chat data without
 replay rows (2,185 steps of 128 chat rows, `hybrid-720m-chat-sft-no-replay-03`).
 Pretraining held-out loss of each export, measured with
-`modal_train::heldout` (the 40B run's document counts; the base export
+`modal_tools::heldout` (the 40B run's document counts; the base export
 reproduces its final values):
 
 | Export | ClimbMix | Code | Math | Chat held-out (mean of 19 files) |
@@ -222,7 +223,7 @@ stopped; the third ran normally.
 ## RL record
 
 RL with verifiable rewards ([`rl.py`](../hybrid/rl.py), launched with
-`modal_train::launch_rl`) from the SFT export. Prompts: recipe
+`modal_tools::launch_rl`) from the SFT export. Prompts: recipe
 [`rl-v1`](../hybrid/recipes/rl-v1.json), 16,211 training and 357 held-out
 prompts from GSM8K train, MATH train levels 1–3 and KodCode-Light-RL-10K
 easy/medium (code problems kept only when their reference solution passes in the

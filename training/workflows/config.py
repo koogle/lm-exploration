@@ -1,4 +1,15 @@
-"""Resolve a selectable workflow, model configuration and dataset configuration."""
+"""Resolve a selectable workflow, model configuration and dataset configuration.
+
+Every workflow names its model `family`:
+
+- `subword`: `model_config` (relative to the workflow's folder) holds the subword
+  GPT's architecture and optimizer settings and `dataset_config` its data; the
+  workflow owns the token target, GPU count and data-review opt-in, and the three
+  resolve into one `DistributedConfig`.
+- `hybrid`: `model_config` (relative to training/) is a hybrid run config
+  (hybrid/configs/*.json), which owns its data recipe and token target; the
+  workflow owns only execution (GPUs, sessions, qualification).
+"""
 
 import hashlib
 import json
@@ -22,17 +33,21 @@ def relative_json(value):
     return path
 
 
+FAMILIES = ("subword", "hybrid")
+
+
 @dataclass(frozen=True)
 class WorkflowConfig:
+    family: str
     model_config: str
-    dataset_config: str
     gpu: str
     world_size: int
-    target_tokens: int
     segment_seconds: int
     worker_timeout_seconds: int
     max_segments: int
     segments_per_call: int
+    dataset_config: str = ""
+    target_tokens: int = 0
     qualification_segments: int = 0
     qualification_steps: int = 2
     pilot: bool = False
@@ -47,14 +62,20 @@ class WorkflowConfig:
     overlap_preparation: bool = False
 
     def __post_init__(self):
+        if self.family not in FAMILIES:
+            raise ValueError(f"Workflow family must be one of {FAMILIES}")
         relative_json(self.model_config)
-        relative_json(self.dataset_config)
         for name in ("pilot", "allow_unreviewed_data", "overlap_preparation"):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f"Workflow {name} must be a boolean")
+        if self.family == "subword":
+            relative_json(self.dataset_config)
+            if type(self.target_tokens) is not int or self.target_tokens < 1:
+                raise ValueError("Workflow target_tokens must be a positive integer")
+        elif self.dataset_config or self.target_tokens or self.pilot or self.allow_unreviewed_data:
+            raise ValueError("A hybrid run config owns its data and token target")
         for name in (
             "world_size",
-            "target_tokens",
             "segment_seconds",
             "worker_timeout_seconds",
             "max_segments",
@@ -111,8 +132,30 @@ class DatasetConfig:
             raise ValueError("Dataset mode must be prepare_raw or snapshot")
 
 
+def resolve_hybrid(workflow, run):
+    """A hybrid run config, checked against the workflow's GPU count (no torch import)."""
+    required = ("recipe", "model", "target_tokens", "global_rows", "microbatch")
+    if not isinstance(run, dict) or any(key not in run for key in required):
+        raise ValueError(f"A hybrid run config needs {required}")
+    rows, microbatch = run["global_rows"], run["microbatch"]
+    if any(type(v) is not int or v < 1 for v in (rows, microbatch, run["target_tokens"])):
+        raise ValueError("Hybrid rows, microbatch and target must be positive integers")
+    if rows % (workflow.world_size * microbatch):
+        raise ValueError("Global rows must divide into whole per-GPU microbatches")
+    return run
+
+
+def step_tokens(family, settings):
+    """Tokens one optimizer step consumes at most (the family's token budget unit)."""
+    if family == "hybrid":
+        return settings["global_rows"] * settings["model"]["block_size"]
+    return settings["global_windows"] * settings["context"]
+
+
 def resolve_settings(workflow, dataset, model):
     """Compose one trainer request with a single owner for each setting."""
+    if workflow.family == "hybrid":
+        return resolve_hybrid(workflow, model)
     reserved = {"world_size", "target_tokens", "pilot", "allow_unreviewed_data", "data_loader"}
     if reserved.intersection(model):
         raise ValueError("Model configs cannot duplicate workflow or dataset settings")
@@ -129,7 +172,7 @@ def resolve_settings(workflow, dataset, model):
 def resolve_payload(payload):
     """Revalidate the frozen selection on every remote controller/worker boundary."""
     workflow = WorkflowConfig(**payload["workflow"])
-    dataset = DatasetConfig(**payload["dataset"])
+    dataset = DatasetConfig(**payload["dataset"]) if payload["dataset"] else None
     training = resolve_settings(workflow, dataset, payload["model"])
     return workflow, dataset, training
 
@@ -142,6 +185,7 @@ def load_workflow_config(path):
 def load_workflow(path, *, model_config="", dataset_config="", project_root=None):
     """Resolve paths locally and freeze exact selected config contents for remote calls."""
     path = Path(path).resolve()
+    project_root = Path(project_root or Path(__file__).resolve().parent.parent).resolve()
     workflow = load_workflow_config(path)
     overrides = {}
     if model_config:
@@ -150,25 +194,29 @@ def load_workflow(path, *, model_config="", dataset_config="", project_root=None
         overrides["dataset_config"] = dataset_config
     workflow = WorkflowConfig(**{**asdict(workflow), **overrides})
     inputs = {"workflow": path}
-    for key in ("model_config", "dataset_config"):
-        selected = (path.parent / relative_json(getattr(workflow, key))).resolve()
-        if not selected.is_relative_to(path.parent):
-            raise ValueError("Selected config escapes the workflow directory")
+    # Subword selections live next to the workflows; hybrid run configs under training/.
+    base = path.parent if workflow.family == "subword" else project_root
+    keys = ("model_config", "dataset_config") if workflow.family == "subword" else ("model_config",)
+    for key in keys:
+        selected = (base / relative_json(getattr(workflow, key))).resolve()
+        if not selected.is_relative_to(base):
+            raise ValueError("Selected config escapes its folder")
         inputs[key] = selected
     payload = {
         "workflow": asdict(workflow),
         "model": json.loads(inputs["model_config"].read_text()),
-        "dataset": json.loads(inputs["dataset_config"].read_text()),
+        "dataset": json.loads(inputs["dataset_config"].read_text())
+        if "dataset_config" in inputs
+        else None,
         "config_sources": {
             key: {"path": str(value), "sha256": hashlib.sha256(value.read_bytes()).hexdigest()}
             for key, value in inputs.items()
         },
     }
     _, dataset, _ = resolve_payload(payload)
-    if dataset.mode == "prepare_raw":
+    if dataset and dataset.mode == "prepare_raw":
         from training_data.simple_llm import load_recipe
 
-        project_root = Path(project_root or Path(__file__).resolve().parent.parent).resolve()
         recipe_path = (project_root / relative_json(dataset.recipe)).resolve()
         if not recipe_path.is_relative_to(project_root):
             raise ValueError("Preparation recipe escapes the project directory")
