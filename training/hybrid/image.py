@@ -35,16 +35,25 @@ def build_kernel(kernel):
     )
 
 
-image = (
-    modal.Image.from_registry(CUDA_BASE, add_python="3.12")
-    .pip_install(*PACKAGES)
-    .env({"PYTHONPATH": "/project", "TORCH_CUDA_ARCH_LIST": "9.0"})
-)
-for kernel in KERNELS:
-    image = image.add_local_file(
-        f"hybrid/kernels/{kernel}.cu", f"/opt/hybrid_kernels/{kernel}/{kernel}.cu", copy=True
-    ).run_commands(build_kernel(kernel))
-image = add_project(image)
+def build(extra_packages=(), env=None):
+    """The family's image; `extra_packages` and `env` go in before the local sources."""
+    built = (
+        modal.Image.from_registry(CUDA_BASE, add_python="3.12")
+        .pip_install(*PACKAGES)
+        .env({"PYTHONPATH": "/project", "TORCH_CUDA_ARCH_LIST": "9.0"})
+    )
+    for kernel in KERNELS:
+        built = built.add_local_file(
+            f"hybrid/kernels/{kernel}.cu", f"/opt/hybrid_kernels/{kernel}/{kernel}.cu", copy=True
+        ).run_commands(build_kernel(kernel))
+    if extra_packages:
+        built = built.pip_install(*extra_packages)
+    if env:
+        built = built.env(env)
+    return add_project(built)
+
+
+image = build()
 
 # One function call per launch: no retries, and the call refuses to start once 24
 # hours have passed since launch (queue time included).
