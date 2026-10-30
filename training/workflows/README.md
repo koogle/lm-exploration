@@ -1,8 +1,31 @@
 # Training workflows
 
-A workflow selects a model configuration and dataset configuration, then owns the
-execution settings. The same controller can prepare or reuse a dataset, qualify
-training, and resume bounded sessions through [`trainer.loop`](../trainer/README.md).
+Every training launch is a workflow file with a `stage`, run by one controller,
+`workflows.modal_train`, under one 24-hour deadline and an independent supervisor
+([`modal_app.py`](modal_app.py)) that stops the launch's calls and sandboxes:
+
+| Stage | Workflow file | Runs |
+| --- | --- | --- |
+| `pretrain` | `workflows/*.json` (below) | [`trainer.loop`](../trainer/README.md): prepare or reuse a dataset, qualify, resume bounded sessions |
+| `sft` | an SFT recipe, e.g. [`../sft/recipes/`](../sft/recipes/) ([format](../sft/README.md#train)) | [`trainer/sft.py`](../trainer/sft.py) on one L40S or H100, or its resume qualification |
+| `rl` | an RL recipe, e.g. `../rl/recipes/` ([format](../rl/README.md#code-layout)) | [`trainer/rl/`](../trainer/rl/__init__.py) on one H100 with the code sandbox |
+
+```sh
+# Any stage: inspect the resolved workflow locally (no Modal, data or GPU), then launch.
+uv run python -m workflows --workflow sft/recipes/math-metamath-replay-20b.json
+uv run --all-extras modal run -m workflows.modal_train --workflow sft/recipes/math-metamath-replay-20b.json
+```
+
+SFT and RL launches ([`modal_post_train.py`](modal_post_train.py)) take `--run-id` to
+replace the recipe's run ID, SFT also `--resume <run>/step-NNNNNNNNN.pt` and
+`--qualify N` (an uninterrupted N-step run against a stop at N − 1, fresh-container
+restore and continue, compared exactly). Their local result goes to
+`artifacts/<stage>/<run-id>.json`, and the launch status to `/runs/<run-id>/workflow.json`.
+
+## Pretraining
+
+A pretraining workflow selects a model configuration and dataset configuration, then
+owns the execution settings.
 
 | Files | Owns |
 | --- | --- |

@@ -1,4 +1,5 @@
 {
+  "stage": "sft",
   "name": "math-metamath-replay-5b",
   "description": "Longer, gentler math SFT (cosine 2e-5) with ClimbMix and code pretraining replay of the WSD 5.45B decay branch",
   "run_id": "math-sft-metamath-replay-5b-r02",

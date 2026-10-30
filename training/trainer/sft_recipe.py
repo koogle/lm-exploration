@@ -1,8 +1,9 @@
-"""Validate SFT run recipes for `modal_scripts/modal_sft_train.py` without Modal.
+"""Validate SFT workflow files (`"stage": "sft"`, run by `workflows/modal_post_train.py`)
+without Modal.
 
 A recipe is a JSON object naming one run: the parent checkpoint, the data, the output run ID,
-the GPU type and `trainer.sft.Settings`. Command-line overrides replace recipe values so
-one recipe can describe a recorded run and also seed a fresh one.
+the GPU type and `trainer.sft.Settings`. A launch may replace the run ID and the resume
+checkpoint, so one recipe can describe a recorded run and also seed a fresh one.
 """
 
 import json
@@ -16,6 +17,7 @@ RUN_ID = re.compile(r"[a-zA-Z0-9_-]{1,80}")
 CHECKPOINT = re.compile(r"[a-zA-Z0-9_-]{1,80}/step-[0-9]{9}\.pt")
 GPUS = ("L40S", "H100")
 FIELDS = {
+    "stage",
     "name",
     "description",
     "provenance",
@@ -49,6 +51,8 @@ def validate_recipe(recipe):
     unknown = set(recipe) - FIELDS
     if unknown:
         raise ValueError(f"Unknown recipe fields: {sorted(unknown)}")
+    if recipe.get("stage") != "sft":
+        raise ValueError('An SFT recipe has "stage": "sft"')
     for field in ("run_id", "parent", "data", "settings"):
         if not recipe.get(field):
             raise ValueError(f"Recipe needs an explicit {field}")
@@ -73,6 +77,7 @@ def validate_recipe(recipe):
     settings = asdict(Settings(**recipe["settings"]))
     return {
         **{k: recipe[k] for k in ("name", "description", "provenance") if k in recipe},
+        "stage": "sft",
         "run_id": run_id(recipe["run_id"]),
         "parent": checkpoint(recipe["parent"], "parent"),
         "data": dict(data),
@@ -83,17 +88,11 @@ def validate_recipe(recipe):
     }
 
 
-def load_recipe(path, run_id="", parent="", dataset="", data_id="", resume=""):
-    """Load a recipe file and apply nonempty command-line overrides."""
+def load_recipe(path, run="", resume=""):
+    """Load a recipe file; a nonempty `run` or `resume` replaces its run ID or resume
+    checkpoint."""
     recipe = json.loads(Path(path).read_text())
-    if dataset and data_id:
-        raise ValueError("Pass either --dataset or --data-id, not both")
-    overrides = {"run_id": run_id, "parent": parent, "resume": resume}
-    recipe.update({k: v for k, v in overrides.items() if v})
-    if dataset:
-        recipe["data"] = {"local": dataset}
-    if data_id:
-        recipe["data"] = {"volume": data_id}
+    recipe.update({k: v for k, v in {"run_id": run, "resume": resume}.items() if v})
     return validate_recipe(recipe)
 
 

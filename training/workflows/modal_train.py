@@ -1,4 +1,8 @@
-"""Generic prepare/reuse -> qualify -> continue training workflow.
+"""Generic workflow controller: every stage's launch command.
+
+A pretraining workflow (`"stage": "pretrain"`) prepares or reuses a dataset, qualifies
+and continues training here; SFT and RL workflows (`"stage": "sft"` / `"rl"`) run in
+`workflows/modal_post_train.py`, on the same app and deadline supervisor.
 
 No job launches on import/deployment. Start prepare_and_launch.spawn explicitly.
 """
@@ -12,6 +16,10 @@ import modal
 from distributed.image import image as gpu_image
 from modal_scripts.modal_prepare_simple_llm import image as cpu_image
 
+# Registers the SFT and RL stage functions on the app.
+from workflows import modal_post_train
+from workflows.modal_app import app, data_volume, enforce_deadline, record, run_volume, track_call
+
 # Both images must be able to resolve this module's canonical package imports.
 cpu_image = (
     cpu_image.add_local_dir("distributed", "/project/distributed")
@@ -20,9 +28,6 @@ cpu_image = (
     .add_local_dir("modal_scripts", "/project/modal_scripts")
 )
 gpu_image = gpu_image.add_local_dir("modal_scripts", "/project/modal_scripts")
-app = modal.App("lm-exploration-training-workflows")
-data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
-run_volume = modal.Volume.from_name("lm-exploration-training")
 
 
 # Audits a prepared snapshot still needs; allow_unreviewed_data accepts them explicitly.
@@ -32,14 +37,6 @@ PENDING_AUDITS = [
     "cross-source parent reconciliation",
     "eligibility and contamination review",
 ]
-
-
-def track_call(run_id, call_id, kind):
-    """Record a call so the deadline supervisor can cancel it."""
-    from workflows.deadline import track
-
-    track(Path("/runs/.calls") / run_id, call_id, kind)
-    run_volume.commit()
 
 
 def spawn_training(run_id, snapshot, bundle, provenance, **options):
@@ -69,15 +66,6 @@ def started_chain(run_id, wait):
         if calls:
             return calls[0]
     return None
-
-
-def record(run_id, stage, *, status_file="workflow.json", **details):
-    folder = Path("/runs") / run_id
-    folder.mkdir(parents=True, exist_ok=True)
-    status = {"run_id": run_id, "stage": stage, "updated_unix": time.time(), **details}
-    (folder / status_file).write_text(json.dumps(status, indent=2) + "\n")
-    run_volume.commit()
-    print(json.dumps(status), flush=True)
 
 
 @app.function(
@@ -536,50 +524,30 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
     return {"training_call_id": call_id, "snapshot": dataset.snapshot}
 
 
-@app.function(
-    image=cpu_image,
-    cpu=0.25,
-    memory=512,
-    timeout=86400,
-    retries=0,
-    volumes={"/runs": run_volume},
-)
-def enforce_deadline(run_id, deadline_unix):
-    """Independent supervisor: cancel every recorded call of this launch at its deadline."""
-    from workflows.deadline import tracked_calls
-
-    status = Path("/runs") / run_id / "workflow.json"
-    preparation = status.with_name("preparation.json")
-
-    def stage(path):
-        return json.loads(path.read_text())["stage"] if path.exists() else None
-
-    while (remaining := deadline_unix - time.time()) > 0:
-        time.sleep(min(remaining, 300))
-        run_volume.reload()
-        # Overlapped preparation can outlast training only if it is still preparing.
-        if stage(status) == "completed" and stage(preparation) != "preparing":
-            return {"stage": "completed"}
-    run_volume.reload()
-    cancelled = []
-    for call_id in tracked_calls(Path("/runs/.calls") / run_id):
-        modal.FunctionCall.from_id(call_id).cancel()
-        cancelled.append(call_id)
-    record(run_id, "deadline_cancelled", cancelled_calls=cancelled)
-    return {"stage": "deadline_cancelled", "cancelled_calls": cancelled}
-
-
 @app.local_entrypoint()
 def main(
     workflow: str,
-    run_id: str,
+    run_id: str = "",
     version: str = "",
     model_config: str = "",
     dataset_config: str = "",
     resume_preparation: bool = False,
     resume: str = "",
     phase_from: str = "",
+    qualify: int = 0,
 ):
+    """Launch any stage. Post-training stages take `--run-id` and `--resume` (SFT) as
+    overrides and `--qualify N` (SFT resume qualification); pretraining needs `--run-id`."""
+    from workflows.config import workflow_stage
+
+    stage = workflow_stage(workflow)
+    if stage != "pretrain":
+        if version or model_config or dataset_config or resume_preparation or phase_from:
+            raise ValueError("Those options select pretraining data and models")
+        modal_post_train.launch(stage, workflow, run_id, resume, qualify)
+        return
+    if not run_id or qualify:
+        raise ValueError("Pretraining needs --run-id and qualifies through its workflow")
     import subprocess
 
     from workflows.checks import validate_paths

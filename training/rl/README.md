@@ -105,12 +105,14 @@ loss, at the start, every `evaluate_every` steps and at the end.
 
 ### 24-hour limit
 
-`modal_scripts/modal_rl_train.py` records a deadline 24 hours after launch and spawns the
-training call (21-hour timeout, no retries; `max_seconds` at most 20 hours) and a
-supervisor call. Training refuses work after the deadline and stops taking updates 30
-minutes before it. The sandbox ID is written to `/runs/rl-launches/<run-id>.json`; the
-supervisor cancels the training call at the deadline and terminates the sandbox when the
-call ends. A run does not resume; an interrupted run is rerun from scratch.
+An RL recipe is a workflow file (`"stage": "rl"`) that the
+[workflow controller](../workflows/README.md) runs under its 24-hour deadline: the
+supervisor starts first, then a controller call spawns the training call (at most 21
+hours and within the deadline, no retries; `max_seconds` at most 20 hours). Training
+refuses work after the deadline and stops taking updates 30 minutes before it. The code
+sandbox is recorded for the supervisor, which terminates it when the launch ends and
+cancels the training call at the deadline. A run does not resume; an interrupted run is
+rerun from scratch.
 
 ### Logged
 
@@ -135,10 +137,16 @@ each pass all their tests through this harness.
 From `training/`:
 
 ```sh
-uv run --all-extras modal run -m modal_scripts.modal_rl_train --recipe RECIPE.json
+uv run python -m workflows --workflow RECIPE.json   # every setting filled in, no Modal
+uv run --all-extras modal run -m workflows.modal_train --workflow RECIPE.json [--run-id ID]
+# Off-policy trajectories from the Qwen teacher's saved code answers:
+uv run --all-extras modal run -m modal_scripts.modal_teacher::trajectories \
+  --teacher code-teacher-qwen35-02 --data-id <fresh-id> [--limit N]
 ```
 
-A recipe names `run_id`, `parent` (an SFT checkpoint, `run/step-N.pt` on the run
-volume), `pool` (an `rl_pool` data ID) and `settings` ([code layout](#code-layout)). RL
+A recipe ([`../trainer/rl/recipe.py`](../trainer/rl/recipe.py)) has `"stage": "rl"` and
+names `run_id`, `parent` (an SFT checkpoint, `run/step-N.pt` on the run volume), `pool`
+(an `rl_pool` data ID, also used for validation) and `settings`
+([code layout](#code-layout)). RL
 checkpoints (format `rl-v1`) keep the model code and tokenizer beside them, so
 `analysis/evaluation` loads them like SFT checkpoints.

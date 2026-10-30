@@ -34,7 +34,6 @@ uv run modal run -m workflows.modal_train \
 | `modal_muon_comparison.py` | Matched 100M-token Muon vs AdamW comparison; [guide](../distributed/MUON_COMPARISON.md); outputs on HF under `pr-24/training/results/` |
 | `modal_overlap_checks.py` | Bounded three-GPU equivalence/resume checks for the overlapped [`../modal_streaming_train.py`](../modal_streaming_train.py) launcher |
 | `modal_sft_data.py` | Repair-SFT data: verified arithmetic curriculum, CommitPackFT and private-patch preparation; [guide](../sft/README.md) |
-| `modal_sft_train.py` | Recipe-driven one-GPU repair SFT / CIG-SFT and exact resume qualification; same guide |
 | `modal_sft_eval.py` | Executable repair diagnostic in network-blocked Sandboxes; same guide |
 
 The benchmark launchers retain their historical defaults, resource bounds and
