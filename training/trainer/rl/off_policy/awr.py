@@ -20,6 +20,7 @@ class AWR:
     max_weight: float = 20.0
 
     SOURCES = ("reuse", "file")
+    sampler_top_k = 0
     needs_behaviour = False
     skips_zero_advantage = False
 

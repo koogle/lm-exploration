@@ -5,8 +5,9 @@ train on older or other models' answers.
 
 An algorithm is a frozen dataclass whose fields are its options. It declares the
 trajectory `SOURCES` it accepts, whether it `needs_behaviour` log-probabilities (the
-sampling weights' probabilities of each answer token, for importance ratios), and
-whether answers with zero advantage are skipped. `advantages(batch)` gives one advantage
+sampling weights' probabilities of each answer token, for importance ratios), how many
+of the sampler's top tokens it needs recorded (`sampler_top_k`), and whether answers
+with zero advantage are skipped. `advantages(batch)` gives one advantage
 per answer of a `Batch`; `loss(tokens)` takes one micro-batch (`Tokens`) and returns the
 scalar to minimize, whose gradient is what matters, and {statistic: sum over answer
 tokens}.
