@@ -1,127 +1,195 @@
-"""Incremental decoding for HybridLM in plain PyTorch (CPU or GPU, no fla/Flex).
+"""Generation for HybridLM on CUDA: one-pass prefill, then a CUDA-graph decode step.
 
-Each layer keeps a cache per row: full attention its rotated keys and values; KDA
-the last `kda_conv_size - 1` projections for its short convolutions and its fp32
-recurrent state. One token per row then costs one pass through the weights instead
-of a forward over the whole prefix. The arithmetic mirrors `HybridLM.forward`
-(tests check logits against it), including documents: after a row feeds EOS, its
-next token starts a new document (attention reads only keys from there on, the
-convolutions and state reset and RoPE positions restart).
+`prefill` reads each prompt with one forward pass of the model (the training kernels;
+the KDA kernels return each document's final state) and loads the rows into a
+`Decoder`, left-padded to the longest prompt. The Decoder keeps preallocated buffers
+per layer: full attention its rotated keys and values, KDA the last
+`kda_conv_size - 1` q/k/v projections for its short convolutions and its fp32
+recurrent state. One step feeds one token per row: projections and the MLP through
+cuBLAS, the KDA update and the attention read through the kernels of
+kernels/decode.cu, the whole step captured once as a CUDA graph and replayed.
 
-`prefill` reads each prompt with one forward pass instead and builds the same cache
-for every row, left-padded to the longest prompt (pad keys are masked through each
-row's document start), so `generate_batch` costs one forward per prompt plus one
-step per new token.
+Rows follow the model's document rule: after a row feeds EOS, its next token starts
+a new document (attention reads only keys from there on, the convolutions and state
+reset and RoPE positions restart).
 """
-
-import math
 
 import torch
 from torch.nn import functional as F
 
-from .kda import kda_gate
+from .cuda_extension import load as load_kernel
 from .model import DocumentMask, HybridLM
 
 PREFILL_MIN = 1024
+# Decoders kept per model, by (rows, capacity); capacity is rounded up to this step.
+CAPACITY_STEP = 256
+MAX_DECODERS = 2
 
 
-class Cache:
-    def __init__(self, lm, rows=1):
-        device = lm.token_embedding.weight.device
-        self.length = 0
-        self.positions = torch.zeros(rows, dtype=torch.long, device=device)
-        # Rows whose previous token ended a document (all rows before the first token).
+class Decoder:
+    """Decode state for `rows` rows and up to `capacity` cached tokens, and the CUDA
+    graph of one step. The graph reads the model's parameters in place, so it follows
+    in-place weight updates."""
+
+    def __init__(self, lm: HybridLM, rows, capacity):
+        if not lm.token_embedding.weight.is_cuda:
+            raise ValueError("decoding runs on CUDA")
+        self.lm, self.rows, self.capacity = lm, rows, capacity
+        config, device = lm.config, lm.token_embedding.weight.device
+        dtype = lm.token_embedding.weight.dtype
+        self.ops = load_kernel("decode")
+        long = {"dtype": torch.long, "device": device}
+        self.token = torch.zeros(rows, **long)
+        self.positions = torch.zeros(rows, **long)
+        self.starts = torch.zeros(rows, **long)
+        self.slot = torch.zeros(1, **long)
         self.fresh = torch.ones(rows, dtype=torch.bool, device=device)
-        # Cache index where each row's current document starts.
-        self.starts = torch.zeros(rows, dtype=torch.long, device=device)
-        self.layers = [{} for _ in lm.blocks]
+        self.layers = []
+        for block in lm.blocks:
+            mixer = block.mixer
+            if block.kind == "kda":
+                inner = mixer.heads * mixer.head_dim
+                history = (rows, config.kda_conv_size - 1, inner)
+                self.layers.append(
+                    {
+                        **{n: torch.zeros(history, device=device) for n in "qkv"},
+                        "state": torch.zeros(
+                            rows, mixer.heads, mixer.head_dim, mixer.head_dim, device=device
+                        ),
+                    }
+                )
+            else:
+                shape = (rows, mixer.n_kv_head, capacity, mixer.head_dim)
+                self.layers.append(
+                    {
+                        "key": torch.zeros(shape, dtype=dtype, device=device),
+                        "value": torch.zeros(shape, dtype=dtype, device=device),
+                    }
+                )
+        self.logits = torch.zeros(rows, config.vocab_size, device=device)
+        self.used = 0  # cache slots holding tokens, on the host
+        self.parameters = parameter_pointers(lm)
+        self.graph = self._capture()
+
+    def _kda(self, kda, x, layer):
+        point = x[:, 0]
+        projections = [p(point).float() for p in (kda.q_proj, kda.k_proj, kda.v_proj)]
+        out = self.ops.kda_step(
+            *projections,
+            kda.f_proj(point).float(),
+            kda.b_proj(point).float(),
+            kda.g_proj(point).float(),
+            *(w.float()[:, 0].contiguous() for w in (kda.q_conv, kda.k_conv, kda.v_conv)),
+            layer["q"],
+            layer["k"],
+            layer["v"],
+            layer["state"],
+            self.fresh,
+            kda.A_log.float(),
+            kda.dt_bias.float(),
+            kda.o_norm_weight.float(),
+            kda.norm_eps,
+        )
+        return kda.o_proj(out.to(x.dtype))[:, None]
+
+    def _attention(self, attention, x, layer, rope):
+        query, key, value = attention.project(x, rope)
+        layer["key"].index_copy_(2, self.slot, key)
+        layer["value"].index_copy_(2, self.slot, value)
+        attended = self.ops.attention(
+            query[:, :, 0].contiguous(),
+            layer["key"],
+            layer["value"],
+            self.starts,
+            self.slot,
+            attention.sink.float(),
+        )
+        attended = attended.to(x.dtype).reshape(self.rows, 1, -1)
+        gate = torch.sigmoid(attention.gate_proj(x) + attention.gate_bias)
+        return attention.o_proj(attended * gate.to(attended.dtype))
+
+    def _step(self):
+        lm = self.lm
+        self.positions.masked_fill_(self.fresh, 0)
+        self.starts.copy_(torch.where(self.fresh, self.slot, self.starts))
+        x = lm.token_embedding(self.token[:, None])
+        cos, sin = lm.rope_cos[self.positions], lm.rope_sin[self.positions]
+        rope = (cos[:, None, None], sin[:, None, None])
+        for block, layer in zip(lm.blocks, self.layers, strict=True):
+            normed = block.mixer_norm(x)
+            if block.kind == "kda":
+                x = x + self._kda(block.mixer, normed, layer)
+            else:
+                x = x + self._attention(block.mixer, normed, layer, rope)
+            x = x + block.mlp(block.mlp_norm(x))
+        self.logits.copy_(F.linear(lm.final_norm(x), lm.output_weight)[:, 0])
+        self.slot += 1
+        self.positions += 1
+        self.fresh.copy_(self.token == lm.config.eos_id)
+
+    @torch.no_grad()
+    def _capture(self):
+        # Warm up on a side stream (cuBLAS handles, kernel loading), then capture; the
+        # buffers are reset afterwards and filled by `load`.
+        stream = torch.cuda.Stream()
+        stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(stream):
+            for _ in range(2):
+                self._step()
+        torch.cuda.current_stream().wait_stream(stream)
+        graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(graph):
+            self._step()
+        return graph
+
+    @torch.no_grad()
+    def load(self, entries, lengths, width):
+        """Fill the buffers from prefilled rows: `entries` [layer][name] batched over rows,
+        keys and values left-padded to `width`, the next slot at `width`."""
+        for layer, entry in zip(self.layers, entries, strict=True):
+            if "key" in layer:
+                layer["key"].zero_()
+                layer["value"].zero_()
+                layer["key"][:, :, :width].copy_(entry["key"])
+                layer["value"][:, :, :width].copy_(entry["value"])
+            else:
+                for name in ("q", "k", "v", "state"):
+                    layer[name].copy_(entry[name])
+        lengths = torch.as_tensor(lengths, device=self.token.device)
+        self.positions.copy_(lengths)
+        self.starts.copy_(width - lengths)
+        self.slot.fill_(width)
+        self.fresh.zero_()
+        self.used = width
+
+    @torch.no_grad()
+    def step(self, tokens):
+        """Logits [rows, vocab] for the next token after feeding `tokens` (one id per row)."""
+        if self.used >= self.capacity:
+            raise ValueError("the decoder's cache is full")
+        self.token.copy_(torch.as_tensor(tokens).view(-1))
+        self.graph.replay()
+        self.used += 1
+        return self.logits
 
 
-def _attention_step(attention, x, cache, layer, cos, sin):
-    query, key, value = attention.project(x, (cos[:, None, None], sin[:, None, None]))
-    if "key" in layer:
-        key = torch.cat((layer["key"], key), 2)
-        value = torch.cat((layer["value"], value), 2)
-    layer["key"], layer["value"] = key, value
-    # Query heads grouped by their shared key head: [rows, kv heads, group, width].
-    rows, heads, kv_heads = x.size(0), query.size(1), key.size(1)
-    grouped = query.view(rows, kv_heads, heads // kv_heads, query.size(-1))
-    scores = (grouped @ key.transpose(-1, -2)).float() / math.sqrt(query.size(-1))
-    index = torch.arange(key.size(2), device=x.device)
-    other_documents = index[None, :] < cache.starts[:, None]
-    scores = scores.masked_fill(other_documents[:, None, None], float("-inf"))
-    lse = scores.logsumexp(-1)
-    weights = (scores - lse[..., None]).exp().to(value.dtype)
-    attended = (weights @ value).float().view(rows, heads, 1, -1)
-    kept = torch.sigmoid(lse.view(rows, heads) - attention.sink.float())[..., None, None]
-    attended = (attended * kept).to(x.dtype).transpose(1, 2).reshape(rows, 1, -1)
-    gate = torch.sigmoid(attention.gate_proj(x) + attention.gate_bias)
-    return attention.o_proj(attended * gate.to(attended.dtype))
+def parameter_pointers(lm):
+    return tuple(p.data_ptr() for p in lm.parameters())
 
 
-def _convolution_step(x, weight, layer, name, fresh):
-    """One step of `kda.short_convolution` for x [B, C]; history holds earlier inputs."""
-    width = weight.size(-1)
-    history = layer.get(name)
-    if history is None:
-        history = x.new_zeros(x.size(0), width - 1, x.size(1))
-    history = history.masked_fill(fresh[:, None, None], 0)
-    out = x * weight[:, 0, -1]
-    for shift in range(1, width):
-        out = out + history[:, -shift] * weight[:, 0, -1 - shift]
-    layer[name] = torch.cat((history[:, 1:], x[:, None]), 1)
-    return F.silu(out)
-
-
-def _kda_step(kda, x, layer, fresh):
-    rows = x.size(0)
-    shape = (rows, kda.heads, kda.head_dim)
-    point = x[:, 0]
-    q = _convolution_step(kda.q_proj(point), kda.q_conv, layer, "q", fresh).float()
-    k = _convolution_step(kda.k_proj(point), kda.k_conv, layer, "k", fresh).float()
-    v = _convolution_step(kda.v_proj(point), kda.v_conv, layer, "v", fresh).float()
-    q = F.normalize(q.view(shape), dim=-1) * kda.head_dim**-0.5
-    k = F.normalize(k.view(shape), dim=-1)
-    v = v.view(shape)
-    beta = torch.sigmoid(kda.b_proj(point).float())
-    decay = kda_gate(kda.f_proj(point).view(shape), kda.A_log, kda.dt_bias).exp()
-    state = layer.get("state")
-    if state is None:
-        state = x.new_zeros(rows, kda.heads, kda.head_dim, kda.head_dim, dtype=torch.float32)
-    state = state.masked_fill(fresh[:, None, None, None], 0) * decay[..., None]
-    error = v - torch.einsum("bhk,bhkv->bhv", k, state)
-    state = state + torch.einsum("bhk,bhv->bhkv", beta[..., None] * k, error)
-    layer["state"] = state
-    out = torch.einsum("bhk,bhkv->bhv", q, state)
-    out = out * torch.rsqrt(out.square().mean(-1, keepdim=True) + kda.norm_eps)
-    out = out * kda.o_norm_weight.float()
-    gate = torch.sigmoid(kda.g_proj(point).float().view(shape))
-    return kda.o_proj((out * gate).to(x.dtype).reshape(rows, 1, -1))
-
-
-@torch.no_grad()
-def step(lm: HybridLM, tokens, cache: Cache):
-    """Logits [rows, vocab] for the next token after feeding `tokens` (one id per row)."""
-    tokens = torch.as_tensor(tokens, device=cache.positions.device).view(-1)
-    fresh = cache.fresh
-    cache.positions = torch.where(fresh, 0, cache.positions)
-    cache.starts = torch.where(fresh, cache.length, cache.starts)
-    if int(cache.positions.max()) >= lm.config.block_size:
-        raise ValueError("context is full")
-    x = lm.token_embedding(tokens[:, None])
-    cos, sin = lm.rope_cos[cache.positions], lm.rope_sin[cache.positions]
-    for block, layer in zip(lm.blocks, cache.layers, strict=True):
-        normed = block.mixer_norm(x)
-        if block.kind == "kda":
-            mixed = _kda_step(block.mixer, normed, layer, fresh)
-        else:
-            mixed = _attention_step(block.mixer, normed, cache, layer, cos, sin)
-        x = x + mixed
-        x = x + block.mlp(block.mlp_norm(x))
-    cache.length += 1
-    cache.positions = cache.positions + 1
-    cache.fresh = tokens == lm.config.eos_id
-    return F.linear(lm.final_norm(x), lm.output_weight)[:, 0].float()
+def decoder(lm, rows, capacity):
+    """A Decoder for `lm` with at least `capacity` slots, reused across calls while the
+    model's parameters stay in the same memory."""
+    capacity = -(-capacity // CAPACITY_STEP) * CAPACITY_STEP
+    decoders = lm.__dict__.setdefault("_decoders", {})
+    if decoders and next(iter(decoders.values())).parameters != parameter_pointers(lm):
+        decoders.clear()
+    key = (rows, capacity)
+    if key not in decoders:
+        while len(decoders) >= MAX_DECODERS:
+            decoders.pop(next(iter(decoders)))
+        decoders[key] = Decoder(lm, rows, capacity)
+    return decoders[key]
 
 
 def _sample(logits, temperature, top_p, generator):
@@ -170,11 +238,9 @@ def _prefill_row(lm, prompt, device):
 
 
 @torch.no_grad()
-def prefill(lm, prompts):
-    """Logits [rows, vocab] after each prompt and the batched Cache that continues them.
-
-    Each prompt is one document (it may not contain EOS).
-    """
+def prefill(lm, prompts, new_tokens):
+    """Logits [rows, vocab] after each prompt and the Decoder that continues them for up
+    to `new_tokens` steps. Each prompt is one document (it may not contain EOS)."""
     if not prompts or not all(prompts):
         raise ValueError("every prompt must contain at least one token")
     if any(lm.config.eos_id in p for p in prompts):
@@ -184,18 +250,18 @@ def prefill(lm, prompts):
     device = lm.token_embedding.weight.device
     rows = [_prefill_row(lm, p, device) for p in prompts]
     width = max(len(p) for p in prompts)
-    cache = Cache(lm, len(prompts))
-    cache.length = width
-    cache.positions = torch.tensor([len(p) for p in prompts], device=device)
-    cache.starts = width - cache.positions
-    cache.fresh = torch.zeros(len(prompts), dtype=torch.bool, device=device)
-    for index, layer in enumerate(cache.layers):
+    entries = []
+    for index in range(len(lm.blocks)):
+        entry = {}
         for name in rows[0][1][index]:
-            parts = [entry[index][name] for _, entry in rows]
+            parts = [layers[index][name] for _, layers in rows]
             if name in ("key", "value"):
                 parts = [F.pad(part, (0, 0, width - part.size(2), 0)) for part in parts]
-            layer[name] = torch.cat(parts)
-    return torch.stack([logits for logits, _ in rows]), cache
+            entry[name] = torch.cat(parts)
+        entries.append(entry)
+    state = decoder(lm, len(prompts), width + max(new_tokens, 1))
+    state.load(entries, [len(p) for p in prompts], width)
+    return torch.stack([logits for logits, _ in rows]), state
 
 
 @torch.no_grad()
@@ -207,12 +273,12 @@ def generate_batch(
     Prompts are read by `prefill` (one document each), so each row decodes as it
     would alone. `done(row, ids)` may end a row early (for example on a stop string).
     """
-    logits, cache = prefill(lm, prompts)
     room = lm.config.block_size + 1 - max(len(p) for p in prompts)
+    limit = max(0, min(max_new_tokens, room))
+    logits, state = prefill(lm, prompts, limit)
     outputs = [[] for _ in prompts]
     finished = [False] * len(prompts)
     stops = torch.tensor(sorted(stop_ids), device=logits.device)
-    limit = max(0, min(max_new_tokens, room))
     for index in range(limit):
         token = _sample(logits, temperature, top_p, generator)
         stopped = torch.isin(token, stops).tolist()
@@ -223,27 +289,22 @@ def generate_batch(
             finished[row] = stopped[row] or bool(done and done(row, outputs[row]))
         if all(finished) or index == limit - 1:
             break
-        logits = step(lm, token, cache)
+        logits = state.step(token)
     return outputs
 
 
 @torch.no_grad()
 def generate(lm, prompt_ids, max_new_tokens, stop_ids, temperature=0.0, top_p=1.0, generator=None):
     """Yield new token ids up to and including one of `stop_ids`; greedy at temperature 0,
-    else nucleus sampling."""
-    if not prompt_ids:
-        raise ValueError("the prompt must contain at least one token")
-    cache = Cache(lm)
-    for token in prompt_ids[:-1]:
-        step(lm, [token], cache)
-    token = prompt_ids[-1]
-    for _ in range(max_new_tokens):
-        if int(cache.positions[0]) >= lm.config.block_size:
+    else nucleus sampling. The prompt is one document (it may not contain EOS)."""
+    limit = max(0, min(max_new_tokens, lm.config.block_size + 1 - len(prompt_ids)))
+    logits, state = prefill(lm, [list(prompt_ids)], limit)
+    for index in range(limit):
+        token = _sample(logits, temperature, top_p, generator)
+        yield int(token[0])
+        if int(token[0]) in stop_ids or index == limit - 1:
             return
-        token = int(_sample(step(lm, [token], cache), temperature, top_p, generator)[0])
-        yield token
-        if token in stop_ids:
-            return
+        logits = state.step(token)
 
 
 def load_export(folder, dtype=torch.float32, device="cpu"):

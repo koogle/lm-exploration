@@ -10,7 +10,7 @@ by hand in the owning study's docs. uv installs this folder as `evaluation`.
 | `benchmarks/` | One module per benchmark: its prompt format and `score` |
 | `scoring.py` | The scored model interface of a checkpoint (loaded by [`trainer/checkpoints.py`](../../trainer/checkpoints.py) with its run's verified model code), log-likelihood batching, greedy generation, answer checking, bits per byte |
 | `heldout.py` | Validation windows of a raw snapshot |
-| `modal_evaluate.py` | Modal launcher: one H100, 3-hour timeout, no retries |
+| `modal_evaluate.py` | Modal launcher: one H100, 3-hour timeout, no retries; a code sandbox for code benchmarks |
 
 ## Run
 
@@ -28,8 +28,8 @@ records it and the SHA256 of every evaluation source file.
 
 Each checkpoint loads the model code its run copied, after checking the source and
 tokenizer hashes the checkpoint recorded, so any checkout can evaluate any checkpoint:
-pretraining checkpoints from `RUN-sNN/source`, SFT checkpoints
-([`sft/`](../../sft/README.md)) from the `model.py` and `shared_model.py` beside them.
+pretraining checkpoints from `RUN-sNN/source`, SFT and RL checkpoints
+([`sft/`](../../sft/README.md), [`rl/`](../../rl/README.md)) from the `model.py` and `shared_model.py` beside them.
 `--shots` sets the math exemplar count (default 5; use 0 for SFT models, whose training
 prompt is the zero-shot format). `--tasks` limits a run to a comma-separated subset,
 such as `gsm8k,svamp`. The call refuses new work 24 hours after launch. Results go to
@@ -55,6 +55,13 @@ such as `gsm8k,svamp`. The call refuses new work 24 hours after launch. Results 
   [Math-Verify](https://github.com/huggingface/Math-Verify) extracts the final answer
   from the completion and the gold answer and checks they are equal. Answers are kept in the
   result.
+
+- **Code, greedy pass@1:** MBPP+ (378) and HumanEval+ (164) from EvalPlus, in the code
+  SFT prompt format (`training_data.code_sft.code_prompt`: the problem, or HumanEval's
+  docstring, and the function's signature). The completion up to EOS is the program
+  (after HumanEval's imports and helpers); it passes if every EvalPlus test passes, run
+  only in a network-blocked Modal Sandbox (`training_data.sandbox`, 20 s per
+  program). A completion without EOS within 512 tokens fails. SFT and RL models only.
 
 Datasets are pinned to HF commits in `configs/benchmarks.json`. Inference uses BF16 autocast with FP32
 weights. Chance levels: about 25% for HellaSwag, ARC and OpenBookQA, 50% for Winogrande.

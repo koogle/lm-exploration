@@ -369,15 +369,22 @@ The published H-Net is [`jfrick/hnet-720m`](https://huggingface.co/jfrick/hnet-7
 
 ## Generation
 
-[`generate.py`](generate.py) decodes incrementally in plain PyTorch (CPU or GPU):
-a KV cache for the full-attention layers, convolution history and fp32 state for
-KDA, one token per row per pass through the weights. Rows follow the model's
-document rule (after EOS the next token starts a new document), so
-`generate_batch` left-pads prompts of different lengths with EOS and each row
-decodes exactly as it would alone. `prefill` reads each prompt with one forward
-pass (the KDA kernels return each document's final state) and builds the same
-cache, so a batch costs one forward per prompt plus one step per new token. RoPE
-tables stay in fp32 when the model is cast to bf16.
+[`generate.py`](generate.py) generates on CUDA. `prefill` reads each prompt with one
+forward pass of the model (the training kernels; the KDA kernels return each
+document's final state) and loads the rows into a `Decoder`, left-padded to the
+longest prompt: preallocated keys and values for the full-attention layers, and for
+KDA the convolution history and the fp32 recurrent state. Each decode step feeds one
+token per row as one replay of a captured CUDA graph: projections and the MLP through
+cuBLAS, and two kernels from [`kernels/decode.cu`](kernels/decode.cu): the KDA step
+(short convolutions, normalized q and k, decay, the delta-rule update and read-out,
+output norm and gate, one thread per state column) and attention over the cache with
+the sink (online softmax, one block per row and query head). Rows follow the model's
+document rule (after EOS the next token starts a new document), so each row of
+`generate_batch` decodes exactly as it would alone. Decoders are kept per model and
+shape and read the parameters in place, so RL's in-place weight updates reach them.
+On one H100, a randomly initialized 720M model in bf16 decodes 64 rows (512-token
+prompts) at 4.1 ms per step, 15,550 tokens/s; the plain-PyTorch step it replaces took
+15.8 ms (4,046 tokens/s).
 
 ## Chat SFT
 
@@ -482,8 +489,8 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
   tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
   tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
   tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet \
-  tests.test_hybrid_generate tests.test_hybrid_chat tests.test_hybrid_livecodebench \
-  tests.test_hybrid_rl tests.test_hybrid_long_context -v
+  tests.test_hybrid_chat tests.test_hybrid_livecodebench tests.test_hybrid_rl \
+  tests.test_hybrid_long_context -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
@@ -491,6 +498,7 @@ On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
 ```sh
 uv run modal run -m model_hybrid.modal_checks::main
 uv run modal run -m model_hybrid.modal_checks::main --only hnet   # the H-Net check alone
+uv run modal run -m model_hybrid.modal_checks::main --only decode # the decode check alone
 ```
 
 The Modal image uses the CUDA 13.0 devel base with torch 2.14.1.
@@ -504,7 +512,10 @@ The same check compares fla's `chunk_kda` with `cu_seqlens` against
 `kda_reference` (output and all input gradients, within TF32 tolerance) and times
 bf16 training steps of a small compiled hybrid model with the fla call outside the
 compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
-The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it.
+The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it. The decode
+check continues prefilled prompts (rows of different lengths, EOS mid-way) and
+compares every step's logits with the full forward pass in fp32, checks that batched
+rows decode exactly as one row at a time, and times 720M bf16 decoding.
 
 `test_hybrid_720m` checks the configuration, parameter count, schedule, FLOP
 accounting and gate/sink statistics;

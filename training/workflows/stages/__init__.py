@@ -3,23 +3,23 @@
 - `data`: prepare training data (`data.py`).
 - `pretrain`: train a model from scratch; `midtrain`: continue training a parent
   checkpoint on new data, context or schedule (`pretrain.py`).
-- `sft`, `rl`: post-train a parent checkpoint (`sft.py`, ...).
+- `sft`, `rl`: post-train a parent checkpoint (`sft.py`, `rl.py`).
 
 A post-training stage entry holds the stage's own inputs and its trainer's `settings`;
 the workflow supplies its `run_id` and its `parent`, a checkpoint of any stage
 (`trainer/checkpoints.py`). `POST_TRAINING` maps each post-training kind to its module,
-which declares `FIELDS` (its own inputs, such as SFT's `data`), `inputs(spec)` (those
+which declares `FIELDS` (its own inputs, such as SFT's `data` or RL's `pool`), `inputs(spec)` (those
 inputs, checked and with defaults) and `settings(values)` (its trainer's settings with
 every default filled in). Trainers know nothing about workflow files.
 """
 
 from workflows.checks import checkpoint, run_id
-from workflows.stages import sft
+from workflows.stages import rl, sft
 
 KINDS = ("data", "pretrain", "midtrain", "sft", "rl")
 # Stages that train a model and write checkpoints.
 TRAINING = ("pretrain", "midtrain", "sft", "rl")
-POST_TRAINING = {"sft": sft}
+POST_TRAINING = {"sft": sft, "rl": rl}
 COMMON = {"stage", "name", "description", "provenance", "run_id", "parent", "settings"}
 
 
