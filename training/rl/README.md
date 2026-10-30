@@ -292,7 +292,7 @@ uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --checkpoint math-code-sft-replay-20b-s0-r02/step-000020000.pt
 # The hybrid pool, then chat SFT and RL.
 uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool \
-  --data-id rl-pool-hybrid-02 --math-lighteval --kodcode --code-train 0
+  --data-id rl-pool-hybrid-03 --math-lighteval --kodcode --code-train 0
 uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --workflow workflows/hybrid-720m-rl.json --run-id ID
 # Off-policy trajectories from the Qwen teacher's saved code answers:
