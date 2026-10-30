@@ -248,7 +248,12 @@ def prefill(lm, prompts, new_tokens):
     if max(len(p) for p in prompts) > lm.config.block_size:
         raise ValueError("a prompt is longer than the model's context")
     device = lm.token_embedding.weight.device
-    rows = [_prefill_row(lm, p, device) for p in prompts]
+    # Each distinct prompt is read once (RL samples a group of answers per prompt).
+    read = {}
+    for prompt in map(tuple, prompts):
+        if prompt not in read:
+            read[prompt] = _prefill_row(lm, prompt, device)
+    rows = [read[tuple(p)] for p in prompts]
     width = max(len(p) for p in prompts)
     entries = []
     for index in range(len(lm.blocks)):

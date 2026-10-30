@@ -30,7 +30,7 @@ def batch_for(targets, sampler_logprobs, top_ids, top_logprobs):
     picked = sampler_logprobs.gather(-1, targets[..., None])[0, 1:, 0]
     records = [(picked, top_ids[0, 1:], top_logprobs[0, 1:])]
     rows = [{"prompt_ids": PROMPT, "task": "math"}]
-    return Batch(rows, [targets[0, 1:].tolist()], [False], [1.0], sampler=records)
+    return Batch(rows, [targets[0, 1:].tolist()], [False], [1.0], [None], sampler=records)
 
 
 def logits_grad(logits, targets, sampler=None, top_k=None, algorithm=None):

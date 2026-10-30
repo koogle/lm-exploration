@@ -1,8 +1,14 @@
 """Check model-written Python functions against unit tests, only inside a Modal Sandbox.
 
-`program` joins a solution and its tests into one script: the solution becomes the
-module `solution` and its names are visible to the tests, the tests run, every `test*` function they define (not ones imported
-from the solution) is called, and the script prints a nonce last. `runner.py` runs the
+`program` joins a solution and its tests into one script, in one of two test styles:
+
+- `functions` (the default): the solution becomes the module `solution` and its names
+  are visible to the tests, the tests run, every `test*` function they define (not ones
+  imported from the solution) is called, and the script prints a nonce last.
+- `pytest`: the solution is written as `solution.py` beside the tests as
+  `test_solution.py` in a fresh folder, pytest runs them (fixtures, parametrization,
+  `pytest.raises`), and the script prints the nonce last only if every test passed.
+ `runner.py` runs the
 scripts with resource limits and passes a script only if it exits cleanly and prints its
 nonce, so a solution that exits early, raises or skips the tests fails.
 
@@ -23,10 +29,27 @@ RUNNER = Path(__file__).with_name("runner.py")
 SANDBOX_RUNNER = "/runner/runner.py"
 # Seconds each program may run.
 PROGRAM_SECONDS = 5
+TEST_STYLES = ("functions", "pytest")
 
 
-def program(solution, tests, nonce):
-    """The script that imports `solution` as a module, runs `tests` and prints `nonce`."""
+def program(solution, tests, nonce, style="functions"):
+    """The script that runs `tests` against `solution` in `style` and prints `nonce`."""
+    if style not in TEST_STYLES:
+        raise ValueError(f"test style must be one of {TEST_STYLES}")
+    if style == "pytest":
+        return (
+            "import os, sys, tempfile\n"
+            "import pytest\n"
+            "_folder = tempfile.mkdtemp()\n"
+            "for _name, _text in (('solution.py', "
+            f"{solution!r}), ('test_solution.py', {tests!r})):\n"
+            "    with open(os.path.join(_folder, _name), 'w') as _file:\n"
+            "        _file.write(_text)\n"
+            "sys.path.insert(0, _folder)\n"
+            "_args = [os.path.join(_folder, 'test_solution.py'), '-q', '-p', 'no:cacheprovider']\n"
+            "if pytest.main(_args) == 0:\n"
+            f"    print({nonce!r})\n"
+        )
     return (
         "import sys, types\n"
         "_module = types.ModuleType('solution')\n"
@@ -42,10 +65,11 @@ def program(solution, tests, nonce):
 
 
 def _request(pairs, seconds, python=None):
+    """`pairs`: (solution, tests) or (solution, tests, test style)."""
     programs = []
-    for solution, tests in pairs:
+    for solution, tests, *style in pairs:
         nonce = secrets.token_hex(16)
-        programs.append({"source": program(solution, tests, nonce), "nonce": nonce})
+        programs.append({"source": program(solution, tests, nonce, *style), "nonce": nonce})
     return json.dumps(
         {"programs": programs, "timeout": seconds, **({"python": python} if python else {})}
     )

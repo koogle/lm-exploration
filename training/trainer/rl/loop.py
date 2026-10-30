@@ -19,9 +19,12 @@ sampler and learner probabilities. Pretraining replay (`replay_*`, the hook
 update. Gradients are clipped to norm 1.
 
 Validation is greedy accuracy on the pool's validation problems, and replay validation
-loss. The parent is a checkpoint of any stage (`trainer/checkpoints.py`; usually SFT, which
-has learned the answer formats) on the run volume. A run does not
-resume; an interrupted run is rerun from scratch.
+loss. The parent is a checkpoint of any stage and model family (`trainer/checkpoints.py`;
+usually SFT, which has learned the answer formats) on the run volume; its recorded
+architecture picks the family adapter (`trainer/families.py`), which builds the model,
+encodes prompts, samples, says where answers are and writes exports (at the end, and to
+`hf_repo` if set). Replay is for the subword family. A run does not resume; an
+interrupted run is rerun from scratch.
 """
 
 import json
@@ -33,17 +36,9 @@ from dataclasses import asdict
 from pathlib import Path
 
 from training_data import rl_tasks, rl_trajectories
-from training_data.subword import (
-    BOS_TOKEN_ID,
-    DEFAULT_FOLDER,
-    EOS_TOKEN_ID,
-    LOSS_IGNORE_INDEX,
-    TOKENIZER_SHA256,
-    digest,
-    load_frozen,
-)
+from training_data.subword import LOSS_IGNORE_INDEX, digest
 
-from trainer import batches, checkpoints, rollout
+from trainer import batches, checkpoints, optimizers
 from trainer.batches import collate
 from trainer.replay_hook import ReplayHook
 from trainer.rl.batch import Tokens
@@ -70,10 +65,8 @@ def token_logprobs(network, x, y):
     return values * mask, mask
 
 
-def source_files():
+def source_files(family):
     """{name: path} of the code a run depends on, hashed and copied into the run."""
-    import model_10m.model as shared_module
-    import model_100m.model as model_module
     import training_data.sandbox.execution as execution_module
     import training_data.sandbox.runner as runner_module
 
@@ -83,8 +76,9 @@ def source_files():
             "rl_" + "_".join(path.relative_to(package).with_suffix("").parts): str(path)
             for path in sorted(package.rglob("*.py"))
         },
-        "rollout": rollout.__file__,
         "batches": batches.__file__,
+        "optimizers": optimizers.__file__,
+        "checkpoints": checkpoints.__file__,
         "rl_tasks": rl_tasks.__file__,
         "rl_trajectories": rl_trajectories.__file__,
         "math_sft": sys.modules["training_data.math_sft"].__file__,
@@ -92,8 +86,7 @@ def source_files():
         "sandbox_execution": execution_module.__file__,
         "sandbox_runner": runner_module.__file__,
         **ReplayHook.SOURCES,
-        "model": model_module.__file__,
-        "shared_model": shared_module.__file__,
+        **{name: str(path) for name, path in family.source_files().items()},
     }
 
 
@@ -112,18 +105,23 @@ def train(
     then validate and save a final checkpoint. `sandbox.run` checks code answers;
     `trajectories_path` is the trajectory file of the `"file"` source."""
     import torch
-    from model_100m.model import GPT, ModelConfig
 
     if deadline is not None and time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing RL work")
     if not torch.cuda.is_available():
         raise RuntimeError("Training is CUDA/Modal only")
     algorithm, rollouts = settings.algorithm, settings.rollouts
-    tokenizer = load_frozen()
+    saved, description, family = checkpoints.parent(parent)
+    if settings.replay and family.name != "subword":
+        raise ValueError("Replay reads subword snapshots; it is for the subword family")
+    if settings.hf_repo and not family.exports:
+        raise ValueError(f"The {family.name} family writes no exports to publish")
+    if settings.stable_reinforce and not family.records_sampler:
+        raise ValueError(f"The {family.name} sampler records no log-probabilities")
+    tokenizer = family.tokenizer()
 
     def with_prompt(row):
-        prompt = tokenizer.encode(rl_tasks.prompt(row), add_special_tokens=False).ids
-        return {**row, "prompt_ids": [BOS_TOKEN_ID, *prompt]}
+        return {**row, "prompt_ids": family.prompt_ids(tokenizer, row)}
 
     pool, pool_hash = rl_tasks.load(pool_path)
     pool = {
@@ -143,25 +141,20 @@ def train(
                 row["completion_ids"]
             ) < rollouts.token_limit(row["task"]):
                 trajectories.append(row)
-    import model_100m.model as model_module
-
-    saved, description = checkpoints.parent(parent, model_module, TOKENIZER_SHA256)
-    files = source_files()
+    files = source_files(family)
     source_hashes = {name: digest(path) for name, path in files.items()}
     config = description.model_config
-    model = GPT(ModelConfig(**config)).cuda()
-    model.load_state_dict(saved["model"], strict=True)
-    reference = GPT(ModelConfig(**config)).cuda().eval()
-    reference.load_state_dict(saved["model"], strict=True)
+    model = family.build(config).cuda()
+    family.load(model, saved["model"])
+    reference = family.build(config).cuda().eval()
+    family.load(reference, saved["model"])
     reference.requires_grad_(False)
     del saved
     torch.manual_seed(settings.seed)
     rng = random.Random(settings.seed)
     generator = torch.Generator(device="cuda").manual_seed(settings.seed)
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=settings.optimizer.lr, weight_decay=settings.optimizer.weight_decay
-    )
-    replay = ReplayHook.attach(settings, data_root, config["block_size"])
+    optimizer = settings.optimizer.make(model)
+    replay = ReplayHook.attach(settings, data_root, family.context(model))
     stable = StableReinforce.attach(settings)
     identity = {
         "parent": str(parent),
@@ -169,9 +162,10 @@ def train(
         "parent_stage": description.stage,
         # The parent's model code, which may predate this trainer's (`source_sha256`).
         "parent_source_sha256": description.source_sha256,
+        "family": family.name,
         "pool_sha256": pool_hash,
         "trajectories_sha256": trajectory_hash,
-        "tokenizer_sha256": TOKENIZER_SHA256,
+        "tokenizer_sha256": family.tokenizer_sha256,
         "replay": replay.identity() if replay else None,
         "settings": asdict(settings),
         "source_sha256": source_hashes,
@@ -180,12 +174,13 @@ def train(
     output.mkdir(parents=True, exist_ok=False)
     (output / "manifest.json").write_text(json.dumps(identity, indent=2))
     shutil.copyfile(pool_path, output / "pool.jsonl")
-    shutil.copytree(DEFAULT_FOLDER, output / "tokenizer")
+    family.copy_tokenizer(output / "tokenizer")
     for name, path in files.items():
-        shutil.copyfile(path, output / f"{name}.py")
+        shutil.copyfile(path, output / f"{name}{Path(path).suffix}")
 
     def sample(rows):
         return collect(
+            family,
             model,
             rows,
             rollouts,
@@ -202,13 +197,17 @@ def train(
         "reuse": lambda: Reuse(
             rollouts, scheduler, sample, settings.trajectories.updates_per_batch
         ),
-        "file": lambda: TrajectoryFile(trajectories, settings.trajectories.answers_per_step, rng),
+        "file": lambda: TrajectoryFile(
+            trajectories, settings.trajectories.answers_per_step, rng, family.stop_ids[0]
+        ),
     }[settings.trajectories.source]()
-    step, update = 0, 0
+    step, update, trained_tokens = 0, 0, 0
 
     def evaluate():
         metrics = {}
-        batch = collect(model, pool["validation"], rollouts, 0, generator, tokenizer, sandbox)
+        batch = collect(
+            family, model, pool["validation"], rollouts, 0, generator, tokenizer, sandbox
+        )
         for task in rl_tasks.TASKS:
             picked = [i for i, row in enumerate(batch.rows) if row["task"] == task]
             if picked:
@@ -238,9 +237,8 @@ def train(
 
     def optimize(batch, sequences, advantage, answers, old, totals):
         """One optimizer update on `answers`; adds token statistics to `totals`."""
-        nonlocal update
-        for g in optimizer.param_groups:
-            g["lr"] = settings.optimizer.learning_rate(update)
+        nonlocal update, trained_tokens
+        optimizers.set_learning_rate(optimizer, settings.optimizer.factor(update))
         optimizer.zero_grad(set_to_none=True)
         # Dr. GRPO's constant: the answers per update times the task's token limit.
         per_update = len(batch.rows) / source.updates_per_batch
@@ -279,6 +277,7 @@ def train(
             totals["kl"] += kl.detach().sum().item()
             totals["nll"] += -logp.detach().sum().item()
             totals["tokens"] += int(mask.sum())
+            trained_tokens += int(mask.sum())
         if replay:
             totals["replay_loss"] += replay.backward(model)
         grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -297,8 +296,8 @@ def train(
                 "format": FORMAT,
                 "stage": "rl",
                 "identity": identity,
-                "special_tokens": {"bos": BOS_TOKEN_ID, "eos": EOS_TOKEN_ID},
-                "model_config": asdict(model.config),
+                "special_tokens": family.special_tokens,
+                "architecture": family.architecture(model),
                 "model": model.state_dict(),
                 "step": step,
                 "prompt_state": scheduler.state,
@@ -382,5 +381,10 @@ def train(
             last_saved = step
     record(**evaluate(), phase="final")
     path = str(output / f"step-{step:09d}.pt") if last_saved == step else save()
+    upload = family.export(
+        model, output, {"step": step, "tokens": trained_tokens}, settings.hf_repo
+    )
+    if upload is not None:
+        upload.join()
     commit()
     return {"checkpoint": path, "step": step, "seconds": time.monotonic() - started}

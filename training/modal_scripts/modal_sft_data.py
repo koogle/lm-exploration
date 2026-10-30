@@ -357,25 +357,46 @@ def prepare_mixture(data_id, datasets, deadline):
 @app.function(
     image=data_image, cpu=2, memory=16384, timeout=1800, retries=0, volumes={"/runs": volume}
 )
-def prepare_rl_pool(data_id, deadline):
+def prepare_rl_pool(data_id, deadline, math_lighteval=False, kodcode=False, code_train=10000):
     from training_data.code_sft import MBPP, OPENCODEINSTRUCT, RL_SHARD, shard_name
     from training_data.hub_files import pinned_rows
     from training_data.math_sft import GSM8K
-    from training_data.rl_tasks import build
+    from training_data.rl_tasks import KODCODE, MATH_LIGHTEVAL, build
+    from training_data.rl_trajectories import SANDBOX_BATCH
+    from training_data.sandbox import Sandbox
 
     check_deadline(deadline)
     volume.reload()
     output = fresh_output(data_id)
     # MBPP validation problems are the pool's code validation set.
     math_tests, code_tests = benchmark_problems(("test", "prompt"))
-    report = build(
-        pinned_rows(*GSM8K, "main/train-00000-of-00001.parquet"),
-        pinned_rows(*OPENCODEINSTRUCT, shard_name(RL_SHARD)),
-        pinned_rows(*MBPP, "full/validation-00000-of-00001.parquet"),
-        math_tests,
-        code_tests,
-        output,
-    )
+    sandbox = Sandbox(app, min(1800, deadline - time.time())) if kodcode else None
+
+    def check(pairs):
+        return [
+            result
+            for start in range(0, len(pairs), SANDBOX_BATCH)
+            for result in sandbox.run(pairs[start : start + SANDBOX_BATCH])
+        ]
+
+    try:
+        report = build(
+            pinned_rows(*GSM8K, "main/train-00000-of-00001.parquet"),
+            pinned_rows(*OPENCODEINSTRUCT, shard_name(RL_SHARD)),
+            pinned_rows(*MBPP, "full/validation-00000-of-00001.parquet"),
+            math_tests,
+            code_tests,
+            output,
+            math_lighteval=pinned_rows(*MATH_LIGHTEVAL, "data/train-00000-of-00001.parquet")
+            if math_lighteval
+            else (),
+            kodcode=pinned_rows(*KODCODE, "data/train-00000-of-00001.parquet") if kodcode else (),
+            check=check,
+            code_train=code_train,
+        )
+    finally:
+        if sandbox is not None:
+            sandbox.close()
     volume.commit()
     return report
 
@@ -395,7 +416,17 @@ def mixture(data_id: str, math: str, code: str, report: str = ""):
 
 
 @app.local_entrypoint()
-def rl_pool(data_id: str, report: str = ""):
+def rl_pool(
+    data_id: str,
+    report: str = "",
+    math_lighteval: bool = False,
+    kodcode: bool = False,
+    code_train: int = 10000,
+):
+    """`--math-lighteval` and `--kodcode` add MATH levels 1-3 and KodCode-Light-RL easy and
+    medium problems; `--code-train` caps the OpenCodeInstruct training problems (0 for
+    none). The hybrid pool (`workflows/hybrid-720m-rl.json`) is GSM8K, MATH and KodCode:
+    `--math-lighteval --kodcode --code-train 0`."""
     run_id(data_id, "data_id")
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    write(report, prepare_rl_pool.remote(data_id, deadline))
+    write(report, prepare_rl_pool.remote(data_id, deadline, math_lighteval, kodcode, code_train))

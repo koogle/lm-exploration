@@ -11,15 +11,20 @@ updates 30 minutes before the launch deadline to evaluate and save. No call retr
   exact resume first: an uninterrupted run against stop, fresh-container restore and
   continue.
 - RL: one H100 training call (`trainer/rl/`) that runs model-written code only in a
-  network-blocked sandbox, recorded for the supervisor.
+  network-blocked sandbox, recorded for the supervisor. The workflow's family picks the
+  worker: subword runs on the subword image with its runs on the training volume; hybrid
+  on the hybrid image (its kernels) with parents and runs on the hybrid runs volume and
+  the prompt pool on the training volume.
 """
 
 import json
 import time
 from pathlib import Path
 
+from model_hybrid.image import build as hybrid_image_with
+
 from distributed.image import project_image
-from workflows.modal_app import app, data_volume, run_volume, track_call
+from workflows.modal_app import app, data_volume, hybrid_runs, run_volume, track_call
 
 # Seconds a call may run: SFT's settings cap its training loop at four hours, RL's at 20.
 SFT_SECONDS = 6 * 60 * 60
@@ -28,7 +33,10 @@ FINAL_RESERVE_SECONDS = 30 * 60
 LOCAL_DATA_LIMIT = 20 * 1024 * 1024
 
 image = project_image("math-verify==0.8.0")
+hybrid_image = hybrid_image_with(("math-verify==0.8.0",))
 volumes = {"/runs": run_volume, "/data": data_volume}
+# Hybrid post-training: parents and runs on the hybrid runs volume, pools beside.
+hybrid_volumes = {"/runs": hybrid_runs, "/pools": run_volume}
 
 
 def train_sft(recipe, examples, deadline, stop_after_step=None):
@@ -85,10 +93,9 @@ def sft_h100(recipe, examples, deadline, launch, stop_after_step=None):
     return train_sft(recipe, examples, deadline, stop_after_step)
 
 
-@app.function(
-    image=image, gpu="H100", cpu=8, memory=65536, timeout=RL_SECONDS, retries=0, volumes=volumes
-)
-def rl_h100(recipe, examples, deadline, launch):
+def train_rl(recipe, deadline, launch, runs_volume, pools):
+    """One RL run: parent and output under /runs (`runs_volume`), pool and trajectory
+    data under `pools`."""
     from training_data.sandbox import Sandbox
     from training_data.subword import digest
 
@@ -100,15 +107,16 @@ def rl_h100(recipe, examples, deadline, launch):
     if time.time() >= stop:
         raise TimeoutError("Launch deadline passed; refusing RL work")
     recipe = validate(recipe)
-    run_volume.reload()
-    runs = Path("/runs")
-    pool = runs / recipe["pool"]
+    for volume in {runs_volume, run_volume}:
+        volume.reload()
+    runs, pools = Path("/runs"), Path(pools)
+    pool = pools / recipe["pool"]
     if digest(pool / "pool.jsonl") != json.loads((pool / "report.json").read_text())["pool_sha256"]:
         raise ValueError("Pool differs from its preparation report")
     settings = Settings.from_dict(recipe["settings"])
     trajectories = None
     if settings.trajectories.source == "file":
-        folder = runs / settings.trajectories.data
+        folder = pools / settings.trajectories.data
         trajectories = folder / "trajectories.jsonl"
         report = json.loads((folder / "report.json").read_text())
         if digest(trajectories) != report["trajectories_sha256"]:
@@ -122,7 +130,7 @@ def rl_h100(recipe, examples, deadline, launch):
             runs / recipe["run_id"],
             settings,
             sandbox,
-            run_volume.commit,
+            runs_volume.commit,
             deadline=stop,
             trajectories_path=trajectories,
         )
@@ -130,13 +138,39 @@ def rl_h100(recipe, examples, deadline, launch):
         return result
     finally:
         sandbox.close()
-        run_volume.commit()
+        runs_volume.commit()
 
 
-# {stage: (the worker for a recipe, seconds it may run)}
+@app.function(
+    image=image, gpu="H100", cpu=8, memory=65536, timeout=RL_SECONDS, retries=0, volumes=volumes
+)
+def rl_h100(recipe, examples, deadline, launch):
+    return train_rl(recipe, deadline, launch, run_volume, "/runs")
+
+
+@app.function(
+    image=hybrid_image,
+    gpu="H100",
+    cpu=8,
+    memory=131072,
+    timeout=RL_SECONDS,
+    retries=0,
+    volumes=hybrid_volumes,
+)
+def rl_h100_hybrid(recipe, examples, deadline, launch):
+    return train_rl(recipe, deadline, launch, hybrid_runs, "/pools")
+
+
+# {stage: (the worker for a recipe and family, seconds it may run)}
 WORKERS = {
-    "sft": (lambda recipe: {"L40S": sft_l40s, "H100": sft_h100}[recipe["gpu"]], SFT_SECONDS),
-    "rl": (lambda recipe: rl_h100, RL_SECONDS),
+    "sft": (
+        lambda recipe, family: {"L40S": sft_l40s, "H100": sft_h100}[recipe["gpu"]],
+        SFT_SECONDS,
+    ),
+    "rl": (
+        lambda recipe, family: {"subword": rl_h100, "hybrid": rl_h100_hybrid}[family],
+        RL_SECONDS,
+    ),
 }
 
 
@@ -193,10 +227,12 @@ def start(function, seconds, launch, deadline, *args, **kwargs):
     return call
 
 
-def run_stage(stage, recipe, launch, deadline, examples=b""):
-    """Start one post-training stage's training call."""
+def run_stage(stage, family, recipe, launch, deadline, examples=b""):
+    """Start one post-training stage's training call for the workflow's model family."""
     worker, seconds = WORKERS[stage]
-    return start(worker(recipe), seconds, launch, deadline, recipe, examples, deadline, launch)
+    return start(
+        worker(recipe, family), seconds, launch, deadline, recipe, examples, deadline, launch
+    )
 
 
 def relative(path):
@@ -211,7 +247,7 @@ def qualify_sft(recipe, launch, deadline, steps, examples=b""):
     `steps` to its restored step plus two."""
     prefix = recipe["run_id"]
     worker, seconds = WORKERS["sft"]
-    worker = worker(recipe)
+    worker = worker(recipe, "subword")
     recipe = {**recipe, "settings": {**recipe["settings"], "steps": steps}}
 
     def run(changes, **kwargs):

@@ -38,8 +38,10 @@ def profile(deadline, batch, prompt, new, checkpoint):
         raise RuntimeError("Launch deadline passed; refusing work")
     torch.manual_seed(0)
     if checkpoint:
+        from trainer.checkpoints import describe
+
         saved = torch.load(Path("/runs") / checkpoint, map_location="cpu", weights_only=False)
-        model = GPT(ModelConfig(**saved["model_config"]))
+        model = GPT(ModelConfig(**describe(saved).model_config))
         model.load_state_dict(saved["model"])
         model = model.cuda().eval()
     else:
@@ -105,8 +107,10 @@ def diagnose(deadline, checkpoint, batch=32, prompt=200):
 
     if time.time() > deadline:
         raise RuntimeError("Launch deadline passed; refusing work")
+    from trainer.checkpoints import describe
+
     saved = torch.load(Path("/runs") / checkpoint, map_location="cpu", weights_only=False)
-    model = GPT(ModelConfig(**saved["model_config"]))
+    model = GPT(ModelConfig(**describe(saved).model_config))
     model.load_state_dict(saved["model"])
     model = model.cuda().eval()
     torch.manual_seed(0)
@@ -205,8 +209,10 @@ def replay_check(deadline, checkpoint, batch=32, prompt=200, new=32):
 
     if time.time() > deadline:
         raise RuntimeError("Launch deadline passed; refusing work")
+    from trainer.checkpoints import describe
+
     saved = torch.load(Path("/runs") / checkpoint, map_location="cpu", weights_only=False)
-    model = GPT(ModelConfig(**saved["model_config"]))
+    model = GPT(ModelConfig(**describe(saved).model_config))
     model.load_state_dict(saved["model"])
     model = model.cuda().eval()
     torch.manual_seed(0)

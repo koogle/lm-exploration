@@ -32,10 +32,7 @@ from training_data.math_sft import MATH
 from training_data.mixture_sft import MIXTURE
 from training_data.repair_sft import REPAIR
 from training_data.subword import (
-    BOS_TOKEN_ID,
-    EOS_TOKEN_ID,
     LOSS_IGNORE_INDEX,
-    TOKENIZER_SHA256,
     digest,
     load_frozen,
 )
@@ -146,7 +143,6 @@ def train(
     taking updates once it passes, then evaluates and saves a final checkpoint.
     """
     import torch
-    from model_100m.model import GPT, ModelConfig
     from torch.nn import functional as F
 
     if extend and resume is None:
@@ -166,17 +162,16 @@ def train(
         data_modules[f"data_{name}"] = sys.modules[type(task).__module__].__file__
     tokenizer = load_frozen()
     splits, data_hash = data.prepare(dataset, tokenizer, settings.context)
-    import model_100m.model as model_module
-
-    base, description = checkpoints.parent(parent, model_module, TOKENIZER_SHA256)
-    model_config = ModelConfig(**description.model_config)
-    if settings.context > model_config.block_size:
-        raise ValueError("SFT context exceeds parent context")
+    base, description, family = checkpoints.parent(parent)
+    if family.name != "subword":
+        raise ValueError("The SFT datasets are in the subword family's formats")
     torch.manual_seed(settings.seed)
     torch.cuda.manual_seed_all(settings.seed)
     rng = random.Random(settings.seed)
-    model = GPT(model_config).cuda()
-    model.load_state_dict(base["model"], strict=True)
+    model = family.build(description.model_config).cuda()
+    family.load(model, base["model"])
+    if settings.context > family.context(model):
+        raise ValueError("SFT context exceeds parent context")
     optimizer = torch.optim.AdamW(model.parameters(), lr=settings.lr, weight_decay=0.01)
     from trainer import cig
 
@@ -191,16 +186,14 @@ def train(
             json.loads(line) for line in Path(dataset).read_text().splitlines() if line.strip()
         ]
         cache = cig.reference_cache(model, splits, raw_rows, tokenizer, settings.context)
-    import model_10m.model as shared_module
     import training_data.sft as sft_data_module
 
-    replay = ReplayHook.attach(settings, data_root, model_config.block_size)
+    replay = ReplayHook.attach(settings, data_root, family.context(model))
     source_hashes.update(
         **{name: digest(file) for name, file in ReplayHook.SOURCES.items()},
         **{name: digest(file) for name, file in data_modules.items()},
         sft_data=digest(sft_data_module.__file__),
-        model=digest(model_module.__file__),
-        shared_model=digest(shared_module.__file__),
+        **{name: digest(file) for name, file in family.source_files().items()},
     )
     identity = {
         "dataset_sha256": data_hash,
@@ -210,7 +203,8 @@ def train(
         # The parent's model code, which may predate this trainer's (`source_sha256`).
         "parent_source_sha256": description.source_sha256,
         "replay": replay.identity() if replay else None,
-        "tokenizer_sha256": TOKENIZER_SHA256,
+        "family": family.name,
+        "tokenizer_sha256": family.tokenizer_sha256,
         "settings": asdict(settings),
         "source_sha256": source_hashes,
     }
@@ -250,9 +244,7 @@ def train(
     import shutil
 
     shutil.copyfile(dataset, output / "examples.jsonl")
-    from training_data.subword import DEFAULT_FOLDER
-
-    shutil.copytree(DEFAULT_FOLDER, output / "tokenizer")
+    family.copy_tokenizer(output / "tokenizer")
     for name, module in (
         ("trainer", __file__),
         ("batches", batches.__file__),
@@ -260,8 +252,7 @@ def train(
         *data_modules.items(),
         ("sft_data", sft_data_module.__file__),
         *ReplayHook.SOURCES.items(),
-        ("model", model_module.__file__),
-        ("shared_model", shared_module.__file__),
+        *family.source_files().items(),
     ):
         shutil.copyfile(module, output / f"{name}.py")
     if cache:
@@ -332,8 +323,8 @@ def train(
                 "format": data.FORMAT,
                 "stage": "sft",
                 "identity": identity,
-                "special_tokens": {"bos": BOS_TOKEN_ID, "eos": EOS_TOKEN_ID},
-                "model_config": asdict(model.config),
+                "special_tokens": family.special_tokens,
+                "architecture": family.architecture(model),
                 "model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "step": step,

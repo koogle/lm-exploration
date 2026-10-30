@@ -930,7 +930,12 @@ def run_workflow(plan, selected, provenance, checkpoint="", examples=None, quali
             state["stages"][name] = {"status": "running", "run_id": run, "attempt": attempt}
             save()
             pending[name] = modal_post_train.run_stage(
-                stage["stage"], recipe, launch, deadline, (examples or {}).get(name, b"")
+                stage["stage"],
+                plan["family"],
+                recipe,
+                launch,
+                deadline,
+                (examples or {}).get(name, b""),
             )
         for name in list(pending):
             finish(name)

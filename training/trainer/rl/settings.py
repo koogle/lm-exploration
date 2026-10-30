@@ -97,23 +97,51 @@ class Trajectories:
 
 @dataclass(frozen=True)
 class Optimizer:
-    """AdamW; the learning rate warms up linearly over `warmup_steps` updates."""
+    """The role-declared optimizer (`trainer/optimizers.py`): AdamW at `lr` for every
+    parameter, or with `muon` Muon at `muon_lr` for hidden matrices and AdamW at `lr` for
+    the rest. The rates warm up linearly over `warmup_steps` updates, then stay constant."""
 
     lr: float = 1e-6
     warmup_steps: int = 20
     weight_decay: float = 0.0
+    betas: tuple[float, float] = (0.9, 0.999)
+    muon: bool = False
+    muon_lr: float = 2e-4
+    muon_momentum: float = 0.95
 
     def __post_init__(self):
         if not math.isfinite(self.lr) or not 0 < self.lr <= 1e-4:
             raise ValueError("Invalid learning rate")
+        if not math.isfinite(self.muon_lr) or not 0 < self.muon_lr <= 0.05:
+            raise ValueError("Invalid Muon learning rate")
+        if len(self.betas) != 2 or not all(0 <= b < 1 for b in self.betas):
+            raise ValueError("Invalid betas")
+        object.__setattr__(self, "betas", tuple(self.betas))
         if type(self.warmup_steps) is not int or self.warmup_steps < 0:
             raise ValueError("warmup_steps must be a nonnegative integer")
         if self.weight_decay < 0:
             raise ValueError("Invalid weight_decay")
 
+    def factor(self, update):
+        """The rates' factor for optimizer update `update` (0-based)."""
+        return min(1.0, (update + 1) / max(1, self.warmup_steps))
+
     def learning_rate(self, update):
-        """The rate for optimizer update `update` (0-based)."""
-        return self.lr * min(1.0, (update + 1) / max(1, self.warmup_steps))
+        """The AdamW rate for optimizer update `update` (0-based)."""
+        return self.lr * self.factor(update)
+
+    def make(self, model):
+        from trainer.optimizers import OptimizerConfig, RoleOptimizer
+
+        settings = OptimizerConfig(
+            muon_lr=self.muon_lr,
+            muon_momentum=self.muon_momentum,
+            adamw_lr=self.lr,
+            adam_betas=self.betas,
+            weight_decay=self.weight_decay,
+            use_muon=self.muon,
+        )
+        return RoleOptimizer(model, settings)
 
 
 @dataclass(frozen=True)
@@ -135,6 +163,8 @@ class Settings(ReplaySettings):
     evaluate_every: int = 50
     save_every: int = 100
     max_seconds: int = 72000
+    # An HF model repo for the final export (families that export, `trainer/families.py`).
+    hf_repo: str = ""
 
     @classmethod
     def from_dict(cls, values):

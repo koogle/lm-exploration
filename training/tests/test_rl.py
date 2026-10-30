@@ -38,7 +38,7 @@ class AlgorithmTests(unittest.TestCase):
                 make(spec)
 
     def test_group_advantages_subtract_the_group_mean(self):
-        batch = Batch(rows("math" for _ in range(6)), [], [], [1, 0, 0, 1, 1, 1], group=3)
+        batch = Batch(rows("math" for _ in range(6)), [], [], [1, 0, 0, 1, 1, 1], [], group=3)
         for got, expected in zip(
             GRPO().advantages(batch), [2 / 3, -1 / 3, -1 / 3, 0, 0, 0], strict=True
         ):
@@ -69,7 +69,7 @@ class AlgorithmTests(unittest.TestCase):
         self.assertEqual(stats["clipped_tokens"], 1)
 
     def test_awr_weights_answers_against_their_task_mean(self):
-        batch = Batch(rows(["code", "code", "math", "math"]), [], [], [1.0, 0.0, 0.0, 0.0])
+        batch = Batch(rows(["code", "code", "math", "math"]), [], [], [1.0, 0.0, 0.0, 0.0], [])
         self.assertEqual(AWR().advantages(batch), [0.5, -0.5, 0.0, 0.0])
         logits = torch.zeros(3, 1, 4, requires_grad=True)
         micro = tokens(logits, torch.tensor([[0], [0], [0]]), torch.tensor([0.5, -0.5, 30.0]))
@@ -144,7 +144,7 @@ class SourceTests(unittest.TestCase):
             {**row, "completion_ids": [7, int(row["id"])], "reward": float(i % 2)}
             for i, row in enumerate(rows("code" for _ in range(5)))
         ]
-        source = TrajectoryFile(written, 2, random.Random(0))
+        source = TrajectoryFile(written, 2, random.Random(0), stop=2)
         first = [source.batch(step) for step in range(2)]
         seen = [row["id"] for batch in first for row in batch.rows]
         self.assertEqual(len(set(seen)), 4)

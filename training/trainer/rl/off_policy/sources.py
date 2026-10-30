@@ -21,10 +21,12 @@ class Reuse(Sampler):
 class TrajectoryFile:
     updates_per_batch = 1
 
-    def __init__(self, rows, answers_per_step, rng):
+    def __init__(self, rows, answers_per_step, rng, stop):
+        """`stop`: the token that ends each (finished) written answer."""
         if len(rows) < answers_per_step:
             raise ValueError("Fewer trajectories than answers_per_step")
         self.rows, self.answers_per_step, self.rng = rows, answers_per_step, rng
+        self.stop = stop
         self.order, self.passes = [], 0
 
     def batch(self, step):
@@ -39,6 +41,7 @@ class TrajectoryFile:
             [row["completion_ids"] for row in chosen],
             [True] * len(chosen),
             [row["reward"] for row in chosen],
+            [self.stop] * len(chosen),
         )
 
     def statistics(self, step):

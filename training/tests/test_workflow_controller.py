@@ -183,7 +183,7 @@ class RunWorkflowTests(unittest.TestCase):
         run = controller("run_workflow")
         calls = []
 
-        def run_stage(kind, recipe, launch, deadline, examples):
+        def run_stage(kind, family, recipe, launch, deadline, examples):
             calls.append(recipe)
             call = Mock()
             if recipe["run_id"].removeprefix("flow-").split("-a")[0] in fail:
