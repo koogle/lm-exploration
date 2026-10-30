@@ -2,8 +2,13 @@
 
 Run from training/:
     modal run -m model_hybrid.modal_tools::bench --gpus 1 [--microbatch 4]
+    modal run -m model_hybrid.modal_tools::publish --checkpoint <run>/step-NNNNNNNNN.pt \\
+        --repo <owner/name> [--public] [--card <README.md>]
 
-Each benchmark is one call with a 30-minute timeout and no retries.
+Each benchmark is one call with a 30-minute timeout and no retries. `publish` uploads
+one checkpoint from the runs volume as bf16 weights, config, progress and the run's
+logs (private unless --public), with an optional model card; one CPU call, one hour,
+no retries.
 """
 
 import json
@@ -70,6 +75,37 @@ def benchmark(
     }
 
 
+@app.function(
+    image=image,
+    cpu=8,
+    memory=65536,
+    timeout=3600,
+    retries=0,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes=VOLUMES,
+)
+def export_checkpoint(checkpoint, repo, private, card, deadline):
+    """One trusted checkpoint written by trainer.loop on our own runs volume, to HF."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import torch
+    from model_hybrid.train import RunConfig, family_of, upload_export
+
+    path = Path("/runs") / checkpoint
+    saved = torch.load(path, map_location="cpu", weights_only=False)
+    config = RunConfig(**saved["config"])
+    family = family_of(config)(config, path.parent, data=({}, None))
+    lm = family.build("cpu")
+    lm.load_state_dict(saved["model"])
+    progress = {"step": saved["step"], "tokens": saved["tokens"]}
+    upload_export(lm, family.model_config, path.parent, progress, repo, private).join()
+    if card:
+        from huggingface_hub import HfApi
+
+        HfApi().upload_file(path_or_fileobj=card.encode(), path_in_repo="README.md", repo_id=repo)
+    return {"repo": repo, "private": private, **progress}
+
+
 def load_config(path):
     return json.loads(Path(path).read_text())
 
@@ -107,5 +143,17 @@ def bench(
         document_tokens,
         time.time() + MAX_LAUNCH_SECONDS,
         profile,
+    )
+    print(json.dumps(result, indent=2))
+
+
+@app.local_entrypoint()
+def publish(checkpoint: str, repo: str, public: bool = False, card: str = ""):
+    """Upload one checkpoint (RUN/step-NNNNNNNNN.pt on the runs volume) to an HF model repo."""
+    from workflows.deadline import MAX_LAUNCH_SECONDS
+
+    text = Path(card).read_text() if card else ""
+    result = export_checkpoint.remote(
+        checkpoint, repo, not public, text, time.time() + MAX_LAUNCH_SECONDS
     )
     print(json.dumps(result, indent=2))
