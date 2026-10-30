@@ -23,7 +23,9 @@ def naive_greedy(model, prompt, max_new_tokens):
 class RolloutTests(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(0)
-        self.model = GPT(ModelConfig(vocab_size=64, block_size=48, n_layer=2, n_head=2, n_embd=32))
+        self.model = GPT(
+            ModelConfig(vocab_size=64, eos_id=EOS, block_size=48, n_layer=2, n_head=2, n_embd=32)
+        )
         self.model.eval()
         self.prompts = [[1, 5, 9, 11], [1, 7], [1, 3, 3, 3, 4, 8, 20]]
 

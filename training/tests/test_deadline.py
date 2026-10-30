@@ -1,11 +1,13 @@
 """The 24-hour launch deadline bounds every call a workflow starts."""
 
 import tempfile
+import time
 import unittest
 
 from workflows.deadline import (
     MAX_LAUNCH_SECONDS,
     bounded_timeout,
+    cancel_at_deadline,
     new_deadline,
     segment_seconds,
     track,
@@ -37,6 +39,22 @@ class DeadlineTests(unittest.TestCase):
             track(folder, "fc-a", "continue_training")
             self.assertEqual(tracked_calls(folder), ["fc-a", "fc-b"])
             self.assertEqual(tracked_calls(folder, kind="continue_training"), ["fc-a"])
+
+
+class SupervisorTests(unittest.TestCase):
+    def test_cancels_recorded_calls_at_the_deadline(self):
+        cancelled = []
+        result = cancel_at_deadline(
+            time.time() + 0.05, lambda: ["fc-a", "fc-b"], poll_seconds=0.01, cancel=cancelled.append
+        )
+        self.assertEqual((result, cancelled), (["fc-a", "fc-b"], ["fc-a", "fc-b"]))
+
+    def test_finished_work_ends_the_wait_without_cancelling(self):
+        cancelled = []
+        result = cancel_at_deadline(
+            time.time() + 3600, lambda: ["fc-a"], lambda: True, 0.01, cancelled.append
+        )
+        self.assertEqual((result, cancelled), (None, []))
 
 
 if __name__ == "__main__":

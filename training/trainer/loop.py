@@ -319,6 +319,7 @@ def train(
             n_layer=config.n_layer,
             n_head=config.n_head,
             n_embd=config.n_embd,
+            eos_id=EOS_TOKEN_ID,
         )
         model = GPT(model_config).cuda()
         if config.cache_rope:
