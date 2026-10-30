@@ -7,6 +7,8 @@ CUDA kernels, prebuilt here into /opt/hybrid_kernels/<kernel>/.
 
 import modal
 
+from workflows.images import add_project
+
 CUDA_BASE = "nvidia/cuda:13.0.0-devel-ubuntu22.04"
 PACKAGES = (
     "torch==2.14.1",
@@ -48,20 +50,7 @@ def build(extra_packages=(), env=None):
         built = built.pip_install(*extra_packages)
     if env:
         built = built.env(env)
-    return (
-        built.add_local_dir("10m", "/project/model_10m", ignore=["__pycache__"])
-        .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
-        .add_local_file("workflows/__init__.py", "/project/workflows/__init__.py")
-        .add_local_file("workflows/deadline.py", "/project/workflows/deadline.py")
-        .add_local_file("distributed/__init__.py", "/project/distributed/__init__.py")
-        .add_local_file("distributed/config.py", "/project/distributed/config.py")
-        .add_local_file("trainer/__init__.py", "/project/trainer/__init__.py")
-        .add_local_file("trainer/loop.py", "/project/trainer/loop.py")
-        .add_local_file("trainer/optimizers.py", "/project/trainer/optimizers.py")
-        .add_local_file("trainer/roles.py", "/project/trainer/roles.py")
-        .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__"])
-        .add_local_dir("tests", "/project/tests", ignore=["__pycache__", "fixtures"])
-    )
+    return add_project(built)
 
 
 image = build()
