@@ -255,10 +255,12 @@ class HNetFamilyTests(unittest.TestCase):
         self.assertGreater(result["bytes_per_chunk"], 1)
 
     def test_workflows_count_bytes(self):
-        from workflows.config import load_workflow, resolve_payload, step_tokens
+        from workflows.config import resolve_payload, step_tokens
+        from workflows.plan import load_workflow
 
         root = Path(__file__).parents[1] / "workflows"
-        policy, _, settings = resolve_payload(load_workflow(root / "hnet-h100x8.json"))
+        plan = load_workflow(root / "hnet-h100x8.json", "check")
+        policy, _, settings = resolve_payload(plan["stages"][-1]["spec"])
         self.assertEqual(policy.family, "hybrid")
         self.assertEqual(settings["architecture"], "hnet")
         self.assertEqual(step_tokens("hybrid", settings), 288 * 16_384)
