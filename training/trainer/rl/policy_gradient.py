@@ -18,8 +18,8 @@ def group_advantages(rewards, group, scale_by_std=False):
 
 
 def loss(tokens, clip=None):
-    """−Σ scale · r · A · log p over answer tokens, with r = p / p_old (detached), so its
-    gradient is −r·A·∇log p. With `clip`, PPO's clipped surrogate: tokens whose ratio left
+    """−Σ scale · r · A · score over answer tokens, with r = p / p_old (detached), so its
+    gradient is −r·A·∇log p for the plain score (`Tokens.score`). With `clip`, PPO's clipped surrogate: tokens whose ratio left
     1 ± clip in the advantage's direction get no gradient. Returns (loss, statistics)."""
     ratio = (tokens.logp - tokens.old_logp).detach().exp()
     advantage = tokens.advantage[:, None]
@@ -27,4 +27,4 @@ def loss(tokens, clip=None):
     if clip is not None:
         clipped = ((advantage > 0) & (ratio > 1 + clip)) | ((advantage < 0) & (ratio < 1 - clip))
     weight = tokens.scale[:, None] * ratio * advantage * (~clipped & tokens.mask)
-    return -(weight * tokens.logp).sum(), {"clipped_tokens": (clipped & tokens.mask).sum().item()}
+    return -(weight * tokens.score).sum(), {"clipped_tokens": (clipped & tokens.mask).sum().item()}

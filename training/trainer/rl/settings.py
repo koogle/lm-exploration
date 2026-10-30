@@ -6,11 +6,14 @@
       "trajectories": {"source": "sampler"},
       "rollouts": {"prompts_per_step": 64, "samples_per_prompt": 8, "math_share": 0.5},
       "optimizer": {"lr": 1e-6, "warmup_steps": 20},
+      "stable_reinforce": {"top_k": 32},
       "replay": true, "replay_snapshot": "...", ...
     }
 
 Omitted fields take the defaults below; `Settings.from_dict` builds and checks them.
-The `replay_*` fields are the ones SFT shares (`trainer/replay_hook.py`).
+The `replay_*` fields are the ones SFT shares (`trainer/replay_hook.py`);
+`stable_reinforce` switches on the off-policy corrections of
+`off_policy/stable_reinforce.py`.
 """
 
 import math
@@ -18,6 +21,7 @@ from dataclasses import dataclass, field
 
 from trainer.replay_hook import ReplaySettings
 from trainer.rl import algorithms
+from trainer.rl.off_policy.stable_reinforce import StableReinforceSettings
 
 
 def positive_int(owner, *names):
@@ -42,6 +46,8 @@ class Rollouts:
     code_tokens: int = 384
     temperature: float = 1.0
     rest_steps: int = 50
+    # Sampler engine (`trainer/rollout.py`): "graph" replays custom-kernel CUDA graphs.
+    engine: str = "graph"
 
     def __post_init__(self):
         positive_int(self, "prompts_per_step", "samples_per_prompt", "math_tokens", "code_tokens")
@@ -53,6 +59,8 @@ class Rollouts:
             raise ValueError("temperature must be in (0, 2]")
         if type(self.rest_steps) is not int or self.rest_steps < 0:
             raise ValueError("rest_steps must be a nonnegative integer")
+        if self.engine not in ("eager", "graph"):
+            raise ValueError("engine must be eager or graph")
 
     def token_limit(self, task):
         return self.math_tokens if task == "math" else self.code_tokens
@@ -89,23 +97,51 @@ class Trajectories:
 
 @dataclass(frozen=True)
 class Optimizer:
-    """AdamW; the learning rate warms up linearly over `warmup_steps` updates."""
+    """The role-declared optimizer (`trainer/optimizers.py`): AdamW at `lr` for every
+    parameter, or with `muon` Muon at `muon_lr` for hidden matrices and AdamW at `lr` for
+    the rest. The rates warm up linearly over `warmup_steps` updates, then stay constant."""
 
     lr: float = 1e-6
     warmup_steps: int = 20
     weight_decay: float = 0.0
+    betas: tuple[float, float] = (0.9, 0.999)
+    muon: bool = False
+    muon_lr: float = 2e-4
+    muon_momentum: float = 0.95
 
     def __post_init__(self):
         if not math.isfinite(self.lr) or not 0 < self.lr <= 1e-4:
             raise ValueError("Invalid learning rate")
+        if not math.isfinite(self.muon_lr) or not 0 < self.muon_lr <= 0.05:
+            raise ValueError("Invalid Muon learning rate")
+        if len(self.betas) != 2 or not all(0 <= b < 1 for b in self.betas):
+            raise ValueError("Invalid betas")
+        object.__setattr__(self, "betas", tuple(self.betas))
         if type(self.warmup_steps) is not int or self.warmup_steps < 0:
             raise ValueError("warmup_steps must be a nonnegative integer")
         if self.weight_decay < 0:
             raise ValueError("Invalid weight_decay")
 
+    def factor(self, update):
+        """The rates' factor for optimizer update `update` (0-based)."""
+        return min(1.0, (update + 1) / max(1, self.warmup_steps))
+
     def learning_rate(self, update):
-        """The rate for optimizer update `update` (0-based)."""
-        return self.lr * min(1.0, (update + 1) / max(1, self.warmup_steps))
+        """The AdamW rate for optimizer update `update` (0-based)."""
+        return self.lr * self.factor(update)
+
+    def make(self, model):
+        from trainer.optimizers import OptimizerConfig, RoleOptimizer
+
+        settings = OptimizerConfig(
+            muon_lr=self.muon_lr,
+            muon_momentum=self.muon_momentum,
+            adamw_lr=self.lr,
+            adam_betas=self.betas,
+            weight_decay=self.weight_decay,
+            use_muon=self.muon,
+        )
+        return RoleOptimizer(model, settings)
 
 
 @dataclass(frozen=True)
@@ -119,28 +155,50 @@ class Settings(ReplaySettings):
     optimizer: Optimizer = field(default_factory=Optimizer)
     # KL(policy ‖ parent), k3 estimate on answer tokens; always measured, added at kl_coef.
     kl_coef: float = 0.0
+    # Score Centering and the sampler-learner KL on our sampler's answers, or None.
+    stable_reinforce: StableReinforceSettings | None = None
     # Answers per forward and backward pass.
     micro_batch: int = 16
     seed: int = 42
     evaluate_every: int = 50
     save_every: int = 100
+    # Also save once this many seconds have passed since the last checkpoint.
+    save_seconds: int = 3600
+    # Checkpoints kept in the run folder (the newest); 0 keeps all.
+    keep_checkpoints: int = 0
     max_seconds: int = 72000
+    # An HF model repo for the final export (families that export, `trainer/families.py`).
+    hf_repo: str = ""
 
     @classmethod
     def from_dict(cls, values):
         values = dict(values)
+        stable = values.pop("stable_reinforce", None)
         return cls(
             algorithm=algorithms.make(values.pop("algorithm", {"name": "on_policy/grpo"})),
             trajectories=Trajectories(**values.pop("trajectories", {})),
             rollouts=Rollouts(**values.pop("rollouts", {})),
             optimizer=Optimizer(**values.pop("optimizer", {})),
+            stable_reinforce=StableReinforceSettings(**stable) if stable is not None else None,
             **values,
         )
 
     def __post_init__(self):
-        positive_int(self, "steps", "micro_batch", "evaluate_every", "save_every", "max_seconds")
+        positive_int(
+            self,
+            "steps",
+            "micro_batch",
+            "evaluate_every",
+            "save_every",
+            "save_seconds",
+            "max_seconds",
+        )
+        if type(self.keep_checkpoints) is not int or self.keep_checkpoints < 0:
+            raise ValueError("keep_checkpoints must be a nonnegative integer")
         if not math.isfinite(self.kl_coef) or self.kl_coef < 0:
             raise ValueError("Invalid KL coefficient")
+        if self.stable_reinforce is not None:
+            self.stable_reinforce.check(self)
         if self.trajectories.source not in self.algorithm.SOURCES:
             raise ValueError(
                 f"{self.algorithm.name} trains on trajectories from {self.algorithm.SOURCES}"

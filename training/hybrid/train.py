@@ -265,7 +265,7 @@ def export_config(model_config):
 
 def upload_export(lm, model_config, run_dir, progress, repo, private=True):
     """bf16 trunk weights and config under `<run_dir>/export/`, and to the HF model repo
-    with the run's metrics in a background thread."""
+    with the run's metrics in a background thread (returned; None without a repo)."""
     import threading
 
     from safetensors.torch import save_file
@@ -281,6 +281,8 @@ def upload_export(lm, model_config, run_dir, progress, repo, private=True):
     (folder / "config.json").write_text(json.dumps(export_config(model_config), indent=2) + "\n")
     (folder / "progress.json").write_text(json.dumps(progress, indent=2) + "\n")
     logs = [Path(run_dir, name) for name in ("metrics.jsonl", "validation.jsonl")]
+    if not repo:
+        return None
 
     def push():
         from huggingface_hub import HfApi

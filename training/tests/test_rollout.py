@@ -53,6 +53,28 @@ class RolloutTests(unittest.TestCase):
         self.assertEqual([len(c) for c in samples.completions], [2, 2, 2])
         self.assertEqual(samples.finished, [False, False, False])
 
+    def test_recorded_logprobs_match_the_model(self):
+        samples = sample(
+            self.model,
+            self.prompts,
+            12,
+            EOS,
+            generator=torch.Generator().manual_seed(1),
+            record_top_k=4,
+        )
+        for row, prompt in enumerate(self.prompts):
+            answer = samples.completions[row] + ([EOS] if samples.finished[row] else [])
+            with torch.no_grad():
+                logits = self.model(torch.tensor([prompt + answer]))[0]
+            expected = torch.log_softmax(logits[len(prompt) - 1 : -1], -1)
+            steps = len(answer)
+            picked = expected.gather(1, torch.tensor(answer)[:, None])[:, 0]
+            torch.testing.assert_close(samples.logprobs[row, :steps], picked, atol=1e-4, rtol=0)
+            top, ids = expected.topk(4, -1)
+            torch.testing.assert_close(samples.top_logprobs[row, :steps], top, atol=1e-4, rtol=0)
+            self.assertTrue(torch.equal(samples.top_ids[row, :steps], ids))
+        self.assertIsNone(sample(self.model, self.prompts, 4, EOS, temperature=0).logprobs)
+
     def test_rejects_overlong_requests(self):
         with self.assertRaises(ValueError):
             sample(self.model, self.prompts, 42, EOS)
@@ -63,7 +85,9 @@ class ChooseTests(unittest.TestCase):
         options = {"temperature": 1.0, "top_k": 0, "top_p": 1.0, "penalty": 1.0, **settings}
         seen = torch.zeros(1, logits.numel(), dtype=torch.bool)
         return {
-            int(choose(logits[None], seen, generator=torch.Generator().manual_seed(s), **options))
+            int(
+                choose(logits[None], seen, generator=torch.Generator().manual_seed(s), **options)[0]
+            )
             for s in range(200)
         }
 
@@ -78,7 +102,7 @@ class ChooseTests(unittest.TestCase):
     def test_repetition_penalty_lowers_seen_tokens(self):
         logits = torch.tensor([[2.0, 1.9, -1.0]])
         seen = torch.tensor([[True, False, True]])
-        greedy = choose(logits, seen, 0, 0, 1.0, 1.5, None)
+        greedy, _ = choose(logits, seen, 0, 0, 1.0, 1.5, None)
         self.assertEqual(int(greedy), 1)
 
 

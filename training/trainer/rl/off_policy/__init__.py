@@ -6,4 +6,7 @@ Qwen teacher's). An algorithm that corrects with token-level importance ratios n
 sampling weights' log-probabilities (`needs_behaviour`), which exist only for the model's
 own answers; a teacher with another tokenizer has none, so its answers need an algorithm
 without ratios.
+
+`stable_reinforce.py` corrects any algorithm for the sampler's numerics differing from
+the learner's, which makes even freshly sampled answers slightly off-policy.
 """
