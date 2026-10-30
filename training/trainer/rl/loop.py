@@ -17,7 +17,8 @@ tokens, which is always measured and logged; pretraining replay (`replay_*`, the
 update. Gradients are clipped to norm 1.
 
 Validation is greedy accuracy on the pool's validation problems, and replay validation
-loss. The parent is an SFT checkpoint (`trainer/sft.py`) on the run volume. A run does not
+loss. The parent is a checkpoint of any stage (`trainer/checkpoints.py`; usually SFT, which
+has learned the answer formats) on the run volume. A run does not
 resume; an interrupted run is rerun from scratch.
 """
 
@@ -40,7 +41,7 @@ from training_data.subword import (
     load_frozen,
 )
 
-from trainer import batches, rollout
+from trainer import batches, checkpoints, rollout
 from trainer.batches import collate
 from trainer.replay_hook import ReplayHook
 from trainer.rl.batch import Tokens
@@ -48,8 +49,6 @@ from trainer.rl.off_policy.sources import Reuse, TrajectoryFile
 from trainer.rl.rollouts import Sampler, Scheduler, collect
 
 FORMAT = "rl-v1"
-# Parents this trainer accepts: SFT checkpoints of `trainer/sft.py`.
-PARENT_FORMATS = ("math-sft-v1", "code-sft-v1", "mixture-sft-v1")
 # Longest pool prompt used, in tokens.
 MAX_PROMPT_TOKENS = 512
 
@@ -141,17 +140,12 @@ def train(
                 row["completion_ids"]
             ) < rollouts.token_limit(row["task"]):
                 trajectories.append(row)
-    # Only load our trusted private run-volume checkpoints, never dataset-supplied files.
-    saved = torch.load(parent, map_location="cpu", weights_only=False)
-    if saved.get("format") not in PARENT_FORMATS:
-        raise ValueError("Expected an SFT parent checkpoint")
+    import model_100m.model as model_module
+
+    saved, description = checkpoints.parent(parent, model_module, TOKENIZER_SHA256)
     files = source_files()
     source_hashes = {name: digest(path) for name, path in files.items()}
-    if saved["identity"]["source_sha256"]["model"] != source_hashes["model"]:
-        raise ValueError("Model implementation differs from parent checkpoint")
-    if saved["identity"]["tokenizer_sha256"] != TOKENIZER_SHA256:
-        raise ValueError("Parent uses another tokenizer")
-    config = saved["model_config"]
+    config = description.model_config
     model = GPT(ModelConfig(**config)).cuda()
     model.load_state_dict(saved["model"], strict=True)
     reference = GPT(ModelConfig(**config)).cuda().eval()
@@ -168,6 +162,7 @@ def train(
     identity = {
         "parent": str(parent),
         "parent_sha256": digest(parent),
+        "parent_stage": description.stage,
         "pool_sha256": pool_hash,
         "trajectories_sha256": trajectory_hash,
         "tokenizer_sha256": TOKENIZER_SHA256,
@@ -284,6 +279,7 @@ def train(
         torch.save(
             {
                 "format": FORMAT,
+                "stage": "rl",
                 "identity": identity,
                 "special_tokens": {"bos": BOS_TOKEN_ID, "eos": EOS_TOKEN_ID},
                 "model_config": asdict(model.config),

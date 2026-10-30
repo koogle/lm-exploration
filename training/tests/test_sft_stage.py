@@ -1,4 +1,4 @@
-"""Offline checks of SFT recipe/argument validation; never imports Modal apps."""
+"""Offline checks of SFT stage files (`workflows/stages`); never imports Modal apps."""
 
 import json
 import tempfile
@@ -7,7 +7,9 @@ import unittest
 from pathlib import Path
 
 from trainer.sft import Settings, train
-from trainer.sft_recipe import load_recipe, parse_checkpoints, validate_recipe
+from workflows.checks import parse_checkpoints
+from workflows.stages import load
+from workflows.stages import validate as validate_recipe
 
 PARENT = "parent-run/step-000000100.pt"
 
@@ -68,10 +70,10 @@ class RecipeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "recipe.json"
             path.write_text(json.dumps(recipe()))
-            spec = load_recipe(path, run="fresh-r02", resume="other/step-000000005.pt")
+            spec = load(path, run_id="fresh-r02", resume="other/step-000000005.pt")
             self.assertEqual(spec["run_id"], "fresh-r02")
             self.assertEqual(spec["resume"], "other/step-000000005.pt")
-            self.assertEqual(load_recipe(path)["run_id"], "sft-fixture-r01")
+            self.assertEqual(load(path)["run_id"], "sft-fixture-r01")
 
     def test_checkpoint_list(self):
         parsed = parse_checkpoints(f"base={PARENT}, sft=run/step-000000200.pt")

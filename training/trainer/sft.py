@@ -14,8 +14,9 @@ step, trained with the ordinary next-token loss: the step backpropagates
 `(1 - replay_weight) * answer loss`, then the hook adds `replay_weight * replay loss`. The learning rate is constant, or warms up linearly over
 `warmup_steps` and follows a cosine to `min_lr_ratio * lr` (`schedule: "cosine"`).
 
-The parent is an explicit `scholarly-ddp-v1` checkpoint on the private run volume; launchers
-pass it in. See `sft/README.md` for the data formats and launch commands.
+The parent is any checkpoint of our trainers (`trainer/checkpoints.py`: pretraining, SFT or
+a later stage) on the private run volume with this trainer's model code and tokenizer;
+launchers pass it in. Checkpoints record their `stage` (`"sft"`) and their parent. See `sft/README.md` for the data formats and launch commands.
 """
 
 import json
@@ -38,7 +39,7 @@ from training_data.subword import (
     load_frozen,
 )
 
-from trainer import batches
+from trainer import batches, checkpoints
 from trainer.batches import collate
 from trainer.replay_hook import ReplayHook, ReplaySettings
 
@@ -164,24 +165,16 @@ def train(
         data_modules[f"data_{name}"] = sys.modules[type(task).__module__].__file__
     tokenizer = load_frozen()
     splits, data_hash = data.prepare(dataset, tokenizer, settings.context)
-    # Only load our trusted private run-volume checkpoints, never dataset-supplied files.
-    base = torch.load(parent, map_location="cpu", weights_only=False)
-    if base.get("format") != "scholarly-ddp-v1":
-        raise ValueError("Expected distributed pretraining parent")
-    cfg = base["config"]
-    if settings.context > cfg["context"]:
+    import model_100m.model as model_module
+
+    base, description = checkpoints.parent(parent, model_module, TOKENIZER_SHA256)
+    model_config = ModelConfig(**description.model_config)
+    if settings.context > model_config.block_size:
         raise ValueError("SFT context exceeds parent context")
     torch.manual_seed(settings.seed)
     torch.cuda.manual_seed_all(settings.seed)
     rng = random.Random(settings.seed)
-    model = GPT(
-        ModelConfig(
-            vocab_size=32768,
-            eos_id=EOS_TOKEN_ID,
-            block_size=cfg["context"],
-            **{k: cfg[k] for k in ("n_layer", "n_head", "n_embd")},
-        )
-    ).cuda()
+    model = GPT(model_config).cuda()
     model.load_state_dict(base["model"], strict=True)
     optimizer = torch.optim.AdamW(model.parameters(), lr=settings.lr, weight_decay=0.01)
     from trainer import cig
@@ -198,10 +191,9 @@ def train(
         ]
         cache = cig.reference_cache(model, splits, raw_rows, tokenizer, settings.context)
     import model_10m.model as shared_module
-    import model_100m.model as model_module
     import training_data.sft as sft_data_module
 
-    replay = ReplayHook.attach(settings, data_root, cfg["context"])
+    replay = ReplayHook.attach(settings, data_root, model_config.block_size)
     source_hashes.update(
         **{name: digest(file) for name, file in ReplayHook.SOURCES.items()},
         **{name: digest(file) for name, file in data_modules.items()},
@@ -211,14 +203,14 @@ def train(
     )
     identity = {
         "dataset_sha256": data_hash,
+        "parent": str(parent),
         "parent_sha256": digest(parent),
+        "parent_stage": description.stage,
         "replay": replay.identity() if replay else None,
         "tokenizer_sha256": TOKENIZER_SHA256,
         "settings": asdict(settings),
         "source_sha256": source_hashes,
     }
-    if base["source_sha256"]["model"] != source_hashes["model"]:
-        raise ValueError("Model implementation differs from parent checkpoint")
     step, answer_tokens = 0, 0
     if resume:
         saved = torch.load(resume, map_location="cpu", weights_only=False)
@@ -335,6 +327,7 @@ def train(
         torch.save(
             {
                 "format": data.FORMAT,
+                "stage": "sft",
                 "identity": identity,
                 "special_tokens": {"bos": BOS_TOKEN_ID, "eos": EOS_TOKEN_ID},
                 "model_config": asdict(model.config),
