@@ -278,21 +278,21 @@ closes each session. With `hf_repo` set, bf16 trunk weights and config (under
 `export/`) and the logs go to that private HF model repo every `hf_every_tokens`
 and at the end.
 
-[`modal_train.py`](modal_train.py) runs it on Modal:
+Training runs through the workflows like every model family
+([workflows/README.md](../workflows/README.md)); `model_config` selects the run
+config:
 
 ```sh
-uv run modal run -m model_hybrid.modal_train::bench --gpus 1      # 30-minute call
-uv run modal run --detach -m model_hybrid.modal_train::launch --run-id <id> [--gpus 8]
-uv run modal run -m model_hybrid.modal_train::stop --run-id <id>  # checkpoint and exit
+uv run modal run --detach -m workflows.modal_train --workflow workflows/hybrid-h100x8.json \
+    --run-id <id> [--model-config hybrid/configs/<config>.json] [--resume <run>-sNN/step-N.pt]
+uv run modal run -m workflows.modal_train::stop --run-id <id>    # checkpoint and exit
+uv run modal run -m model_hybrid.modal_tools::bench --gpus 1     # 30-minute benchmark
 ```
 
-Each launch fixes a deadline 24 hours ahead (less a margin), starts an
-independent supervisor that cancels the recorded segment then, and starts one
-segment (`retries=0`, timeout bounded by the deadline) that stops itself 15
-minutes before its timeout with a checkpoint. Launching again with the same run
-ID and config resumes. MFU counts 6 x (matmul weights, including both
-output-layer uses) plus attention FLOPs over the mean attended keys, against
-989 TFLOPS per H100.
+Each session trains in `lm-exploration-hybrid-runs/<run id>-sNN/` and resumes the
+previous session's final checkpoint; a later launch continues a run with
+`--resume`. MFU counts 6 x (matmul weights, including both output-layer uses) plus
+attention FLOPs over the mean attended keys, against 989 TFLOPS per H100.
 
 ## Tests
 

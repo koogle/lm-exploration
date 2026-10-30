@@ -2,7 +2,7 @@
 
     torchrun --nproc_per_node=<gpus> -m trainer.subword --config <config.json> \\
         --manifest <snapshot manifest> --output <run dir> [--resume <checkpoint>] \\
-        [--max-seconds N] [--max-steps N] [--stop-tokens N] [--volume-name V]
+        [--max-seconds N] [--max-steps N] [--stop-tokens N] [--stop-file F] [--volume-name V]
 
 Settings are a `distributed.config.DistributedConfig`. Data comes from the snapshot
 manifest (`training_data.mixture.open_mixture`, optionally prefetched on a producer
@@ -388,6 +388,7 @@ def main():
     parser.add_argument("--max-seconds", type=int, default=3000)
     parser.add_argument("--max-steps", type=int)
     parser.add_argument("--stop-tokens", type=int, help="Stop at this many targets")
+    parser.add_argument("--stop-file", help="Checkpoint and exit once this file exists")
     parser.add_argument("--volume-name")
     args = parser.parse_args()
     if not 1 <= args.max_seconds <= 82800:
@@ -412,6 +413,7 @@ def main():
         stop_unix=stop_unix,
         max_steps=args.max_steps,
         stop_tokens=args.stop_tokens,
+        stop_file=args.stop_file,
         commit=commit,
     )
 
