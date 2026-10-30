@@ -185,9 +185,7 @@ def spawned(function, seconds, launch, deadline, *args, **kwargs):
     cannot be recorded is cancelled."""
     from workflows.deadline import bounded_timeout
 
-    call = function.with_options(timeout=bounded_timeout(deadline, seconds)).spawn(
-        *args, **kwargs
-    )
+    call = function.with_options(timeout=bounded_timeout(deadline, seconds)).spawn(*args, **kwargs)
     try:
         track_call(launch, call.object_id, "post_train")
     except BaseException:

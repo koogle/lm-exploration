@@ -235,7 +235,9 @@ class CorpusTests(unittest.TestCase):
         loader = TokenMixture(self.root / "export/manifest.json", context=16, allow_unreviewed=True)
         x, y = loader.next_batch(1)
         model = GPT(
-            ModelConfig(vocab_size=VOCAB_SIZE, block_size=16, n_layer=1, n_head=1, n_embd=16)
+            ModelConfig(
+                vocab_size=VOCAB_SIZE, block_size=16, n_layer=1, n_head=1, n_embd=16, eos_id=2
+            )
         )
         logits = model(x)
         logits.retain_grad()

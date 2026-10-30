@@ -3,7 +3,7 @@
 import unittest
 
 import torch
-from model_10m.model import ModelConfig
+from model_10m.model import ModelConfig, find_documents
 from model_10m.mtp import GPTWithMTP
 from torch.nn import functional as F
 
@@ -12,7 +12,7 @@ class MTPTests(unittest.TestCase):
     def setUp(self):
         torch.set_num_threads(1)
         torch.manual_seed(17)
-        self.model = GPTWithMTP(ModelConfig(19, 8, 1, 2, 16))
+        self.model = GPTWithMTP(ModelConfig(19, 8, 1, 2, 16, eos_id=18))
         self.sequence = torch.tensor([[1, 2, 3, 4, 5], [6, 7, 8, 0, 0]])
         self.lengths = torch.tensor([5, 3])
 
@@ -21,8 +21,9 @@ class MTPTests(unittest.TestCase):
         losses = model.training_losses(seq, self.lengths)
         self.assertEqual(losses["ntp_count"].item(), 6)
         self.assertEqual(losses["mtp_count"].item(), 4)
-        hidden = model.blocks(model.token_embedding(seq[:, :-1]))
-        future = model.mtp(hidden[:, :-1], model.token_embedding(seq[:, 1:-1]))
+        hidden, _ = model.trunk(seq[:, :-1])
+        documents = find_documents(seq[:, :-2], model.config.eos_id)
+        future = model.mtp(hidden[:, :-1], model.token_embedding(seq[:, 1:-1]), documents)
         logits = model.lm_head(future)
         expected = F.cross_entropy(logits[0], seq[0, 2:], reduction="sum")
         expected += F.cross_entropy(logits[1, :1], seq[1, 2:3], reduction="sum")
@@ -42,8 +43,11 @@ class MTPTests(unittest.TestCase):
     def test_future_target_cannot_leak_into_prediction(self):
         def future_logits(seq):
             tokens = seq[:, :-1]
-            hidden = self.model.blocks(self.model.token_embedding(tokens))
-            future = self.model.mtp(hidden[:, :-1], self.model.token_embedding(tokens[:, 1:]))
+            hidden, _ = self.model.trunk(tokens)
+            documents = find_documents(tokens[:, :-1], self.model.config.eos_id)
+            future = self.model.mtp(
+                hidden[:, :-1], self.model.token_embedding(tokens[:, 1:]), documents
+            )
             return self.model.lm_head(future)
 
         changed = self.sequence.clone()

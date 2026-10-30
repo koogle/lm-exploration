@@ -2,22 +2,41 @@
 
 import gc
 import hashlib
+import itertools
 import json
 import math
 import statistics
 import time
 from dataclasses import asdict
 
-from training_data.subword import LOSS_IGNORE_INDEX
+from training_data.subword import EOS_TOKEN_ID, LOSS_IGNORE_INDEX
 
 
 def explicit_causal_attention(query, key, value):
-    """Masked-softmax reference for the SDPA kernel check."""
+    """Masked-softmax causal attention over [..., T, D] tensors."""
     import torch
 
     scores = query @ key.transpose(-2, -1) / math.sqrt(query.size(-1))
     mask = torch.ones(query.size(-2), key.size(-2), device=query.device, dtype=torch.bool).tril()
     return scores.masked_fill(~mask, float("-inf")).softmax(dim=-1) @ value
+
+
+def explicit_document_attention(query, key, value, tokens, eos_id):
+    """Each document of each [B, T, H, D] row attended on its own, in fp32."""
+    import torch
+
+    outputs = []
+    for row in range(tokens.size(0)):
+        ends = (tokens[row, :-1] == eos_id).nonzero().squeeze(1).tolist()
+        bounds = [0, *(end + 1 for end in ends), tokens.size(1)]
+        pieces = [
+            explicit_causal_attention(
+                *(t[row, a:b].transpose(0, 1).float() for t in (query, key, value))
+            ).transpose(0, 1)
+            for a, b in itertools.pairwise(bounds)
+        ]
+        outputs.append(torch.cat(pieces))
+    return torch.stack(outputs).to(query.dtype)
 
 
 def benchmark(
@@ -35,13 +54,16 @@ def benchmark(
 
     torch.set_num_threads(4)
     torch.manual_seed(42)
-    # Check the CUDA BF16 kernel against the explicit causal implementation.
+    # Check the CUDA BF16 varlen kernel against explicit per-document attention.
     tensors = [
-        torch.randn(2, 12, 128, 64, device="cuda", dtype=torch.bfloat16, requires_grad=True)
+        torch.randn(2, 128, 12, 64, device="cuda", dtype=torch.bfloat16, requires_grad=True)
         for _ in range(3)
     ]
-    actual = modern.causal_attention(*tensors)
-    expected = explicit_causal_attention(*tensors)
+    tokens = torch.full((2, 128), 5, device="cuda")
+    tokens[0, [20, 77]] = EOS_TOKEN_ID
+    documents = modern.find_documents(tokens, EOS_TOKEN_ID)
+    actual = modern.document_attention(*tensors, documents)
+    expected = explicit_document_attention(*tensors, tokens, EOS_TOKEN_ID)
     torch.testing.assert_close(actual, expected, atol=0.02, rtol=0.05)
     upstream = torch.randn_like(actual)
     for a, b in zip(
@@ -53,7 +75,7 @@ def benchmark(
     gc.collect()
     torch.cuda.empty_cache()
 
-    config = modern.ModelConfig(vocab_size=32768, block_size=2048)
+    config = modern.ModelConfig(vocab_size=32768, block_size=2048, eos_id=EOS_TOKEN_ID)
     effective_windows = 48
     rows = []
     total_start = time.monotonic()

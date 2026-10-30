@@ -33,7 +33,9 @@ class SingleRankParityTests(unittest.TestCase):
                 with torch.random.fork_rng():
                     torch.manual_seed(43)
                     model = GPT(
-                        ModelConfig(vocab_size=64, block_size=16, n_layer=1, n_head=2, n_embd=32)
+                        ModelConfig(
+                            vocab_size=64, block_size=16, n_layer=1, n_head=2, n_embd=32, eos_id=2
+                        )
                     )
                     reference = copy.deepcopy(model)
                     ddp = DDP(model)
