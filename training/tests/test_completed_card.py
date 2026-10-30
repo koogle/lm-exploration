@@ -78,7 +78,7 @@ ${sample_text}
             ),
         }
         self.segment = {
-            "total_loss_tokens": 80,
+            "tokens": 80,
             "steps": 4,
             "parameters": 200,
             "data_identity": {"manifest_sha256": "fixture"},
@@ -147,7 +147,7 @@ ${sample_text}
         with self.assertRaisesRegex(ValueError, "strict_load"):
             self.build()
         self.validation["strict_load"] = True
-        self.segment["total_loss_tokens"] += 1
+        self.segment["tokens"] += 1
         with self.assertRaisesRegex(ValueError, "token counts disagree"):
             self.build()
         self.assertFalse(self.output.exists())

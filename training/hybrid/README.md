@@ -165,8 +165,9 @@ and produces identical logits.
 
 Each module declares the optimizer role of the parameters it creates, next to its
 `__init__`: `optimizer()` in [`model.py`](model.py) and [`kda.py`](kda.py)
-yields `(parameter, role)` pairs (helper `declare` in [`roles.py`](roles.py)).
-[`optim.py`](optim.py) collects them by parameter identity:
+yields `(parameter, role)` pairs (helper `declare` in
+[`trainer/roles.py`](../trainer/roles.py)). `trainer.optimizers.RoleOptimizer`
+collects them by parameter identity:
 
 | Role | Optimizer | Parameters |
 | --- | --- | --- |
@@ -178,10 +179,10 @@ Muon is `trainer.optimizers.Muon` (five-step Newton–Schulz with the original
 aspect-ratio scaling); its weight decay is decoupled, `p *= 1 - lr * 0.1`.
 The learning rates are the 124M comparison's
 ([MUON_COMPARISON.md](../distributed/MUON_COMPARISON.md)), starting values for
-the 720M pilot rather than tuned at this scale. `HybridOptimizer` keeps Muon
-groups at `lr_scale = muon_lr / adamw_lr`, so `trainer.optimizers.set_learning_rate`
-applies one schedule factor to both. A parameter that no module declares, one
-declared twice, or a non-matrix declared for Muon raises.
+the 720M pilot rather than tuned at this scale. Every group keeps its base rate
+and `trainer.optimizers.set_learning_rate` applies one schedule factor to all of
+them. A parameter that no module declares, one declared twice, or a non-matrix
+declared for Muon raises.
 
 ## Tokenizer and data recipe
 
@@ -258,20 +259,24 @@ into its cross-entropy/z-loss gradient in place in two passes, instead of severa
 fp32 copies of the [rows, 154,880] block. FlexAttention and fla supply the
 tensor-core attention and KDA kernels.
 
-[`train.py`](train.py) is the torchrun trainer: rank 0 reads `PreparedMixture`
-and broadcasts each batch and every stop decision (stop time, data exhausted or
-late, stop request); every rank derives MTP targets (the model derives its own
-document ids from `eos_id`, which must be the GLM EOS), and DDP averages gradients. Each loss is normalized by its global target count. Rank 0
-writes `metrics.jsonl` (loss, z, MTP loss, learning rate, gradient norm,
-tokens/s, MFU, rows per source), every `eval_every_steps` the held-out loss,
-bits per byte and MTP loss per source with per-layer gate openness and sink
-weight plus sink, gate-bias and KDA-decay parameters, and every
-`sample_every_steps` greedy continuations of fixed prompts. Checkpoints (model,
-optimizer, data cursor, RNG, progress; the last two kept) are written every
-`checkpoint_seconds` and at stop; a run directory resumes from its latest one,
-also with a different GPU count (the global batch is unchanged). With `hf_repo`
-set, bf16 trunk weights, config and metrics go to that private HF model repo
-every `hf_every_tokens` and at the end.
+[`train.py`](train.py) is the hybrid family for the common loop
+([`trainer/loop.py`](../trainer/loop.py), see [trainer/README.md](../trainer/README.md)),
+run as `torchrun -m model_hybrid.train`: rank 0 reads the recipe's
+`PreparedMixture` and scatters each batch; every rank derives MTP targets (the
+model derives its own document ids from `eos_id`, which must be the GLM EOS), and
+DDP averages gradients. Each loss is normalized by its global target count. Rank 0
+writes `metrics.jsonl` (loss, z, MTP loss, learning-rate factor, gradient norm,
+tokens/s, MFU, rows per source, peak memory per rank), and at start, every
+`eval_every_steps` and at the end `validation.jsonl`: held-out loss, bits per byte
+and MTP loss per source with per-layer gate openness and sink weight, sink,
+gate-bias and KDA-decay parameters, and (every `sample_every_steps` and at the end)
+greedy continuations of fixed prompts. Checkpoints (`step-<step>.pt`: model,
+optimizer, data cursor, every rank's RNG; the last `keep_checkpoints` kept) are
+written every `checkpoint_seconds` and at stop, and a run directory resumes from
+its `latest.json` with the same config, GPU count and source files. `report.json`
+closes each session. With `hf_repo` set, bf16 trunk weights and config (under
+`export/`) and the logs go to that private HF model repo every `hf_every_tokens`
+and at the end.
 
 [`modal_train.py`](modal_train.py) runs it on Modal:
 

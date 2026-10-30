@@ -72,7 +72,8 @@ split the model across devices or increase the configured global batch.
    use actual valid-token counts. The cycle repeats with the next global batch.
 
 The production implementation is
-[`backward_batch()` and `train()` in trainer/loop.py](../trainer/loop.py).
+[`train()` in trainer/loop.py](../trainer/loop.py) with the subword family in
+[trainer/subword.py](../trainer/subword.py).
 Input shards remain on the shared `/data` volume and are read only by rank zero
 within a job. Independent jobs can read the same immutable snapshot; each keeps
 its own cursor and output directory. The launcher copies source, tokenizer assets
