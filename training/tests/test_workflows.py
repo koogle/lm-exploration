@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from workflows.checks import check_capacity, check_progress, check_resume
-from workflows.config import load_workflow, resolve_payload
+from workflows.config import load_workflow, resolve_payload, step_tokens
 
 ROOT = Path(__file__).resolve().parents[1] / "workflows"
 
@@ -50,6 +50,30 @@ class WorkflowResolutionTests(unittest.TestCase):
         bundle["model"]["microbatch"] = 7
         with self.assertRaisesRegex(ValueError, "microbatches"):
             resolve_payload(bundle)
+
+    def test_hybrid_workflows_take_their_data_and_target_from_the_run_config(self):
+        bundle = load_workflow(ROOT / "hybrid-h100x8.json")
+        policy, dataset, settings = resolve_payload(bundle)
+        self.assertEqual((policy.family, dataset), ("hybrid", None))
+        self.assertEqual(settings["target_tokens"], bundle["model"]["target_tokens"])
+        self.assertEqual(step_tokens("hybrid", settings), 256 * 4096)
+        other = load_workflow(
+            ROOT / "hybrid-h100x8.json", model_config="hybrid/configs/hybrid-720m-pilot.json"
+        )
+        self.assertEqual(
+            other["model"]["target_tokens"], resolve_payload(other)[2]["target_tokens"]
+        )
+        for change in ({"target_tokens": 5}, {"dataset_config": "datasets/pilot-tokens.json"}):
+            broken = copy.deepcopy(bundle)
+            broken["workflow"].update(change)
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, "owns"):
+                resolve_payload(broken)
+        broken = copy.deepcopy(bundle)
+        broken["model"]["global_rows"] = 12
+        with self.assertRaisesRegex(ValueError, "microbatches"):
+            resolve_payload(broken)
+        with self.assertRaises(ValueError):
+            load_workflow(ROOT / "hybrid-h100x8.json", model_config="../outside.json")
 
     def test_overlapped_preparation_persists_within_the_stall_timeout(self):
         bundle = load_workflow(ROOT / "climbmix-124m-overlap-smoke.json")
@@ -115,3 +139,12 @@ class WorkflowProgressTests(unittest.TestCase):
         check_resume(report, {"initial_validation": report["final_validation"]})
         with self.assertRaises(ValueError):
             check_resume(report, {"initial_validation": {"weighted_loss": 2.0}})
+        # Families whose evaluation is not bit-reproducible compare within a tolerance.
+        hybrid = {"final_validation": {"heldout": {"code": {"loss": 1.0}}, "samples": ["a"]}}
+        close = {"initial_validation": {"heldout": {"code": {"loss": 1.0004}}, "samples": ["b"]}}
+        check_resume(hybrid, close, 1e-3)
+        with self.assertRaises(ValueError):
+            check_resume(hybrid, close)
+        far = {"initial_validation": {"heldout": {"code": {"loss": 1.1}}, "samples": ["a"]}}
+        with self.assertRaises(ValueError):
+            check_resume(hybrid, far, 1e-3)
