@@ -76,12 +76,13 @@ deadline, so the first segments ran on the 2 free H100s. Moving between GPU
 counts uses:
 
 ```sh
-uv run modal run -m model_hybrid.modal_train::stop --run-id hybrid-720m-40b-01
-uv run modal run -m model_hybrid.modal_train::bench --gpus 8
-uv run modal run --detach -m model_hybrid.modal_train::launch --run-id hybrid-720m-40b-01 --gpus 8
+uv run modal run -m workflows.modal_train::stop --run-id <id>
+uv run modal run -m model_hybrid.modal_tools::bench --gpus 8
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
+    --run-id <id> --start pretrain
 ```
 
-The resumed segment keeps the 1,048,576-token global batch. Every launch stops
+Launching the workflow run again continues its unfinished stage. The resumed segment keeps the 1,048,576-token global batch. Every launch stops
 within 24 hours.
 
 Held-out loss (bits per byte); the learning rate is constant until 34B tokens and
@@ -124,3 +125,4 @@ cost are recorded above.
 Studies that spend compute or touch data at scale (token counts, contamination
 screens, benchmarks, pilots, the launch) are run only after the user approves
 each one.
+
