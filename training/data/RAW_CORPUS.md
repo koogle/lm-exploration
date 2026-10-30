@@ -82,7 +82,7 @@ single-pass continuation is every source with `--one-pass`.
     stores the duplicate itself. The growing loader reads stored rows regardless of
     those flags, so every copy yields the same windows, including validation.
   - A wait ends the session at its time limit with a checkpoint and the stop reason
-    `data_wait`; the chain continues even if that session trained nothing. A wait longer
+    `data_late`; the chain continues even if that session trained nothing. A wait longer
     than an hour fails the run, and the NCCL timeout covers that wait.
   - Exact per-source `target_tokens` budgets need final counts, so growing snapshots
     reject them. Each local copy is the full database, and a source keeps reading its

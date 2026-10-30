@@ -9,8 +9,8 @@ from model_100m.model import GPT, ModelConfig
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from distributed.config import DistributedConfig
-from trainer.loop import backward_batch
 from trainer.optimizers import make_optimizer
+from trainer.subword import backward_batch
 
 rank, world = int(os.environ["LOCAL_RANK"]), int(os.environ["WORLD_SIZE"])
 torch.cuda.set_device(rank)

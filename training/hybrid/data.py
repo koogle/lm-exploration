@@ -192,7 +192,11 @@ class PreparedMixture:
         self.names = sorted(recipe["sources"])
         self.orders = {name: training_order(recipe, name) for name in self.names}
         self.state = {name: {"shard": 0, "offset": 0, "tokens": 0} for name in self.names}
+        self.weights = {name: source["weight"] for name, source in recipe["sources"].items()}
         self.loaded = {}
+
+    def _load(self, path):
+        return np.fromfile(path, dtype=np.uint32)
 
     def _tokens(self, name, position):
         if position >= len(self.orders[name]):
@@ -214,7 +218,7 @@ class PreparedMixture:
                 self.orders[name][p] for p in (current, current + 1) if p < len(self.orders[name])
             }
             self.loaded = {k: v for k, v in self.loaded.items() if k[0] != name or k[1] in keep}
-            self.loaded[key] = np.fromfile(bin_path, dtype=np.uint32)
+            self.loaded[key] = self._load(bin_path)
         return self.loaded[key]
 
     def _take(self, name, count):
@@ -241,8 +245,7 @@ class PreparedMixture:
         state["tokens"] += self.context
 
     def next_window(self):
-        weights = self.recipe["sources"]
-        name = min(self.names, key=lambda n: (self.state[n]["tokens"] / weights[n]["weight"], n))
+        name = min(self.names, key=lambda n: (self.state[n]["tokens"] / self.weights[n], n))
         window = self._take(name, self.context + 1)
         self._advance(name, self.context)
         return name, window
@@ -277,10 +280,27 @@ def heldout_windows(recipe, root, name, context, max_documents):
     lengths = np.load(docs_path)[:max_documents]
     count = int(lengths[:, 0].sum())
     tokens = np.fromfile(bin_path, dtype=np.uint32, count=count).astype(np.int64)
+    return (*pack_windows(tokens, context), int(lengths[:, 1].sum()))
+
+
+def pack_windows(stream, context):
+    """int64 inputs and labels [rows, context] covering `stream`; padding targets are -100."""
+    count = len(stream)
     rows = -(-(count - 1) // context)
     padded = np.full(rows * context + 1, -100, dtype=np.int64)
-    padded[:count] = tokens
+    padded[:count] = stream
     inputs = padded[:-1].reshape(rows, context).copy()
     labels = padded[1:].reshape(rows, context).copy()
     inputs[inputs < 0] = 0
-    return inputs, labels, int(lengths[:, 1].sum())
+    return inputs, labels
+
+
+def wait_for_heldout(recipe, mixture):
+    """Wait (up to the mixture's wait_seconds) until every source's held-out shard exists."""
+    for name, source in recipe["sources"].items():
+        meta = shard_paths(mixture.root, name, heldout_index(source))[2]
+        waited = time.monotonic()
+        while not meta.exists():
+            if time.monotonic() - waited > mixture.wait_seconds:
+                raise TimeoutError(f"Held-out shard for {name} was not prepared")
+            time.sleep(15)

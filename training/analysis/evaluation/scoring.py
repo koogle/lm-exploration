@@ -6,14 +6,40 @@ A model is any object with `forward(tokens) -> logits` over a `[batch, time]` Lo
 `encode(text) -> ids` (no special tokens), `decode(ids) -> text`, `bos_token_id`,
 `eos_token_id`, `pad_token_id`, `block_size` and `device`; generation also uses
 `network`, the decoder itself, which the shared sampler (`trainer/rollout.py`) runs.
+`scorer` makes one from a checkpoint loaded by `trainer.checkpoints.load`.
 """
 
 import math
+from types import SimpleNamespace
 
 # Requests per forward pass are bounded by total padded tokens, not by count.
 TOKENS_PER_BATCH = 16384
 # Prompts decoded together by the shared sampler.
 GENERATION_BATCH = 64
+
+
+def scorer(checkpoint):
+    """The model interface above for a loaded checkpoint, in BF16 autocast on CUDA."""
+    import torch
+    from training_data.subword import PAD_TOKEN_ID
+
+    def forward(tokens):
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            return checkpoint.model(tokens)
+
+    tokenizer = checkpoint.tokenizer
+    return SimpleNamespace(
+        forward=forward,
+        network=checkpoint.model,
+        encode=lambda text: tokenizer.encode(text, add_special_tokens=False).ids,
+        decode=lambda ids: tokenizer.decode(ids, skip_special_tokens=True),
+        bos_token_id=checkpoint.special["bos"],
+        eos_token_id=checkpoint.special["eos"],
+        # Padding sits after every scored position.
+        pad_token_id=PAD_TOKEN_ID,
+        block_size=checkpoint.config["block_size"],
+        device="cuda",
+    )
 
 
 def loglikelihoods(model, requests):

@@ -155,7 +155,13 @@ chunked cross-entropy and z-loss.
 the next document) and at the last position. `forward(tokens, labels, mtp_labels)` adds `mtp_loss`, `mtp_ce`,
 `mtp_z` and `mtp_count`. The trainer combines the means as
 `loss / count + mtp_weight(config, progress) * mtp_loss / mtp_count`, where the
-weight decays linearly from 0.3 to 0.1 over training progress.
+weight decays linearly from 0.3 to 0.1 over training progress. With
+`mtp_loss_fraction < 1` (default 1.0), training passes only a uniformly random
+fixed-size fraction of positions through the output layer for the MTP loss (the
+module itself still runs over every position) and divides by the expected count;
+evaluation uses every position. At 0.5 the 720M step on one H100 runs at 57.3K
+tokens/s instead of 54.8K, since the two output-layer projections are about half
+of the model's FLOPs.
 
 Inference does not run the module: `forward(tokens)` returns trunk logits, and
 a model built with `mtp=False` loads the trunk weights (all keys outside `mtp.`)
@@ -165,8 +171,9 @@ and produces identical logits.
 
 Each module declares the optimizer role of the parameters it creates, next to its
 `__init__`: `optimizer()` in [`model.py`](model.py) and [`kda.py`](kda.py)
-yields `(parameter, role)` pairs (helper `declare` in [`roles.py`](roles.py)).
-[`optim.py`](optim.py) collects them by parameter identity:
+yields `(parameter, role)` pairs (helper `declare` in
+[`trainer/roles.py`](../trainer/roles.py)). `trainer.optimizers.RoleOptimizer`
+collects them by parameter identity:
 
 | Role | Optimizer | Parameters |
 | --- | --- | --- |
@@ -178,10 +185,10 @@ Muon is `trainer.optimizers.Muon` (five-step Newton–Schulz with the original
 aspect-ratio scaling); its weight decay is decoupled, `p *= 1 - lr * 0.1`.
 The learning rates are the 124M comparison's
 ([MUON_COMPARISON.md](../distributed/MUON_COMPARISON.md)), starting values for
-the 720M pilot rather than tuned at this scale. `HybridOptimizer` keeps Muon
-groups at `lr_scale = muon_lr / adamw_lr`, so `trainer.optimizers.set_learning_rate`
-applies one schedule factor to both. A parameter that no module declares, one
-declared twice, or a non-matrix declared for Muon raises.
+the 720M pilot rather than tuned at this scale. Every group keeps its base rate
+and `trainer.optimizers.set_learning_rate` applies one schedule factor to all of
+them. A parameter that no module declares, one declared twice, or a non-matrix
+declared for Muon raises.
 
 ## Tokenizer and data recipe
 
@@ -213,17 +220,20 @@ order and packs 4,097-token windows (consecutive windows share one token), each
 from the source furthest below its weight; it is resumable and waits for shards
 that are still being prepared, so training can start while preparation runs.
 
-[`modal_data.py`](modal_data.py) prepares shards on Modal CPUs (8 cores, one call
-per shard, up to 48 in parallel), held-out shards first and then in the order
-training reads them, onto the `lm-exploration-hybrid-data` volume:
+[`modal_data.py`](modal_data.py) is the family's data stage: it prepares shards on
+Modal CPUs (8 cores, one call per shard, up to the stage's `parallel`, 48 by
+default), held-out shards first and then in the order training reads them, onto the
+`lm-exploration-hybrid-data` volume. A workflow runs it as a `data` stage, alone or
+before pretraining (`workflows/hybrid-h100x8.json`):
 
 ```sh
-uv run modal run --detach -m model_hybrid.modal_data::main --run-id <id>
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
+    --run-id <id> --end corpus
 ```
 
-The launch fixes a deadline 24 hours ahead; an independent supervisor cancels
-every recorded call then, and each call has `retries=0` and a timeout bounded by
-the deadline. Finished shards are skipped, so another launch continues. The
+The workflow launch's supervisor cancels every recorded call at the 24-hour
+deadline, and each call has `retries=0` and a timeout bounded by the deadline.
+Finished shards are skipped, so another launch continues. The
 coordinator writes `capacity.json` (train/held-out tokens, documents and drops
 per source) and the screen writes `screen.json`.
 
@@ -234,8 +244,126 @@ screened out). The screen holds 3,225,682 unique 13-grams. At those sizes the
 training shards hold about 31B ClimbMix, 11B code and 4.6B math tokens, above
 the 28B/8B/4B shares.
 
-The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
-placeholders until the 720M configuration is fixed in PR 8.
+## 720M configuration and training
+
+[`configs/hybrid-720m-40b.json`](configs/hybrid-720m-40b.json): width 1536, 16
+layers as 4 x [KDA, KDA, KDA, full] (full attention at 3, 7, 11, 15), 12 query /
+4 KV heads, 12 KDA heads, head dimension 128, SwiGLU 4,224, GLM vocabulary
+154,880, context 4,096, one MTP module. The trunk used for inference has
+707,129,536 parameters; with the MTP module 739,972,556 (`test_hybrid_720m`
+asserts both). Training: 256 x 4,096 = 1,048,576 tokens per step, warmup over
+500M tokens, then constant, then linear decay to 0 over the last 15%; Muon/AdamW
+as above with weight decay 0.1, gradient clipping 1.0, bf16 autocast with fp32
+parameters, `torch.compile`, z-loss 1e-4, MTP weight 0.3 to 0.1.
+
+Full attention trains with FlexAttention (above).
+[`fused_loss.py`](fused_loss.py) computes the output layer, cross-entropy, z-loss
+and their gradients in one chunked pass, without storing or recomputing the
+[tokens, 154,880] logits, for the next-token and MTP heads.
+
+Custom kernels in this family: the fused output-layer loss (+15% training
+throughput on one H100) and, inside it, a CUDA kernel
+([`kernels/softmax_gradient.cu`](kernels/softmax_gradient.cu)) that turns each bf16 logit row
+into its cross-entropy/z-loss gradient in place in two passes, instead of several
+fp32 copies of the [rows, 154,880] block. FlexAttention and fla supply the
+tensor-core attention and KDA kernels.
+
+[`train.py`](train.py) is the hybrid family for the common loop
+([`trainer/loop.py`](../trainer/loop.py), see [trainer/README.md](../trainer/README.md)),
+run as `torchrun -m model_hybrid.train`: rank 0 reads the recipe's
+`PreparedMixture` and scatters each batch; every rank derives MTP targets (the
+model derives its own document ids from `eos_id`, which must be the GLM EOS), and
+DDP averages gradients. Each loss is normalized by its global target count. Rank 0
+writes `metrics.jsonl` (loss, z, MTP loss, learning-rate factor, gradient norm,
+tokens/s, MFU, rows per source, peak memory per rank), and at start, every
+`eval_every_steps` and at the end `validation.jsonl`: held-out loss, bits per byte
+and MTP loss per source with per-layer gate openness and sink weight, sink,
+gate-bias and KDA-decay parameters, and (every `sample_every_steps` and at the end)
+greedy continuations of fixed prompts. Checkpoints (`step-<step>.pt`: model,
+optimizer, data cursor, every rank's RNG; the last `keep_checkpoints` kept) are
+written every `checkpoint_seconds` and at stop, and a run directory resumes from
+its `latest.json` with the same config, GPU count and source files. `report.json`
+closes each session. With `hf_repo` set, bf16 trunk weights and config (under
+`export/`) and the logs go to that private HF model repo every `hf_every_tokens`
+and at the end.
+
+Training runs through the workflows like every model family
+([workflows/README.md](../workflows/README.md)); a stage's `model_config` selects
+the run config:
+
+```sh
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
+    --run-id <id> [--start pretrain]
+uv run modal run -m workflows.modal_train::stop --run-id <id>    # checkpoint and exit
+uv run modal run -m model_hybrid.modal_tools::bench --gpus 1     # 30-minute benchmark
+```
+
+Each session trains in `lm-exploration-hybrid-runs/<stage run>-sNN/` and resumes
+the previous session's final checkpoint; launching the workflow run again continues
+its unfinished stage. A `midtrain` stage starts from the previous stage's exported
+weights (`init_from`). MFU counts 6 x (matmul weights, including both output-layer uses) plus
+attention FLOPs over the mean attended keys, against 989 TFLOPS per H100.
+
+## Byte-level H-Net
+
+[`hnet.py`](hnet.py) wraps the hybrid trunk in one stage of dynamic chunking
+([H-Net](https://arxiv.org/abs/2507.07955), following
+[goombalab/hnet](https://github.com/goombalab/hnet)) and reads UTF-8 bytes instead
+of GLM tokens. The [H-Net comparison plan](../plans/HNET_720M.md) records the
+configuration, the compute matching and the run.
+
+- Bytes 0–255 and EOS 256 are embedded at width `outer_embd` and run through
+  `outer_layers` encoder blocks (KDA mixer and SwiGLU, as in the trunk).
+- The routing module gives each byte a boundary probability
+  `p_t = (1 - cos(W_q x_(t-1), W_k x_t)) / 2`, with `W_q`, `W_k` starting at the
+  identity and `p = 1` on the first byte of every document. Bytes with `p > 0.5`
+  start chunks.
+- The chunk layer gathers the boundary bytes, appends a learned vector up to the
+  main width and runs the main network (`main`: any `HybridConfig` fields) over
+  the chunks, document-masked like the token model. The number of chunks per batch
+  is rounded up to `chunk_bucket`, so `torch.compile` builds one static graph per
+  bucket (`static_compilation`).
+- The dechunk layer smooths chunk outputs with `z_t = p_t h_t + (1 - p_t) z_(t-1)`
+  (`dechunk_ema`, restarting at each document) and repeats each chunk over its
+  bytes. Since every chunk has `p > 0.5`, a chunk 128 positions back carries a
+  weight below 2^-128, so the EMA is computed exactly from 2 x 128-chunk windows
+  with one matrix product each.
+- The decoder input is the dechunked value times a straight-through estimator of
+  the chosen probability (1 in the forward pass) plus a zero-initialized fp32
+  projection of the encoder output; `outer_layers` decoder blocks and an untied
+  byte output layer follow.
+- The loss adds `ratio_loss_weight * N/(N-1) * ((N-1) F G + (1-F)(1-G))`, with `F`
+  the fraction of bytes that start chunks, `G` their mean probability and
+  `N = target_ratio`; it is 1 at `F = G = 1/N`. The model folds it into its summed
+  `loss` (times the target count), so the trainer's objective is unchanged.
+
+[`byte_data.py`](byte_data.py) decodes the prepared GLM shards back to bytes: the
+GLM tokenizer is byte-level BPE without a normalizer, so each token id maps to
+fixed bytes (`token_byte_table`; added tokens to their text, EOS to 256).
+`ByteMixture` reads the shards in `PreparedMixture`'s order, with source weights
+converted from tokens to bytes by each source's bytes per token, so the byte model
+trains on the token model's documents in the same proportions.
+`heldout_byte_windows` builds the same held-out documents and checks that the
+decoded lengths equal the recorded UTF-8 byte counts.
+
+A run config with `"architecture": "hnet"` trains the H-Net through the same
+loop as `HNetFamily` in [`train.py`](train.py); `target_tokens`, `warmup_tokens`,
+the context and batch rows then count bytes. It logs the ratio loss and bytes per
+chunk, held-out bits per byte with bytes per chunk per source, and 192-byte greedy
+samples; MFU counts outer-stage FLOPs per byte and main-network FLOPs per chunk
+(`flops_per_byte`). H-Net runs use expandable CUDA segments, since the main
+network's length varies with the chunk count.
+
+```sh
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hnet-h100x8.json \
+    --run-id <id>
+uv run modal run -m model_hybrid.modal_tools::publish --checkpoint <run>-sNN/step-NNNNNNNNN.pt \
+    --repo <owner/name> [--public] [--card <README.md>]
+```
+
+`publish` uploads one checkpoint of either architecture as bf16 weights, config
+(with its `architecture`), progress and the run's logs, private unless `--public`.
+The published H-Net is [`jfrick/hnet-720m`](https://huggingface.co/jfrick/hnet-720m).
 
 ## Tests
 
@@ -245,13 +373,15 @@ From `training/`:
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
   tests.test_hybrid_sink_gate tests.test_hybrid_kda \
   tests.test_hybrid_mtp tests.test_hybrid_optim \
-  tests.test_hybrid_tokenizer tests.test_hybrid_data -v
+  tests.test_hybrid_tokenizer tests.test_hybrid_data tests.test_hybrid_720m \
+  tests.test_hybrid_fused_loss tests.test_hybrid_hnet -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
 
 ```sh
-uv run modal run -m model_hybrid.modal_checks
+uv run modal run -m model_hybrid.modal_checks::main
+uv run modal run -m model_hybrid.modal_checks::main --only hnet   # the H-Net check alone
 ```
 
 The Modal image uses the CUDA 13.0 devel base with torch 2.14.1.
@@ -267,6 +397,9 @@ bf16 training steps of a small compiled hybrid model with the fla call outside t
 compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
 The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it.
 
+`test_hybrid_720m` checks the configuration, parameter count, schedule, FLOP
+accounting and gate/sink statistics;
+`test_hybrid_fused_loss` checks the fused loss and its gradients against autograd.
 `test_hybrid_data` prepares shards from small parquet files (license filter,
 empty documents, contamination drops, EOS layout, byte counts) and checks the
 mixture's weights, contiguity across shards, resume and the held-out windows;
@@ -289,3 +422,15 @@ fp32 RMSNorm statistics, causality (changing future tokens leaves earlier logits
 bit-identical), attention against an explicit softmax, GQA against MHA with
 duplicated key/value heads, the RoPE base and the chunked loss against
 `F.cross_entropy` plus an explicit z-loss.
+
+`test_hybrid_hnet` compares `dechunk_ema` with the sequential recurrence (across
+blocks and document resets), checks chunk ordering, the loss against an explicit
+cross-entropy, gradients reaching every parameter, the ratio loss, forced
+document-start boundaries, causality and document isolation in fp64, optimizer
+roles, initialization, that the 720M config's main network equals the hybrid
+trunk and its FLOPs per byte match the GLM model, `HNetFamily`'s objective and
+logged ratio loss and bytes per chunk, that the H-Net workflows count bytes, and
+the byte decoding, mixture weights and held-out windows; with the GLM tokenizer
+downloaded, that GLM tokens decode to the exact UTF-8 text. The CUDA check compares
+a compiled bf16 H-Net's loss with its fp64 CPU reference and checks document
+isolation when compiled.

@@ -1,4 +1,4 @@
-"""RL settings, in the sections a recipe writes under `"settings"`:
+"""RL settings, in sections:
 
     {
       "steps": 300,
