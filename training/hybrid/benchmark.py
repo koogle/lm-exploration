@@ -3,8 +3,8 @@
     torchrun --nproc_per_node=<gpus> -m model_hybrid.benchmark --config <run.json> \\
         --steps 20 [--microbatch 4] [--document-tokens 1000] [--profile <out.json>]
 
-Runs the real training step (trainer, optimizer, compile) without checkpoints or
-evaluation. Document lengths are geometric with the given mean, close to the
+Runs the real training step (trainer.loop with the hybrid family: optimizer,
+compile, DDP) without checkpoints or evaluation. Document lengths are geometric with the given mean, close to the
 recipe's mixture (ClimbMix ~600, code ~1,700, math ~1,400 tokens). Prints one JSON
 line per step from the trainer; summarize with `summarize`. With `--profile`, rank 0
 records PROFILE_STEPS steps after PROFILE_SKIP with the PyTorch profiler and writes
@@ -22,8 +22,11 @@ import time
 
 import numpy as np
 
+from distributed.config import DistributedRuntime
+from trainer import loop
+
 from . import tokenizer as glm
-from .train import RunConfig, train
+from .train import HybridFamily, RunConfig
 
 PROFILE_SKIP, PROFILE_STEPS = 6, 3
 # First match wins; names are CUDA kernel names as the profiler reports them.
@@ -56,6 +59,9 @@ class SyntheticMixture:
 
     def state_dict(self):
         return {}
+
+    def load_state_dict(self, state):
+        """Synthetic batches have no cursor."""
 
 
 def summarize(lines, skip=5):
@@ -120,7 +126,7 @@ def main():
         overrides["global_rows"] = args.global_rows
     config = dataclasses.replace(config, **overrides)
     context = config.model["block_size"]
-    on_step, profiler = None, None
+    profiler = None
     if args.profile and int(os.environ.get("RANK", "0")) == 0:
         import torch
 
@@ -136,20 +142,18 @@ def main():
         )
         profiler.start()
 
-        def on_step(progress):
-            profiler.step()
-
     with tempfile.TemporaryDirectory() as run_dir:
-        train(
-            config,
+        mixture = SyntheticMixture(context, config.model["vocab_size"], args.document_tokens)
+        family = HybridFamily(config, run_dir, data=({"synthetic": True}, lambda: mixture))
+        if profiler:
+            family.after_step = lambda data, model, progress: profiler.step()
+        loop.train(
+            family,
             run_dir,
-            time.time() + 3600,
-            max_tokens=args.steps * config.global_rows * context,
-            data_source=lambda recipe: SyntheticMixture(
-                context, config.model["vocab_size"], args.document_tokens
-            ),
-            save_final=False,
-            on_step=on_step,
+            runtime=DistributedRuntime.from_torchrun(os.environ),
+            stop_unix=time.time() + 3600,
+            max_steps=args.steps,
+            save=False,
         )
     if profiler:
         profiler.stop()

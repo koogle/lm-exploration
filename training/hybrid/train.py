@@ -1,41 +1,32 @@
-"""Distributed pretraining loop for the hybrid family (torchrun on one host).
+"""The hybrid family for trainer.loop, and the evaluation and export helpers it uses.
 
-Rank 0 reads the prepared-shard mixture and broadcasts each global batch; every
-rank derives document ids and MTP targets from it, trains its slice with DDP
-(bf16 autocast, fp32 parameters, torch.compile) and HybridOptimizer. The
-objective is mean next-token loss plus the decaying MTP weight times mean MTP
-loss, each normalized by its global target count. Learning rate follows
-warmup-stable-decay over tokens. Rank 0 logs metrics.jsonl, evaluates held-out
-loss and bits per byte per source, records gate and sink statistics, writes
-fixed-prompt samples, and saves full checkpoints at a fixed interval and when the
-stop time arrives. A run directory resumes from its latest checkpoint.
+`HybridFamily` adapts a run config (hybrid/configs/*.json) to the common training
+loop: the hybrid model with role-declared Muon/AdamW, prepared-shard or chat SFT
+data (chat with optional pretraining replay; budget: every window token), the objective mean
+next-token loss plus the decaying MTP weight times mean MTP loss (each over its
+global target count), held-out loss, bits per byte, gate and sink statistics,
+fixed-prompt samples, and bf16
+exports to the run's HF repo every `hf_every_tokens` and at the end.
 
     torchrun --nproc_per_node=8 -m model_hybrid.train --config <run.json> \\
-        --run-dir <dir> --stop-unix <time>
+        --run-dir <dir> --data-root <dir> --stop-unix <time> [--max-tokens N]
+
+A run directory resumes from its latest checkpoint.
 """
 
 import argparse
-import contextlib
 import dataclasses
-import datetime
-import faulthandler
 import json
 import math
 import os
-import random
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
-import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel
-
-from trainer.optimizers import set_learning_rate
 
 from . import documents as doc_utils
 from . import model as hybrid
-from . import optim
 from . import tokenizer as glm
 
 H100_BF16_FLOPS = 989e12
@@ -108,20 +99,6 @@ def mean_attended_keys(positions):
     return float((positions.float() + 1).mean())
 
 
-class Runtime:
-    def __init__(self):
-        self.rank = int(os.environ["RANK"])
-        self.world = int(os.environ["WORLD_SIZE"])
-        self.local = int(os.environ["LOCAL_RANK"])
-        torch.cuda.set_device(self.local)
-        dist.init_process_group("nccl", timeout=datetime.timedelta(hours=1))
-        self.device = torch.device("cuda", self.local)
-
-    @property
-    def main(self):
-        return self.rank == 0
-
-
 def model_config_of(config):
     model_config = hybrid.HybridConfig(
         **{k: tuple(v) if isinstance(v, list) else v for k, v in config.model.items()}
@@ -131,79 +108,8 @@ def model_config_of(config):
     return model_config
 
 
-def build_model(config, device):
-    model_config = model_config_of(config)
-    lm = hybrid.HybridLM(model_config).to(device)
-    return model_config, lm
-
-
-def batch_tensors(batch, eos_id):
-    inputs, labels = batch[0], batch[1]
-    return inputs, labels, doc_utils.mtp_labels(inputs, labels, eos_id)
-
-
-STOP_REASONS = ("", "stop_time", "data_exhausted", "data_late", "stop_requested")
-HANG_DUMP_SECONDS = 1200
 # The launcher creates this file when a graceful stop is requested.
 STOP_FILE = os.environ.get("HYBRID_STOP_FILE", "/tmp/hybrid-stop")
-
-
-def broadcast_batch(runtime, mixture, rows, context, stop_unix):
-    """Rank 0 decides whether to continue and reads the batch; every rank gets both.
-
-    Returns (int64 [2, rows, context] batch or None, row sources, stop reason).
-    """
-    control = torch.zeros(1, dtype=torch.int32, device=runtime.device)
-    names, stacked = None, None
-    if runtime.main:
-        if time.time() >= stop_unix:
-            control[0] = 1
-        elif os.path.exists(STOP_FILE):
-            control[0] = 4
-        else:
-            try:
-                inputs, labels, names = mixture.next_batch(rows)
-                stacked = np.stack((inputs, labels)).astype(np.int32)
-            except StopIteration:
-                control[0] = 2
-            except TimeoutError:
-                control[0] = 3
-    dist.broadcast(control, 0)
-    if control.item():
-        return None, None, STOP_REASONS[control.item()]
-    buffer = torch.empty(2, rows, context, dtype=torch.int32, device=runtime.device)
-    if runtime.main:
-        buffer.copy_(torch.from_numpy(stacked))
-    dist.broadcast(buffer, 0)
-    return buffer.long(), names, ""
-
-
-def checkpoint_paths(run_dir):
-    return sorted(Path(run_dir, "checkpoints").glob("step-*.pt"))
-
-
-def save_checkpoint(run_dir, lm, optimizer, mixture_state, progress, keep):
-    folder = Path(run_dir, "checkpoints")
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"step-{progress['step']:07d}.pt"
-    state = {
-        "model": lm.state_dict(),
-        "optimizer": optimizer.state_dict(),
-        "data": mixture_state,
-        "progress": progress,
-        "rng": {
-            "python": random.getstate(),
-            "numpy": np.random.get_state(),
-            "torch": torch.get_rng_state(),
-            "cuda": torch.cuda.get_rng_state(),
-        },
-    }
-    torch.save(state, path.with_suffix(".tmp"))
-    path.with_suffix(".tmp").rename(path)
-    (folder / "latest.json").write_text(json.dumps({"path": path.name, **progress}) + "\n")
-    for old in checkpoint_paths(run_dir)[:-keep]:
-        old.unlink()
-    return path
 
 
 def gate_sink_statistics(lm):
@@ -284,7 +190,8 @@ def samples(lm, tokenizer, device, prompts=SAMPLE_PROMPTS, stop_ids=(), new_toke
 
 
 def upload_export(lm, model_config, run_dir, progress, repo):
-    """bf16 trunk weights, config and metrics to the HF model repo, in a background thread."""
+    """bf16 trunk weights and config under `<run_dir>/export/`, and to the HF model repo
+    with the run's metrics in a background thread."""
     import threading
 
     from safetensors.torch import save_file
@@ -303,7 +210,7 @@ def upload_export(lm, model_config, run_dir, progress, repo):
     }
     (folder / "config.json").write_text(json.dumps(config, indent=2) + "\n")
     (folder / "progress.json").write_text(json.dumps(progress, indent=2) + "\n")
-    metrics = Path(run_dir, "metrics.jsonl")
+    logs = [Path(run_dir, name) for name in ("metrics.jsonl", "validation.jsonl")]
 
     def push():
         from huggingface_hub import HfApi
@@ -311,228 +218,13 @@ def upload_export(lm, model_config, run_dir, progress, repo):
         api = HfApi()
         api.create_repo(repo, private=True, exist_ok=True)
         api.upload_folder(repo_id=repo, folder_path=folder, path_in_repo=folder.name)
-        if metrics.exists():
-            api.upload_file(path_or_fileobj=metrics, path_in_repo="metrics.jsonl", repo_id=repo)
+        for log in logs:
+            if log.exists():
+                api.upload_file(path_or_fileobj=log, path_in_repo=log.name, repo_id=repo)
 
     thread = threading.Thread(target=push, daemon=False)
     thread.start()
     return thread
-
-
-def train(
-    config,
-    run_dir,
-    stop_unix,
-    max_tokens=None,
-    data_source=None,
-    save_final=True,
-    on_step=None,
-    heldout_source=None,
-    sample_prompts=SAMPLE_PROMPTS,
-    sample_stop_ids=(),
-    sample_new_tokens=48,
-):
-    """Train until target/max tokens, data exhaustion or stop_unix; returns final progress.
-
-    `heldout_source(recipe, mixture, context)` (rank 0) returns the held-out
-    windows {name: (inputs, labels, bytes)}; `on_step(progress)` runs on every rank
-    after each optimizer step.
-    """
-    runtime = Runtime()
-    torch.manual_seed(config.seed)
-    torch.backends.cuda.matmul.allow_tf32 = True
-    run_dir = Path(run_dir)
-    model_config, lm = build_model(config, runtime.device)
-    settings = {k: tuple(v) if isinstance(v, list) else v for k, v in config.optimizer.items()}
-    optimizer = optim.HybridOptimizer(lm, optim.OptimizerConfig(**settings), fused=True)
-    context = model_config.block_size
-    recipe = json.loads(Path(config.recipe).read_text()) if config.recipe else None
-    mixture = data_source(recipe) if data_source else None
-    progress = {"step": 0, "tokens": 0, "seconds": 0.0}
-    latest = checkpoint_paths(run_dir)
-    if latest:
-        state = torch.load(latest[-1], map_location=runtime.device, weights_only=False)
-        lm.load_state_dict(state["model"])
-        optimizer.load_state_dict(state["optimizer"])
-        progress = state["progress"]
-        if mixture is not None and runtime.main:
-            mixture.load_state_dict(state["data"])
-        random.setstate(state["rng"]["python"])
-        np.random.set_state(state["rng"]["numpy"])
-        torch.set_rng_state(state["rng"]["torch"].cpu())
-        torch.cuda.set_rng_state(state["rng"]["cuda"].cpu())
-        del state
-    elif config.init_from:
-        from safetensors.torch import load_file
-
-        lm.load_state_dict(load_file(Path(config.init_from) / "model.safetensors", device="cpu"))
-    compiled = torch.compile(lm) if config.compile else lm
-    ddp = DistributedDataParallel(compiled, device_ids=[runtime.local], broadcast_buffers=False)
-    rows_per_rank = config.global_rows // runtime.world
-    if rows_per_rank * runtime.world != config.global_rows or rows_per_rank % config.microbatch:
-        raise ValueError("global_rows must split evenly into ranks and microbatches")
-    accumulation = rows_per_rank // config.microbatch
-    tokens_per_step = config.global_rows * context
-    limit = min(config.target_tokens, max_tokens or config.target_tokens)
-    tokenizer = heldout = None
-    if runtime.main:
-        run_dir.mkdir(parents=True, exist_ok=True)
-        (run_dir / "config.json").write_text(
-            json.dumps(dataclasses.asdict(config), indent=2) + "\n"
-        )
-        if recipe and heldout_source:
-            heldout = heldout_source(recipe, mixture, context)
-            tokenizer = glm.load()
-    metrics_file = open(run_dir / "metrics.jsonl", "a") if runtime.main else None  # noqa: SIM115
-    last_checkpoint, uploads = time.monotonic(), []
-    next_upload = (progress["tokens"] // config.hf_every_tokens + 1) * config.hf_every_tokens
-    params = sum(p.numel() for p in lm.parameters())
-    stop_reason = "target" if limit == config.target_tokens else "token_limit"
-
-    def checkpoint():
-        if runtime.main:
-            state = mixture.state_dict() if mixture is not None else None
-            save_checkpoint(run_dir, lm, optimizer, state, dict(progress), config.keep_checkpoints)
-
-    while progress["tokens"] + tokens_per_step <= limit:
-        # A step that takes this long is stuck: print every thread's stack (repeatedly).
-        faulthandler.dump_traceback_later(HANG_DUMP_SECONDS, repeat=True)
-        start = time.perf_counter()
-        batch, names, reason = broadcast_batch(
-            runtime, mixture, config.global_rows, context, stop_unix
-        )
-        if reason:
-            stop_reason = reason
-            break
-        inputs, labels, mtp_labels = batch_tensors(batch, model_config.eos_id)
-        ntp_count = (labels != -100).sum()
-        # Expected number of sampled valid MTP targets (see HybridLM.forward).
-        mtp_count = (mtp_labels != -100).sum().clamp_min(1) * model_config.mtp_loss_fraction
-        fraction = progress["tokens"] / config.target_tokens
-        mtp_weight = hybrid.mtp_weight(model_config, fraction) if model_config.mtp else 0.0
-        lr_factor = learning_rate_factor(config, progress["tokens"] + tokens_per_step)
-        set_learning_rate(optimizer, lr_factor * optimizer.base_lr)
-        progress["lr_factor"] = lr_factor
-        sums = torch.zeros(3, device=runtime.device)
-        mine = slice(runtime.rank * rows_per_rank, (runtime.rank + 1) * rows_per_rank)
-        for micro in range(accumulation):
-            rows = slice(
-                mine.start + micro * config.microbatch, mine.start + (micro + 1) * config.microbatch
-            )
-            sync = micro == accumulation - 1
-            with contextlib.nullcontext() if sync else ddp.no_sync():
-                with torch.autocast("cuda", dtype=torch.bfloat16):
-                    losses = ddp(
-                        inputs[rows],
-                        labels[rows],
-                        mtp_labels[rows] if model_config.mtp else None,
-                    )
-                objective = losses["loss"] / ntp_count
-                if model_config.mtp:
-                    objective = objective + mtp_weight * losses["mtp_loss"] / mtp_count
-                (objective * runtime.world).backward()
-            sums += torch.stack(
-                (
-                    losses["ce"].detach(),
-                    losses["z"].detach(),
-                    losses["mtp_ce"].detach()
-                    if model_config.mtp
-                    else torch.zeros((), device=runtime.device),
-                )
-            )
-        dist.all_reduce(sums)
-        norm = torch.nn.utils.clip_grad_norm_(lm.parameters(), config.gradient_clip)
-        optimizer.step()
-        optimizer.zero_grad(set_to_none=True)
-        loss = (sums[0] / ntp_count).item()
-        if not math.isfinite(loss) or not math.isfinite(norm.item()):
-            stop_reason = "non_finite"
-            break
-        elapsed = time.perf_counter() - start
-        progress["step"] += 1
-        progress["tokens"] += tokens_per_step
-        progress["seconds"] += elapsed
-        if on_step:
-            on_step(progress)
-        if runtime.main:
-            record = None
-            if progress["step"] % config.log_every_steps == 0 or progress["step"] == 1:
-                documents = doc_utils.document_ids(inputs[:8], model_config.eos_id)
-                keys = mean_attended_keys(doc_utils.document_positions(documents))
-                rate = tokens_per_step / elapsed
-                record = {
-                    "step": progress["step"],
-                    "tokens": progress["tokens"],
-                    "loss": loss,
-                    "z": (sums[1] / ntp_count).item(),
-                    "mtp_loss": (sums[2] / mtp_count).item() if model_config.mtp else None,
-                    "mtp_weight": mtp_weight,
-                    "lr_factor": lr_factor,
-                    "grad_norm": norm.item(),
-                    "tokens_per_second": rate,
-                    "mfu": rate
-                    * flops_per_token(model_config, lm, keys)
-                    / (runtime.world * H100_BF16_FLOPS),
-                    "sources": {n: names.count(n) for n in sorted(set(names))} if names else None,
-                }
-                print(json.dumps(record), flush=True)
-            if heldout and progress["step"] % config.eval_every_steps == 0:
-                record = (record or {"step": progress["step"], "tokens": progress["tokens"]}) | {
-                    "heldout": evaluate(lm, heldout, runtime.device, model_config.eos_id),
-                    "parameters": gate_sink_statistics(lm),
-                }
-            if tokenizer and progress["step"] % config.sample_every_steps == 0:
-                record = (record or {"step": progress["step"]}) | {
-                    "samples": samples(
-                        lm,
-                        tokenizer,
-                        runtime.device,
-                        sample_prompts,
-                        sample_stop_ids,
-                        sample_new_tokens,
-                    )
-                }
-            if record:
-                metrics_file.write(json.dumps(record) + "\n")
-                metrics_file.flush()
-        if time.monotonic() - last_checkpoint >= config.checkpoint_seconds:
-            checkpoint()
-            last_checkpoint = time.monotonic()
-        if runtime.main and config.hf_repo and progress["tokens"] >= next_upload:
-            uploads.append(upload_export(lm, model_config, run_dir, dict(progress), config.hf_repo))
-            next_upload += config.hf_every_tokens
-    if save_final and stop_reason != "non_finite":
-        checkpoint()
-    if runtime.main:
-        if heldout:
-            final = {
-                "step": progress["step"],
-                "tokens": progress["tokens"],
-                "final": True,
-                "heldout": evaluate(lm, heldout, runtime.device, model_config.eos_id),
-                "parameters": gate_sink_statistics(lm),
-            }
-            if tokenizer:
-                final["samples"] = samples(
-                    lm,
-                    tokenizer,
-                    runtime.device,
-                    sample_prompts,
-                    sample_stop_ids,
-                    sample_new_tokens,
-                )
-            metrics_file.write(json.dumps(final) + "\n")
-            metrics_file.close()
-        if config.hf_repo and stop_reason == "target":
-            uploads.append(upload_export(lm, model_config, run_dir, dict(progress), config.hf_repo))
-        for thread in uploads:
-            thread.join()
-        summary = {**progress, "stop_reason": stop_reason, "parameters": params}
-        (run_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-        print(json.dumps({"summary": summary}), flush=True)
-    dist.barrier()
-    dist.destroy_process_group()
-    return progress
 
 
 def heldout_windows(recipe, root, name, context, max_documents):
@@ -570,39 +262,37 @@ def pretraining_heldout(config):
     return heldout
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=True)
-    parser.add_argument("--run-dir", required=True)
-    parser.add_argument("--data-root", required=True)
-    parser.add_argument("--stop-unix", type=float, required=True)
-    parser.add_argument("--max-tokens", type=int)
-    args = parser.parse_args()
-    config = RunConfig.load(args.config)
-    recipe = json.loads(Path(config.recipe).read_text())
-    root = Path(args.data_root) / recipe["name"]
-    if recipe.get("format") == "chat-sft":
-        from training_data.packed_shards import PreparedMixture
+def recipe_data(config, data_root):
+    """(identity, mixture factory, held-out factory(mixture, context), chat) for a run
+    config's recipe.
 
+    Chat SFT recipes may replay an earlier pretraining recipe's prepared shards and
+    hold out conversations per subset plus the replayed sources' held-out shards;
+    pretraining recipes hold out per source.
+    """
+    from training_data.packed_shards import PreparedMixture
+
+    recipe = json.loads(Path(config.recipe).read_text())
+    root = Path(data_root) / recipe["name"]
+    replay = recipe.get("replay")
+    if recipe.get("format") == "chat-sft":
         from . import sft_data
 
-        replay = recipe.get("replay")
         if replay:
             replay_recipe = json.loads(
                 (Path(config.recipe).parent / f"{replay['recipe']}.json").read_text()
             )
-            replay_root = Path(args.data_root) / replay_recipe["name"]
+            replay_root = Path(data_root) / replay_recipe["name"]
             replay_rows = round(config.global_rows * replay["fraction"])
 
-        def data_source(recipe):
+        def mixture():
             chat = sft_data.ChatMixture(recipe, root, config.seed)
             if not replay:
                 return chat
             pretraining = PreparedMixture(replay_recipe, replay_root)
             return sft_data.ReplayMixture(chat, pretraining, replay_rows)
 
-        def heldout_source(recipe, mixture, context):
-            """Chat held-out per file, plus the pretraining held-out sources under replay."""
+        def heldout(mixture, context):
             count = config.eval_documents["chat"]
             out = {
                 name: windows
@@ -613,22 +303,258 @@ def main():
                 if replay and name in replay_recipe["sources"]:
                     out[name] = heldout_windows(replay_recipe, replay_root, name, context, count)
             return out
-
-        options = {
-            "data_source": data_source,
-            "heldout_source": heldout_source,
-            "sample_prompts": sft_data.sample_prompts(),
-            "sample_stop_ids": sft_data.STOP_IDS,
-            "sample_new_tokens": 160,
-        }
     else:
-        from training_data.packed_shards import PreparedMixture
+        own = pretraining_heldout(config)
 
-        options = {
-            "data_source": lambda recipe: PreparedMixture(recipe, root),
-            "heldout_source": pretraining_heldout(config),
+        def mixture():
+            return PreparedMixture(recipe, root)
+
+        def heldout(mixture, context):
+            return own(recipe, mixture, context)
+
+    identity = {
+        "recipe": recipe,
+        "replay": replay["recipe"] if replay else None,
+        "tokenizer_sha256": glm.SHA256,
+    }
+    return identity, mixture, heldout, recipe.get("format") == "chat-sft"
+
+
+class HybridData:
+    """A recipe mixture for the loop: every window token counts toward the budget."""
+
+    def __init__(self, identity, mixture, state):
+        self.identity, self.mixture = identity, mixture
+        if state is not None:
+            mixture.load_state_dict(state)
+
+    def next_batch(self, rows):
+        inputs, labels, names = self.mixture.next_batch(rows)
+        return inputs, labels, names, int(inputs.size)
+
+    def state_dict(self):
+        return self.mixture.state_dict()
+
+    def load_state_dict(self, state):
+        self.mixture.load_state_dict(state)
+
+    def close(self):
+        pass
+
+
+class HybridFamily:
+    """A hybrid run config for trainer.loop, training into `output` (its exports go to
+    `output/export/`); `data` = (identity, mixture factory) overrides the recipe
+    (synthetic benchmarks), and then nothing is held out."""
+
+    def __init__(self, config, output, data_root=None, data=None):
+        self.config, self.output = config, Path(output)
+        self.settings = dataclasses.asdict(config)
+        self.model_config = model_config_of(config)
+        self.global_rows, self.microbatch = config.global_rows, config.microbatch
+        self.target_tokens, self.gradient_clip = config.target_tokens, config.gradient_clip
+        self.seed, self.log_every = config.seed, config.log_every_steps
+        self.evaluate_every = config.eval_every_steps
+        self.checkpoint_every, self.checkpoint_seconds = 0, config.checkpoint_seconds
+        self.keep_checkpoints = config.keep_checkpoints
+        self.collective_timeout_seconds = 3600
+        if data is None:
+            identity, factory, self.heldout_factory, chat = recipe_data(config, data_root)
+        else:
+            (identity, factory), self.heldout_factory, chat = data, None, False
+        self.identity, self.factory = identity, factory
+        if chat:
+            from . import sft_data
+
+            self.sampling = (sft_data.sample_prompts(), sft_data.STOP_IDS, 160)
+        else:
+            self.sampling = (SAMPLE_PROMPTS, (), 48)
+        self.lm, self.uploads = None, []
+        self.next_upload = None
+
+    def learning_rate_factor(self, tokens):
+        return learning_rate_factor(self.config, tokens)
+
+    def build(self, device):
+        torch.backends.cuda.matmul.allow_tf32 = True
+        self.lm = hybrid.HybridLM(self.model_config).to(device)
+        return self.lm
+
+    def initialize(self, model):
+        """An `init_from` export's trunk weights start a fresh run (e.g. SFT)."""
+        if self.config.init_from:
+            from safetensors.torch import load_file
+
+            path = Path(self.config.init_from) / "model.safetensors"
+            model.load_state_dict(load_file(path, device="cpu"))
+
+    def compile(self, model):
+        return torch.compile(model) if self.config.compile else model
+
+    def make_optimizer(self, model):
+        from trainer.optimizers import OptimizerConfig, RoleOptimizer
+
+        settings = {
+            k: tuple(v) if isinstance(v, list) else v for k, v in self.config.optimizer.items()
         }
-    train(config, args.run_dir, args.stop_unix, args.max_tokens, **options)
+        return RoleOptimizer(model, OptimizerConfig(**settings), fused=True)
+
+    def open_data(self, deadline, state):
+        return HybridData(self.identity, self.factory(), state)
+
+    def metadata(self):
+        return {
+            "architecture": {
+                "module": hybrid.HybridConfig.__module__,
+                "config": dataclasses.asdict(self.model_config),
+            },
+            "tokenizer": glm.SOURCE,
+        }
+
+    def source_files(self):
+        from training_data import mixture, packed_shards
+
+        from . import (
+            chat,
+            cuda_extension,
+            documents,
+            fused_loss,
+            kda,
+            kda_convolution,
+            sft_data,
+            softmax_kernel,
+        )
+        from . import model as hybrid_model
+        from . import tokenizer as hybrid_tokenizer
+
+        modules = (
+            chat,
+            cuda_extension,
+            documents,
+            fused_loss,
+            hybrid_model,
+            kda,
+            kda_convolution,
+            sft_data,
+            softmax_kernel,
+            hybrid_tokenizer,
+        )
+        files = {f"hybrid.{Path(m.__file__).stem}": Path(m.__file__) for m in modules}
+        return {
+            "family": Path(__file__),
+            **files,
+            "packed_shards": Path(packed_shards.__file__),
+            "mixture": Path(mixture.__file__),
+        }
+
+    def branchable(self, saved):
+        return False
+
+    def check_resume(self, saved):
+        """Resume needs only the loop's checks."""
+
+    def heldout(self, data):
+        if self.heldout_factory is None:
+            return None
+        windows = self.heldout_factory(data.mixture, self.model_config.block_size)
+        return {"windows": windows, "tokenizer": glm.load()}
+
+    def evaluate(self, model, heldout, progress, final):
+        if heldout is None:
+            return {}
+        device = next(model.parameters()).device
+        result = {
+            "heldout": evaluate(model, heldout["windows"], device, self.model_config.eos_id),
+            "parameters": gate_sink_statistics(model),
+        }
+        if final or progress["step"] % self.config.sample_every_steps == 0:
+            prompts, stop_ids, new_tokens = self.sampling
+            result["samples"] = samples(
+                model, heldout["tokenizer"], device, prompts, stop_ids, new_tokens
+            )
+        return result
+
+    def prepare(self, inputs, labels):
+        counts = {"ntp": (labels != -100).sum()}
+        if not self.model_config.mtp:
+            return {}, counts
+        targets = doc_utils.mtp_labels(inputs, labels, self.model_config.eos_id)
+        return {"mtp_labels": targets}, counts | {"mtp": (targets != -100).sum()}
+
+    def loss(self, model, inputs, labels, extras, counts, progress):
+        losses = model(inputs, labels, extras.get("mtp_labels"))
+        objective = losses["loss"] / counts["ntp"]
+        sums = {"ce": losses["ce"], "z": losses["z"]}
+        if self.model_config.mtp:
+            # Expected number of sampled valid MTP targets (see HybridLM.forward).
+            mtp_count = counts["mtp"].clamp_min(1) * self.model_config.mtp_loss_fraction
+            weight = hybrid.mtp_weight(self.model_config, progress["tokens"] / self.target_tokens)
+            objective = objective + weight * losses["mtp_loss"] / mtp_count
+            sums["mtp_ce"] = losses["mtp_ce"]
+        return objective, sums
+
+    def log(self, sums, counts):
+        row = {
+            "loss": float(sums["ce"] / counts["ntp"]),
+            "z": float(sums["z"] / counts["ntp"]),
+        }
+        if self.model_config.mtp:
+            mtp_count = counts["mtp"].clamp_min(1) * self.model_config.mtp_loss_fraction
+            row["mtp_loss"] = float(sums["mtp_ce"] / mtp_count)
+        return row
+
+    def step_metrics(self, inputs, seconds, budget, world):
+        documents = doc_utils.document_ids(inputs[:8], self.model_config.eos_id)
+        keys = mean_attended_keys(doc_utils.document_positions(documents))
+        flops = flops_per_token(self.model_config, self.lm, keys)
+        return {"mfu": budget / seconds * flops / (world * H100_BF16_FLOPS)}
+
+    def after_step(self, data, model, progress):
+        """A bf16 export to the HF repo every `hf_every_tokens`."""
+        config = self.config
+        if not config.hf_repo:
+            return
+        if self.next_upload is None:
+            done = progress["tokens"] - progress["tokens"] % config.hf_every_tokens
+            self.next_upload = done + config.hf_every_tokens
+        if progress["tokens"] >= self.next_upload:
+            self.uploads.append(
+                upload_export(model, self.model_config, self.output, progress, config.hf_repo)
+            )
+            self.next_upload += config.hf_every_tokens
+
+    def finish(self, data, model, progress, reason):
+        """The final export when the run reached its target; waits for every upload."""
+        exported = None
+        if self.config.hf_repo and reason == "token_limit":
+            self.uploads.append(
+                upload_export(model, self.model_config, self.output, progress, self.config.hf_repo)
+            )
+            exported = f"tokens-{progress['tokens']:012d}"
+        for thread in self.uploads:
+            thread.join()
+        return {"export": exported}
+
+
+def main():
+    from distributed.config import DistributedRuntime
+    from trainer import loop
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--run-dir", required=True)
+    parser.add_argument("--data-root", required=True)
+    parser.add_argument("--stop-unix", type=float, required=True)
+    parser.add_argument("--max-tokens", type=int)
+    args = parser.parse_args()
+    loop.train(
+        HybridFamily(RunConfig.load(args.config), args.run_dir, args.data_root),
+        args.run_dir,
+        runtime=DistributedRuntime.from_torchrun(os.environ),
+        stop_unix=args.stop_unix,
+        stop_tokens=args.max_tokens,
+        stop_file=STOP_FILE,
+    )
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ class ScriptLayoutTests(unittest.TestCase):
             "tokenizer.package_tokenizer_research": "tokenizer/package_tokenizer_research.py",
             "tokenizer.verify_tokenizer_publication": "tokenizer/verify_tokenizer_publication.py",
             "trainer.loop": "trainer/loop.py",
+            "trainer.subword": "trainer/subword.py",
             "distributed.config": "distributed/config.py",
             "distributed.modal_train": "distributed/modal_train.py",
             "distributed.modal_checks": "distributed/modal_checks.py",

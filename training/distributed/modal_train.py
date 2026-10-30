@@ -81,7 +81,7 @@ def worker(
             "--standalone",
             f"--nproc_per_node={config.world_size}",
             "-m",
-            "trainer.loop",
+            "trainer.subword",
             "--config",
             str(request),
             "--manifest",
