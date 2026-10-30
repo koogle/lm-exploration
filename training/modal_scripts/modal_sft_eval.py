@@ -75,20 +75,14 @@ def generate(checkpoint, rows, deadline):
         load_frozen,
     )
 
-    from trainer.sft_recipe import checkpoint as checked
+    from trainer.checkpoints import describe
+    from workflows.checks import checkpoint as checked
 
     check_deadline(deadline)
     run_volume.reload()
     path = Path("/runs") / checked(checkpoint)
     saved = torch.load(path, map_location="cpu", weights_only=False)
-    if saved["format"] == "scholarly-ddp-v1":
-        cfg = {k: saved["config"][k] for k in ("n_layer", "n_head", "n_embd")}
-        cfg.update(vocab_size=32768, block_size=saved["config"]["context"], eos_id=EOS_TOKEN_ID)
-    elif saved["format"] == "repair-sft-v2":
-        cfg = saved["model_config"]
-    else:
-        raise ValueError("Unknown checkpoint format")
-    model = GPT(ModelConfig(**cfg)).cuda().eval()
+    model = GPT(ModelConfig(**describe(saved).model_config)).cuda().eval()
     model.load_state_dict(saved["model"])
     del saved
     tokenizer = load_frozen()
@@ -195,7 +189,7 @@ def grade(row, code, deadline):
 
 @app.local_entrypoint()
 def main(dataset: str, checkpoints: str, output: str = "", limit_per_language: int = 2):
-    from trainer.sft_recipe import parse_checkpoints
+    from workflows.checks import parse_checkpoints
 
     named = parse_checkpoints(checkpoints)
     deadline = time.time() + LAUNCH_LIMIT_SECONDS

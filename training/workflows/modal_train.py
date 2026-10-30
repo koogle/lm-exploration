@@ -537,10 +537,16 @@ def main(
     qualify: int = 0,
 ):
     """Launch any stage. Post-training stages take `--run-id` and `--resume` (SFT) as
-    overrides and `--qualify N` (SFT resume qualification); pretraining needs `--run-id`."""
+    overrides and `--qualify N` (SFT resume qualification); pipelines and pretraining need
+    `--run-id`."""
     from workflows.config import workflow_stage
 
     stage = workflow_stage(workflow)
+    if stage == "pipeline":
+        if not run_id or resume or qualify:
+            raise ValueError("A pipeline takes --run-id only; relaunching it continues it")
+        modal_post_train.launch_pipeline(workflow, run_id)
+        return
     if stage != "pretrain":
         if version or model_config or dataset_config or resume_preparation or phase_from:
             raise ValueError("Those options select pretraining data and models")

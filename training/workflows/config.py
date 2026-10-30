@@ -1,7 +1,7 @@
 """Resolve a selectable workflow, model configuration and dataset configuration.
 
-Every workflow file names its `stage`: `pretrain` (resolved here), `sft` or `rl` (a
-post-training recipe, `trainer/sft_recipe.py` and `trainer/rl/recipe.py`).
+Every workflow file names its `stage`: `pretrain` (resolved here), a post-training stage
+(`workflows/stages/`), or `pipeline` (`pipeline.py`).
 """
 
 import hashlib
@@ -26,13 +26,13 @@ def relative_json(value):
     return path
 
 
-STAGES = ("pretrain", "sft", "rl")
-
-
 def workflow_stage(path):
+    from .stages import STAGES
+
+    stages = ("pretrain", "pipeline", *STAGES)
     stage = json.loads(Path(path).read_text()).get("stage")
-    if stage not in STAGES:
-        raise ValueError(f"A workflow names its stage, one of {STAGES}")
+    if stage not in stages:
+        raise ValueError(f"A workflow names its stage, one of {stages}")
     return stage
 
 
