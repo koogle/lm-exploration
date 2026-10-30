@@ -116,3 +116,40 @@ checkpoint and the recorded metrics are the completed launch's only.
 
 Outputs (metrics, configs, capacity, benchmarks, LiveCodeBench):
 `training/results/hybrid-720m-mid32k-01/` in `jfrick/lm-exploration-results`.
+
+## Agentic SFT pilot (`agentic-sft-v1`, 2026-10-29)
+
+Agent episodes on the 506 verified PR tasks (`hybrid/agent.py`, `hybrid/modal_agentic.py`):
+the agent starts from the parent revision with the commit's tests and git history
+removed, has bash, read/edit/write file and submit tools (40 turns), and is graded by the
+commit's hidden tests in a separate sandbox (resolved: every fail-to-pass and
+pass-to-pass test passes). Repositories are split by owner: 179 tasks from 8
+repositories are held out.
+
+### Teacher: GLM-5.3 (medium reasoning effort)
+
+| | Episodes | Resolved |
+| --- | ---: | ---: |
+| Held-out repositories (one attempt) | 179 | 113 (63.1%) |
+| Training repositories (two attempts) | 654 | 370 (56.6%), 211 of 327 tasks |
+
+$45.66 for 833 episodes (265M prompt tokens), 85 minutes. A 12-task pilot at low effort
+and 30 turns resolved 3.
+
+### Student: `hybrid-720m-agentic-sft-02`
+
+From the 32K mid-training export: the 356 resolved training-repository trajectories
+that fit 32K (4.6M tokens, read 4 times) with a seeded 30% of chat-sft-v1 and 25%
+replay of `hybrid-40b-v1`, 400M tokens, 381 steps in 21 minutes on 8×H100. The first
+launch (`-01`) failed out of memory on one rank at step 45 with 8.4 GB reserved but
+unallocated; the image now uses expandable allocator segments.
+
+**Held-out resolved: 0 of 179.** The format is learned: 99.8% of 6,507 assistant turns
+are well-formed tool calls. The behavior is not: 98.6% of calls are bash exploration
+(grep, sed), 70% of calls repeat an earlier call in the same episode, 28 edits were
+attempted (about half with text that does not occur in the file), 5 episodes produced
+a patch and none submitted. 145 episodes ended at the turn limit, 20 at the context
+limit and 14 by answering without a tool call.
+
+Outputs (trajectories, summaries, run metrics, the failed launch's log):
+`training/results/agentic-sft-pilot/` in `jfrick/lm-exploration-results`.
