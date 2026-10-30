@@ -21,6 +21,9 @@ than small CUDA correctness checks.
 | 8 | 720M config, throughput benchmark, ~200M-token pilot | Planned |
 | 9 | 40B launch on 8×H100 in 24-hour segments | Planned |
 
+A side pilot of speedrun-style n-gram hints on this architecture is not part of
+the plan; see its [report](../references/n-gram-hints-2026-10-29.md).
+
 Studies that spend compute or touch data at scale (token counts, contamination
 screens, benchmarks, pilots, the launch) are run only after the user approves
 each one.
