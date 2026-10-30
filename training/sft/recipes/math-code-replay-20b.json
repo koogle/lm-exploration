@@ -1,4 +1,5 @@
 {
+  "stage": "sft",
   "name": "math-code-replay-20b",
   "description": "Joint math and code SFT (GSM8K + MetaMathQA; OpenCodeInstruct + MBPP problems with Qwen3.5 solutions) with pretraining replay of the WSD 20B end point; stage 0 before RL",
   "run_id": "math-code-sft-replay-20b-s0-r02",

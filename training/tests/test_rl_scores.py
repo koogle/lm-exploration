@@ -2,7 +2,8 @@ import unittest
 
 import torch
 
-from trainer.rl.algorithms import GRPO, Tokens
+from trainer.rl.batch import Tokens
+from trainer.rl.on_policy.grpo import GRPO
 from trainer.rl.scores import sampler_kl
 
 
@@ -80,7 +81,7 @@ class ScoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             Settings.from_dict(
                 {
-                    "algorithm": {"name": "grpo", "score": "centered"},
+                    "algorithm": {"name": "on_policy/grpo", "score": "centered"},
                     "rollouts": {"temperature": 0.7},
                 }
             )

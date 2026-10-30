@@ -1,4 +1,5 @@
 {
+  "stage": "rl",
   "name": "rl-r1-math",
   "description": "Math-only RL from stage 0: validates the loop cheaply",
   "run_id": "rl-r1-math-20b-r01",
@@ -12,8 +13,7 @@
       "math_share": 1.0
     },
     "algorithm": {
-      "name": "grpo",
-      "policy": "on",
+      "name": "on_policy/grpo",
       "score": "centered"
     },
     "optimizer": {

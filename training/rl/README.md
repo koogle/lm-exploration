@@ -42,13 +42,16 @@ cosine schedule and pretraining replay.
 ## Code layout
 
 [`../trainer/rl/`](../trainer/rl/__init__.py) keeps the parts of RL apart, so an
-algorithm or a sampling regime can change without touching the rest:
+algorithm or a source of answers can change without touching the rest:
 
-| File | Owns |
+| Path | Owns |
 | --- | --- |
-| `settings.py` | What a recipe sets, in sections: `rollouts`, `algorithm`, `optimizer`, plus the shared `replay_*` fields |
-| `rollouts.py` | Which prompts are drawn, how answers are sampled and rewarded |
-| `algorithms.py` | How rewards become advantages and a loss; `ALGORITHMS` by name; on- or off-policy |
+| `settings.py` | What a recipe sets, in sections: `algorithm`, `trajectories`, `rollouts`, `optimizer`, plus the shared `replay_*` fields |
+| `algorithms.py` | The algorithms by name |
+| `on_policy/` | Algorithms that train only on answers the current weights just sampled: `grpo.py` |
+| `off_policy/` | Algorithms that also train on older or other models' answers (`ppo.py`, `awr.py`), and their trajectory sources (`sources.py`) |
+| `rollouts.py` | Sampling answers with the current weights and rewarding them |
+| `batch.py`, `policy_gradient.py` | What the algorithms share |
 | `loop.py` | The training loop, checkpoints and provenance |
 
 A recipe's `settings` reads top-down; omitted fields take the defaults in `settings.py`:
@@ -56,49 +59,60 @@ A recipe's `settings` reads top-down; omitted fields take the defaults in `setti
 ```json
 {
   "steps": 300,
+  "algorithm": {"name": "on_policy/grpo"},
   "rollouts": {"prompts_per_step": 64, "samples_per_prompt": 8, "math_share": 1.0},
-  "algorithm": {"name": "grpo", "policy": "on"},
   "optimizer": {"lr": 1e-6, "warmup_steps": 20},
   "replay": true, "replay_snapshot": "...", "replay_sources": {"...": 1.0},
   "replay_batch_size": 8, "replay_weight": 0.1
 }
 ```
 
-`uv run python -m trainer.rl --recipe RECIPE.json` prints the settings with every
-default filled in, without Modal, data or a GPU.
+**Where answers come from** (`trajectories.source`):
 
-**On- and off-policy.** `"policy": "on"` takes one optimizer update per rollout batch, so
-every answer comes from the weights being updated. `"policy": "off"` with
-`updates_per_batch: N` (at least 2) splits the batch's answers into N shares and takes
-one update on each; after the first, answers come from older weights. The log-probabilities
-of the weights that sampled the batch are computed before its first update, and the
-algorithm corrects for the difference. Only algorithms listed in `OFF_POLICY` may run
-off-policy.
+| Source | Answers | Updates per batch | Behaviour log-probabilities |
+| --- | --- | --- | --- |
+| `sampler` (default) | Sampled by the current weights every step | 1 | The current weights' own |
+| `reuse` | Sampled the same way, reused | `updates_per_batch` (≥ 2), each on a share | Computed before the batch's first update |
+| `file` | A trajectory file (`data`), `answers_per_step` per step | 1 | None |
 
-**Algorithms.** An algorithm is a frozen dataclass registered in `ALGORITHMS`. It has
-`advantages(rewards, group)` and `loss(tokens)`, where `tokens` is one micro-batch of
-answers (`Tokens`: logits, log-probabilities now and when sampled, advantages). Its fields
-are the recipe's `algorithm` options. `grpo` is the one implemented:
+A trajectory file ([`../data/rl_trajectories.py`](../data/rl_trajectories.py),
+`rl-trajectories-v1`) holds one answer per row: its problem, the answer text and its
+reward. `modal_scripts/modal_teacher.py::trajectories` makes one from the Qwen teacher's
+saved code answers, passing and failing. The teacher uses another tokenizer, so
+its answers have no log-probabilities our model could use for importance ratios.
 
-- Advantage: reward minus its group's mean. With `scale_by_std` it is also divided by
-  the group's standard deviation; that is off by default, as in Dr. GRPO
-  (arXiv:2503.20783).
-- Loss: PPO's clipped surrogate −min(r·A, clip(r, 1 ± `clip`)·A) per answer token, with
-  r = p / p_old: gradient −r·A·∇log p where the ratio is not clipped. On-policy r is 1,
-  so the gradient is the plain policy gradient −A·∇log p (`tests/test_rl.py`).
-- Score (`score`): `"plain"` pushes up ∇log p(y). `"centered"` uses Score Centering's
-  ∇log p(y) − Σ_v q_v ∇log p_v ([`../trainer/rl/scores.py`](../trainer/rl/scores.py),
-  the method behind Tinker's StableReinforce,
-  [reference](../references/stable-reinforce-2026-10-25.md)). Here q is the sampler's
-  distribution from its top `centering_top_k` (32) tokens, with the rest of the mass
-  spread like the learner's. On the logits its gradient is onehot(y) − q instead of
-  onehot(y) − p (`tests/test_rl_scores.py`). The sampler (cached one-token decoding) and
-  the learner (a full forward pass) compute probabilities with different kernels;
-  centering cancels any bias between them. Centering needs temperature 1.
+**Algorithms** (`algorithm.name`; its other fields are the algorithm's options):
+
+| Name | Sources | Advantage | Loss per answer token |
+| --- | --- | --- | --- |
+| `on_policy/grpo` | `sampler` | Reward minus the group mean; with `scale_by_std`, divided by the group's standard deviation (off by default, as in Dr. GRPO, arXiv:2503.20783) | −A·∇log p |
+| `off_policy/ppo` | `reuse` | As GRPO | PPO's clipped surrogate −min(r·A, clip(r, 1 ± `clip`)·A), r = p / p_old |
+| `off_policy/awr` | `reuse`, `file` | Reward minus the batch mean of its task | −w·∇log p with w = min(exp(A / `beta`), `max_weight`) (advantage-weighted regression, arXiv:1910.00177) |
+
+An algorithm is a frozen dataclass registered in `algorithms.py`. It declares the sources
+it accepts and whether it needs behaviour log-probabilities, and has
+`advantages(batch)` and `loss(tokens)`. `tokens` is one micro-batch of answers
+(`Tokens`: logits, log-probabilities now and when sampled, advantages). A recipe pairing
+an algorithm with a source it does not accept fails when its settings are checked.
+Policy-gradient algorithms skip answers with zero advantage; AWR trains every answer.
+
+**Score.** GRPO and PPO take `score`: `"plain"` pushes up ∇log p(y), `"centered"` uses
+Score Centering's ∇log p(y) − Σ_v q_v ∇log p_v
+([`../trainer/rl/scores.py`](../trainer/rl/scores.py), the method behind Tinker's
+StableReinforce, [reference](../references/stable-reinforce-2026-10-25.md)). q is the
+sampler's distribution from its top `centering_top_k` (32) tokens, with the rest of the
+mass spread like the learner's; on the logits the gradient is onehot(y) − q instead of
+onehot(y) − p (`tests/test_rl_scores.py`). The sampler (cached one-token decoding) and
+the learner (a full forward pass) compute probabilities with different kernels;
+centering cancels any bias between them. It needs temperature 1 and answers our sampler
+wrote.
+`tests/test_rl.py` checks that GRPO's gradient is the plain policy gradient, PPO's
+clipping, and AWR's weights.
 
 ## The loop
 
-[`../trainer/rl/loop.py`](../trainer/rl/loop.py) on one H100:
+[`../trainer/rl/loop.py`](../trainer/rl/loop.py) on one H100. Steps 1–3 are the `sampler`
+and `reuse` sources; the `file` source draws `answers_per_step` rewarded answers instead.
 
 1. **Prompts.** Draw `prompts_per_step` (64) training problems of the pool,
    `math_share` (half) math. A prompt solved by none or all of its group on two visits in
@@ -117,14 +131,14 @@ are the recipe's `algorithm` options. `grpo` is the one implemented:
 3. **Rewards** ([`../data/rl_tasks.py`](../data/rl_tasks.py)). 1 or 0; an answer
    without EOS within the limit scores 0. Code answers are checked in the sandbox in a
    background thread while math is sampled.
-4. **Advantages** from the algorithm. Groups whose answers all score the same have zero
-   advantage and are skipped; their share is logged.
+4. **Advantages** from the algorithm. For GRPO and PPO, groups whose answers all score
+   the same have zero advantage and are skipped; their share is logged.
 5. **Updates.** The algorithm's loss is summed over answer tokens and divided by the
    number of answers per update times the task's token limit (no per-answer length
    normalization).
 6. **Anchors.** KL(policy ‖ parent) is estimated (k3) on the answer tokens every update and
    added with `kl_coef` (default 0); `sampler_kl_coef` (default 0) adds Tinker's
-   sampler–learner KL term. Pretraining replay (`"replay": true`, the hook SFT
+   sampler–learner KL term on answers our sampler wrote. Pretraining replay (`"replay": true`, the hook SFT
    also uses, [`../trainer/replay_hook.py`](../trainer/replay_hook.py)) adds a
    next-token loss on pretraining windows at `replay_weight` to every update.
 7. **Optimizer.** AdamW without weight decay, LR 1e-6 after 20 warmup updates, gradient
@@ -135,19 +149,21 @@ loss, at the start, every `evaluate_every` steps and at the end.
 
 ### 24-hour limit
 
-`modal_scripts/modal_rl_train.py` records a deadline 24 hours after launch and spawns the
-training call (21-hour timeout, no retries; `max_seconds` at most 20 hours) and a
-supervisor call. Training refuses work after the deadline and stops taking updates 30
-minutes before it. The sandbox ID is written to `/runs/rl-launches/<run-id>.json`; the
-supervisor cancels the training call at the deadline and terminates the sandbox when the
-call ends. A run does not resume; an interrupted run is rerun from scratch.
+An RL recipe is a workflow file (`"stage": "rl"`) that the
+[workflow controller](../workflows/README.md) runs under its 24-hour deadline: the
+supervisor starts first, then a controller call spawns the training call (at most 21
+hours and within the deadline, no retries; `max_seconds` at most 20 hours). Training
+refuses work after the deadline and stops taking updates 30 minutes before it. The code
+sandbox is recorded for the supervisor, which terminates it when the launch ends and
+cancels the training call at the deadline. A run does not resume; an interrupted run is
+rerun from scratch.
 
 ### Logged
 
 Every step: reward, share of uniform groups, answer length and truncation rate per task;
 answers trained on; optimizer updates so far; the algorithm's statistics (for `grpo`,
 the share of clipped tokens); mean NLL of the sampled tokens; KL to the parent;
-sampler–learner mismatch (mean sampler minus learner log-probability of the sampled
+sampler–learner mismatch (mean sampler minus learner log-probability of our sampler's
 tokens); replay loss; gradient norm; resting prompts; generation and training seconds.
 Every evaluation: validation accuracy and truncation per task, and replay validation
 loss per source. With the graph engine at 64 prompts × 8 answers, a smoke run took 3.8 s
@@ -180,7 +196,7 @@ replay at weight 0.1:
 R1–R3 ran with the RL trainer before it was split into `trainer/rl/` (commit `ef2dc8a`):
 on-policy GRPO with a centered score (top 32), the graph engine and replay windows
 starting at random documents. The recipes state that algorithm as
-`"algorithm": {"name": "grpo", "policy": "on", "score": "centered"}`.
+`"algorithm": {"name": "on_policy/grpo", "score": "centered"}`.
 Single seed. Benchmarks from [`analysis/evaluation`](../analysis/evaluation/README.md),
 zero-shot greedy: GSM8K first 500 test problems, SVAMP 300, MBPP+ 378 and HumanEval+ 164
 pass@1; bits per byte on the snapshot's held-out windows.
@@ -225,8 +241,12 @@ be compared in the private playground Space (`jfrick/climbmix-124m-playground`).
 From `training/`, after the data of [`../sft/CODE_DATA.md`](../sft/CODE_DATA.md):
 
 ```sh
-uv run --all-extras modal run -m modal_scripts.modal_sft_train::main --recipe sft/recipes/math-code-replay-20b.json
-uv run --all-extras modal run -m modal_scripts.modal_rl_train --recipe rl/recipes/r1-math.json
+uv run --all-extras modal run -m workflows.modal_train --workflow sft/recipes/math-code-replay-20b.json
+uv run python -m workflows --workflow rl/recipes/r1-math.json   # every setting filled in, no Modal
+uv run --all-extras modal run -m workflows.modal_train --workflow rl/recipes/r1-math.json
+# Off-policy trajectories from the Qwen teacher's saved code answers:
+uv run --all-extras modal run -m modal_scripts.modal_teacher::trajectories \
+  --teacher code-teacher-qwen35-02 --data-id <fresh-id> [--limit N]
 ```
 
 To play with the stage 0 and RL checkpoints next to the base and math SFT models, export
@@ -237,7 +257,8 @@ uv run --all-extras modal run -m playground.modal_export \
   --config analysis/playground/configs/post-training.json --name EXPORT-NAME
 ```
 
-A recipe names `run_id`, `parent` (an SFT checkpoint, `run/step-N.pt` on the run
-volume), `pool` (an `rl_pool` data ID) and `settings` ([code layout](#code-layout)). RL
-checkpoints (format `rl-v1`) keep the model code and tokenizer beside them, so
-`analysis/evaluation` loads them like SFT checkpoints.
+A recipe ([`../trainer/rl/recipe.py`](../trainer/rl/recipe.py)) has `"stage": "rl"` and
+names `run_id`, `parent` (an SFT checkpoint, `run/step-N.pt` on the run volume), `pool`
+(an `rl_pool` data ID, also used for validation) and `settings`
+([code layout](#code-layout)). RL checkpoints (format `rl-v1`) keep the model code and
+tokenizer beside them, so `analysis/evaluation` loads them like SFT checkpoints.
