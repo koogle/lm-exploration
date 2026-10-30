@@ -9,8 +9,9 @@ uv run --all-extras modal run -m kernels.modal_bench                      # corr
 ```
 
 Each launch is one function call on one H100 (30-minute timeout, no retries) that refuses
-to start once 24 hours have passed since launch. [`image.py`](image.py) is a CUDA 12.4
-devel image so the extension compiles with `nvcc`; outputs go to the ignored `artifacts/`.
+to start once 24 hours have passed since launch. [`image.py`](image.py) is a CUDA 13.0
+devel image with torch 2.14.1 so the extension compiles with `nvcc`; outputs go to the
+ignored `artifacts/`.
 
 ## What `fuse(model)` does
 
@@ -21,15 +22,34 @@ names, so checkpoints are interchangeable with the unfused model. It expects BF1
 | --- | --- | --- |
 | RMSNorm | FP32 residual in, BF16 out, one warp per row | input and weight gradients |
 | Residual add + RMSNorm | residual + sublayer output + its bias, then the next norm | residual, sublayer, bias and weight gradients |
-| QKV split + RoPE | adds the QKV bias, writes rotated q, k and v in attention layout | input and bias gradients |
+| QKV split + RoPE | adds the QKV bias, rotates by each token's position within its document, writes q, k and v in attention layout | input and bias gradients |
 | SwiGLU | adds both biases, `silu(gate) * up`, eight BF16 values per thread | input and both bias gradients |
 | LM head + cross-entropy | logits, loss and gradient 4,096 rows at a time, gradient written over the logits | precomputed in the forward |
 
 Linears run without bias; the kernel that consumes each output adds the bias and sums its
-gradient in registers, so no separate bias reductions run. Attention uses PyTorch's cuDNN
-kernel by default (`fuse(model, attention="flash")` selects FlashAttention-2).
+gradient in registers, so no separate bias reductions run. Attention is the model's own
+document-causal call (FlashAttention's varlen kernel), so packed documents stay isolated
+exactly as in the unfused model.
 
-## Results (one H100, 16 x 2,048 tokens, BF16 autocast, fused AdamW, 2026-10-24)
+## Results with document masking (one H100, torch 2.14.1, 2026-10-25)
+
+16 x 2,048-token windows with an EOS every 1,000 tokens, BF16 autocast, fused AdamW.
+Every variant masks attention by document.
+
+| Step variant | Time | Tokens/s | Peak memory |
+| --- | ---: | ---: | ---: |
+| Eager PyTorch | 151 ms | 217K | 33.5 GB |
+| `torch.compile` | 88.4 ms | 371K | 18.2 GB |
+| Fused kernels | 83.7 ms | 392K | 16.0 GB |
+
+Every kernel, including QKV + RoPE with positions restarting at document boundaries,
+matches PyTorch to BF16 rounding; whole-model gradients agree with the unfused model at
+cosine 0.99995. Attention alone (forward + backward, 16 x 2,048 x 12 heads x 64):
+causal SDPA 1.57 ms, varlen with ~1,000-token documents 1.59 ms, varlen with one
+document per row 2.36 ms. Reports: HF dataset `jfrick/lm-exploration-results`,
+`training/results/document-masking-2026-10-25/`.
+
+## Results without document masking (one H100, 16 x 2,048 tokens, BF16 autocast, fused AdamW, torch 2.6.0, 2026-10-24)
 
 | Step variant | Time | Tokens/s | Peak memory |
 | --- | ---: | ---: | ---: |

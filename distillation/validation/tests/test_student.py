@@ -96,7 +96,7 @@ class ModelTest(unittest.TestCase):
     def model(self, vocab=40):
         torch.manual_seed(0)
         config = student.ModelConfig(
-            vocab_size=vocab, block_size=64, n_layer=2, n_head=2, n_embd=32
+            vocab_size=vocab, block_size=64, n_layer=2, n_head=2, n_embd=32, eos_id=7
         )
         return student.GPT(config).eval()
 
@@ -121,7 +121,7 @@ class ModelTest(unittest.TestCase):
             settings["size"] = "tiny"
             logs = []
             model, summary = student.train(
-                settings, [shard], vocab, tmp, logs.append, device="cpu"
+                settings, [shard], vocab, 7, tmp, logs.append, device="cpu"
             )
             steps = [entry for entry in logs if entry["event"] == "step"]
             self.assertLess(steps[-1]["ce"], steps[0]["ce"] / 2)
@@ -219,7 +219,7 @@ class ScoreTest(unittest.TestCase):
 class VllmModelDirTest(unittest.TestCase):
     def test_model_dir_links_the_checkpoint_and_describes_it(self):
         config = student.ModelConfig(
-            vocab_size=40, block_size=32, n_layer=1, n_head=2, n_embd=16
+            vocab_size=40, block_size=32, n_layer=1, n_head=2, n_embd=16, eos_id=7
         )
         model = student.GPT(config)
         vocab = student.Vocabulary.full(40, bos=1)
