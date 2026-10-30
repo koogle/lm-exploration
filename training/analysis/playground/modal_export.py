@@ -7,7 +7,7 @@ Run from training/ (needs an HF token with write access, e.g. `hf auth login`):
 The config names the model repository, the Space, the checkpoints (label, description and
 volume path), their display layout, the models selected by default, the decoder file they share and the evaluation results to quote.
 One CPU call (30-minute timeout, no retries; refuses work 24 hours after launch) loads each
-checkpoint with its run's own model code (`evaluation.checkpoints`), checks that the shared
+checkpoint with its run's own model code (`trainer.checkpoints`), checks that the shared
 `model.py` reproduces its logits and writes float32 safetensors, the tokenizer and
 `models.json` to `/runs/playground/NAME`. The local entrypoint downloads that folder to
 `artifacts/playground/NAME`, uploads it to the model repository, then uploads this folder's
@@ -35,6 +35,8 @@ image = (
     .env({"PYTHONPATH": "/project"})
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("analysis/evaluation", "/project/evaluation", ignore=["__pycache__"])
+    .add_local_file("trainer/__init__.py", "/project/trainer/__init__.py")
+    .add_local_file("trainer/checkpoints.py", "/project/trainer/checkpoints.py")
 )
 app = modal.App("playground-export")
 volume = modal.Volume.from_name("lm-exploration-training")
@@ -70,9 +72,10 @@ def export(name, config, deadline):
     import importlib.util
 
     import torch
-    from evaluation import checkpoints
     from safetensors.torch import save_file
     from training_data.subword import digest
+
+    from trainer.checkpoints import load
 
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing export")
@@ -88,7 +91,7 @@ def export(name, config, deadline):
     probe = torch.randint(4, 32768, (1, 64), generator=torch.Generator().manual_seed(0))
     entries, shared = [], None
     for item in config["models"]:
-        loaded = checkpoints.load(Path("/runs") / item["checkpoint"])
+        loaded = load(Path("/runs") / item["checkpoint"])
         keys = ("vocab_size", "block_size", "n_layer", "n_head", "n_embd")
         dimensions = {key: loaded.config[key] for key in keys}
         served = served_code.GPT(served_code.ModelConfig(**dimensions)).eval()

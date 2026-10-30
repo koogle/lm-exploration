@@ -1,8 +1,9 @@
 # SFT: code repair, CIG and math
 
 Post-training for the 124M Simple LLM models: supervised fine-tuning on code repairs or
-math word problems, starting from an explicit `scholarly-ddp-v1` pretraining checkpoint
-on the private `lm-exploration-training` Modal volume. Model weights, architecture and
+math word problems, starting from a checkpoint of any stage (usually pretraining;
+[`../trainer/checkpoints.py`](../trainer/checkpoints.py)) on the private
+`lm-exploration-training` Modal volume. Model weights, architecture and
 the parent's frozen tokenizer are inherited; AdamW starts fresh. Nothing launches
 automatically, and no checkpoint is published.
 
@@ -142,7 +143,7 @@ a problem and its rewrites never cross splits.
 
 An SFT recipe is a workflow file (`"stage": "sft"`) that the
 [workflow controller](../workflows/README.md) runs on one L40S or H100. It is JSON
-([`../trainer/sft_recipe.py`](../trainer/sft_recipe.py) validates it):
+([`../workflows/stages/`](../workflows/stages/__init__.py) validates it):
 
 ```json
 {

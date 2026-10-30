@@ -1,11 +1,39 @@
-"""Pure path, capacity, progress and resume checks for training workflows."""
+"""Pure name, path, capacity, progress and resume checks for training workflows."""
 
 import math
 import re
 
+RUN_ID = re.compile(r"[a-zA-Z0-9_-]{1,80}")
+CHECKPOINT = re.compile(r"[a-zA-Z0-9_-]{1,80}/step-[0-9]{9}\.pt")
+
+
+def run_id(value, field="run_id"):
+    """A run or data ID: one folder name on the run volume."""
+    if not isinstance(value, str) or not RUN_ID.fullmatch(value):
+        raise ValueError(f"{field} must match {RUN_ID.pattern}")
+    return value
+
+
+def checkpoint(value, field="checkpoint"):
+    """Volume-relative `run-id/step-NNNNNNNNN.pt`; never an absolute or parent path."""
+    if not isinstance(value, str) or not CHECKPOINT.fullmatch(value):
+        raise ValueError(f"{field} must be run-id/step-NNNNNNNNN.pt")
+    return value
+
+
+def parse_checkpoints(value):
+    """`name=run/step-N.pt,...` into an ordered {name: checkpoint} mapping."""
+    result = {}
+    for item in value.split(","):
+        name, sep, path = item.strip().partition("=")
+        if not sep or name in result:
+            raise ValueError("Expected unique name=run/step-NNNNNNNNN.pt entries")
+        result[run_id(name, "checkpoint name")] = checkpoint(path)
+    return result
+
 
 def validate_paths(run_id, snapshot, resume):
-    if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
+    if not RUN_ID.fullmatch(run_id):
         raise ValueError("Invalid run ID")
     if not re.fullmatch(r"[a-zA-Z0-9_-]+/snapshots/[a-zA-Z0-9_-]+", snapshot):
         raise ValueError("Expected version/snapshots/name")
