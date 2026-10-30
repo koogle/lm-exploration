@@ -40,6 +40,20 @@ volume_image = (
     .add_local_dir("10m", "/project/model_10m", ignore=["__pycache__"])
     .add_local_dir("tokenizer", "/project/tokenizer", ignore=["__pycache__", "research"])
 )
+
+
+def hybrid_image():
+    """The hybrid family's CUDA image (fla, FlexAttention) with this checkout's model code.
+
+    Containers of the other images do not ship model_hybrid; they never run sample_hybrid.
+    """
+    try:
+        from model_hybrid.image import image as base
+    except ImportError:
+        return None
+    return base.add_local_dir("analysis/sampling", "/project/sampling")
+
+
 app = modal.App("sampling-recipe")
 volume = modal.Volume.from_name("lm-exploration-training")
 limits = {
@@ -257,6 +271,89 @@ def open_transformers(spec, done):
     )
 
 
+def open_hybrid(spec, done):
+    """Yield one hybrid-family export (GLM-token hybrid or byte-level H-Net) at a pinned commit.
+
+    The repository folder holds trainer exports: bf16 trunk weights, config.json and
+    progress.json. Model code is this checkout's model_hybrid package; the recipe names
+    the architecture, and config fields outside its dataclass (tokenizer, provenance) are
+    not model settings.
+    """
+    import dataclasses
+    from types import SimpleNamespace
+
+    import torch
+    from huggingface_hub import HfApi
+    from model_hybrid import hnet, model, tokenizer
+    from safetensors.torch import load_file
+
+    if spec["name"] in done:
+        return
+    repo, revision = spec["repo"], spec["revision"]
+    assert HfApi().model_info(repo, revision=revision).sha == revision
+    folder = download(repo, revision=revision, allow_patterns=[f"{spec['folder']}/*"])
+    folder = folder / spec["folder"]
+    saved = json.loads((folder / "config.json").read_text())
+    progress = json.loads((folder / "progress.json").read_text())
+    if spec["architecture"] == "hnet":
+        config_class, build = hnet.HNetConfig, hnet.HNetLM
+        text = hnet.ByteTokenizer()
+        encode = lambda p: text.encode(p).ids
+        decode, eos = text.decode, hnet.BYTE_EOS
+    else:
+        config_class, build = model.HybridConfig, model.HybridLM
+        glm = tokenizer.load()
+        encode = lambda p: glm.encode(p, add_special_tokens=False).ids
+        decode = lambda ids: glm.decode(ids, skip_special_tokens=True)
+        eos = tokenizer.EOS_ID
+        # The family's token models use the GLM EOS; exports hold the inference trunk only.
+        saved |= {"eos_id": eos, "mtp": False}
+    fields = {f.name for f in dataclasses.fields(config_class)}
+    settings = {k: tuple(v) if isinstance(v, list) else v for k, v in saved.items() if k in fields}
+    lm = build(config_class(**settings))
+    weights = load_file(str(folder / "model.safetensors"))
+    lm.load_state_dict({k: v.float() for k, v in weights.items()}, strict=True)
+    lm = lm.cuda().eval()
+    parameters = sum(p.numel() for p in lm.parameters())
+    assert parameters == spec["parameters"]
+    assert all(torch.isfinite(p).all() for p in lm.parameters())
+    info = {
+        "name": spec["name"],
+        "kind": "hybrid",
+        "architecture": spec["architecture"],
+        "repo": repo,
+        "revision": revision,
+        "folder": spec["folder"],
+        "step": progress["step"],
+        "trained_tokens": progress["tokens"],
+        "parameters": parameters,
+        "weights_sha256": sha256(folder / "model.safetensors"),
+    }
+    print(json.dumps(info), flush=True)
+
+    def forward(tokens):
+        """Left-pad to a multiple of 128 with EOS so kernels see few shapes.
+
+        Each pad EOS ends a document, so document masking keeps the padding out of
+        the prompt's attention, KDA state, routing and positions.
+        """
+        pad = -tokens.size(1) % 128
+        padding = torch.full((tokens.size(0), pad), eos, dtype=tokens.dtype, device=tokens.device)
+        return lm(torch.cat((padding, tokens), 1))[:, pad:]
+
+    yield (
+        info,
+        SimpleNamespace(
+            forward=forward,
+            encode=encode,
+            decode=decode,
+            eos_token_id=eos,
+            device="cuda",
+            max_new_tokens=spec.get("max_new_tokens"),
+        ),
+    )
+
+
 def run(recipe, deadline, open_runs):
     import torch
 
@@ -295,6 +392,20 @@ def sample_volume(recipe, deadline):
     return run(recipe, deadline, open_volume)
 
 
+# Uncached decoding through the byte-level H-Net runs one full forward pass per byte.
+HYBRID_TIMEOUT_SECONDS = 2 * 60 * 60
+
+
+@app.function(
+    image=hybrid_image(),
+    memory=32768,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    **{**limits, "timeout": HYBRID_TIMEOUT_SECONDS},
+)
+def sample_hybrid(recipe, deadline):
+    return run(recipe, deadline, open_hybrid)
+
+
 @app.local_entrypoint()
 def main(recipe: str, output: str = ""):
     from sampling.recipe import load_recipe
@@ -306,6 +417,7 @@ def main(recipe: str, output: str = ""):
         "checkpoint": sample_checkpoints,
         "transformers": sample_transformers,
         "volume": sample_volume,
+        "hybrid": sample_hybrid,
     }[kind]
     report = function.remote(spec, deadline)
     path = Path(output or f"artifacts/sampling/{spec['name']}.json")

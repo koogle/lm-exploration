@@ -5,6 +5,8 @@ Pretraining and SFT run through the workflows like every model family
     modal run -m model_hybrid.modal_tools::bench --gpus 1 [--microbatch 4]
     modal run -m model_hybrid.modal_tools::heldout --export <run>/export/<name>
     modal run -m model_hybrid.modal_tools::export --run-id <run folder>
+    modal run -m model_hybrid.modal_tools::publish --checkpoint <run>/step-NNNNNNNNN.pt \\
+        --repo <owner/name> [--public] [--card <README.md>]
     modal run --detach -m model_hybrid.modal_tools::launch_rl --run-id <id> --config <rl config>
 
 `launch_rl` fixes one deadline 24 hours ahead (less a supervisor margin), starts an
@@ -12,7 +14,10 @@ independent supervisor that cancels every recorded call at that deadline, then r
 model_hybrid.rl as one 8xH100 segment (`retries=0`, timeout bounded by the
 deadline, stopping SHUTDOWN_SECONDS early with a checkpoint) in an image that also
 grades completions; relaunching resumes, also with a larger `steps`. Each
-benchmark is one call with a 30-minute timeout and no retries.
+benchmark is one call with a 30-minute timeout and no retries. `publish` uploads
+one checkpoint from the runs volume as bf16 weights, config, progress and the run's
+logs (private unless --public), with an optional model card; one CPU call, one hour,
+no retries.
 """
 
 import io
@@ -209,6 +214,37 @@ def launch_key(deadline):
     return str(int(deadline))
 
 
+@app.function(
+    image=image,
+    cpu=8,
+    memory=65536,
+    timeout=3600,
+    retries=0,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes=VOLUMES,
+)
+def export_checkpoint(checkpoint, repo, private, card, deadline):
+    """One trusted checkpoint written by trainer.loop on our own runs volume, to HF."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import torch
+    from model_hybrid.train import RunConfig, family_of, upload_export
+
+    path = Path("/runs") / checkpoint
+    saved = torch.load(path, map_location="cpu", weights_only=False)
+    config = RunConfig(**saved["config"])
+    family = family_of(config)(config, path.parent, data=({}, None))
+    lm = family.build("cpu")
+    lm.load_state_dict(saved["model"])
+    progress = {"step": saved["step"], "tokens": saved["tokens"]}
+    upload_export(lm, family.model_config, path.parent, progress, repo, private).join()
+    if card:
+        from huggingface_hub import HfApi
+
+        HfApi().upload_file(path_or_fileobj=card.encode(), path_in_repo="README.md", repo_id=repo)
+    return {"repo": repo, "private": private, **progress}
+
+
 def load_config(path):
     return json.loads(Path(path).read_text())
 
@@ -288,12 +324,10 @@ def heldout(export: str, recipe: str = "hybrid/recipes/hybrid-40b-v1.json"):
 
 
 @app.function(image=image, cpu=8, memory=65536, timeout=1800, retries=0, volumes=VOLUMES)
-def export_checkpoint(run_id):
+def export_latest(run_id):
     """bf16 trunk export (config.json, model.safetensors) of a run's latest checkpoint."""
-    import dataclasses
-
     import torch
-    from model_hybrid import tokenizer as glm
+    from model_hybrid.train import RunConfig, export_config, model_config_of
     from safetensors.torch import save_file
 
     from trainer.loop import latest_checkpoint
@@ -301,12 +335,7 @@ def export_checkpoint(run_id):
     folder = Path("/runs") / run_id
     latest = latest_checkpoint(folder)
     state = torch.load(latest, map_location="cpu", weights_only=False)
-    settings = json.loads((folder / "run-config.json").read_text())["model"]
-    from model_hybrid.model import HybridConfig
-
-    model_config = HybridConfig(
-        **{k: tuple(v) if isinstance(v, list) else v for k, v in settings.items()}
-    )
+    model_config = model_config_of(RunConfig(**state["config"]))
     out = folder / "export" / latest.stem
     out.mkdir(parents=True, exist_ok=True)
     weights = {
@@ -315,11 +344,7 @@ def export_checkpoint(run_id):
         if not k.startswith("mtp.")
     }
     save_file(weights, out / "model.safetensors")
-    config = dataclasses.asdict(model_config) | {
-        "tokenizer": glm.SOURCE,
-        "tokenizer_sha256": glm.SHA256,
-    }
-    (out / "config.json").write_text(json.dumps(config, indent=2) + "\n")
+    (out / "config.json").write_text(json.dumps(export_config(model_config), indent=2) + "\n")
     progress = {"step": state["step"], "tokens": state["tokens"]}
     (out / "progress.json").write_text(json.dumps(progress, indent=2) + "\n")
     runs_volume.commit()
@@ -329,7 +354,7 @@ def export_checkpoint(run_id):
 @app.local_entrypoint()
 def export(run_id: str):
     """Export a run's latest checkpoint for evaluation (`<run id>/export/step-N/`)."""
-    print(json.dumps(export_checkpoint.remote(run_id)))
+    print(json.dumps(export_latest.remote(run_id)))
 
 
 @app.local_entrypoint()
@@ -384,3 +409,15 @@ def start(run_id, config, segment, kind, gpus, extra=(), notes=None):
 def launch_rl(run_id: str, config: str, gpus: int = 8):
     """An RL run (model_hybrid.rl) with the same deadline supervision as training."""
     start(run_id, config, rl_segment, "rl_segment", gpus)
+
+
+@app.local_entrypoint()
+def publish(checkpoint: str, repo: str, public: bool = False, card: str = ""):
+    """Upload one checkpoint (RUN/step-NNNNNNNNN.pt on the runs volume) to an HF model repo."""
+    from workflows.deadline import MAX_LAUNCH_SECONDS
+
+    text = Path(card).read_text() if card else ""
+    result = export_checkpoint.remote(
+        checkpoint, repo, not public, text, time.time() + MAX_LAUNCH_SECONDS
+    )
+    print(json.dumps(result, indent=2))

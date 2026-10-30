@@ -5,10 +5,11 @@
 
 Runs the real training step (trainer.loop with the hybrid family: optimizer,
 compile, DDP) without checkpoints or evaluation. Document lengths are geometric with the given mean, close to the
-recipe's mixture (ClimbMix ~600, code ~1,700, math ~1,400 tokens). Prints one JSON
-line per step from the trainer; summarize with `summarize`. With `--profile`, rank 0
-records PROFILE_STEPS steps after PROFILE_SKIP with the PyTorch profiler and writes
-GPU time per kernel category and the slowest kernels.
+recipe's mixture (ClimbMix ~600, code ~1,700, math ~1,400 tokens); for the byte-level
+H-Net, document lengths and the context are in bytes. Prints one JSON line per step
+from the trainer; summarize with `summarize`. With `--profile`, rank 0 records
+PROFILE_STEPS steps after PROFILE_SKIP with the PyTorch profiler and writes GPU time
+per kernel category and the slowest kernels.
 """
 
 import argparse
@@ -25,8 +26,9 @@ import numpy as np
 from distributed.config import DistributedRuntime
 from trainer import loop
 
+from . import hnet
 from . import tokenizer as glm
-from .train import HybridFamily, RunConfig
+from .train import RunConfig, family_of
 
 PROFILE_SKIP, PROFILE_STEPS = 6, 3
 # First match wins; names are CUDA kernel names as the profiler reports them.
@@ -47,14 +49,14 @@ KERNEL_CATEGORIES = (
 
 
 class SyntheticMixture:
-    def __init__(self, context, vocab, document_tokens, seed=0):
-        self.context, self.vocab, self.mean = context, vocab, document_tokens
+    def __init__(self, context, document_tokens, ids, eos_id, seed=0):
+        self.context, self.mean, self.ids, self.eos_id = context, document_tokens, ids, eos_id
         self.rng = np.random.default_rng(seed)
 
     def next_batch(self, rows):
-        tokens = self.rng.integers(0, glm.TOKENIZER_SIZE - 64, (rows, self.context + 1))
+        tokens = self.rng.integers(0, self.ids, (rows, self.context + 1))
         ends = self.rng.random((rows, self.context + 1)) < 1 / self.mean
-        tokens[ends] = glm.EOS_ID
+        tokens[ends] = self.eos_id
         return tokens[:, :-1], tokens[:, 1:], ["synthetic"] * rows
 
     def state_dict(self):
@@ -72,6 +74,11 @@ def summarize(lines, skip=5):
         "steps_timed": len(timed),
         "tokens_per_second": float(np.median([s["tokens_per_second"] for s in timed])),
         "mfu": float(np.median([s["mfu"] for s in timed])),
+        **(
+            {"bytes_per_chunk": float(np.median([s["bytes_per_chunk"] for s in timed]))}
+            if timed and "bytes_per_chunk" in timed[0]
+            else {}
+        ),
         "loss_first": steps[0]["loss"] if steps else None,
         "loss_last": steps[-1]["loss"] if steps else None,
     }
@@ -126,6 +133,10 @@ def main():
         overrides["global_rows"] = args.global_rows
     config = dataclasses.replace(config, **overrides)
     context = config.model["block_size"]
+    if config.architecture == "hnet":
+        ids, eos_id = 256, hnet.BYTE_EOS
+    else:
+        ids, eos_id = glm.TOKENIZER_SIZE - 64, glm.EOS_ID
     profiler = None
     if args.profile and int(os.environ.get("RANK", "0")) == 0:
         import torch
@@ -143,8 +154,8 @@ def main():
         profiler.start()
 
     with tempfile.TemporaryDirectory() as run_dir:
-        mixture = SyntheticMixture(context, config.model["vocab_size"], args.document_tokens)
-        family = HybridFamily(config, run_dir, data=({"synthetic": True}, lambda: mixture))
+        mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
+        family = family_of(config)(config, run_dir, data=({"synthetic": True}, lambda: mixture))
         if profiler:
             family.after_step = lambda data, model, progress: profiler.step()
         loop.train(

@@ -1,0 +1,128 @@
+{
+  "name": "hnet-vs-glm-720m-samples",
+  "note": "Byte-level H-Net (hnet-720m-cmp-02, 23.8 GB of bytes) vs the GLM-token 720M hybrid at its 5.0B-token export (22.7 GB of the same data), both at constant learning rate; lengths are about 320 bytes each. Not a benchmark.",
+  "precision": "bf16-autocast",
+  "max_new_tokens": 72,
+  "prompts": [
+    {
+      "text": "The solar system consists of",
+      "group": "prose"
+    },
+    {
+      "text": "In mathematics, a prime number is",
+      "group": "prose"
+    },
+    {
+      "text": "The purpose of an experiment is to",
+      "group": "prose"
+    },
+    {
+      "text": "Once upon a time,",
+      "group": "prose"
+    },
+    {
+      "text": "def add(a, b):\n    ",
+      "group": "python"
+    },
+    {
+      "text": "def factorial(n):\n    ",
+      "group": "python"
+    },
+    {
+      "text": "import json\n\ndef read_config(path):\n    ",
+      "group": "python"
+    },
+    {
+      "text": "The capital of France is",
+      "group": "prose"
+    },
+    {
+      "text": "2 + 2 =",
+      "group": "prose"
+    },
+    {
+      "text": "A language model predicts",
+      "group": "prose"
+    },
+    {
+      "text": "Photosynthesis is the process by which",
+      "group": "prose"
+    },
+    {
+      "text": "The French Revolution began in",
+      "group": "prose"
+    },
+    {
+      "text": "Here is a short explanation of why the sky is blue:",
+      "group": "prose"
+    },
+    {
+      "text": "How to make a cup of tea:\n1.",
+      "group": "prose"
+    },
+    {
+      "text": "In 1969,",
+      "group": "prose"
+    },
+    {
+      "text": "12 + 7 =",
+      "group": "math"
+    },
+    {
+      "text": "The derivative of x^2 is",
+      "group": "math"
+    },
+    {
+      "text": "Question: Tom has 3 apples and buys 5 more. How many apples does he have?\nAnswer:",
+      "group": "math"
+    },
+    {
+      "text": "Question: A train travels 60 miles in 2 hours. What is its average speed?\nAnswer:",
+      "group": "math"
+    },
+    {
+      "text": "def is_prime(n):\n    ",
+      "group": "python"
+    }
+  ],
+  "modes": [
+    {
+      "name": "greedy",
+      "temperature": 0.0,
+      "seed_offsets": [
+        1000
+      ]
+    },
+    {
+      "name": "t08_p95",
+      "temperature": 0.8,
+      "top_p": 0.95,
+      "seed_offsets": [
+        1000,
+        2000
+      ]
+    }
+  ],
+  "models": [
+    {
+      "kind": "hybrid",
+      "name": "glm-hybrid-720m-step4769",
+      "architecture": "hybrid",
+      "repo": "jfrick/hybrid-720m-40b",
+      "revision": "225cd7756c6437a8ede314eae9ca5ea3210bf12b",
+      "folder": "tokens-005000658944",
+      "parameters": 707129536,
+      "max_new_tokens": 72
+    },
+    {
+      "kind": "hybrid",
+      "name": "hnet-720m-step5043",
+      "architecture": "hnet",
+      "repo": "jfrick/hnet-720m",
+      "revision": "af2d7b11543e8627c61f4fdf7ed49a11573fc93f",
+      "folder": "tokens-023795859456",
+      "parameters": 580052736,
+      "max_new_tokens": 320
+    }
+  ]
+}
