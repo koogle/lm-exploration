@@ -73,8 +73,9 @@ clipping, and AWR's weights.
 
 ## The loop
 
-[`../trainer/rl/loop.py`](../trainer/rl/loop.py) on one H100. Steps 1–3 are the `sampler`
-and `reuse` sources; the `file` source draws `answers_per_step` rewarded answers instead.
+[`../trainer/rl/loop.py`](../trainer/rl/loop.py); the workflow stage currently runs it on
+one H100. Steps 1–3 are the `sampler` and `reuse` sources; the `file` source draws
+`answers_per_step` rewarded answers instead.
 
 1. **Prompts.** Draw `prompts_per_step` (64) training problems of the pool,
    `math_share` (half) math. A prompt solved by none or all of its group on two visits in
