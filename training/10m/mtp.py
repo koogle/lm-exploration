@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from .model import GPT, Block, RMSNorm
+from .model import GPT, Block, RMSNorm, find_documents
 
 
 class SequentialMTP(nn.Module):
@@ -19,19 +19,19 @@ class SequentialMTP(nn.Module):
         self.block = Block(config)
         self.output_norm = RMSNorm(width)
 
-    def forward(self, hidden, next_embeddings):
+    def forward(self, hidden, next_embeddings, documents):
         fused = self.fuse(
             torch.cat((self.hidden_norm(hidden), self.embedding_norm(next_embeddings)), dim=-1)
         )
-        return self.output_norm(self.block(fused))
+        return self.output_norm(self.block(fused, documents))
 
 
 class GPTWithMTP(GPT):
     """Ordinary GPT inference plus a separate, teacher-forced training objective.
 
     Inherited forward() remains next-token-only. Use training_losses() explicitly
-    for MTP. Each batch row must contain ONE document, optionally right-padded;
-    packed multi-document rows are not supported by this prototype.
+    for MTP. Attention is masked by document, but MTP targets do not stop at
+    EOS, so each batch row must contain ONE document, optionally right-padded.
     """
 
     def __init__(self, config):
@@ -61,12 +61,16 @@ class GPTWithMTP(GPT):
             raise ValueError("document lengths must be within the supplied sequence")
 
         tokens = sequence[:, :-1]
-        hidden = self.blocks(self.token_embedding(tokens))
+        hidden, _ = self.trunk(tokens)
         next_logits = self.lm_head(self.final_norm(hidden))
 
         # h_t sees only x_<=t. The auxiliary branch additionally sees x_(t+1),
         # never its target x_(t+2). Attention within the branch remains causal.
-        future_hidden = self.mtp(hidden[:, :-1], self.token_embedding(tokens[:, 1:]))
+        future_hidden = self.mtp(
+            hidden[:, :-1],
+            self.token_embedding(tokens[:, 1:]),
+            find_documents(tokens[:, :-1], self.config.eos_id),
+        )
         future_logits = self.lm_head(future_hidden)  # same tied vocabulary table
 
         def loss_sum(logits, targets, offset):

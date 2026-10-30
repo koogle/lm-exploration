@@ -26,7 +26,9 @@ class OptimizationTests(unittest.TestCase):
     def test_equivalence(self):
         torch.set_num_threads(1)
         torch.manual_seed(19)
-        model = GPT(ModelConfig(vocab_size=64, block_size=16, n_layer=2, n_head=2, n_embd=32))
+        model = GPT(
+            ModelConfig(vocab_size=64, block_size=16, n_layer=2, n_head=2, n_embd=32, eos_id=2)
+        )
         x = torch.randint(0, 64, (4, 16))
         y = torch.randint(0, 64, (4, 16))
         y[0] = -100
@@ -64,7 +66,7 @@ class OptimizationTests(unittest.TestCase):
 
     def test_optimizer_resume(self):
         torch.manual_seed(7)
-        config = ModelConfig(vocab_size=32, block_size=8, n_layer=1, n_head=2, n_embd=16)
+        config = ModelConfig(vocab_size=32, block_size=8, n_layer=1, n_head=2, n_embd=16, eos_id=2)
         model = GPT(config)
         for block in model.blocks:
             block.attention.cache_rotary(8)

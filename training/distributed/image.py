@@ -7,8 +7,8 @@ The CUDA devel base provides nvcc for the cross-entropy kernel
 
 import modal
 
-CUDA_BASE = "nvidia/cuda:12.4.1-devel-ubuntu22.04"  # Matches torch 2.6.0+cu124.
-BASE_PACKAGES = ("torch==2.6.0", "numpy", "pydantic>=2.11,<3", "tokenizers==0.22.2", "ninja")
+CUDA_BASE = "nvidia/cuda:13.0.0-devel-ubuntu22.04"  # Matches torch 2.14.1+cu130 (uv.lock).
+BASE_PACKAGES = ("torch==2.14.1", "numpy", "pydantic>=2.11,<3", "tokenizers==0.22.2", "ninja")
 BUILD_KERNEL = (
     'python -c "from torch.utils.cpp_extension import load; '
     "load(name='stable_ce', sources=['/opt/stable_ce/stable_ce.cu'], "

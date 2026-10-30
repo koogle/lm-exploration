@@ -36,7 +36,7 @@ def profile(deadline, microbatch=16, context=2048, fused_kernels=False):
     torch.manual_seed(0)
     results = {"device": torch.cuda.get_device_name(), "microbatch": microbatch, "context": context}
     for compiled in (False, True):
-        model = GPT(ModelConfig(vocab_size=32768, block_size=context)).cuda()
+        model = GPT(ModelConfig(vocab_size=32768, block_size=context, eos_id=2)).cuda()
         if fused_kernels:
             from kernels import fused
 

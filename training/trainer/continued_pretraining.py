@@ -85,6 +85,7 @@ def migrate_phase(parent_path, output, manifest_path, config, *, note=""):
         n_layer=config.n_layer,
         n_head=config.n_head,
         n_embd=config.n_embd,
+        eos_id=EOS_TOKEN_ID,
     )
     architecture = {"module": ModelConfig.__module__, "config": asdict(model_config)}
     if saved["architecture"] != architecture:

@@ -17,7 +17,9 @@ torch.set_num_threads(2)
 dist.init_process_group("nccl")
 try:
     torch.manual_seed(43)
-    initial = GPT(ModelConfig(vocab_size=64, block_size=32, n_layer=2, n_head=2, n_embd=32)).cuda()
+    initial = GPT(
+        ModelConfig(vocab_size=64, block_size=32, n_layer=2, n_head=2, n_embd=32, eos_id=2)
+    ).cuda()
     x = torch.randint(4, 64, (32, 32), device="cuda")
     y = torch.randint(4, 64, (32, 32), device="cuda")
     for i in range(32):
