@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from trainer.checkpoints import describe
+from trainer.checkpoints import describe, parent
 from workflows.plan import load_workflow, select
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -154,6 +154,27 @@ class CheckpointTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             describe({"model": {}})
+
+    def test_parent_from_other_model_code_needs_family_and_tokenizer(self):
+        import model_100m.model as module
+        import torch
+
+        saved = {
+            "architecture": {"module": module.__name__, "config": {"n_layer": 2}},
+            "source_sha256": {"model": "earlier model code"},
+            "data_identity": {"tokenizer_sha256": "t"},
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "step-000000001.pt")
+            torch.save(saved, path)
+            _, description = parent(path, module, "t")
+            self.assertEqual(description.source_sha256, {"model": "earlier model code"})
+            with self.assertRaisesRegex(ValueError, "tokenizer"):
+                parent(path, module, "other")
+            saved["architecture"]["module"] = "model_hybrid.model"
+            torch.save(saved, path)
+            with self.assertRaisesRegex(ValueError, "family"):
+                parent(path, module, "t")
 
 
 if __name__ == "__main__":

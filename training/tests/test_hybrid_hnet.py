@@ -259,7 +259,7 @@ class HNetFamilyTests(unittest.TestCase):
         from workflows.plan import load_workflow
 
         root = Path(__file__).parents[1] / "workflows"
-        plan = load_workflow(root / "hnet-h100x8.json", "check")
+        plan = load_workflow(root / "hnet-h100x8.json", "hnet-check")
         policy, _, settings = resolve_payload(plan["stages"][-1]["spec"])
         self.assertEqual(policy.family, "hybrid")
         self.assertEqual(settings["architecture"], "hnet")
