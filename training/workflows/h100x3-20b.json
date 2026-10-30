@@ -1,4 +1,5 @@
 {
+  "family": "subword",
   "model_config": "model_configs/modern-124m.json",
   "dataset_config": "datasets/pretraining-tokens.json",
   "gpu": "H100",

@@ -1,8 +1,28 @@
 # Training workflows
 
-A workflow selects a model configuration and dataset configuration, then owns the
-execution settings. The same controller can prepare or reuse a dataset, qualify
-training, and resume bounded sessions through [`trainer.loop`](../trainer/README.md).
+A workflow names a model family and its configuration, then owns the execution
+settings. One controller ([`modal_train.py`](modal_train.py)) launches every family:
+an independent supervisor cancels the launch's calls at its 24-hour deadline, and a
+session chain runs bounded sessions (`torchrun -m <family trainer>` over
+[`trainer.loop`](../trainer/README.md), each in a fresh `<run id>-sNN` folder that
+resumes the previous session's final checkpoint), checks progress and resume between
+them, and stops on request (`modal run -m workflows.modal_train::stop --run-id <id>`).
+Every image carries the same project sources ([`images.py`](images.py)).
+
+| Family | `model_config` | Data | Sessions | Run folders |
+| --- | --- | --- | --- | --- |
+| `subword` | `model_configs/*.json` (next to the workflow) | `dataset_config`: prepare or reuse a token snapshot | `trainer.subword` | `lm-exploration-training` |
+| `hybrid` | `hybrid/configs/*.json` (under training/); owns its recipe and token target | prepared by `hybrid/modal_data.py` | `model_hybrid.train` | `lm-exploration-hybrid-runs` |
+
+Workflow state (`<run id>/workflow.json`, session reports, tracked calls) lives on
+`lm-exploration-training` for every family. Hybrid workflows:
+
+```sh
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
+  --run-id <id> [--model-config hybrid/configs/<config>.json] [--resume <run>-sNN/step-N.pt]
+```
+
+The rest of this page covers the subword family's settings and data.
 
 | Files | Owns |
 | --- | --- |
@@ -36,11 +56,11 @@ The generic Modal entrypoint accepts the same selections:
 
 ```sh
 # Existing prepared token snapshot, one GPU.
-uv run modal run --detach -m workflows.modal_train \
+uv run modal run --detach -m workflows.modal_train::main \
   --workflow workflows/h100x1-pilot.json --run-id my-pilot-01
 
 # Prepare/reuse a raw corpus: select a workflow whose dataset uses prepare_raw.
-uv run modal run --detach -m workflows.modal_train \
+uv run modal run --detach -m workflows.modal_train::main \
   --workflow workflows/MY-WORKFLOW.json --run-id my-training-01 --version my-data-v1
 ```
 
