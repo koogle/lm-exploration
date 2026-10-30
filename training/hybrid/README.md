@@ -366,6 +366,18 @@ uv run modal run -m model_hybrid.modal_tools::publish --checkpoint <run>-sNN/ste
 (with its `architecture`), progress and the run's logs, private unless `--public`.
 The published H-Net is [`jfrick/hnet-720m`](https://huggingface.co/jfrick/hnet-720m).
 
+## Generation
+
+[`generate.py`](generate.py) decodes incrementally in plain PyTorch (CPU or GPU):
+a KV cache for the full-attention layers, convolution history and fp32 state for
+KDA, one token per row per pass through the weights. Rows follow the model's
+document rule (after EOS the next token starts a new document), so
+`generate_batch` left-pads prompts of different lengths with EOS and each row
+decodes exactly as it would alone. `prefill` reads each prompt with one forward
+pass (the KDA kernels return each document's final state) and builds the same
+cache, so a batch costs one forward per prompt plus one step per new token. RoPE
+tables stay in fp32 when the model is cast to bf16.
+
 ## Tests
 
 From `training/`:
@@ -374,7 +386,8 @@ From `training/`:
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
   tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
   tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
-  tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet -v
+  tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet \
+  tests.test_hybrid_generate -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):

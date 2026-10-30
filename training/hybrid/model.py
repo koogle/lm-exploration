@@ -350,6 +350,15 @@ class HybridLM(nn.Module):
         self.register_buffer("rope_cos", cos, persistent=False)
         self.register_buffer("rope_sin", sin, persistent=False)
 
+    def _apply(self, fn, recurse=True):
+        # RoPE tables keep at least fp32 precision when the model is cast to bf16/fp16.
+        super()._apply(fn, recurse)
+        if self.rope_cos.dtype in (torch.bfloat16, torch.float16):
+            config, device = self.config, self.rope_cos.device
+            tables = rope_tables(config.block_size, config.head_dim, config.rope_base, device)
+            self.rope_cos, self.rope_sin = tables
+        return self
+
     @property
     def output_weight(self):
         return self.token_embedding.weight
