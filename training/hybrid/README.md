@@ -272,7 +272,7 @@ tensor-core attention and KDA kernels.
 [`train.py`](train.py) is the hybrid family for the common loop
 ([`trainer/loop.py`](../trainer/loop.py), see [trainer/README.md](../trainer/README.md)),
 run as `torchrun -m model_hybrid.train`: rank 0 reads the recipe's mixture
-(`PreparedMixture`, with replay rows when the recipe names one) and scatters each batch; every
+(`PreparedMixture` or `ChatMixture`, with replay) and scatters each batch; every
 rank derives MTP targets (the model derives its own document ids from `eos_id`,
 which must be the GLM EOS), and DDP averages gradients. Each loss is normalized by
 its global target count. Rank 0 writes `metrics.jsonl` (loss, z, MTP loss,
@@ -385,23 +385,64 @@ On one H100, a randomly initialized 720M model in bf16 decodes 64 rows (512-toke
 prompts) at 4.1 ms per step, 15,550 tokens/s; the plain-PyTorch step it replaces took
 15.8 ms (4,046 tokens/s).
 
-## Benchmarks
+## Chat SFT
 
-[`benchmarks.py`](benchmarks.py) wraps an export as an lm-evaluation-harness
-model. Multiple-choice and perplexity requests are scored with the model's
-document-masked forward pass on CUDA (each request is `[EOS] + context +
-continuation`, grouped into five fixed shapes so the compiled attention reuses its
-graphs); generation is greedy `generate_batch` cut at the task's stop strings.
-[`modal_benchmarks.py`](modal_benchmarks.py) runs the same suite on one H100 per
-model for the export and pinned reference models through the harness's Hugging
-Face backend (SmolLM2-360M, Qwen3-0.6B, Qwen3.5-0.8B, LFM2.5-1.2B, OLMo-2-1B,
-Gemma 3 270M and 1B, Gemma 4 E2B; `--models` picks a subset): HellaSwag, ARC-Easy/Challenge, PIQA, WinoGrande, OpenBookQA, SciQ and
-LAMBADA zero-shot, MMLU 5-shot, GSM8K 5-shot, HumanEval zero-shot and MBPP 3-shot
-(`retries=0`, 6-hour timeout, refuses work 24 hours after launch; each call writes its
-results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
+[`chat.py`](chat.py) maps OpenAI chat messages (`system`/`user`/`assistant`/`tool`,
+assistant `tool_calls`, a `tools` list of function schemas) onto GLM-4.7-Flash's
+own chat template, pinned by revision and SHA-256 like the tokenizer. Assistant
+turns render without reasoning (`<|assistant|></think>`); calls are GLM's
+`<tool_call>name<arg_key>…</arg_key><arg_value>…</arg_value></tool_call>` and
+results `<|observation|><tool_response>…</tool_response>`. `encode` returns token
+ids and a loss mask that covers each assistant turn after its prompt plus the token
+that ends it (the next role token, or the closing EOS); `parse_assistant` turns
+generated text back into an OpenAI assistant message.
+
+[`recipes/chat-sft-v1.json`](recipes/chat-sft-v1.json) takes the non-reasoning
+(`no_think`) files of `HuggingFaceTB/smoltalk2` SFT, pinned by revision: general
+chat and system prompts, rewriting and summarization, instruction following,
+tables, science, OpenThoughts3 answers and two tool-calling sets (xLAM traces,
+Hermes function calling). [`sft_data.py`](sft_data.py) converts each row to OpenAI
+messages (Hermes `<tool_call>` JSON or Python dicts become `tool_calls`, multiple
+`<tool_response>` blocks become separate `tool` turns, instructions around a
+`<tools>` block join the system prompt, turns after the last assistant reply are
+cut), drops rows with reasoning or unparsable calls, conversations longer than
+the context and those sharing a 13-gram with the pretraining benchmark screen,
+and holds out 0.5% by hash. [`modal_sft_data.py`](modal_sft_data.py) prepares
+each file in its own call (`retries=0`, refuses work 24 hours after launch):
 
 ```sh
-uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
+uv run --all-extras modal run -m model_hybrid.modal_sft_data
+```
+
+`ChatMixture` packs whole conversations, in one seeded order across files, into
+4,097-token windows padded with EOS; labels are `-100` outside the loss mask, and
+the document mask keeps conversations apart. One pass is one epoch. The recipe's
+`replay` takes a quarter of every batch's rows from the pretraining mixture
+(`hybrid-40b-v1`, read from the start of its order, every token a target), so
+fine-tuning keeps the pretraining objective; the run also evaluates the
+pretraining held-out sources with the same document counts as the 40B run, which
+measures what SFT costs there. `train.py`
+selects it for recipes with `"format": "chat-sft"`, evaluates loss and bits per
+byte on each file's held-out conversations, and samples greedy replies to fixed
+chat prompts (one with a tool) up to the end of the turn.
+[`configs/hybrid-720m-chat-sft.json`](configs/hybrid-720m-chat-sft.json) starts
+from the 40B export (`init_from`, trunk only, `mtp=False`) with a tenth of the
+pretraining learning rates, a 50M-token warmup and linear decay to 0 over one
+epoch of the chat data (2,913 steps of 96 chat and 32 replay rows, from packing
+simulated with the run's seed), and trains like pretraining
+(`torchrun -m model_hybrid.train --config hybrid/configs/hybrid-720m-chat-sft.json`).
+
+## Playground
+
+[`playground/`](playground) is a
+Gradio app for a private Hugging Face Space: text continuation, and for chat
+exports a chat tab with OpenAI tools whose replies are parsed back into OpenAI
+messages. `playground/publish.py` uploads the app and the inference modules; the
+Space downloads the export from the private model repo with its `HF_TOKEN` secret.
+
+```sh
+uv run --all-extras python -m model_hybrid.playground.publish \
+  --space jfrick/hybrid-720m-playground --export tokens-039998980096 [--chat]
 ```
 
 ## Benchmarks
@@ -431,7 +472,8 @@ From `training/`:
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
   tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
   tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
-  tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet -v
+  tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet \
+  tests.test_hybrid_chat -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
