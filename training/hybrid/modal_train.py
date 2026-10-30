@@ -126,11 +126,12 @@ def run_segment(
     code, _ = run_torchrun(
         module, args, gpus, timeout - 300, folder / "logs" / f"segment-{int(started)}.log", run_id
     )
-    summary = folder / "summary.json"
-    result = json.loads(summary.read_text()) if summary.exists() else {}
+    report = folder / ("summary.json" if module == "model_hybrid.rl" else "report.json")
+    result = json.loads(report.read_text()) if report.exists() else {}
     if code:
-        raise RuntimeError(f"Training exited with {code}; last summary {result}")
-    return result
+        raise RuntimeError(f"Training exited with {code}; last report {result.get('stop_reason')}")
+    keys = ("steps", "tokens", "stop_reason", "elapsed_seconds", "final_checkpoint", "export")
+    return {k: result[k] for k in keys if k in result} or result
 
 
 @app.function(
@@ -315,11 +316,12 @@ def export_checkpoint(run_id):
 
     import torch
     from model_hybrid import tokenizer as glm
-    from model_hybrid.train import checkpoint_paths
     from safetensors.torch import save_file
 
+    from trainer.loop import latest_checkpoint
+
     folder = Path("/runs") / run_id
-    latest = checkpoint_paths(folder)[-1]
+    latest = latest_checkpoint(folder)
     state = torch.load(latest, map_location="cpu", weights_only=False)
     settings = json.loads((folder / "run-config.json").read_text())["model"]
     from model_hybrid.model import HybridConfig
@@ -340,9 +342,10 @@ def export_checkpoint(run_id):
         "tokenizer_sha256": glm.SHA256,
     }
     (out / "config.json").write_text(json.dumps(config, indent=2) + "\n")
-    (out / "progress.json").write_text(json.dumps(state["progress"], indent=2) + "\n")
+    progress = {"step": state["step"], "tokens": state["tokens"]}
+    (out / "progress.json").write_text(json.dumps(progress, indent=2) + "\n")
     runs_volume.commit()
-    return {"export": f"{run_id}/{latest.stem}", "progress": state["progress"]}
+    return {"export": f"{run_id}/{latest.stem}", "progress": progress}
 
 
 @app.local_entrypoint()
