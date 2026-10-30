@@ -15,9 +15,15 @@ import json
 from pathlib import Path
 
 import numpy as np
+from training_data.packed_shards import (
+    PreparedMixture,
+    heldout_index,
+    pack_windows,
+    shard_paths,
+    wait_for_heldout,
+)
 
 from . import tokenizer as glm
-from .data import PreparedMixture, heldout_index, pack_windows, shard_paths, wait_for_heldout
 from .hnet import BYTE_EOS
 
 

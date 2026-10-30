@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-from model_hybrid import data
+from training_data import packed_shards as data
 
 EOS = 99
 
@@ -82,6 +82,84 @@ class HybridDataTests(unittest.TestCase):
             for name in ("web", "code")
             for i in range(3)
         ]
+
+    def test_repository_documents(self):
+        rows = {
+            "code": ["b = 2", "a = 1", "z = 26", "solo"],
+            "license": ["mit", "mit", "mit", "mit"],
+            "repo_name": ["r1", "r1", "r2", "r3"],
+            "path": ["b.py", "a.py", "z.py", "s.py"],
+        }
+        pq.write_table(pa.table(rows), self.root / "repo-12.parquet")
+        source = {
+            "weight": 1.0,
+            "repo": "c",
+            "revision": "r",
+            "pattern": "repo-{index}.parquet",
+            "file_offset": 10,
+            "shards": 3,
+            "column": "code",
+            "permissive_licenses_only": True,
+            "group_by": "repo_name",
+            "order_by": "path",
+            "min_tokens": 20,
+            "max_passes": 1,
+        }
+        self.recipe["sources"] = {"repos": source}
+        meta = data.prepare_shard(
+            self.recipe,
+            "repos",
+            2,
+            self.root / "out",
+            self.tokenizer,
+            np.empty(0, np.uint64),
+            EOS,
+            self.download,
+        )
+        # r1 joins its files in path order; r2 and r3 are shorter than 20 tokens.
+        self.assertEqual((meta["documents"], meta["dropped"]["short"]), (1, 2))
+        self.assertEqual(meta["upstream"]["file"], "repo-12.parquet")
+        expected = "### a.py\na = 1\n\n### b.py\nb = 2\n\n"
+        self.assertEqual(meta["tokens"], len(expected) + 1)
+        self.assertEqual(meta["bytes"], len(expected.encode()))
+
+    def test_sources_prepared_under_another_recipe(self):
+        self.prepare()
+        other = dict(self.recipe, name="other-recipe")
+        other["sources"] = {
+            "web": dict(self.recipe["sources"]["web"], prepared_in="out", weight=1.0)
+        }
+        mixture = data.PreparedMixture(other, self.root / "other-recipe")
+        name, window = mixture.next_window()
+        self.assertEqual(name, "web")
+        first = data.training_order(other, "web")[0]
+        tokens = np.fromfile(data.shard_paths(self.root / "out", "web", first)[0], np.uint32)
+        np.testing.assert_array_equal(window, tokens[: len(window)])
+
+    def test_rendered_message_documents(self):
+        messages = [
+            [{"role": "user", "content": f"q{i}"}, {"role": "assistant", "content": "a"}]
+            for i in range(3)
+        ]
+        pq.write_table(pa.table({"messages": messages}), self.root / "chat-1.parquet")
+        source = {
+            "weight": 1.0,
+            "repo": "s",
+            "revision": "r",
+            "files": ["x", "chat-1.parquet"],
+            "shards": 2,
+            "column": "messages",
+            "render": "test",
+            "max_passes": 1,
+        }
+        self.recipe["sources"] = {"chat": source}
+        args = (self.recipe, "chat", 1, self.root / "out", self.tokenizer, np.empty(0, np.uint64))
+        with self.assertRaisesRegex(ValueError, "renderer"):
+            data.prepare_shard(*args, EOS, self.download)
+        render = lambda m: "".join(f"<{t['role']}>{t['content']}" for t in m)
+        meta = data.prepare_shard(*args, EOS, self.download, render=render)
+        self.assertEqual(meta["documents"], 3)
+        self.assertEqual(meta["bytes"], 3 * len("<user>q0<assistant>a"))
 
     def test_ngram_hashes_and_screen(self):
         ids = list(range(20))
