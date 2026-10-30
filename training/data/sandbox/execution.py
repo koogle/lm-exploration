@@ -6,7 +6,7 @@
   are visible to the tests, the tests run, every `test*` function they define (not ones
   imported from the solution) is called, and the script prints a nonce last.
 - `pytest`: the solution is written as `solution.py` beside the tests as
-  `test_solution.py` in a fresh folder, pytest runs them (fixtures, parametrization,
+  `test_solution.py` in the program's own folder, pytest runs them (fixtures, parametrization,
   `pytest.raises`), and the script prints the nonce last only if every test passed.
  `runner.py` runs the
 scripts with resource limits and passes a script only if it exits cleanly and prints its
@@ -38,9 +38,9 @@ def program(solution, tests, nonce, style="functions"):
         raise ValueError(f"test style must be one of {TEST_STYLES}")
     if style == "pytest":
         return (
-            "import os, sys, tempfile\n"
+            "import os, sys\n"
             "import pytest\n"
-            "_folder = tempfile.mkdtemp()\n"
+            "_folder = os.getcwd()\n"
             "for _name, _text in (('solution.py', "
             f"{solution!r}), ('test_solution.py', {tests!r})):\n"
             "    with open(os.path.join(_folder, _name), 'w') as _file:\n"
