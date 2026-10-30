@@ -1,19 +1,7 @@
 """Pieces the policy-gradient algorithms share: group-relative advantages and the
-(optionally ratio-weighted and clipped) policy-gradient loss with a plain or centered
-score (`scores.py`)."""
+(optionally ratio-weighted and clipped) policy-gradient loss."""
 
 import torch
-
-from trainer.rl import scores
-
-SCORES = ("plain", "centered")
-
-
-def check_score(algorithm):
-    if algorithm.score not in SCORES:
-        raise ValueError(f"score must be one of {SCORES}")
-    if type(algorithm.centering_top_k) is not int or algorithm.centering_top_k < 1:
-        raise ValueError("centering_top_k must be a positive integer")
 
 
 def group_advantages(rewards, group, scale_by_std=False):
@@ -29,21 +17,14 @@ def group_advantages(rewards, group, scale_by_std=False):
     return result
 
 
-def loss(tokens, clip=None, score="plain"):
+def loss(tokens, clip=None):
     """−Σ scale · r · A · score over answer tokens, with r = p / p_old (detached), so its
-    gradient is −r·A·∇log p for the plain score. The centered score is Score Centering's
-    (`scores.centered`, from the sampler's top tokens in `tokens`). With `clip`, PPO's
-    clipped surrogate: tokens whose ratio left 1 ± clip in the advantage's direction get
-    no gradient. Returns (loss, statistics)."""
+    gradient is −r·A·∇log p for the plain score (`Tokens.score`). With `clip`, PPO's clipped surrogate: tokens whose ratio left
+    1 ± clip in the advantage's direction get no gradient. Returns (loss, statistics)."""
     ratio = (tokens.logp - tokens.old_logp).detach().exp()
     advantage = tokens.advantage[:, None]
     clipped = torch.zeros_like(tokens.mask)
     if clip is not None:
         clipped = ((advantage > 0) & (ratio > 1 + clip)) | ((advantage < 0) & (ratio < 1 - clip))
     weight = tokens.scale[:, None] * ratio * advantage * (~clipped & tokens.mask)
-    value = tokens.logp
-    if score == "centered":
-        value = scores.centered(
-            tokens.logits, tokens.targets, tokens.sampler_top_ids, tokens.sampler_top_logprobs
-        )
-    return -(weight * value).sum(), {"clipped_tokens": (clipped & tokens.mask).sum().item()}
+    return -(weight * tokens.score).sum(), {"clipped_tokens": (clipped & tokens.mask).sum().item()}

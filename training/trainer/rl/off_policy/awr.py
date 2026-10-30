@@ -20,7 +20,6 @@ class AWR:
     max_weight: float = 20.0
 
     SOURCES = ("reuse", "file")
-    sampler_top_k = 0
     needs_behaviour = False
     skips_zero_advantage = False
 
@@ -42,5 +41,5 @@ class AWR:
     def loss(self, tokens):
         weight = (tokens.advantage / self.beta).exp().clamp(max=self.max_weight)
         token_weight = weight[:, None] * tokens.mask
-        loss = -(tokens.scale[:, None] * token_weight * tokens.logp).sum()
+        loss = -(tokens.scale[:, None] * token_weight * tokens.score).sum()
         return loss, {"awr_weight": token_weight.sum().item()}

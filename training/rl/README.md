@@ -69,16 +69,19 @@ it accepts and whether it needs behaviour log-probabilities, and has
 an algorithm with a source it does not accept fail when they are checked.
 Policy-gradient algorithms skip answers with zero advantage; AWR trains every answer.
 
-**Score.** GRPO and PPO take `score`: `"plain"` pushes up ∇log p(y), `"centered"` uses
-Score Centering's ∇log p(y) − Σ_v q_v ∇log p_v
-([`../trainer/rl/scores.py`](../trainer/rl/scores.py), the method behind Tinker's
-StableReinforce, [reference](../references/stable-reinforce-2026-10-25.md)). q is the
-sampler's distribution from its top `centering_top_k` (32) tokens, with the rest of the
-mass spread like the learner's; on the logits the gradient is onehot(y) − q instead of
-onehot(y) − p (`tests/test_rl_scores.py`). The sampler (cached one-token decoding) and
-the learner (a full forward pass) compute probabilities with different kernels;
-centering cancels any bias between them. It needs temperature 1 and answers our sampler
-wrote.
+**StableReinforce** (`"stable_reinforce": {"top_k": 32, "sampler_kl_coef": 0.0}`, off
+when absent) is an off-policy correction that any algorithm takes on answers our sampler
+wrote: [`../trainer/rl/off_policy/stable_reinforce.py`](../trainer/rl/off_policy/stable_reinforce.py),
+the method behind Tinker's StableReinforce
+([reference](../references/stable-reinforce-2026-10-25.md)). The sampler (cached
+one-token decoding) and the learner (a full forward pass) compute probabilities with
+different kernels, so even fresh samples are slightly off-policy. The hook replaces each
+token's score ∇log p(y), which the algorithm's loss pushes up, by Score Centering's
+∇log p(y) − Σ_v q_v ∇log p_v. q is the sampler's distribution from its top `top_k`
+tokens, with the rest of the mass spread like the learner's; on the logits the gradient
+is onehot(y) − q instead of onehot(y) − p, so any bias between the engines cancels
+(`tests/test_stable_reinforce.py`). `sampler_kl_coef` adds Tinker's sampler–learner KL
+term. Centering needs temperature 1.
 `tests/test_rl.py` checks that GRPO's gradient is the plain policy gradient, PPO's
 clipping, and AWR's weights.
 
@@ -97,7 +100,7 @@ one H100. Steps 1–3 are the `sampler` and `reuse` sources; the `file` source d
    [`../trainer/rollout.py`](../trainer/rollout.py) samples a left-padded batch with a
    key/value cache; its greedy output matches unbatched, uncached decoding exactly
    (`tests/test_rollout.py`). It also records each sampled token's log-probability and,
-   for a centered score, the sampler's top tokens.
+   for StableReinforce, the sampler's top tokens.
 3. **Rewards** ([`../data/rl_tasks.py`](../data/rl_tasks.py)). 1 or 0; an answer
    without EOS within the limit scores 0. Code answers are checked in the sandbox in a
    background thread while math is sampled.
@@ -107,8 +110,7 @@ one H100. Steps 1–3 are the `sampler` and `reuse` sources; the `file` source d
    number of answers per update times the task's token limit (no per-answer length
    normalization).
 6. **Anchors.** KL(policy ‖ parent) is estimated (k3) on the answer tokens every update and
-   added with `kl_coef` (default 0); `sampler_kl_coef` (default 0) adds Tinker's
-   sampler–learner KL term on answers our sampler wrote. Pretraining replay (`"replay": true`, the hook SFT
+   added with `kl_coef` (default 0). Pretraining replay (`"replay": true`, the hook SFT
    also uses, [`../trainer/replay_hook.py`](../trainer/replay_hook.py)) adds a
    next-token loss on pretraining windows at `replay_weight` to every update.
 7. **Optimizer.** AdamW without weight decay, LR 1e-6 after 20 warmup updates, gradient
@@ -129,9 +131,9 @@ not resume: a relaunch reruns an unfinished RL stage from its parent.
 
 Every step: reward, share of uniform groups, answer length and truncation rate per task;
 answers trained on; optimizer updates so far; the algorithm's statistics (for `grpo`,
-the share of clipped tokens); mean NLL of the sampled tokens; KL to the parent;
-sampler–learner mismatch (mean sampler minus learner log-probability of our sampler's
-tokens); replay loss; gradient norm; resting prompts; generation and training seconds.
+the share of clipped tokens); mean NLL of the sampled tokens; KL to the parent; with
+StableReinforce, the sampler–learner mismatch (mean sampler minus learner
+log-probability of the sampled tokens); replay loss; gradient norm; resting prompts; generation and training seconds.
 Every evaluation: validation accuracy and truncation per task, and replay validation
 loss per source.
 
