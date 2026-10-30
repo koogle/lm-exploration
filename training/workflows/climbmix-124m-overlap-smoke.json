@@ -1,4 +1,5 @@
 {
+  "family": "subword",
   "model_config": "model_configs/modern-124m.json",
   "dataset_config": "datasets/climbmix-code-v4-raw.json",
   "target_tokens": 300000000,
