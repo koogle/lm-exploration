@@ -1,8 +1,9 @@
 # SFT: code repair, CIG and math
 
 Post-training for the 124M Simple LLM models: supervised fine-tuning on code repairs or
-math word problems, starting from an explicit `scholarly-ddp-v1` pretraining checkpoint
-on the private `lm-exploration-training` Modal volume. Model weights, architecture and
+math word problems, starting from a checkpoint of any stage (usually pretraining;
+[`../trainer/checkpoints.py`](../trainer/checkpoints.py)) on the private
+`lm-exploration-training` Modal volume. Model weights, architecture and
 the parent's frozen tokenizer are inherited; AdamW starts fresh. Nothing launches
 automatically, and no checkpoint is published.
 
@@ -140,45 +141,58 @@ a problem and its rewrites never cross splits.
 
 ### Train
 
-[`../modal_scripts/modal_sft_train.py`](../modal_scripts/modal_sft_train.py) runs one
-recipe on one L40S or H100. A recipe is JSON
-([`../trainer/sft_recipe.py`](../trainer/sft_recipe.py) validates it):
+SFT is a stage of a [workflow](../workflows/README.md) and runs on one L40S or H100.
+A workflow that only fine-tunes starts from a pretrained checkpoint, `from`.
+[`../workflows/stages/`](../workflows/stages/__init__.py) validates each stage:
 
 ```json
 {
-  "name": "example",
-  "run_id": "repair-sft-example-r01",
-  "parent": "<pretraining-run>/step-NNNNNNNNN.pt",
-  "data": {"local": "artifacts/sft/repairs.jsonl"},
-  "gpu": "L40S",
-  "settings": {"steps": 200, "batch_size": 4, "context": 1024, "lr": 1e-5, "objective": "sft"}
+  "name": "repair-sft",
+  "family": "subword",
+  "from": "<pretraining-run>/step-NNNNNNNNN.pt",
+  "stages": [
+    {
+      "stage": "sft",
+      "name": "repairs",
+      "data": {"local": "artifacts/sft/repairs.jsonl"},
+      "gpu": "L40S",
+      "settings": {"steps": 200, "batch_size": 4, "context": 1024, "lr": 1e-5, "objective": "sft"}
+    }
+  ]
 }
 ```
 
-Recipes for the math runs are in [`recipes/`](recipes/).
+The math runs are [`math-sft-20b.json`](../workflows/math-sft-20b.json) and
+[`math-sft-5b.json`](../workflows/math-sft-5b.json), each with and without replay as
+two branches.
 `data` is `{"local": path}` (validated locally, uploaded, at most 20 MiB) or
 `{"volume": data-id}` (a prepared volume folder; its hash must match `report.json`).
 `settings` are `trainer.sft.Settings`: `steps` (total target), `batch_size`,
 `context`, `lr`, `seed`, `evaluate_every`, `save_every`, `max_seconds` (training-loop
-limit, at most 14,400), `objective` (`sft` or `cig`) and `cig_proximity`. `resume`
-continues from an SFT checkpoint with identical identity. Adding `"extend": true`
-also permits a larger step target and new cadence/time limit, but no change to
-learning, data, model, objective or trainer source; lineage goes to `continuation.json`.
+limit, at most 14,400), `objective` (`sft` or `cig`) and `cig_proximity`, plus
+pretraining replay (`replay` and its `replay_*` settings, `trainer/replay_hook.py`).
+`resume` continues from an SFT checkpoint with identical identity. Adding
+`"extend": true` also permits a larger step target and new cadence/time limit, but no
+change to learning, data, model, objective or trainer source; lineage goes to
+`continuation.json`.
 
 ```sh
-# Exact resume qualification: uninterrupted run vs. stop, fresh-container restore, continue.
-modal run -m modal_scripts.modal_sft_train::qualify --recipe <recipe.json> --run-prefix <fresh-prefix>
-# Train; command-line values override the recipe's parent, data, run ID and resume.
-modal run -m modal_scripts.modal_sft_train::main --recipe <recipe.json> \
-  --run-id <fresh-run-id> --parent <run>/step-NNNNNNNNN.pt [--dataset <jsonl> | --data-id <id>]
+# Inspect the workflow with every setting filled in.
+uv run python -m workflows --workflow <workflow.json> --run-id <run-id>
+# Exact resume qualification of N steps for one SFT stage: uninterrupted run vs. stop,
+# fresh-container restore, continue, as runs <run-id>-<stage>-q-{full,part,resume}.
+uv run --all-extras modal run -m workflows.modal_train::main --workflow <workflow.json> \
+  --run-id <run-id> --start <stage> --end <stage> --qualify 2
+# Train; --checkpoint fine-tunes another parent than the workflow's `from`.
+uv run --all-extras modal run --detach -m workflows.modal_train::main \
+  --workflow <workflow.json> --run-id <run-id> [--checkpoint <run>/step-NNNNNNNNN.pt]
 ```
 
-The run folder on the volume holds the manifest (dataset, parent, tokenizer, source and
+Each stage trains as `<run-id>-<stage>`. The run folder on the volume holds the manifest (dataset, parent, tokenizer, source and
 settings hashes), the exact examples, tokenizer and source snapshots, `metrics.jsonl`
 (per-step loss and periodic validation), CIG reference scores and periodic full
-checkpoints (model, optimizer, sampler and RNG state). The local result goes to
-`artifacts/sft/<run-id>.json`. A time-limited run can stop below its step target;
-resume it into a new run ID.
+checkpoints (model, optimizer, sampler and RNG state). A time-limited run can stop
+below its step target; resume it in a stage of a new workflow run.
 
 ### Evaluate executable repairs
 

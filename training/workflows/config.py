@@ -1,14 +1,15 @@
-"""Resolve a selectable workflow, model configuration and dataset configuration.
+"""Resolve one pretraining or mid-training stage: its execution settings, model
+configuration and dataset configuration (`workflows/plan.py` resolves whole workflows).
 
-Every workflow names its model `family`:
+A stage trains a model `family` (the workflow's):
 
-- `subword`: `model_config` (relative to the workflow's folder) holds the subword
-  GPT's architecture and optimizer settings and `dataset_config` its data; the
-  workflow owns the token target, GPU count and data-review opt-in, and the three
-  resolve into one `DistributedConfig`.
+- `subword`: `model_config` (relative to training/) holds the subword GPT's
+  architecture and optimizer settings and the dataset config its data; the stage
+  owns the token target, GPU count and data-review opt-in, and the three resolve
+  into one `DistributedConfig`.
 - `hybrid`: `model_config` (relative to training/) is a hybrid run config
-  (hybrid/configs/*.json), which owns its data recipe and token target; the
-  workflow owns only execution (GPUs, sessions, qualification).
+  (hybrid/configs/*.json), which owns its data recipe and token target; the stage
+  owns only execution (GPUs, sessions, qualification).
 """
 
 import hashlib
@@ -37,7 +38,9 @@ FAMILIES = ("subword", "hybrid")
 
 
 @dataclass(frozen=True)
-class WorkflowConfig:
+class PretrainConfig:
+    """The execution settings of one pretraining or mid-training stage."""
+
     family: str
     model_config: str
     gpu: str
@@ -63,7 +66,7 @@ class WorkflowConfig:
 
     def __post_init__(self):
         if self.family not in FAMILIES:
-            raise ValueError(f"Workflow family must be one of {FAMILIES}")
+            raise ValueError(f"Family must be one of {FAMILIES}")
         relative_json(self.model_config)
         for name in ("pilot", "allow_unreviewed_data", "overlap_preparation"):
             if type(getattr(self, name)) is not bool:
@@ -171,39 +174,32 @@ def resolve_settings(workflow, dataset, model):
 
 def resolve_payload(payload):
     """Revalidate the frozen selection on every remote controller/worker boundary."""
-    workflow = WorkflowConfig(**payload["workflow"])
+    policy = PretrainConfig(**payload["stage"])
     dataset = DatasetConfig(**payload["dataset"]) if payload["dataset"] else None
-    training = resolve_settings(workflow, dataset, payload["model"])
-    return workflow, dataset, training
+    training = resolve_settings(policy, dataset, payload["model"])
+    return policy, dataset, training
 
 
-def load_workflow_config(path):
-    """Load an explicit workflow path; there is no implicit experiment selection."""
-    return WorkflowConfig(**json.loads(Path(path).read_text()))
+def project_file(project_root, value):
+    """A JSON file named relative to training/, never outside it."""
+    path = (project_root / relative_json(value)).resolve()
+    if not path.is_relative_to(project_root):
+        raise ValueError("A selected config escapes the project directory")
+    return path
 
 
-def load_workflow(path, *, model_config="", dataset_config="", project_root=None):
-    """Resolve paths locally and freeze exact selected config contents for remote calls."""
-    path = Path(path).resolve()
+def pretrain_bundle(spec, family, dataset_config="", project_root=None):
+    """Freeze a pretraining or mid-training stage for remote calls: its execution
+    settings (`spec`'s other fields), and the contents and hashes of its model config,
+    its dataset config (`dataset_config`, subword only) and preparation recipe."""
     project_root = Path(project_root or Path(__file__).resolve().parent.parent).resolve()
-    workflow = load_workflow_config(path)
-    overrides = {}
-    if model_config:
-        overrides["model_config"] = model_config
-    if dataset_config:
-        overrides["dataset_config"] = dataset_config
-    workflow = WorkflowConfig(**{**asdict(workflow), **overrides})
-    inputs = {"workflow": path}
-    # Subword selections live next to the workflows; hybrid run configs under training/.
-    base = path.parent if workflow.family == "subword" else project_root
-    keys = ("model_config", "dataset_config") if workflow.family == "subword" else ("model_config",)
-    for key in keys:
-        selected = (base / relative_json(getattr(workflow, key))).resolve()
-        if not selected.is_relative_to(base):
-            raise ValueError("Selected config escapes its folder")
-        inputs[key] = selected
+    fields = {k: v for k, v in spec.items() if k not in ("stage", "name", "description", "data")}
+    policy = PretrainConfig(family=family, dataset_config=dataset_config, **fields)
+    inputs = {"model_config": project_file(project_root, policy.model_config)}
+    if family == "subword":
+        inputs["dataset_config"] = project_file(project_root, dataset_config)
     payload = {
-        "workflow": asdict(workflow),
+        "stage": asdict(policy),
         "model": json.loads(inputs["model_config"].read_text()),
         "dataset": json.loads(inputs["dataset_config"].read_text())
         if "dataset_config" in inputs
@@ -217,9 +213,7 @@ def load_workflow(path, *, model_config="", dataset_config="", project_root=None
     if dataset and dataset.mode == "prepare_raw":
         from training_data.simple_llm import load_recipe
 
-        recipe_path = (project_root / relative_json(dataset.recipe)).resolve()
-        if not recipe_path.is_relative_to(project_root):
-            raise ValueError("Preparation recipe escapes the project directory")
+        recipe_path = project_file(project_root, dataset.recipe)
         payload["preparation_recipe"] = load_recipe(recipe_path)
         payload["config_sources"]["preparation_recipe"] = {
             "path": dataset.recipe,

@@ -8,10 +8,19 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from workflows.config import load_workflow
+from workflows.config import pretrain_bundle
+from workflows.plan import load_workflow as load_plan
+from workflows.plan import select
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCH = {"deadline_unix": time.time() + 86400}
+LAUNCH = {"deadline_unix": time.time() + 86400, "workflow_run_id": "run"}
+
+
+def load_workflow(name="h100x1-pilot.json", dataset_config=None):
+    """The resolved pretraining stage of a shipped workflow."""
+    entry = dict(json.loads((ROOT / "workflows" / name).read_text())["stages"][-1])
+    dataset = entry.pop("dataset_config")
+    return pretrain_bundle(entry, "subword", dataset_config or dataset, ROOT)
 
 
 # Module helpers the controllers call; compiled alongside each one.
@@ -33,23 +42,7 @@ def controller(name):
 
 class WorkflowControllerTests(unittest.TestCase):
     def setUp(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            workflow = json.loads((ROOT / "workflows/h100x1-pilot.json").read_text())
-            model = (ROOT / "workflows" / workflow["model_config"]).read_text()
-            workflow.update(model_config="model.json", dataset_config="data.json")
-            (Path(temporary) / "run.json").write_text(json.dumps(workflow))
-            (Path(temporary) / "model.json").write_text(model)
-            (Path(temporary) / "data.json").write_text(
-                json.dumps(
-                    {
-                        "mode": "prepare_raw",
-                        "root": "fixture",
-                        "loader": "raw",
-                        "recipe": "tests/fixtures/corpus-recipe.json",
-                    }
-                )
-            )
-            self.bundle = load_workflow(Path(temporary) / "run.json", project_root=ROOT)
+        self.bundle = load_workflow(dataset_config="workflows/datasets/climbmix-code-v4-raw.json")
 
     def test_pending_data_fails_before_ingestion(self):
         prepare = controller("prepare_and_launch")
@@ -72,7 +65,7 @@ class WorkflowControllerTests(unittest.TestCase):
                         "data-v1",
                         {
                             **self.bundle,
-                            "workflow": {**self.bundle["workflow"], "allow_unreviewed_data": False},
+                            "stage": {**self.bundle["stage"], "allow_unreviewed_data": False},
                         },
                         LAUNCH,
                     )
@@ -87,12 +80,12 @@ class WorkflowControllerTests(unittest.TestCase):
                 parent = root / "data/other-corpus/v1/snapshots"
                 parent.mkdir(parents=True)
                 fixture(parent / "prepared")
-                bundle = load_workflow(ROOT / "workflows/h100x1-pilot.json")
+                bundle = load_workflow()
                 bundle["dataset"].update(root="other-corpus", snapshot="v1/snapshots/prepared")
                 if invalid == "review":
-                    bundle["workflow"]["allow_unreviewed_data"] = False
+                    bundle["stage"]["allow_unreviewed_data"] = False
                 if invalid == "capacity":
-                    bundle["workflow"]["pilot"] = False
+                    bundle["stage"]["pilot"] = False
                 launch = controller("launch_snapshot")
                 continuation = Mock()
                 launch.__globals__.update(
@@ -140,10 +133,10 @@ class WorkflowControllerTests(unittest.TestCase):
             db.close()
             snapshot = version / "snapshots/overlap"
             export_growing(version, snapshot, ["audit"])
-            bundle = load_workflow(ROOT / "workflows/h100x1-pilot.json")
-            bundle["workflow"]["pilot"] = False
+            bundle = load_workflow()
+            bundle["stage"]["pilot"] = False
             bundle["dataset"].update(root="fixture", snapshot="v1/snapshots/overlap", loader="raw")
-            target = bundle["workflow"]["target_tokens"]
+            target = bundle["stage"]["target_tokens"]
             launch = controller("launch_snapshot")
             continuation = Mock()
             launch.__globals__.update(
@@ -156,7 +149,7 @@ class WorkflowControllerTests(unittest.TestCase):
             )
             spawn = continuation.with_options.return_value.spawn
             with patch.dict(os.environ), patch("tempfile.mkdtemp", return_value=temporary):
-                with self.assertRaisesRegex(ValueError, "resume-preparation"):
+                with self.assertRaisesRegex(ValueError, "workflow run again"):
                     launch("run", bundle, LAUNCH)
                 shutil.copyfile(version / "raw.sqlite", snapshot / "raw.sqlite")
                 complete_growing(snapshot, capacity_verified_for_tokens=target - 1)
@@ -172,7 +165,88 @@ class WorkflowControllerTests(unittest.TestCase):
         launch = controller("launch_snapshot")
         continuation = Mock()
         launch.__globals__.update(record=Mock(), continue_training=continuation, track_call=Mock())
-        bundle = load_workflow(ROOT / "workflows/h100x1-pilot.json")
+        bundle = load_workflow()
         with self.assertRaisesRegex(RuntimeError, "deadline"):
             launch("run", bundle, {"deadline_unix": time.time() + 60})
         continuation.with_options.assert_not_called()
+
+
+class RunWorkflowTests(unittest.TestCase):
+    """`run_workflow` with its stage runners replaced: order, parents, branches, relaunch."""
+
+    def run_plan(self, root, stages, start="", end="", checkpoint="", fail=()):
+        path = Path(root, "workflow.json")
+        path.write_text(
+            json.dumps({"family": "subword", "from": "base/step-000000100.pt", "stages": stages})
+        )
+        plan = load_plan(path, "flow", ROOT)
+        run = controller("run_workflow")
+        calls = []
+
+        def run_stage(kind, recipe, launch, deadline, examples):
+            calls.append(recipe)
+            call = Mock()
+            if recipe["run_id"].removeprefix("flow-").split("-a")[0] in fail:
+                call.get.side_effect = RuntimeError("training failed")
+            else:
+                call.get.return_value = {"checkpoint": f"/runs/{recipe['run_id']}/step-1.pt"}
+            return call
+
+        run.__globals__.update(
+            Path=lambda path: Path(root) / str(path).lstrip("/"),
+            json=json,
+            time=time,
+            record=Mock(),
+            run_volume=Mock(),
+            track_call=Mock(),
+            modal=Mock(),
+            STAGE_RESERVE_SECONDS=1800,
+            modal_post_train=Mock(run_stage=run_stage),
+            relative=lambda path: str(Path(path).relative_to("/runs")),
+        )
+        result = run(plan, select(plan, start, end), LAUNCH, checkpoint)
+        return result, {recipe["run_id"]: recipe["parent"] for recipe in calls}
+
+    def test_chains_post_training_and_skips_finished_stages(self):
+        sft = {"stage": "sft", "data": {"volume": "math-data"}, "settings": {"steps": 1}}
+        stages = [
+            {**sft, "name": "chat"},
+            {"stage": "sft", "branches": [{**sft, "name": "a"}, {**sft, "name": "b"}]},
+        ]
+        with tempfile.TemporaryDirectory() as root:
+            result, parents = self.run_plan(root, stages, end="chat")
+            self.assertEqual(parents, {"flow-chat": "base/step-000000100.pt"})
+            self.assertEqual(result["chat"]["output"]["checkpoint"], "flow-chat/step-1.pt")
+            # A later launch continues the same workflow run with the unfinished stages.
+            _, parents = self.run_plan(root, stages)
+            self.assertEqual(
+                parents, {"flow-a": "flow-chat/step-1.pt", "flow-b": "flow-chat/step-1.pt"}
+            )
+
+    def test_sequential_post_training_waits_for_its_parent(self):
+        sft = {"stage": "sft", "data": {"volume": "d"}, "settings": {"steps": 1}}
+        stages = [{**sft, "name": "chat"}, {**sft, "name": "more"}]
+        with tempfile.TemporaryDirectory() as root:
+            result, parents = self.run_plan(root, stages)
+            self.assertEqual(parents["flow-more"], "flow-chat/step-1.pt")
+            self.assertEqual(result["more"]["status"], "completed")
+
+    def test_failed_stage_runs_again_as_a_new_attempt(self):
+        stages = [
+            {"stage": "sft", "name": "chat", "data": {"volume": "d"}, "settings": {"steps": 1}}
+        ]
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaisesRegex(RuntimeError, "training failed"):
+                self.run_plan(root, stages, fail=("chat",))
+            result, parents = self.run_plan(root, stages, checkpoint="other/step-000000002.pt")
+            self.assertEqual(parents, {"flow-chat-a2": "other/step-000000002.pt"})
+            self.assertEqual(result["chat"]["status"], "completed")
+
+    def test_unfinished_parent_needs_a_checkpoint(self):
+        sft = {"stage": "sft", "data": {"volume": "d"}, "settings": {"steps": 1}}
+        stages = [{**sft, "name": "chat"}, {**sft, "name": "more"}]
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaisesRegex(ValueError, "--checkpoint"):
+                self.run_plan(root, stages, start="more")
+            _, parents = self.run_plan(root, stages, start="more", checkpoint="x/step-000000003.pt")
+            self.assertEqual(parents, {"flow-more": "x/step-000000003.pt"})

@@ -1,16 +1,19 @@
-"""Prepare the hybrid recipe's token shards on Modal CPUs, in training order.
+"""Prepare a hybrid recipe's token shards on Modal CPUs, in training order: the hybrid
+family's data stage (`workflows/stages/data.py`).
 
-Run from training/:
-    modal run --detach -m model_hybrid.modal_data --run-id <id> [--recipe <json>]
-
-The launch fixes one deadline 24 hours ahead (less a supervisor margin). An
-independent supervisor cancels every recorded call at that deadline. The
+A workflow's data stage runs `coordinate` under the workflow launch's deadline and
+supervisor (`workflows/modal_app.py`), which records every call it starts. The
 coordinator builds the contamination screen once (or uses the one the recipe's
 `screen` names), then prepares shards (held-out shards first, then by when training
-will read them) with at most `parallel` workers. Every call has `retries=0` and a timeout bounded by the deadline; shards
+will read them) with at most `parallel` workers. Every call has `retries=0` and a
+timeout bounded by the deadline; shards
 that already exist are skipped, so a later launch continues the preparation.
 Shards land on the `lm-exploration-hybrid-data` volume under `<recipe name>/`,
 with `screen.json` and `capacity.json` reports beside them.
+
+    modal run -m model_hybrid.modal_data::smoke [--recipe <json>]
+
+builds the screen and each source's held-out shard only.
 """
 
 import json
@@ -19,9 +22,10 @@ from pathlib import Path
 
 import modal
 
-app = modal.App("lm-exploration-hybrid-data")
-volume = modal.Volume.from_name("lm-exploration-hybrid-data", create_if_missing=True)
-secret = modal.Secret.from_name("simple-llm-hf")
+from workflows.modal_app import app, hf_secret, run_volume, track_call
+from workflows.modal_app import hybrid_data as volume
+
+secret = hf_secret
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install(
@@ -35,8 +39,7 @@ image = (
             "HF_HUB_CACHE": "/tmp/upstream",
         }
     )
-    .add_local_file("workflows/__init__.py", "/project/workflows/__init__.py")
-    .add_local_file("workflows/deadline.py", "/project/workflows/deadline.py")
+    .add_local_dir("workflows", "/project/workflows", ignore=["__pycache__"])
     .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
     .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__", "kernels"])
 )
@@ -47,18 +50,6 @@ DEFAULT_RECIPE = "hybrid/recipes/hybrid-40b-v1.json"
 def screen_path(recipe):
     """The recipe's contamination screen: its own, or another recipe's named by `screen`."""
     return ROOT / recipe.get("screen", f"{recipe['name']}/screen.npy")
-
-
-def calls_folder(run_id, deadline):
-    """This launch's call records; a later launch of the same run gets its own folder."""
-    return ROOT / ".calls" / run_id / str(int(deadline))
-
-
-def status(run_id, **fields):
-    path = ROOT / ".runs" / f"{run_id}.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"updated_unix": time.time(), **fields}, indent=2) + "\n")
-    volume.commit()
 
 
 @app.function(
@@ -156,12 +147,14 @@ def schedule(recipe):
     timeout=86400,
     retries=0,
     secrets=[secret],
-    volumes={"/data": volume},
+    volumes={"/data": volume, "/runs": run_volume},
 )
-def coordinate(run_id, recipe, deadline, parallel):
-    from workflows.deadline import bounded_timeout, track
+def coordinate(launch, recipe, deadline, parallel):
+    """Prepare every shard of `recipe` within launch `launch`'s deadline; returns the
+    capacity report, or raises if a shard failed."""
+    from workflows.deadline import bounded_timeout
 
-    track(calls_folder(run_id, deadline), modal.current_function_call_id(), "coordinate")
+    track_call(launch, modal.current_function_call_id(), "coordinate")
     folder = ROOT / recipe["name"]
     if "screen" in recipe and not screen_path(recipe).exists():
         raise FileNotFoundError(f"Screen {recipe['screen']} is not prepared")
@@ -169,8 +162,7 @@ def coordinate(run_id, recipe, deadline, parallel):
         call = build_screen.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
             recipe, deadline
         )
-        track(calls_folder(run_id, deadline), call.object_id, "build_screen")
-        volume.commit()
+        track_call(launch, call.object_id, "build_screen")
         call.get()
     volume.reload()
     pending, running, done, failed = schedule(recipe), {}, {}, []
@@ -180,7 +172,7 @@ def coordinate(run_id, recipe, deadline, parallel):
             call = prepare.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
                 recipe, name, index, deadline
             )
-            track(calls_folder(run_id, deadline), call.object_id, f"prepare {name} {index}")
+            track_call(launch, call.object_id, "prepare_shard")
             running[call.object_id] = (name, index, call)
         volume.commit()
         for call_id, (name, index, call) in list(running.items()):
@@ -194,13 +186,9 @@ def coordinate(run_id, recipe, deadline, parallel):
             del running[call_id]
             if meta:
                 done[f"{name}/{index}"] = meta
-        status(
-            run_id,
-            stage="preparing",
-            done=len(done),
-            running=len(running),
-            pending=len(pending),
-            failed=failed,
+        print(
+            json.dumps({"done": len(done), "running": len(running), "pending": len(pending)}),
+            flush=True,
         )
         time.sleep(10)
     from training_data.packed_shards import source_root
@@ -227,64 +215,10 @@ def coordinate(run_id, recipe, deadline, parallel):
             ),
         }
     (folder / "capacity.json").write_text(json.dumps(capacity, indent=2) + "\n")
-    status(
-        run_id,
-        stage="completed" if not failed else "completed_with_failures",
-        done=len(done),
-        failed=failed,
-        capacity=capacity,
-    )
+    volume.commit()
+    if failed:
+        raise RuntimeError(f"{len(failed)} shards failed: {failed[:3]}")
     return capacity
-
-
-@app.function(
-    image=image, cpu=0.25, memory=512, timeout=86400, retries=0, volumes={"/data": volume}
-)
-def enforce_deadline(run_id, deadline):
-    """Independent supervisor: cancel every recorded call of this launch at its deadline."""
-    from workflows.deadline import cancel_at_deadline, tracked_calls
-
-    path = ROOT / ".runs" / f"{run_id}.json"
-
-    def done():
-        volume.reload()
-        return path.exists() and json.loads(path.read_text())["stage"].startswith("completed")
-
-    def calls():
-        volume.reload()
-        return tracked_calls(calls_folder(run_id, deadline))
-
-    cancelled = cancel_at_deadline(deadline, calls, done)
-    if cancelled is None:
-        return {"stage": "completed"}
-    return {"stage": "deadline_cancelled", "cancelled": cancelled}
-
-
-@app.local_entrypoint()
-def main(run_id: str, recipe: str = DEFAULT_RECIPE, parallel: int = 48):
-    import re
-
-    from training_data.packed_shards import load_recipe
-
-    from workflows.deadline import new_deadline
-
-    if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
-        raise ValueError("Invalid run ID")
-    resolved = load_recipe(recipe)
-    deadline = new_deadline()
-    supervisor = enforce_deadline.spawn(run_id, deadline)
-    call = coordinate.with_options(timeout=int(deadline - time.time())).spawn(
-        run_id, resolved, deadline, parallel
-    )
-    print(
-        json.dumps(
-            {
-                "deadline_unix": deadline,
-                "supervisor": supervisor.object_id,
-                "coordinator": call.object_id,
-            }
-        )
-    )
 
 
 @app.local_entrypoint()

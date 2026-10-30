@@ -9,7 +9,7 @@ two end points of the 20B WSD pretraining run
 Data `math-gsm8k-metamath-02` (dataset SHA256 `f757e05f…`): 224,035 training rows
 (7,469 GSM8K, 217,064 MetaMathQA GSM rows) and 498 GSM8K validation problems; 17,015
 rewrites of validation problems and 97 test-overlapping problems were dropped. Both runs
-used [`recipes/`](recipes/): 7,500 steps of 32 examples (about one epoch), context 2,048,
+(the `metamath` branches of `workflows/math-sft-{20b,5b}.json`) used 7,500 steps of 32 examples (about one epoch), context 2,048,
 constant LR 5e-5 with AdamW, one H100.
 
 | Run ID | Parent | Validation loss, step 500 → 7,500 |
@@ -49,8 +49,9 @@ these scores have not been recomputed with it.
 
 ## Replay runs (r02)
 
-[`recipes/math-metamath-replay-{20b,5b}.json`](recipes/) train the same data from the
-same parents for 15,000 steps (about two epochs) with a cosine schedule (2e-5 peak, 300
+The `metamath-replay` branches of [`math-sft-20b.json`](../workflows/math-sft-20b.json) and
+[`math-sft-5b.json`](../workflows/math-sft-5b.json) train the same data from the same
+parents for 15,000 steps (about two epochs) with a cosine schedule (2e-5 peak, 300
 warmup steps, decaying to 2e-6), and replay 8 windows of 1,024 pretraining tokens per
 step from the 20B run's snapshot: 60% ClimbMix, 40% code (35% curated, 5% MIT), with
 replay weight 0.25. Each run took about 1h54 on one H100. r02 ran with replay built into

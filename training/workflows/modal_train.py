@@ -1,11 +1,13 @@
-"""Training workflows for every model family: launch, qualify and continue sessions.
+"""Run workflows (`workflows/plan.py`): their stages in order, from data preparation to
+post-training, as one launch with one deadline.
 
     modal run --detach -m workflows.modal_train::main --workflow <workflow.json> --run-id <id> \\
-        [--model-config <config>] [--resume <run>/step-NNNNNNNNN.pt]
+        [--start <stage>] [--end <stage>] [--checkpoint <run>/step-NNNNNNNNN.pt]
     modal run -m workflows.modal_train::stop --run-id <id>
 
-One deadline supervisor, one session chain (`continue_training`) and one stop request
-serve every family; a family supplies its session runner (`train_segment` for
+`run_workflow` runs the selected stages; one deadline supervisor and one stop request
+serve the whole launch. Pretraining and mid-training stages of every family share one
+session chain (`continue_training`); a family supplies its session runner (`train_segment` for
 subword GPTs, `hybrid_segment` for the hybrid, each `torchrun -m <family trainer>`
 in a fresh `<run id>-sNN` folder resuming the previous session's final checkpoint)
 and its launch preflight. Workflow state (status, session reports, tracked calls)
@@ -17,33 +19,32 @@ No job launches on import/deployment.
 
 import json
 import subprocess
-import threading
 import time
 from pathlib import Path
 
 import modal
+
+# Registers the hybrid data stage's functions on the app.
+from model_hybrid import modal_data
 from model_hybrid.image import image as hybrid_image
 
 from distributed.image import image as gpu_image
-from workflows.images import add_project
-
-cpu_image = add_project(
-    modal.Image.debian_slim(python_version="3.12")
-    .pip_install(
-        "tokenizers==0.22.2", "requests==2.34.2", "pyarrow==26.0.0", "huggingface-hub==1.33.0"
-    )
-    .env({"PYTHONPATH": "/project"})
+from workflows import modal_post_train
+from workflows.modal_app import (
+    STOP_FILE,
+    app,
+    control,
+    cpu_image,
+    data_volume,
+    enforce_deadline,
+    hf_secret,
+    hybrid_data,
+    hybrid_runs,
+    record,
+    run_volume,
+    track_call,
+    watch,
 )
-app = modal.App("lm-exploration-training-workflows")
-data_volume = modal.Volume.from_name("lm-exploration-mixture-data")
-run_volume = modal.Volume.from_name("lm-exploration-training")
-hybrid_data = modal.Volume.from_name("lm-exploration-hybrid-data", create_if_missing=True)
-hybrid_runs = modal.Volume.from_name("lm-exploration-hybrid-runs", create_if_missing=True)
-hf_secret = modal.Secret.from_name("simple-llm-hf")
-# run id -> "stop" asks the running session to checkpoint and exit at its next step.
-control = modal.Dict.from_name("lm-exploration-training-control", create_if_missing=True)
-STOP_FILE = "/tmp/training-stop"
-
 
 # Audits a prepared snapshot still needs; allow_unreviewed_data accepts them explicitly.
 PENDING_AUDITS = [
@@ -54,14 +55,6 @@ PENDING_AUDITS = [
 ]
 
 
-def track_call(run_id, call_id, kind):
-    """Record a call so the deadline supervisor can cancel it."""
-    from workflows.deadline import track
-
-    track(Path("/runs/.calls") / run_id, call_id, kind)
-    run_volume.commit()
-
-
 def spawn_training(run_id, snapshot, bundle, provenance, **options):
     """Start a training chain within this launch's deadline and track it."""
     from workflows.deadline import bounded_timeout
@@ -69,11 +62,11 @@ def spawn_training(run_id, snapshot, bundle, provenance, **options):
     call = continue_training.with_options(
         timeout=bounded_timeout(provenance["deadline_unix"], 86400)
     ).spawn(run_id, snapshot, bundle, provenance, **options)
-    track_call(run_id, call.object_id, "continue_training")
+    track_call(provenance["workflow_run_id"], call.object_id, f"continue_training:{run_id}")
     return call.object_id
 
 
-def started_chain(run_id, wait):
+def started_chain(launch, run_id, wait):
     """The training chain this launch already started, from the calls it tracks.
 
     `continue_training` tracks itself as it starts; after a preempted launch, wait a few
@@ -85,38 +78,10 @@ def started_chain(run_id, wait):
         if attempt:
             time.sleep(60)
         run_volume.reload()
-        calls = tracked_calls(Path("/runs/.calls") / run_id, kind="continue_training")
+        calls = tracked_calls(Path("/runs/.calls") / launch, kind=f"continue_training:{run_id}")
         if calls:
             return calls[0]
     return None
-
-
-def watch(run_id, every, sync=()):
-    """Every `every` seconds until the returned event is set: create the trainer's stop
-    file once the run's stop is requested, and run each `sync` action."""
-    done = threading.Event()
-
-    def loop():
-        while not done.wait(every):
-            if control.get(run_id) == "stop":
-                Path(STOP_FILE).touch()
-            for action in sync:
-                try:
-                    action()
-                except Exception as error:  # noqa: BLE001 - retried on the next pass.
-                    print(f"volume sync: {error}", flush=True)
-
-    threading.Thread(target=loop, daemon=True).start()
-    return done
-
-
-def record(run_id, stage, *, status_file="workflow.json", **details):
-    folder = Path("/runs") / run_id
-    folder.mkdir(parents=True, exist_ok=True)
-    status = {"run_id": run_id, "stage": stage, "updated_unix": time.time(), **details}
-    (folder / status_file).write_text(json.dumps(status, indent=2) + "\n")
-    run_volume.commit()
-    print(json.dumps(status), flush=True)
 
 
 @app.function(
@@ -248,7 +213,8 @@ def continue_training(
     # Hybrid evaluation kernels are not bit-reproducible across processes.
     tolerance = 1e-3 if policy.family == "hybrid" else 0.0
     deadline = provenance["deadline_unix"]
-    track_call(run_id, modal.current_function_call_id(), "continue_training")
+    launch = provenance["workflow_run_id"]
+    track_call(launch, modal.current_function_call_id(), f"continue_training:{run_id}")
     if type(first_segment) is not int or not 0 <= first_segment < policy.max_segments:
         raise ValueError("Invalid first segment")
     validate_paths(f"{run_id}-s{first_segment:02d}", snapshot, initial_resume)
@@ -286,7 +252,7 @@ def continue_training(
                 policy.qualification_steps if segment < policy.qualification_segments else None,
                 segment_seconds(timeout, policy.segment_seconds),
             )
-            track_call(run_id, call.object_id, "train_segment")
+            track_call(launch, call.object_id, "train_segment")
             report = call.get()
             if report["stop_reason"] == "stop_requested":
                 record(
@@ -343,7 +309,12 @@ def continue_training(
     # Private code sources stream with the HF token.
     secrets=[modal.Secret.from_name("simple-llm-hf")],
 )
-def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=False):
+def prepare_and_launch(
+    run_id, version, bundle, provenance, resume_preparation=False, launch_training=True
+):
+    """Prepare the stage's raw snapshot (or reuse a compatible one) and, with
+    `launch_training`, start its training chain: on the growing snapshot with
+    `overlap_preparation`, else once the data is prepared."""
     import os
     import shutil
     from concurrent.futures import ThreadPoolExecutor
@@ -359,10 +330,13 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
 
     policy, dataset, config = resolve_payload(bundle)
     settings = config.as_dict()
+    overlap = policy.overlap_preparation and launch_training
     validate_paths(run_id + "-s00", f"{version}/snapshots/{run_id}", "")
     deadline = provenance["deadline_unix"]
     bounded_timeout(deadline, 86400)
-    track_call(run_id, modal.current_function_call_id(), "prepare_and_launch")
+    track_call(
+        provenance["workflow_run_id"], modal.current_function_call_id(), "prepare_and_launch"
+    )
     if dataset.mode != "prepare_raw":
         raise ValueError("Preparation requires a prepare_raw dataset config")
     data_root = Path("/data") / dataset.root
@@ -373,7 +347,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
     selection_path = run_folder / "resolved-workflow.json"
     launch_path = run_folder / "launch.json"
     # Overlapped training owns workflow.json, so that preparation reports in its own file.
-    status_file = "preparation.json" if policy.overlap_preparation else "workflow.json"
+    status_file = "preparation.json" if overlap else "workflow.json"
     status_path = run_folder / status_file
     snapshot = f"{version}/snapshots/{run_id}"
     manifest_path = data_root / snapshot / "manifest.json"
@@ -388,9 +362,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
             raise ValueError("Preparation resume requires the identical resolved workflow")
         # Overlapped training runs on its own chain, so its preparation can always resume.
         preparation_failed = prior.get("stage") == "failed" and (
-            policy.overlap_preparation
-            or not manifest_path.exists()
-            and not (Path("/runs") / f"{run_id}-s00").exists()
+            overlap or not manifest_path.exists() and not (Path("/runs") / f"{run_id}-s00").exists()
         )
         if not resume_preparation or not (prior.get("stage") == "preparing" or preparation_failed):
             raise ValueError("Only stopped preparation can reuse its workflow run ID")
@@ -421,6 +393,8 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
             report_status(
                 "data_reused", snapshot=reused, target_tokens=target, pending_data_audits=pending
             )
+            if not launch_training:
+                return {"snapshot": reused, "data_reused": True}
             call_id = spawn_training(
                 run_id, reused, bundle, {**provenance, "pending_data_audits": pending}
             )
@@ -456,12 +430,14 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
             if not restarted:
                 export_growing(folder, manifest_path.parent, PENDING_AUDITS)
                 data_volume.commit()
-            return started_chain(run_id, wait=restarted) or spawn_training(
+            return started_chain(
+                provenance["workflow_run_id"], run_id, wait=restarted
+            ) or spawn_training(
                 run_id, snapshot, bundle, {**provenance, "pending_data_audits": PENDING_AUDITS}
             )
 
         training_call = None
-        if policy.overlap_preparation and manifest_path.exists():
+        if overlap and manifest_path.exists():
             training_call = start_training()
         # Copies run on their own thread so preparation keeps writing meanwhile.
         persister = ThreadPoolExecutor(max_workers=1)
@@ -480,7 +456,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
                     if launch:
                         training_call = start_training()
                 launch = (
-                    policy.overlap_preparation
+                    overlap
                     and training_call is None
                     and all(
                         s["train_loss_tokens"] > 0 and s["validation_loss_tokens"] >= prefix_tokens
@@ -509,7 +485,7 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
         finally:
             persister.shutdown(wait=True)
         check_capacity(report, target)
-        if policy.overlap_preparation:
+        if overlap:
             # One final copy for the version and one frozen into the snapshot.
             persist(report, (folder / "raw.sqlite", manifest_path.parent / "raw.sqlite"))
             corpus.close()
@@ -532,6 +508,8 @@ def prepare_and_launch(run_id, version, bundle, provenance, resume_preparation=F
         report_status(
             "data_prepared", snapshot=snapshot, capacity=report, pending_data_audits=pending_audits
         )
+        if not launch_training:
+            return {"snapshot": snapshot}
         if training_call is None:
             training_call = spawn_training(
                 run_id, snapshot, bundle, {**provenance, "pending_data_audits": pending_audits}
@@ -591,7 +569,7 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
     _, dataset, config = resolve_payload(bundle)
     deadline = provenance["deadline_unix"]
     bounded_timeout(deadline, 86400)
-    track_call(run_id, modal.current_function_call_id(), "launch_snapshot")
+    track_call(provenance["workflow_run_id"], modal.current_function_call_id(), "launch_snapshot")
     if dataset.mode != "snapshot":
         raise ValueError("Snapshot launch requires a snapshot dataset config")
     validate_paths(run_id + "-s00", dataset.snapshot, resume or phase_from)
@@ -602,7 +580,9 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
         # A run that trained during preparation continues on its frozen final database.
         completion = manifest_path.parent / COMPLETE_RECORD
         if not completion.exists():
-            raise ValueError("Finish the growing snapshot's preparation with --resume-preparation")
+            raise ValueError(
+                "Finish the growing snapshot's preparation: launch its workflow run again"
+            )
         verified = json.loads(completion.read_text())["capacity_verified_for_tokens"]
         if not config.pilot and verified < config.target_tokens:
             raise ValueError("Growing snapshot capacity was verified for fewer tokens")
@@ -644,7 +624,7 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
         call = seed_phase.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
             phase_from, resume, str(manifest_path), bundle, note=f"workflow run {run_id}"
         )
-        track_call(run_id, call.object_id, "seed_phase")
+        track_call(provenance["workflow_run_id"], call.object_id, "seed_phase")
         lineage = call.get()
         record(run_id, "phase_seeded", seed=resume, parent=phase_from, lineage=lineage)
     call_id = spawn_training(run_id, dataset.snapshot, bundle, provenance, initial_resume=resume)
@@ -660,22 +640,26 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
     max_containers=1,
     volumes={"/runs": run_volume, "/hybrid-data": hybrid_data, "/hybrid-runs": hybrid_runs},
 )
-def launch_hybrid(run_id, bundle, provenance, resume=""):
-    """Preflight a hybrid workflow (recipe prepared, resume checkpoint present), then
-    start its session chain."""
+def launch_hybrid(run_id, bundle, provenance, resume="", init_from=""):
+    """Preflight a hybrid stage (recipe prepared, resume checkpoint or `init_from` export
+    present), then start its session chain."""
     from workflows.checks import validate_paths
     from workflows.config import resolve_payload
     from workflows.deadline import bounded_timeout
 
+    if init_from:
+        bundle = {**bundle, "model": {**bundle["model"], "init_from": f"/runs/{init_from}"}}
     _, _, settings = resolve_payload(bundle)
     bounded_timeout(provenance["deadline_unix"], 3600)
-    track_call(run_id, modal.current_function_call_id(), "launch_hybrid")
+    track_call(provenance["workflow_run_id"], modal.current_function_call_id(), "launch_hybrid")
     validate_paths(run_id + "-s00", None, resume)
     recipe = json.loads(Path(settings["recipe"]).read_text())
     if not (Path("/hybrid-data") / recipe["name"]).is_dir():
         raise ValueError(f"Prepare the {recipe['name']} recipe on the hybrid data volume first")
     if resume and not (Path("/hybrid-runs") / resume).exists():
         raise ValueError(f"No checkpoint {resume} on the hybrid runs volume")
+    if init_from and not (Path("/hybrid-runs") / init_from / "model.safetensors").exists():
+        raise ValueError(f"No export {init_from} on the hybrid runs volume")
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=False)
     provenance = {**provenance, "resolved_workflow": bundle}
@@ -684,73 +668,316 @@ def launch_hybrid(run_id, bundle, provenance, resume=""):
     return {"training_call_id": call_id, "recipe": recipe["name"]}
 
 
+# Seconds before the launch deadline at which the orchestrator stops starting stages.
+STAGE_RESERVE_SECONDS = 1800
+
+
+def stage_status(run_id):
+    """The status a stage's run records in `/runs/<run_id>/workflow.json`, or None."""
+    run_volume.reload()
+    path = Path("/runs") / run_id / "workflow.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def last_checkpoint(run_id):
+    """The final checkpoint of the last session a pretraining stage's run reported."""
+    reports = sorted((Path("/runs") / run_id).glob("segment-*.json"))
+    return json.loads(reports[-1].read_text())["final_checkpoint"] if reports else None
+
+
+def await_training(run_id, deadline):
+    """Wait for a pretraining stage's session chain: its final status, or None when the
+    launch deadline comes first (a later launch continues it)."""
+    while time.time() < deadline - STAGE_RESERVE_SECONDS:
+        status = stage_status(run_id)
+        if status and status["stage"] in ("completed", "failed", "stopped", "deadline_cancelled"):
+            return status
+        time.sleep(60)
+    return None
+
+
+def relative(path):
+    return str(Path(path).relative_to("/runs"))
+
+
+def run_training_stage(stage, plan, state, parent, provenance, launch_data):
+    """Run (or continue) a pretraining or mid-training stage; its output, or None if
+    the launch ends first. `launch_data` is the data stage to prepare first, if any."""
+    from workflows.config import resolve_payload
+
+    deadline = provenance["deadline_unix"]
+    bundle, family = stage["spec"], plan["family"]
+    record_ = state["stages"].setdefault(stage["name"], {"attempt": 0})
+    previous_run = record_.get("run_id")
+    # A stage interrupted by an earlier launch resumes its last checkpoint in a new run.
+    resume = stage.get("resume", "")
+    if previous_run:
+        resume = last_checkpoint(previous_run) or resume
+        resume = relative(resume) if resume.startswith("/runs") else resume
+    record_["attempt"] += 1
+    run = stage["run_id"] if record_["attempt"] == 1 else f"{stage['run_id']}-a{record_['attempt']}"
+    record_.update(run_id=run, status="running")
+    stage_provenance = {**provenance, "stage": stage["name"]}
+    if family == "hybrid":
+        init_from = ""
+        if stage["stage"] == "midtrain" and not resume:
+            init_from = parent["export"]
+        launch_hybrid.spawn(run, bundle, stage_provenance, resume, init_from).get()
+    elif launch_data is not None:
+        # Preparation that an earlier launch started continues in that run.
+        if previous_run:
+            run = previous_run
+            record_["attempt"] -= 1
+            record_["run_id"] = run
+        prepared = prepare_and_launch.spawn(
+            run,
+            launch_data["spec"]["version"],
+            bundle,
+            stage_provenance,
+            resume_preparation=bool(previous_run),
+        ).get()
+        state["stages"][launch_data["name"]] = {"status": "completed", "output": prepared}
+    else:
+        snapshot = (
+            state["stages"][stage["data"]]["output"]["snapshot"] if stage.get("data") else None
+        )
+        if snapshot:
+            _, dataset, _ = resolve_payload(bundle)
+            bundle = {
+                **bundle,
+                "dataset": {
+                    "mode": "snapshot",
+                    "root": dataset.root,
+                    "loader": "raw",
+                    "snapshot": snapshot,
+                },
+            }
+        phase_from = parent["checkpoint"] if stage["stage"] == "midtrain" and not resume else ""
+        launch_snapshot.spawn(run, bundle, stage_provenance, resume, phase_from).get()
+    status = await_training(run, deadline)
+    # A stage stopped on request continues, like one the deadline ended, at the next launch.
+    if status is None or status["stage"] == "stopped":
+        return None
+    if status["stage"] != "completed":
+        raise RuntimeError(
+            f"Stage {stage['name']} ended {status['stage']}: {status.get('error', '')}"
+        )
+    output = {"checkpoint": relative(status["final_checkpoint"])}
+    if family == "hybrid":
+        output["export"] = str(
+            Path(output["checkpoint"]).parent / "export" / f"tokens-{status['trained_tokens']:012d}"
+        )
+    return output
+
+
+def run_data_stage(stage, plan, consumer, provenance, resume=False):
+    """Prepare a data stage's data on its own (`resume` continues an earlier launch's
+    preparation); its output."""
+    deadline = provenance["deadline_unix"]
+    from workflows.deadline import bounded_timeout
+
+    if plan["family"] == "hybrid":
+        from model_hybrid.data import load_recipe
+
+        recipe = load_recipe(stage["spec"]["recipe"])
+        call = modal_data.coordinate.with_options(timeout=bounded_timeout(deadline, 86400)).spawn(
+            plan["run_id"], recipe, deadline, stage["spec"]["parallel"]
+        )
+        track_call(plan["run_id"], call.object_id, "coordinate")
+        return {"recipe": stage["spec"]["recipe_name"], "capacity": call.get()}
+    if consumer is None:
+        raise ValueError(f"Data stage {stage['name']} feeds no pretraining stage of the workflow")
+    return prepare_and_launch.spawn(
+        stage["run_id"],
+        stage["spec"]["version"],
+        consumer["spec"],
+        {**provenance, "stage": stage["name"]},
+        resume_preparation=resume,
+        launch_training=False,
+    ).get()
+
+
 @app.function(
     image=cpu_image,
-    cpu=0.25,
-    memory=512,
+    cpu=1,
+    memory=2048,
     timeout=86400,
     retries=0,
     volumes={"/runs": run_volume},
+    secrets=[hf_secret],
 )
-def enforce_deadline(run_id, deadline_unix):
-    """Independent supervisor: cancel every recorded call of this launch at its deadline."""
-    from workflows.deadline import cancel_at_deadline, tracked_calls
+def run_workflow(plan, selected, provenance, checkpoint="", examples=None, qualify=0):
+    """Run the selected stages of a workflow in order, skipping those an earlier launch of
+    this workflow run finished; records `/runs/<run>/stages.json` and the launch status.
+    With `qualify` N, qualify exact resume of the one selected SFT stage over N steps
+    instead (`modal_post_train.qualify_sft`)."""
+    launch, deadline = plan["run_id"], provenance["deadline_unix"]
+    track_call(launch, modal.current_function_call_id(), "run_workflow")
+    run_volume.reload()
+    state_path = Path("/runs") / launch / "stages.json"
+    state = {"plan_sha256": plan["sha256"], "stages": {}}
+    if state_path.exists():
+        state = json.loads(state_path.read_text())
+        if state["plan_sha256"] != plan["sha256"]:
+            raise ValueError("This workflow run was started with another plan")
 
-    status = Path("/runs") / run_id / "workflow.json"
-    preparation = status.with_name("preparation.json")
+    def save():
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps(state, indent=2) + "\n")
+        run_volume.commit()
 
-    def stage(path):
-        return json.loads(path.read_text())["stage"] if path.exists() else None
+    stages = {stage["name"]: stage for stage in plan["stages"]}
+    order = [stage["name"] for stage in plan["stages"]]
 
-    def done():
-        run_volume.reload()
-        # Overlapped preparation can outlast training only if it is still preparing.
-        return stage(status) == "completed" and stage(preparation) != "preparing"
+    def parent_of(stage):
+        """The output of the stage this one continues, or the given/`from` checkpoint."""
+        if stage.get("parent") is None:
+            return None
+        given = checkpoint or plan["from"]
+        if stage["parent"] != "from":
+            done = state["stages"].get(stage["parent"], {})
+            if done.get("status") == "completed":
+                return done["output"]
+            if stage["parent"] in selected:
+                raise RuntimeError(f"Stage {stage['parent']} did not finish")
+            given = checkpoint
+        if not given:
+            raise ValueError(
+                f"Stage {stage['name']} needs --checkpoint: its parent stage has not run"
+            )
+        return {"checkpoint": given, "export": given}
 
-    def calls():
-        run_volume.reload()
-        return tracked_calls(Path("/runs/.calls") / run_id)
+    def consumer_of(data_stage):
+        for name in order[order.index(data_stage) + 1 :]:
+            if stages[name].get("data") == data_stage:
+                return stages[name]
+        return None
 
-    cancelled = cancel_at_deadline(deadline_unix, calls, done)
-    if cancelled is None:
-        return {"stage": "completed"}
-    record(run_id, "deadline_cancelled", cancelled_calls=cancelled)
-    return {"stage": "deadline_cancelled", "cancelled_calls": cancelled}
+    # Post-training calls still running; branches of the last stage run side by side.
+    pending = {}
+
+    def finish(name):
+        result = pending.pop(name).get()
+        state["stages"][name].update(
+            status="completed",
+            output={"checkpoint": relative(result["checkpoint"])},
+            result=result,
+        )
+        save()
+
+    record(launch, "running", selected=selected, provenance=provenance)
+    try:
+        if qualify:
+            stage = stages[selected[0]]
+            recipe = {
+                **stage["spec"],
+                "run_id": f"{stage['run_id']}-q",
+                "parent": parent_of(stage)["checkpoint"],
+            }
+            report = modal_post_train.qualify_sft(
+                recipe, launch, deadline, qualify, (examples or {}).get(stage["name"], b"")
+            )
+            record(launch, "completed", qualification=report, provenance=provenance)
+            return report
+        for name in selected:
+            stage = stages[name]
+            if state["stages"].get(name, {}).get("status") == "completed":
+                continue
+            if time.time() >= deadline - STAGE_RESERVE_SECONDS:
+                record(launch, "paused", stages=state["stages"], provenance=provenance)
+                return state["stages"]
+            consumer = consumer_of(name) if stage["stage"] == "data" else None
+            if stage["stage"] == "data":
+                # A subword corpus prepared together with the selected stage it feeds.
+                if plan["family"] == "subword" and consumer and consumer["name"] in selected:
+                    continue
+                resume = state["stages"].get(name, {}).get("status") == "running"
+                state["stages"][name] = {"status": "running"}
+                save()
+                state["stages"][name] = {
+                    "status": "completed",
+                    "output": run_data_stage(stage, plan, consumer, provenance, resume),
+                }
+                save()
+                continue
+            if stage.get("parent") in pending:
+                finish(stage["parent"])
+            parent = parent_of(stage)
+            if stage["stage"] in ("pretrain", "midtrain"):
+                data_stage = stage.get("data")
+                launch_data = None
+                if (
+                    plan["family"] == "subword"
+                    and data_stage
+                    and state["stages"].get(data_stage, {}).get("status") != "completed"
+                ):
+                    if data_stage not in selected:
+                        raise RuntimeError(f"Data stage {data_stage} has not run in this workflow")
+                    launch_data = stages[data_stage]
+                save()
+                output = run_training_stage(stage, plan, state, parent, provenance, launch_data)
+                save()
+                if output is None:
+                    record(launch, "paused", stages=state["stages"], provenance=provenance)
+                    return state["stages"]
+                state["stages"][name].update(status="completed", output=output)
+                save()
+                continue
+            # A stage an earlier launch started runs again from its parent in a new run.
+            attempt = state["stages"].get(name, {}).get("attempt", 0) + 1
+            run = stage["run_id"] if attempt == 1 else f"{stage['run_id']}-a{attempt}"
+            recipe = {**stage["spec"], "run_id": run, "parent": parent["checkpoint"]}
+            state["stages"][name] = {"status": "running", "run_id": run, "attempt": attempt}
+            save()
+            pending[name] = modal_post_train.run_stage(
+                stage["stage"], recipe, launch, deadline, (examples or {}).get(name, b"")
+            )
+        for name in list(pending):
+            finish(name)
+    except BaseException as error:
+        for done in state["stages"].values():
+            if done.get("status") == "running":
+                done["status"] = "failed"
+        save()
+        record(launch, "failed", error=repr(error), stages=state["stages"], provenance=provenance)
+        raise
+    record(launch, "completed", stages=state["stages"], provenance=provenance)
+    return state["stages"]
 
 
 @app.local_entrypoint()
 def main(
     workflow: str,
     run_id: str,
-    version: str = "",
-    model_config: str = "",
-    dataset_config: str = "",
-    resume_preparation: bool = False,
-    resume: str = "",
-    phase_from: str = "",
+    start: str = "",
+    end: str = "",
+    checkpoint: str = "",
+    qualify: int = 0,
 ):
-    import subprocess
-
-    from workflows.checks import validate_paths
-    from workflows.config import load_workflow, resolve_payload
-
-    bundle = load_workflow(workflow, model_config=model_config, dataset_config=dataset_config)
-    policy, dataset, _ = resolve_payload(bundle)
-    if policy.family == "hybrid":
-        if version or resume_preparation or phase_from:
-            raise ValueError("Hybrid workflows take only a run config and an optional resume")
-        snapshot = None
-    elif dataset.mode == "prepare_raw":
-        snapshot = f"{version}/snapshots/{run_id}"
-    else:
-        snapshot = dataset.snapshot
-    validate_paths(run_id + "-s00", snapshot, resume or phase_from)
+    """Run a workflow, or its stages `--start` to `--end`, as workflow run `--run-id`;
+    `--checkpoint` is the parent of the first selected stage if its parent stage has not
+    finished in this run. Launching the same workflow and run ID again continues it.
+    `--qualify N` qualifies exact resume of one selected SFT stage over N steps."""
+    from workflows.checks import parent_path
     from workflows.deadline import new_deadline
+    from workflows.plan import load_workflow, select
 
+    plan = load_workflow(workflow, run_id)
+    selected = select(plan, start, end)
+    stages = {stage["name"]: stage for stage in plan["stages"]}
+    if qualify and (len(selected) != 1 or stages[selected[0]]["stage"] != "sft" or qualify < 2):
+        raise ValueError("--qualify N (at least 2) selects one SFT stage with --start/--end")
+    if checkpoint:
+        parent_path(checkpoint, "checkpoint")
+    examples = {
+        stage["name"]: modal_post_train.local_examples(stage["spec"])
+        for stage in plan["stages"]
+        if stage["name"] in selected and stage["stage"] == "sft"
+    }
     provenance = {
         "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         "workflow_run_id": run_id,
-        "resolved_workflow": bundle,
+        "workflow": plan.get("name", ""),
         # Every call this launch starts stops by this time.
         "deadline_unix": new_deadline(),
     }
@@ -759,21 +986,15 @@ def main(
     supervisor = enforce_deadline.spawn(run_id, provenance["deadline_unix"])
     print(
         json.dumps(
-            {"deadline_unix": provenance["deadline_unix"], "supervisor": supervisor.object_id}
+            {
+                "deadline_unix": provenance["deadline_unix"],
+                "supervisor": supervisor.object_id,
+                "stages": selected,
+            }
         )
     )
-    if policy.family == "hybrid":
-        print(launch_hybrid.spawn(run_id, bundle, provenance, resume).get())
-    elif dataset.mode == "prepare_raw":
-        if resume or phase_from:
-            raise ValueError("Checkpoint resume requires a prepared snapshot dataset")
-        call = prepare_and_launch.spawn(run_id, version, bundle, provenance, resume_preparation)
-        print(call.get())
-    else:
-        if version or resume_preparation:
-            raise ValueError("Snapshot datasets do not use version or resume_preparation")
-        call = launch_snapshot.spawn(run_id, bundle, provenance, resume, phase_from)
-        print(call.get())
+    result = run_workflow.remote(plan, selected, provenance, checkpoint, examples, qualify)
+    print(json.dumps(result, indent=2))
 
 
 @app.local_entrypoint()
