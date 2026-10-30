@@ -9,9 +9,11 @@ fixed-prompt samples, and bf16
 exports to the run's HF repo every `hf_every_tokens` and at the end.
 
     torchrun --nproc_per_node=8 -m model_hybrid.train --config <run.json> \\
-        --run-dir <dir> --data-root <dir> --stop-unix <time> [--max-tokens N]
+        --run-dir <dir> --data-root <dir> --stop-unix <time> [--max-tokens N] \\
+        [--max-steps N] [--resume <checkpoint>] [--stop-file <path>]
 
-A run directory resumes from its latest checkpoint.
+A run directory resumes from `--resume` or else its latest checkpoint;
+`workflows.modal_train` runs sessions this way for every family.
 """
 
 import argparse
@@ -546,14 +548,19 @@ def main():
     parser.add_argument("--data-root", required=True)
     parser.add_argument("--stop-unix", type=float, required=True)
     parser.add_argument("--max-tokens", type=int)
+    parser.add_argument("--max-steps", type=int)
+    parser.add_argument("--resume", help="A checkpoint to resume (default: the run's latest)")
+    parser.add_argument("--stop-file", default=STOP_FILE)
     args = parser.parse_args()
     loop.train(
         HybridFamily(RunConfig.load(args.config), args.run_dir, args.data_root),
         args.run_dir,
         runtime=DistributedRuntime.from_torchrun(os.environ),
+        resume=args.resume,
         stop_unix=args.stop_unix,
+        max_steps=args.max_steps,
         stop_tokens=args.max_tokens,
-        stop_file=STOP_FILE,
+        stop_file=args.stop_file,
     )
 
 
