@@ -10,8 +10,9 @@ updates 30 minutes before the launch deadline to evaluate and save. No call retr
 - SFT: one training call on the stage's GPU (`trainer/sft.py`). `qualify_sft` checks
   exact resume first: an uninterrupted run against stop, fresh-container restore and
   continue.
-- RL: one H100 training call (`trainer/rl/`) that runs model-written code only in a
-  network-blocked sandbox, recorded for the supervisor. The workflow's family picks the
+- RL: one training call on the stage's `gpus` H100s (`trainer/rl/`, one process per GPU)
+  that runs model-written code only in a network-blocked sandbox, recorded for the
+  supervisor; an RL stage resumes its own run when relaunched. The workflow's family picks the
   worker: subword runs on the subword image with its runs on the training volume; hybrid
   on the hybrid image (its kernels) with parents and runs on the hybrid runs volume and
   the prompt pool on the training volume.

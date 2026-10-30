@@ -143,8 +143,10 @@ See the [SFT guide](../sft/README.md). The parent is a checkpoint of any stage, 
 the trainer checks that its architecture and tokenizer fit
 ([`trainer/checkpoints.py`](../trainer/checkpoints.py)).
 
-An RL stage entry holds its `pool` and the trainer's `settings` ([`trainer/rl/`](../trainer/rl/__init__.py));
-it trains on one H100 and runs model-written code only in a network-blocked sandbox.
+An RL stage entry holds its `pool`, its `gpus` (1–8 H100s, one process each) and the
+trainer's `settings` ([`trainer/rl/`](../trainer/rl/__init__.py)); it runs model-written
+code only in a network-blocked sandbox. A run that stops short of its step target leaves
+the stage paused, and the next launch resumes it in the same run.
 The parent checkpoint's architecture picks the model family's adapter
 ([`trainer/families.py`](../trainer/families.py)). Subword runs use the subword image and
 the training volume; hybrid runs use the hybrid image, with parents and runs on the

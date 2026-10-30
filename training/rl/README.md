@@ -127,8 +127,8 @@ clipping, and AWR's weights.
 
 ## The loop
 
-[`../trainer/rl/loop.py`](../trainer/rl/loop.py); the workflow stage currently runs it on
-one H100. Steps 1–3 are the `sampler` and `reuse` sources; the `file` source draws
+[`../trainer/rl/loop.py`](../trainer/rl/loop.py), on the stage's `gpus` H100s (see
+[24-hour limit](#24-hour-limit)). Steps 1–3 are the `sampler` and `reuse` sources; the `file` source draws
 `answers_per_step` rewarded answers instead.
 
 1. **Prompts.** Draw `prompts_per_step` (64) training problems of the pool,
@@ -172,8 +172,20 @@ loss, at the start, every `evaluate_every` steps and at the end.
 RL runs as a stage of a [workflow](../workflows/README.md), under the launch's deadline
 and supervisor: one training call of at most 21 hours (`max_seconds` at most 20), no
 retries. Training stops taking updates 30 minutes before the deadline. The code sandbox
-is recorded for the supervisor, which terminates it when the launch ends. A run does
-not resume: a relaunch reruns an unfinished RL stage from its parent.
+is recorded for the supervisor, which terminates it when the launch ends. A run saves a
+checkpoint every `save_every` steps, every `save_seconds` (an hour) and when it stops,
+with its optimizer, prompt scheduler, trajectory source and random generators; the
+last `keep_checkpoints` are kept. A run that stops before its step target (the time
+limit, the deadline, or the workflow's `stop` entrypoint) leaves the stage paused, and
+the next launch of the workflow run resumes it exactly in the same run folder; only
+the step target and the save, validation and time settings may change. The final
+validation and the family's export follow the step target.
+
+The stage's `gpus` (1–8) sets the H100s ([`../trainer/rl/ranks.py`](../trainer/rl/ranks.py)):
+one process per GPU, every process drawing the same prompts and sampling and training
+its share (`prompts_per_step` must split evenly), with gradients averaged before
+clipping. Validation is sharded the same way. The launching process holds the code
+sandbox and serves it, volume commits and the stop request to the processes.
 
 ### Logged
 
