@@ -3,9 +3,10 @@ family's data stage (`workflows/stages/data.py`).
 
 A workflow's data stage runs `coordinate` under the workflow launch's deadline and
 supervisor (`workflows/modal_app.py`), which records every call it starts. The
-coordinator builds the contamination screen once, then prepares shards (held-out
-shards first, then by when training will read them) with at most `parallel`
-workers. Every call has `retries=0` and a timeout bounded by the deadline; shards
+coordinator builds the contamination screen once (or uses the one the recipe's
+`screen` names), then prepares shards (held-out shards first, then by when training
+will read them) with at most `parallel` workers. Every call has `retries=0` and a
+timeout bounded by the deadline; shards
 that already exist are skipped, so a later launch continues the preparation.
 Shards land on the `lm-exploration-hybrid-data` volume under `<recipe name>/`,
 with `screen.json` and `capacity.json` reports beside them.
@@ -44,6 +45,11 @@ ROOT = Path("/data")
 DEFAULT_RECIPE = "hybrid/recipes/hybrid-40b-v1.json"
 
 
+def screen_path(recipe):
+    """The recipe's contamination screen: its own, or another recipe's named by `screen`."""
+    return ROOT / recipe.get("screen", f"{recipe['name']}/screen.npy")
+
+
 @app.function(
     image=image,
     cpu=4,
@@ -55,7 +61,8 @@ DEFAULT_RECIPE = "hybrid/recipes/hybrid-40b-v1.json"
 )
 def build_screen(recipe, deadline):
     import numpy as np
-    from model_hybrid import data, tokenizer
+    from model_hybrid import tokenizer
+    from training_data import packed_shards as data
 
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -93,7 +100,8 @@ def prepare(recipe, name, index, deadline):
     import shutil
 
     import numpy as np
-    from model_hybrid import data, tokenizer
+    from model_hybrid import tokenizer
+    from training_data import packed_shards as data
 
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -103,7 +111,7 @@ def prepare(recipe, name, index, deadline):
         return json.loads(meta_path.read_text())
     os.environ["RAYON_NUM_THREADS"] = "8"
     glm = tokenizer.load(tokenizer.tokenizer_file("/tmp/tokenizer"))
-    screen = np.load(folder / "screen.npy")
+    screen = np.load(screen_path(recipe))
     meta = data.prepare_shard(recipe, name, index, folder, glm, screen, tokenizer.EOS_ID)
     shutil.rmtree("/tmp/upstream", ignore_errors=True)
     volume.commit()
@@ -112,10 +120,12 @@ def prepare(recipe, name, index, deadline):
 
 def schedule(recipe):
     """(source, index) in the order they are needed: held-out shards, then by expected use."""
-    from model_hybrid import data
+    from training_data import packed_shards as data
 
-    jobs = [(-1.0, name, data.heldout_index(s)) for name, s in recipe["sources"].items()]
-    for name, source in recipe["sources"].items():
+    # Sources prepared under another recipe (`prepared_in`) are not prepared again.
+    own = {n: s for n, s in recipe["sources"].items() if "prepared_in" not in s}
+    jobs = [(-1.0, name, data.heldout_index(s)) for name, s in own.items()]
+    for name, source in own.items():
         scale = source["estimated_tokens_per_shard"] / source["weight"]
         jobs += [(p * scale, name, i) for p, i in enumerate(data.training_order(recipe, name))]
     return [(name, index) for _, name, index in sorted(jobs)]
@@ -137,7 +147,9 @@ def coordinate(launch, recipe, deadline, parallel):
 
     track_call(launch, modal.current_function_call_id(), "coordinate")
     folder = ROOT / recipe["name"]
-    if not (folder / "screen.npy").exists():
+    if "screen" in recipe and not screen_path(recipe).exists():
+        raise FileNotFoundError(f"Screen {recipe['screen']} is not prepared")
+    if not screen_path(recipe).exists():
         call = build_screen.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
             recipe, deadline
         )
@@ -170,9 +182,13 @@ def coordinate(launch, recipe, deadline, parallel):
             flush=True,
         )
         time.sleep(10)
+    from training_data.packed_shards import source_root
+
+    volume.reload()  # shard workers created the recipe folder after this call started
     capacity = {}
     for name in recipe["sources"]:
-        metas = [m for m in done.values() if m["source"] == name]
+        shards = source_root(recipe, folder, name) / name
+        metas = [json.loads(p.read_text()) for p in sorted(shards.glob("*.json"))]
         train = [m for m in metas if not m["heldout"]]
         capacity[name] = {
             "train_shards": len(train),
@@ -180,9 +196,14 @@ def coordinate(launch, recipe, deadline, parallel):
             "heldout_tokens": sum(m["tokens"] for m in metas if m["heldout"]),
             "documents": sum(m["documents"] for m in metas),
             "dropped": {
-                k: sum(m["dropped"][k] for m in metas) for k in ("license", "empty", "contaminated")
+                k: sum(m["dropped"].get(k, 0) for m in metas)
+                for k in ("license", "empty", "short", "contaminated")
             },
-            "needed_tokens": round(recipe["target_tokens"] * recipe["sources"][name]["weight"]),
+            "needed_tokens": round(
+                recipe["target_tokens"]
+                * (1 - recipe.get("replay", {}).get("fraction", 0))
+                * recipe["sources"][name]["weight"]
+            ),
         }
     (folder / "capacity.json").write_text(json.dumps(capacity, indent=2) + "\n")
     volume.commit()
@@ -194,7 +215,7 @@ def coordinate(launch, recipe, deadline, parallel):
 @app.local_entrypoint()
 def smoke(recipe: str = DEFAULT_RECIPE):
     """Build the screen and prepare each source's held-out shard (one bounded call each)."""
-    from model_hybrid.data import heldout_index, load_recipe
+    from training_data.packed_shards import heldout_index, load_recipe
 
     from workflows.deadline import new_deadline
 

@@ -9,7 +9,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from model_hybrid import byte_data, data, hnet
+from model_hybrid import byte_data, hnet
+from training_data import packed_shards as data
 
 from trainer.optimizers import RoleOptimizer, parameter_groups
 

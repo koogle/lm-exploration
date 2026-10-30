@@ -2,7 +2,8 @@
 
 `HybridFamily` adapts a run config (hybrid/configs/*.json) to the common training
 loop: the hybrid model with role-declared Muon/AdamW, prepared-shard data
-(`data.PreparedMixture`; budget: every window token), the objective mean
+(`training_data.packed_shards.PreparedMixture`, with optional replay; budget: every
+window token), the objective mean
 next-token loss plus the decaying MTP weight times mean MTP loss (each over its
 global target count), held-out loss, bits per byte, gate and sink statistics,
 fixed-prompt samples, and bf16 exports to the run's HF repo every
@@ -248,21 +249,57 @@ def upload_export(lm, model_config, run_dir, progress, repo, private=True):
 
 def recipe_data(config, data_root):
     """(identity, mixture factory, held-out factory(mixture, context)) for a run config's
-    prepared-shard recipe; held-out windows wait for each source's held-out shard."""
-    from .data import PreparedMixture, heldout_windows, wait_for_heldout
+    prepared-shard recipe.
+
+    Replay reads an earlier recipe's prepared shards at this recipe's context. Held-out
+    windows wait for each source's held-out shard and add the replayed sources' own.
+    """
+    from training_data.packed_shards import (
+        PreparedMixture,
+        ReplayMixture,
+        heldout_windows,
+        wait_for_heldout,
+    )
 
     recipe = json.loads(Path(config.recipe).read_text())
     root = Path(data_root) / recipe["name"]
+    replay = recipe.get("replay")
+    if replay:
+        replay_recipe = json.loads(
+            (Path(config.recipe).parent / f"{replay['recipe']}.json").read_text()
+        )
+        replay_recipe["context"] = recipe["context"]
+        replay_root = Path(data_root) / replay_recipe["name"]
+        replay_rows = round(config.global_rows * replay["fraction"])
+
+    def mixture():
+        primary = PreparedMixture(recipe, root)
+        if not replay:
+            return primary
+        return ReplayMixture(primary, PreparedMixture(replay_recipe, replay_root), replay_rows)
 
     def heldout(mixture, context):
-        wait_for_heldout(recipe, mixture)
-        return {
-            name: heldout_windows(recipe, mixture.root, name, context, count)
+        primary = getattr(mixture, "primary", mixture)
+        wait_for_heldout(recipe, primary)
+        windows = {
+            name: heldout_windows(recipe, primary.root, name, context, count)
             for name, count in config.eval_documents.items()
+            if name in recipe["sources"]
         }
+        if replay:
+            windows |= {
+                name: heldout_windows(replay_recipe, replay_root, name, context, count)
+                for name, count in config.eval_documents.items()
+                if name in replay_recipe["sources"]
+            }
+        return windows
 
-    identity = {"recipe": recipe, "tokenizer_sha256": glm.SHA256}
-    return identity, lambda: PreparedMixture(recipe, root), heldout
+    identity = {
+        "recipe": recipe,
+        "replay": replay_recipe["name"] if replay else None,
+        "tokenizer_sha256": glm.SHA256,
+    }
+    return identity, mixture, heldout
 
 
 class HybridData:
@@ -356,9 +393,10 @@ class HybridFamily:
         }
 
     def source_files(self):
+        from training_data import mixture, packed_shards
+
         from . import (
             cuda_extension,
-            data,
             documents,
             fused_loss,
             kda,
@@ -370,7 +408,6 @@ class HybridFamily:
 
         modules = (
             cuda_extension,
-            data,
             documents,
             fused_loss,
             hybrid_model,
@@ -380,7 +417,12 @@ class HybridFamily:
             hybrid_tokenizer,
         )
         files = {f"hybrid.{Path(m.__file__).stem}": Path(m.__file__) for m in modules}
-        return {"family": Path(__file__), **files}
+        return {
+            "family": Path(__file__),
+            **files,
+            "packed_shards": Path(packed_shards.__file__),
+            "mixture": Path(mixture.__file__),
+        }
 
     def branchable(self, saved):
         return False

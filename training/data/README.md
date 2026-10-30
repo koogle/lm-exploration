@@ -13,6 +13,12 @@ CLI lives in [`prepare_simple_llm.py`](prepare_simple_llm.py); run
 The corresponding CPU Modal launcher lives in
 [`../modal_scripts/modal_prepare_simple_llm.py`](../modal_scripts/modal_prepare_simple_llm.py).
 
+The hybrid family's GLM data uses [`packed_shards.py`](packed_shards.py): uint32
+shards with real EOS and per-document byte counts, a 13-gram benchmark screen, and
+`PreparedMixture`, which packs documents into fixed windows and can read shards still
+being prepared. It shares the source-scheduling rule (`mixture.deficit_source`) with
+`TokenMixture`; recipes and the Modal launcher are in [`../hybrid/`](../hybrid/README.md).
+
 `datasets.json` records each dataset's source, license review and eligibility;
 [`registry.py`](registry.py) validates it with pydantic.
 Paths in it are relative to this `data/` directory. Active training consumes the
