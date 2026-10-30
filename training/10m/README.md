@@ -2,7 +2,7 @@
 
 The complete architecture is in [model.py](model.py): six pre-RMSNorm causal
 decoder blocks, width 384, six attention heads, RoPE (theta 10,000), SwiGLU
-(hidden width 1,024), causal SDPA and tied input/output embeddings. Projection
+(hidden width 1,024), document-causal attention and tied input/output embeddings. Projection
 biases, normal initialization (std 0.02), context 256 and norm epsilon 1e-5
 remain. With 65 characters it has **10,670,592 unique parameters**.
 The [100M model](../100m/README.md) uses this same implementation at larger dimensions.
@@ -18,6 +18,18 @@ learned positions, GELU, untied embeddings; **10,795,776 parameters**). That cod
 removed from this checkout; the public bundle ships its own `model.py` and
 `generate.py`, and the last revision with the in-repo implementation is `1e06fb8`
 (`training/10m/legacy.py`).
+
+## Document masking
+
+Training windows pack whole documents back to back, each ending in EOS. Every forward
+pass masks attention by document: `ModelConfig.eos_id` is required, `find_documents`
+derives each token's document and its position within it from the EOS tokens in the
+input, a token attends only to earlier tokens of its own document, and RoPE positions
+restart after each EOS. bf16/fp16 CUDA tensors use FlashAttention's varlen kernel
+(`torch.nn.attention.varlen.varlen_attn`) over the flattened batch; other devices and
+dtypes use SDPA with an explicit document-causal mask. Checkpoints record `eos_id` in
+their architecture config. `tests/check_documents_cuda.py` compares the varlen path with
+explicit per-document attention on an H100.
 
 From `training/`, verify with:
 

@@ -83,7 +83,7 @@ def generate(checkpoint, rows, deadline):
     saved = torch.load(path, map_location="cpu", weights_only=False)
     if saved["format"] == "scholarly-ddp-v1":
         cfg = {k: saved["config"][k] for k in ("n_layer", "n_head", "n_embd")}
-        cfg.update(vocab_size=32768, block_size=saved["config"]["context"])
+        cfg.update(vocab_size=32768, block_size=saved["config"]["context"], eos_id=EOS_TOKEN_ID)
     elif saved["format"] == "repair-sft-v2":
         cfg = saved["model_config"]
     else:

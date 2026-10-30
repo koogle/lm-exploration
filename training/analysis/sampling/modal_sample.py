@@ -21,7 +21,7 @@ TIMEOUT_SECONDS = 30 * 60
 def image(*packages):
     return (
         modal.Image.debian_slim(python_version="3.12")
-        .pip_install("torch==2.6.0", "numpy", *packages)
+        .pip_install("torch==2.14.1", "numpy", *packages)
         .env({"PYTHONPATH": "/project"})
         .add_local_dir("analysis/sampling", "/project/sampling")
     )
