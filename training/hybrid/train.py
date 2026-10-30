@@ -196,10 +196,9 @@ def evaluate(lm, heldout, device, eos_id):
                 with torch.autocast("cuda", dtype=torch.bfloat16):
                     losses = lm(x, y, targets)
                 # Models without MTP (the H-Net) return no mtp_ sums; chunk counts are H-Net only.
-                losses.setdefault("mtp_ce", torch.zeros(()))
-                losses.setdefault("mtp_count", torch.zeros((), dtype=torch.long))
                 for key in sums:
-                    sums[key] += losses[key].item() if key.endswith("ce") else int(losses[key])
+                    if key in losses:
+                        sums[key] += losses[key].item() if key.endswith("ce") else int(losses[key])
                 for key in chunking:
                     chunking[key] += int(losses.get(key, 0))
                 activations.append(
@@ -329,7 +328,8 @@ def pretraining_heldout(config):
 
 
 def recipe_data(config, data_root):
-    """(mixture factory(state), held-out factory(mixture, context)) for a run config's recipe.
+    """(identity, mixture factory, held-out factory(mixture, context), chat) for a run
+    config's recipe.
 
     Replay reads an earlier recipe's prepared shards at this recipe's context; chat
     SFT recipes hold out conversations per subset, pretraining recipes per source,
