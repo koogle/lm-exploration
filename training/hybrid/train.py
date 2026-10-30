@@ -66,6 +66,9 @@ class RunConfig:
     hf_repo: str = ""
     hf_every_tokens: int = 5_000_000_000
     seed: int = 1234
+    # An export folder (config.json, model.safetensors) whose trunk weights start the
+    # run when it has no checkpoint yet, e.g. a pretrained model for mid-training.
+    init_from: str = ""
 
     @classmethod
     def load(cls, path):
@@ -321,7 +324,13 @@ class HybridFamily:
         return self.lm
 
     def initialize(self, model):
-        """Fresh runs keep the model's own initialization."""
+        """An `init_from` export's trunk weights start a fresh run (mid-training);
+        otherwise the model keeps its own initialization."""
+        if self.config.init_from:
+            from safetensors.torch import load_file
+
+            path = Path(self.config.init_from) / "model.safetensors"
+            model.load_state_dict(load_file(path, device="cpu"))
 
     def compile(self, model):
         return torch.compile(model) if self.config.compile else model

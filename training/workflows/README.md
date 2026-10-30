@@ -1,120 +1,147 @@
 # Training workflows
 
-A workflow names a model family and its configuration, then owns the execution
-settings. One controller ([`modal_train.py`](modal_train.py)) launches every family:
-an independent supervisor cancels the launch's calls at its 24-hour deadline, and a
-session chain runs bounded sessions (`torchrun -m <family trainer>` over
-[`trainer.loop`](../trainer/README.md), each in a fresh `<run id>-sNN` folder that
-resumes the previous session's final checkpoint), checks progress and resume between
-them, and stops on request (`modal run -m workflows.modal_train::stop --run-id <id>`).
-Every image carries the same project sources ([`images.py`](images.py)).
+A workflow file describes how a model is made, as a list of stages:
 
-| Family | `model_config` | Data | Sessions | Run folders |
-| --- | --- | --- | --- | --- |
-| `subword` | `model_configs/*.json` (next to the workflow) | `dataset_config`: prepare or reuse a token snapshot | `trainer.subword` | `lm-exploration-training` |
-| `hybrid` | `hybrid/configs/*.json` (under training/); owns its recipe and token target | prepared by `hybrid/modal_data.py` | `model_hybrid.train` | `lm-exploration-hybrid-runs` |
+| Stage | Does | Module |
+| --- | --- | --- |
+| `data` | Prepare training data for a later pretraining or mid-training stage | [`stages/data.py`](stages/data.py) |
+| `pretrain` | Train a model from scratch | [`stages/pretrain.py`](stages/pretrain.py) |
+| `midtrain` | Continue the previous checkpoint on new data, context or schedule | [`stages/pretrain.py`](stages/pretrain.py) |
+| `sft` | Supervised fine-tuning of the previous checkpoint | [`stages/sft.py`](stages/sft.py) |
+| `rl` | Reinforcement learning from the previous checkpoint | not yet a stage |
 
-Workflow state (`<run id>/workflow.json`, session reports, tracked calls) lives on
-`lm-exploration-training` for every family. Hybrid workflows:
-
-```sh
-uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
-  --run-id <id> [--model-config hybrid/configs/<config>.json] [--resume <run>-sNN/step-N.pt]
+```json
+{
+  "name": "math-sft-20b",
+  "family": "subword",
+  "from": "climbmix-124m-wsd20b-02-s02/step-000203724.pt",
+  "stages": [
+    {"stage": "sft", "branches": [{"name": "metamath", ...}, {"name": "metamath-replay", ...}]}
+  ]
+}
 ```
 
-The rest of this page covers the subword family's settings and data.
+A workflow may hold every stage or any part of them. One workflow goes from corpus to
+pretrained model. Another holds only SFT stages that start from a pretrained
+checkpoint, `from`. Each stage starts from the previous training stage's final
+checkpoint. The first training stage that isn't pretraining starts from `from`. A
+pretraining or mid-training stage names the data stage it trains on in `data`. The
+last stage may list `branches`: stages of one kind that run side by side from the same
+parent, such as SFT with and without replay. [`plan.py`](plan.py) resolves a workflow
+file into its plan.
+
+Every stage of a workflow belongs to one `family`:
+
+| Family | `model_config` | Data stage | Sessions | Run folders |
+| --- | --- | --- | --- | --- |
+| `subword` | `workflows/model_configs/*.json` | `dataset_config` (`prepare_raw`) and `version`: a raw snapshot on `lm-exploration-mixture-data` | `trainer.subword` | `lm-exploration-training` |
+| `hybrid` | `hybrid/configs/*.json`; owns its token target | `recipe`: token shards on `lm-exploration-hybrid-data` ([`hybrid/modal_data.py`](../hybrid/modal_data.py)) | `model_hybrid.train` | `lm-exploration-hybrid-runs` |
+
+Post-training stages exist for `subword`. File paths in a workflow are relative to
+`training/`.
+
+## Inspect and run
+
+Run commands from `training/`. Inspect the resolved plan locally; this does not import
+Modal, download data or launch work:
+
+```sh
+uv run python -m workflows --workflow workflows/climbmix-124m-wsd-20b.json --run-id my-run-01
+```
+
+Launch it on Modal. One launch runs the selected stages in order, within one 24-hour
+deadline:
+
+```sh
+uv run modal run --detach -m workflows.modal_train::main \
+  --workflow workflows/climbmix-124m-wsd-20b.json --run-id my-run-01 \
+  [--start <stage>] [--end <stage>] [--checkpoint <run>/step-NNNNNNNNN.pt]
+uv run modal run -m workflows.modal_train::stop --run-id my-run-01
+```
+
+- Stage `<name>` runs as `<run id>-<name>`. A relaunch of a stage that a launch left
+  unfinished adds `-a2`, `-a3`, ...
+- `/runs/<run id>/stages.json` on `lm-exploration-training` records each finished
+  stage's output. Launching the same workflow and run ID again skips finished stages
+  and continues the rest. A pretraining stage longer than one launch resumes its last
+  checkpoint. A data stage continues its preparation. The plan's SHA256 must match:
+  start a changed workflow under a new run ID.
+- `--start` and `--end` select stages by name. `--checkpoint` is the parent of the
+  first selected stage when its parent stage hasn't finished in this run, for
+  example to run a workflow's SFT stages from another pretrained model.
+- `stop` asks the running training session to save a checkpoint and exit. The
+  workflow pauses, and the next launch continues it.
+- An independent supervisor cancels every call and sandbox of the launch at its
+  deadline ([`modal_app.py`](modal_app.py), [`deadline.py`](deadline.py)). A stage
+  starts only if at least 30 minutes remain.
+
+## Pretraining and mid-training stages
+
+A stage entry holds the execution settings of `PretrainConfig`
+([`config.py`](config.py)): GPU family and count, token target, data-review opt-in,
+pilot mode, session length, qualification and continuation, and preparation
+concurrency and overlap with training. It also holds `model_config` and its data.
 
 | Files | Owns |
 | --- | --- |
-| `*.json` | Model/dataset selection, GPU family/count, token target, data-review opt-in, pilot mode, session/qualification/continuation, preparation concurrency and overlap with training |
+| `*.json` | Workflows: stages and their execution settings |
 | [`model_configs/`](model_configs/README.md) | Architecture dimensions, context/batching, optimizer, learning-rate schedule, checkpoint/evaluation settings |
 | `datasets/*.json` | Dataset root on the Modal volume, loader, and either a prepared snapshot or a corpus preparation recipe |
 
 There is one owner per setting. Model configs cannot contain `world_size`,
 `target_tokens`, `pilot`, `allow_unreviewed_data` or `data_loader`. The resolver
-combines the three selections into a validated `DistributedConfig` for the trainer.
-Changing GPU count still requires compatible global/microbatch sizes.
+combines the selections into a validated `DistributedConfig` for the trainer, and
+the plan carries their frozen contents and SHA256 provenance. Changing the GPU count
+needs compatible global and microbatch sizes.
 
-## Inspect and run
+The controller runs bounded sessions (`torchrun -m <family trainer>` over
+[`trainer.loop`](../trainer/README.md), each in a fresh `<stage run>-sNN` folder that
+resumes the previous session's final checkpoint). It checks progress and validation
+continuity between sessions, up to `max_segments`. Qualification uses the model's
+final schedule with a short step limit, then continues the same checkpoint lineage.
+`qualification_segments: 0` skips it.
 
-Run commands from `training/`. Inspect the complete resolved configuration locally;
-this does not import Modal, download data or launch work:
+Data:
 
-```sh
-uv run python -m workflows --workflow workflows/h100x1-pilot.json
-uv run python -m workflows --workflow workflows/h100x1-pilot.json \
-  --model-config model_configs/modern-124m.json \
-  --dataset-config datasets/pilot-tokens.json
-```
+- A subword stage without a data stage selects a `snapshot` dataset config:
+  `snapshot: "VERSION/snapshots/NAME"`, a `raw` or `token_shards` loader and the
+  `root` folder on the data volume. Format, tokenizer, review status,
+  train/validation splits and non-pilot capacity are checked before a GPU is
+  scheduled.
+- A subword data stage prepares a `prepare_raw` dataset config: `loader: "raw"` and a
+  corpus `recipe` (`training_data.simple_llm.load_recipe`). It goes into
+  `<root>/<version>/snapshots/<stage run>`. The pretraining stage that names it sizes
+  and checks the preparation. The two run together, and with `overlap_preparation`
+  training starts on the growing snapshot. An exact compatible snapshot is reused.
+- A hybrid data stage prepares its recipe's token shards. The training stage reads
+  them under the recipe's name.
 
-Model/dataset references and selector overrides are relative to the workflow file's
-directory. Preparation recipes are relative to `training/`. Config files are loaded
-explicitly; continuation jobs receive their frozen contents and SHA256 provenance
-rather than reloading whichever files happen to exist later.
+Continuing a checkpoint:
 
-The generic Modal entrypoint accepts the same selections:
-
-```sh
-# Existing prepared token snapshot, one GPU.
-uv run modal run --detach -m workflows.modal_train::main \
-  --workflow workflows/h100x1-pilot.json --run-id my-pilot-01
-
-# Prepare/reuse a raw corpus: select a workflow whose dataset uses prepare_raw.
-uv run modal run --detach -m workflows.modal_train::main \
-  --workflow workflows/MY-WORKFLOW.json --run-id my-training-01 --version my-data-v1
-```
+- `resume` in a pretraining stage continues a pretraining checkpoint exactly, for
+  example a WSD decay branch (`climbmix-124m-wsd-20b-decay-5b.json`). The trainer
+  requires identical settings, sources, dataset and PyTorch version.
+- `midtrain` continues the previous checkpoint with new data, context or schedule.
+  - `subword`: `seed_phase` (CPU, one-hour timeout) writes
+    `<stage run>-seed/step-000000000.pt` with the parent's weights, optimizer state
+    and RNG, then trains from it. See
+    [continued pretraining](../trainer/README.md#continued-pretraining).
+  - `hybrid`: starts from the parent's exported weights (`init_from`) with a fresh
+    optimizer, so its run config may change the context length or drop MTP heads.
 
 `h100x1-pilot.json` and `h100x2-pilot.json` share one model config and dataset config.
-No shipped workflow prepares a raw corpus: the 12-source scholarly/code recipe and
-its `small-5b.json` workflow were removed with that mixture.
 `h100x3-20b.json` is a template: replace its dataset's placeholder snapshot with a
-prepared, reviewed, capacity-qualified snapshot before launch. These configurations
-are not newly measured or deployed results.
+prepared, reviewed, capacity-qualified snapshot before launch.
+`model_configs/historical/` keeps earlier recipe files as configuration provenance.
 
-## Select datasets
+## Post-training stages
 
-- `mode: "snapshot"` requires `snapshot: "VERSION/snapshots/NAME"` and a loader of
-  `raw` or `token_shards`. `root` selects the directory under the mounted data
-  volume. Format, tokenizer, review status, train/validation availability and
-  non-pilot capacity are checked before scheduling a GPU.
-- `mode: "prepare_raw"` requires `loader: "raw"` and `recipe`, a project-relative
-  corpus recipe accepted by `training_data.simple_llm.load_recipe`. Supply a fresh
-  `--version` when changing staging identity. The workflow reuses an exact compatible
-  snapshot or stages/exports a new one. The selected recipe's contents are frozen
-  in the resolved workflow, including its pinned upstream sources.
+An SFT stage entry holds its `data` (`{"volume": data-id}`, or `{"local": path}`
+uploaded at launch), `gpu` (`L40S` or `H100`), an optional `resume` of an SFT
+checkpoint with `extend`, and the trainer's `settings` ([`trainer/sft.py`](../trainer/sft.py)).
+See the [SFT guide](../sft/README.md). The parent is a checkpoint of any stage, and
+the trainer checks that its architecture and tokenizer fit
+([`trainer/checkpoints.py`](../trainer/checkpoints.py)).
 
-Create another dataset JSON to select another snapshot or supported corpus recipe;
-no controller edit is needed. Both modes currently use the project's frozen 32K
-tokenizer and existing data adapters. Arbitrary tokenizer formats, source schemas
-and character training are not implemented by this configuration change.
-
-## Continuation and recovery
-
-Qualification uses the selected model's final training schedule with a short step
-limit, then continues the same checkpoint lineage. There is no separate active
-qualification recipe. Set `qualification_segments: 0` to skip that phase.
-
-The controller schedules the workflow's GPU count/family and timeout for each
-segment, checks progress and validation continuity, and continues up to
-`max_segments`. The model configuration and dataset selection stay fixed.
-To resume a stopped checkpoint explicitly, select its prepared snapshot dataset
-and launch with a fresh run ID and `--resume OLD_RUN/step-NNNNNNNNN.pt`.
-The trainer still requires identical settings, source, dataset and PyTorch version.
-
-To continue pretraining on new data or with a new schedule, select the new phase's
-snapshot dataset and model config and launch with a fresh run ID and
-`--phase-from OLD_RUN/step-NNNNNNNNN.pt`. The launcher first runs `seed_phase` (CPU,
-one-hour timeout, no retries) in the training image. It writes
-`RUN_ID-seed/step-000000000.pt` with the parent's weights, optimizer state and RNG, then
-trains from that seed. The lineage is recorded in `RUN_ID/workflow.json`. See
-[continued pretraining](../trainer/README.md#continued-pretraining) for what carries over.
-
-Interrupted preparation can use `--resume-preparation` with its original run ID,
-version and identical resolved selection, provided training has not begun. With
-`overlap_preparation`, preparation that stops after its training started also resumes
-this way. A growing snapshot can be selected for `--resume` once its preparation has
-written `complete.json`.
-Historical recipe files are retained under `model_configs/historical/`; the old
-`workflows.modal_small_5b` module and standalone recipe-launch CLI are replaced by
-`workflows.modal_train`. Existing remote resource names and measured artifacts
-remain unchanged. The new controller requires explicit deployment for deployed use.
+`math-sft-20b.json` and `math-sft-5b.json` run math SFT of the WSD end points, with
+and without pretraining replay.

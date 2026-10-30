@@ -220,17 +220,20 @@ order and packs 4,097-token windows (consecutive windows share one token), each
 from the source furthest below its weight; it is resumable and waits for shards
 that are still being prepared, so training can start while preparation runs.
 
-[`modal_data.py`](modal_data.py) prepares shards on Modal CPUs (8 cores, one call
-per shard, up to 48 in parallel), held-out shards first and then in the order
-training reads them, onto the `lm-exploration-hybrid-data` volume:
+[`modal_data.py`](modal_data.py) is the family's data stage: it prepares shards on
+Modal CPUs (8 cores, one call per shard, up to the stage's `parallel`, 48 by
+default), held-out shards first and then in the order training reads them, onto the
+`lm-exploration-hybrid-data` volume. A workflow runs it as a `data` stage, alone or
+before pretraining (`workflows/hybrid-h100x8.json`):
 
 ```sh
-uv run modal run --detach -m model_hybrid.modal_data::main --run-id <id>
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
+    --run-id <id> --end corpus
 ```
 
-The launch fixes a deadline 24 hours ahead; an independent supervisor cancels
-every recorded call then, and each call has `retries=0` and a timeout bounded by
-the deadline. Finished shards are skipped, so another launch continues. The
+The workflow launch's supervisor cancels every recorded call at the 24-hour
+deadline, and each call has `retries=0` and a timeout bounded by the deadline.
+Finished shards are skipped, so another launch continues. The
 coordinator writes `capacity.json` (train/held-out tokens, documents and drops
 per source) and the screen writes `screen.json`.
 
@@ -285,19 +288,20 @@ closes each session. With `hf_repo` set, bf16 trunk weights and config (under
 and at the end.
 
 Training runs through the workflows like every model family
-([workflows/README.md](../workflows/README.md)); `model_config` selects the run
-config:
+([workflows/README.md](../workflows/README.md)); a stage's `model_config` selects
+the run config:
 
 ```sh
 uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
-    --run-id <id> [--model-config hybrid/configs/<config>.json] [--resume <run>-sNN/step-N.pt]
+    --run-id <id> [--start pretrain]
 uv run modal run -m workflows.modal_train::stop --run-id <id>    # checkpoint and exit
 uv run modal run -m model_hybrid.modal_tools::bench --gpus 1     # 30-minute benchmark
 ```
 
-Each session trains in `lm-exploration-hybrid-runs/<run id>-sNN/` and resumes the
-previous session's final checkpoint; a later launch continues a run with
-`--resume`. MFU counts 6 x (matmul weights, including both output-layer uses) plus
+Each session trains in `lm-exploration-hybrid-runs/<stage run>-sNN/` and resumes
+the previous session's final checkpoint; launching the workflow run again continues
+its unfinished stage. A `midtrain` stage starts from the previous stage's exported
+weights (`init_from`). MFU counts 6 x (matmul weights, including both output-layer uses) plus
 attention FLOPs over the mean attended keys, against 989 TFLOPS per H100.
 
 ## Byte-level H-Net

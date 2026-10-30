@@ -8,8 +8,7 @@ by hand in the owning study's docs. uv installs this folder as `evaluation`.
 | --- | --- |
 | `configs/benchmarks.json` | Benchmark datasets (HF repository, pinned commit, files) and settings |
 | `benchmarks/` | One module per benchmark: its prompt format and `score` |
-| `scoring.py` | Log-likelihood batching, greedy generation, answer checking, bits per byte |
-| `checkpoints.py` | Loading a checkpoint with its run's verified model code |
+| `scoring.py` | The scored model interface of a checkpoint (loaded by [`trainer/checkpoints.py`](../../trainer/checkpoints.py) with its run's verified model code), log-likelihood batching, greedy generation, answer checking, bits per byte |
 | `heldout.py` | Validation windows of a raw snapshot |
 | `modal_evaluate.py` | Modal launcher: one H100, 3-hour timeout, no retries |
 

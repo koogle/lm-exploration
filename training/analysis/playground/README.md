@@ -20,7 +20,7 @@ uv run --all-extras modal run -m playground.modal_export \
 ```
 
 1. One Modal CPU call loads each checkpoint with its run's own model code
-   (`evaluation.checkpoints`), checks that the config's shared `model_code` reproduces
+   (`trainer.checkpoints`), checks that the config's shared `model_code` reproduces
    its logits exactly, and writes float32 safetensors (the tied output head stored once),
    the tokenizer and `models.json` (provenance and headline scores from the configured
    evaluation results) to `/runs/playground/EXPORT-NAME`.

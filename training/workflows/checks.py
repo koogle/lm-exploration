@@ -1,7 +1,45 @@
-"""Pure path, capacity, progress and resume checks for training workflows."""
+"""Pure name, path, capacity, progress and resume checks for training workflows."""
 
 import math
 import re
+
+RUN_ID = re.compile(r"[a-zA-Z0-9_-]{1,80}")
+CHECKPOINT = re.compile(r"[a-zA-Z0-9_-]{1,80}/step-[0-9]{9}\.pt")
+
+
+def run_id(value, field="run_id"):
+    """A run or data ID: one folder name on a run volume."""
+    if not isinstance(value, str) or not RUN_ID.fullmatch(value):
+        raise ValueError(f"{field} must match {RUN_ID.pattern}")
+    return value
+
+
+def checkpoint(value, field="checkpoint"):
+    """Volume-relative `run-id/step-NNNNNNNNN.pt`; never an absolute or parent path."""
+    if not isinstance(value, str) or not CHECKPOINT.fullmatch(value):
+        raise ValueError(f"{field} must be run-id/step-NNNNNNNNN.pt")
+    return value
+
+
+EXPORT = re.compile(r"[a-zA-Z0-9_-]{1,80}(/[a-zA-Z0-9_-]{1,80})?/export/tokens-[0-9]{12}")
+
+
+def parent_path(value, field="parent"):
+    """A checkpoint, or a hybrid export folder (`run/export/tokens-N`), on a run volume."""
+    if isinstance(value, str) and EXPORT.fullmatch(value):
+        return value
+    return checkpoint(value, field)
+
+
+def parse_checkpoints(value):
+    """`name=run/step-N.pt,...` into an ordered {name: checkpoint} mapping."""
+    result = {}
+    for item in value.split(","):
+        name, sep, path = item.strip().partition("=")
+        if not sep or name in result:
+            raise ValueError("Expected unique name=run/step-NNNNNNNNN.pt entries")
+        result[run_id(name, "checkpoint name")] = checkpoint(path)
+    return result
 
 
 def validate_paths(run_id, snapshot, resume):

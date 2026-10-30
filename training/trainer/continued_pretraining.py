@@ -9,8 +9,8 @@ hyperparameters (weight decay, betas, Muon momentum and learning-rate ratio) als
 from the new config. Lineage records the parent and the lifetime target count.
 
 Run it where the parent checkpoint and the new snapshot are reachable, with the same
-PyTorch build as the training image, then resume the trainer from the seed. The
-workflow launcher does both with `--phase-from` (see `workflows/README.md`).
+PyTorch build as the training image, then resume the trainer from the seed. A workflow's
+`midtrain` stage does both (see `workflows/README.md`).
 """
 
 import argparse

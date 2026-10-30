@@ -103,8 +103,9 @@ exist. `lineage` records the parent checkpoint and hash, its step, config, data 
 source identity, and `parent_tokens`, the lifetime targets before this phase. Later
 checkpoints keep the lineage, and `report.json` adds `lifetime_loss_tokens`.
 
-Through the workflow launcher, `--phase-from OLD_RUN/step-NNNNNNNNN.pt` seeds the new
-phase in the training image and then trains it (see [workflows](../workflows/README.md)).
+A workflow's `midtrain` stage seeds the new phase from the previous stage's checkpoint
+(or the workflow's `from`) in the training image and then trains it (see
+[workflows](../workflows/README.md)).
 Locally, with the PyTorch build of the training image:
 
 ```sh

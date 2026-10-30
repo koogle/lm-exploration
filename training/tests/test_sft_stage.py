@@ -1,19 +1,18 @@
-"""Offline checks of SFT recipe/argument validation; never imports Modal apps."""
+"""Offline checks of SFT stages (`workflows/stages`); never imports Modal apps."""
 
-import json
-import tempfile
 import time
 import unittest
-from pathlib import Path
 
 from trainer.sft import Settings, train
-from trainer.sft_recipe import load_recipe, parse_checkpoints, validate_recipe
+from workflows.checks import parse_checkpoints
+from workflows.stages import validate as validate_recipe
 
 PARENT = "parent-run/step-000000100.pt"
 
 
 def recipe(**changes):
     value = {
+        "stage": "sft",
         "name": "fixture",
         "run_id": "sft-fixture-r01",
         "parent": PARENT,
@@ -54,6 +53,7 @@ class RecipeTests(unittest.TestCase):
             {"settings": {"steps": 0}},
             {"settings": {"objective": "dpo"}},
             {"unexpected": 1},
+            {"stage": "rl"},
         ):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 validate_recipe(recipe(**changes))
@@ -61,22 +61,6 @@ class RecipeTests(unittest.TestCase):
     def test_extension_recipe(self):
         spec = validate_recipe(recipe(resume="sft-fixture-r01/step-000000200.pt", extend=True))
         self.assertTrue(spec["extend"])
-
-    def test_command_line_overrides(self):
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "recipe.json"
-            path.write_text(json.dumps(recipe()))
-            spec = load_recipe(
-                path, run_id="fresh-r02", parent="other/step-000000005.pt", data_id="data-v1"
-            )
-            self.assertEqual(spec["run_id"], "fresh-r02")
-            self.assertEqual(spec["parent"], "other/step-000000005.pt")
-            self.assertEqual(spec["data"], {"volume": "data-v1"})
-            spec = load_recipe(path, dataset="other.jsonl")
-            self.assertEqual(spec["data"], {"local": "other.jsonl"})
-            self.assertEqual(spec["run_id"], "sft-fixture-r01")
-            with self.assertRaisesRegex(ValueError, "either"):
-                load_recipe(path, dataset="a.jsonl", data_id="b")
 
     def test_checkpoint_list(self):
         parsed = parse_checkpoints(f"base={PARENT}, sft=run/step-000000200.pt")

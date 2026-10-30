@@ -1,16 +1,24 @@
 {
+  "name": "climbmix-124m-wsd-20b-decay-10b",
   "family": "subword",
-  "model_config": "model_configs/modern-124m-wsd-h100x8.json",
-  "dataset_config": "datasets/climbmix-code-v6-20b.json",
-  "target_tokens": 10907981967,
-  "allow_unreviewed_data": true,
-  "pilot": false,
-  "gpu": "H100",
-  "world_size": 8,
-  "segment_seconds": 21600,
-  "worker_timeout_seconds": 25200,
-  "max_segments": 2,
-  "segments_per_call": 2,
-  "qualification_segments": 1,
-  "qualification_steps": 2
+  "stages": [
+    {
+      "stage": "pretrain",
+      "name": "pretrain",
+      "dataset_config": "workflows/datasets/climbmix-code-v6-20b.json",
+      "resume": "climbmix-124m-wsd20b-02-s01/step-000100000.pt",
+      "model_config": "workflows/model_configs/modern-124m-wsd-h100x8.json",
+      "target_tokens": 10907981967,
+      "allow_unreviewed_data": true,
+      "pilot": false,
+      "gpu": "H100",
+      "world_size": 8,
+      "segment_seconds": 21600,
+      "worker_timeout_seconds": 25200,
+      "max_segments": 2,
+      "segments_per_call": 2,
+      "qualification_segments": 1,
+      "qualification_steps": 2
+    }
+  ]
 }
