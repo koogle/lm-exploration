@@ -78,10 +78,12 @@ configs now use that, with microbatch 2 and expandable CUDA segments.
 
 ## Run
 
-```sh
-uv run modal run --detach -m model_hybrid.modal_train::launch --run-id hnet-720m-cmp-02 \
-  --config hybrid/configs/hnet-720m-40b.json --gpus 8 --max-tokens 23800000000
-```
+`hnet-720m-cmp-02` ran from commit `4fb7076` with that commit's launcher:
+`modal_train::launch --run-id hnet-720m-cmp-02 --config hybrid/configs/hnet-720m-40b.json
+--gpus 8 --max-tokens 23800000000`. H-Net runs now go through the workflows like every
+family (`workflows/hnet-h100x8.json`, see the
+[hybrid README](../hybrid/README.md#byte-level-h-net)); a workflow trains to the
+config's `target_tokens`.
 
 23.8 GB of bytes (5,043 steps) matches the GLM run's first 5,000 steps (5.24B
 tokens). Both runs are then still at the constant learning rate, so held-out bits
@@ -97,7 +99,7 @@ prefix of a full 40B-equivalent run.
 | Throughput | 850–890K bytes/s on 8 GPUs, 14.8% MFU; 4.2–4.4 bytes per chunk in training after step 100 |
 | Compute | about 70 H100-hours, about $280 at list price plus about $32 CPU and memory; with `cmp-01`, the routing tests, the smoke run, checks and benchmarks about $340 |
 | Records | metrics, configs, launches and logs of every run here: `training/results/hnet-720m/` in the HF dataset `jfrick/lm-exploration-results` |
-| Model | public bf16 weights, config, training log and model card: [`jfrick/hnet-720m`](https://huggingface.co/jfrick/hnet-720m) (`modal_train::publish`) |
+| Model | public bf16 weights, config, training log and model card: [`jfrick/hnet-720m`](https://huggingface.co/jfrick/hnet-720m) (`model_hybrid.modal_tools::publish`) |
 
 ## Results
 
