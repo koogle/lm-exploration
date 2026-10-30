@@ -187,7 +187,7 @@ def continue_training(run_id, settings, provenance, previous=None, first_segment
                 run_id,
                 "qualifying" if segment < 2 else "training",
                 segment=segment_id,
-                completed_tokens=previous["total_loss_tokens"] if previous else 0,
+                completed_tokens=previous["tokens"] if previous else 0,
                 target_tokens=settings["target_tokens"],
                 snapshot=SNAPSHOT,
                 repo_id=REPO,
@@ -199,7 +199,7 @@ def continue_training(run_id, settings, provenance, previous=None, first_segment
                 check_resume(previous, report)
             done = check_progress(
                 report,
-                previous["total_loss_tokens"] if previous else 0,
+                previous["tokens"] if previous else 0,
                 settings["target_tokens"],
                 settings["global_windows"] * settings["context"],
             )
@@ -213,14 +213,14 @@ def continue_training(run_id, settings, provenance, previous=None, first_segment
                     run_id,
                     "qualified",
                     publisher_call_id=call.object_id,
-                    completed_tokens=report["total_loss_tokens"],
+                    completed_tokens=report["tokens"],
                     repo_id=REPO,
                 )
             if done:
                 record(
                     run_id,
                     "completed",
-                    trained_tokens=report["total_loss_tokens"],
+                    trained_tokens=report["tokens"],
                     final_checkpoint=report["final_checkpoint"],
                     repo_id=REPO,
                 )
@@ -229,7 +229,7 @@ def continue_training(run_id, settings, provenance, previous=None, first_segment
             resume = str(Path(report["final_checkpoint"]).relative_to("/runs"))
         if segment + 1 >= 24:
             raise RuntimeError("Reached bounded segment limit")
-        record(run_id, "continuing", completed_tokens=previous["total_loss_tokens"], resume=resume)
+        record(run_id, "continuing", completed_tokens=previous["tokens"], resume=resume)
         call = continue_training.spawn(run_id, settings, provenance, previous, segment + 1)
         return {"continuation_call_id": call.object_id}
     except Exception as exc:

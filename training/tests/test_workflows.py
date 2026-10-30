@@ -94,21 +94,21 @@ class WorkflowProgressTests(unittest.TestCase):
 
     def test_stops_and_resume_are_checked(self):
         report = {
-            "total_loss_tokens": 95,
+            "tokens": 95,
             "stop_reason": "token_limit",
             "final_validation": {"weighted_loss": 1.0},
         }
         self.assertTrue(check_progress(report, 80, 100, 10))
         for change in (
-            {"total_loss_tokens": 80},
-            {"total_loss_tokens": 101},
-            {"stop_reason": "source_two_pass_limit"},
+            {"tokens": 80},
+            {"tokens": 101},
+            {"stop_reason": "data_exhausted"},
             {"final_validation": {"weighted_loss": float("nan")}},
         ):
             with self.assertRaises(ValueError):
                 check_progress({**report, **change}, 80, 100, 10)
         # A session that only waited for prepared data continues the chain.
-        waited = {**report, "total_loss_tokens": 80, "stop_reason": "data_wait"}
+        waited = {**report, "tokens": 80, "stop_reason": "data_late"}
         self.assertFalse(check_progress(waited, 80, 100, 10))
         with self.assertRaises(ValueError):
             check_progress({**waited, "stop_reason": "time_limit"}, 80, 100, 10)
