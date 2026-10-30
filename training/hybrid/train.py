@@ -1,9 +1,8 @@
 """The hybrid family for trainer.loop, and the evaluation and export helpers it uses.
 
 `HybridFamily` adapts a run config (hybrid/configs/*.json) to the common training
-loop: the hybrid model with role-declared Muon/AdamW, prepared-shard data
-(`training_data.packed_shards.PreparedMixture`, with optional replay; budget: every
-window token), the objective mean
+loop: the hybrid model with role-declared Muon/AdamW, prepared-shard or chat SFT
+data with optional replay (budget: every window token), the objective mean
 next-token loss plus the decaying MTP weight times mean MTP loss (each over its
 global target count), held-out loss, bits per byte, gate and sink statistics,
 fixed-prompt samples, and bf16 exports to the run's HF repo every
@@ -68,7 +67,7 @@ class RunConfig:
     hf_every_tokens: int = 5_000_000_000
     seed: int = 1234
     # An export folder (config.json, model.safetensors) whose trunk weights start the
-    # run when it has no checkpoint yet, e.g. a pretrained model for mid-training.
+    # run when it has no checkpoint yet: a pretrained model for mid-training or SFT.
     init_from: str = ""
 
     @classmethod
@@ -187,19 +186,37 @@ def evaluate(lm, heldout, device, eos_id):
 
 
 @torch.no_grad()
-def samples(lm, tokenizer, device, new_tokens):
-    """Greedy continuations of fixed prompts (full recompute per token)."""
+def samples(lm, tokenizer, device, prompts=SAMPLE_PROMPTS, stop_ids=(), new_tokens=48):
+    """Greedy continuations of fixed prompts (full recompute per token), up to a stop id."""
     lm.eval()
     outputs = []
-    for prompt in SAMPLE_PROMPTS:
+    for prompt in prompts:
         ids = tokenizer.encode(prompt, add_special_tokens=False).ids
+        start = len(ids)
         for _ in range(new_tokens):
             x = torch.tensor([ids], device=device)
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 ids.append(int(lm(x)[0, -1].argmax()))
-        outputs.append({"prompt": prompt, "completion": tokenizer.decode(ids)})
+            if ids[-1] in stop_ids:
+                break
+        completion = tokenizer.decode(ids[start:], skip_special_tokens=False)
+        outputs.append({"prompt": prompt, "completion": completion})
     lm.train()
     return outputs
+
+
+def export_config(model_config):
+    """An export's config.json: the model config with its architecture and tokenizer."""
+    if isinstance(model_config, hnet.HNetConfig):
+        return dataclasses.asdict(model_config) | {
+            "architecture": "hnet",
+            "tokenizer": "utf-8 bytes, EOS 256",
+        }
+    return dataclasses.asdict(model_config) | {
+        "architecture": "hybrid",
+        "tokenizer": glm.SOURCE,
+        "tokenizer_sha256": glm.SHA256,
+    }
 
 
 def upload_export(lm, model_config, run_dir, progress, repo, private=True):
@@ -217,18 +234,7 @@ def upload_export(lm, model_config, run_dir, progress, repo, private=True):
         if not k.startswith("mtp.")
     }
     save_file(weights, folder / "model.safetensors")
-    if isinstance(model_config, hnet.HNetConfig):
-        config = dataclasses.asdict(model_config) | {
-            "architecture": "hnet",
-            "tokenizer": "utf-8 bytes, EOS 256",
-        }
-    else:
-        config = dataclasses.asdict(model_config) | {
-            "architecture": "hybrid",
-            "tokenizer": glm.SOURCE,
-            "tokenizer_sha256": glm.SHA256,
-        }
-    (folder / "config.json").write_text(json.dumps(config, indent=2) + "\n")
+    (folder / "config.json").write_text(json.dumps(export_config(model_config), indent=2) + "\n")
     (folder / "progress.json").write_text(json.dumps(progress, indent=2) + "\n")
     logs = [Path(run_dir, name) for name in ("metrics.jsonl", "validation.jsonl")]
 
@@ -247,19 +253,45 @@ def upload_export(lm, model_config, run_dir, progress, repo, private=True):
     return thread
 
 
-def recipe_data(config, data_root):
-    """(identity, mixture factory, held-out factory(mixture, context)) for a run config's
-    prepared-shard recipe.
+def heldout_windows(recipe, root, name, context, max_documents):
+    """Held-out windows of a pretraining source or a chat subset: (inputs, labels, bytes).
 
-    Replay reads an earlier recipe's prepared shards at this recipe's context. Held-out
-    windows wait for each source's held-out shard and add the replayed sources' own.
+    Pretraining sources concatenate whole documents into one stream
+    (`packed_shards.heldout_windows`); chat subsets pack whole conversations and train
+    only assistant tokens (`sft_data.chat_heldout_windows`, None when empty).
     """
-    from training_data.packed_shards import (
-        PreparedMixture,
-        ReplayMixture,
-        heldout_windows,
-        wait_for_heldout,
-    )
+    if recipe.get("format") == "chat-sft":
+        from .sft_data import chat_heldout_windows
+
+        return chat_heldout_windows(recipe, root, name, context, max_documents)
+    from training_data.packed_shards import heldout_windows as source_windows
+
+    return source_windows(recipe, root, name, context, max_documents)
+
+
+def pretraining_heldout(config):
+    def heldout(recipe, mixture, context):
+        from training_data.packed_shards import wait_for_heldout
+
+        wait_for_heldout(recipe, mixture)
+        return {
+            name: heldout_windows(recipe, mixture.root, name, context, count)
+            for name, count in config.eval_documents.items()
+            if name in recipe["sources"]
+        }
+
+    return heldout
+
+
+def recipe_data(config, data_root):
+    """(identity, mixture factory, held-out factory(mixture, context), chat) for a run
+    config's recipe.
+
+    Replay reads an earlier recipe's prepared shards at this recipe's context; chat
+    SFT recipes hold out conversations per subset, pretraining recipes per source,
+    plus the replayed sources' held-out shards.
+    """
+    from training_data.packed_shards import PreparedMixture, ReplayMixture
 
     recipe = json.loads(Path(config.recipe).read_text())
     root = Path(data_root) / recipe["name"]
@@ -272,34 +304,48 @@ def recipe_data(config, data_root):
         replay_root = Path(data_root) / replay_recipe["name"]
         replay_rows = round(config.global_rows * replay["fraction"])
 
-    def mixture():
-        primary = PreparedMixture(recipe, root)
+    def with_replay(primary):
         if not replay:
             return primary
         return ReplayMixture(primary, PreparedMixture(replay_recipe, replay_root), replay_rows)
 
-    def heldout(mixture, context):
-        primary = getattr(mixture, "primary", mixture)
-        wait_for_heldout(recipe, primary)
-        windows = {
-            name: heldout_windows(recipe, primary.root, name, context, count)
+    def replay_heldout(context):
+        return {
+            name: heldout_windows(replay_recipe, replay_root, name, context, count)
             for name, count in config.eval_documents.items()
-            if name in recipe["sources"]
+            if replay and name in replay_recipe["sources"]
         }
-        if replay:
-            windows |= {
-                name: heldout_windows(replay_recipe, replay_root, name, context, count)
-                for name, count in config.eval_documents.items()
-                if name in replay_recipe["sources"]
+
+    if recipe.get("format") == "chat-sft":
+        from . import sft_data
+
+        def mixture():
+            return with_replay(sft_data.ChatMixture(recipe, root, config.seed))
+
+        def heldout(mixture, context):
+            count = config.eval_documents["chat"]
+            own = {
+                name: windows
+                for name, _, _ in sft_data.subsets(recipe)
+                if (windows := heldout_windows(recipe, root, name, context, count)) is not None
             }
-        return windows
+            return own | replay_heldout(context)
+    else:
+        own = pretraining_heldout(config)
+
+        def mixture():
+            return with_replay(PreparedMixture(recipe, root))
+
+        def heldout(mixture, context):
+            primary = getattr(mixture, "primary", mixture)
+            return own(recipe, primary, context) | replay_heldout(context)
 
     identity = {
         "recipe": recipe,
         "replay": replay_recipe["name"] if replay else None,
         "tokenizer_sha256": glm.SHA256,
     }
-    return identity, mixture, heldout
+    return identity, mixture, heldout, recipe.get("format") == "chat-sft"
 
 
 class HybridData:
@@ -341,9 +387,16 @@ class HybridFamily:
         self.keep_checkpoints = config.keep_checkpoints
         self.collective_timeout_seconds = 3600
         if data is None:
-            self.identity, self.factory, self.heldout_factory = self.recipe_data(data_root)
+            identity, factory, self.heldout_factory, chat = self.recipe_data(data_root)
         else:
-            (self.identity, self.factory), self.heldout_factory = data, None
+            (identity, factory), self.heldout_factory, chat = data, None, False
+        self.identity, self.factory = identity, factory
+        if chat:
+            from . import sft_data
+
+            self.sampling = (sft_data.sample_prompts(), sft_data.STOP_IDS, 160)
+        else:
+            self.sampling = (SAMPLE_PROMPTS, (), self.sample_length)
         self.lm, self.uploads = None, []
         self.next_upload = None
 
@@ -361,7 +414,7 @@ class HybridFamily:
         return self.lm
 
     def initialize(self, model):
-        """An `init_from` export's trunk weights start a fresh run (mid-training);
+        """An `init_from` export's trunk weights start a fresh run (mid-training, SFT);
         otherwise the model keeps its own initialization."""
         if self.config.init_from:
             from safetensors.torch import load_file
@@ -396,23 +449,27 @@ class HybridFamily:
         from training_data import mixture, packed_shards
 
         from . import (
+            chat,
             cuda_extension,
             documents,
             fused_loss,
             kda,
             kda_convolution,
+            sft_data,
             softmax_kernel,
         )
         from . import model as hybrid_model
         from . import tokenizer as hybrid_tokenizer
 
         modules = (
+            chat,
             cuda_extension,
             documents,
             fused_loss,
             hybrid_model,
             kda,
             kda_convolution,
+            sft_data,
             softmax_kernel,
             hybrid_tokenizer,
         )
@@ -445,7 +502,10 @@ class HybridFamily:
             "parameters": gate_sink_statistics(model),
         }
         if final or progress["step"] % self.config.sample_every_steps == 0:
-            result["samples"] = samples(model, heldout["tokenizer"], device, self.sample_length)
+            prompts, stop_ids, new_tokens = self.sampling
+            result["samples"] = samples(
+                model, heldout["tokenizer"], device, prompts, stop_ids, new_tokens
+            )
         return result
 
     def prepare(self, inputs, labels):
@@ -524,7 +584,7 @@ class HNetFamily(HybridFamily):
     def recipe_data(self, data_root):
         from .byte_data import recipe_data as byte_recipe_data
 
-        return byte_recipe_data(self.config, data_root)
+        return (*byte_recipe_data(self.config, data_root), False)
 
     def build(self, device):
         torch.backends.cuda.matmul.allow_tf32 = True
