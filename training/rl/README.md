@@ -289,7 +289,7 @@ uv run --all-extras modal run --detach -m workflows.modal_train::main \
 # Only RL, from the existing stage 0 checkpoint.
 uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --workflow workflows/s0-rl-20b.json --run-id ID --start r1-math \
-  --checkpoint math-code-sft-replay-20b-s0-r02/step-000020000.pt
+  --checkpoint math-code-sft-replay-20b-s0-r02-arch/step-000020000.pt
 # The hybrid pool, then chat SFT and RL.
 uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool \
   --data-id rl-pool-hybrid-03 --math-lighteval --kodcode --code-train 0
@@ -311,4 +311,7 @@ uv run --all-extras modal run -m playground.modal_export \
 RL checkpoints (format `rl-v1`, `"stage": "rl"`) record their architecture and keep the
 family's source files and tokenizer beside them, so evaluation and later stages load
 them like any other checkpoint (`trainer/checkpoints.py`). A parent must record its
-architecture: pretraining checkpoints and SFT/RL checkpoints from this layout on.
+architecture: pretraining checkpoints and SFT/RL checkpoints from this layout on. The
+stage 0 checkpoint above is `math-code-sft-replay-20b-s0-r02-arch`, the r02 run's final
+checkpoint with its architecture (and the tokenizer's EOS as `eos_id`) recorded by a
+one-off conversion; its `converted_from` names the original, which is unchanged.
