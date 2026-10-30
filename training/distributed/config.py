@@ -199,9 +199,6 @@ class DistributedRuntime:
         return f"tcp://{host}:{self.master_port}"
 
 
-CHECKPOINT_FORMAT = "scholarly-ddp-v1"
-
-
 def wsd_branch(saved, config):
     """A WSD stable-phase checkpoint may resume under a new target: a decay branch.
 
@@ -214,16 +211,3 @@ def wsd_branch(saved, config):
         and {**saved["config"], "target_tokens": config.target_tokens} == config.as_dict()
         and saved["tokens"] <= min(old.decay_start_tokens, config.decay_start_tokens)
     )
-
-
-def validate_resume(saved, config, identity, source_hashes, torch_version):
-    if saved.get("format") != CHECKPOINT_FORMAT:
-        raise ValueError(
-            "Unsupported checkpoint format; pilot/character checkpoints cannot resume here"
-        )
-    if saved["config"] != config.as_dict() and not wsd_branch(saved, config):
-        raise ValueError("Resume requires identical training settings and GPU count")
-    if saved["data_identity"] != identity:
-        raise ValueError("Checkpoint dataset/tokenizer identity mismatch")
-    if saved["source_sha256"] != source_hashes or saved["torch_version"] != torch_version:
-        raise ValueError("Resume requires identical training source and PyTorch version")

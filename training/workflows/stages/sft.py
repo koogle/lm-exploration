@@ -1,4 +1,4 @@
-"""The SFT stage's own inputs (`trainer/sft.py` trains it).
+"""The SFT stage's own inputs (`trainer/sft.py` trains it, subword family).
 
 - `data`: `{"local": path}` (validated locally, uploaded, at most 20 MiB) or
   `{"volume": data-id}` (a prepared folder on the run volume).

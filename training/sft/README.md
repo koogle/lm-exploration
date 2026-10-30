@@ -141,50 +141,58 @@ a problem and its rewrites never cross splits.
 
 ### Train
 
-An SFT recipe is a workflow file (`"stage": "sft"`) that the
-[workflow controller](../workflows/README.md) runs on one L40S or H100. It is JSON
-([`../workflows/stages/`](../workflows/stages/__init__.py) validates it):
+SFT is a stage of a [workflow](../workflows/README.md) and runs on one L40S or H100.
+A workflow that only fine-tunes starts from a pretrained checkpoint, `from`.
+[`../workflows/stages/`](../workflows/stages/__init__.py) validates each stage:
 
 ```json
 {
-  "stage": "sft",
-  "name": "example",
-  "run_id": "repair-sft-example-r01",
-  "parent": "<pretraining-run>/step-NNNNNNNNN.pt",
-  "data": {"local": "artifacts/sft/repairs.jsonl"},
-  "gpu": "L40S",
-  "settings": {"steps": 200, "batch_size": 4, "context": 1024, "lr": 1e-5, "objective": "sft"}
+  "name": "repair-sft",
+  "family": "subword",
+  "from": "<pretraining-run>/step-NNNNNNNNN.pt",
+  "stages": [
+    {
+      "stage": "sft",
+      "name": "repairs",
+      "data": {"local": "artifacts/sft/repairs.jsonl"},
+      "gpu": "L40S",
+      "settings": {"steps": 200, "batch_size": 4, "context": 1024, "lr": 1e-5, "objective": "sft"}
+    }
+  ]
 }
 ```
 
-Recipes for the math runs are in [`recipes/`](recipes/).
+The math runs are [`math-sft-20b.json`](../workflows/math-sft-20b.json) and
+[`math-sft-5b.json`](../workflows/math-sft-5b.json), each with and without replay as
+two branches.
 `data` is `{"local": path}` (validated locally, uploaded, at most 20 MiB) or
 `{"volume": data-id}` (a prepared volume folder; its hash must match `report.json`).
 `settings` are `trainer.sft.Settings`: `steps` (total target), `batch_size`,
 `context`, `lr`, `seed`, `evaluate_every`, `save_every`, `max_seconds` (training-loop
-limit, at most 14,400), `objective` (`sft` or `cig`) and `cig_proximity`. `resume`
-continues from an SFT checkpoint with identical identity. Adding `"extend": true`
-also permits a larger step target and new cadence/time limit, but no change to
-learning, data, model, objective or trainer source; lineage goes to `continuation.json`.
+limit, at most 14,400), `objective` (`sft` or `cig`) and `cig_proximity`, plus
+pretraining replay (`replay` and its `replay_*` settings, `trainer/replay_hook.py`).
+`resume` continues from an SFT checkpoint with identical identity. Adding
+`"extend": true` also permits a larger step target and new cadence/time limit, but no
+change to learning, data, model, objective or trainer source; lineage goes to
+`continuation.json`.
 
 ```sh
-# Inspect the recipe with every setting filled in.
-uv run python -m workflows --workflow <recipe.json>
-# Exact resume qualification of N steps: uninterrupted run vs. stop, fresh-container restore,
-# continue; the run ID is the prefix of the three runs.
-uv run --all-extras modal run -m workflows.modal_train --workflow <recipe.json> \
-  --run-id <fresh-prefix> --qualify 2
-# Train; --run-id and --resume replace the recipe's run ID and resume checkpoint.
-uv run --all-extras modal run -m workflows.modal_train --workflow <recipe.json> \
-  --run-id <fresh-run-id>
+# Inspect the workflow with every setting filled in.
+uv run python -m workflows --workflow <workflow.json> --run-id <run-id>
+# Exact resume qualification of N steps for one SFT stage: uninterrupted run vs. stop,
+# fresh-container restore, continue, as runs <run-id>-<stage>-q-{full,part,resume}.
+uv run --all-extras modal run -m workflows.modal_train::main --workflow <workflow.json> \
+  --run-id <run-id> --start <stage> --end <stage> --qualify 2
+# Train; --checkpoint fine-tunes another parent than the workflow's `from`.
+uv run --all-extras modal run --detach -m workflows.modal_train::main \
+  --workflow <workflow.json> --run-id <run-id> [--checkpoint <run>/step-NNNNNNNNN.pt]
 ```
 
-The run folder on the volume holds the manifest (dataset, parent, tokenizer, source and
+Each stage trains as `<run-id>-<stage>`. The run folder on the volume holds the manifest (dataset, parent, tokenizer, source and
 settings hashes), the exact examples, tokenizer and source snapshots, `metrics.jsonl`
 (per-step loss and periodic validation), CIG reference scores and periodic full
-checkpoints (model, optimizer, sampler and RNG state). The local result goes to
-`artifacts/sft/<run-id>.json`. A time-limited run can stop below its step target;
-resume it into a new run ID.
+checkpoints (model, optimizer, sampler and RNG state). A time-limited run can stop
+below its step target; resume it in a stage of a new workflow run.
 
 ### Evaluate executable repairs
 

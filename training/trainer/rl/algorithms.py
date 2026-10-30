@@ -1,5 +1,5 @@
-"""The RL algorithms by name, as a recipe's `"algorithm": {"name": ..., **options}` gives
-them. A name's folder says where its answers may come from: `on_policy/` algorithms
+"""The RL algorithms by name, as the settings' `"algorithm": {"name": ..., **options}`
+give them. A name's folder says where its answers may come from: `on_policy/` algorithms
 train only on answers the current weights just sampled; `off_policy/` algorithms also
 train on older or other models' answers.
 
@@ -21,7 +21,7 @@ ALGORITHMS = {algorithm.name: algorithm for algorithm in (GRPO(), PPO(), AWR())}
 
 
 def make(spec):
-    """The algorithm a recipe's `{"name": ..., **options}` describes."""
+    """The algorithm `{"name": ..., **options}` describes."""
     spec = dict(spec)
     name = spec.get("name")
     if name not in ALGORITHMS:

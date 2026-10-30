@@ -19,7 +19,7 @@ algorithm or a source of answers can change without touching the rest:
 
 | Path | Owns |
 | --- | --- |
-| `settings.py` | What a recipe sets, in sections: `algorithm`, `trajectories`, `rollouts`, `optimizer`, plus the shared `replay_*` fields |
+| `settings.py` | What an RL stage's `settings` set, in sections: `algorithm`, `trajectories`, `rollouts`, `optimizer`, plus the shared `replay_*` fields |
 | `algorithms.py` | The algorithms by name |
 | `on_policy/` | Algorithms that train only on answers the current weights just sampled: `grpo.py` |
 | `off_policy/` | Algorithms that also train on older or other models' answers (`ppo.py`, `awr.py`), and their trajectory sources (`sources.py`) |
@@ -27,7 +27,7 @@ algorithm or a source of answers can change without touching the rest:
 | `batch.py`, `policy_gradient.py` | What the algorithms share |
 | `loop.py` | The training loop, checkpoints and provenance |
 
-A recipe's `settings` reads top-down; omitted fields take the defaults in `settings.py`:
+A stage's `settings` read top-down; omitted fields take the defaults in `settings.py`:
 
 ```json
 {
@@ -65,8 +65,8 @@ its answers have no log-probabilities our model could use for importance ratios.
 An algorithm is a frozen dataclass registered in `algorithms.py`. It declares the sources
 it accepts and whether it needs behaviour log-probabilities, and has
 `advantages(batch)` and `loss(tokens)`. `tokens` is one micro-batch of answers
-(`Tokens`: logits, log-probabilities now and when sampled, advantages). A recipe pairing
-an algorithm with a source it does not accept fails when its settings are checked.
+(`Tokens`: logits, log-probabilities now and when sampled, advantages). Settings that pair
+an algorithm with a source it does not accept fail when they are checked.
 Policy-gradient algorithms skip answers with zero advantage; AWR trains every answer.
 
 **Score.** GRPO and PPO take `score`: `"plain"` pushes up ∇log p(y), `"centered"` uses
@@ -123,14 +123,11 @@ loss, at the start, every `evaluate_every` steps and at the end.
 
 ### 24-hour limit
 
-An RL recipe is a workflow file (`"stage": "rl"`) that the
-[workflow controller](../workflows/README.md) runs under its 24-hour deadline: the
-supervisor starts first, then a controller call spawns the training call (at most 21
-hours and within the deadline, no retries; `max_seconds` at most 20 hours). Training
-refuses work after the deadline and stops taking updates 30 minutes before it. The code
-sandbox is recorded for the supervisor, which terminates it when the launch ends and
-cancels the training call at the deadline. A run does not resume; an interrupted run is
-rerun from scratch.
+RL runs as a stage of a [workflow](../workflows/README.md), under the launch's deadline
+and supervisor: one training call of at most 21 hours (`max_seconds` at most 20), no
+retries. Training stops taking updates 30 minutes before the deadline. The code sandbox
+is recorded for the supervisor, which terminates it when the launch ends. A run does
+not resume: a relaunch reruns an unfinished RL stage from its parent.
 
 ### Logged
 
@@ -155,20 +152,39 @@ each pass all their tests through this harness.
 
 ## Run
 
+RL is a workflow stage ([`../workflows/stages/rl.py`](../workflows/stages/rl.py)). Its
+entry holds `pool` (an `rl_pool` data ID, also used for validation) and `settings`
+([code layout](#code-layout)); the workflow supplies its parent, usually an SFT stage
+or a `from` checkpoint. A workflow can hold SFT then RL, or only RL stages from a
+checkpoint, branching into several algorithms:
+
+```json
+{
+  "name": "code-rl",
+  "family": "subword",
+  "from": "<sft-run>/step-NNNNNNNNN.pt",
+  "stages": [
+    {"stage": "rl", "branches": [
+      {"name": "grpo", "pool": "<pool-id>", "settings": {"algorithm": {"name": "on_policy/grpo"}}},
+      {"name": "awr", "pool": "<pool-id>", "settings": {
+        "algorithm": {"name": "off_policy/awr"},
+        "trajectories": {"source": "file", "data": "<trajectories-id>"}}}
+    ]}
+  ]
+}
+```
+
 From `training/`:
 
 ```sh
-uv run python -m workflows --workflow RECIPE.json   # every setting filled in, no Modal
-uv run --all-extras modal run -m workflows.modal_train --workflow RECIPE.json [--run-id ID]
+uv run python -m workflows --workflow WORKFLOW.json --run-id ID   # resolved, no Modal
+uv run --all-extras modal run --detach -m workflows.modal_train::main \
+  --workflow WORKFLOW.json --run-id ID [--start STAGE] [--checkpoint RUN/step-N.pt]
 # Off-policy trajectories from the Qwen teacher's saved code answers:
 uv run --all-extras modal run -m modal_scripts.modal_teacher::trajectories \
   --teacher code-teacher-qwen35-02 --data-id <fresh-id> [--limit N]
 ```
 
-An RL stage file ([`../workflows/stages/rl.py`](../workflows/stages/rl.py)) has
-`"stage": "rl"` and names `run_id`, `parent` (a checkpoint of any stage, usually SFT,
-`run/step-N.pt` on the run volume), `pool` (an `rl_pool` data ID, also used for
-validation) and `settings` ([code layout](#code-layout)); it can also be a step of a
-[pipeline](../workflows/README.md#pipelines). RL checkpoints (format `rl-v1`, `"stage":
-"rl"`) keep the model code and tokenizer beside them, so evaluation and later stages
-load them like any other checkpoint (`trainer/checkpoints.py`).
+RL checkpoints (format `rl-v1`, `"stage": "rl"`) keep the model code and tokenizer
+beside them, so evaluation and later stages load them like any other checkpoint
+(`trainer/checkpoints.py`).

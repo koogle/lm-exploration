@@ -113,10 +113,11 @@ modal run --detach -m modal_scripts.modal_sft_data::private_patches \
   --sources sft/private-patch-full-sources.json --data-id <full-id> \
   --reserved <commitpack-id>,<pilot-run-id>,<private-id> --replay <commitpack-id> --full
 
-# Training (example: arithmetic pilot; the recipe names the chosen base as its parent)
-modal run -m workflows.modal_train --workflow artifacts/sft/arithmetic-pilot.json \
-  --run-id <fresh-prefix> --qualify 2
-modal run -m workflows.modal_train --workflow artifacts/sft/arithmetic-pilot.json \
+# Training (example: arithmetic pilot, a workflow with one SFT stage "pilot" from the
+# chosen base)
+modal run -m workflows.modal_train::main --workflow artifacts/sft/arithmetic-pilot.json \
+  --run-id <fresh-prefix> --start pilot --end pilot --qualify 2
+modal run -m workflows.modal_train::main --workflow artifacts/sft/arithmetic-pilot.json \
   --run-id <fresh-run-id>
 # Volume-backed runs set "data": {"volume": ...}; CIG long runs resume
 # <new pilot run>/step-000000200.pt with "extend": true.

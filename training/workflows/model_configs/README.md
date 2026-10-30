@@ -7,7 +7,7 @@ Workflows supply GPU count and total token target; dataset configs supply the lo
 - `modern-124m-pilot.json`: the shared one-/two-GPU pilot model and optimizer settings.
 - `modern-124m.json`: the larger 20B experiment's model and optimizer settings.
 
-Choose one with a workflow's `model_config` field or the `--model-config` selector.
+Choose one with a training stage's `model_config` field.
 See the [workflow guide](../README.md) for resolution and launch commands.
 
 `historical/` preserves the former recipe files byte for byte, including the unused
