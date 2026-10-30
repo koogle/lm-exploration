@@ -70,6 +70,33 @@ class MTPTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             trunk_only(self.inputs, self.labels, mtp_labels=self.labels)
 
+    def test_sampled_mtp_loss_uses_a_fixed_random_subset_in_training(self):
+        lm = model.HybridLM(dataclasses.replace(self.lm.config, mtp_loss_fraction=0.5)).double()
+        lm.load_state_dict(self.lm.state_dict())
+        inputs = self.inputs.repeat(2, 1)
+        labels = self.labels.repeat(2, 1)
+        targets = documents.mtp_labels(inputs, labels, EOS)
+        torch.manual_seed(5)
+        sampled = lm(inputs, labels, targets)
+        torch.manual_seed(5)
+        rows = torch.rand(inputs.numel()).topk(inputs.numel() // 2).indices
+        x, rope, mask = lm.trunk(inputs)
+        next_tokens = torch.cat((inputs[:, 1:], labels[:, -1:]), 1)
+        future = lm.mtp(x, lm.token_embedding(next_tokens), rope, mask).flatten(0, 1)[rows]
+        chosen = targets.flatten()[rows]
+        valid = chosen != -100
+        logits = F.linear(future[valid], lm.output_weight)
+        expected = F.cross_entropy(logits, chosen[valid], reduction="sum")
+        torch.testing.assert_close(sampled["mtp_ce"], expected)
+        self.assertEqual(sampled["mtp_count"].item(), int(valid.sum()))
+        # The trunk's loss is untouched, and evaluation uses every position.
+        torch.testing.assert_close(sampled["ce"], self.lm(inputs, labels, targets)["ce"])
+        lm.eval()
+        full = lm(inputs, labels, targets)
+        self.assertEqual(full["mtp_count"].item(), int((targets != -100).sum()))
+        with self.assertRaises(ValueError):
+            dataclasses.replace(self.lm.config, mtp_loss_fraction=0)
+
     def test_weight_schedule(self):
         config = self.lm.config
         self.assertAlmostEqual(model.mtp_weight(config, 0.0), 0.3)

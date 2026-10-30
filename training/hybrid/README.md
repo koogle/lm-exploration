@@ -155,7 +155,13 @@ chunked cross-entropy and z-loss.
 the next document) and at the last position. `forward(tokens, labels, mtp_labels)` adds `mtp_loss`, `mtp_ce`,
 `mtp_z` and `mtp_count`. The trainer combines the means as
 `loss / count + mtp_weight(config, progress) * mtp_loss / mtp_count`, where the
-weight decays linearly from 0.3 to 0.1 over training progress.
+weight decays linearly from 0.3 to 0.1 over training progress. With
+`mtp_loss_fraction < 1` (default 1.0), training passes only a uniformly random
+fixed-size fraction of positions through the output layer for the MTP loss (the
+module itself still runs over every position) and divides by the expected count;
+evaluation uses every position. At 0.5 the 720M step on one H100 runs at 57.3K
+tokens/s instead of 54.8K, since the two output-layer projections are about half
+of the model's FLOPs.
 
 Inference does not run the module: `forward(tokens)` returns trunk logits, and
 a model built with `mtp=False` loads the trunk weights (all keys outside `mtp.`)

@@ -80,10 +80,13 @@ def learning_rate_factor(config, tokens):
 
 
 def flops_per_token(model_config, lm, attended_keys):
-    """Training FLOPs per token: 6 x matmul weights (incl. both output-layer uses) + attention."""
+    """Training FLOPs per token: 6 x matmul weights (incl. both output-layer uses) + attention.
+
+    The MTP module reuses the output layer for its sampled fraction of positions.
+    """
     matmul = sum(p.numel() for n, p in lm.named_parameters() if p.ndim == 2)
-    heads = 1 if model_config.mtp else 0
-    matmul += heads * lm.output_weight.numel()  # MTP reuses the output layer.
+    if model_config.mtp:
+        matmul += model_config.mtp_loss_fraction * lm.output_weight.numel()
     full_layers = model_config.layer_kinds.count("full") + (
         1 if model_config.mtp and model_config.mtp_layer_kind == "full" else 0
     )
@@ -322,11 +325,29 @@ class HybridFamily:
         }
 
     def source_files(self):
-        from . import data, documents, fused_loss, kda, softmax_kernel
+        from . import (
+            cuda_extension,
+            data,
+            documents,
+            fused_loss,
+            kda,
+            kda_convolution,
+            softmax_kernel,
+        )
         from . import model as hybrid_model
         from . import tokenizer as hybrid_tokenizer
 
-        modules = (data, documents, fused_loss, hybrid_model, kda, softmax_kernel, hybrid_tokenizer)
+        modules = (
+            cuda_extension,
+            data,
+            documents,
+            fused_loss,
+            hybrid_model,
+            kda,
+            kda_convolution,
+            softmax_kernel,
+            hybrid_tokenizer,
+        )
         files = {f"hybrid.{Path(m.__file__).stem}": Path(m.__file__) for m in modules}
         return {"family": Path(__file__), **files}
 
@@ -366,7 +387,8 @@ class HybridFamily:
         objective = losses["loss"] / counts["ntp"]
         sums = {"ce": losses["ce"], "z": losses["z"]}
         if self.model_config.mtp:
-            mtp_count = counts["mtp"].clamp_min(1)
+            # Expected number of sampled valid MTP targets (see HybridLM.forward).
+            mtp_count = counts["mtp"].clamp_min(1) * self.model_config.mtp_loss_fraction
             weight = hybrid.mtp_weight(self.model_config, progress["tokens"] / self.target_tokens)
             objective = objective + weight * losses["mtp_loss"] / mtp_count
             sums["mtp_ce"] = losses["mtp_ce"]
@@ -378,7 +400,8 @@ class HybridFamily:
             "z": float(sums["z"] / counts["ntp"]),
         }
         if self.model_config.mtp:
-            row["mtp_loss"] = float(sums["mtp_ce"] / counts["mtp"].clamp_min(1))
+            mtp_count = counts["mtp"].clamp_min(1) * self.model_config.mtp_loss_fraction
+            row["mtp_loss"] = float(sums["mtp_ce"] / mtp_count)
         return row
 
     def step_metrics(self, inputs, seconds, budget, world):
