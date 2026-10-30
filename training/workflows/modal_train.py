@@ -777,7 +777,7 @@ def run_data_stage(stage, plan, consumer, provenance, resume=False):
     from workflows.deadline import bounded_timeout
 
     if plan["family"] == "hybrid":
-        from model_hybrid.data import load_recipe
+        from training_data.packed_shards import load_recipe
 
         recipe = load_recipe(stage["spec"]["recipe"])
         call = modal_data.coordinate.with_options(timeout=bounded_timeout(deadline, 86400)).spawn(
