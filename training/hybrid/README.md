@@ -478,7 +478,7 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
   tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
   tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
   tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet \
-  tests.test_hybrid_chat tests.test_hybrid_rl -v
+  tests.test_hybrid_chat -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
