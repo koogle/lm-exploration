@@ -1,4 +1,8 @@
-"""Resolve a selectable workflow, model configuration and dataset configuration."""
+"""Resolve a selectable workflow, model configuration and dataset configuration.
+
+Every workflow file names its `stage`: `pretrain` (resolved here), a post-training stage
+(`workflows/stages/`), or `pipeline` (`pipeline.py`).
+"""
 
 import hashlib
 import json
@@ -22,8 +26,19 @@ def relative_json(value):
     return path
 
 
+def workflow_stage(path):
+    from .stages import STAGES
+
+    stages = ("pretrain", "pipeline", *STAGES)
+    stage = json.loads(Path(path).read_text()).get("stage")
+    if stage not in stages:
+        raise ValueError(f"A workflow names its stage, one of {stages}")
+    return stage
+
+
 @dataclass(frozen=True)
 class WorkflowConfig:
+    stage: str
     model_config: str
     dataset_config: str
     gpu: str
@@ -47,6 +62,8 @@ class WorkflowConfig:
     overlap_preparation: bool = False
 
     def __post_init__(self):
+        if self.stage != "pretrain":
+            raise ValueError('A pretraining workflow has "stage": "pretrain"')
         relative_json(self.model_config)
         relative_json(self.dataset_config)
         for name in ("pilot", "allow_unreviewed_data", "overlap_preparation"):

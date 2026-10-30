@@ -22,7 +22,7 @@ from pathlib import Path
 
 import modal
 
-from trainer.sft_recipe import run_id
+from workflows.checks import run_id
 
 LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
 SHARD_SECONDS = 4 * 60 * 60

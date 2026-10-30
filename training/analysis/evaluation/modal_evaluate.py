@@ -6,7 +6,7 @@ Run from training/:
         [--shots 5] [--tasks gsm8k,svamp] [--output result.json]
 
 `--config` names the benchmark datasets (pinned HF commits) and settings; checkpoints load
-with their runs' own model code (`checkpoints.py`). One function call, a 3-hour hard timeout
+with their runs' own model code (`trainer/checkpoints.py`). One function call, a 3-hour hard timeout
 and no retries; the call refuses new work 24 hours after launch, including time spent
 queued. Results go to `/runs/evaluation/NAME.json` after each checkpoint and to `--output`
 (default `artifacts/evaluation/NAME.json`).
@@ -50,6 +50,7 @@ image = (
     .add_local_dir("analysis/evaluation", "/project/evaluation", ignore=["__pycache__"])
     .add_local_file("trainer/rollout.py", "/project/trainer/rollout.py")
     .add_local_file("trainer/__init__.py", "/project/trainer/__init__.py")
+    .add_local_file("trainer/checkpoints.py", "/project/trainer/checkpoints.py")
 )
 app = modal.App("checkpoint-evaluation")
 run_volume = modal.Volume.from_name("lm-exploration-training")
@@ -86,9 +87,10 @@ def evaluate(name, snapshot, checkpoints, config, deadline, shots, selected):
     from training_data.hub_files import pinned_rows
     from training_data.subword import digest
 
-    from evaluation import checkpoints as loader
     from evaluation import heldout, scoring
     from evaluation.benchmarks import BENCHMARKS
+    from evaluation.checkpoints import scorer
+    from trainer.checkpoints import load
 
     check_deadline(deadline)
     output = Path("/runs/evaluation") / f"{name}.json"
@@ -118,8 +120,8 @@ def evaluate(name, snapshot, checkpoints, config, deadline, shots, selected):
     for checkpoint in checkpoints:
         check_deadline(deadline)
         started = time.time()
-        loaded = loader.load(Path("/runs") / checkpoint, device="cuda")
-        model = loader.scorer(loaded)
+        loaded = load(Path("/runs") / checkpoint, device="cuda")
+        model = scorer(loaded)
         info = {"checkpoint": checkpoint, **loaded.info}
         print(json.dumps(info), flush=True)
         scores, answers = {}, {}

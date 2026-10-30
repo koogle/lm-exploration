@@ -1,8 +1,9 @@
 # SFT: code repair, CIG and math
 
 Post-training for the 124M Simple LLM models: supervised fine-tuning on code repairs or
-math word problems, starting from an explicit `scholarly-ddp-v1` pretraining checkpoint
-on the private `lm-exploration-training` Modal volume. Model weights, architecture and
+math word problems, starting from a checkpoint of any stage (usually pretraining;
+[`../trainer/checkpoints.py`](../trainer/checkpoints.py)) on the private
+`lm-exploration-training` Modal volume. Model weights, architecture and
 the parent's frozen tokenizer are inherited; AdamW starts fresh. Nothing launches
 automatically, and no checkpoint is published.
 
@@ -140,12 +141,13 @@ a problem and its rewrites never cross splits.
 
 ### Train
 
-[`../modal_scripts/modal_sft_train.py`](../modal_scripts/modal_sft_train.py) runs one
-recipe on one L40S or H100. A recipe is JSON
-([`../trainer/sft_recipe.py`](../trainer/sft_recipe.py) validates it):
+An SFT recipe is a workflow file (`"stage": "sft"`) that the
+[workflow controller](../workflows/README.md) runs on one L40S or H100. It is JSON
+([`../workflows/stages/`](../workflows/stages/__init__.py) validates it):
 
 ```json
 {
+  "stage": "sft",
   "name": "example",
   "run_id": "repair-sft-example-r01",
   "parent": "<pretraining-run>/step-NNNNNNNNN.pt",
@@ -166,11 +168,15 @@ also permits a larger step target and new cadence/time limit, but no change to
 learning, data, model, objective or trainer source; lineage goes to `continuation.json`.
 
 ```sh
-# Exact resume qualification: uninterrupted run vs. stop, fresh-container restore, continue.
-modal run -m modal_scripts.modal_sft_train::qualify --recipe <recipe.json> --run-prefix <fresh-prefix>
-# Train; command-line values override the recipe's parent, data, run ID and resume.
-modal run -m modal_scripts.modal_sft_train::main --recipe <recipe.json> \
-  --run-id <fresh-run-id> --parent <run>/step-NNNNNNNNN.pt [--dataset <jsonl> | --data-id <id>]
+# Inspect the recipe with every setting filled in.
+uv run python -m workflows --workflow <recipe.json>
+# Exact resume qualification of N steps: uninterrupted run vs. stop, fresh-container restore,
+# continue; the run ID is the prefix of the three runs.
+uv run --all-extras modal run -m workflows.modal_train --workflow <recipe.json> \
+  --run-id <fresh-prefix> --qualify 2
+# Train; --run-id and --resume replace the recipe's run ID and resume checkpoint.
+uv run --all-extras modal run -m workflows.modal_train --workflow <recipe.json> \
+  --run-id <fresh-run-id>
 ```
 
 The run folder on the volume holds the manifest (dataset, parent, tokenizer, source and

@@ -16,8 +16,8 @@ Run from training/:
 `curriculum` execute-verifies every original arithmetic repair and writes the JSONL locally.
 `commitpack`, `private_patches`, `math` (GSM8K + MetaMathQA word problems), `code` (OpenCodeInstruct +
 MBPP functions) and `mixture` (prepared math and code rows in one file) write `examples.jsonl`
-and `report.json` to `/runs/<data-id>` on the private run volume for `modal_sft_train
---data-id`. `rl_pool` writes the RL prompt pool `pool.jsonl` (`training_data.rl_tasks`).
+and `report.json` to `/runs/<data-id>` on the private run volume for SFT workflows
+(`"data": {"volume": data-id}`). `rl_pool` writes the RL prompt pool `pool.jsonl` (`training_data.rl_tasks`).
 No supplied code is executed during preparation. Every function has
 no retries and a timeout under 24 hours; calls that start more than 24 hours after launch refuse
 work.
@@ -29,7 +29,7 @@ from pathlib import Path
 
 import modal
 
-from trainer.sft_recipe import run_id
+from workflows.checks import run_id
 
 LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
 
