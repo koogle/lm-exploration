@@ -376,8 +376,8 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
 
 ```sh
-uv run modal run -m model_hybrid.modal_checks
-uv run modal run -m model_hybrid.modal_checks --only hnet   # the H-Net check alone
+uv run modal run -m model_hybrid.modal_checks::main
+uv run modal run -m model_hybrid.modal_checks::main --only hnet   # the H-Net check alone
 ```
 
 The Modal image uses the CUDA 13.0 devel base with torch 2.14.1.

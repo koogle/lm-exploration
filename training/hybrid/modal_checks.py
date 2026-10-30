@@ -1,7 +1,7 @@
 """Small CUDA correctness checks for the hybrid family on one H100.
 
 Run from training/:
-    modal run -m model_hybrid.modal_checks [--output <result.json>] [--only hnet]
+    modal run -m model_hybrid.modal_checks::main [--output <result.json>] [--only hnet]
     modal run -m model_hybrid.modal_checks::kda_bench [--output <result.json>]
 
 One H100, 30-minute timeout, no retries; the call refuses to start once 24 hours
