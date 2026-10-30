@@ -23,6 +23,7 @@ repo at the end.
 import argparse
 import contextlib
 import dataclasses
+import datetime
 import json
 import math
 import os
@@ -36,12 +37,12 @@ from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.checkpoint import checkpoint
 
-from trainer.optimizers import set_learning_rate
+from trainer.optimizers import OptimizerConfig, RoleOptimizer, set_learning_rate
 
-from . import chat, generate, optim, rewards, rl_data, sft_data
+from . import chat, generate, rewards, rl_data, sft_data
 from . import tokenizer as glm
 from .model import HybridLM
-from .train import STOP_FILE, Runtime, checkpoint_paths, model_config_of, upload_export
+from .train import STOP_FILE, model_config_of, upload_export
 
 
 @dataclasses.dataclass(frozen=True)
@@ -136,6 +137,24 @@ def batch(prompts, completions, advantages, eos_id, multiple=256):
     return tokens, targets, weights
 
 
+class Runtime:
+    def __init__(self):
+        self.rank = int(os.environ["RANK"])
+        self.world = int(os.environ["WORLD_SIZE"])
+        self.local = int(os.environ["LOCAL_RANK"])
+        torch.cuda.set_device(self.local)
+        dist.init_process_group("nccl", timeout=datetime.timedelta(hours=1))
+        self.device = torch.device("cuda", self.local)
+
+    @property
+    def main(self):
+        return self.rank == 0
+
+
+def checkpoint_paths(run_dir):
+    return sorted(Path(run_dir, "checkpoints").glob("step-*.pt"))
+
+
 def save(run_dir, lm, optimizer, stream, progress, keep):
     folder = Path(run_dir, "checkpoints")
     folder.mkdir(parents=True, exist_ok=True)
@@ -192,7 +211,7 @@ def train(config, run_dir, root, stop_unix):
     model_config = model_config_of(config)
     lm = HybridLM(model_config).to(runtime.device)
     settings = {k: tuple(v) if isinstance(v, list) else v for k, v in config.optimizer.items()}
-    optimizer = optim.HybridOptimizer(lm, optim.OptimizerConfig(**settings), fused=True)
+    optimizer = RoleOptimizer(lm, OptimizerConfig(**settings), fused=True)
     progress = {"step": 0, "tokens": 0, "seconds": 0.0}
     latest = checkpoint_paths(run_dir)
     if latest:
@@ -256,7 +275,7 @@ def train(config, run_dir, root, stop_unix):
         groups = torch.tensor(scores).view(-1, config.group_size)
         advantages = (groups - groups.mean(1, keepdim=True)).flatten().tolist()
         factor = min(1.0, (progress["step"] + 1) / max(1, config.warmup_steps))
-        set_learning_rate(optimizer, factor * optimizer.base_lr)
+        set_learning_rate(optimizer, factor)
         logprob_sum = torch.zeros((), device=runtime.device)
         order = range(0, len(repeated), config.microbatch)
         for index, start in enumerate(order):

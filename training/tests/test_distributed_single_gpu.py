@@ -14,7 +14,8 @@ from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from distributed.config import DistributedConfig
-from trainer.loop import backward_batch, evaluate_sources, make_optimizer, validation_blocks
+from trainer.optimizers import make_optimizer
+from trainer.subword import backward_batch, evaluate_sources, validation_blocks
 
 
 class SingleRankParityTests(unittest.TestCase):
@@ -78,15 +79,15 @@ class TrainingMathTests(unittest.TestCase):
         )
         restored = DistributedConfig(**json.loads(json.dumps(config.as_dict())))
         self.assertEqual(restored, config)
-        parameter = torch.nn.Linear(2, 1)
-        optimizer = make_optimizer(parameter, restored, fused=False)
-        group = optimizer.param_groups[0]
+        model = GPT(ModelConfig(vocab_size=8, block_size=4, n_layer=1, n_head=2, n_embd=8))
+        optimizer = make_optimizer(model, restored, fused=False)
+        group = optimizer.adamw.param_groups[0]
         self.assertEqual(group["betas"], (0.8, 0.99))
         self.assertEqual(group["lr"], 0.002)
         self.assertEqual(group["weight_decay"], 0.02)
-        parameter(torch.ones(1, 2)).sum().backward()
+        model(torch.zeros(1, 2, dtype=torch.long)).sum().backward()
         optimizer.step()
-        self.assertTrue(optimizer.state)
+        self.assertTrue(optimizer.adamw.state)
 
     def test_validation_samples_exact_count_and_fails_if_split_is_too_small(self):
         data = SimpleNamespace(sources={"source": {}}, blocks=lambda _: (i for i in range(5)))

@@ -159,7 +159,7 @@ def continue_training(
                 "training",
                 segment=segment_id,
                 target_tokens=target,
-                completed_tokens=previous["total_loss_tokens"] if previous else 0,
+                completed_tokens=previous["tokens"] if previous else 0,
                 pending_data_audits=provenance.get("pending_data_audits", []),
             )
             timeout = bounded_timeout(deadline, policy.worker_timeout_seconds)
@@ -180,9 +180,9 @@ def continue_training(
             report = call.get()
             if previous:
                 check_resume(previous, report)
-            previous_tokens = previous["total_loss_tokens"] if previous else 0
+            previous_tokens = previous["tokens"] if previous else 0
             if initial_resume and previous is None:
-                previous_tokens = report["total_loss_tokens"] - report["session_loss_tokens"]
+                previous_tokens = report["tokens"] - report["session_tokens"]
             done = check_progress(
                 report,
                 previous_tokens,
@@ -197,7 +197,7 @@ def continue_training(
                 record(
                     run_id,
                     "completed",
-                    trained_tokens=report["total_loss_tokens"],
+                    trained_tokens=report["tokens"],
                     target_tokens=target,
                     final_checkpoint=report["final_checkpoint"],
                     pending_data_audits=provenance.get("pending_data_audits", []),
@@ -207,7 +207,7 @@ def continue_training(
             resume = str(Path(report["final_checkpoint"]).relative_to("/runs"))
         if segment + 1 >= policy.max_segments:
             raise RuntimeError("Training reached the bounded session limit without completing")
-        record(run_id, "continuing", completed_tokens=previous["total_loss_tokens"], resume=resume)
+        record(run_id, "continuing", completed_tokens=previous["tokens"], resume=resume)
         call_id = spawn_training(
             run_id, snapshot, bundle, provenance, previous=previous, first_segment=segment + 1
         )
