@@ -89,7 +89,6 @@ def evaluate(name, snapshot, checkpoints, config, deadline, shots, selected):
 
     from evaluation import heldout, scoring
     from evaluation.benchmarks import BENCHMARKS
-    from evaluation.checkpoints import scorer
     from trainer.checkpoints import load
 
     check_deadline(deadline)
@@ -121,7 +120,7 @@ def evaluate(name, snapshot, checkpoints, config, deadline, shots, selected):
         check_deadline(deadline)
         started = time.time()
         loaded = load(Path("/runs") / checkpoint, device="cuda")
-        model = scorer(loaded)
+        model = scoring.scorer(loaded)
         info = {"checkpoint": checkpoint, **loaded.info}
         print(json.dumps(info), flush=True)
         scores, answers = {}, {}
