@@ -64,13 +64,13 @@ def benchmark(run_id, settings, provenance, qualify=False):
     complete = (
         report["stop_reason"] == "token_limit"
         and 0
-        <= settings["target_tokens"] - report["total_loss_tokens"]
+        <= settings["target_tokens"] - report["tokens"]
         < settings["global_windows"] * settings["context"]
     )
     summary = {
         "status": "completed" if complete else "incomplete",
         "whole_session_nonpadding_tokens_per_second": (
-            report["session_loss_tokens"] / report["elapsed_seconds"]
+            report["session_tokens"] / report["elapsed_seconds"]
         ),
         "run_id": run_id,
         "settings": settings,
