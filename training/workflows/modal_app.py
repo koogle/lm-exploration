@@ -56,15 +56,26 @@ def terminate_sandboxes(run_id):
 def enforce_deadline(run_id, deadline_unix):
     """Independent supervisor: cancel every recorded call and terminate every recorded
     sandbox of this launch at its deadline. A launch that records `completed` or `failed`
-    first only has its sandboxes terminated."""
-    from workflows.deadline import cancel_at_deadline, tracked_calls
+    first only has its sandboxes terminated; a status written before this launch (by an
+    earlier launch of a relaunched pipeline) does not count."""
+    from workflows.deadline import (
+        MAX_LAUNCH_SECONDS,
+        SUPERVISOR_MARGIN_SECONDS,
+        cancel_at_deadline,
+        tracked_calls,
+    )
+
+    launched = deadline_unix - (MAX_LAUNCH_SECONDS - SUPERVISOR_MARGIN_SECONDS)
 
     calls_folder = Path("/runs/.calls") / run_id
     status = Path("/runs") / run_id / "workflow.json"
     preparation = status.with_name("preparation.json")
 
     def stage(path):
-        return json.loads(path.read_text())["stage"] if path.exists() else None
+        if not path.exists():
+            return None
+        written = json.loads(path.read_text())
+        return written["stage"] if written["updated_unix"] >= launched else None
 
     def done():
         run_volume.reload()

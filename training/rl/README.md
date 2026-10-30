@@ -84,8 +84,9 @@ clipping, and AWR's weights.
 
 ## The loop
 
-[`../trainer/rl/loop.py`](../trainer/rl/loop.py) on one H100. Steps 1–3 are the `sampler`
-and `reuse` sources; the `file` source draws `answers_per_step` rewarded answers instead.
+[`../trainer/rl/loop.py`](../trainer/rl/loop.py); the workflow stage currently runs it on
+one H100. Steps 1–3 are the `sampler` and `reuse` sources; the `file` source draws
+`answers_per_step` rewarded answers instead.
 
 1. **Prompts.** Draw `prompts_per_step` (64) training problems of the pool,
    `math_share` (half) math. A prompt solved by none or all of its group on two visits in
@@ -159,9 +160,10 @@ uv run --all-extras modal run -m modal_scripts.modal_teacher::trajectories \
   --teacher code-teacher-qwen35-02 --data-id <fresh-id> [--limit N]
 ```
 
-A recipe ([`../trainer/rl/recipe.py`](../trainer/rl/recipe.py)) has `"stage": "rl"` and
-names `run_id`, `parent` (an SFT checkpoint, `run/step-N.pt` on the run volume), `pool`
-(an `rl_pool` data ID, also used for validation) and `settings`
-([code layout](#code-layout)). RL
-checkpoints (format `rl-v1`) keep the model code and tokenizer beside them, so
-`analysis/evaluation` loads them like SFT checkpoints.
+An RL stage file ([`../workflows/stages/rl.py`](../workflows/stages/rl.py)) has
+`"stage": "rl"` and names `run_id`, `parent` (a checkpoint of any stage, usually SFT,
+`run/step-N.pt` on the run volume), `pool` (an `rl_pool` data ID, also used for
+validation) and `settings` ([code layout](#code-layout)); it can also be a step of a
+[pipeline](../workflows/README.md#pipelines). RL checkpoints (format `rl-v1`, `"stage":
+"rl"`) keep the model code and tokenizer beside them, so evaluation and later stages
+load them like any other checkpoint (`trainer/checkpoints.py`).

@@ -1,4 +1,4 @@
-"""Bounded single-GPU RL on math and code problems with checkable answers.
+"""Bounded RL on math and code problems with checkable answers.
 
 Answers come from a trajectory source, an automatic checker has rewarded them, and an
 algorithm turns rewarded answers into updates. The package keeps those parts apart:
