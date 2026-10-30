@@ -44,6 +44,18 @@
       "file": "data/test-00000-of-00001.parquet",
       "exemplars": "data/train-00000-of-00001.parquet",
       "max_new_tokens": 256
+    },
+    "mbpp_plus": {
+      "repo": "evalplus/mbppplus",
+      "revision": "b2d74c91837c3f2a20c1299ae98133cbe7cfa077",
+      "file": "data/test-00000-of-00001-d5781c9c51e02795.parquet",
+      "max_new_tokens": 512
+    },
+    "humaneval_plus": {
+      "repo": "evalplus/humanevalplus",
+      "revision": "d32357cf319e50e9c8d8dab5ea876c72b0fd321b",
+      "file": "data/test-00000-of-00001-5973903632b82d40.parquet",
+      "max_new_tokens": 512
     }
   },
   "heldout_windows_per_source": 64,

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from trainer.checkpoints import describe, parent
 from workflows.plan import load_workflow, select
+from workflows.stages import validate
 
 ROOT = Path(__file__).resolve().parents[1]
 START = "pretrain-run/step-000000100.pt"
@@ -19,6 +20,15 @@ SFT = {
     "stage": "sft",
     "data": {"volume": "math-data"},
     "settings": {"steps": 10, "task": "math"},
+}
+
+RL = {
+    "stage": "rl",
+    "pool": "rl-pool-fixture",
+    "settings": {
+        "algorithm": {"name": "off_policy/awr", "beta": 0.5},
+        "trajectories": {"source": "file", "data": "teacher-trajectories"},
+    },
 }
 
 
@@ -129,6 +139,33 @@ class WorkflowPlanTests(unittest.TestCase):
         plan = json.loads(printed)
         self.assertEqual(plan["selected"], ["metamath-replay"])
         self.assertTrue(plan["stages"][1]["spec"]["settings"]["replay"])
+
+
+class RLStageTests(unittest.TestCase):
+    def test_rl_stage_fills_settings(self):
+        stage = {**RL, "run_id": "rl-fixture-r01", "parent": "sft-run/step-000000100.pt"}
+        spec = validate(stage)
+        self.assertEqual(spec["settings"]["algorithm"]["max_weight"], 20.0)
+        self.assertEqual(spec["settings"]["rollouts"]["samples_per_prompt"], 8)
+        self.assertEqual(validate(spec), spec)
+        for changes in (
+            {"run_id": "../x"},
+            {"pool": "a/b"},
+            {"data": {"volume": "x"}},
+            {"settings": {**RL["settings"], "trajectories": {"source": "file", "data": "../x"}}},
+        ):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                validate({**stage, **changes})
+
+    def test_workflow_runs_rl_after_sft(self):
+        grpo = {**RL, "name": "grpo", "settings": {"algorithm": {"name": "on_policy/grpo"}}}
+        plan = plan_of(
+            [sft("chat"), {"stage": "rl", "branches": [{**RL, "name": "awr"}, grpo]}],
+            **{"from": START},
+        )
+        self.assertEqual([s["stage"] for s in plan["stages"]], ["sft", "rl", "rl"])
+        self.assertEqual([s["parent"] for s in plan["stages"]], ["from", "chat", "chat"])
+        self.assertEqual(plan["stages"][1]["run_id"], "flow-awr")
 
 
 class CheckpointTests(unittest.TestCase):
