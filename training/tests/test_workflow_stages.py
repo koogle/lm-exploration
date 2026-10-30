@@ -157,6 +157,13 @@ class RLStageTests(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 validate({**stage, **changes})
 
+    def test_shipped_rl_stages_use_stable_reinforce(self):
+        plan = load_workflow(ROOT / "workflows/s0-rl-20b.json", "check")
+        stages = [s for s in plan["stages"] if s["stage"] == "rl"]
+        self.assertEqual([s["parent"] for s in stages], ["s0"] * 3)
+        for stage in stages:
+            self.assertEqual(stage["spec"]["settings"]["stable_reinforce"]["top_k"], 32)
+
     def test_workflow_runs_rl_after_sft(self):
         grpo = {**RL, "name": "grpo", "settings": {"algorithm": {"name": "on_policy/grpo"}}}
         plan = plan_of(

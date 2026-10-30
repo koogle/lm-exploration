@@ -1,0 +1,165 @@
+{
+  "name": "s0-rl-20b",
+  "description": "Stage 0 joint math + code SFT of the WSD 20B end point, then the R1, R2 and R3 RL runs from it side by side",
+  "family": "subword",
+  "from": "climbmix-124m-wsd20b-02-s02/step-000203724.pt",
+  "stages": [
+    {
+      "stage": "sft",
+      "name": "s0",
+      "description": "Joint math and code SFT (GSM8K + MetaMathQA; OpenCodeInstruct + MBPP problems with Qwen3.5 solutions) with pretraining replay of the WSD 20B end point; stage 0 before RL",
+      "data": {
+        "volume": "mixture-math-code-02"
+      },
+      "gpu": "H100",
+      "settings": {
+        "task": "mixture",
+        "steps": 20000,
+        "batch_size": 32,
+        "context": 2048,
+        "lr": 2e-05,
+        "seed": 42,
+        "evaluate_every": 2000,
+        "save_every": 2500,
+        "max_seconds": 14400,
+        "objective": "sft",
+        "schedule": "cosine",
+        "warmup_steps": 300,
+        "min_lr_ratio": 0.1,
+        "replay": true,
+        "replay_snapshot": "climbmix-code/climbmix-code-v6/snapshots/climbmix-124m-wsd20b-02",
+        "replay_sources": {
+          "climbmix_0": 0.15,
+          "climbmix_1": 0.15,
+          "climbmix_2": 0.15,
+          "climbmix_3": 0.15,
+          "code_curated": 0.35,
+          "code_mit": 0.05
+        },
+        "replay_batch_size": 8,
+        "replay_context": 1024,
+        "replay_weight": 0.25,
+        "replay_validation_windows": 4
+      }
+    },
+    {
+      "stage": "rl",
+      "branches": [
+        {
+          "name": "r1-math",
+          "description": "Math-only RL from stage 0: validates the loop cheaply",
+          "pool": "rl-pool-math-code-03",
+          "settings": {
+            "steps": 300,
+            "rollouts": {
+              "prompts_per_step": 64,
+              "samples_per_prompt": 8,
+              "math_share": 1.0
+            },
+            "algorithm": {
+              "name": "on_policy/grpo"
+            },
+            "stable_reinforce": {
+              "top_k": 32
+            },
+            "optimizer": {
+              "lr": 1e-06,
+              "warmup_steps": 20
+            },
+            "evaluate_every": 50,
+            "save_every": 100,
+            "replay": true,
+            "replay_snapshot": "climbmix-code/climbmix-code-v6/snapshots/climbmix-124m-wsd20b-02",
+            "replay_sources": {
+              "climbmix_0": 0.15,
+              "climbmix_1": 0.15,
+              "climbmix_2": 0.15,
+              "climbmix_3": 0.15,
+              "code_curated": 0.35,
+              "code_mit": 0.05
+            },
+            "replay_batch_size": 8,
+            "replay_context": 1024,
+            "replay_weight": 0.1
+          }
+        },
+        {
+          "name": "r2-code",
+          "description": "Code-only RL from stage 0: validates the sandbox reward",
+          "pool": "rl-pool-math-code-03",
+          "settings": {
+            "steps": 300,
+            "rollouts": {
+              "prompts_per_step": 64,
+              "samples_per_prompt": 8,
+              "math_share": 0.0
+            },
+            "algorithm": {
+              "name": "on_policy/grpo"
+            },
+            "stable_reinforce": {
+              "top_k": 32
+            },
+            "optimizer": {
+              "lr": 1e-06,
+              "warmup_steps": 20
+            },
+            "evaluate_every": 50,
+            "save_every": 100,
+            "replay": true,
+            "replay_snapshot": "climbmix-code/climbmix-code-v6/snapshots/climbmix-124m-wsd20b-02",
+            "replay_sources": {
+              "climbmix_0": 0.15,
+              "climbmix_1": 0.15,
+              "climbmix_2": 0.15,
+              "climbmix_3": 0.15,
+              "code_curated": 0.35,
+              "code_mit": 0.05
+            },
+            "replay_batch_size": 8,
+            "replay_context": 1024,
+            "replay_weight": 0.1
+          }
+        },
+        {
+          "name": "r3-joint",
+          "description": "Joint math and code RL from stage 0",
+          "pool": "rl-pool-math-code-03",
+          "settings": {
+            "steps": 1000,
+            "rollouts": {
+              "prompts_per_step": 64,
+              "samples_per_prompt": 8,
+              "math_share": 0.5
+            },
+            "algorithm": {
+              "name": "on_policy/grpo"
+            },
+            "stable_reinforce": {
+              "top_k": 32
+            },
+            "optimizer": {
+              "lr": 1e-06,
+              "warmup_steps": 20
+            },
+            "evaluate_every": 50,
+            "save_every": 100,
+            "replay": true,
+            "replay_snapshot": "climbmix-code/climbmix-code-v6/snapshots/climbmix-124m-wsd20b-02",
+            "replay_sources": {
+              "climbmix_0": 0.15,
+              "climbmix_1": 0.15,
+              "climbmix_2": 0.15,
+              "climbmix_3": 0.15,
+              "code_curated": 0.35,
+              "code_mit": 0.05
+            },
+            "replay_batch_size": 8,
+            "replay_context": 1024,
+            "replay_weight": 0.1
+          }
+        }
+      ]
+    }
+  ]
+}

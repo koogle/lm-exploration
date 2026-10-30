@@ -12,6 +12,33 @@ RL can only reinforce answers the model already produces sometimes: a prompt the
 never solves gives no learning signal. So RL starts from an SFT checkpoint that has
 learned the answer formats (math and code, `trainer/sft.py` with `"task": "mixture"`).
 
+**Status:** stage 0 SFT and three RL runs are done ([results](#results-2026-10-26)): RL
+raised math slightly and did not measurably change code, with no forgetting.
+
+## Starting point and targets
+
+Measured so far ([`../sft/MATH_EXPERIMENTS.md`](../sft/MATH_EXPERIMENTS.md)): math SFT
+with pretraining replay (r02, 20B parent) scores 17.4 on GSM8K and 16.7 on SVAMP and
+keeps most general ability; no model had been trained to write functions.
+
+| Measure | Now (best SFT) | Target after RL |
+| --- | --- | --- |
+| GSM8K (500 test, greedy, Math-Verify) | 17.4 | ≥ 30 |
+| SVAMP (300, greedy) | 16.7 | ≥ 25 |
+| MBPP+ / HumanEval+ greedy pass@1 | stage 0 pending | clearly above stage 0 |
+| ClimbMix bits per byte | 0.890 (base 0.876) | within 3% of base |
+| HellaSwag, ARC-E | 38.2, 53.1 | within 2 points of the starting checkpoint |
+
+These are aspirations for choosing settings, not predictions. For scale: GPT-3 175B
+fine-tuned on GSM8K reached about 33%.
+
+## Stage 0: joint SFT
+
+The `s0` stage of [`../workflows/s0-rl-20b.json`](../workflows/s0-rl-20b.json) (run
+`math-code-sft-replay-20b-s0-r02`): the 20B end point, 20,000 steps of 32 on
+`mixture-math-code-02` (the 224,533 math rows and the Qwen3.5-solved code rows, [`../sft/CODE_DATA.md`](../sft/CODE_DATA.md)), r02's
+cosine schedule and pretraining replay.
+
 ## Code layout
 
 [`../trainer/rl/`](../trainer/rl/__init__.py) keeps the parts of RL apart, so an
@@ -152,39 +179,95 @@ HumanEval+ (164) greedy pass@1 in the code sandbox, next to GSM8K, SVAMP, the ge
 benchmarks and held-out bits per byte. Reference solutions of a 40-problem sample of
 each pass all their tests through this harness.
 
+## Runs
+
+The RL branches of [`../workflows/s0-rl-20b.json`](../workflows/s0-rl-20b.json), all from
+the stage 0 checkpoint on `rl-pool-math-code-03`, with replay at weight 0.1:
+
+| Run | Purpose | Success looks like |
+| --- | --- | --- |
+| S0 | Joint math + code SFT with replay | Code pass@1 above 0, math and general scores at r02 level |
+| R1 (`r1-math`) | Math-only RL, 300 steps | GSM8K rises; validates the loop cheaply |
+| R2 (`r2-code`) | Code-only RL, 300 steps | MBPP+ pass@1 rises; validates the sandbox reward |
+| R3 (`r3-joint`) | Joint RL, 1,000 steps | Both rise; general scores within the targets |
+
+## Results (2026-10-26)
+
+R1–R3 ran with the RL trainer before it was split into `trainer/rl/` (commit `ef2dc8a`):
+on-policy GRPO with a centered score (top 32), the graph engine and replay windows
+starting at random documents. The workflow states that algorithm as
+`"algorithm": {"name": "on_policy/grpo"}` with `"stable_reinforce": {"top_k": 32}`.
+Single seed. Benchmarks from [`analysis/evaluation`](../analysis/evaluation/README.md),
+zero-shot greedy: GSM8K first 500 test problems, SVAMP 300, MBPP+ 378 and HumanEval+ 164
+pass@1; bits per byte on the snapshot's held-out windows.
+
+| Model | GSM8K | SVAMP | MBPP+ | HumanEval+ | ClimbMix bpb | Code bpb | HellaSwag | ARC-E | LAMBADA |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 20B base | 1.8 | 1.0 | — | — | 0.876 | 0.501 | 38.0 | 57.3 | 28.6 |
+| Math SFT + replay (r02) | 17.4 | 16.7 | — | — | 0.890 | 0.618 | 38.2 | 53.1 | 29.1 |
+| S0: math + code SFT + replay | 16.0 | 13.3 | 11.6 | 9.1 | 0.891 | 0.626 | 38.0 | 54.2 | 29.4 |
+| R1: S0 + 300 math RL steps | 17.0 | 13.7 | 11.1 | 11.0 | 0.891 | 0.627 | 38.0 | 54.0 | 29.9 |
+| R2: S0 + 300 code RL steps | 16.2 | 13.7 | 11.6 | 9.8 | 0.891 | 0.628 | 38.0 | 54.0 | 29.7 |
+| R3: S0 + 1,000 joint RL steps | 17.6 | 15.7 | 11.9 | 10.4 | 0.891 | 0.628 | 38.1 | 53.6 | 29.9 |
+
+- Stage 0 writes working functions where no earlier model could (11.6% MBPP+, 9.1%
+  HumanEval+ against the EvalPlus tests) and keeps r02's general scores; half its rows
+  being code costs 1.4 GSM8K and 3.4 SVAMP points against r02. It trained for 20,000
+  steps (about 2.5 hours on one H100).
+- RL raised training rewards steadily (math 22% → 30%, code 27% → 31% over R1 and R2)
+  but moved the benchmarks little: R3 gains 1.6 GSM8K and 2.4 SVAMP points, about one
+  standard error each, and code within one or two problems. General scores and bits per
+  byte did not move; KL to stage 0 stayed near 0.01 and the sampler–learner mismatch
+  near 1e-4 nats per token.
+- About 65% of code prompt groups (38% for math) were all right or all wrong, so they
+  gave no learning signal, and up to about 900 code problems rested at a time.
+- A math step took about 2.8 s and a code step about 11 s, mostly waiting on the
+  sandbox's tests.
+
+Result files (evaluations with every generated answer, training metrics and manifests,
+data reports) are in `jfrick/lm-exploration-results` under `pr-87/`. The checkpoints can
+be compared in the private playground Space (`jfrick/climbmix-124m-playground`).
+
+## Next
+
+1. Code problems matched to stage 0: keep those it solves sometimes but not always with 8
+   samples, so most groups carry signal.
+2. Larger learning rates (3e-6, 1e-5): KL stayed small at 1e-6.
+3. Check code answers on more sandbox CPUs in parallel.
+4. Repeat the best setting with a second seed before claiming a gain.
+
 ## Run
 
 RL is a workflow stage ([`../workflows/stages/rl.py`](../workflows/stages/rl.py)). Its
 entry holds `pool` (an `rl_pool` data ID, also used for validation) and `settings`
 ([code layout](#code-layout)); the workflow supplies its parent, usually an SFT stage
-or a `from` checkpoint. A workflow can hold SFT then RL, or only RL stages from a
-checkpoint, branching into several algorithms:
+or a `from` checkpoint. [`../workflows/s0-rl-20b.json`](../workflows/s0-rl-20b.json)
+holds stage 0 (`s0`) and then R1, R2 and R3 (`r1-math`, `r2-code`, `r3-joint`) as
+branches from it.
 
-```json
-{
-  "name": "code-rl",
-  "family": "subword",
-  "from": "<sft-run>/step-NNNNNNNNN.pt",
-  "stages": [
-    {"stage": "rl", "branches": [
-      {"name": "grpo", "pool": "<pool-id>", "settings": {"algorithm": {"name": "on_policy/grpo"}}},
-      {"name": "awr", "pool": "<pool-id>", "settings": {
-        "algorithm": {"name": "off_policy/awr"},
-        "trajectories": {"source": "file", "data": "<trajectories-id>"}}}
-    ]}
-  ]
-}
-```
-
-From `training/`:
+From `training/`, after the data of [`../sft/CODE_DATA.md`](../sft/CODE_DATA.md):
 
 ```sh
-uv run python -m workflows --workflow WORKFLOW.json --run-id ID   # resolved, no Modal
+# Every setting filled in, no Modal.
+uv run python -m workflows --workflow workflows/s0-rl-20b.json --run-id ID
+# Stage 0, then R1-R3 from it.
 uv run --all-extras modal run --detach -m workflows.modal_train::main \
-  --workflow WORKFLOW.json --run-id ID [--start STAGE] [--checkpoint RUN/step-N.pt]
+  --workflow workflows/s0-rl-20b.json --run-id ID
+# Only RL, from the existing stage 0 checkpoint.
+uv run --all-extras modal run --detach -m workflows.modal_train::main \
+  --workflow workflows/s0-rl-20b.json --run-id ID --start r1-math \
+  --checkpoint math-code-sft-replay-20b-s0-r02/step-000020000.pt
 # Off-policy trajectories from the Qwen teacher's saved code answers:
 uv run --all-extras modal run -m modal_scripts.modal_teacher::trajectories \
   --teacher code-teacher-qwen35-02 --data-id <fresh-id> [--limit N]
+```
+
+To play with the stage 0 and RL checkpoints next to the base and math SFT models, export
+them to the private comparison Space ([`../analysis/playground`](../analysis/playground/README.md)):
+
+```sh
+uv run --all-extras modal run -m playground.modal_export \
+  --config analysis/playground/configs/post-training.json --name EXPORT-NAME
 ```
 
 RL checkpoints (format `rl-v1`, `"stage": "rl"`) keep the model code and tokenizer
