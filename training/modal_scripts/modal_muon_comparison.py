@@ -108,12 +108,12 @@ def main(prefix: str, output_dir: str = "artifacts/pr-24/results"):
         if (
             report["stop_reason"] != "token_limit"
             or not 0
-            <= settings["target_tokens"] - report["total_loss_tokens"]
+            <= settings["target_tokens"] - report["tokens"]
             < settings["global_windows"] * settings["context"]
         ):
             raise RuntimeError("Incomplete arm; retained report, stopping comparison")
     a, m = results["adamw"], results["muon"]
-    for key in ("total_loss_tokens", "loss_token_exposures", "data_identity"):
+    for key in ("tokens", "loss_token_exposures", "data_identity"):
         if a["report"][key] != m["report"][key]:
             raise RuntimeError(f"Unmatched comparison: {key}")
     if a["initial_validation"] != m["initial_validation"]:

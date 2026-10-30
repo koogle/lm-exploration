@@ -174,7 +174,7 @@ gradient descent, start with [the XOR example](examples/README.md).
   `uv run python -m tokenizer.<module>` from `training/`.
   Tiny Shakespeare is a learning benchmark, not a selected research corpus.
 - Run artifacts live on the `lm-exploration-training` Modal volume under `<run-id>/`.
-  Each save writes a new `checkpoints/step-NNNNNN.pt`; nothing is overwritten.
+  Each save writes a new `step-NNNNNNNNN.pt`; nothing is overwritten.
   Reports are copied to the ignored `artifacts/results/<run-id>.json`.
 
 `training/` is a uv-managed project with `pyproject.toml`, `uv.lock` and a Python

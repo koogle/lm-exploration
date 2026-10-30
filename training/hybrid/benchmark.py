@@ -3,8 +3,8 @@
     torchrun --nproc_per_node=<gpus> -m model_hybrid.benchmark --config <run.json> \\
         --steps 20 [--microbatch 4] [--document-tokens 1000]
 
-Runs the real training step (trainer, optimizer, compile) without checkpoints or
-evaluation. Document lengths are geometric with the given mean, close to the
+Runs the real training step (trainer.loop with the hybrid family: optimizer,
+compile, DDP) without checkpoints or evaluation. Document lengths are geometric with the given mean, close to the
 recipe's mixture (ClimbMix ~600, code ~1,700, math ~1,400 tokens). Prints one JSON
 line per step from the trainer; summarize with `summarize`.
 """
@@ -12,13 +12,17 @@ line per step from the trainer; summarize with `summarize`.
 import argparse
 import dataclasses
 import json
+import os
 import tempfile
 import time
 
 import numpy as np
 
+from distributed.config import DistributedRuntime
+from trainer import loop
+
 from . import tokenizer as glm
-from .train import RunConfig, train
+from .train import HybridFamily, RunConfig
 
 
 class SyntheticMixture:
@@ -34,6 +38,9 @@ class SyntheticMixture:
 
     def state_dict(self):
         return {}
+
+    def load_state_dict(self, state):
+        """Synthetic batches have no cursor."""
 
 
 def summarize(lines, skip=5):
@@ -66,15 +73,15 @@ def main():
     config = dataclasses.replace(config, **overrides)
     context = config.model["block_size"]
     with tempfile.TemporaryDirectory() as run_dir:
-        train(
-            config,
+        mixture = SyntheticMixture(context, config.model["vocab_size"], args.document_tokens)
+        family = HybridFamily(config, run_dir, data=({"synthetic": True}, lambda: mixture))
+        loop.train(
+            family,
             run_dir,
-            time.time() + 3600,
-            max_tokens=args.steps * config.global_rows * context,
-            data_source=lambda recipe: SyntheticMixture(
-                context, config.model["vocab_size"], args.document_tokens
-            ),
-            save_final=False,
+            runtime=DistributedRuntime.from_torchrun(os.environ),
+            stop_unix=time.time() + 3600,
+            max_steps=args.steps,
+            save=False,
         )
 
 

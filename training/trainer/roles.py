@@ -1,8 +1,8 @@
 """Optimizer roles, declared by the modules that own the parameters.
 
-Each hybrid module with parameters defines `optimizer()`, yielding
+Each module with parameters of its own defines `optimizer()`, yielding
 `(parameter, role)` for every parameter it creates, including those of its plain
-`torch.nn` or shared children (Linear, RMSNorm, SwiGLU). `optim.parameter_groups`
+`torch.nn` or shared children (Linear, RMSNorm, SwiGLU). `optimizers.parameter_groups`
 collects the declarations by parameter identity and refuses any parameter that is
 undeclared or declared twice.
 """

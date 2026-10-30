@@ -1,62 +1,49 @@
-"""Single-host CUDA DDP subword training with durable optimizer-boundary resume."""
+"""The training loop for every model family: single-host CUDA DDP, resumable at optimizer steps.
 
-import argparse
+Rank 0 reads each global batch from the family's data and scatters one slice to every
+rank; ranks accumulate gradients over microbatches (bf16 autocast, DDP), then clip
+and step the optimizer with the family's learning-rate factor. Rank 0 logs a row per
+step to `metrics.jsonl`, evaluates at start, every `evaluate_every` steps and at the
+end (`validation.jsonl`), and writes `step-<step>.pt` checkpoints (model, optimizer,
+data cursor, every rank's RNG) with `latest.json`, then `report.json`. A run resumes
+from an explicit checkpoint or from its output folder's `latest.json`, only with the
+same settings, data identity, source files and PyTorch version (or a change the
+family accepts, such as a WSD decay branch).
+
+A family adapter supplies the model and everything specific to it:
+
+- settings (dict, compared on resume), `global_rows`, `microbatch`, `target_tokens`,
+  `gradient_clip`, `seed`, `log_every`, `evaluate_every`, `checkpoint_every` (steps,
+  0 = only at the end), `checkpoint_seconds` (0 = none), `keep_checkpoints` (0 = all),
+  `collective_timeout_seconds`;
+- `learning_rate_factor(tokens)`; `build(device)` → model; `initialize(model)` (fresh
+  runs only); `compile(model)` → the module DDP wraps; `make_optimizer(model)`;
+- `open_data(deadline, state)` (rank 0; `state` is a resumed cursor or None) → data
+  with `identity`, `next_batch(rows)` → (inputs, labels, row names or None, budget
+  tokens), `state_dict()`, `load_state_dict()`, `close()`; StopIteration means
+  exhausted, TimeoutError late;
+- `prepare(inputs, labels)` → (per-row extras, local target counts) and
+  `loss(model, inputs, labels, extras, counts, progress)` → (objective normalized by the
+  global counts, detached sums); `log(sums, counts)` → logged values;
+- `heldout(data)` and `evaluate(model, heldout, progress, final)` (rank 0);
+- `metadata()`, `source_files()`, `branchable(saved)`, `check_resume(saved)`,
+  `after_step(data, model, progress)` and `finish(data, model, progress, reason)` (rank 0).
+"""
+
+import contextlib
+import faulthandler
 import hashlib
 import json
+import math
 import os
 import random
 import signal
 import time
-from contextlib import nullcontext
-from dataclasses import asdict
 from datetime import timedelta
-from itertools import islice
 from pathlib import Path
 
-from training_data.growing import STALL_SECONDS, STATE_ENV, DataDeadline
-from training_data.mixture import check_capacity, open_mixture
-from training_data.subword import BOS_TOKEN_ID, EOS_TOKEN_ID, LOSS_IGNORE_INDEX, VOCAB_SIZE
-
-from distributed.config import (
-    CHECKPOINT_FORMAT,
-    DistributedConfig,
-    DistributedRuntime,
-    validate_resume,
-)
-
-
-def source_hashes():
-    import model_100m.model
-    import training_data.heldout
-    import training_data.live_stream
-    import training_data.mixture
-    import training_data.prefetch
-    import training_data.prepared_reference
-    import training_data.raw_token_stream
-    import training_data.subword
-    import training_data.token_shards
-    import training_data.token_stream
-
-    import distributed.config
-    import trainer.optimizers
-
-    paths = {
-        "trainer": Path(__file__),
-        "config": Path(distributed.config.__file__),
-        "optimizer": Path(trainer.optimizers.__file__),
-        "model": Path(model_100m.model.__file__),
-        **{name: Path(path) for name, path in model_100m.model.MODEL_DEPENDENCIES.items()},
-        "loader": Path(training_data.token_stream.__file__),
-        "loader_selection": Path(training_data.mixture.__file__),
-        "raw_loader": Path(training_data.raw_token_stream.__file__),
-        "heldout_loader": Path(training_data.heldout.__file__),
-        "prefetch": Path(training_data.prefetch.__file__),
-        "prepared_reference": Path(training_data.prepared_reference.__file__),
-        "live_loader": Path(training_data.live_stream.__file__),
-        "token_shards": Path(training_data.token_shards.__file__),
-        "tokenizer": Path(training_data.subword.__file__),
-    }
-    return {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in paths.items()}
+CHECKPOINT_FORMAT = "lm-exploration-ddp-v2"
+HANG_DUMP_SECONDS = 1200
 
 
 def atomic_json(path, value):
@@ -66,160 +53,105 @@ def atomic_json(path, value):
     os.replace(temporary, path)
 
 
-def validation_blocks(data, windows_per_source):
-    heldout = {}
-    for name in data.sources:
-        blocks = data.blocks(name)
-        try:
-            heldout[name] = list(islice(blocks, windows_per_source))
-        finally:
-            blocks.close()
-        if len(heldout[name]) != windows_per_source:
-            raise ValueError(
-                f"Source {name} has fewer than {windows_per_source} validation windows"
-            )
-    return heldout
+def source_hashes(paths):
+    """SHA-256 of each named source file."""
+    return {name: hashlib.sha256(Path(p).read_bytes()).hexdigest() for name, p in paths.items()}
 
 
-def heldout_blocks(config, manifest, validation):
-    """The evaluation set `config.heldout` names; never a silent fallback."""
-    frozen = "heldout" in json.loads(Path(manifest).read_text())
-    if config.heldout == "frozen":
-        if not frozen:
-            raise ValueError("heldout is frozen but the snapshot manifest has no heldout entry")
-        from training_data.heldout import load_heldout
+def trainer_sources():
+    """The loop and optimizer files every family's source identity includes."""
+    import trainer.optimizers
+    import trainer.roles
 
-        return load_heldout(manifest, config.context)
-    if frozen:
-        raise ValueError("The snapshot ships a frozen held-out set; set heldout to frozen")
-    # Diagnostics derived from our validation split, not capability evaluation.
-    return validation_blocks(validation, config.validation_windows_per_source)
-
-
-def make_optimizer(model, config, *, fused=True):
-    from trainer.optimizers import make_optimizer as create_optimizer
-
-    return create_optimizer(model, config, fused=fused)
-
-
-def evaluate_sources(model, heldout, *, device="cuda", bf16=True):
-    """Mean loss per valid target by source and by stratum, for unequal-length windows.
-
-    A block's `stratum` defaults to its source.
-    """
-    import torch
-
-    from trainer.loss import cross_entropy
-
-    losses, counts, stratum_sums, stratum_counts = {}, {}, {}, {}
-    with torch.no_grad():
-        for name, blocks in heldout.items():
-            summed_loss = loss_tokens = 0
-            for block in blocks:
-                x = torch.tensor([block["input_ids"]], device=device)
-                y = torch.tensor([block["labels"]], device=device)
-                with torch.autocast(torch.device(device).type, dtype=torch.bfloat16, enabled=bf16):
-                    loss = cross_entropy(
-                        model(x).flatten(0, 1),
-                        y.flatten(),
-                        reduction="sum",
-                        ignore_index=LOSS_IGNORE_INDEX,
-                    )
-                summed_loss += float(loss)
-                loss_tokens += block["loss_tokens"]
-                stratum = block.get("stratum", name)
-                stratum_sums[stratum] = stratum_sums.get(stratum, 0.0) + float(loss)
-                stratum_counts[stratum] = stratum_counts.get(stratum, 0) + block["loss_tokens"]
-            losses[name] = summed_loss / loss_tokens
-            counts[name] = loss_tokens
     return {
-        "per_source": losses,
-        "target_counts": counts,
-        "per_stratum": {k: total / stratum_counts[k] for k, total in stratum_sums.items()},
-        "stratum_target_counts": stratum_counts,
-        "windows": sum(len(blocks) for blocks in heldout.values()),
+        "trainer": Path(__file__),
+        "optimizer": Path(trainer.optimizers.__file__),
+        "roles": Path(trainer.roles.__file__),
     }
 
 
-def crop_trailing_padding(x, y):
-    """Keep every supervised position, including interior masks and its causal prefix."""
-    valid_columns = (y != LOSS_IGNORE_INDEX).any(dim=0).nonzero()
-    # An empty rank must still participate in DDP backward with zero loss.
-    length = int(valid_columns[-1]) + 1 if valid_columns.numel() else 1
-    return x[:, :length].contiguous(), y[:, :length].contiguous()
+def latest_checkpoint(output):
+    """The checkpoint `latest.json` in `output` names, or None."""
+    latest = Path(output) / "latest.json"
+    if not latest.exists():
+        return None
+    return Path(output) / json.loads(latest.read_text())["checkpoint"]
 
 
-def backward_batch(
-    ddp, x, y, count, microbatch, world, *, bf16=True, crop_padding=False, loss_chunk_size=0
-):
-    """Accumulate the gradient of the global mean over nonpadding loss tokens.
+def accumulate(ddp, parts, objective, world):
+    """Backward each microbatch's objective; returns the summed detached sums.
 
-    DDP's autograd hooks reduce gradients during the final microbatch backward.
+    `parts` are microbatch argument tuples; `objective(*part)` returns (objective,
+    sums). DDP averages gradients across ranks, so each objective is scaled by `world`
+    and the optimizer sees the gradient of the global normalized objective. DDP hooks
+    reduce gradient buckets during the final microbatch's backward.
     """
     import torch
 
-    from trainer.loss import cross_entropy
-
-    total_loss = torch.zeros((), device=x.device)
-    parts = list(zip(x.split(microbatch), y.split(microbatch)))
-    for index, (mx, my) in enumerate(parts):
-        if crop_padding:
-            mx, my = crop_trailing_padding(mx, my)
-        is_last_microbatch = index == len(parts) - 1
+    totals = {}
+    for index, part in enumerate(parts):
+        last = index == len(parts) - 1
         # no_sync must cover forward and backward for earlier microbatches.
-        with nullcontext() if is_last_microbatch else ddp.no_sync():
-            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=bf16):
-                if loss_chunk_size:
-                    loss = ddp(
-                        mx, labels=my, loss_chunk_size=loss_chunk_size, loss_fn=cross_entropy
-                    )
-                else:
-                    loss = cross_entropy(
-                        ddp(mx).flatten(0, 1),
-                        my.flatten(),
-                        reduction="sum",
-                        ignore_index=LOSS_IGNORE_INDEX,
-                    )
-            total_loss += loss.detach()
-            # DDP averages across ranks, while count covers valid tokens globally:
-            # (1 / world) * sum_r grad(loss_r * world / count)
-            #     = grad(sum_r loss_r / count).
-            # On the final microbatch, DDP hooks reduce gradient buckets via NCCL
-            # as backward runs. After backward returns, gradients are synchronized.
-            (loss * world / count).backward()
-    return total_loss
+        with contextlib.nullcontext() if last else ddp.no_sync():
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                value, sums = objective(*part)
+            (value * world).backward()
+        for key, sum_ in sums.items():
+            totals[key] = totals.get(key, 0) + sum_.detach()
+    return totals
+
+
+def _split(value, size):
+    return value.split(size) if value is not None else None
+
+
+def check_resume(saved, family, identity, sources, torch_version):
+    if saved.get("format") != CHECKPOINT_FORMAT:
+        raise ValueError("Unsupported checkpoint format")
+    if saved["config"] != family.settings and not family.branchable(saved):
+        raise ValueError("Resume requires identical training settings and GPU count")
+    if saved["data_identity"] != identity:
+        raise ValueError("Checkpoint dataset/tokenizer identity mismatch")
+    if saved["source_sha256"] != sources or saved["torch_version"] != torch_version:
+        raise ValueError("Resume requires identical training source and PyTorch version")
 
 
 def train(
-    config,
-    manifest,
+    family,
     output,
     *,
-    runtime: DistributedRuntime,
+    runtime,
     resume=None,
-    max_seconds=3000,
+    stop_unix=None,
     max_steps=None,
     stop_tokens=None,
+    stop_file=None,
     commit=None,
+    save=True,
 ):
-    """Train until `config.target_tokens`; `stop_tokens` ends the session earlier.
+    """Train until `family.target_tokens`; returns the report (every rank).
 
-    `stop_tokens` is an evaluation boundary: the schedule still runs to the target, so a
-    later resume continues the same run.
+    `stop_tokens` ends the session earlier at a token count (the schedule still runs
+    to the target, so a later resume continues the same run); `stop_unix`,
+    `max_steps`, SIGTERM/SIGINT and an existing `stop_file` end it with a checkpoint.
+    `save=False` writes no checkpoints (throughput benchmarks).
     """
     import numpy as np
     import torch
     import torch.distributed as dist
-    from model_100m.model import GPT, ModelConfig
     from torch.nn.parallel import DistributedDataParallel as DDP
 
-    if not 1 <= max_seconds <= 82800 or (max_steps is not None and max_steps < 1):
-        raise ValueError("Session limits must be positive; maximum session length is 82800 seconds")
-    if stop_tokens is not None and not 0 < stop_tokens <= config.target_tokens:
+    from trainer.optimizers import set_learning_rate
+
+    if max_steps is not None and max_steps < 1:
+        raise ValueError("max_steps must be positive")
+    if stop_tokens is not None and not 0 < stop_tokens <= family.target_tokens:
         raise ValueError("stop_tokens must be within the token target")
     rank, world = runtime.rank, runtime.world_size
-    if world != config.world_size:
-        raise ValueError("torchrun world size differs from configuration")
+    rows = family.global_rows // world
+    if rows * world != family.global_rows or rows % family.microbatch:
+        raise ValueError("Global rows must divide into whole per-GPU microbatches")
+    stop_unix = stop_unix if stop_unix is not None else math.inf
     torch.cuda.set_device(runtime.local_rank)
     torch.set_num_threads(4)
     dist.init_process_group(
@@ -227,15 +159,12 @@ def train(
         init_method=runtime.init_method,
         rank=rank,
         world_size=world,
-        # Rank zero may wait for a growing database while peers wait in a broadcast.
-        timeout=timedelta(seconds=STALL_SECONDS + 300 if STATE_ENV in os.environ else 300),
+        timeout=timedelta(seconds=family.collective_timeout_seconds),
     )
-    output, manifest = Path(output), Path(manifest)
-    if config.data_loader == "live" and (
-        not config.prefetch_batches or not config.allow_unreviewed_data
-    ):
-        raise ValueError("Live upstream data requires prefetch and allow_unreviewed_data")
+    device = torch.device("cuda", runtime.local_rank)
+    output = Path(output)
     commit = commit or (lambda: None)
+    resume = Path(resume) if resume else latest_checkpoint(output)
     stopped = False
     old_handlers = {}
 
@@ -247,7 +176,7 @@ def train(
         old_handlers[sig] = signal.signal(sig, stop)
 
     def primary(function):
-        """Broadcast rank-zero failures before peers enter the next collective."""
+        """Broadcast rank-zero results (or failures) before peers enter the next collective."""
         result = [None]
         if rank == 0:
             try:
@@ -259,90 +188,38 @@ def train(
             raise RuntimeError(result[0]["error"])
         return result[0]["value"]
 
-    data = validation = None
+    data = None
     try:
         started = time.monotonic()
-        # A growing database wait ends at the session limit with a checkpoint.
-        deadline = time.time() + max_seconds
-        random.seed(config.seed)
-        np.random.seed(config.seed)
-        torch.manual_seed(config.seed)
-        torch.cuda.manual_seed(config.seed)
+        random.seed(family.seed)
+        np.random.seed(family.seed)
+        torch.manual_seed(family.seed)
+        torch.cuda.manual_seed(family.seed)
+
+        saved, load_error = None, None
+        if resume:
+            try:
+                # Only trusted checkpoints from our own run volumes.
+                saved = torch.load(resume, map_location="cpu", weights_only=False)
+            except Exception as exc:  # noqa: BLE001 -- every rank must fail together
+                load_error = f"{type(exc).__name__}: {exc}"
 
         def prepare():
-            nonlocal data, validation
-            if (output / "config.json").exists():
-                raise ValueError("Use a fresh run ID, including for resume")
+            nonlocal data
             output.mkdir(parents=True, exist_ok=True)
-
-            def make_data():
-                mixture = open_mixture(
-                    manifest,
-                    loader=config.data_loader,
-                    context=config.context,
-                    allow_unreviewed=config.allow_unreviewed_data,
-                )
-                if hasattr(mixture, "copies"):
-                    mixture.copies.deadline = deadline
-                return mixture
-
-            if config.prefetch_batches:
-                from training_data.prefetch import PrefetchedBatches
-
-                initial = None
-                if resume:
-                    initial = torch.load(resume, map_location="cpu", weights_only=False)["data"]
-                data = PrefetchedBatches(
-                    make_data,
-                    config.global_windows,
-                    depth=config.prefetch_batches,
-                    state=initial,
-                    device=torch.device("cuda", rank),
-                )
-            else:
-                data = make_data()
-            if not config.pilot and config.data_loader != "live":
-                check_capacity(data, config.target_tokens)
-            validation = open_mixture(
-                manifest,
-                loader=config.data_loader,
-                context=config.context,
-                split="validation",
-                allow_unreviewed=config.allow_unreviewed_data,
-            )
+            data = family.open_data(stop_unix, saved["data"] if saved else None)
             return data.identity
 
         identity = primary(prepare)
-        model_config = ModelConfig(
-            vocab_size=VOCAB_SIZE,
-            block_size=config.context,
-            n_layer=config.n_layer,
-            n_head=config.n_head,
-            n_embd=config.n_embd,
-        )
-        model = GPT(model_config).cuda()
-        if config.cache_rope:
-            for block in model.blocks:
-                block.attention.cache_rotary(config.context)
-        # Compile in place so state-dict keys and optimizer parameter identity stay stable.
-        if config.compile_model:
-            model.compile(dynamic=True)
-        ddp = DDP(
-            model,
-            device_ids=[runtime.local_rank],
-            gradient_as_bucket_view=True,
-            broadcast_buffers=False,
-        )
-        from trainer.optimizers import set_learning_rate
-
-        optimizer = make_optimizer(model, config)
+        model = family.build(device)
+        optimizer = family.make_optimizer(model)
+        sources = source_hashes({**trainer_sources(), **family.source_files()})
         metadata = {
             "format": CHECKPOINT_FORMAT,
-            "config": config.as_dict(),
-            "architecture": {"module": ModelConfig.__module__, "config": asdict(model_config)},
-            "special_tokens": {"bos": BOS_TOKEN_ID, "eos": EOS_TOKEN_ID},
+            "config": family.settings,
+            **family.metadata(),
             "data_identity": identity,
-            "source_sha256": source_hashes(),
+            "source_sha256": sources,
             "torch_version": str(torch.__version__),
             "gpu": torch.cuda.get_device_name(),
             "parameters": sum(p.numel() for p in model.parameters()),
@@ -350,24 +227,20 @@ def train(
         }
         step = tokens = 0
         if resume:
-            saved = None
-            error = None
+            error = load_error
             try:
-                # Only trusted checkpoints from our own persistent run volume.
-                saved = torch.load(resume, map_location="cpu", weights_only=False)
-                validate_resume(
-                    saved, config, identity, metadata["source_sha256"], str(torch.__version__)
-                )
+                if error:
+                    raise ValueError(error)
+                check_resume(saved, family, identity, sources, str(torch.__version__))
+                family.check_resume(saved)
                 if "lineage" in saved:
                     # A continued-pretraining phase keeps its parent lineage in every checkpoint.
                     metadata["lineage"] = saved["lineage"]
                 model.load_state_dict(saved["model"])
                 optimizer.load_state_dict(saved["optimizer"])
                 step, tokens = saved["step"], saved["tokens"]
-                if sum(saved["data"]["loss_token_exposures"].values()) != tokens:
-                    raise ValueError("Checkpoint token accounting differs from data state")
                 if (
-                    not 0 <= tokens <= config.target_tokens
+                    not 0 <= tokens <= family.target_tokens
                     or step < 0
                     or len(saved["rng"]) != world
                 ):
@@ -377,8 +250,6 @@ def train(
                 np.random.set_state(state["numpy"])
                 torch.set_rng_state(state["torch"])
                 torch.cuda.set_rng_state(state["cuda"])
-                if rank == 0 and not config.prefetch_batches:
-                    data.load_state_dict(saved["data"])
             except Exception as exc:  # noqa: BLE001 -- every rank must fail together
                 error = f"{type(exc).__name__}: {exc}"
             errors = [None] * world
@@ -386,42 +257,34 @@ def train(
             if any(errors):
                 raise ValueError(f"Resume failed: {errors}")
             del saved
-        primary(lambda: atomic_json(output / "config.json", metadata))
-        start_step, start_tokens = step, tokens
-        last_saved = None
-        final_checkpoint = None
-        heldout = None
-        if rank == 0:
-            heldout = primary(lambda: heldout_blocks(config, manifest, validation))
         else:
-            primary(lambda: None)
+            family.initialize(model)
+        primary(lambda: atomic_json(output / "config.json", metadata))
+        ddp = DDP(
+            family.compile(model),
+            device_ids=[runtime.local_rank],
+            gradient_as_bucket_view=True,
+            broadcast_buffers=False,
+        )
+        start_step, start_tokens = step, tokens
+        last_saved, final_checkpoint = None, None
+        heldout = None
 
-        if rank == 0 and validation is not None and hasattr(validation, "close"):
-            validation.close()
-            validation = None
+        def load_heldout():
+            nonlocal heldout
+            heldout = family.heldout(data)
 
-        @torch.no_grad()
-        def evaluate():
-            model.eval()
-            try:
-                stats = evaluate_sources(model, heldout)
-            finally:
-                model.train()
-            losses = stats["per_source"]
-            return {
-                "step": step,
-                "tokens": tokens,
-                **stats,
-                "weighted_loss": sum(
-                    losses[n] * data.sources[n]["weight_percent"] / 100 for n in losses
-                ),
-            }
+        primary(load_heldout)
 
-        def evaluate_and_record():
-            result = evaluate()
-            with (output / "validation.jsonl").open("a") as handle:
-                handle.write(json.dumps(result) + "\n")
-            return result
+        def evaluate(final=False):
+            def run():
+                progress = {"step": step, "tokens": tokens}
+                result = {**progress, **family.evaluate(model, heldout, progress, final)}
+                with (output / "validation.jsonl").open("a") as handle:
+                    handle.write(json.dumps(result) + "\n")
+                return result
+
+            return primary(run)
 
         def checkpoint():
             nonlocal last_saved, final_checkpoint
@@ -454,97 +317,113 @@ def train(
                     output / "latest.json",
                     {"checkpoint": path.name, "step": step, "tokens": tokens},
                 )
+                if family.keep_checkpoints:
+                    for old in sorted(output.glob("step-*.pt"))[: -family.keep_checkpoints]:
+                        old.unlink()
                 commit()
                 return str(path)
 
             final_checkpoint = primary(save)
             last_saved = step
 
-        initial_validation = primary(evaluate_and_record)
-        local_windows = config.global_windows // world
-        reason = "token_limit"
-        data_error = None
-        while tokens < config.target_tokens:
+        initial_validation = evaluate()
+        last_checkpoint = time.monotonic()
+        reason, data_error = "token_limit", None
+        while tokens < family.target_tokens:
+            # A step that takes this long is stuck: print every thread's stack (repeatedly).
+            faulthandler.dump_traceback_later(HANG_DUMP_SECONDS, repeat=True)
             if stop_tokens is not None and tokens >= stop_tokens:
                 reason = "evaluation_boundary"
                 break
-            flag = torch.tensor(int(stopped), device="cuda")
+            flag = torch.tensor(int(stopped), device=device)
             dist.all_reduce(flag, op=dist.ReduceOp.MAX)
             if int(flag):
                 reason = "signal"
                 break
-            elapsed = time.monotonic() - started
-            limit = primary(
-                lambda elapsed=elapsed, step=step: (
-                    "time_limit"
-                    if elapsed >= max_seconds
-                    else (
-                        "step_limit"
-                        if max_steps is not None and step - start_step >= max_steps
-                        else None
-                    )
-                )
-            )
+
+            def limits(step=step):
+                if time.time() >= stop_unix:
+                    return "time_limit"
+                if max_steps is not None and step - start_step >= max_steps:
+                    return "step_limit"
+                if stop_file and os.path.exists(stop_file):
+                    return "stop_requested"
+                return None
+
+            limit = primary(limits)
             if limit:
                 reason = limit
                 break
-            full_x = full_y = None
+            full = {}
 
-            def fetch(tokens=tokens):
-                nonlocal full_x, full_y
+            def fetch(tokens=tokens, full=full):
                 cursor = data.state_dict()
                 try:
-                    full_x, full_y = data.next_batch(config.global_windows, "cuda")
+                    inputs, labels, names, budget = data.next_batch(family.global_rows)
                 except StopIteration:
-                    return {"stop": "source_two_pass_limit"}
-                except DataDeadline:
-                    return {"stop": "data_wait"}
-                count = int((full_y != LOSS_IGNORE_INDEX).sum())
-                if tokens + count > config.target_tokens:
-                    # Do not consume untrained data or exceed the token ceiling.
+                    return {"stop": "data_exhausted"}
+                except TimeoutError:
+                    return {"stop": "data_late"}
+                if tokens + budget > family.target_tokens:
+                    # Do not consume untrained data or exceed the token target.
                     data.load_state_dict(cursor)
                     return {"stop": "token_limit"}
-                return {"count": count}
+                full["inputs"] = torch.as_tensor(inputs, device=device).long()
+                full["labels"] = torch.as_tensor(labels, device=device).long()
+                counted = {n: names.count(n) for n in sorted(set(names))} if names else None
+                return {"budget": budget, "sources": counted, "context": full["inputs"].shape[1]}
 
             torch.cuda.synchronize()
             tick = time.monotonic()
-            fetch_tick = time.monotonic()
             try:
                 batch = primary(fetch)
             except RuntimeError as exc:
                 # All ranks received the same producer failure. Save the last
                 # completed optimizer boundary, without acknowledging bad data.
-                reason = "data_error"
-                data_error = str(exc)
+                reason, data_error = "data_error", str(exc)
                 break
-            data_fetch_seconds = time.monotonic() - fetch_tick
+            data_fetch_seconds = time.monotonic() - tick
             if "stop" in batch:
                 reason = batch["stop"]
                 break
-            count = batch["count"]
-            x = torch.empty((local_windows, config.context), dtype=torch.long, device="cuda")
-            y = torch.empty_like(x)
-            dist.scatter(x, list(full_x.chunk(world)) if rank == 0 else None, src=0)
-            dist.scatter(y, list(full_y.chunk(world)) if rank == 0 else None, src=0)
-            lr = config.learning_rate(tokens + count)
-            set_learning_rate(optimizer, lr)
+            inputs = torch.empty((rows, batch["context"]), dtype=torch.long, device=device)
+            labels = torch.empty_like(inputs)
+            dist.scatter(inputs, list(full["inputs"].chunk(world)) if rank == 0 else None, src=0)
+            dist.scatter(labels, list(full["labels"].chunk(world)) if rank == 0 else None, src=0)
+            full.clear()
+            extras, counts = family.prepare(inputs, labels)
+            for value in counts.values():
+                dist.all_reduce(value)
+            progress = {"step": step, "tokens": tokens}
+            factor = family.learning_rate_factor(tokens + batch["budget"])
+            set_learning_rate(optimizer, factor)
             optimizer.zero_grad(set_to_none=True)
             torch.cuda.synchronize()
             compute_tick = time.monotonic()
-            total_loss = backward_batch(
-                ddp,
-                x,
-                y,
-                count,
-                config.microbatch,
-                world,
-                crop_padding=config.crop_padding,
-                loss_chunk_size=config.loss_chunk_size,
+            parts = list(
+                zip(
+                    inputs.split(family.microbatch),
+                    labels.split(family.microbatch),
+                    *([_split(v, family.microbatch) for v in extras.values()]),
+                    strict=True,
+                )
             )
-            # DDP has synchronized gradients; replicas now clip and update alike.
+            keys = list(extras)
+
+            def objective(x, y, *rest, keys=keys, counts=counts, progress=progress):
+                return family.loss(ddp, x, y, dict(zip(keys, rest, strict=True)), counts, progress)
+
+            sums = accumulate(ddp, parts, objective, world)
             norm = torch.nn.utils.clip_grad_norm_(
-                model.parameters(), config.gradient_clip_norm, error_if_nonfinite=True, foreach=True
+                model.parameters(), family.gradient_clip, foreach=True
             )
+            for value in sums.values():
+                dist.all_reduce(value)
+            logged = family.log(sums, counts)
+            values = [float(norm), *(v for v in logged.values() if isinstance(v, float))]
+            if not all(math.isfinite(v) for v in values):
+                reason = "non_finite"
+                break
             optimizer.step()
             torch.cuda.synchronize()
             rank_stats = [None] * world
@@ -552,113 +431,81 @@ def train(
                 rank_stats,
                 {
                     "compute_seconds": time.monotonic() - compute_tick,
-                    "nonpadding_tokens": int((y != LOSS_IGNORE_INDEX).sum()),
                     "peak_allocated_bytes": torch.cuda.max_memory_allocated(),
                     "peak_reserved_bytes": torch.cuda.max_memory_reserved(),
                 },
             )
-            # This reduction sums detached losses for logging, not gradients.
-            dist.all_reduce(total_loss)
-            # Wait for this GPU's queued work to finish for accurate timing.
-            torch.cuda.synchronize()
-            if config.prefetch_batches and rank == 0:
-                data.acknowledge()
             step += 1
-            tokens += count
-            duration = time.monotonic() - tick
-
+            tokens += batch["budget"]
+            seconds = time.monotonic() - tick
             row = {
                 "step": step,
                 "tokens": tokens,
-                "loss_tokens": count,
-                "loss": float(total_loss) / count,
-                "lr": lr,
+                "budget_tokens": batch["budget"],
+                **logged,
+                "lr_factor": factor,
                 "optimizer_lrs": [g["lr"] for g in optimizer.param_groups],
-                "gradient_norm": float(norm),
-                "seconds": duration,
-                "nonpadding_tokens_per_second": count / duration,
-                "ranks": rank_stats,
+                "grad_norm": float(norm),
+                "seconds": seconds,
+                "tokens_per_second": batch["budget"] / seconds,
                 "data_fetch_seconds": data_fetch_seconds,
-                "prefetch": data.stats() if rank == 0 and config.prefetch_batches else None,
+                "sources": batch["sources"],
+                "ranks": rank_stats,
             }
 
-            def record(row=row):
+            def record(row=row, seconds=seconds, inputs=inputs, budget=batch["budget"]):
+                row.update(family.step_metrics(inputs, seconds, budget, world))
+                family.after_step(data, model, {"step": row["step"], "tokens": row["tokens"]})
                 with (output / "metrics.jsonl").open("a") as handle:
                     handle.write(json.dumps(row) + "\n")
-                if row["step"] == start_step + 1 or row["step"] % config.log_every == 0:
+                if row["step"] == start_step + 1 or row["step"] % family.log_every == 0:
                     print(json.dumps(row), flush=True)
 
             primary(record)
-            if step % config.evaluate_every == 0:
-                primary(evaluate_and_record)
-            if step % config.checkpoint_every == 0:
+            if step % family.evaluate_every == 0:
+                evaluate()
+            due = family.checkpoint_every and step % family.checkpoint_every == 0
+            late = (
+                family.checkpoint_seconds
+                and time.monotonic() - last_checkpoint >= family.checkpoint_seconds
+            )
+            if save and (due or late):
                 checkpoint()
-        final_validation = primary(evaluate_and_record)
-        if last_saved != step:
+                last_checkpoint = time.monotonic()
+        faulthandler.cancel_dump_traceback_later()
+        final_validation = evaluate(final=True)
+        if save and reason != "non_finite" and last_saved != step:
             checkpoint()
 
         def finish():
+            progress = {"step": step, "tokens": tokens}
             report = dict(
                 metadata,
                 steps=step,
                 session_steps=step - start_step,
-                total_loss_tokens=tokens,
-                lifetime_loss_tokens=metadata.get("lineage", {}).get("parent_tokens", 0) + tokens,
-                session_loss_tokens=tokens - start_tokens,
+                tokens=tokens,
+                lifetime_tokens=metadata.get("lineage", {}).get("parent_tokens", 0) + tokens,
+                session_tokens=tokens - start_tokens,
                 stop_reason=reason,
                 data_error=data_error,
                 elapsed_seconds=time.monotonic() - started,
                 final_checkpoint=final_checkpoint,
                 initial_validation=initial_validation,
                 final_validation=final_validation,
-                loss_token_exposures=data.exposures,
-                validation_note=(
-                    "frozen stratified held-out set from the snapshot manifest"
-                    if config.heldout == "frozen"
-                    else f"{config.validation_windows_per_source} fixed windows/source; "
-                    "diagnostic only"
-                ),
-                prefetch=data.stats() if config.prefetch_batches else None,
+                **family.finish(data, model, progress, reason),
             )
             atomic_json(output / "report.json", report)
             commit()
+            print(
+                json.dumps({"report": {k: report[k] for k in ("steps", "tokens", "stop_reason")}})
+            )
             return report
 
         return primary(finish)
     finally:
-        for mixture in (data, validation):
-            if mixture is not None:
-                mixture.close()
+        faulthandler.cancel_dump_traceback_later()
+        if data is not None:
+            data.close()
         for sig, handler in old_handlers.items():
             signal.signal(sig, handler)
         dist.destroy_process_group()
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=True)
-    parser.add_argument("--manifest", required=True)
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--resume")
-    parser.add_argument("--max-seconds", type=int, default=3000)
-    parser.add_argument("--max-steps", type=int)
-    parser.add_argument("--stop-tokens", type=int, help="Stop at this many targets")
-    parser.add_argument("--volume-name")
-    args = parser.parse_args()
-    runtime = DistributedRuntime.from_torchrun(os.environ)
-    commit = None
-    if args.volume_name:
-        import modal
-
-        commit = modal.Volume.from_name(args.volume_name).commit
-    train(
-        DistributedConfig(**json.loads(Path(args.config).read_text())),
-        args.manifest,
-        args.output,
-        runtime=runtime,
-        resume=args.resume,
-        max_seconds=args.max_seconds,
-        max_steps=args.max_steps,
-        stop_tokens=args.stop_tokens,
-        commit=commit,
-    )
