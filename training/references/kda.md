@@ -18,11 +18,11 @@ are value channels. `kda_reference` updates it once per token:
 ```python
 for t in range(length):
     keep = (positions[:, t] > 0).to(dtype)[:, None, None, None]
-    state = state * keep * decay[:, t, ..., None]                                  # forget
+    state = state * keep * decay[:, t, ..., None]  # forget
     k_t = k[:, t]
-    error = v[:, t] - torch.einsum("bhk,bhkv->bhv", k_t, state)                   # predict
+    error = v[:, t] - torch.einsum("bhk,bhkv->bhv", k_t, state)  # predict
     state = state + torch.einsum("bhk,bhv->bhkv", beta[:, t, :, None] * k_t, error)  # correct
-    outputs.append(torch.einsum("bhk,bhkv->bhv", q[:, t], state))                 # read
+    outputs.append(torch.einsum("bhk,bhkv->bhv", q[:, t], state))  # read
 ```
 
 - **Forget:** every row of S is scaled by its own decay α in (0, 1), computed per

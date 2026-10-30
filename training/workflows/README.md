@@ -8,7 +8,7 @@ A workflow file describes how a model is made, as a list of stages:
 | `pretrain` | Train a model from scratch | [`stages/pretrain.py`](stages/pretrain.py) |
 | `midtrain` | Continue the previous checkpoint on new data, context or schedule | [`stages/pretrain.py`](stages/pretrain.py) |
 | `sft` | Supervised fine-tuning of the previous checkpoint | [`stages/sft.py`](stages/sft.py) |
-| `rl` | Reinforcement learning from the previous checkpoint | not yet a stage |
+| `rl` | Reinforcement learning from the previous checkpoint | [`stages/rl.py`](stages/rl.py) |
 
 ```json
 {
@@ -37,7 +37,7 @@ Every stage of a workflow belongs to one `family`:
 | `subword` | `workflows/model_configs/*.json` | `dataset_config` (`prepare_raw`) and `version`: a raw snapshot on `lm-exploration-mixture-data` | `trainer.subword` | `lm-exploration-training` |
 | `hybrid` | `hybrid/configs/*.json`; owns its token target | `recipe`: token shards on `lm-exploration-hybrid-data` ([`hybrid/modal_data.py`](../hybrid/modal_data.py)) | `model_hybrid.train` | `lm-exploration-hybrid-runs` |
 
-Post-training stages exist for `subword`. File paths in a workflow are relative to
+Post-training stages (`sft`, `rl`) exist for `subword`. File paths in a workflow are relative to
 `training/`.
 
 ## Inspect and run
@@ -142,6 +142,10 @@ checkpoint with `extend`, and the trainer's `settings` ([`trainer/sft.py`](../tr
 See the [SFT guide](../sft/README.md). The parent is a checkpoint of any stage, and
 the trainer checks that its architecture and tokenizer fit
 ([`trainer/checkpoints.py`](../trainer/checkpoints.py)).
+
+An RL stage entry holds its `pool` and the trainer's `settings` ([`trainer/rl/`](../trainer/rl/__init__.py));
+it trains on one H100 and runs model-written code only in a network-blocked sandbox.
+See the [RL guide](../rl/README.md).
 
 `math-sft-20b.json` and `math-sft-5b.json` run math SFT of the WSD end points, with
 and without pretraining replay.
