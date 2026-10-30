@@ -1,7 +1,7 @@
 # RL for math and code
 
-Reinforcement learning for our 124M models on problems whose answers can be checked
-automatically: math word problems, checked against the reference answer, and Python
+Reinforcement learning for our models (the subword 124M GPT and the hybrid 720M) on
+problems whose answers can be checked automatically: math word problems, checked against the reference answer, and Python
 functions, checked by running unit tests. The model writes complete answers and is
 trained on its own samples, scored by those checkers. In SFT
 ([`../sft/README.md`](../sft/README.md)) it only imitates answers someone else wrote.
@@ -53,6 +53,19 @@ algorithm or a source of answers can change without touching the rest:
 | `rollouts.py` | Sampling answers with the current weights and rewarding them |
 | `batch.py`, `policy_gradient.py` | What the algorithms share |
 | `loop.py` | The training loop, checkpoints and provenance |
+
+**Model families.** The parent checkpoint's recorded architecture picks the family
+adapter ([`../trainer/families.py`](../trainer/families.py)); everything else in the
+loop is shared:
+
+| | Subword ([`../trainer/subword.py`](../trainer/subword.py) `SubwordModel`) | Hybrid ([`../hybrid/post_train.py`](../hybrid/post_train.py) `HybridModel`) |
+| --- | --- | --- |
+| Model, tokenizer | model_100m GPT, frozen subword tokenizer | hybrid LM (trunk, without MTP heads), pinned GLM tokenizer |
+| Prompt | BOS and the task's SFT prompt (`rl_tasks.prompt`) | one user turn in GLM's chat template asking for a `\boxed{}` answer or one Python block |
+| Answer ends at | EOS | EOS, `<\|user\|>` or `<\|observation\|>` |
+| Answer format | `plain`: the whole completion | `boxed`: the last `\boxed{}`; the last fenced Python block |
+| Sampler | [`../trainer/rollout.py`](../trainer/rollout.py) (records log-probabilities and top tokens) | [`../hybrid/generate.py`](../hybrid/generate.py) on a bf16 copy of the policy (no log-probabilities, so no StableReinforce) |
+| Replay, exports | pretraining replay; the checkpoint is the artifact | no replay; a bf16 export at the end, uploaded to `hf_repo` if set |
 
 A stage's `settings` read top-down; omitted fields take the defaults in `settings.py`:
 
@@ -114,8 +127,8 @@ clipping, and AWR's weights.
 
 ## The loop
 
-[`../trainer/rl/loop.py`](../trainer/rl/loop.py); the workflow stage currently runs it on
-one H100. Steps 1–3 are the `sampler` and `reuse` sources; the `file` source draws
+[`../trainer/rl/loop.py`](../trainer/rl/loop.py), on the stage's `gpus` H100s (see
+[24-hour limit](#24-hour-limit)). Steps 1–3 are the `sampler` and `reuse` sources; the `file` source draws
 `answers_per_step` rewarded answers instead.
 
 1. **Prompts.** Draw `prompts_per_step` (64) training problems of the pool,
@@ -123,7 +136,7 @@ one H100. Steps 1–3 are the `sampler` and `reuse` sources; the `file` source d
    a row rests for `rest_steps` (50) steps.
 2. **Rollouts.** `samples_per_prompt` (8) answers per prompt at temperature 1, without
    top-k or top-p, so samples follow the policy's probabilities. At most 256 new tokens
-   for math and 384 for code. The shared sampler
+   for math and 384 for code. The family's sampler draws them; for subword, the shared sampler
    [`../trainer/rollout.py`](../trainer/rollout.py) samples a left-padded batch with a
    key/value cache. The rollouts' default `engine`, `graph`, replays one CUDA graph per
    token built from custom decode kernels
@@ -132,9 +145,11 @@ one H100. Steps 1–3 are the `sampler` and `reuse` sources; the `file` source d
    engine's greedy output matches unbatched, uncached decoding exactly
    (`tests/test_rollout.py`). It also records each sampled token's log-probability and,
    for StableReinforce, the sampler's top tokens.
-3. **Rewards** ([`../data/rl_tasks.py`](../data/rl_tasks.py)). 1 or 0; an answer
-   without EOS within the limit scores 0. Code answers are checked in the sandbox in a
-   background thread while math is sampled.
+3. **Rewards** ([`../data/rl_tasks.py`](../data/rl_tasks.py)). 1 or 0, reading the
+   answer in the family's format; an answer that does not end in one of the family's
+   stop tokens within the limit scores 0. Code answers are checked in the sandbox in a
+   background thread while math is sampled; a pool row's tests run as `functions` (every
+   `test*` function is called) or, for KodCode, under `pytest`.
 4. **Advantages** from the algorithm. For GRPO and PPO, groups whose answers all score
    the same have zero advantage and are skipped; their share is logged.
 5. **Updates.** The algorithm's loss is summed over answer tokens and divided by the
@@ -144,8 +159,10 @@ one H100. Steps 1–3 are the `sampler` and `reuse` sources; the `file` source d
    added with `kl_coef` (default 0). Pretraining replay (`"replay": true`, the hook SFT
    also uses, [`../trainer/replay_hook.py`](../trainer/replay_hook.py)) adds a
    next-token loss on pretraining windows at `replay_weight` to every update.
-7. **Optimizer.** AdamW without weight decay, LR 1e-6 after 20 warmup updates, gradient
-   clipping at 1.0.
+7. **Optimizer.** The role-declared optimizer ([`../trainer/optimizers.py`](../trainer/optimizers.py)):
+   by default AdamW for every parameter without weight decay, LR 1e-6 after 20 warmup
+   updates; with `"muon": true` Muon at `muon_lr` for hidden matrices. Gradient clipping
+   at 1.0.
 
 Validation is greedy accuracy on the pool's validation problems plus replay validation
 loss, at the start, every `evaluate_every` steps and at the end.
@@ -155,8 +172,20 @@ loss, at the start, every `evaluate_every` steps and at the end.
 RL runs as a stage of a [workflow](../workflows/README.md), under the launch's deadline
 and supervisor: one training call of at most 21 hours (`max_seconds` at most 20), no
 retries. Training stops taking updates 30 minutes before the deadline. The code sandbox
-is recorded for the supervisor, which terminates it when the launch ends. A run does
-not resume: a relaunch reruns an unfinished RL stage from its parent.
+is recorded for the supervisor, which terminates it when the launch ends. A run saves a
+checkpoint every `save_every` steps, every `save_seconds` (an hour) and when it stops,
+with its optimizer, prompt scheduler, trajectory source and random generators; the
+last `keep_checkpoints` are kept. A run that stops before its step target (the time
+limit, the deadline, or the workflow's `stop` entrypoint) leaves the stage paused, and
+the next launch of the workflow run resumes it exactly in the same run folder; only
+the step target and the save, validation and time settings may change. The final
+validation and the family's export follow the step target.
+
+The stage's `gpus` (1–8) sets the H100s ([`../trainer/rl/ranks.py`](../trainer/rl/ranks.py)):
+one process per GPU, every process drawing the same prompts and sampling and training
+its share (`prompts_per_step` must split evenly), with gradients averaged before
+clipping. Validation is sharded the same way. The launching process holds the code
+sandbox and serves it, volume commits and the stop request to the processes.
 
 ### Logged
 
@@ -243,7 +272,11 @@ entry holds `pool` (an `rl_pool` data ID, also used for validation) and `setting
 ([code layout](#code-layout)); the workflow supplies its parent, usually an SFT stage
 or a `from` checkpoint. [`../workflows/s0-rl-20b.json`](../workflows/s0-rl-20b.json)
 holds stage 0 (`s0`) and then R1, R2 and R3 (`r1-math`, `r2-code`, `r3-joint`) as
-branches from it.
+branches from it. [`../workflows/hybrid-720m-rl.json`](../workflows/hybrid-720m-rl.json)
+is the hybrid run: chat SFT of the 40B export as a `midtrain` stage, then RL on a pool
+of GSM8K, MATH levels 1–3 and KodCode-Light-RL easy/medium problems (the old `rl-v1`
+mix; KodCode kept only where the reference solution passes in the sandbox) with Muon,
+16 prompts × 8 answers per step and 768-token answers.
 
 From `training/`, after the data of [`../sft/CODE_DATA.md`](../sft/CODE_DATA.md):
 
@@ -256,7 +289,12 @@ uv run --all-extras modal run --detach -m workflows.modal_train::main \
 # Only RL, from the existing stage 0 checkpoint.
 uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --workflow workflows/s0-rl-20b.json --run-id ID --start r1-math \
-  --checkpoint math-code-sft-replay-20b-s0-r02/step-000020000.pt
+  --checkpoint math-code-sft-replay-20b-s0-r02-arch/step-000020000.pt
+# The hybrid pool, then chat SFT and RL.
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool \
+  --data-id rl-pool-hybrid-03 --math-lighteval --kodcode --code-train 0
+uv run --all-extras modal run --detach -m workflows.modal_train::main \
+  --workflow workflows/hybrid-720m-rl.json --run-id ID
 # Off-policy trajectories from the Qwen teacher's saved code answers:
 uv run --all-extras modal run -m modal_scripts.modal_teacher::trajectories \
   --teacher code-teacher-qwen35-02 --data-id <fresh-id> [--limit N]
@@ -270,6 +308,10 @@ uv run --all-extras modal run -m playground.modal_export \
   --config analysis/playground/configs/post-training.json --name EXPORT-NAME
 ```
 
-RL checkpoints (format `rl-v1`, `"stage": "rl"`) keep the model code and tokenizer
-beside them, so evaluation and later stages load them like any other checkpoint
-(`trainer/checkpoints.py`).
+RL checkpoints (format `rl-v1`, `"stage": "rl"`) record their architecture and keep the
+family's source files and tokenizer beside them, so evaluation and later stages load
+them like any other checkpoint (`trainer/checkpoints.py`). A parent must record its
+architecture: pretraining checkpoints and SFT/RL checkpoints from this layout on. The
+stage 0 checkpoint above is `math-code-sft-replay-20b-s0-r02-arch`, the r02 run's final
+checkpoint with its architecture (and the tokenizer's EOS as `eos_id`) recorded by a
+one-off conversion; its `converted_from` names the original, which is unchanged.

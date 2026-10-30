@@ -38,7 +38,7 @@ class AlgorithmTests(unittest.TestCase):
                 make(spec)
 
     def test_group_advantages_subtract_the_group_mean(self):
-        batch = Batch(rows("math" for _ in range(6)), [], [], [1, 0, 0, 1, 1, 1], group=3)
+        batch = Batch(rows("math" for _ in range(6)), [], [], [1, 0, 0, 1, 1, 1], [], group=3)
         for got, expected in zip(
             GRPO().advantages(batch), [2 / 3, -1 / 3, -1 / 3, 0, 0, 0], strict=True
         ):
@@ -69,7 +69,7 @@ class AlgorithmTests(unittest.TestCase):
         self.assertEqual(stats["clipped_tokens"], 1)
 
     def test_awr_weights_answers_against_their_task_mean(self):
-        batch = Batch(rows(["code", "code", "math", "math"]), [], [], [1.0, 0.0, 0.0, 0.0])
+        batch = Batch(rows(["code", "code", "math", "math"]), [], [], [1.0, 0.0, 0.0, 0.0], [])
         self.assertEqual(AWR().advantages(batch), [0.5, -0.5, 0.0, 0.0])
         logits = torch.zeros(3, 1, 4, requires_grad=True)
         micro = tokens(logits, torch.tensor([[0], [0], [0]]), torch.tensor([0.5, -0.5, 30.0]))
@@ -125,6 +125,38 @@ class SettingsTests(unittest.TestCase):
                 Settings.from_dict(values)
 
 
+class ResumeTests(unittest.TestCase):
+    def test_resume_may_change_only_the_target_and_schedule(self):
+        from trainer.rl.loop import check_resume
+
+        identity = {"pool_sha256": "p", "settings": {"steps": 10, "save_every": 5, "seed": 1}}
+        check_resume(identity, {**identity, "settings": {"steps": 20, "save_every": 2, "seed": 1}})
+        for changed in ({"pool_sha256": "q"}, {"settings": {**identity["settings"], "seed": 2}}):
+            with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, "identity"):
+                check_resume(identity, {**identity, **changed})
+
+    def test_latest_checkpoint_is_the_highest_step(self):
+        from trainer.rl.loop import latest_checkpoint
+
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertIsNone(latest_checkpoint(Path(folder, "missing")))
+            for step in (2, 10, 9):
+                Path(folder, f"step-{step:09d}.pt").touch()
+            self.assertEqual(latest_checkpoint(folder).name, "step-000000010.pt")
+
+    def test_trajectory_file_state_continues_the_order(self):
+        written = [
+            {**row, "completion_ids": [7], "reward": 1.0} for row in rows("code" for _ in range(5))
+        ]
+        source = TrajectoryFile(written, 2, random.Random(0), stop=2)
+        source.batch(0)
+        state = source.state()
+        expected = [row["id"] for row in source.batch(1).rows]
+        resumed = TrajectoryFile(written, 2, random.Random(0), stop=2)
+        resumed.load_state(state)
+        self.assertEqual([row["id"] for row in resumed.batch(1).rows], expected)
+
+
 class SourceTests(unittest.TestCase):
     def test_scheduler_rests_prompts_solved_by_all_or_none_twice(self):
         pool = rows("math" for _ in range(4))
@@ -144,7 +176,7 @@ class SourceTests(unittest.TestCase):
             {**row, "completion_ids": [7, int(row["id"])], "reward": float(i % 2)}
             for i, row in enumerate(rows("code" for _ in range(5)))
         ]
-        source = TrajectoryFile(written, 2, random.Random(0))
+        source = TrajectoryFile(written, 2, random.Random(0), stop=2)
         first = [source.batch(step) for step in range(2)]
         seen = [row["id"] for batch in first for row in batch.rows]
         self.assertEqual(len(set(seen)), 4)

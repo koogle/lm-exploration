@@ -15,8 +15,10 @@ data, loss, evaluation and exports (the interface is in the module docstring):
 module declares `muon` and AdamW for the rest (`adamw_decay`, `adamw_no_decay`),
 from the `optimizer()` declarations of the modules that own the parameters
 ([`roles.py`](roles.py)); each group keeps a base rate and the loop applies one
-schedule factor to all of them. Hybrid RL ([`../hybrid/rl.py`](../hybrid/rl.py)) is
-its own on-policy loop with the same optimizer.
+schedule factor to all of them. SFT and RL ([`sft.py`](sft.py), [`rl/`](rl/__init__.py))
+use it too, and pick the model family from the parent checkpoint's architecture
+([`families.py`](families.py): `SubwordModel` in `subword.py`, `HybridModel` in
+[`../hybrid/post_train.py`](../hybrid/post_train.py)).
 
 A run folder holds `config.json`, `metrics.jsonl` (one row per step),
 `validation.jsonl` (start, every `evaluate_every` steps, end), `step-<step>.pt`

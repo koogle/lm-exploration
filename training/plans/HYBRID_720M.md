@@ -220,6 +220,61 @@ drops 5.6 points and ARC-Easy and SciQ about 4. The first two launches of the
 no-replay run (`-01`, `-02`) hung on 8 GPUs before their first step and were
 stopped; the third ran normally.
 
+## RL record
+
+RL with verifiable rewards from the SFT export, with the hybrid RL loop of commit
+`4c04614` (`hybrid/rl.py`, 8xH100 DDP, launched with `modal_tools::launch_rl`).
+Hybrid RL now runs through the shared RL trainer
+([`workflows/hybrid-720m-rl.json`](../workflows/hybrid-720m-rl.json), see the
+[RL guide](../rl/README.md)). Prompts: recipe `rl-v1`, 16,211 training and 357 held-out
+prompts from GSM8K train, MATH train levels 1–3 and KodCode-Light-RL-10K
+easy/medium (code problems kept only when their reference solution passes in the
+grading sandbox; 1,721 prompts dropped by the benchmark screen). Rewards: 1 for a
+`\boxed{}` answer that `math_verify` accepts, or for code whose pytest file
+passes. Each step samples 8 completions for each of 128 prompts (1,024 per step,
+temperature 1, up to 768 tokens) and takes one on-policy step on group-centred
+advantages with a constant normalizer (Dr. GRPO, no KL). Muon/AdamW without weight
+decay, 10-step warmup, then constant.
+
+| Run | Learning rates (Muon / AdamW) | Steps | Outcome |
+| --- | --- | ---: | --- |
+| `hybrid-720m-rl-lr-low-01` | 1e-4 / 1.5e-6 | 1,000 | steps 925–1,000: KodCode 43.5, GSM8K 14.6, MATH 17.4; export `tokens-000158595563` (the Space's model) |
+| `hybrid-720m-rl-02` | 2e-4 / 3e-6 | 1,000 | behind the low rate until step ~700, level at the end (steps 925–1,000: KodCode 43.4, GSM8K 15.4, MATH 21.0) |
+| `hybrid-720m-rl-lr-high-01` | 4e-4 / 6e-6 | 202 | stopped: completions collapsed to ~100 tokens and held-out GSM8K and code fell |
+
+The first base-rate run (`hybrid-720m-rl-01`) ran out of memory in its first
+update; the trainer now frees the generation caches before the update and that
+config trains in microbatches of 4. The runs were extended from 400 to 1,000
+steps by relaunching with a larger `steps`.
+
+Held-out solve rate of the low-rate run (greedy, chat format, mean over the
+evaluations in each window; MATH has about 56 held-out problems):
+
+| Steps | KodCode | GSM8K | MATH | Mean completion tokens |
+| --- | ---: | ---: | ---: | ---: |
+| 25–75 | 29.3 | 7.8 | 7.7 | 216 |
+| 225–275 | 41.0 | 9.1 | 7.7 | 161 |
+| 475–525 | 44.7 | 11.0 | 14.9 | 132 |
+| 725–775 | 45.4 | 11.3 | 16.1 | 137 |
+| 925–1,000 | 43.5 | 14.6 | 17.4 | 138 |
+
+Code levels off near step 400; GSM8K and MATH were still rising at the end.
+Benchmark suite (as above, base-model prompts):
+
+| Export | HellaSwag | ARC-E | ARC-C | PIQA | WinoG | OBQA | SciQ | LAMBADA | MMLU | GSM8K | HumanEval | MBPP |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Base, 40B tokens | 51.4 | 63.4 | 35.4 | 72.7 | 57.4 | 38.8 | 87.8 | 41.2 | 26.4 | 3.5 | 4.3 | 5.0 |
+| SFT with replay | 50.2 | 63.7 | 35.0 | 72.0 | 56.0 | 36.6 | 88.3 | 41.1 | 27.0 | 3.6 | 10.4 | 8.4 |
+| RL, low rate, step 432 | 50.5 | 65.0 | 35.2 | 72.1 | 55.5 | 37.8 | 89.3 | 42.8 | 26.5 | 4.3 | 12.2 | 12.8 |
+| RL, low rate, step 1,000 | 50.1 | 65.2 | 35.2 | 72.2 | 55.7 | 37.0 | 89.8 | 39.1 | 26.6 | 7.2 | 13.4 | 12.0 |
+
+After SFT and RL the model keeps the base model's commonsense scores (within
+about 2 points) and triples HumanEval and MBPP; GSM8K doubles over SFT but stays
+far below the models trained on much more math. The final export,
+`jfrick/hybrid-720m-rl-lr-low/tokens-000158595563`, is the chat model in the
+playground Space. Metrics, configs and launch records:
+`training/results/hybrid-720m-rl/` in `jfrick/lm-exploration-results`.
+
 ## Data licensing
 
 The models in this plan are research models, not commercially clean, and that is
