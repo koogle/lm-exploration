@@ -40,6 +40,7 @@ def worker(
     max_steps=None,
     *,
     dataset_root,
+    stop_file="",
 ):
     validate_paths(run_id, snapshot, resume)
     if not isinstance(dataset_root, str) or not re.fullmatch(r"[a-zA-Z0-9_-]+", dataset_root):
@@ -81,7 +82,7 @@ def worker(
             "--standalone",
             f"--nproc_per_node={config.world_size}",
             "-m",
-            "trainer.loop",
+            "trainer.subword",
             "--config",
             str(request),
             "--manifest",
@@ -97,6 +98,8 @@ def worker(
             command.extend(["--resume", str(Path("/runs") / resume)])
         if max_steps is not None:
             command.extend(["--max-steps", str(max_steps)])
+        if stop_file:
+            command.extend(["--stop-file", stop_file])
         print(
             json.dumps({"run_id": run_id, "world_size": config.world_size, "resume": resume}),
             flush=True,

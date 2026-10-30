@@ -54,6 +54,20 @@ def tracked_calls(run_folder, kind=None):
     return sorted(r["call_id"] for r in records if kind is None or r["kind"] == kind)
 
 
+def calls_finished(call_ids):
+    """True once every call has returned or failed (none still queued or running)."""
+    import modal
+
+    for call_id in call_ids:
+        try:
+            modal.FunctionCall.from_id(call_id).get(timeout=0)
+        except TimeoutError:
+            return False
+        except Exception:  # noqa: BLE001, S110 - a failed or cancelled call has finished
+            pass
+    return True
+
+
 def cancel_at_deadline(deadline_unix, calls, done=lambda: False, poll_seconds=300, cancel=None):
     """Independent supervisor body: wait for the deadline, then cancel outstanding calls.
 

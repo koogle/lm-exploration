@@ -9,8 +9,8 @@ hyperparameters (weight decay, betas, Muon momentum and learning-rate ratio) als
 from the new config. Lineage records the parent and the lifetime target count.
 
 Run it where the parent checkpoint and the new snapshot are reachable, with the same
-PyTorch build as the training image, then resume the trainer from the seed. The
-workflow launcher does both with `--phase-from` (see `workflows/README.md`).
+PyTorch build as the training image, then resume the trainer from the seed. A workflow's
+`midtrain` stage does both (see `workflows/README.md`).
 """
 
 import argparse
@@ -38,9 +38,8 @@ def _check_optimizer_state(optimizer):
     """Every saved tensor is finite and shaped like its parameter; some state exists."""
     import torch
 
-    parts = [o for o in vars(optimizer).values() if isinstance(o, torch.optim.Optimizer)]
     entries = 0
-    for part in parts or [optimizer]:
+    for part in optimizer.parts.values():
         for parameter, state in part.state.items():
             entries += 1
             for name, value in state.items():
@@ -67,9 +66,9 @@ def migrate_phase(parent_path, output, manifest_path, config, *, note=""):
         digest,
     )
 
-    from distributed.config import CHECKPOINT_FORMAT
-    from trainer.loop import source_hashes
+    from trainer.loop import CHECKPOINT_FORMAT
     from trainer.optimizers import make_optimizer
+    from trainer.subword import source_hashes
 
     parent_path, output = Path(parent_path), Path(output)
     if output.exists():

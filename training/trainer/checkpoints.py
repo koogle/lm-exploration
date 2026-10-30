@@ -62,16 +62,18 @@ def describe(saved):
 
 def parent(path, model_module, tokenizer_sha256):
     """(checkpoint dictionary, `Description`) of a parent to continue training with
-    `model_module`'s code and the tokenizer of `tokenizer_sha256`, from any stage."""
+    `model_module`'s code and the tokenizer of `tokenizer_sha256`, from any stage.
+
+    The parent's model code may be an earlier version of `model_module`: the trainer
+    loads its weights strictly into the current model, so they must fit, and records
+    the parent's source hashes (`Description.source_sha256`) beside its own."""
     import torch
 
     # Only load our trusted private run-volume checkpoints, never dataset-supplied files.
     saved = torch.load(path, map_location="cpu", weights_only=False)
     description = describe(saved)
-    if description.module != model_module.__name__ or description.source_sha256["model"] != digest(
-        model_module.__file__
-    ):
-        raise ValueError("Model implementation differs from the parent checkpoint")
+    if description.module != model_module.__name__:
+        raise ValueError("Parent checkpoint is another model family")
     if description.tokenizer_sha256 != tokenizer_sha256:
         raise ValueError("Parent uses another tokenizer")
     return saved, description

@@ -20,9 +20,11 @@ from torch.nn import functional as F
 from torch.nn.attention.flex_attention import AuxRequest, create_block_mask, flex_attention
 from torch.utils.checkpoint import checkpoint
 
+from trainer.roles import declare
+
 from .documents import document_ids, document_positions
+from .fused_loss import fused_cross_entropy
 from .kda import KimiDeltaAttention
-from .roles import declare
 
 __all__ = [
     "Attention",
@@ -137,6 +139,7 @@ class HybridConfig:
     mtp_layer_kind: str = "full"
     mtp_weight_start: float = 0.3
     mtp_weight_end: float = 0.1
+    mtp_loss_fraction: float = 1.0
     gate_bias_init: float = 3.0
     rope_base: float = 1_000_000.0
     norm_eps: float = 1e-5
@@ -158,6 +161,8 @@ class HybridConfig:
             raise ValueError("eos_id must be a token id")
         if not self.layer_pattern or set(self.layer_pattern) - {"kda", "full"}:
             raise ValueError("layer_pattern must list 'kda' and 'full' layers")
+        if not 0 < self.mtp_loss_fraction <= 1:
+            raise ValueError("mtp_loss_fraction must be in (0, 1]")
         if self.mtp_layer_kind not in ("kda", "full"):
             raise ValueError("mtp_layer_kind must be 'kda' or 'full'")
         if self.n_layer % len(self.layer_pattern):
@@ -193,6 +198,9 @@ class Attention(nn.Module):
     elementwise gate sigmoid(W_g x + b) is computed from the layer input; `b` is
     the family's only bias and starts at `gate_bias_init` (3.0: about 95% open).
     """
+
+    # Set during evaluation to record gate openness and sink weight per layer.
+    record_statistics = False
 
     def __init__(self, config):
         super().__init__()
@@ -239,6 +247,11 @@ class Attention(nn.Module):
         batch, length, _ = x.shape
         attended = attended.transpose(1, 2).reshape(batch, length, -1)
         gate = torch.sigmoid(self.gate_proj(x) + self.gate_bias)
+        if Attention.record_statistics:
+            self.statistics = {
+                "gate_open": gate.float().mean().item(),
+                "sink_weight": (1 - kept).float().mean().item(),
+            }
         return self.o_proj(attended * gate.to(attended.dtype))
 
 
@@ -376,11 +389,17 @@ class HybridLM(nn.Module):
         return self.final_norm(self.trunk(tokens)[0])
 
     def loss_sums(self, hidden, labels, prefix=""):
-        ce, z = chunked_cross_entropy(
-            hidden, self.output_weight, labels, self.config.loss_chunk_size
-        )
+        if hidden.is_cuda and torch.is_grad_enabled():
+            loss, ce, z = fused_cross_entropy(
+                hidden, self.output_weight, labels, self.config.z_loss, self.config.loss_chunk_size
+            )
+        else:
+            ce, z = chunked_cross_entropy(
+                hidden, self.output_weight, labels, self.config.loss_chunk_size
+            )
+            loss = ce + self.config.z_loss * z
         return {
-            f"{prefix}loss": ce + self.config.z_loss * z,
+            f"{prefix}loss": loss,
             f"{prefix}ce": ce,
             f"{prefix}z": z,
             f"{prefix}count": (labels != IGNORE_INDEX).sum(),
@@ -393,7 +412,11 @@ class HybridLM(nn.Module):
         valid targets; divide by the global valid-target count to get the mean.
         With `mtp_labels` (targets for t+2, see `documents.mtp_labels`), also
         returns the same sums for the MTP module under an `mtp_` prefix. Without
-        them the MTP module does not run, as in inference.
+        them the MTP module does not run, as in inference. In training mode with
+        `mtp_loss_fraction < 1`, the MTP module runs over every position but only a
+        uniformly random `mtp_loss_fraction` of them (fixed count) go through the
+        output layer and loss; divide `mtp_loss` by the expected valid count
+        (all valid MTP targets times the fraction).
         """
         x, rope, mask = self.trunk(tokens)
         hidden = self.final_norm(x)
@@ -407,5 +430,12 @@ class HybridLM(nn.Module):
             # labels never feed a valid MTP target, so any in-vocabulary id works.
             next_tokens = torch.cat((tokens[:, 1:], labels[:, -1:].clamp_min(0)), 1)
             future = self.mtp(x, self.token_embedding(next_tokens), rope, mask)
+            if self.training and self.config.mtp_loss_fraction < 1:
+                future, mtp_labels = future.flatten(0, 1), mtp_labels.flatten()
+                keep = max(1, round(future.size(0) * self.config.mtp_loss_fraction))
+                # Indices of the `keep` largest uniform keys: a random subset, without
+                # randperm (which torch.compile cannot trace).
+                rows = torch.rand(future.size(0), device=future.device).topk(keep).indices
+                future, mtp_labels = future[rows], mtp_labels[rows]
             losses |= self.loss_sums(future, mtp_labels, "mtp_")
         return losses

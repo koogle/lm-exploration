@@ -1,12 +1,12 @@
-"""Muon/AdamW grouping for the hybrid family."""
+"""Role-declared Muon/AdamW grouping, for the hybrid and the subword GPT."""
 
 import unittest
 
 import torch
-from model_hybrid import model, optim
-from model_hybrid.roles import declare
+from model_hybrid import model
 
-from trainer.optimizers import set_learning_rate
+from trainer import optimizers as optim
+from trainer.roles import declare
 
 
 def small_model():
@@ -40,7 +40,7 @@ class OptimizerGroupingTests(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(sum(1 for _ in self.lm.parameters()), len(ids))
 
-        optimizer = optim.HybridOptimizer(self.lm)
+        optimizer = optim.RoleOptimizer(self.lm)
         held = [id(p) for g in optimizer.param_groups for p in g["params"]]
         self.assertEqual(sorted(held), sorted(ids))
 
@@ -93,8 +93,8 @@ class OptimizerGroupingTests(unittest.TestCase):
             type(block).optimizer = original
 
     def test_learning_rates_and_step(self):
-        optimizer = optim.HybridOptimizer(self.lm)
-        set_learning_rate(optimizer, 0.5 * 3e-4)
+        optimizer = optim.RoleOptimizer(self.lm)
+        optim.set_learning_rate(optimizer, 0.5)
         self.assertAlmostEqual(optimizer.muon.param_groups[0]["lr"], 0.01)
         decay, no_decay = optimizer.adamw.param_groups
         self.assertAlmostEqual(decay["lr"], 1.5e-4)
@@ -106,7 +106,7 @@ class OptimizerGroupingTests(unittest.TestCase):
         optimizer.step()
         changed = [n for n, p in self.lm.named_parameters() if not torch.equal(p, before[n])]
         self.assertEqual(len(changed), len(before))
-        restored = optim.HybridOptimizer(small_model())
+        restored = optim.RoleOptimizer(small_model())
         restored.load_state_dict(optimizer.state_dict())
 
 

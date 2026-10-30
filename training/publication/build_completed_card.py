@@ -60,7 +60,7 @@ def card_values(settings, audit, validation, segments):
     final = segments[-1]
     config = final["config"]
     tokens, updates = audit["tokens"], audit["updates"]
-    if not tokens == validation["trained_tokens"] == final["total_loss_tokens"]:
+    if not tokens == validation["trained_tokens"] == final["tokens"]:
         raise ValueError("Training token counts disagree across reports")
     if not updates == validation["step"] == final["steps"]:
         raise ValueError("Training update counts disagree across reports")

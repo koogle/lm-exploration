@@ -26,7 +26,8 @@ def main(recipe, steps=20, warmup=3):
 
     from distributed.config import DistributedConfig
     from trainer import loss as loss_module
-    from trainer.loop import backward_batch, make_optimizer
+    from trainer.optimizers import make_optimizer
+    from trainer.subword import backward_batch
 
     fixed = loss_module.cross_entropy
 

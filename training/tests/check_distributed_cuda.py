@@ -74,7 +74,7 @@ def check_equal(a, b, floating_tolerance=False):
 def checks(output):
     output = Path(output)
     output.mkdir(exist_ok=False, parents=True)
-    from trainer.loop import source_hashes
+    from trainer.subword import source_hashes
 
     summary = {
         "source_sha256": source_hashes(),
@@ -100,7 +100,7 @@ def checks(output):
                 "--standalone",
                 f"--nproc_per_node={config.world_size}",
                 "-m",
-                "trainer.loop",
+                "trainer.subword",
                 "--config",
                 str(settings),
                 "--manifest",
@@ -198,7 +198,7 @@ def checks(output):
             assert state["data"] == full["data"] and state["tokens"] == full["tokens"]
             summary["token_limit"][world] = "no_overshoot_cursor_rolled_back"
             exhausted, state = run(f"w{world}-exhaustion", config, source=small)
-            assert exhausted["stop_reason"] == "source_two_pass_limit"
+            assert exhausted["stop_reason"] == "data_exhausted"
             assert sum(state["data"]["loss_token_exposures"].values()) == state["tokens"]
             summary["exhaustion"][world] = "clean_checkpoint_no_deadlock"
             if world == 2:

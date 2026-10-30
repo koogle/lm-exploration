@@ -23,10 +23,11 @@ from training_data.subword import (
     load_frozen,
 )
 
-from distributed.config import CHECKPOINT_FORMAT, DistributedConfig, validate_resume
+from distributed.config import DistributedConfig
 from trainer.continued_pretraining import migrate_phase
-from trainer.loop import source_hashes
+from trainer.loop import CHECKPOINT_FORMAT, check_resume
 from trainer.optimizers import make_optimizer, set_learning_rate
+from trainer.subword import SubwordFamily, source_hashes
 
 
 def snapshot(root, name):
@@ -101,7 +102,7 @@ def build(config):
 def step(model, optimizer, config, data, tokens):
     x, y = data.next_batch(config.global_windows)
     count = int((y != LOSS_IGNORE_INDEX).sum())
-    set_learning_rate(optimizer, config.learning_rate(tokens + count))
+    set_learning_rate(optimizer, config.learning_rate(tokens + count) / config.peak_lr)
     optimizer.zero_grad(set_to_none=True)
     loss = F.cross_entropy(model(x).flatten(0, 1), y.flatten(), ignore_index=LOSS_IGNORE_INDEX)
     loss.backward()
@@ -197,7 +198,9 @@ class ContinuedPretrainingTests(unittest.TestCase):
 
         # The trainer accepts the seed for the new config and data exactly as on resume.
         data = open_mixture(self.child_manifest, loader="raw", context=config.context)
-        validate_resume(seed, config, data.identity, source_hashes(), str(torch.__version__))
+        family = SubwordFamily(config, self.child_manifest)
+        check_resume(seed, family, data.identity, source_hashes(), str(torch.__version__))
+        family.check_resume(seed)
         self.assertEqual(sum(seed["data"]["loss_token_exposures"].values()), 0)
         data.load_state_dict(seed["data"])
         model, optimizer, _ = build(config)
@@ -212,10 +215,9 @@ class ContinuedPretrainingTests(unittest.TestCase):
 
     def test_adamw_parent_keeps_moments_and_step_counts(self):
         parent, state = self.migrate_and_step("adamw")
-        for index, entry in state["state"].items():
-            self.assertEqual(
-                float(entry["step"]), float(parent["optimizer"]["state"][index]["step"]) + 1
-            )
+        for index, entry in state["adamw"]["state"].items():
+            previous = parent["optimizer"]["adamw"]["state"][index]["step"]
+            self.assertEqual(float(entry["step"]), float(previous) + 1)
 
     def test_muon_parent_keeps_momentum_and_auxiliary_adamw_state(self):
         parent, state = self.migrate_and_step("muon")
@@ -223,9 +225,8 @@ class ContinuedPretrainingTests(unittest.TestCase):
         for index, entry in state["adamw"]["state"].items():
             previous = parent["optimizer"]["adamw"]["state"][index]["step"]
             self.assertEqual(float(entry["step"]), float(previous) + 1)
-        # Muon's lr ratio follows the new config (same values here, but from the new build).
-        ratio = state["muon"]["param_groups"][0]["lr_scale"]
-        self.assertAlmostEqual(ratio, 0.02 / 3e-4)
+        # Base learning rates follow the new config (same values here, but from the new build).
+        self.assertAlmostEqual(state["muon"]["param_groups"][0]["base_lr"], 0.02)
 
     def test_rejects_mismatches_and_overwrites(self):
         config = tiny_config("muon")
