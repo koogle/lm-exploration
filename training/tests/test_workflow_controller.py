@@ -174,7 +174,7 @@ class WorkflowControllerTests(unittest.TestCase):
 class RunWorkflowTests(unittest.TestCase):
     """`run_workflow` with its stage runners replaced: order, parents, branches, relaunch."""
 
-    def run_plan(self, root, stages, start="", end="", checkpoint="", fail=()):
+    def run_plan(self, root, stages, start="", end="", checkpoint="", fail=(), reasons=None):
         path = Path(root, "workflow.json")
         path.write_text(
             json.dumps({"family": "subword", "from": "base/step-000000100.pt", "stages": stages})
@@ -189,7 +189,10 @@ class RunWorkflowTests(unittest.TestCase):
             if recipe["run_id"].removeprefix("flow-").split("-a")[0] in fail:
                 call.get.side_effect = RuntimeError("training failed")
             else:
-                call.get.return_value = {"checkpoint": f"/runs/{recipe['run_id']}/step-1.pt"}
+                call.get.return_value = {
+                    "checkpoint": f"/runs/{recipe['run_id']}/step-1.pt",
+                    **({"stop_reason": reasons.pop(0)} if reasons else {}),
+                }
             return call
 
         run.__globals__.update(
@@ -230,6 +233,17 @@ class RunWorkflowTests(unittest.TestCase):
             result, parents = self.run_plan(root, stages)
             self.assertEqual(parents["flow-more"], "flow-chat/step-1.pt")
             self.assertEqual(result["more"]["status"], "completed")
+
+    def test_rl_stopped_short_pauses_and_resumes_its_own_run(self):
+        stages = [{"stage": "rl", "name": "rl", "pool": "pool", "settings": {"steps": 100}}]
+        with tempfile.TemporaryDirectory() as root:
+            result, parents = self.run_plan(root, stages, reasons=["deadline"])
+            self.assertEqual(result["rl"]["status"], "paused")
+            result, parents = self.run_plan(root, stages, reasons=["steps"])
+            self.assertEqual(result["rl"]["status"], "completed")
+            # The second launch continued run `flow-rl`, not a new attempt's run.
+            self.assertEqual(list(parents), ["flow-rl"])
+            self.assertEqual(result["rl"]["attempt"], 2)
 
     def test_failed_stage_runs_again_as_a_new_attempt(self):
         stages = [

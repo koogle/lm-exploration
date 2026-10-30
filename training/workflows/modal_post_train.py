@@ -24,7 +24,14 @@ from pathlib import Path
 from model_hybrid.image import build as hybrid_image_with
 
 from distributed.image import project_image
-from workflows.modal_app import app, data_volume, hybrid_runs, run_volume, track_call
+from workflows.modal_app import (
+    app,
+    control,
+    data_volume,
+    hybrid_runs,
+    run_volume,
+    track_call,
+)
 
 # Seconds a call may run: SFT's settings cap its training loop at four hours, RL's at 20.
 SFT_SECONDS = 6 * 60 * 60
@@ -133,6 +140,8 @@ def train_rl(recipe, deadline, launch, runs_volume, pools):
             runs_volume.commit,
             deadline=stop,
             trajectories_path=trajectories,
+            # The workflow's `stop` entrypoint: checkpoint and pause at the next step.
+            should_stop=lambda: control.get(launch) == "stop",
         )
         (runs / recipe["run_id"] / "result.json").write_text(json.dumps(result, indent=2))
         return result

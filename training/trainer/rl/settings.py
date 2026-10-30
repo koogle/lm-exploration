@@ -162,6 +162,10 @@ class Settings(ReplaySettings):
     seed: int = 42
     evaluate_every: int = 50
     save_every: int = 100
+    # Also save once this many seconds have passed since the last checkpoint.
+    save_seconds: int = 3600
+    # Checkpoints kept in the run folder (the newest); 0 keeps all.
+    keep_checkpoints: int = 0
     max_seconds: int = 72000
     # An HF model repo for the final export (families that export, `trainer/families.py`).
     hf_repo: str = ""
@@ -180,7 +184,17 @@ class Settings(ReplaySettings):
         )
 
     def __post_init__(self):
-        positive_int(self, "steps", "micro_batch", "evaluate_every", "save_every", "max_seconds")
+        positive_int(
+            self,
+            "steps",
+            "micro_batch",
+            "evaluate_every",
+            "save_every",
+            "save_seconds",
+            "max_seconds",
+        )
+        if type(self.keep_checkpoints) is not int or self.keep_checkpoints < 0:
+            raise ValueError("keep_checkpoints must be a nonnegative integer")
         if not math.isfinite(self.kl_coef) or self.kl_coef < 0:
             raise ValueError("Invalid KL coefficient")
         if self.stable_reinforce is not None:

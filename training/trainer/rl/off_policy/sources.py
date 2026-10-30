@@ -46,3 +46,9 @@ class TrajectoryFile:
 
     def statistics(self, step):
         return {"trajectory_passes": self.passes}
+
+    def state(self):
+        return {"order": list(self.order), "passes": self.passes}
+
+    def load_state(self, state):
+        self.order, self.passes = list(state["order"]), state["passes"]

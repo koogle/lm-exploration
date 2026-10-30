@@ -23,8 +23,15 @@ loss. The parent is a checkpoint of any stage and model family (`trainer/checkpo
 usually SFT, which has learned the answer formats) on the run volume; its recorded
 architecture picks the family adapter (`trainer/families.py`), which builds the model,
 encodes prompts, samples, says where answers are and writes exports (at the end, and to
-`hf_repo` if set). Replay is for the subword family. A run does not resume; an
-interrupted run is rerun from scratch.
+`hf_repo` if set). Replay is for the subword family.
+
+A run saves a checkpoint every `save_every` steps, every `save_seconds` and when it stops
+(the last `keep_checkpoints` are kept, all when 0): the weights, optimizer, step and update
+counts, the prompt scheduler, the trajectory source and every random generator. Training
+stops at the step target (`stop_reason: steps`, then a final validation and the family's
+export), at `settings.max_seconds`, the absolute `deadline` or when `should_stop()`; a later
+call with the same output folder resumes its latest checkpoint exactly, with the same
+identity except the step target and the save, validation and time settings.
 """
 
 import json
@@ -100,10 +107,11 @@ def train(
     deadline=None,
     data_root=Path("/data"),
     trajectories_path=None,
+    should_stop=lambda: False,
 ):
-    """Train until the step target, `settings.max_seconds` or the absolute `deadline`;
-    then validate and save a final checkpoint. `sandbox.run` checks code answers;
-    `trajectories_path` is the trajectory file of the `"file"` source."""
+    """Train, or resume `output`'s latest checkpoint, until a stop (see the module
+    docstring). `sandbox.run` checks code answers; `trajectories_path` is the trajectory
+    file of the `"file"` source."""
     import torch
 
     if deadline is not None and time.time() >= deadline:
@@ -171,12 +179,17 @@ def train(
         "source_sha256": source_hashes,
     }
     output = Path(output)
-    output.mkdir(parents=True, exist_ok=False)
-    (output / "manifest.json").write_text(json.dumps(identity, indent=2))
-    shutil.copyfile(pool_path, output / "pool.jsonl")
-    family.copy_tokenizer(output / "tokenizer")
-    for name, path in files.items():
-        shutil.copyfile(path, output / f"{name}{Path(path).suffix}")
+    resumed = latest_checkpoint(output)
+    if resumed is None:
+        # A run stopped before its first checkpoint starts again.
+        if output.exists():
+            shutil.rmtree(output)
+        output.mkdir(parents=True)
+        (output / "manifest.json").write_text(json.dumps(identity, indent=2))
+        shutil.copyfile(pool_path, output / "pool.jsonl")
+        family.copy_tokenizer(output / "tokenizer")
+        for name, path in files.items():
+            shutil.copyfile(path, output / f"{name}{Path(path).suffix}")
 
     def sample(rows):
         return collect(
@@ -202,6 +215,23 @@ def train(
         ),
     }[settings.trajectories.source]()
     step, update, trained_tokens = 0, 0, 0
+    if resumed is not None:
+        # Only load our trusted private run-volume checkpoints.
+        state = torch.load(resumed, map_location="cpu", weights_only=False)
+        check_resume(state["identity"], identity)
+        family.load(model, state["model"])
+        optimizer.load_state_dict(state["optimizer"])
+        step, update, trained_tokens = state["step"], state["update"], state["trained_tokens"]
+        scheduler.state = state["prompt_state"]
+        if state["source_state"] is not None:
+            source.load_state(state["source_state"])
+        if replay:
+            replay.load_state(state["replay_state"])
+        rng.setstate(state["rng"])
+        torch.set_rng_state(state["torch_rng"])
+        torch.cuda.set_rng_state(state["cuda_rng"])
+        generator.set_state(state["generator"])
+        del state
 
     def evaluate():
         metrics = {}
@@ -217,6 +247,14 @@ def train(
                 metrics[f"validation_{task}_truncated"] = 1 - sum(
                     batch.finished[i] for i in picked
                 ) / len(picked)
+        # Per dataset, named by the row ID's prefix (gsm8k, math, kodcode, mbpp, oci).
+        datasets = {}
+        for i, row in enumerate(batch.rows):
+            datasets.setdefault(row["id"].split("-")[0], []).append(batch.rewards[i])
+        if len(datasets) > 1:
+            metrics["validation_accuracy_by_dataset"] = {
+                name: sum(values) / len(values) for name, values in sorted(datasets.items())
+            }
         if replay:
             model.eval()
             metrics["replay_validation_by_source"] = replay.validation(model)
@@ -299,12 +337,24 @@ def train(
                 "special_tokens": family.special_tokens,
                 "architecture": family.architecture(model),
                 "model": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
                 "step": step,
+                "update": update,
+                "trained_tokens": trained_tokens,
                 "prompt_state": scheduler.state,
+                "source_state": source.state() if hasattr(source, "state") else None,
+                "replay_state": replay.state() if replay else None,
+                "rng": rng.getstate(),
+                "torch_rng": torch.get_rng_state(),
+                "cuda_rng": torch.cuda.get_rng_state(),
+                "generator": generator.get_state(),
             },
             temporary,
         )
         temporary.replace(target)
+        if settings.keep_checkpoints:
+            for old in sorted(output.glob("step-*.pt"))[: -settings.keep_checkpoints]:
+                old.unlink()
         commit()
         return str(target)
 
@@ -313,16 +363,25 @@ def train(
             handle.write(json.dumps({"step": step, **values}) + "\n")
 
     started = time.monotonic()
-    record(**evaluate(), phase="baseline")
-    commit()
-    print(json.dumps({"stage": "training", "target": settings.steps}), flush=True)
-    last_saved = -1
+    if resumed is None:
+        record(**evaluate(), phase="baseline")
+        commit()
+    print(json.dumps({"stage": "training", "step": step, "target": settings.steps}), flush=True)
+    last_saved, saved_at = step if resumed is not None else -1, time.monotonic()
+
+    def stop_reason():
+        if step >= settings.steps:
+            return "steps"
+        if time.monotonic() - started >= settings.max_seconds:
+            return "time_limit"
+        if deadline is not None and time.time() >= deadline:
+            return "deadline"
+        if should_stop():
+            return "stop_requested"
+        return None
+
     shares = source.updates_per_batch
-    while (
-        step < settings.steps
-        and time.monotonic() - started < settings.max_seconds
-        and (deadline is None or time.time() < deadline)
-    ):
+    while (reason := stop_reason()) is None:
         timings = {}
         clock = time.monotonic()
         batch = source.batch(step)
@@ -376,15 +435,44 @@ def train(
             metrics = evaluate()
             record(**metrics)
             print(json.dumps({"step": step, **metrics}), flush=True)
-        if step % settings.save_every == 0:
+        if step % settings.save_every == 0 or time.monotonic() - saved_at >= settings.save_seconds:
             save()
-            last_saved = step
-    record(**evaluate(), phase="final")
+            last_saved, saved_at = step, time.monotonic()
+    if reason == "steps":
+        record(**evaluate(), phase="final")
     path = str(output / f"step-{step:09d}.pt") if last_saved == step else save()
-    upload = family.export(
-        model, output, {"step": step, "tokens": trained_tokens}, settings.hf_repo
-    )
-    if upload is not None:
-        upload.join()
+    if reason == "steps":
+        upload = family.export(
+            model, output, {"step": step, "tokens": trained_tokens}, settings.hf_repo
+        )
+        if upload is not None:
+            upload.join()
     commit()
-    return {"checkpoint": path, "step": step, "seconds": time.monotonic() - started}
+    return {
+        "checkpoint": path,
+        "step": step,
+        "stop_reason": reason,
+        "seconds": time.monotonic() - started,
+    }
+
+
+# Settings a resumed run may change: the step target and when it saves, validates, stops.
+RESUMABLE = ("steps", "evaluate_every", "save_every", "save_seconds", "max_seconds")
+
+
+def latest_checkpoint(output):
+    """The run folder's newest `step-*.pt`, or None."""
+    found = sorted(Path(output).glob("step-*.pt")) if Path(output).exists() else []
+    return found[-1] if found else None
+
+
+def check_resume(saved, current):
+    """Refuse a resume whose identity differs beyond the `RESUMABLE` settings."""
+
+    def fixed(identity):
+        settings = {k: v for k, v in identity["settings"].items() if k not in RESUMABLE}
+        return {**identity, "settings": settings}
+
+    if fixed(saved) != fixed(current):
+        changed = sorted(k for k in current if saved.get(k) != current[k])
+        raise ValueError(f"Resume changed the run's identity: {changed}")
