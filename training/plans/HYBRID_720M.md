@@ -126,3 +126,46 @@ Studies that spend compute or touch data at scale (token counts, contamination
 screens, benchmarks, pilots, the launch) are run only after the user approves
 each one.
 
+## Benchmarks
+
+lm-evaluation-harness 0.4.13 through [`modal_benchmarks.py`](../hybrid/modal_benchmarks.py)
+(2026-10-27): the same tasks, shot counts and greedy decoding for every model;
+reference models pinned by revision. Zero-shot except MMLU (5-shot), GSM8K (5-shot,
+flexible extract) and MBPP (3-shot); acc_norm where the harness reports it. Raw
+results: `training/results/hybrid-720m-40b-01/benchmarks/` in
+`jfrick/lm-exploration-results`.
+
+| Model | Tokens | HellaSwag | ARC-E | ARC-C | PIQA | WinoG | OBQA | SciQ | LAMBADA | MMLU | GSM8K | HumanEval | MBPP |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Hybrid 720M (40B export) | 40B | 51.4 | 63.4 | 35.4 | 72.7 | 57.4 | 38.8 | 87.8 | 41.2 | 26.4 | 3.5 | 4.3 | 5.0 |
+| Gemma 3 270M | 6T | 41.3 | 57.1 | 28.3 | 68.1 | 53.4 | 30.6 | 83.8 | 43.0 | 26.3 | 2.2 | 3.0 | 1.8 |
+| SmolLM2-360M | 4T | 56.3 | 68.2 | 38.5 | 71.5 | 59.4 | 38.0 | 86.5 | 53.3 | 25.3 | 3.9 | 0.0 | 19.8 |
+| Qwen3-0.6B-Base | ~36T | 53.8 | 58.1 | 38.1 | 70.1 | 58.6 | 34.4 | 91.5 | 53.8 | 52.5 | 50.9 | 29.9 | 38.8 |
+| Qwen3.5-0.8B-Base | | 54.8 | 67.5 | 40.4 | 71.5 | 60.7 | 36.0 | 91.8 | 50.8 | 48.3 | 40.0 | 22.6 | 25.6 |
+| Gemma 3 1B | 2T | 62.1 | 72.0 | 38.2 | 74.7 | 58.5 | 37.6 | 92.1 | 55.9 | 26.3 | 2.7 | 6.1 | 8.8 |
+| OLMo-2-0425-1B | 4T | 68.3 | 73.6 | 42.2 | 75.8 | 64.4 | 39.4 | 95.1 | 64.9 | 42.4 | 33.7 | 6.7 | 7.6 |
+| LFM2.5-1.2B-Base | | 59.2 | 77.7 | 51.3 | 72.9 | 59.5 | 39.0 | 93.2 | 46.6 | 55.1 | 55.0 | 23.8 | 23.2 |
+| Gemma 4 E2B | | 73.7 | 79.9 | 52.0 | 78.7 | 64.7 | 44.6 | 95.9 | 67.1 | 57.7 | 23.4 | 26.8 | 36.8 |
+
+The run's own exports:
+
+| Tokens | HellaSwag | ARC-E | ARC-C | PIQA | WinoG | OBQA | SciQ | LAMBADA | MMLU |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 5B | 37.5 | 54.3 | 27.5 | 68.0 | 50.4 | 31.8 | 75.1 | 23.5 | 25.3 |
+| 10B | 39.1 | 54.5 | 30.5 | 67.7 | 51.5 | 33.4 | 81.7 | 31.0 | 24.4 |
+| 15B | 39.6 | 54.5 | 28.6 | 68.4 | 51.0 | 32.2 | 79.1 | 26.7 | 25.0 |
+| 20B | 40.5 | 56.3 | 30.4 | 69.6 | 52.6 | 34.2 | 81.4 | 26.4 | 24.3 |
+| 25B | 40.7 | 55.4 | 28.5 | 69.0 | 54.5 | 33.2 | 82.1 | 33.7 | 26.1 |
+| 30B | 40.3 | 54.5 | 28.7 | 68.3 | 52.8 | 33.0 | 80.7 | 33.9 | 23.6 |
+| 35B | 41.8 | 56.3 | 32.0 | 70.2 | 53.0 | 34.0 | 81.9 | 31.5 | 28.1 |
+| 40B | 51.4 | 63.4 | 35.4 | 72.7 | 57.4 | 38.8 | 87.8 | 41.2 | 26.4 |
+
+At constant learning rate (to 34B tokens) the benchmarks rose slowly; the
+decay over the last 6B tokens added 10 points on HellaSwag and LAMBADA and 7 on
+ARC-E. The model is ahead of Gemma 3 270M, close to SmolLM2-360M and Qwen3-0.6B on
+commonsense tasks (ahead on PIQA and OpenBookQA), and 5–10 points behind the
+1B-class models there. MMLU, GSM8K and code are at chance or near zero, as for
+Gemma 3 1B and SmolLM2; the models at ~50% on MMLU and GSM8K (Qwen3, Qwen3.5,
+LFM2.5) trained on far more, and more exam-like, data. The training data was
+screened against these test sets; the reference models' was not necessarily.
+

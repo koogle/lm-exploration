@@ -385,6 +385,44 @@ On one H100, a randomly initialized 720M model in bf16 decodes 64 rows (512-toke
 prompts) at 4.1 ms per step, 15,550 tokens/s; the plain-PyTorch step it replaces took
 15.8 ms (4,046 tokens/s).
 
+## Benchmarks
+
+[`benchmarks.py`](benchmarks.py) wraps an export as an lm-evaluation-harness
+model. Multiple-choice and perplexity requests are scored with the model's
+document-masked forward pass on CUDA (each request is `[EOS] + context +
+continuation`, grouped into five fixed shapes so the compiled attention reuses its
+graphs); generation is greedy `generate_batch` cut at the task's stop strings.
+[`modal_benchmarks.py`](modal_benchmarks.py) runs the same suite on one H100 per
+model for the export and pinned reference models through the harness's Hugging
+Face backend (SmolLM2-360M, Qwen3-0.6B, Qwen3.5-0.8B, LFM2.5-1.2B, OLMo-2-1B,
+Gemma 3 270M and 1B, Gemma 4 E2B; `--models` picks a subset): HellaSwag, ARC-Easy/Challenge, PIQA, WinoGrande, OpenBookQA, SciQ and
+LAMBADA zero-shot, MMLU 5-shot, GSM8K 5-shot, HumanEval zero-shot and MBPP 3-shot
+(`retries=0`, 6-hour timeout, refuses work 24 hours after launch; each call writes its
+results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
+
+```sh
+uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
+```
+
+## Benchmarks
+
+[`benchmarks.py`](benchmarks.py) wraps an export as an lm-evaluation-harness
+model. Multiple-choice and perplexity requests are scored with the model's
+document-masked forward pass on CUDA (each request is `[EOS] + context +
+continuation`, grouped into five fixed shapes so the compiled attention reuses its
+graphs); generation is greedy `generate_batch` cut at the task's stop strings.
+[`modal_benchmarks.py`](modal_benchmarks.py) runs the same suite on one H100 per
+model for the export and pinned reference models through the harness's Hugging
+Face backend (SmolLM2-360M, Qwen3-0.6B, Qwen3.5-0.8B, LFM2.5-1.2B, OLMo-2-1B,
+Gemma 3 270M and 1B, Gemma 4 E2B; `--models` picks a subset): HellaSwag, ARC-Easy/Challenge, PIQA, WinoGrande, OpenBookQA, SciQ and
+LAMBADA zero-shot, MMLU 5-shot, GSM8K 5-shot, HumanEval zero-shot and MBPP 3-shot
+(`retries=0`, 6-hour timeout, refuses work 24 hours after launch; each call writes its
+results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
+
+```sh
+uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
+```
+
 ## Tests
 
 From `training/`:
