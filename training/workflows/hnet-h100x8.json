@@ -1,11 +1,24 @@
 {
+  "name": "hnet-h100x8",
   "family": "hybrid",
-  "model_config": "hybrid/configs/hnet-720m-40b.json",
-  "gpu": "H100",
-  "world_size": 8,
-  "segment_seconds": 82000,
-  "worker_timeout_seconds": 84000,
-  "max_segments": 8,
-  "segments_per_call": 1,
-  "qualification_segments": 0
+  "stages": [
+    {
+      "stage": "data",
+      "name": "corpus",
+      "recipe": "hybrid/recipes/hybrid-40b-v1.json"
+    },
+    {
+      "stage": "pretrain",
+      "name": "pretrain",
+      "data": "corpus",
+      "model_config": "hybrid/configs/hnet-720m-40b.json",
+      "gpu": "H100",
+      "world_size": 8,
+      "segment_seconds": 82000,
+      "worker_timeout_seconds": 84000,
+      "max_segments": 8,
+      "segments_per_call": 1,
+      "qualification_segments": 0
+    }
+  ]
 }
