@@ -26,8 +26,34 @@ class RLTaskTests(unittest.TestCase):
         ]
         finished = [True, True, False, True, True]
         self.assertEqual(
-            rl_tasks.rewards(rows, completions, finished, LocalSandbox()), [1, 0, 0, 1, 0]
+            rl_tasks.rewards(rows, completions, finished, LocalSandbox(), "plain"), [1, 0, 0, 1, 0]
         )
+
+    def test_boxed_format_reads_the_last_box_and_code_block(self):
+        self.assertEqual(
+            rl_tasks.last_boxed("a \\boxed{1} then \\boxed{\\frac{1}{2}}"), "\\frac{1}{2}"
+        )
+        self.assertIsNone(rl_tasks.last_boxed("no box \\boxed{open"))
+        text = "First:\n```python\nx = 1\n```\nFinal:\n```python\ndef add(a, b):\n    return a + b\n```"
+        self.assertEqual(rl_tasks.program(text, "boxed"), "def add(a, b):\n    return a + b\n")
+        self.assertIsNone(rl_tasks.program("def add(a, b): ...", "boxed"))
+        self.assertEqual(rl_tasks.program("def f(): ...", "plain"), "def f(): ...")
+
+    def test_boxed_rewards(self):
+        math = {"task": "math", "answer": "\\frac{1}{2}"}
+        code = {
+            "task": "code",
+            "tests": "from solution import add\n\ndef test_add():\n    assert add(1, 2) == 3\n",
+        }
+        rows = [math, math, code, code]
+        completions = [
+            "Half is \\boxed{0.5}.",
+            "So \\boxed{2}.",
+            "```python\ndef add(a, b):\n    return a + b\n```",
+            "def add(a, b):\n    return a + b",
+        ]
+        rewards = rl_tasks.rewards(rows, completions, [True] * 4, LocalSandbox(), "boxed")
+        self.assertEqual(rewards, [1, 0, 1, 0])
 
     def test_prompts_match_sft_formats(self):
         self.assertEqual(

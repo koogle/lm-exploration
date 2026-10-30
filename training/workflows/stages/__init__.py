@@ -20,6 +20,8 @@ KINDS = ("data", "pretrain", "midtrain", "sft", "rl")
 # Stages that train a model and write checkpoints.
 TRAINING = ("pretrain", "midtrain", "sft", "rl")
 POST_TRAINING = {"sft": sft, "rl": rl}
+# The post-training kinds each family's trainers support (`trainer/families.py`).
+FAMILY_POST_TRAINING = {"subword": ("sft", "rl"), "hybrid": ("rl",)}
 COMMON = {"stage", "name", "description", "provenance", "run_id", "parent", "settings"}
 
 
