@@ -98,7 +98,11 @@ one H100. Steps 1–3 are the `sampler` and `reuse` sources; the `file` source d
    top-k or top-p, so samples follow the policy's probabilities. At most 256 new tokens
    for math and 384 for code. The shared sampler
    [`../trainer/rollout.py`](../trainer/rollout.py) samples a left-padded batch with a
-   key/value cache; its greedy output matches unbatched, uncached decoding exactly
+   key/value cache. The rollouts' default `engine`, `graph`, replays one CUDA graph per
+   token built from custom decode kernels
+   ([`../kernels/README.md`](../kernels/README.md#rollout-decoding)), 3.2 times faster
+   than `eager` decoding on an H100 with the same error against the learner; the `eager`
+   engine's greedy output matches unbatched, uncached decoding exactly
    (`tests/test_rollout.py`). It also records each sampled token's log-probability and,
    for StableReinforce, the sampler's top tokens.
 3. **Rewards** ([`../data/rl_tasks.py`](../data/rl_tasks.py)). 1 or 0; an answer
@@ -135,7 +139,8 @@ the share of clipped tokens); mean NLL of the sampled tokens; KL to the parent; 
 StableReinforce, the sampler–learner mismatch (mean sampler minus learner
 log-probability of the sampled tokens); replay loss; gradient norm; resting prompts; generation and training seconds.
 Every evaluation: validation accuracy and truncation per task, and replay validation
-loss per source.
+loss per source. With the graph engine at 64 prompts × 8 answers, a smoke run took 3.8 s
+to generate and 0.9 s to train per step.
 
 Signs to watch: rewards rising while EvalPlus pass@1 does not (reward hacking), sampled
 NLL collapsing toward zero while reward plateaus (lost exploration), truncation rising.

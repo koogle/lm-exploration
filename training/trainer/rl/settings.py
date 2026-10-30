@@ -46,6 +46,8 @@ class Rollouts:
     code_tokens: int = 384
     temperature: float = 1.0
     rest_steps: int = 50
+    # Sampler engine (`trainer/rollout.py`): "graph" replays custom-kernel CUDA graphs.
+    engine: str = "graph"
 
     def __post_init__(self):
         positive_int(self, "prompts_per_step", "samples_per_prompt", "math_tokens", "code_tokens")
@@ -57,6 +59,8 @@ class Rollouts:
             raise ValueError("temperature must be in (0, 2]")
         if type(self.rest_steps) is not int or self.rest_steps < 0:
             raise ValueError("rest_steps must be a nonnegative integer")
+        if self.engine not in ("eager", "graph"):
+            raise ValueError("engine must be eager or graph")
 
     def token_limit(self, task):
         return self.math_tokens if task == "math" else self.code_tokens

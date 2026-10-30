@@ -9,6 +9,7 @@ SOURCES = (
     ("100m", "model_100m"),
     ("hybrid", "model_hybrid"),
     ("trainer", "trainer"),
+    ("kernels", "kernels"),
     ("distributed", "distributed"),
     ("workflows", "workflows"),
     ("data", "training_data"),

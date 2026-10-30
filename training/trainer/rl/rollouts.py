@@ -1,7 +1,8 @@
 """Answers sampled by the weights being trained, and their rewards.
 
 `Scheduler` draws training prompts per task and rests prompts that carry no signal.
-`collect` samples answers with the shared cached sampler (`trainer/rollout.py`) and
+`collect` samples answers with the shared cached sampler (`trainer/rollout.py`, with the
+rollouts' `engine`) and
 scores them (`training_data.rl_tasks`): 1 for an answer that ends in EOS and is correct
 (Math-Verify for math, every unit test passing in the code sandbox for code), else 0.
 `Sampler` is the trajectory source of on-policy training: every step it samples a group
@@ -66,6 +67,7 @@ def collect(model, rows, rollouts, temperature, generator, tokenizer, sandbox, t
                 temperature,
                 generator,
                 record_top_k=top_k,
+                engine=rollouts.engine,
             )
             for j, (i, c, d) in enumerate(
                 zip(indices, samples.completions, samples.finished, strict=True)

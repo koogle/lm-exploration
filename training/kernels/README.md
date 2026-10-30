@@ -1,7 +1,7 @@
-# Fused training kernels
+# Fused training and rollout kernels
 
-Custom CUDA kernels for the element-wise work of the 124M decoder, measured on one H100.
-Training does not use them yet. Run from `training/` with Modal credentials:
+Custom CUDA kernels for the 124M decoder, measured on one H100. Pretraining does not use
+the training kernels yet; RL rollouts use the decode kernels ([below](#rollout-decoding)). Run from `training/` with Modal credentials:
 
 ```sh
 uv run --all-extras modal run -m kernels.modal_profile [--fused-kernels]  # where step time goes
@@ -74,3 +74,45 @@ tensor (e4m3 activations and weights, e5m2 gradients) and the LM head in BF16, t
 the scaling passes and the transposed copies the backward needs cost more than the faster
 matmuls save. FP8 would need fused quantize-and-transpose kernels, finer (per-row)
 scales and a training run showing unchanged loss.
+
+## Rollout decoding
+
+RL samples hundreds of answers per step one token at a time, which in eager PyTorch is
+bound by kernel launches and masked attention. [`decode.py`](decode.py) captures one
+whole decode step (all 14 blocks, the LM head and sampling) as a CUDA graph and replays
+it per token (`trainer.rollout.sample(..., engine="graph")`, the RL default). The graph
+uses the RMSNorm kernel above, cuBLAS linears on BF16 weight copies, and three kernels
+from [`decode_ops.cu`](decode_ops.cu) that read the cache slot, step and positions from
+device memory, so shapes stay fixed across steps:
+
+| Kernel | Work |
+| --- | --- |
+| `rope_append` | RoPE of the new query and key with the model's BF16 rounding; writes key and value to the cache slot |
+| `attention` | one query per (row, head) over the row's cached keys, online softmax, eight warps per block |
+| `sample` | log-sum-exp of logits / T, inverse-CDF draw from a pre-drawn uniform, the token and its log-probability |
+
+Prefill runs eagerly into the same cache. Graphs are cached per (batch, capacity, top-k,
+greedy) with capacity rounded up to 256 tokens, and weights are copied into the graph's
+buffers before every rollout.
+
+```sh
+uv run --all-extras modal run -m kernels.modal_rollout::main --checkpoint RUN/step-N.pt
+uv run --all-extras modal run -m kernels.modal_rollout::check --checkpoint RUN/step-N.pt
+```
+
+### Results (one H100, r02 math SFT checkpoint, 256 rows, 100–200 prompt tokens, 2026-10-25)
+
+| Engine | ms per decode step | With top-32 recorded |
+| --- | ---: | ---: |
+| Eager PyTorch | 10.6 | 10.6 |
+| CUDA graph + decode kernels | 3.29 | 3.45 |
+
+- **Correctness:** a graph-replayed step equals the same kernels called step by step
+  (log-probability differences at most 1e-6), and the `sample` kernel matches
+  `log_softmax` to 1e-6 and a reference inverse-CDF draw on every row.
+- **Against the learner** (the full forward pass the RL loss uses), the sampled tokens'
+  mean absolute log-probability difference is 0.0153 for the graph engine and 0.0154 for
+  eager decoding. Greedy decoding gives identical 64-token answers on 89% of rows; the
+  rest diverge at BF16 near-ties.
+- **Where time goes:** the attention kernel is the largest share of a graph step,
+  followed by the linears.
