@@ -1,0 +1,30 @@
+{
+  "name": "rl-v1",
+  "format": "rl",
+  "description": "Verifiable math (GSM8K train, MATH train levels 1-3) and Python (KodCode-Light-RL-10K easy/medium, pytest) prompts.",
+  "sources": {
+    "gsm8k": {
+      "kind": "math",
+      "repo": "openai/gsm8k",
+      "revision": "740312add88f781978c0658806c59bc2815b9866",
+      "file": "main/train-00000-of-00001.parquet"
+    },
+    "math": {
+      "kind": "math",
+      "repo": "DigitalLearningGmbH/MATH-lighteval",
+      "revision": "0530c78699ea5e8eb5530600900e1f328b48acad",
+      "file": "data/train-00000-of-00001.parquet",
+      "levels": ["Level 1", "Level 2", "Level 3"]
+    },
+    "kodcode": {
+      "kind": "code",
+      "repo": "KodCode/KodCode-Light-RL-10K",
+      "revision": "dcf78a8bbba9a613b596ce993c4921a38687dfcc",
+      "file": "data/train-00000-of-00001.parquet",
+      "difficulties": ["easy", "medium"]
+    }
+  },
+  "heldout_fraction": 0.02,
+  "screen": "hybrid-40b-v1/screen.npy",
+  "screen_ngram": 13
+}
