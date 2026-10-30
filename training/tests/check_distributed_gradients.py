@@ -16,7 +16,9 @@ torch.cuda.set_device(rank)
 dist.init_process_group("nccl")
 try:
     torch.manual_seed(43)
-    model = GPT(ModelConfig(vocab_size=64, block_size=16, n_layer=1, n_head=2, n_embd=32)).cuda()
+    model = GPT(
+        ModelConfig(vocab_size=64, block_size=16, n_layer=1, n_head=2, n_embd=32, eos_id=2)
+    ).cuda()
     reference = copy.deepcopy(model)
     ddp = DDP(model, device_ids=[rank])
     generator = torch.Generator().manual_seed(9)

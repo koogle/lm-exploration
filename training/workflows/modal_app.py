@@ -35,20 +35,14 @@ def record(run_id, stage, *, status_file="workflow.json", **details):
     print(json.dumps(status), flush=True)
 
 
-def stop_tracked(run_id, calls=True):
-    """Terminate this launch's recorded sandboxes and, with `calls`, cancel its calls."""
+def terminate_sandboxes(run_id):
+    """Terminate this launch's recorded sandboxes; returns their IDs."""
     from workflows.deadline import tracked_calls
 
-    stopped = []
-    for object_id in tracked_calls(Path("/runs/.calls") / run_id, kind="sandbox"):
+    sandboxes = tracked_calls(Path("/runs/.calls") / run_id, kind="sandbox")
+    for object_id in sandboxes:
         modal.Sandbox.from_id(object_id).terminate()
-        stopped.append(object_id)
-    if calls:
-        for call_id in tracked_calls(Path("/runs/.calls") / run_id):
-            if call_id not in stopped:
-                modal.FunctionCall.from_id(call_id).cancel()
-                stopped.append(call_id)
-    return stopped
+    return sandboxes
 
 
 @app.function(
@@ -63,19 +57,32 @@ def enforce_deadline(run_id, deadline_unix):
     """Independent supervisor: cancel every recorded call and terminate every recorded
     sandbox of this launch at its deadline. A launch that records `completed` or `failed`
     first only has its sandboxes terminated."""
+    from workflows.deadline import cancel_at_deadline, tracked_calls
+
+    calls_folder = Path("/runs/.calls") / run_id
     status = Path("/runs") / run_id / "workflow.json"
     preparation = status.with_name("preparation.json")
 
     def stage(path):
         return json.loads(path.read_text())["stage"] if path.exists() else None
 
-    while (remaining := deadline_unix - time.time()) > 0:
-        time.sleep(min(remaining, 300))
+    def done():
         run_volume.reload()
         # Overlapped preparation can outlast training only if it is still preparing.
-        if stage(status) in ("completed", "failed") and stage(preparation) != "preparing":
-            return {"stage": stage(status), "terminated": stop_tracked(run_id, calls=False)}
-    run_volume.reload()
-    cancelled = stop_tracked(run_id)
+        return stage(status) in ("completed", "failed") and stage(preparation) != "preparing"
+
+    def calls():
+        run_volume.reload()
+        return tracked_calls(calls_folder)
+
+    def cancel(object_id):
+        if object_id in tracked_calls(calls_folder, kind="sandbox"):
+            modal.Sandbox.from_id(object_id).terminate()
+        else:
+            modal.FunctionCall.from_id(object_id).cancel()
+
+    cancelled = cancel_at_deadline(deadline_unix, calls, done, cancel=cancel)
+    if cancelled is None:
+        return {"stage": stage(status), "terminated": terminate_sandboxes(run_id)}
     record(run_id, "deadline_cancelled", cancelled_calls=cancelled)
     return {"stage": "deadline_cancelled", "cancelled_calls": cancelled}

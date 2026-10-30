@@ -228,8 +228,10 @@ __device__ __forceinline__ void rope_angle(int position, int pair, int head_dim,
   sincosf(position * frequency, s, c);
 }
 
-__global__ void qkv_rope_forward_kernel(const bf16* qkv, const float* bias, bf16* q, bf16* k, bf16* v,
-                                        int batch, int length, int heads, int head_dim) {
+// positions: int32 [batch * length], each token's position within its document.
+__global__ void qkv_rope_forward_kernel(const bf16* qkv, const float* bias, const int* positions,
+                                        bf16* q, bf16* k, bf16* v, int batch, int length, int heads,
+                                        int head_dim) {
   int width = heads * head_dim;
   size_t pairs = (size_t)batch * length * width / 2;
   for (size_t index = blockIdx.x * (size_t)blockDim.x + threadIdx.x; index < pairs;
@@ -241,7 +243,7 @@ __global__ void qkv_rope_forward_kernel(const bf16* qkv, const float* bias, bf16
     const bf16* source = qkv + token * 3 * width;
     size_t target = (((size_t)b * heads + h) * length + t) * head_dim + d;
     float c, s;
-    rope_angle(t, d / 2, head_dim, &c, &s);
+    rope_angle(positions[token], d / 2, head_dim, &c, &s);
     for (int part = 0; part < 2; ++part) {
       int column = part * width + feature;
       float even = __bfloat162float(source[column]) + bias[column];
@@ -256,8 +258,9 @@ __global__ void qkv_rope_forward_kernel(const bf16* qkv, const float* bias, bf16
   }
 }
 
-__global__ void qkv_rope_backward_kernel(const bf16* dq, const bf16* dk, const bf16* dv, bf16* dqkv,
-                                         float* dbias, int batch, int length, int heads, int head_dim) {
+__global__ void qkv_rope_backward_kernel(const bf16* dq, const bf16* dk, const bf16* dv,
+                                         const int* positions, bf16* dqkv, float* dbias, int batch,
+                                         int length, int heads, int head_dim) {
   extern __shared__ float local[];
   int width = heads * head_dim;
   for (int i = threadIdx.x; i < 3 * width; i += blockDim.x) local[i] = 0.f;
@@ -274,7 +277,7 @@ __global__ void qkv_rope_backward_kernel(const bf16* dq, const bf16* dk, const b
     bf16* target = dqkv + token * 3 * width;
     size_t source = (((size_t)b * heads + h) * length + t) * head_dim + d;
     float c, s;
-    rope_angle(t, d / 2, head_dim, &c, &s);
+    rope_angle(positions[token], d / 2, head_dim, &c, &s);
     for (int part = 0; part < 3; ++part) {
       const bf16* in = part == 0 ? dq : part == 1 ? dk : dv;
       float ge = __bfloat162float(in[source]), go = __bfloat162float(in[source + 1]);
@@ -505,7 +508,9 @@ std::vector<torch::Tensor> add_rmsnorm_backward(torch::Tensor dy, c10::optional<
   return {dr, dd, dw.sum(0), db.sum(0)};
 }
 
-std::vector<torch::Tensor> qkv_rope_forward(torch::Tensor qkv, torch::Tensor bias, int64_t heads) {
+std::vector<torch::Tensor> qkv_rope_forward(torch::Tensor qkv, torch::Tensor bias,
+                                            torch::Tensor positions, int64_t heads) {
+  positions = positions.to(torch::kInt32).contiguous();
   int batch = qkv.size(0), length = qkv.size(1), width = qkv.size(2) / 3;
   int head_dim = width / heads;
   auto q = torch::empty({batch, heads, length, head_dim}, qkv.options());
@@ -513,12 +518,14 @@ std::vector<torch::Tensor> qkv_rope_forward(torch::Tensor qkv, torch::Tensor bia
   size_t pairs = (size_t)batch * length * width / 2;
   qkv_rope_forward_kernel<<<std::min(blocks_for(pairs, 256), 4096), 256, 0, at::cuda::getCurrentCUDAStream()>>>(
       reinterpret_cast<const bf16*>(qkv.data_ptr()), bias.data_ptr<float>(),
-      reinterpret_cast<bf16*>(q.data_ptr()), reinterpret_cast<bf16*>(k.data_ptr()),
+      positions.data_ptr<int>(), reinterpret_cast<bf16*>(q.data_ptr()), reinterpret_cast<bf16*>(k.data_ptr()),
       reinterpret_cast<bf16*>(v.data_ptr()), batch, length, heads, head_dim);
   return {q, k, v};
 }
 
-std::vector<torch::Tensor> qkv_rope_backward(torch::Tensor dq, torch::Tensor dk, torch::Tensor dv) {
+std::vector<torch::Tensor> qkv_rope_backward(torch::Tensor dq, torch::Tensor dk, torch::Tensor dv,
+                                             torch::Tensor positions) {
+  positions = positions.to(torch::kInt32).contiguous();
   dq = dq.contiguous();
   dk = dk.contiguous();
   dv = dv.contiguous();
@@ -529,7 +536,8 @@ std::vector<torch::Tensor> qkv_rope_backward(torch::Tensor dq, torch::Tensor dk,
   size_t pairs = (size_t)batch * length * width / 2;
   qkv_rope_backward_kernel<<<column_stable_blocks(width / 2, 256), 256, 3 * width * sizeof(float), at::cuda::getCurrentCUDAStream()>>>(
       reinterpret_cast<const bf16*>(dq.data_ptr()), reinterpret_cast<const bf16*>(dk.data_ptr()),
-      reinterpret_cast<const bf16*>(dv.data_ptr()), reinterpret_cast<bf16*>(dqkv.data_ptr()),
+      reinterpret_cast<const bf16*>(dv.data_ptr()), positions.data_ptr<int>(),
+      reinterpret_cast<bf16*>(dqkv.data_ptr()),
       dbias.data_ptr<float>(), batch, length, heads, head_dim);
   return {dqkv, dbias};
 }

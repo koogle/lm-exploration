@@ -7,9 +7,11 @@ from model_10m.model import (
     GPT,
     Attention,
     Block,
+    Documents,
     RMSNorm,
     SwiGLU,
-    causal_attention,
+    document_attention,
+    find_documents,
     rotary,
 )
 
@@ -17,10 +19,12 @@ __all__ = [
     "GPT",
     "Attention",
     "Block",
+    "Documents",
     "ModelConfig",
     "RMSNorm",
     "SwiGLU",
-    "causal_attention",
+    "document_attention",
+    "find_documents",
     "rotary",
 ]
 MODEL_DEPENDENCIES = {

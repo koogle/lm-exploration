@@ -4,6 +4,9 @@ Source-backed reading notes and proposed experiments for our from-scratch models
 External results are attributed to their authors; proposals are not measured
 results or changes to the agreed training plan.
 
+- [N-gram hints on the hybrid model — 2026-10-29](n-gram-hints-2026-10-29.md):
+  a measured two-arm pilot of the NanoGPT speedrun's n-gram hints; the gain is mostly
+  retrieval of text that recurs in the training split.
 - [Mirendil Fern 0.1 and 10M-token context — 2026-10-26](mirendil-fern-2026-10-26.md):
   context-length BPB, RULER to 10M and agentic benchmarks, with a proposed
   byte-windowed context-length evaluation for our models.
@@ -12,6 +15,9 @@ results or changes to the agreed training plan.
   and the Score Centering correction for training–inference mismatch.
 - [KV cache, step by step](kv-cache.md): causal attention with a KV cache in the
   10M model, illustrated by prefill and decode passes over "hello".
+- [Kimi Delta Attention, step by step](kda.md): the KDA recurrence of the hybrid
+  model on a toy head, mapped to the lines of `hybrid/kda.py` and its tests; its
+  relation to Mamba, Mamba-2 and Gated DeltaNet; and the short convolution.
 - [A fix for softmax and cross-entropy — 2026-10-24](softmax-fix-2026-10-24.md):
   Softmax Collapse/Cancellation (Barron et al.), a tested PyTorch port in
   `trainer/stable_softmax.py`, and the CUDA kernel our trainer now uses for its loss.
