@@ -269,6 +269,7 @@ class SubwordFamily:
             n_layer=config.n_layer,
             n_head=config.n_head,
             n_embd=config.n_embd,
+            eos_id=EOS_TOKEN_ID,
         )
 
     def learning_rate_factor(self, tokens):

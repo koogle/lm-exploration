@@ -84,8 +84,9 @@ data_state = data.state_dict()
 ```
 
 The raw loader packs each source's documents, as `BOS ids EOS`, into full windows
-with one token of input/target overlap between consecutive windows. Attention is
-not masked at document boundaries. BOS is an input but never a target, and each
+with one token of input/target overlap between consecutive windows. The model masks
+attention by document: a token sees only earlier tokens after the previous EOS, and
+RoPE positions restart there. BOS is an input but never a target, and each
 content token and EOS receives loss exactly once per pass. Only a source's last
 window in a pass is padded (PAD input 0, target -100). Packing replaced
 document-local windows on 2026-10-23: ClimbMix documents average about 600 tokens,

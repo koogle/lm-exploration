@@ -8,6 +8,12 @@ from torch.nn import functional as F
 
 from trainer.gpu_benchmark import explicit_causal_attention
 
+EOS = 2
+
+
+def one_document(batch, length):
+    return model.find_documents(torch.zeros(batch, length, dtype=torch.long), EOS)
+
 
 def complex_rotary(x, offset=0):
     pairs = torch.view_as_complex(x.reshape(*x.shape[:-1], -1, 2).contiguous())
@@ -20,10 +26,10 @@ class Modern100MTests(unittest.TestCase):
     def setUp(self):
         torch.set_num_threads(1)
         torch.manual_seed(42)
-        self.config = model.ModelConfig(11, 8, 1, 3, 24)
+        self.config = model.ModelConfig(11, 8, 1, 3, 24, eos_id=EOS)
 
     def test_modern_defaults_and_parameter_matched_feedforward(self):
-        config = model.ModelConfig(32768)
+        config = model.ModelConfig(32768, eos_id=EOS)
         self.assertEqual(
             (config.n_layer, config.n_embd, config.n_head, config.block_size), (14, 768, 12, 256)
         )
@@ -66,18 +72,19 @@ class Modern100MTests(unittest.TestCase):
 
     def test_rope_rotation_and_attention_against_independent_reference(self):
         x = torch.randn(1, 2, 3, 8, dtype=torch.float64, requires_grad=True)
-        torch.testing.assert_close(model.rotary(x, 7), complex_rotary(x, 7))
-        self.assertTrue(torch.autograd.gradcheck(model.rotary, (x,)))
-        torch.testing.assert_close(model.rotary(x).square().sum(-1), x.square().sum(-1))
+        positions = torch.arange(3)
+        torch.testing.assert_close(model.rotary(x, positions + 7), complex_rotary(x, 7))
+        self.assertTrue(torch.autograd.gradcheck(lambda t: model.rotary(t, positions), (x,)))
+        torch.testing.assert_close(model.rotary(x, positions).square().sum(-1), x.square().sum(-1))
         key = torch.randn_like(x)
         torch.testing.assert_close(
-            model.rotary(x) @ model.rotary(key).transpose(-2, -1),
-            model.rotary(x, 17) @ model.rotary(key, 17).transpose(-2, -1),
+            model.rotary(x, positions) @ model.rotary(key, positions).transpose(-2, -1),
+            model.rotary(x, positions + 17) @ model.rotary(key, positions + 17).transpose(-2, -1),
         )
         attention = model.Attention(self.config).double()
         inputs = torch.randn(2, 5, 24, dtype=torch.float64, requires_grad=True)
         reference_x = inputs.detach().clone().requires_grad_()
-        actual = attention(inputs)
+        actual = attention(inputs, one_document(2, 5))
         query, key, value = attention.qkv(reference_x).chunk(3, -1)
         query, key, value = [t.view(2, 5, 3, 8).transpose(1, 2) for t in (query, key, value)]
         attended = F.scaled_dot_product_attention(
@@ -93,13 +100,23 @@ class Modern100MTests(unittest.TestCase):
         for a, b in zip(actual_grad, expected_grad):
             torch.testing.assert_close(a, b)
 
-    def test_sdpa_matches_explicit_attention_outputs_and_gradients(self):
+    def test_document_attention_matches_explicit_attention_per_document(self):
         torch.manual_seed(123)
         q, k, v = [
-            torch.randn(2, 3, 17, 8, dtype=torch.float64, requires_grad=True) for _ in range(3)
+            torch.randn(2, 17, 3, 8, dtype=torch.float64, requires_grad=True) for _ in range(3)
         ]
-        actual = model.causal_attention(q, k, v)
-        expected = explicit_causal_attention(q, k, v)
+        tokens = torch.zeros(2, 17, dtype=torch.long)
+        tokens[0, [4, 11]] = EOS
+        tokens[1, 16] = EOS  # The last input's EOS starts no document inside the row.
+        documents = model.find_documents(tokens, EOS)
+        self.assertEqual(documents.cu_seqlens.tolist(), [0, 5, 12, 17, 34])
+        self.assertEqual(documents.positions[0, [0, 4, 5, 11, 12, 16]].tolist(), [0, 4, 0, 6, 0, 4])
+        actual = model.document_attention(q, k, v, documents)
+        pieces = []
+        for row, start, end in ((0, 0, 5), (0, 5, 12), (0, 12, 17), (1, 0, 17)):
+            parts = [t[row : row + 1, start:end].transpose(1, 2) for t in (q, k, v)]
+            pieces.append((row, explicit_causal_attention(*parts).transpose(1, 2)))
+        expected = torch.cat((torch.cat([p for r, p in pieces if r == 0], 1), pieces[-1][1]), 0)
         torch.testing.assert_close(actual, expected, rtol=1e-10, atol=1e-10)
         upstream = torch.randn_like(actual)
         actual_grad = torch.autograd.grad(actual, (q, k, v), upstream)
@@ -121,6 +138,18 @@ class Modern100MTests(unittest.TestCase):
         for a, b in zip(actual_grad, expected_grad):
             torch.testing.assert_close(a, b)
 
+    def test_documents_are_isolated_and_positions_restart(self):
+        instance = model.GPT(model.ModelConfig(11, 16, 2, 3, 24, eos_id=EOS)).double()
+        b = torch.tensor([5, 6, 7, 8])
+        first = torch.cat((torch.tensor([3, 4, EOS]), b))[None]
+        second = torch.cat((torch.tensor([9, 10, 3, 4, 5, EOS]), b))[None]
+        alone = instance(b[None])[0]
+        torch.testing.assert_close(instance(first)[0, 3:], alone, rtol=0, atol=1e-12)
+        torch.testing.assert_close(instance(second)[0, 6:], alone, rtol=0, atol=1e-12)
+        # Without the EOS the tokens form one document, and the prefix reaches b.
+        joined = first.masked_fill(first == EOS, 9)
+        self.assertFalse(torch.allclose(instance(joined)[0, 3:], alone))
+
     def test_combined_model_causality_gradients_and_context_bounds(self):
         instance = model.GPT(self.config)
         tokens = torch.randint(11, (2, 8))
@@ -137,7 +166,7 @@ class Modern100MTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 instance(torch.zeros(1, length, dtype=torch.long))
         with self.assertRaises(ValueError):
-            model.ModelConfig(11, n_embd=18, n_head=6)
+            model.ModelConfig(11, n_embd=18, n_head=6, eos_id=EOS)
 
 
 if __name__ == "__main__":
