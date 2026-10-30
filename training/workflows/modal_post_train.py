@@ -181,11 +181,18 @@ def rl_h100(recipe, deadline, launch):
 
 
 def spawned(function, seconds, launch, deadline, *args, **kwargs):
-    """Run `function` within the launch deadline, recorded for the supervisor."""
+    """Run `function` within the launch deadline, recorded for the supervisor; a call that
+    cannot be recorded is cancelled."""
     from workflows.deadline import bounded_timeout
 
-    call = function.with_options(timeout=bounded_timeout(deadline, seconds)).spawn(*args, **kwargs)
-    track_call(launch, call.object_id, function.info.function_name)
+    call = function.with_options(timeout=bounded_timeout(deadline, seconds)).spawn(
+        *args, **kwargs
+    )
+    try:
+        track_call(launch, call.object_id, "post_train")
+    except BaseException:
+        call.cancel()
+        raise
     return call.get()
 
 
