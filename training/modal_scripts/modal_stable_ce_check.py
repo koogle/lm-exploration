@@ -68,7 +68,7 @@ def check(deadline):
     import torch
     from model_100m.model import GPT, ModelConfig
     from torch.nn import functional as F
-    from training_data.subword import VOCAB_SIZE
+    from training_data.subword import EOS_TOKEN_ID, VOCAB_SIZE
 
     from trainer import stable_ce_cuda, stable_softmax
     from trainer.loss import cross_entropy
@@ -108,7 +108,14 @@ def check(deadline):
 
     # The active 124M recipe: 14 layers, 768 wide, context 2048, microbatch 16, bf16.
     model = GPT(
-        ModelConfig(vocab_size=VOCAB_SIZE, block_size=2048, n_layer=14, n_head=12, n_embd=768)
+        ModelConfig(
+            vocab_size=VOCAB_SIZE,
+            block_size=2048,
+            n_layer=14,
+            n_head=12,
+            n_embd=768,
+            eos_id=EOS_TOKEN_ID,
+        )
     ).cuda()
     x = torch.randint(0, VOCAB_SIZE, (16, 2048), device="cuda")
     y = torch.randint(0, VOCAB_SIZE, (16, 2048), device="cuda")

@@ -14,7 +14,7 @@ class TiedEmbeddingTests(unittest.TestCase):
     def setUp(self):
         torch.set_num_threads(1)
         torch.manual_seed(42)
-        self.config = variant.ModelConfig(11, 8, 1, 3, 24)
+        self.config = variant.ModelConfig(11, 8, 1, 3, 24, eos_id=2)
 
     def test_default_shares_one_parameter_and_preserves_alias_on_conversion(self):
         model = variant.GPT(self.config)
@@ -67,14 +67,14 @@ class TiedEmbeddingTests(unittest.TestCase):
         ids = tokenizer.encode("def square(x):\n    return x ** 2  # α²\n").ids
         # Also exercise the special IDs and the highest valid vocabulary index.
         tokens = torch.tensor([[0, 1, 2, 3, VOCAB_SIZE - 1, *ids]])
-        config = variant.ModelConfig(VOCAB_SIZE, tokens.size(1), 1, 3, 24)
+        config = variant.ModelConfig(VOCAB_SIZE, tokens.size(1), 1, 3, 24, eos_id=2)
         model = variant.GPT(config)
         logits = model(tokens)
         self.assertEqual(logits.shape, (1, tokens.size(1), VOCAB_SIZE))
         F.cross_entropy(logits[:, :-1].flatten(0, 1), tokens[:, 1:].flatten()).backward()
         self.assertTrue(torch.isfinite(model.token_embedding.weight.grad).all())
         with torch.device("meta"):
-            tied = variant.GPT(variant.ModelConfig(VOCAB_SIZE))
+            tied = variant.GPT(variant.ModelConfig(VOCAB_SIZE, eos_id=2))
         tied_count = sum(p.numel() for p in tied.parameters())
         self.assertEqual(tied_count, 124_389_632)
         # state_dict names both uses; parameters() counts the shared matrix once.
