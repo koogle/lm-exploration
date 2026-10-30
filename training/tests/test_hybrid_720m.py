@@ -55,7 +55,7 @@ class HybridRunConfigTests(unittest.TestCase):
         self.assertEqual(flops_per_token(self.config, self.lm, 1000), expected)
 
     def test_synthetic_benchmark_data_and_summary(self):
-        mixture = SyntheticMixture(64, tokenizer.VOCAB_SIZE, 16)
+        mixture = SyntheticMixture(64, 16, tokenizer.TOKENIZER_SIZE - 64, tokenizer.EOS_ID)
         inputs, labels, _ = mixture.next_batch(4)
         self.assertEqual(inputs.shape, (4, 64))
         np.testing.assert_array_equal(inputs[:, 1:], labels[:, :-1])

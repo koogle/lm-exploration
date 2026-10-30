@@ -60,7 +60,8 @@ modal run --detach -m sampling.modal_sample --recipe analysis/decoding-presets/d
   --output artifacts/decoding-presets/decoding-presets.json
 ```
 
-Each launch makes one function call: one H100, 30-minute hard timeout, `retries=0`,
+Each launch makes one function call: one H100, 30-minute hard timeout (2 hours for `hybrid`
+exports, whose byte-level H-Net decodes one byte per forward pass), `retries=0`,
 `max_containers=1`. The call refuses further samples 24 hours after launch, including
 time spent queued. After each model it writes partial results to
 `/runs/sampling/<name>.json` on the volume. Rerunning an identical recipe skips models

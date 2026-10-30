@@ -300,6 +300,67 @@ previous session's final checkpoint; a later launch continues a run with
 `--resume`. MFU counts 6 x (matmul weights, including both output-layer uses) plus
 attention FLOPs over the mean attended keys, against 989 TFLOPS per H100.
 
+## Byte-level H-Net
+
+[`hnet.py`](hnet.py) wraps the hybrid trunk in one stage of dynamic chunking
+([H-Net](https://arxiv.org/abs/2507.07955), following
+[goombalab/hnet](https://github.com/goombalab/hnet)) and reads UTF-8 bytes instead
+of GLM tokens. The [H-Net comparison plan](../plans/HNET_720M.md) records the
+configuration, the compute matching and the run.
+
+- Bytes 0–255 and EOS 256 are embedded at width `outer_embd` and run through
+  `outer_layers` encoder blocks (KDA mixer and SwiGLU, as in the trunk).
+- The routing module gives each byte a boundary probability
+  `p_t = (1 - cos(W_q x_(t-1), W_k x_t)) / 2`, with `W_q`, `W_k` starting at the
+  identity and `p = 1` on the first byte of every document. Bytes with `p > 0.5`
+  start chunks.
+- The chunk layer gathers the boundary bytes, appends a learned vector up to the
+  main width and runs the main network (`main`: any `HybridConfig` fields) over
+  the chunks, document-masked like the token model. The number of chunks per batch
+  is rounded up to `chunk_bucket`, so `torch.compile` builds one static graph per
+  bucket (`static_compilation`).
+- The dechunk layer smooths chunk outputs with `z_t = p_t h_t + (1 - p_t) z_(t-1)`
+  (`dechunk_ema`, restarting at each document) and repeats each chunk over its
+  bytes. Since every chunk has `p > 0.5`, a chunk 128 positions back carries a
+  weight below 2^-128, so the EMA is computed exactly from 2 x 128-chunk windows
+  with one matrix product each.
+- The decoder input is the dechunked value times a straight-through estimator of
+  the chosen probability (1 in the forward pass) plus a zero-initialized fp32
+  projection of the encoder output; `outer_layers` decoder blocks and an untied
+  byte output layer follow.
+- The loss adds `ratio_loss_weight * N/(N-1) * ((N-1) F G + (1-F)(1-G))`, with `F`
+  the fraction of bytes that start chunks, `G` their mean probability and
+  `N = target_ratio`; it is 1 at `F = G = 1/N`. The model folds it into its summed
+  `loss` (times the target count), so the trainer's objective is unchanged.
+
+[`byte_data.py`](byte_data.py) decodes the prepared GLM shards back to bytes: the
+GLM tokenizer is byte-level BPE without a normalizer, so each token id maps to
+fixed bytes (`token_byte_table`; added tokens to their text, EOS to 256).
+`ByteMixture` reads the shards in `PreparedMixture`'s order, with source weights
+converted from tokens to bytes by each source's bytes per token, so the byte model
+trains on the token model's documents in the same proportions.
+`heldout_byte_windows` builds the same held-out documents and checks that the
+decoded lengths equal the recorded UTF-8 byte counts.
+
+A run config with `"architecture": "hnet"` trains the H-Net through the same
+loop as `HNetFamily` in [`train.py`](train.py); `target_tokens`, `warmup_tokens`,
+the context and batch rows then count bytes. It logs the ratio loss and bytes per
+chunk, held-out bits per byte with bytes per chunk per source, and 192-byte greedy
+samples; MFU counts outer-stage FLOPs per byte and main-network FLOPs per chunk
+(`flops_per_byte`). H-Net runs use expandable CUDA segments, since the main
+network's length varies with the chunk count.
+
+```sh
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hnet-h100x8.json \
+    --run-id <id>
+uv run modal run -m model_hybrid.modal_tools::publish --checkpoint <run>-sNN/step-NNNNNNNNN.pt \
+    --repo <owner/name> [--public] [--card <README.md>]
+```
+
+`publish` uploads one checkpoint of either architecture as bf16 weights, config
+(with its `architecture`), progress and the run's logs, private unless `--public`.
+The published H-Net is [`jfrick/hnet-720m`](https://huggingface.co/jfrick/hnet-720m).
+
 ## Tests
 
 From `training/`:
@@ -309,13 +370,14 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
   tests.test_hybrid_sink_gate tests.test_hybrid_kda \
   tests.test_hybrid_mtp tests.test_hybrid_optim \
   tests.test_hybrid_tokenizer tests.test_hybrid_data tests.test_hybrid_720m \
-  tests.test_hybrid_fused_loss -v
+  tests.test_hybrid_fused_loss tests.test_hybrid_hnet -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
 
 ```sh
-uv run modal run -m model_hybrid.modal_checks
+uv run modal run -m model_hybrid.modal_checks::main
+uv run modal run -m model_hybrid.modal_checks::main --only hnet   # the H-Net check alone
 ```
 
 The Modal image uses the CUDA 13.0 devel base with torch 2.14.1.
@@ -356,3 +418,15 @@ fp32 RMSNorm statistics, causality (changing future tokens leaves earlier logits
 bit-identical), attention against an explicit softmax, GQA against MHA with
 duplicated key/value heads, the RoPE base and the chunked loss against
 `F.cross_entropy` plus an explicit z-loss.
+
+`test_hybrid_hnet` compares `dechunk_ema` with the sequential recurrence (across
+blocks and document resets), checks chunk ordering, the loss against an explicit
+cross-entropy, gradients reaching every parameter, the ratio loss, forced
+document-start boundaries, causality and document isolation in fp64, optimizer
+roles, initialization, that the 720M config's main network equals the hybrid
+trunk and its FLOPs per byte match the GLM model, `HNetFamily`'s objective and
+logged ratio loss and bytes per chunk, that the H-Net workflows count bytes, and
+the byte decoding, mixture weights and held-out windows; with the GLM tokenizer
+downloaded, that GLM tokens decode to the exact UTF-8 text. The CUDA check compares
+a compiled bf16 H-Net's loss with its fp64 CPU reference and checks document
+isolation when compiled.

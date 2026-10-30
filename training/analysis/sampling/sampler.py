@@ -70,10 +70,12 @@ def check_deadline(deadline):
 def sample_model(recipe, model, deadline):
     """All prompt x mode x seed samples for one loaded model.
 
-    `model` provides forward, encode(prompt) -> prefix ids, decode(ids), eos_token_id, device.
+    `model` provides forward, encode(prompt) -> prefix ids, decode(ids), eos_token_id, device,
+    and optionally max_new_tokens, which replaces the recipe's limit for this model.
     """
     samples = []
     autocast = recipe["precision"] == "bf16-autocast"
+    limit = getattr(model, "max_new_tokens", None) or recipe["max_new_tokens"]
     for index, (prompt, group) in enumerate(prompts(recipe)):
         prefix = model.encode(prompt)
         for mode in expand_modes(recipe):
@@ -84,7 +86,7 @@ def sample_model(recipe, model, deadline):
                 prefix,
                 mode,
                 seed,
-                recipe["max_new_tokens"],
+                limit,
                 model.eos_token_id,
                 model.device,
                 autocast,

@@ -1,0 +1,12 @@
+{
+  "family": "hybrid",
+  "model_config": "hybrid/configs/hnet-720m-pilot.json",
+  "gpu": "H100",
+  "world_size": 2,
+  "segment_seconds": 3600,
+  "worker_timeout_seconds": 5400,
+  "max_segments": 6,
+  "segments_per_call": 3,
+  "qualification_segments": 1,
+  "qualification_steps": 2
+}
