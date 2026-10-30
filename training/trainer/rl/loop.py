@@ -1,22 +1,22 @@
 """The RL training loop.
 
-Each step draws `prompts_per_step` training problems of the pool, `math_share` of them
-math, samples `samples_per_prompt` answers to each with the current weights and rewards
-them (`rollouts.py`). The algorithm (`algorithms.py`) turns the rewards into one advantage
-per answer; answers with zero advantage (every answer of a group scored the same) are
-skipped. The rest are shuffled into the algorithm's `updates_per_batch` equal shares, one
-optimizer update each: one update per step on-policy, several off-policy. For off-policy
-updates, the log-probabilities of the weights that sampled the batch are computed once
-before its first update.
+Each step takes one `Batch` of answers with rewards from the trajectory source
+(`settings.trajectories`): sampled by the current weights (`rollouts.Sampler`), sampled
+and reused for several updates, or read from a trajectory file (`off_policy/sources.py`).
+The algorithm (`algorithms.py`) gives one advantage per answer; policy-gradient
+algorithms skip answers with zero advantage (every answer of a group scored the same).
+The answers are shuffled into the source's `updates_per_batch` equal shares, one
+optimizer update each. When the algorithm needs the sampling weights' log-probabilities,
+they are computed once before the batch's first update.
 
 Each answer's token loss is divided by a constant, the answers per update times the
 task's token limit (no per-answer length normalization, as in Dr. GRPO,
 arXiv:2503.20783). `kl_coef` adds the k3 estimate of KL(policy ‖ parent) on the answer
 tokens, which is always measured and logged; `sampler_kl_coef` adds that of
-KL(sampler ‖ learner). The sampler (cached one-token decoding) and the learner (a full
-forward pass) compute probabilities with different kernels, so they differ slightly; the
-mean sampler minus learner log-probability of the sampled tokens is logged as
-`sampler_mismatch`. Pretraining replay (`replay_*`, the hook
+KL(sampler ‖ learner) on answers our sampler wrote. The sampler (cached one-token
+decoding) and the learner (a full forward pass) compute probabilities with different
+kernels, so they differ slightly; the mean sampler minus learner log-probability of the
+sampled tokens is logged as `sampler_mismatch`. Pretraining replay (`replay_*`, the hook
 `trainer/replay_hook.py` that SFT also uses) adds its loss at `replay_weight` to every
 update. Gradients are clipped to norm 1.
 
@@ -33,7 +33,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from training_data import rl_tasks
+from training_data import rl_tasks, rl_trajectories
 from training_data.subword import (
     BOS_TOKEN_ID,
     DEFAULT_FOLDER,
@@ -48,8 +48,9 @@ from trainer import batches, rollout
 from trainer.batches import collate
 from trainer.replay_hook import ReplayHook
 from trainer.rl import scores
-from trainer.rl.algorithms import Tokens
-from trainer.rl.rollouts import Scheduler, collect
+from trainer.rl.batch import Tokens
+from trainer.rl.off_policy.sources import Reuse, TrajectoryFile
+from trainer.rl.rollouts import Sampler, Scheduler, collect
 
 FORMAT = "rl-v1"
 # Parents this trainer accepts: SFT checkpoints of `trainer/sft.py`.
@@ -81,10 +82,14 @@ def source_files():
 
     package = Path(__file__).parent
     return {
-        **{f"rl_{path.stem}": str(path) for path in sorted(package.glob("*.py"))},
+        **{
+            "rl_" + "_".join(path.relative_to(package).with_suffix("").parts): str(path)
+            for path in sorted(package.rglob("*.py"))
+        },
         "rollout": rollout.__file__,
         "batches": batches.__file__,
         "rl_tasks": rl_tasks.__file__,
+        "rl_trajectories": rl_trajectories.__file__,
         "math_sft": sys.modules["training_data.math_sft"].__file__,
         "code_sft": sys.modules["training_data.code_sft"].__file__,
         "sandbox_execution": execution_module.__file__,
@@ -104,9 +109,11 @@ def train(
     commit=lambda: None,
     deadline=None,
     data_root=Path("/data"),
+    trajectories_path=None,
 ):
     """Train until the step target, `settings.max_seconds` or the absolute `deadline`;
-    then validate and save a final checkpoint. `sandbox.run` checks code answers."""
+    then validate and save a final checkpoint. `sandbox.run` checks code answers;
+    `trajectories_path` is the trajectory file of the `"file"` source."""
     import torch
     from model_100m.model import GPT, ModelConfig
 
@@ -116,13 +123,29 @@ def train(
         raise RuntimeError("Training is CUDA/Modal only")
     algorithm, rollouts = settings.algorithm, settings.rollouts
     tokenizer = load_frozen()
+
+    def with_prompt(row):
+        prompt = tokenizer.encode(rl_tasks.prompt(row), add_special_tokens=False).ids
+        return {**row, "prompt_ids": [BOS_TOKEN_ID, *prompt]}
+
     pool, pool_hash = rl_tasks.load(pool_path)
-    for split in pool:
-        for row in pool[split]:
-            row["prompt_ids"] = [BOS_TOKEN_ID] + tokenizer.encode(
-                rl_tasks.prompt(row), add_special_tokens=False
+    pool = {
+        split: [r for r in map(with_prompt, rows) if len(r["prompt_ids"]) <= MAX_PROMPT_TOKENS]
+        for split, rows in pool.items()
+    }
+    trajectory_hash = None
+    if settings.trajectories.source == "file":
+        written, trajectory_hash = rl_trajectories.load(trajectories_path)
+        trajectories = []
+        for row in map(with_prompt, written):
+            row["completion_ids"] = tokenizer.encode(
+                row["completion"], add_special_tokens=False
             ).ids
-        pool[split] = [r for r in pool[split] if len(r["prompt_ids"]) <= MAX_PROMPT_TOKENS]
+            # Answers the policy could have written within its prompt and token limits.
+            if len(row["prompt_ids"]) <= MAX_PROMPT_TOKENS and len(
+                row["completion_ids"]
+            ) < rollouts.token_limit(row["task"]):
+                trajectories.append(row)
     # Only load our trusted private run-volume checkpoints, never dataset-supplied files.
     saved = torch.load(parent, map_location="cpu", weights_only=False)
     if saved.get("format") not in PARENT_FORMATS:
@@ -151,6 +174,7 @@ def train(
         "parent": str(parent),
         "parent_sha256": digest(parent),
         "pool_sha256": pool_hash,
+        "trajectories_sha256": trajectory_hash,
         "tokenizer_sha256": TOKENIZER_SHA256,
         "replay": replay.identity() if replay else None,
         "settings": asdict(settings),
@@ -163,7 +187,27 @@ def train(
     shutil.copytree(DEFAULT_FOLDER, output / "tokenizer")
     for name, path in files.items():
         shutil.copyfile(path, output / f"{name}.py")
+
+    def sample(rows):
+        return collect(
+            model,
+            rows,
+            rollouts,
+            rollouts.temperature,
+            generator,
+            tokenizer,
+            sandbox,
+            algorithm.sampler_top_k,
+        )
+
     scheduler = Scheduler(pool["train"], rollouts.rest_steps, rng)
+    source = {
+        "sampler": lambda: Sampler(rollouts, scheduler, sample),
+        "reuse": lambda: Reuse(
+            rollouts, scheduler, sample, settings.trajectories.updates_per_batch
+        ),
+        "file": lambda: TrajectoryFile(trajectories, settings.trajectories.answers_per_step, rng),
+    }[settings.trajectories.source]()
     step, update = 0, 0
 
     def evaluate():
@@ -203,7 +247,7 @@ def train(
             g["lr"] = settings.optimizer.learning_rate(update)
         optimizer.zero_grad(set_to_none=True)
         # Dr. GRPO's constant: the answers per update times the task's token limit.
-        per_update = len(batch.rows) / algorithm.updates_per_batch
+        per_update = len(batch.rows) / source.updates_per_batch
         for start in range(0, len(answers), settings.micro_batch):
             chosen = answers[start : start + settings.micro_batch]
             x, y = collate([sequences[i] for i in chosen], "cuda")
@@ -224,21 +268,26 @@ def train(
                 device="cuda",
             )
             weight = torch.tensor([advantage[i] for i in chosen], device="cuda")
-            # The sampler's records at each answer target position.
+            tokens = Tokens(logits, y, mask, logp, old_logp.detach(), weight, scale)
+            # The sampler's records at each answer target position, for answers it wrote.
             top = algorithm.sampler_top_k
             sampled = torch.zeros(y.shape, device="cuda")
-            top_ids = torch.zeros((*y.shape, top), dtype=torch.long, device="cuda")
-            top_logprobs = torch.zeros((*y.shape, top), device="cuda")
+            recorded = torch.zeros(y.shape, dtype=torch.bool, device="cuda")
+            if top:
+                tokens.sampler_top_ids = torch.zeros(
+                    (*y.shape, top), dtype=torch.long, device="cuda"
+                )
+                tokens.sampler_top_logprobs = torch.zeros((*y.shape, top), device="cuda")
             for b, i in enumerate(chosen):
+                if batch.sampler is None or batch.sampler[i] is None:
+                    continue
                 at = len(batch.rows[i]["prompt_ids"]) - 1
                 logprobs, ids, values = batch.sampler[i]
                 sampled[b, at : at + len(logprobs)] = logprobs
+                recorded[b, at : at + len(logprobs)] = True
                 if top:
-                    top_ids[b, at : at + len(ids)] = ids
-                    top_logprobs[b, at : at + len(ids)] = values
-            tokens = Tokens(logits, y, mask, logp, old_logp.detach(), weight, scale)
-            if top:
-                tokens.sampler_top_ids, tokens.sampler_top_logprobs = top_ids, top_logprobs
+                    tokens.sampler_top_ids[b, at : at + len(ids)] = ids
+                    tokens.sampler_top_logprobs[b, at : at + len(ids)] = values
             loss, stats = algorithm.loss(tokens)
             del logits, tokens
             delta = (reference_logp - logp) * mask
@@ -246,10 +295,11 @@ def train(
             if settings.kl_coef:
                 loss = loss + settings.kl_coef * (scale[:, None] * kl).sum()
             if settings.sampler_kl_coef:
-                drift = scores.sampler_kl(logp, sampled, mask)
+                drift = scores.sampler_kl(logp, sampled, mask & recorded)
                 loss = loss + settings.sampler_kl_coef * (scale[:, None] * drift).sum()
             loss.backward()
-            totals["mismatch"] += ((sampled - logp.detach()) * mask).sum().item()
+            totals["mismatch"] += ((sampled - logp.detach()) * (mask & recorded)).sum().item()
+            totals["recorded"] += int((mask & recorded).sum())
             for key, value in stats.items():
                 totals[key] = totals.get(key, 0) + value
             totals["kl"] += kl.detach().sum().item()
@@ -293,7 +343,7 @@ def train(
     commit()
     print(json.dumps({"stage": "training", "target": settings.steps}), flush=True)
     last_saved = -1
-    group = rollouts.samples_per_prompt
+    shares = source.updates_per_batch
     while (
         step < settings.steps
         and time.monotonic() - started < settings.max_seconds
@@ -301,40 +351,25 @@ def train(
     ):
         timings = {}
         clock = time.monotonic()
-        math_prompts = round(rollouts.prompts_per_step * rollouts.math_share)
-        drawn = scheduler.draw("math", math_prompts, step) + scheduler.draw(
-            "code", rollouts.prompts_per_step - math_prompts, step
-        )
-        rows = [row for row in drawn for _ in range(group)]
-        batch = collect(
-            model,
-            rows,
-            rollouts,
-            rollouts.temperature,
-            generator,
-            tokenizer,
-            sandbox,
-            algorithm.sampler_top_k,
-        )
+        batch = source.batch(step)
         timings["generate_seconds"] = time.monotonic() - clock
         clock = time.monotonic()
-        advantage = algorithm.advantages(batch.rewards, group)
-        for index, row in enumerate(drawn):
-            mean = sum(batch.rewards[index * group : (index + 1) * group]) / group
-            scheduler.update(row, mean, step)
+        advantage = algorithm.advantages(batch)
         sequences = batch.sequences()
-        trained = [i for i, a in enumerate(advantage) if a != 0]
+        trained = [
+            i for i, a in enumerate(advantage) if a != 0 or not algorithm.skips_zero_advantage
+        ]
         rng.shuffle(trained)
-        old = old_logprobs(sequences, trained) if algorithm.policy == "off" else None
+        old = old_logprobs(sequences, trained) if algorithm.needs_behaviour else None
         totals = {
             "kl": 0.0,
             "nll": 0.0,
             "mismatch": 0.0,
+            "recorded": 0,
             "tokens": 0,
             "grad_norm": 0.0,
             "replay_loss": 0.0,
         }
-        shares = algorithm.updates_per_batch
         for share in range(shares):
             answers = trained[share * len(trained) // shares : (share + 1) * len(trained) // shares]
             optimize(batch, sequences, advantage, sorted(answers), old, totals)
@@ -342,28 +377,31 @@ def train(
         timings["train_seconds"] = time.monotonic() - clock
         values = {}
         for task in rl_tasks.TASKS:
-            picked = [i for i, row in enumerate(rows) if row["task"] == task]
+            picked = [i for i, row in enumerate(batch.rows) if row["task"] == task]
             if not picked:
                 continue
-            groups = [picked[k : k + group] for k in range(0, len(picked), group)]
             values[f"{task}_reward"] = sum(batch.rewards[i] for i in picked) / len(picked)
-            values[f"{task}_uniform_groups"] = sum(
-                len({batch.rewards[i] for i in g}) == 1 for g in groups
-            ) / len(groups)
+            if batch.group:
+                groups = [picked[k : k + batch.group] for k in range(0, len(picked), batch.group)]
+                values[f"{task}_uniform_groups"] = sum(
+                    len({batch.rewards[i] for i in g}) == 1 for g in groups
+                ) / len(groups)
             values[f"{task}_answer_tokens"] = sum(len(batch.completions[i]) for i in picked) / len(
                 picked
             )
             values[f"{task}_truncated"] = 1 - sum(batch.finished[i] for i in picked) / len(picked)
         tokens = max(1, totals.pop("tokens"))
+        recorded = totals.pop("recorded")
+        mismatch = totals.pop("mismatch")
         values.update(
             trained_answers=len(trained),
             sampled_nll=totals.pop("nll") / tokens,
             kl=totals.pop("kl") / tokens,
-            sampler_mismatch=totals.pop("mismatch") / tokens,
+            **({"sampler_mismatch": mismatch / recorded} if recorded else {}),
             grad_norm=totals.pop("grad_norm") / shares,
             lr=settings.optimizer.learning_rate(update - 1),
             updates=update,
-            resting_prompts=scheduler.resting(step),
+            **source.statistics(step),
             **({"replay_loss": totals.pop("replay_loss") / shares} if replay else {}),
             **{key: value / tokens for key, value in totals.items() if key != "replay_loss"},
             **timings,

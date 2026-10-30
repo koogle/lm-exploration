@@ -1,14 +1,15 @@
 """Bounded single-GPU RL on math and code problems with checkable answers.
 
-The policy writes its own answers, an automatic checker rewards correct ones, and an
+Answers come from a trajectory source, an automatic checker has rewarded them, and an
 algorithm turns rewarded answers into updates. The package keeps those parts apart:
 
-- `settings.py`: what a recipe sets, in sections (`rollouts`, `algorithm`, `optimizer`,
-  plus the shared `replay_*` fields); `python -m trainer.rl --recipe <file>` prints a
-  recipe's settings with every default filled in.
-- `rollouts.py`: which prompts are drawn, how answers are sampled and rewarded.
-- `algorithms.py`: how rewards become advantages and a loss (`ALGORITHMS`, by name), and
-  whether answers may come from older weights (`policy`: `"on"` or `"off"`).
+- `settings.py`: what a recipe sets, in sections (`algorithm`, `trajectories`,
+  `rollouts`, `optimizer`, plus the shared `replay_*` fields).
+- `algorithms.py`: the algorithms by name. `on_policy/` holds those that train only on
+  answers the current weights just sampled; `off_policy/` those that also train on older
+  or other models' answers, and the off-policy trajectory sources.
+- `rollouts.py`: sampling answers with the current weights and rewarding them.
+- `batch.py`, `policy_gradient.py`: what the algorithms share.
 - `loop.py`: the training loop, checkpoints and provenance (`loop.train`).
 """
 
