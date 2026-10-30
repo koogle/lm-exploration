@@ -1,6 +1,12 @@
 import unittest
 
-from distributed.config import DistributedConfig, DistributedRuntime, validate_resume
+from distributed.config import DistributedConfig, DistributedRuntime
+from trainer.loop import CHECKPOINT_FORMAT, check_resume
+from trainer.subword import SubwordFamily
+
+
+def validate_resume(saved, config, identity, sources, torch_version):
+    check_resume(saved, SubwordFamily(config, "manifest.json"), identity, sources, torch_version)
 
 
 class DistributedConfigTests(unittest.TestCase):
@@ -8,7 +14,7 @@ class DistributedConfigTests(unittest.TestCase):
         config = DistributedConfig()
         self.assertEqual(config.optimizer, "muon")
         saved = {
-            "format": "scholarly-ddp-v1",
+            "format": CHECKPOINT_FORMAT,
             "config": DistributedConfig(optimizer="adamw").as_dict(),
         }
         with self.assertRaisesRegex(ValueError, "identical training settings"):
@@ -88,7 +94,7 @@ class DistributedConfigTests(unittest.TestCase):
     def test_resume_rejects_drift(self):
         config = DistributedConfig()
         saved = {
-            "format": "scholarly-ddp-v1",
+            "format": CHECKPOINT_FORMAT,
             "config": config.as_dict(),
             "data_identity": {"hash": "x"},
             "source_sha256": {"model": "y"},
@@ -129,7 +135,7 @@ class DistributedConfigTests(unittest.TestCase):
 
         def saved(tokens, config=main):
             return {
-                "format": "scholarly-ddp-v1",
+                "format": CHECKPOINT_FORMAT,
                 "config": config.as_dict(),
                 "tokens": tokens,
                 "data_identity": {},

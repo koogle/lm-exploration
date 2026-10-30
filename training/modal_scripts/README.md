@@ -12,7 +12,7 @@ recipes, local results and budget ledgers are relative to the training root.
 
 ```sh
 uv sync --locked --extra corpus --extra research
-uv run modal run -m workflows.modal_train \
+uv run modal run -m workflows.modal_train::main \
   --workflow workflows/h100x1-pilot.json --run-id <fresh-run-id>
 ```
 

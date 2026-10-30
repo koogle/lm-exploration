@@ -15,8 +15,9 @@ step, trained with the ordinary next-token loss: the step backpropagates
 `warmup_steps` and follows a cosine to `min_lr_ratio * lr` (`schedule: "cosine"`).
 
 The parent is any checkpoint of our trainers (`trainer/checkpoints.py`: pretraining, SFT or
-a later stage) on the private run volume with this trainer's model code and tokenizer;
-launchers pass it in. Checkpoints record their `stage` (`"sft"`) and their parent. See `sft/README.md` for the data formats and launch commands.
+a later stage) on the private run volume with this trainer's model family and tokenizer;
+its weights load strictly into the current model code, and the run records the parent's
+model source hashes beside its own. Launchers pass it in. Checkpoints record their `stage` (`"sft"`) and their parent. See `sft/README.md` for the data formats and launch commands.
 """
 
 import json
@@ -206,6 +207,8 @@ def train(
         "parent": str(parent),
         "parent_sha256": digest(parent),
         "parent_stage": description.stage,
+        # The parent's model code, which may predate this trainer's (`source_sha256`).
+        "parent_source_sha256": description.source_sha256,
         "replay": replay.identity() if replay else None,
         "tokenizer_sha256": TOKENIZER_SHA256,
         "settings": asdict(settings),

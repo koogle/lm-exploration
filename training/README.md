@@ -137,7 +137,7 @@ the older character loop has been removed.
 All training runs on Modal GPU workers; there is no CPU or MPS training path.
 [`workflows/`](workflows/README.md) owns model configs, dataset selections and execution settings.
 Historical character configs are retained under `workflows/model_configs/historical/`. Use
-`modal run -m workflows.modal_train --workflow workflows/<name>.json --run-id <id>`
+`modal run -m workflows.modal_train::main --workflow workflows/<name>.json --run-id <id>`
 for subword training. [`workflows/`](workflows/README.md) owns preparation,
 qualification and continuation across sessions. Historical character recipes remain for provenance; their loop, launcher,
 checkpoint loader and `lm-generate` CLI have been removed (last present at revision `5083671`).
@@ -174,7 +174,7 @@ gradient descent, start with [the XOR example](examples/README.md).
   `uv run python -m tokenizer.<module>` from `training/`.
   Tiny Shakespeare is a learning benchmark, not a selected research corpus.
 - Run artifacts live on the `lm-exploration-training` Modal volume under `<run-id>/`.
-  Each save writes a new `checkpoints/step-NNNNNN.pt`; nothing is overwritten.
+  Each save writes a new `step-NNNNNNNNN.pt`; nothing is overwritten.
   Reports are copied to the ignored `artifacts/results/<run-id>.json`.
 
 `training/` is a uv-managed project with `pyproject.toml`, `uv.lock` and a Python

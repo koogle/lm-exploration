@@ -34,9 +34,9 @@ fine-tuned on GSM8K reached about 33%.
 
 ## Stage 0: joint SFT
 
-[`../sft/recipes/math-code-replay-20b.json`](../sft/recipes/math-code-replay-20b.json):
-the 20B end point, 20,000 steps of 32 on `mixture-math-code-02` (the 224,533 math rows
-and the Qwen3.5-solved code rows, [`../sft/CODE_DATA.md`](../sft/CODE_DATA.md)), r02's
+The `s0` stage of [`../workflows/s0-rl-20b.json`](../workflows/s0-rl-20b.json) (run
+`math-code-sft-replay-20b-s0-r02`): the 20B end point, 20,000 steps of 32 on
+`mixture-math-code-02` (the 224,533 math rows and the Qwen3.5-solved code rows, [`../sft/CODE_DATA.md`](../sft/CODE_DATA.md)), r02's
 cosine schedule and pretraining replay.
 
 ## Code layout
@@ -46,7 +46,7 @@ algorithm or a source of answers can change without touching the rest:
 
 | Path | Owns |
 | --- | --- |
-| `settings.py` | What a recipe sets, in sections: `algorithm`, `trajectories`, `rollouts`, `optimizer`, plus the shared `replay_*` fields |
+| `settings.py` | What an RL stage's `settings` set, in sections: `algorithm`, `trajectories`, `rollouts`, `optimizer`, plus the shared `replay_*` fields |
 | `algorithms.py` | The algorithms by name |
 | `on_policy/` | Algorithms that train only on answers the current weights just sampled: `grpo.py` |
 | `off_policy/` | Algorithms that also train on older or other models' answers (`ppo.py`, `awr.py`), and their trajectory sources (`sources.py`) |
@@ -54,7 +54,7 @@ algorithm or a source of answers can change without touching the rest:
 | `batch.py`, `policy_gradient.py` | What the algorithms share |
 | `loop.py` | The training loop, checkpoints and provenance |
 
-A recipe's `settings` reads top-down; omitted fields take the defaults in `settings.py`:
+A stage's `settings` read top-down; omitted fields take the defaults in `settings.py`:
 
 ```json
 {
@@ -92,8 +92,8 @@ its answers have no log-probabilities our model could use for importance ratios.
 An algorithm is a frozen dataclass registered in `algorithms.py`. It declares the sources
 it accepts and whether it needs behaviour log-probabilities, and has
 `advantages(batch)` and `loss(tokens)`. `tokens` is one micro-batch of answers
-(`Tokens`: logits, log-probabilities now and when sampled, advantages). A recipe pairing
-an algorithm with a source it does not accept fails when its settings are checked.
+(`Tokens`: logits, log-probabilities now and when sampled, advantages). Settings that pair
+an algorithm with a source it does not accept fail when they are checked.
 Policy-gradient algorithms skip answers with zero advantage; AWR trains every answer.
 
 **Score.** GRPO and PPO take `score`: `"plain"` pushes up ∇log p(y), `"centered"` uses
@@ -150,14 +150,11 @@ loss, at the start, every `evaluate_every` steps and at the end.
 
 ### 24-hour limit
 
-An RL recipe is a workflow file (`"stage": "rl"`) that the
-[workflow controller](../workflows/README.md) runs under its 24-hour deadline: the
-supervisor starts first, then a controller call spawns the training call (at most 21
-hours and within the deadline, no retries; `max_seconds` at most 20 hours). Training
-refuses work after the deadline and stops taking updates 30 minutes before it. The code
-sandbox is recorded for the supervisor, which terminates it when the launch ends and
-cancels the training call at the deadline. A run does not resume; an interrupted run is
-rerun from scratch.
+RL runs as a stage of a [workflow](../workflows/README.md), under the launch's deadline
+and supervisor: one training call of at most 21 hours (`max_seconds` at most 20), no
+retries. Training stops taking updates 30 minutes before the deadline. The code sandbox
+is recorded for the supervisor, which terminates it when the launch ends. A run does
+not resume: a relaunch reruns an unfinished RL stage from its parent.
 
 ### Logged
 
@@ -182,8 +179,8 @@ each pass all their tests through this harness.
 
 ## Runs
 
-[`recipes/`](recipes/), all from the stage 0 checkpoint on `rl-pool-math-code-03`, with
-replay at weight 0.1:
+The RL branches of [`../workflows/s0-rl-20b.json`](../workflows/s0-rl-20b.json), all from
+the stage 0 checkpoint on `rl-pool-math-code-03`, with replay at weight 0.1:
 
 | Run | Purpose | Success looks like |
 | --- | --- | --- |
@@ -196,7 +193,7 @@ replay at weight 0.1:
 
 R1–R3 ran with the RL trainer before it was split into `trainer/rl/` (commit `ef2dc8a`):
 on-policy GRPO with a centered score (top 32), the graph engine and replay windows
-starting at random documents. The recipes state that algorithm as
+starting at random documents. The workflow states that algorithm as
 `"algorithm": {"name": "on_policy/grpo", "score": "centered"}`.
 Single seed. Benchmarks from [`analysis/evaluation`](../analysis/evaluation/README.md),
 zero-shot greedy: GSM8K first 500 test problems, SVAMP 300, MBPP+ 378 and HumanEval+ 164
@@ -239,14 +236,25 @@ be compared in the private playground Space (`jfrick/climbmix-124m-playground`).
 
 ## Run
 
+RL is a workflow stage ([`../workflows/stages/rl.py`](../workflows/stages/rl.py)). Its
+entry holds `pool` (an `rl_pool` data ID, also used for validation) and `settings`
+([code layout](#code-layout)); the workflow supplies its parent, usually an SFT stage
+or a `from` checkpoint. [`../workflows/s0-rl-20b.json`](../workflows/s0-rl-20b.json)
+holds stage 0 (`s0`) and then R1, R2 and R3 (`r1-math`, `r2-code`, `r3-joint`) as
+branches from it.
+
 From `training/`, after the data of [`../sft/CODE_DATA.md`](../sft/CODE_DATA.md):
 
 ```sh
-uv run --all-extras modal run -m workflows.modal_train --workflow sft/recipes/math-code-replay-20b.json
-uv run python -m workflows --workflow rl/recipes/r1-math.json   # every setting filled in, no Modal
-uv run --all-extras modal run -m workflows.modal_train --workflow rl/recipes/r1-math.json
-# Or stage 0 and then R1, R2 and R3 from it as one pipeline:
-uv run --all-extras modal run -m workflows.modal_train --workflow rl/pipelines/s0-rl-20b.json --run-id ID
+# Every setting filled in, no Modal.
+uv run python -m workflows --workflow workflows/s0-rl-20b.json --run-id ID
+# Stage 0, then R1-R3 from it.
+uv run --all-extras modal run --detach -m workflows.modal_train::main \
+  --workflow workflows/s0-rl-20b.json --run-id ID
+# Only RL, from the existing stage 0 checkpoint.
+uv run --all-extras modal run --detach -m workflows.modal_train::main \
+  --workflow workflows/s0-rl-20b.json --run-id ID --start r1-math \
+  --checkpoint math-code-sft-replay-20b-s0-r02/step-000020000.pt
 # Off-policy trajectories from the Qwen teacher's saved code answers:
 uv run --all-extras modal run -m modal_scripts.modal_teacher::trajectories \
   --teacher code-teacher-qwen35-02 --data-id <fresh-id> [--limit N]
@@ -260,10 +268,6 @@ uv run --all-extras modal run -m playground.modal_export \
   --config analysis/playground/configs/post-training.json --name EXPORT-NAME
 ```
 
-An RL stage file ([`../workflows/stages/rl.py`](../workflows/stages/rl.py)) has
-`"stage": "rl"` and names `run_id`, `parent` (a checkpoint of any stage, usually SFT,
-`run/step-N.pt` on the run volume), `pool` (an `rl_pool` data ID, also used for
-validation) and `settings` ([code layout](#code-layout)); it can also be a step of a
-[pipeline](../workflows/README.md#pipelines). RL checkpoints (format `rl-v1`, `"stage":
-"rl"`) keep the model code and tokenizer beside them, so evaluation and later stages
-load them like any other checkpoint (`trainer/checkpoints.py`).
+RL checkpoints (format `rl-v1`, `"stage": "rl"`) keep the model code and tokenizer
+beside them, so evaluation and later stages load them like any other checkpoint
+(`trainer/checkpoints.py`).
