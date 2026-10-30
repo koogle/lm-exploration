@@ -246,6 +246,12 @@ def build(
     if candidates:
         results = check([(r["solution"], r["tests"], r["test_style"]) for r in candidates])
         counts["reference_failed"] = sum(not r["passed"] for r in results)
+        statuses = {}
+        for result in results:
+            if not result["passed"]:
+                status = result["status"].split(":")[0]
+                statuses[status] = statuses.get(status, 0) + 1
+        counts["reference_failed_by_status"] = statuses
         for row, result in zip(candidates, results, strict=True):
             if result["passed"]:
                 keep({k: v for k, v in row.items() if k != "solution"})

@@ -349,7 +349,7 @@ def prepare_mixture(data_id, datasets, deadline):
 
 
 @app.function(
-    image=data_image, cpu=2, memory=16384, timeout=1800, retries=0, volumes={"/runs": volume}
+    image=data_image, cpu=2, memory=16384, timeout=3600, retries=0, volumes={"/runs": volume}
 )
 def prepare_rl_pool(data_id, deadline, math_lighteval=False, kodcode=False, code_train=10000):
     from training_data.code_sft import MBPP, OPENCODEINSTRUCT, RL_SHARD, shard_name
@@ -364,13 +364,15 @@ def prepare_rl_pool(data_id, deadline, math_lighteval=False, kodcode=False, code
     output = fresh_output(data_id)
     # MBPP validation problems are the pool's code validation set.
     math_tests, code_tests = benchmark_problems(("test", "prompt"))
-    sandbox = Sandbox(app, min(1800, deadline - time.time())) if kodcode else None
+    sandboxes = []
 
     def check(pairs):
+        # Started once checking begins (after the downloads), for at most half an hour.
+        sandboxes.append(Sandbox(app, min(1800, deadline - time.time())))
         return [
             result
             for start in range(0, len(pairs), SANDBOX_BATCH)
-            for result in sandbox.run(pairs[start : start + SANDBOX_BATCH])
+            for result in sandboxes[-1].run(pairs[start : start + SANDBOX_BATCH])
         ]
 
     try:
@@ -389,7 +391,7 @@ def prepare_rl_pool(data_id, deadline, math_lighteval=False, kodcode=False, code
             code_train=code_train,
         )
     finally:
-        if sandbox is not None:
+        for sandbox in sandboxes:
             sandbox.close()
     volume.commit()
     return report
