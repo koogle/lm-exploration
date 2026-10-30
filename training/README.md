@@ -137,7 +137,7 @@ the older character loop has been removed.
 All training runs on Modal GPU workers; there is no CPU or MPS training path.
 [`workflows/`](workflows/README.md) owns model configs, dataset selections and execution settings.
 Historical character configs are retained under `workflows/model_configs/historical/`. Use
-`modal run -m workflows.modal_train --workflow workflows/<name>.json --run-id <id>`
+`modal run -m workflows.modal_train::main --workflow workflows/<name>.json --run-id <id>`
 for subword training. [`workflows/`](workflows/README.md) owns preparation,
 qualification and continuation across sessions. Historical character recipes remain for provenance; their loop, launcher,
 checkpoint loader and `lm-generate` CLI have been removed (last present at revision `5083671`).

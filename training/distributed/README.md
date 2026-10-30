@@ -26,7 +26,7 @@ step-based warmup/constant learning-rate schedule.
 
 ```sh
 # One-GPU bounded pilot, using the same model config as the two-GPU workflow.
-modal run --detach -m workflows.modal_train \
+modal run --detach -m workflows.modal_train::main \
   --workflow workflows/h100x1-pilot.json --run-id my-single-gpu-pilot-01
 ```
 
@@ -117,11 +117,11 @@ one validated trainer request. See the [workflow guide](../workflows/README.md).
 
 ```sh
 # Bounded smoke run against the seekable pilot snapshot; creates a checkpoint.
-modal run --detach -m workflows.modal_train \
+modal run --detach -m workflows.modal_train::main \
   --workflow workflows/h100x2-pilot.json --run-id my-ddp-pilot-01
 
 # Substantial-run settings: requires a training-ready snapshot with capacity.
-modal run --detach -m workflows.modal_train \
+modal run --detach -m workflows.modal_train::main \
   --workflow workflows/h100x3-20b.json --run-id my-pretraining-segment-01
 ```
 
@@ -197,7 +197,7 @@ to a temporary file, renamed, then committed to the Modal Volume before training
 continues. Every graceful stop saves an optimizer-boundary checkpoint.
 
 ```sh
-modal run --detach -m workflows.modal_train \
+modal run --detach -m workflows.modal_train::main \
   --workflow workflows/h100x2-pilot.json --run-id my-ddp-pilot-02 \
   --resume my-ddp-pilot-01/step-000000002.pt
 ```
