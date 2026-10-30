@@ -10,6 +10,8 @@ updates 30 minutes before the launch deadline to evaluate and save. No call retr
 - SFT: one training call on the stage's GPU (`trainer/sft.py`). `qualify_sft` checks
   exact resume first: an uninterrupted run against stop, fresh-container restore and
   continue.
+- RL: one H100 training call (`trainer/rl/`) that runs model-written code only in a
+  network-blocked sandbox, recorded for the supervisor.
 """
 
 import json
@@ -19,12 +21,13 @@ from pathlib import Path
 from distributed.image import project_image
 from workflows.modal_app import app, data_volume, run_volume, track_call
 
-# Seconds an SFT call may run: its settings cap the training loop at four hours.
+# Seconds a call may run: SFT's settings cap its training loop at four hours, RL's at 20.
 SFT_SECONDS = 6 * 60 * 60
+RL_SECONDS = 21 * 60 * 60
 FINAL_RESERVE_SECONDS = 30 * 60
 LOCAL_DATA_LIMIT = 20 * 1024 * 1024
 
-image = project_image()
+image = project_image("math-verify==0.8.0")
 volumes = {"/runs": run_volume, "/data": data_volume}
 
 
@@ -82,8 +85,59 @@ def sft_h100(recipe, examples, deadline, launch, stop_after_step=None):
     return train_sft(recipe, examples, deadline, stop_after_step)
 
 
+@app.function(
+    image=image, gpu="H100", cpu=8, memory=65536, timeout=RL_SECONDS, retries=0, volumes=volumes
+)
+def rl_h100(recipe, examples, deadline, launch):
+    from training_data.sandbox import Sandbox
+    from training_data.subword import digest
+
+    from trainer.rl import Settings
+    from trainer.rl.loop import train
+    from workflows.stages import validate
+
+    stop = deadline - FINAL_RESERVE_SECONDS
+    if time.time() >= stop:
+        raise TimeoutError("Launch deadline passed; refusing RL work")
+    recipe = validate(recipe)
+    run_volume.reload()
+    runs = Path("/runs")
+    pool = runs / recipe["pool"]
+    if digest(pool / "pool.jsonl") != json.loads((pool / "report.json").read_text())["pool_sha256"]:
+        raise ValueError("Pool differs from its preparation report")
+    settings = Settings.from_dict(recipe["settings"])
+    trajectories = None
+    if settings.trajectories.source == "file":
+        folder = runs / settings.trajectories.data
+        trajectories = folder / "trajectories.jsonl"
+        report = json.loads((folder / "report.json").read_text())
+        if digest(trajectories) != report["trajectories_sha256"]:
+            raise ValueError("Trajectories differ from their report")
+    sandbox = Sandbox(app, deadline - time.time())
+    try:
+        track_call(launch, sandbox.object_id, "sandbox")
+        result = train(
+            runs / recipe["parent"],
+            pool / "pool.jsonl",
+            runs / recipe["run_id"],
+            settings,
+            sandbox,
+            run_volume.commit,
+            deadline=stop,
+            trajectories_path=trajectories,
+        )
+        (runs / recipe["run_id"] / "result.json").write_text(json.dumps(result, indent=2))
+        return result
+    finally:
+        sandbox.close()
+        run_volume.commit()
+
+
 # {stage: (the worker for a recipe, seconds it may run)}
-WORKERS = {"sft": (lambda recipe: {"L40S": sft_l40s, "H100": sft_h100}[recipe["gpu"]], SFT_SECONDS)}
+WORKERS = {
+    "sft": (lambda recipe: {"L40S": sft_l40s, "H100": sft_h100}[recipe["gpu"]], SFT_SECONDS),
+    "rl": (lambda recipe: rl_h100, RL_SECONDS),
+}
 
 
 @app.function(

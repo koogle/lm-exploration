@@ -5,7 +5,10 @@ softmax attention (outputs, log-sum-exp and all input gradients, including throu
 the log-sum-exp) and work inside torch.compile. fla's chunked KDA must match
 kda_reference within TF32 tolerance, and a small hybrid model is timed with fla
 inside and outside the compiled graph. A small byte-level H-Net, compiled in bf16,
-must match its fp64 CPU reference and keep documents isolated. Run on one GPU through
+must match its fp64 CPU reference and keep documents isolated. CUDA-graph decoding
+(generate.py, kernels/decode.cu) must continue prefilled prompts with the full
+forward pass's logits, across documents, and batch rows exactly as one row at a
+time; its 720M bf16 throughput is timed. Run on one GPU through
 model_hybrid.modal_checks; returns a JSON-serializable dict and raises on any
 mismatch.
 """
@@ -339,7 +342,92 @@ def hnet_against_reference():
     }
 
 
+def decode_config(**overrides):
+    settings = {
+        "vocab_size": 256,
+        "eos_id": EOS,
+        "block_size": 512,
+        "n_layer": 4,
+        "n_embd": 256,
+        "n_head": 4,
+        "n_kv_head": 2,
+        "head_dim": 128,
+        "n_kda_head": 2,
+        "mlp_hidden": 512,
+        "layer_pattern": ("kda", "kda", "kda", "full"),
+        "mtp": False,
+    }
+    return model.HybridConfig(**(settings | overrides))
+
+
+def decode_against_forward():
+    """CUDA-graph decoding against the full forward pass (fp32, TF32 in fla's KDA)."""
+    from model_hybrid import generate
+
+    torch.manual_seed(11)
+    lm = model.HybridLM(decode_config()).cuda().eval()
+    prompts = [[5, 9, 11, 4, 20, 6, 30, 31, 7], [7, 3], [12, 3, 30, 8]]
+    # Decoded tokens, including EOS mid-way: rows 1 and 2 start new documents.
+    following = [[17, 25, 40, 41], [21, EOS, 22, 23], [EOS, 8, 9, 10]]
+    with torch.no_grad():
+        logits, state = generate.prefill(lm, prompts, len(following[0]))
+        steps = [logits.clone()]
+        for i in range(len(following[0]) - 1):
+            steps.append(state.step(torch.tensor([f[i] for f in following])).clone())
+        error, scale = 0.0, 0.0
+        for row, (prompt, after) in enumerate(zip(prompts, following, strict=True)):
+            full = lm(torch.tensor([prompt + after], device="cuda"))[0].float()
+            last = len(prompt) - 1
+            for i, logit in enumerate(steps):
+                error = max(error, max_error(logit[row], full[last + i]))
+                scale = max(scale, full[last + i].abs().max().item())
+    if error > 1e-2 * scale:
+        raise AssertionError(f"decode logits differ from the forward pass by {error}")
+    with torch.no_grad():
+        batch = generate.generate_batch(lm, prompts, 12, (EOS,))
+        alone = [list(generate.generate(lm, p, 12, (EOS,))) for p in prompts]
+    if batch != alone:
+        raise AssertionError("batched generation differs from one row at a time")
+    return {"max_logit_error": error, "max_logit": scale, "batched_matches_alone": True}
+
+
+def decode_timing(rows=64, prompt=512, new_tokens=256):
+    """Decode tokens/s of a randomly initialized 720M model in bf16 (no stop tokens)."""
+    from model_hybrid import generate
+
+    config = model.HybridConfig(vocab_size=154_880, eos_id=154_820, mlp_hidden=4224, mtp=False)
+    lm = model.HybridLM(config).cuda().to(torch.bfloat16).eval()
+    prompts = [list(range(1000 + r, 1000 + r + prompt)) for r in range(rows)]
+    results = {}
+    with torch.no_grad():
+        logits, state = generate.prefill(lm, prompts, new_tokens)
+        token = logits.argmax(-1)
+        for _ in range(8):
+            token = state.step(token).argmax(-1)
+        torch.cuda.synchronize()
+        start = time.perf_counter()
+        for _ in range(new_tokens - 9):
+            token = state.step(token).argmax(-1)
+        torch.cuda.synchronize()
+        seconds = time.perf_counter() - start
+        results["step_ms"] = 1000 * seconds / (new_tokens - 9)
+        results["tokens_per_second"] = rows * (new_tokens - 9) / seconds
+        torch.cuda.synchronize()
+        start = time.perf_counter()
+        generate.generate_batch(lm, prompts, new_tokens, ())
+        torch.cuda.synchronize()
+        results["generate_batch_seconds"] = time.perf_counter() - start
+    return {"rows": rows, "prompt": prompt, "new_tokens": new_tokens, **results}
+
+
 def checks(only=""):
+    if only == "decode":
+        return {
+            "gpu": torch.cuda.get_device_name(),
+            "torch": torch.__version__,
+            "decode_vs_forward": decode_against_forward(),
+            "decode_timing": decode_timing(),
+        }
     if only == "hnet":
         return {
             "gpu": torch.cuda.get_device_name(),
@@ -363,6 +451,8 @@ def checks(only=""):
         "fused_loss_vs_autograd": fused_loss_against_autograd(),
         "compiled_model": compiled_model(),
         "hnet_vs_fp64": hnet_against_reference(),
+        "decode_vs_forward": decode_against_forward(),
+        "decode_timing": decode_timing(),
         "compile_boundary": compile_boundary_timing(),
         "timing": [timing(documents=1), timing(documents=4)],
     }
