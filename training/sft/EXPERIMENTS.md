@@ -113,12 +113,13 @@ modal run --detach -m modal_scripts.modal_sft_data::private_patches \
   --sources sft/private-patch-full-sources.json --data-id <full-id> \
   --reserved <commitpack-id>,<pilot-run-id>,<private-id> --replay <commitpack-id> --full
 
-# Training (example: arithmetic pilot from a chosen base)
-modal run -m modal_scripts.modal_sft_train::qualify --recipe artifacts/sft/arithmetic-pilot.json \
-  --run-prefix <fresh-prefix> --parent <run>/step-NNNNNNNNN.pt
-modal run -m modal_scripts.modal_sft_train --recipe artifacts/sft/arithmetic-pilot.json \
-  --run-id <fresh-run-id> --parent <run>/step-NNNNNNNNN.pt
-# Volume-backed runs take --data-id; CIG long runs resume <new pilot run>/step-000000200.pt with "extend": true.
+# Training (example: arithmetic pilot; the recipe names the chosen base as its parent)
+modal run -m workflows.modal_train --workflow artifacts/sft/arithmetic-pilot.json \
+  --run-id <fresh-prefix> --qualify 2
+modal run -m workflows.modal_train --workflow artifacts/sft/arithmetic-pilot.json \
+  --run-id <fresh-run-id>
+# Volume-backed runs set "data": {"volume": ...}; CIG long runs resume
+# <new pilot run>/step-000000200.pt with "extend": true.
 
 # Executable diagnostic
 modal run -m modal_scripts.modal_sft_eval --dataset artifacts/sft/repairs.jsonl \

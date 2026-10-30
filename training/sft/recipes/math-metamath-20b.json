@@ -1,4 +1,5 @@
 {
+  "stage": "sft",
   "name": "math-metamath-20b",
   "description": "Answer-only math SFT (GSM8K train + MetaMathQA GSM rows) of the WSD 20B end point",
   "run_id": "math-sft-metamath-20b-r01",

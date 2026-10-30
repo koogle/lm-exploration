@@ -1,18 +1,20 @@
-"""Prompts, sampled answers and their rewards.
+"""Answers sampled by the weights being trained, and their rewards.
 
 `Scheduler` draws training prompts per task and rests prompts that carry no signal.
 `collect` samples answers with the shared cached sampler (`trainer/rollout.py`) and
 scores them (`training_data.rl_tasks`): 1 for an answer that ends in EOS and is correct
 (Math-Verify for math, every unit test passing in the code sandbox for code), else 0.
+`Sampler` is the trajectory source of on-policy training: every step it samples a group
+of answers to each drawn prompt with the current weights.
 """
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 
 from training_data import rl_tasks
-from training_data.subword import EOS_TOKEN_ID, LOSS_IGNORE_INDEX
+from training_data.subword import EOS_TOKEN_ID
 
 from trainer import rollout
+from trainer.rl.batch import Batch
 
 
 class Scheduler:
@@ -42,36 +44,10 @@ class Scheduler:
         return sum(s["until"] > step for s in self.state.values())
 
 
-@dataclass
-class Batch:
-    """Answers to `rows` (pool rows, a prompt's group consecutive): new token IDs
-    without EOS, whether each ended in EOS, and its reward. When sampled (not greedy),
-    `sampler[i]` holds the sampler's log-probabilities of answer i's tokens (EOS
-    included) and, if recorded, its top tokens and their log-probabilities at each."""
-
-    rows: list
-    completions: list
-    finished: list
-    rewards: list
-    sampler: list
-
-    def sequences(self):
-        """(inputs, targets) of prompt + answer (+ EOS); only answer tokens are targets."""
-        result = []
-        for row, completion, done in zip(self.rows, self.completions, self.finished, strict=True):
-            answer = completion + ([EOS_TOKEN_ID] if done else [])
-            tokens = row["prompt_ids"] + answer
-            labels = [LOSS_IGNORE_INDEX] * len(row["prompt_ids"]) + answer
-            result.append({"x": tokens[:-1], "y": labels[1:]})
-        return result
-
-
-def collect(model, rows, rollouts, temperature, generator, tokenizer, sandbox, top_k=0):
+def collect(model, rows, rollouts, temperature, generator, tokenizer, sandbox):
     """A `Batch` for `rows`, sampled at `temperature` (0 is greedy), one sampler batch per
-    task, recording the sampler's `top_k` likeliest tokens; code answers are checked in a
-    background thread while math is sampled."""
+    task; code answers are checked in a background thread while math is sampled."""
     completions, finished = [None] * len(rows), [None] * len(rows)
-    sampler = [None] * len(rows)
     rewards = [0.0] * len(rows)
     model.eval()
     with ThreadPoolExecutor(max_workers=1) as checker:
@@ -87,19 +63,9 @@ def collect(model, rows, rollouts, temperature, generator, tokenizer, sandbox, t
                 EOS_TOKEN_ID,
                 temperature,
                 generator,
-                record_top_k=top_k,
             )
-            for j, (i, c, d) in enumerate(
-                zip(indices, samples.completions, samples.finished, strict=True)
-            ):
+            for i, c, d in zip(indices, samples.completions, samples.finished, strict=True):
                 completions[i], finished[i] = c, d
-                if samples.logprobs is not None:
-                    n = len(c) + d
-                    sampler[i] = (
-                        samples.logprobs[j, :n],
-                        None if samples.top_ids is None else samples.top_ids[j, :n],
-                        None if samples.top_ids is None else samples.top_logprobs[j, :n],
-                    )
             chosen = [rows[i] for i in indices]
             texts = [tokenizer.decode(c, skip_special_tokens=True) for c in samples.completions]
             scores = (rl_tasks.rewards, chosen, texts, samples.finished, sandbox)
@@ -112,4 +78,30 @@ def collect(model, rows, rollouts, temperature, generator, tokenizer, sandbox, t
             for i, r in zip(pending[0], pending[1].result(), strict=True):
                 rewards[i] = r
     model.train()
-    return Batch(rows, completions, finished, rewards, sampler)
+    return Batch(rows, completions, finished, rewards)
+
+
+class Sampler:
+    """Every step: `prompts_per_step` training prompts, `math_share` of them math, and
+    `samples_per_prompt` answers to each from the current weights, trained in one update."""
+
+    updates_per_batch = 1
+
+    def __init__(self, rollouts, scheduler, sample):
+        self.rollouts, self.scheduler, self.sample = rollouts, scheduler, sample
+
+    def batch(self, step):
+        rollouts, group = self.rollouts, self.rollouts.samples_per_prompt
+        math_prompts = round(rollouts.prompts_per_step * rollouts.math_share)
+        drawn = self.scheduler.draw("math", math_prompts, step) + self.scheduler.draw(
+            "code", rollouts.prompts_per_step - math_prompts, step
+        )
+        batch = self.sample([row for row in drawn for _ in range(group)])
+        for index, row in enumerate(drawn):
+            mean = sum(batch.rewards[index * group : (index + 1) * group]) / group
+            self.scheduler.update(row, mean, step)
+        batch.group = group
+        return batch
+
+    def statistics(self, step):
+        return {"resting_prompts": self.scheduler.resting(step)}
