@@ -25,6 +25,15 @@ def question_prompt(question):
     return f"Question: {question.strip()}\nAnswer:"
 
 
+def answer_matches(completion, gold):
+    """(extracted answer or None, whether it equals `gold`), both parsed by Math-Verify."""
+    from math_verify import ExprExtractionConfig, parse, verify
+
+    extract = [ExprExtractionConfig()]
+    expected, found = parse(gold, extract), parse(completion, extract)
+    return (found[-1] if found else None), bool(found) and verify(expected, found)
+
+
 class MathSFT(SFTDataset):
     FORMAT = "math-sft-v1"
     FIELDS = ("bucket", "question", "answer")

@@ -8,7 +8,8 @@ from training_data.heldout import load_heldout, write_heldout
 from training_data.subword import TOKENIZER_SHA256
 
 from distributed.config import DistributedConfig, DistributedRuntime
-from trainer.loop import evaluate_sources, heldout_blocks, train
+from trainer.loop import train
+from trainer.subword import SubwordFamily, evaluate_sources, heldout_blocks
 
 
 def snapshot(folder, rows, sources=("code", "web")):
@@ -107,7 +108,12 @@ class HeldoutTests(unittest.TestCase):
         runtime = DistributedRuntime(0, 0, 1, "127.0.0.1", 29500)
         for value in (0, 101):
             with self.subTest(value), self.assertRaisesRegex(ValueError, "stop_tokens"):
-                train(config, "manifest.json", "out", runtime=runtime, stop_tokens=value)
+                train(
+                    SubwordFamily(config, "manifest.json"),
+                    "out",
+                    runtime=runtime,
+                    stop_tokens=value,
+                )
 
 
 if __name__ == "__main__":
