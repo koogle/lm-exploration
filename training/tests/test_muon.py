@@ -5,7 +5,12 @@ import torch
 from model_100m.model import GPT, ModelConfig
 
 from distributed.config import DistributedConfig
-from trainer.optimizers import make_optimizer, orthogonalize, set_learning_rate
+from trainer.optimizers import (
+    make_optimizer,
+    orthogonalize,
+    parameter_groups,
+    set_learning_rate,
+)
 
 
 class MuonTests(unittest.TestCase):
@@ -23,7 +28,7 @@ class MuonTests(unittest.TestCase):
             id(model.token_embedding.weight),
             {id(p) for g in opt.adamw.param_groups for p in g["params"]},
         )
-        set_learning_rate(opt, config.peak_lr / 2)
+        set_learning_rate(opt, 0.5)
         self.assertAlmostEqual(opt.muon.param_groups[0]["lr"], config.muon_lr / 2)
         self.assertAlmostEqual(opt.adamw.param_groups[0]["lr"], config.peak_lr / 2)
 
@@ -43,8 +48,8 @@ class MuonTests(unittest.TestCase):
         restored = copy.deepcopy(model)
         resumed = make_optimizer(restored, config, fused=False)
         resumed.load_state_dict(copy.deepcopy(opt.state_dict()))
-        set_learning_rate(opt, config.peak_lr / 3)
-        set_learning_rate(resumed, config.peak_lr / 3)
+        set_learning_rate(opt, 1 / 3)
+        set_learning_rate(resumed, 1 / 3)
         update(model, opt)
         update(restored, resumed)
         for a, b in zip(model.parameters(), restored.parameters()):
@@ -80,6 +85,16 @@ class MuonTests(unittest.TestCase):
         baseline.step()
         for a, b in zip(model.parameters(), reference.parameters()):
             torch.testing.assert_close(a, b, atol=0, rtol=0)
+
+    def test_gpt_roles_keep_matrices_on_muon_and_the_rest_on_decayed_adamw(self):
+        model = self.model()
+        groups = parameter_groups(model)
+        self.assertEqual(groups["adamw_no_decay"], [])
+        muon = {n for n, _ in groups["muon"]}
+        expected = {
+            n for n, p in model.named_parameters() if n.startswith("blocks.") and p.ndim == 2
+        }
+        self.assertEqual(muon, expected)
 
     def test_invalid_settings(self):
         for values in (

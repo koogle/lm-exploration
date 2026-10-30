@@ -20,10 +20,11 @@ from torch.nn import functional as F
 from torch.nn.attention.flex_attention import AuxRequest, create_block_mask, flex_attention
 from torch.utils.checkpoint import checkpoint
 
+from trainer.roles import declare
+
 from .documents import document_ids, document_positions
 from .fused_loss import fused_cross_entropy
 from .kda import KimiDeltaAttention
-from .roles import declare
 
 __all__ = [
     "Attention",

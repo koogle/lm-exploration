@@ -126,11 +126,12 @@ def train_segment(run_id, config, timeout, deadline, max_tokens=0, gpus=8, prove
         folder / "logs" / f"segment-{int(started)}.log",
         run_id,
     )
-    summary = folder / "summary.json"
-    result = json.loads(summary.read_text()) if summary.exists() else {}
+    report = folder / "report.json"
+    result = json.loads(report.read_text()) if report.exists() else {}
     if code:
-        raise RuntimeError(f"Training exited with {code}; last summary {result}")
-    return result
+        raise RuntimeError(f"Training exited with {code}; last report {result.get('stop_reason')}")
+    keys = ("steps", "tokens", "stop_reason", "elapsed_seconds", "final_checkpoint", "export")
+    return {k: result[k] for k in keys if k in result}
 
 
 @app.function(
