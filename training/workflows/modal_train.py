@@ -1,6 +1,6 @@
 """Training workflows for every model family: launch, qualify and continue sessions.
 
-    modal run --detach -m workflows.modal_train --workflow <workflow.json> --run-id <id> \\
+    modal run --detach -m workflows.modal_train::main --workflow <workflow.json> --run-id <id> \\
         [--model-config <config>] [--resume <run>/step-NNNNNNNNN.pt]
     modal run -m workflows.modal_train::stop --run-id <id>
 

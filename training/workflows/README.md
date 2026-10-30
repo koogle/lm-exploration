@@ -18,7 +18,7 @@ Workflow state (`<run id>/workflow.json`, session reports, tracked calls) lives 
 `lm-exploration-training` for every family. Hybrid workflows:
 
 ```sh
-uv run modal run --detach -m workflows.modal_train --workflow workflows/hybrid-h100x8.json \
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
   --run-id <id> [--model-config hybrid/configs/<config>.json] [--resume <run>-sNN/step-N.pt]
 ```
 
@@ -56,11 +56,11 @@ The generic Modal entrypoint accepts the same selections:
 
 ```sh
 # Existing prepared token snapshot, one GPU.
-uv run modal run --detach -m workflows.modal_train \
+uv run modal run --detach -m workflows.modal_train::main \
   --workflow workflows/h100x1-pilot.json --run-id my-pilot-01
 
 # Prepare/reuse a raw corpus: select a workflow whose dataset uses prepare_raw.
-uv run modal run --detach -m workflows.modal_train \
+uv run modal run --detach -m workflows.modal_train::main \
   --workflow workflows/MY-WORKFLOW.json --run-id my-training-01 --version my-data-v1
 ```
 

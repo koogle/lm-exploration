@@ -283,7 +283,7 @@ Training runs through the workflows like every model family
 config:
 
 ```sh
-uv run modal run --detach -m workflows.modal_train --workflow workflows/hybrid-h100x8.json \
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
     --run-id <id> [--model-config hybrid/configs/<config>.json] [--resume <run>-sNN/step-N.pt]
 uv run modal run -m workflows.modal_train::stop --run-id <id>    # checkpoint and exit
 uv run modal run -m model_hybrid.modal_tools::bench --gpus 1     # 30-minute benchmark
