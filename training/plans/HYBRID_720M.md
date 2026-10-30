@@ -21,6 +21,9 @@ than small CUDA correctness checks.
 | 8 | 720M config, throughput benchmark, ~200M-token pilot | Implemented; 1- and 2-GPU benchmarks and the pilot measured |
 | 9 | 40B launch on 8×H100 in 24-hour segments | Running (`hybrid-720m-40b-01`) |
 
+A side pilot of speedrun-style n-gram hints on this architecture is not part of
+the plan; see its [report](../references/n-gram-hints-2026-10-29.md).
+
 ## Measurements (2026-10-25)
 
 Throughput of the real training step (bf16, `torch.compile`, FlexAttention,

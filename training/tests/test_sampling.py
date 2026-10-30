@@ -34,7 +34,7 @@ def recipe(**changes):
 
 def tiny_model():
     torch.manual_seed(0)
-    model = GPT(ModelConfig(11, 16, 1, 2, 16)).eval()
+    model = GPT(ModelConfig(11, 16, 1, 2, 16, eos_id=2)).eval()
     return SimpleNamespace(
         forward=model,
         encode=lambda text: [1, *(3 + ord(c) - ord("a") for c in text)],

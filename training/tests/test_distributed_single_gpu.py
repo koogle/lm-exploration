@@ -34,7 +34,9 @@ class SingleRankParityTests(unittest.TestCase):
                 with torch.random.fork_rng():
                     torch.manual_seed(43)
                     model = GPT(
-                        ModelConfig(vocab_size=64, block_size=16, n_layer=1, n_head=2, n_embd=32)
+                        ModelConfig(
+                            vocab_size=64, block_size=16, n_layer=1, n_head=2, n_embd=32, eos_id=2
+                        )
                     )
                     reference = copy.deepcopy(model)
                     ddp = DDP(model)
@@ -79,7 +81,9 @@ class TrainingMathTests(unittest.TestCase):
         )
         restored = DistributedConfig(**json.loads(json.dumps(config.as_dict())))
         self.assertEqual(restored, config)
-        model = GPT(ModelConfig(vocab_size=8, block_size=4, n_layer=1, n_head=2, n_embd=8))
+        model = GPT(
+            ModelConfig(vocab_size=8, block_size=4, n_layer=1, n_head=2, n_embd=8, eos_id=1)
+        )
         optimizer = make_optimizer(model, restored, fused=False)
         group = optimizer.adamw.param_groups[0]
         self.assertEqual(group["betas"], (0.8, 0.99))

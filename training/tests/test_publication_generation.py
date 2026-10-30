@@ -19,7 +19,9 @@ class PublicationTests(unittest.TestCase):
     def fixture(self, folder, name="model_10m.model", width=8, heads=2):
         torch.set_num_threads(1)
         module = importlib.import_module(name)
-        cfg = module.ModelConfig(vocab_size=8, block_size=4, n_layer=1, n_head=heads, n_embd=width)
+        cfg = module.ModelConfig(
+            vocab_size=8, block_size=4, n_layer=1, n_head=heads, n_embd=width, eos_id=2
+        )
         model = module.GPT(cfg).eval()
         tokenizer = Tokenizer(
             models.WordLevel(
