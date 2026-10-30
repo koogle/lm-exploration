@@ -1,14 +1,15 @@
-"""Gradio playground for a hybrid-family checkpoint, on CPU with incremental decoding.
+"""Gradio playground for a hybrid-family checkpoint, decoding on the Space's GPU.
 
 Runs inside a Hugging Face Space assembled by publish.py: the model code is copied
 next to this file (model_hybrid/, model_10m/), and the export named in
 model-settings.json is downloaded from its private model repo with the Space's
-HF_TOKEN secret. Chat exports (`"chat": true`) get a chat tab: OpenAI messages and
+HF_TOKEN secret. Generation is serialized: one request decodes at a time. Chat exports (`"chat": true`) get a chat tab: OpenAI messages and
 tools rendered in GLM's chat format, with each reply parsed back into an OpenAI
 assistant message (content and tool_calls); tool results are sent as `tool` turns.
 """
 
 import json
+import threading
 import time
 from pathlib import Path
 
@@ -20,22 +21,27 @@ from model_hybrid import tokenizer as glm
 
 HERE = Path(__file__).parent
 SETTINGS = json.loads((HERE / "model-settings.json").read_text())
-torch.set_num_threads(max(1, torch.get_num_threads()))
 EXPORT = Path(snapshot_download(SETTINGS["repo"], allow_patterns=[f"{SETTINGS['export']}/*"]))
-MODEL = generate.load_export(EXPORT / SETTINGS["export"])
+MODEL = generate.load_export(EXPORT / SETTINGS["export"], dtype=torch.bfloat16, device="cuda")
 TOKENIZER = glm.load()
+# Decoders are reused per shape, so requests take turns.
+LOCK = threading.Lock()
+# Compile prefill attention and capture the decode graph before the first visitor.
+for _ in generate.generate(MODEL, TOKENIZER.encode("Hello").ids, 8, ()):
+    pass
 
 
 def stream(prompt_ids, temperature, top_p, max_new, stop_ids=(glm.EOS_ID,)):
-    started, ids = time.time(), []
-    generator = torch.Generator().manual_seed(0)
-    for token in generate.generate(
-        MODEL, prompt_ids, int(max_new), stop_ids, temperature, top_p, generator
-    ):
-        if token in stop_ids:
-            break
-        ids.append(token)
-        yield ids, len(ids) / max(time.time() - started, 1e-6)
+    with LOCK:
+        started, ids = time.time(), []
+        generator = torch.Generator(device="cuda").manual_seed(0)
+        for token in generate.generate(
+            MODEL, prompt_ids, int(max_new), stop_ids, temperature, top_p, generator
+        ):
+            if token in stop_ids:
+                break
+            ids.append(token)
+            yield ids, len(ids) / max(time.time() - started, 1e-6)
 
 
 def continue_text(prefix, temperature, top_p, max_new):
@@ -134,4 +140,4 @@ with gr.Blocks(title="Hybrid 720M playground") as demo:
         go.click(continue_text, [prefix, temperature, top_p, max_new], [output, rate])
 
 if __name__ == "__main__":
-    demo.queue().launch()
+    demo.queue().launch(server_name="0.0.0.0", server_port=7860)
