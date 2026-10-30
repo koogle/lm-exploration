@@ -39,9 +39,10 @@ class Tokens:
     `[batch, time, vocab]` and its log-probabilities `logp` of the `targets` (both with
     gradient), `old_logp` of the weights that sampled the answers (detached; `logp` itself
     when they are the current weights), the answer-token `mask`, and per answer its
-    `advantage` and constant normalization `scale` `[batch]` (see `loop.py`). When the
-    algorithm asks the sampler to record its top tokens (`sampler_top_k`), the sampler's
-    `sampler_top_ids` and `sampler_top_logprobs` `[batch, time, k]` at each target."""
+    `advantage` and constant normalization `scale` `[batch]` (see `loop.py`).
+
+    `score` is what an algorithm's loss pushes up per token: `logp`, unless a correction
+    replaces it by a term with another gradient (`off_policy/stable_reinforce.py`)."""
 
     logits: torch.Tensor
     targets: torch.Tensor
@@ -50,5 +51,8 @@ class Tokens:
     old_logp: torch.Tensor
     advantage: torch.Tensor
     scale: torch.Tensor
-    sampler_top_ids: torch.Tensor | None = None
-    sampler_top_logprobs: torch.Tensor | None = None
+    score: torch.Tensor | None = None
+
+    def __post_init__(self):
+        if self.score is None:
+            self.score = self.logp
