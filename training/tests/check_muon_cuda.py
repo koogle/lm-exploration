@@ -17,7 +17,9 @@ torch.cuda.set_device(rank)
 dist.init_process_group("nccl")
 try:
     torch.manual_seed(42)
-    model = GPT(ModelConfig(vocab_size=64, block_size=32, n_layer=2, n_head=2, n_embd=32)).cuda()
+    model = GPT(
+        ModelConfig(vocab_size=64, block_size=32, n_layer=2, n_head=2, n_embd=32, eos_id=2)
+    ).cuda()
     for block in model.blocks:
         block.attention.cache_rotary(32)
     model.compile(dynamic=True)

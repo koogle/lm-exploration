@@ -13,6 +13,7 @@ import modal
 from kernels.image import LAUNCH_LIMIT_SECONDS, image, limits
 
 app = modal.App("kernel-bench")
+EOS_ID = 2  # The frozen subword tokenizer's EOS.
 
 
 def relative_error(actual, expected):
@@ -24,7 +25,7 @@ def relative_error(actual, expected):
 def op_checks():
     import torch
     import torch.nn.functional as F
-    from model_10m.model import rotary
+    from model_10m.model import find_documents, rotary
 
     from kernels import fused
 
@@ -65,21 +66,25 @@ def op_checks():
         (t, n, *torch.autograd.grad((t, n), (r, d, b, w), (d_total, dy))), expected
     )
 
-    # QKV split + RoPE with bias, against the model's own rotary().
+    # QKV split + RoPE with bias, against the model's own rotary(), with positions
+    # restarting at document boundaries.
     qkv = torch.randn(2, 512, 3 * 768, device="cuda").bfloat16().requires_grad_()
     bias = (0.1 * torch.randn(3 * 768, device="cuda")).requires_grad_()
     heads = 12
+    tokens = torch.full((2, 512), 5, device="cuda")
+    tokens[0, [100, 333]] = EOS_ID
+    positions = find_documents(tokens, EOS_ID).positions
 
     def reference_qkv(t, bias):
         q, k, v = (t.float() + bias).chunk(3, -1)
         q, k, v = [z.view(2, 512, heads, 64).transpose(1, 2) for z in (q, k, v)]
-        return rotary(q), rotary(k), v
+        return rotary(q, positions[:, None]), rotary(k, positions[:, None]), v
 
     outputs = [torch.randn(2, heads, 512, 64, device="cuda").bfloat16() for _ in range(3)]
     reference = reference_qkv(qkv, bias)
     grads = torch.autograd.grad(reference, (qkv, bias), [g.float() for g in outputs])
     expected = dict(zip(("q", "k", "v", "dqkv", "dbias"), (*reference, *grads)))
-    actual = fused.QKVRopeFunction.apply(qkv, bias, heads)
+    actual = fused.QKVRopeFunction.apply(qkv, bias, positions, heads)
     results["qkv_rope"] = compare(
         (*actual, *torch.autograd.grad(actual, (qkv, bias), outputs)), expected
     )
@@ -116,7 +121,16 @@ def op_checks():
     return results
 
 
-def model_check(**options):
+def packed_tokens(rows, context):
+    """Random tokens with an EOS every 1,000 positions, as in packed training windows."""
+    import torch
+
+    tokens = torch.randint(4, 32768, (rows, context), device="cuda")
+    tokens[:, 999::1000] = EOS_ID
+    return tokens
+
+
+def model_check():
     """Loss and gradients of the whole model, fused versus unfused, same weights."""
     import torch
     from model_100m.model import GPT, ModelConfig
@@ -124,12 +138,12 @@ def model_check(**options):
     from kernels import fused
 
     torch.manual_seed(0)
-    config = ModelConfig(vocab_size=32768, block_size=2048)
+    config = ModelConfig(vocab_size=32768, block_size=2048, eos_id=EOS_ID)
     reference = GPT(config).cuda()
     candidate = GPT(config).cuda()
     candidate.load_state_dict(reference.state_dict())
-    fused.fuse(candidate, **options)
-    tokens = torch.randint(4, 32768, (4, 2048), device="cuda")
+    fused.fuse(candidate)
+    tokens = packed_tokens(4, 2048)
     labels = torch.randint(4, 32768, (4, 2048), device="cuda")
     labels[:, :17] = -100
     out = {}
@@ -154,13 +168,13 @@ def time_steps(variant, microbatch, context, steps=10):
     from kernels import fused
 
     torch.manual_seed(0)
-    model = GPT(ModelConfig(vocab_size=32768, block_size=context)).cuda()
+    model = GPT(ModelConfig(vocab_size=32768, block_size=context, eos_id=EOS_ID)).cuda()
     if "fused" in variant:
-        fused.fuse(model, attention="flash" if "flash" in variant else "cudnn")
+        fused.fuse(model)
     if "compiled" in variant:
         model.compile()
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, fused=True)
-    tokens = torch.randint(4, 32768, (microbatch, context), device="cuda")
+    tokens = packed_tokens(microbatch, context)
     labels = torch.randint(4, 32768, (microbatch, context), device="cuda")
 
     def step():
@@ -196,10 +210,9 @@ def bench(deadline, microbatch=16, context=2048):
         "device": torch.cuda.get_device_name(),
         "ops": op_checks(),
         "model": model_check(),
-        "model_flash": model_check(attention="flash"),
     }
     report["steps"] = {}
-    for variant in ("eager", "compiled", "fused+flash", "fused"):
+    for variant in ("eager", "compiled", "fused"):
         try:
             report["steps"][variant] = time_steps(variant, microbatch, context)
         except Exception as exc:  # noqa: BLE001 -- record and continue with other variants

@@ -20,6 +20,8 @@ def tiny_config(**overrides):
         "head_dim": 8,
         "mlp_hidden": 48,
         "loss_chunk_size": 7,
+        "layer_pattern": ("full",),
+        "mtp": False,
     }
     return model.HybridConfig(**(settings | overrides))
 
