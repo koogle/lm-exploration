@@ -364,8 +364,7 @@ class HybridFamily:
         objective = losses["loss"] / counts["ntp"]
         sums = {"ce": losses["ce"], "z": losses["z"]}
         if self.model_config.mtp:
-            # Expected number of sampled valid MTP targets (see HybridLM.forward).
-            mtp_count = counts["mtp"].clamp_min(1) * self.model_config.mtp_loss_fraction
+            mtp_count = counts["mtp"].clamp_min(1)
             weight = hybrid.mtp_weight(self.model_config, progress["tokens"] / self.target_tokens)
             objective = objective + weight * losses["mtp_loss"] / mtp_count
             sums["mtp_ce"] = losses["mtp_ce"]
@@ -377,8 +376,7 @@ class HybridFamily:
             "z": float(sums["z"] / counts["ntp"]),
         }
         if self.model_config.mtp:
-            mtp_count = counts["mtp"].clamp_min(1) * self.model_config.mtp_loss_fraction
-            row["mtp_loss"] = float(sums["mtp_ce"] / mtp_count)
+            row["mtp_loss"] = float(sums["mtp_ce"] / counts["mtp"].clamp_min(1))
         return row
 
     def step_metrics(self, inputs, seconds, budget, world):
