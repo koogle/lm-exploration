@@ -22,7 +22,7 @@ PACKAGES = (
     "safetensors",
 )
 
-KERNELS = ("softmax_gradient", "kda_convolution")
+KERNELS = ("softmax_gradient", "kda_convolution", "decode")
 
 
 def build_kernel(kernel):
