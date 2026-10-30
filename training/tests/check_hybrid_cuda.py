@@ -4,7 +4,8 @@ Compiled FlexAttention with the document-causal block mask must stay close to fp
 softmax attention (outputs, log-sum-exp and all input gradients, including through
 the log-sum-exp) and work inside torch.compile. fla's chunked KDA must match
 kda_reference within TF32 tolerance, and a small hybrid model is timed with fla
-inside and outside the compiled graph. Run on one GPU through
+inside and outside the compiled graph. A small byte-level H-Net, compiled in bf16,
+must match its fp64 CPU reference and keep documents isolated. Run on one GPU through
 model_hybrid.modal_checks; returns a JSON-serializable dict and raises on any
 mismatch.
 """
@@ -12,7 +13,7 @@ mismatch.
 import time
 
 import torch
-from model_hybrid import kda, model
+from model_hybrid import hnet, kda, model
 from model_hybrid.documents import document_ids, document_positions
 
 EOS = 2
@@ -283,7 +284,68 @@ def compile_boundary_timing(rounds=3, steps=10):
     return {f"{name}_step_ms": values for name, values in times.items()}
 
 
-def checks():
+def hnet_against_reference():
+    """Compiled bf16 H-Net on CUDA vs the same weights in fp64 on CPU; document isolation."""
+    torch.manual_seed(3)
+    main = {
+        "n_layer": 4,
+        "n_embd": 384,
+        "n_head": 6,
+        "n_kv_head": 2,
+        "head_dim": 64,
+        "mlp_hidden": 1024,
+        "n_kda_head": 6,
+    }
+    config = hnet.HNetConfig(
+        main=main,
+        block_size=1024,
+        outer_embd=256,
+        outer_layers=2,
+        outer_kda_head=4,
+        outer_mlp_hidden=704,
+        chunk_bucket=128,
+    )
+    lm = hnet.HNetLM(config).cuda()
+    hnet.static_compilation(config)
+    tokens = torch.randint(0, 256, (2, 1024), device="cuda")
+    tokens[0, [100, 101, 700]] = hnet.BYTE_EOS
+    labels = torch.roll(tokens, -1, 1)
+    labels[:, -1] = -100
+    compiled = torch.compile(lm)
+    with torch.autocast("cuda", dtype=torch.bfloat16):
+        losses = compiled(tokens, labels)
+    (losses["loss"] / losses["count"]).backward()
+    if not all(torch.isfinite(p.grad).all() for p in lm.parameters()):
+        raise AssertionError("Non-finite gradients in the compiled H-Net")
+    reference = hnet.HNetLM(config).double()
+    reference.load_state_dict({k: v.cpu().double() for k, v in lm.state_dict().items()})
+    with torch.no_grad():
+        expected = reference(tokens.cpu(), labels.cpu())
+    loss = (losses["ce"] / losses["count"]).item()
+    expected_loss = (expected["ce"] / expected["count"]).item()
+    if abs(loss - expected_loss) > 0.02:
+        raise AssertionError(f"H-Net loss {loss} differs from fp64 {expected_loss}")
+    # Same document after a different predecessor, compiled, in bf16.
+    tail = tokens[:1, 701:]
+    with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
+        alone = compiled(tail)[0].float()
+        after = compiled(tokens[:1])[0, 701:].float()
+    return {
+        "loss_bf16": loss,
+        "loss_fp64": expected_loss,
+        "chunks_cuda": int(losses["chunks"]),
+        "chunks_fp64": int(expected["chunks"]),
+        "isolation_max_logit_error_bf16": max_error(alone, after),
+    }
+
+
+def checks(only=""):
+    if only == "hnet":
+        return {
+            "gpu": torch.cuda.get_device_name(),
+            "torch": torch.__version__,
+            "hnet_vs_fp64": hnet_against_reference(),
+        }
     cases = (
         (torch.float32, 2, 12, 4, 300, 128, [[63, 64, 200], [150]]),
         (torch.bfloat16, 2, 12, 4, 300, 128, [[63, 64, 200], [150]]),
@@ -300,6 +362,7 @@ def checks():
         "softmax_gradient_vs_fp64": softmax_gradient_against_reference(),
         "fused_loss_vs_autograd": fused_loss_against_autograd(),
         "compiled_model": compiled_model(),
+        "hnet_vs_fp64": hnet_against_reference(),
         "compile_boundary": compile_boundary_timing(),
         "timing": [timing(documents=1), timing(documents=4)],
     }

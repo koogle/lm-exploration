@@ -7,8 +7,9 @@ gate `-exp(A_log) * softplus(f_proj(x) + dt_bias)`, and an output RMSNorm with a
 sigmoid gate before the projection. There is no positional encoding.
 
 The recurrence keeps an fp32 state that starts at zero in every document. On CUDA
-it runs fla's chunked kernel over the flattened batch with `cu_seqlens`; on CPU an
-explicit per-token recurrence is the reference. torch.compile traces through the
+the three convolutions run as one kernel (kda_convolution.py) and the recurrence
+is fla's chunked kernel over the flattened batch with `cu_seqlens`; on CPU
+`short_convolution` and an explicit per-token recurrence are the reference. torch.compile traces through the
 fla call.
 """
 
@@ -145,9 +146,18 @@ class KimiDeltaAttention(nn.Module):
         batch, length, _ = x.shape
         heads = (batch, length, self.heads, self.head_dim)
         positions = mask.positions
-        q = short_convolution(self.q_proj(x), self.q_conv, positions).view(heads)
-        k = short_convolution(self.k_proj(x), self.k_conv, positions).view(heads)
-        v = short_convolution(self.v_proj(x), self.v_conv, positions).view(heads)
+        projections = (self.q_proj(x), self.k_proj(x), self.v_proj(x))
+        weights = (self.q_conv, self.k_conv, self.v_conv)
+        if x.is_cuda:
+            from .kda_convolution import kda_convolutions
+
+            q, k, v = kda_convolutions(*projections, *weights, positions)
+        else:
+            q, k, v = (
+                short_convolution(p, w, positions)
+                for p, w in zip(projections, weights, strict=True)
+            )
+        q, k, v = q.view(heads), k.view(heads), v.view(heads)
         g = self.f_proj(x).view(heads)
         beta = self.b_proj(x)
         if x.is_cuda:

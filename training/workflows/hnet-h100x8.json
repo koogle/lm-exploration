@@ -1,0 +1,11 @@
+{
+  "family": "hybrid",
+  "model_config": "hybrid/configs/hnet-720m-40b.json",
+  "gpu": "H100",
+  "world_size": 8,
+  "segment_seconds": 82000,
+  "worker_timeout_seconds": 84000,
+  "max_segments": 8,
+  "segments_per_call": 1,
+  "qualification_segments": 0
+}
