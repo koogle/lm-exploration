@@ -23,6 +23,7 @@ class ScriptLayoutTests(unittest.TestCase):
             "tokenizer.package_tokenizer_research": "tokenizer/package_tokenizer_research.py",
             "tokenizer.verify_tokenizer_publication": "tokenizer/verify_tokenizer_publication.py",
             "trainer.loop": "trainer/loop.py",
+            "trainer.subword": "trainer/subword.py",
             "distributed.config": "distributed/config.py",
             "distributed.modal_train": "distributed/modal_train.py",
             "distributed.modal_checks": "distributed/modal_checks.py",
@@ -65,6 +66,8 @@ class ScriptLayoutTests(unittest.TestCase):
                 if node.func.attr not in ("add_local_file", "add_local_dir"):
                     continue
                 source = node.args[0]
+                if isinstance(source, ast.Name):
+                    continue  # workflows.images.SOURCES, checked below.
                 self.assertIsInstance(source, ast.Constant)
                 local = ROOT / source.value
                 with self.subTest(script=path.name, source=source.value):
@@ -72,6 +75,13 @@ class ScriptLayoutTests(unittest.TestCase):
                         self.assertTrue(local.is_file(), str(local))
                     else:
                         self.assertTrue(local.is_dir(), str(local))
+
+    def test_every_image_source_exists(self):
+        from workflows.images import SOURCES
+
+        for local, _ in SOURCES:
+            with self.subTest(source=local):
+                self.assertTrue((ROOT / local).is_dir())
 
     def test_training_worker_callers_pass_dataset_root(self):
         """distributed.modal_train.worker takes dataset_root as a required keyword."""

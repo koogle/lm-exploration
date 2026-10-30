@@ -165,8 +165,9 @@ and produces identical logits.
 
 Each module declares the optimizer role of the parameters it creates, next to its
 `__init__`: `optimizer()` in [`model.py`](model.py) and [`kda.py`](kda.py)
-yields `(parameter, role)` pairs (helper `declare` in [`roles.py`](roles.py)).
-[`optim.py`](optim.py) collects them by parameter identity:
+yields `(parameter, role)` pairs (helper `declare` in
+[`trainer/roles.py`](../trainer/roles.py)). `trainer.optimizers.RoleOptimizer`
+collects them by parameter identity:
 
 | Role | Optimizer | Parameters |
 | --- | --- | --- |
@@ -178,10 +179,10 @@ Muon is `trainer.optimizers.Muon` (five-step Newton–Schulz with the original
 aspect-ratio scaling); its weight decay is decoupled, `p *= 1 - lr * 0.1`.
 The learning rates are the 124M comparison's
 ([MUON_COMPARISON.md](../distributed/MUON_COMPARISON.md)), starting values for
-the 720M pilot rather than tuned at this scale. `HybridOptimizer` keeps Muon
-groups at `lr_scale = muon_lr / adamw_lr`, so `trainer.optimizers.set_learning_rate`
-applies one schedule factor to both. A parameter that no module declares, one
-declared twice, or a non-matrix declared for Muon raises.
+the 720M pilot rather than tuned at this scale. Every group keeps its base rate
+and `trainer.optimizers.set_learning_rate` applies one schedule factor to all of
+them. A parameter that no module declares, one declared twice, or a non-matrix
+declared for Muon raises.
 
 ## Tokenizer and data recipe
 
@@ -213,17 +214,20 @@ order and packs 4,097-token windows (consecutive windows share one token), each
 from the source furthest below its weight; it is resumable and waits for shards
 that are still being prepared, so training can start while preparation runs.
 
-[`modal_data.py`](modal_data.py) prepares shards on Modal CPUs (8 cores, one call
-per shard, up to 48 in parallel), held-out shards first and then in the order
-training reads them, onto the `lm-exploration-hybrid-data` volume:
+[`modal_data.py`](modal_data.py) is the family's data stage: it prepares shards on
+Modal CPUs (8 cores, one call per shard, up to the stage's `parallel`, 48 by
+default), held-out shards first and then in the order training reads them, onto the
+`lm-exploration-hybrid-data` volume. A workflow runs it as a `data` stage, alone or
+before pretraining (`workflows/hybrid-h100x8.json`):
 
 ```sh
-uv run modal run --detach -m model_hybrid.modal_data::main --run-id <id>
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
+    --run-id <id> --end corpus
 ```
 
-The launch fixes a deadline 24 hours ahead; an independent supervisor cancels
-every recorded call then, and each call has `retries=0` and a timeout bounded by
-the deadline. Finished shards are skipped, so another launch continues. The
+The workflow launch's supervisor cancels every recorded call at the 24-hour
+deadline, and each call has `retries=0` and a timeout bounded by the deadline.
+Finished shards are skipped, so another launch continues. The
 coordinator writes `capacity.json` (train/held-out tokens, documents and drops
 per source) and the screen writes `screen.json`.
 
@@ -234,8 +238,65 @@ screened out). The screen holds 3,225,682 unique 13-grams. At those sizes the
 training shards hold about 31B ClimbMix, 11B code and 4.6B math tokens, above
 the 28B/8B/4B shares.
 
-The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
-placeholders until the 720M configuration is fixed in PR 8.
+## 720M configuration and training
+
+[`configs/hybrid-720m-40b.json`](configs/hybrid-720m-40b.json): width 1536, 16
+layers as 4 x [KDA, KDA, KDA, full] (full attention at 3, 7, 11, 15), 12 query /
+4 KV heads, 12 KDA heads, head dimension 128, SwiGLU 4,224, GLM vocabulary
+154,880, context 4,096, one MTP module. The trunk used for inference has
+707,129,536 parameters; with the MTP module 739,972,556 (`test_hybrid_720m`
+asserts both). Training: 256 x 4,096 = 1,048,576 tokens per step, warmup over
+500M tokens, then constant, then linear decay to 0 over the last 15%; Muon/AdamW
+as above with weight decay 0.1, gradient clipping 1.0, bf16 autocast with fp32
+parameters, `torch.compile`, z-loss 1e-4, MTP weight 0.3 to 0.1.
+
+Full attention trains with FlexAttention (above).
+[`fused_loss.py`](fused_loss.py) computes the output layer, cross-entropy, z-loss
+and their gradients in one chunked pass, without storing or recomputing the
+[tokens, 154,880] logits, for the next-token and MTP heads.
+
+Custom kernels in this family: the fused output-layer loss (+15% training
+throughput on one H100) and, inside it, a CUDA kernel
+([`kernels/softmax_gradient.cu`](kernels/softmax_gradient.cu)) that turns each bf16 logit row
+into its cross-entropy/z-loss gradient in place in two passes, instead of several
+fp32 copies of the [rows, 154,880] block. FlexAttention and fla supply the
+tensor-core attention and KDA kernels.
+
+[`train.py`](train.py) is the hybrid family for the common loop
+([`trainer/loop.py`](../trainer/loop.py), see [trainer/README.md](../trainer/README.md)),
+run as `torchrun -m model_hybrid.train`: rank 0 reads the recipe's
+`PreparedMixture` and scatters each batch; every rank derives MTP targets (the
+model derives its own document ids from `eos_id`, which must be the GLM EOS), and
+DDP averages gradients. Each loss is normalized by its global target count. Rank 0
+writes `metrics.jsonl` (loss, z, MTP loss, learning-rate factor, gradient norm,
+tokens/s, MFU, rows per source, peak memory per rank), and at start, every
+`eval_every_steps` and at the end `validation.jsonl`: held-out loss, bits per byte
+and MTP loss per source with per-layer gate openness and sink weight, sink,
+gate-bias and KDA-decay parameters, and (every `sample_every_steps` and at the end)
+greedy continuations of fixed prompts. Checkpoints (`step-<step>.pt`: model,
+optimizer, data cursor, every rank's RNG; the last `keep_checkpoints` kept) are
+written every `checkpoint_seconds` and at stop, and a run directory resumes from
+its `latest.json` with the same config, GPU count and source files. `report.json`
+closes each session. With `hf_repo` set, bf16 trunk weights and config (under
+`export/`) and the logs go to that private HF model repo every `hf_every_tokens`
+and at the end.
+
+Training runs through the workflows like every model family
+([workflows/README.md](../workflows/README.md)); a stage's `model_config` selects
+the run config:
+
+```sh
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
+    --run-id <id> [--start pretrain]
+uv run modal run -m workflows.modal_train::stop --run-id <id>    # checkpoint and exit
+uv run modal run -m model_hybrid.modal_tools::bench --gpus 1     # 30-minute benchmark
+```
+
+Each session trains in `lm-exploration-hybrid-runs/<stage run>-sNN/` and resumes
+the previous session's final checkpoint; launching the workflow run again continues
+its unfinished stage. A `midtrain` stage starts from the previous stage's exported
+weights (`init_from`). MFU counts 6 x (matmul weights, including both output-layer uses) plus
+attention FLOPs over the mean attended keys, against 989 TFLOPS per H100.
 
 ## Tests
 
@@ -245,7 +306,8 @@ From `training/`:
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
   tests.test_hybrid_sink_gate tests.test_hybrid_kda \
   tests.test_hybrid_mtp tests.test_hybrid_optim \
-  tests.test_hybrid_tokenizer tests.test_hybrid_data -v
+  tests.test_hybrid_tokenizer tests.test_hybrid_data tests.test_hybrid_720m \
+  tests.test_hybrid_fused_loss -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
@@ -267,6 +329,9 @@ bf16 training steps of a small compiled hybrid model with the fla call outside t
 compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
 The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it.
 
+`test_hybrid_720m` checks the configuration, parameter count, schedule, FLOP
+accounting and gate/sink statistics;
+`test_hybrid_fused_loss` checks the fused loss and its gradients against autograd.
 `test_hybrid_data` prepares shards from small parquet files (license filter,
 empty documents, contamination drops, EOS layout, byte counts) and checks the
 mixture's weights, contiguity across shards, resume and the held-out windows;

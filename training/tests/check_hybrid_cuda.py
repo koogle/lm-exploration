@@ -56,6 +56,68 @@ def against_reference(dtype, batch, heads, kv_heads, length, width, ends):
     return {"shape": [batch, heads, kv_heads, length, width], "vs_fp64": errors}
 
 
+def softmax_gradient_against_reference():
+    """Our CUDA softmax-gradient kernel against fp64 PyTorch, aligned and unaligned rows."""
+    from model_hybrid.softmax_kernel import softmax_gradient_
+
+    results = {}
+    for dtype, vocab in (
+        (torch.float32, 5001),
+        (torch.float32, 154_880),
+        (torch.bfloat16, 154_880),
+    ):
+        torch.manual_seed(vocab)
+        logits = (torch.randn(64, vocab, device="cuda") * 4).to(dtype)
+        targets = torch.randint(0, vocab, (64,), device="cuda")
+        targets[::5] = -100
+        reference = logits.double()
+        lse = reference.logsumexp(-1)
+        expected = (reference - lse[:, None]).exp() * (1 + 2 * 1e-4 * lse)[:, None]
+        rows = torch.arange(64, device="cuda")
+        valid = targets != -100
+        expected[rows[valid], targets[valid]] -= 1
+        expected[~valid] = 0
+        actual = logits.clone()
+        got_lse, got_target = softmax_gradient_(actual, targets, 1e-4)
+        errors = {
+            "lse": max_error(got_lse, lse),
+            "target_logit": max_error(got_target, reference[rows, targets.clamp_min(0)]),
+            "gradient": max_error(actual, expected),
+        }
+        limit = 1e-5 if dtype == torch.float32 else 4e-3
+        if errors["lse"] > 1e-4 or errors["target_logit"] > 0 or errors["gradient"] > limit:
+            raise AssertionError(f"softmax gradient kernel mismatch ({dtype}, {vocab}): {errors}")
+        results[f"{str(dtype).split('.')[-1]}_{vocab}"] = errors
+    return results
+
+
+def fused_loss_against_autograd():
+    """Fused output-layer loss (CUDA gradient kernel) against the chunked autograd loss."""
+    from model_hybrid.fused_loss import fused_cross_entropy
+
+    torch.manual_seed(6)
+    hidden = torch.randn(4096, 1536, device="cuda", requires_grad=True)
+    weight = (torch.randn(154_880, 1536, device="cuda") * 0.02).requires_grad_()
+    labels = torch.randint(0, 154_856, (4096,), device="cuda")
+    labels[::7] = -100
+    loss, ce, z = fused_cross_entropy(hidden, weight, labels, 1e-4, 2048)
+    fused = torch.autograd.grad(loss, (hidden, weight))
+    with torch.autocast("cuda", dtype=torch.bfloat16):
+        expected_ce, expected_z = model.chunked_cross_entropy(hidden, weight, labels, 2048)
+    reference = torch.autograd.grad(expected_ce + 1e-4 * expected_z, (hidden, weight))
+    errors = {
+        "ce_relative": abs(ce.item() - expected_ce.item()) / expected_ce.item(),
+        "z_relative": abs(z.item() - expected_z.item()) / expected_z.item(),
+        **{
+            f"grad_{n}_relative": max_error(a, b) / b.abs().max().item()
+            for n, a, b in zip(("hidden", "weight"), fused, reference, strict=True)
+        },
+    }
+    if max(errors.values()) > 2e-2:
+        raise AssertionError(f"Fused loss disagrees with autograd: {errors}")
+    return errors
+
+
 def compiled_model():
     torch.manual_seed(1)
     # Full attention only, so this isolates the compiled FlexAttention path.
@@ -69,6 +131,7 @@ def compiled_model():
         n_kv_head=2,
         head_dim=64,
         layer_pattern=("full",),
+        mtp=False,
     )
     lm = model.HybridLM(config).cuda()
     compiled = torch.compile(lm)
@@ -234,6 +297,8 @@ def checks():
         # fla's Triton dots use TF32 even for fp32 inputs.
         "kda_vs_reference_fp32": kda_against_reference(torch.float32, 1e-2),
         "kda_vs_reference_bf16": kda_against_reference(torch.bfloat16, 5e-2),
+        "softmax_gradient_vs_fp64": softmax_gradient_against_reference(),
+        "fused_loss_vs_autograd": fused_loss_against_autograd(),
         "compiled_model": compiled_model(),
         "compile_boundary": compile_boundary_timing(),
         "timing": [timing(documents=1), timing(documents=4)],
