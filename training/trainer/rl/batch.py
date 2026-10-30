@@ -11,13 +11,16 @@ from training_data.subword import EOS_TOKEN_ID, LOSS_IGNORE_INDEX
 class Batch:
     """Answers to `rows` (pool rows with `prompt_ids`): new token IDs without EOS, whether
     each ended in EOS, and its reward. `group` is the number of consecutive answers to
-    the same prompt when they were sampled as groups, else None."""
+    the same prompt when they were sampled as groups, else None. `sampler[i]`, for an
+    answer our sampler wrote, holds its log-probabilities of the answer's tokens (EOS
+    included) and, if recorded, its top tokens and their log-probabilities at each."""
 
     rows: list
     completions: list
     finished: list
     rewards: list
     group: int | None = None
+    sampler: list | None = None
 
     def sequences(self):
         """{x, y}: prompt + answer (+ EOS) and its targets; only answer tokens are targets."""
@@ -36,7 +39,10 @@ class Tokens:
     `[batch, time, vocab]` and its log-probabilities `logp` of the `targets` (both with
     gradient), `old_logp` of the weights that sampled the answers (detached; `logp` itself
     when they are the current weights), the answer-token `mask`, and per answer its
-    `advantage` and constant normalization `scale` `[batch]` (see `loop.py`)."""
+    `advantage` and constant normalization `scale` `[batch]` (see `loop.py`).
+
+    `score` is what an algorithm's loss pushes up per token: `logp`, unless a correction
+    replaces it by a term with another gradient (`off_policy/stable_reinforce.py`)."""
 
     logits: torch.Tensor
     targets: torch.Tensor
@@ -45,3 +51,8 @@ class Tokens:
     old_logp: torch.Tensor
     advantage: torch.Tensor
     scale: torch.Tensor
+    score: torch.Tensor | None = None
+
+    def __post_init__(self):
+        if self.score is None:
+            self.score = self.logp

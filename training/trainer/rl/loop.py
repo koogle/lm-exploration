@@ -12,7 +12,9 @@ they are computed once before the batch's first update.
 Each answer's token loss is divided by a constant, the answers per update times the
 task's token limit (no per-answer length normalization, as in Dr. GRPO,
 arXiv:2503.20783). `kl_coef` adds the k3 estimate of KL(policy ‖ parent) on the answer
-tokens, which is always measured and logged; pretraining replay (`replay_*`, the hook
+tokens, which is always measured and logged. With `stable_reinforce`, the hook of
+`off_policy/stable_reinforce.py` corrects every micro-batch for the difference between
+sampler and learner probabilities. Pretraining replay (`replay_*`, the hook
 `trainer/replay_hook.py` that SFT also uses) adds its loss at `replay_weight` to every
 update. Gradients are clipped to norm 1.
 
@@ -46,6 +48,7 @@ from trainer.batches import collate
 from trainer.replay_hook import ReplayHook
 from trainer.rl.batch import Tokens
 from trainer.rl.off_policy.sources import Reuse, TrajectoryFile
+from trainer.rl.off_policy.stable_reinforce import StableReinforce
 from trainer.rl.rollouts import Sampler, Scheduler, collect
 
 FORMAT = "rl-v1"
@@ -159,10 +162,13 @@ def train(
         model.parameters(), lr=settings.optimizer.lr, weight_decay=settings.optimizer.weight_decay
     )
     replay = ReplayHook.attach(settings, data_root, config["block_size"])
+    stable = StableReinforce.attach(settings)
     identity = {
         "parent": str(parent),
         "parent_sha256": digest(parent),
         "parent_stage": description.stage,
+        # The parent's model code, which may predate this trainer's (`source_sha256`).
+        "parent_source_sha256": description.source_sha256,
         "pool_sha256": pool_hash,
         "trajectories_sha256": trajectory_hash,
         "tokenizer_sha256": TOKENIZER_SHA256,
@@ -179,7 +185,16 @@ def train(
         shutil.copyfile(path, output / f"{name}.py")
 
     def sample(rows):
-        return collect(model, rows, rollouts, rollouts.temperature, generator, tokenizer, sandbox)
+        return collect(
+            model,
+            rows,
+            rollouts,
+            rollouts.temperature,
+            generator,
+            tokenizer,
+            sandbox,
+            stable.top_k if stable else 0,
+        )
 
     scheduler = Scheduler(pool["train"], rollouts.rest_steps, rng)
     source = {
@@ -249,10 +264,11 @@ def train(
                 device="cuda",
             )
             weight = torch.tensor([advantage[i] for i in chosen], device="cuda")
-            loss, stats = algorithm.loss(
-                Tokens(logits, y, mask, logp, old_logp.detach(), weight, scale)
-            )
-            del logits
+            tokens = Tokens(logits, y, mask, logp, old_logp.detach(), weight, scale)
+            correction = stable.apply(tokens, batch, chosen) if stable else 0.0
+            loss, stats = algorithm.loss(tokens)
+            loss = loss + correction
+            del logits, tokens
             delta = (reference_logp - logp) * mask
             kl = (delta.exp() - delta - 1) * mask
             if settings.kl_coef:
@@ -346,6 +362,7 @@ def train(
             trained_answers=len(trained),
             sampled_nll=totals.pop("nll") / tokens,
             kl=totals.pop("kl") / tokens,
+            **(stable.statistics() if stable else {}),
             grad_norm=totals.pop("grad_norm") / shares,
             lr=settings.optimizer.learning_rate(update - 1),
             updates=update,

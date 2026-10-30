@@ -6,11 +6,14 @@
       "trajectories": {"source": "sampler"},
       "rollouts": {"prompts_per_step": 64, "samples_per_prompt": 8, "math_share": 0.5},
       "optimizer": {"lr": 1e-6, "warmup_steps": 20},
+      "stable_reinforce": {"top_k": 32},
       "replay": true, "replay_snapshot": "...", ...
     }
 
 Omitted fields take the defaults below; `Settings.from_dict` builds and checks them.
-The `replay_*` fields are the ones SFT shares (`trainer/replay_hook.py`).
+The `replay_*` fields are the ones SFT shares (`trainer/replay_hook.py`);
+`stable_reinforce` switches on the off-policy corrections of
+`off_policy/stable_reinforce.py`.
 """
 
 import math
@@ -18,6 +21,7 @@ from dataclasses import dataclass, field
 
 from trainer.replay_hook import ReplaySettings
 from trainer.rl import algorithms
+from trainer.rl.off_policy.stable_reinforce import StableReinforceSettings
 
 
 def positive_int(owner, *names):
@@ -42,6 +46,8 @@ class Rollouts:
     code_tokens: int = 384
     temperature: float = 1.0
     rest_steps: int = 50
+    # Sampler engine (`trainer/rollout.py`): "graph" replays custom-kernel CUDA graphs.
+    engine: str = "graph"
 
     def __post_init__(self):
         positive_int(self, "prompts_per_step", "samples_per_prompt", "math_tokens", "code_tokens")
@@ -53,6 +59,8 @@ class Rollouts:
             raise ValueError("temperature must be in (0, 2]")
         if type(self.rest_steps) is not int or self.rest_steps < 0:
             raise ValueError("rest_steps must be a nonnegative integer")
+        if self.engine not in ("eager", "graph"):
+            raise ValueError("engine must be eager or graph")
 
     def token_limit(self, task):
         return self.math_tokens if task == "math" else self.code_tokens
@@ -119,6 +127,8 @@ class Settings(ReplaySettings):
     optimizer: Optimizer = field(default_factory=Optimizer)
     # KL(policy ‖ parent), k3 estimate on answer tokens; always measured, added at kl_coef.
     kl_coef: float = 0.0
+    # Score Centering and the sampler-learner KL on our sampler's answers, or None.
+    stable_reinforce: StableReinforceSettings | None = None
     # Answers per forward and backward pass.
     micro_batch: int = 16
     seed: int = 42
@@ -129,11 +139,13 @@ class Settings(ReplaySettings):
     @classmethod
     def from_dict(cls, values):
         values = dict(values)
+        stable = values.pop("stable_reinforce", None)
         return cls(
             algorithm=algorithms.make(values.pop("algorithm", {"name": "on_policy/grpo"})),
             trajectories=Trajectories(**values.pop("trajectories", {})),
             rollouts=Rollouts(**values.pop("rollouts", {})),
             optimizer=Optimizer(**values.pop("optimizer", {})),
+            stable_reinforce=StableReinforceSettings(**stable) if stable is not None else None,
             **values,
         )
 
@@ -141,6 +153,8 @@ class Settings(ReplaySettings):
         positive_int(self, "steps", "micro_batch", "evaluate_every", "save_every", "max_seconds")
         if not math.isfinite(self.kl_coef) or self.kl_coef < 0:
             raise ValueError("Invalid KL coefficient")
+        if self.stable_reinforce is not None:
+            self.stable_reinforce.check(self)
         if self.trajectories.source not in self.algorithm.SOURCES:
             raise ValueError(
                 f"{self.algorithm.name} trains on trajectories from {self.algorithm.SOURCES}"
