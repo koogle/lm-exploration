@@ -169,3 +169,68 @@ Gemma 3 1B and SmolLM2; the models at ~50% on MMLU and GSM8K (Qwen3, Qwen3.5,
 LFM2.5) trained on far more, and more exam-like, data. The training data was
 screened against these test sets; the reference models' was not necessarily.
 
+## Chat SFT record
+
+| | |
+| --- | --- |
+| Run ID | `hybrid-720m-chat-sft-01`, from the final 40B export |
+| Config | [`configs/hybrid-720m-chat-sft.json`](../hybrid/configs/hybrid-720m-chat-sft.json), recipe [`chat-sft-v1`](../hybrid/recipes/chat-sft-v1.json) |
+| Data | 1,130,204 conversations (970M tokens, 718M of them targets) from 19 smoltalk2 `no_think` SFT files; 110,664 dropped by the benchmark screen (80K of them OpenThoughts math), 7,704 unparsable, 1,999 over 4,096 tokens |
+| Batch | 128 x 4,096 tokens: 96 chat rows plus 32 replay rows from `hybrid-40b-v1` |
+| Schedule | 2,913 steps (one chat epoch, 1.53B tokens), Muon 0.002 / AdamW 3e-5, 50M-token warmup, linear decay to 0 |
+| Pilot | `hybrid-720m-chat-sft-pilot-01`, 40 steps: init, replay, held-out and chat sampling checked |
+| Run | 2026-10-26 23:49 to 2026-10-27 01:25 UTC on 8 x H100, ~290K tokens/s, 96 minutes |
+| Export | `tokens-001527250944/` in `jfrick/hybrid-720m-chat-sft` (private) |
+
+Held-out loss at the end (pretraining sources: base model → after SFT): ClimbMix
+2.558 → 2.599, code 1.055 → 1.080, math 1.742 → 1.770; with replay, SFT costs
+1.6–2.4% there. Chat held-out loss over the 19 files averages 0.835, with tool
+calling at 0.077 (xLAM) and 0.31 (Hermes). Greedy replies to the sample
+prompts: "The capital of France is Paris." (then the turn ends), a correct
+`is_prime` with a square-root bound, "$3 × 7 … 7 pens cost $21.", and for the
+weather question with a `get_weather` tool the call
+`<tool_call>get_weather<arg_key>city</arg_key><arg_value>Berlin</arg_value></tool_call>`.
+The base model looped or echoed on the same prompts.
+
+Replay ablation: `chat-sft-v1-no-replay` trains the same chat data without
+replay rows (2,185 steps of 128 chat rows, `hybrid-720m-chat-sft-no-replay-03`).
+Pretraining held-out loss of each export, measured with
+`modal_tools::heldout` (the 40B run's document counts; the base export
+reproduces its final values):
+
+| Export | ClimbMix | Code | Math | Chat held-out (mean of 19 files) |
+| --- | ---: | ---: | ---: | ---: |
+| Base, 40B tokens | 2.558 | 1.055 | 1.742 | |
+| SFT with 25% replay | 2.599 (+1.6%) | 1.080 (+2.4%) | 1.770 (+1.6%) | 0.835 |
+| SFT without replay | 2.881 (+12.6%) | 1.240 (+17.5%) | 2.070 (+18.8%) | 0.829 |
+
+Replay keeps about 85–90% of the pretraining loss that chat-only fine-tuning
+gives up, at 0.006 nats of chat held-out loss. The same benchmark suite on the exports (as above,
+base-model prompts):
+
+| Export | HellaSwag | ARC-E | ARC-C | PIQA | WinoG | OBQA | SciQ | LAMBADA | MMLU | GSM8K | HumanEval | MBPP |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Base, 40B tokens | 51.4 | 63.4 | 35.4 | 72.7 | 57.4 | 38.8 | 87.8 | 41.2 | 26.4 | 3.5 | 4.3 | 5.0 |
+| SFT with replay | 50.2 | 63.7 | 35.0 | 72.0 | 56.0 | 36.6 | 88.3 | 41.1 | 27.0 | 3.6 | 10.4 | 8.4 |
+| SFT without replay | 48.6 | 59.1 | 32.8 | 71.3 | 56.0 | 36.2 | 83.5 | 35.6 | 24.4 | 3.7 | 12.2 | 6.2 |
+
+With replay the commonsense and knowledge scores stay within about 2 points of
+the base model while HumanEval rises from 4.3 to 10.4; without replay LAMBADA
+drops 5.6 points and ARC-Easy and SciQ about 4. The first two launches of the
+no-replay run (`-01`, `-02`) hung on 8 GPUs before their first step and were
+stopped; the third ran normally.
+
+## Data licensing
+
+The models in this plan are research models, not commercially clean, and that is
+accepted (2026-10-27). The binding terms: ClimbMix (the pretraining majority) is
+CC BY-NC 4.0 upstream (`nvidia/Nemotron-ClimbMix`, research and development
+only), KodCode-Light-RL-10K (RL) and the smoltalk2 `explore_instruct_rewriting`
+subset (SFT) are CC BY-NC 4.0, and the Magpie-Ultra and everyday-conversation SFT
+subsets were generated with Llama 3.1, whose license applies to models trained on
+its outputs ("Built with Llama" notice and name prefix when distributed). The
+permissive-code shard keeps per-repository license fields; FineMath and the Tulu
+persona subset are ODC-By. The code collections `jfrick/curated-oss-code-20261019`
+(public, includes GPL projects such as Linux) and
+`jfrick/mit-claude-codex-code-20261019` keep repository license evidence; including
+GPL code is accepted.

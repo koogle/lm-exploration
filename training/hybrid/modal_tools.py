@@ -1,7 +1,10 @@
-"""Hybrid tools on Modal H100s; training runs through the workflows (workflows/README.md).
+"""Hybrid tools on Modal H100s: benchmarks, held-out evaluation, export and publishing.
 
+Training runs through the workflows like every model family (workflows/README.md).
 Run from training/:
     modal run -m model_hybrid.modal_tools::bench --gpus 1 [--microbatch 4]
+    modal run -m model_hybrid.modal_tools::heldout --export <run>/export/<name>
+    modal run -m model_hybrid.modal_tools::export --run-id <run folder>
     modal run -m model_hybrid.modal_tools::publish --checkpoint <run>/step-NNNNNNNNN.pt \\
         --repo <owner/name> [--public] [--card <README.md>]
 
@@ -145,6 +148,77 @@ def bench(
         profile,
     )
     print(json.dumps(result, indent=2))
+
+
+@app.function(
+    image=image, gpu="H100", cpu=8, memory=65536, timeout=3600, retries=0, volumes=VOLUMES
+)
+def heldout_loss(export, recipe, counts, deadline):
+    """Held-out loss and bits per byte of an export on a pretraining recipe's sources."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import torch
+    from model_hybrid import generate
+    from model_hybrid.train import evaluate, heldout_windows
+
+    lm = generate.load_export(Path("/runs") / export, device="cuda")
+    root = Path("/data") / recipe["name"]
+    windows = {
+        name: heldout_windows(recipe, root, name, lm.config.block_size, count)
+        for name, count in counts.items()
+    }
+    torch.backends.cuda.matmul.allow_tf32 = True
+    results = evaluate(lm, windows, torch.device("cuda"), lm.config.eos_id)
+    return {
+        name: {"loss": r["loss"], "bits_per_byte": r["bits_per_byte"]}
+        for name, r in results.items()
+    }
+
+
+@app.local_entrypoint()
+def heldout(export: str, recipe: str = "hybrid/recipes/hybrid-40b-v1.json"):
+    """Pretraining held-out loss of `<run id>/export/<export>` (the 40B run's document counts)."""
+    from workflows.deadline import MAX_LAUNCH_SECONDS
+
+    counts = {"climbmix": 1000, "code": 300, "math": 300}
+    result = heldout_loss.remote(
+        export, load_config(recipe), counts, time.time() + MAX_LAUNCH_SECONDS
+    )
+    print(json.dumps({"export": export, "heldout": result}, indent=1))
+
+
+@app.function(image=image, cpu=8, memory=65536, timeout=1800, retries=0, volumes=VOLUMES)
+def export_latest(run_id):
+    """bf16 trunk export (config.json, model.safetensors) of a run's latest checkpoint."""
+    import torch
+    from model_hybrid.train import RunConfig, export_config, model_config_of
+    from safetensors.torch import save_file
+
+    from trainer.loop import latest_checkpoint
+
+    folder = Path("/runs") / run_id
+    latest = latest_checkpoint(folder)
+    state = torch.load(latest, map_location="cpu", weights_only=False)
+    model_config = model_config_of(RunConfig(**state["config"]))
+    out = folder / "export" / latest.stem
+    out.mkdir(parents=True, exist_ok=True)
+    weights = {
+        k: v.to(torch.bfloat16).contiguous()
+        for k, v in state["model"].items()
+        if not k.startswith("mtp.")
+    }
+    save_file(weights, out / "model.safetensors")
+    (out / "config.json").write_text(json.dumps(export_config(model_config), indent=2) + "\n")
+    progress = {"step": state["step"], "tokens": state["tokens"]}
+    (out / "progress.json").write_text(json.dumps(progress, indent=2) + "\n")
+    runs_volume.commit()
+    return {"export": f"{run_id}/{latest.stem}", "progress": progress}
+
+
+@app.local_entrypoint()
+def export(run_id: str):
+    """Export a run's latest checkpoint for evaluation (`<run id>/export/step-N/`)."""
+    print(json.dumps(export_latest.remote(run_id)))
 
 
 @app.local_entrypoint()
