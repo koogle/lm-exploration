@@ -68,6 +68,20 @@ it accepts and whether it needs behaviour log-probabilities, and has
 (`Tokens`: logits, log-probabilities now and when sampled, advantages). Settings that pair
 an algorithm with a source it does not accept fail when they are checked.
 Policy-gradient algorithms skip answers with zero advantage; AWR trains every answer.
+
+**StableReinforce** (`"stable_reinforce": {"top_k": 32, "sampler_kl_coef": 0.0}`, off
+when absent) is an off-policy correction that any algorithm takes on answers our sampler
+wrote: [`../trainer/rl/off_policy/stable_reinforce.py`](../trainer/rl/off_policy/stable_reinforce.py),
+the method behind Tinker's StableReinforce
+([reference](../references/stable-reinforce-2026-10-25.md)). The sampler (cached
+one-token decoding) and the learner (a full forward pass) compute probabilities with
+different kernels, so even fresh samples are slightly off-policy. The hook replaces each
+token's score ∇log p(y), which the algorithm's loss pushes up, by Score Centering's
+∇log p(y) − Σ_v q_v ∇log p_v. q is the sampler's distribution from its top `top_k`
+tokens, with the rest of the mass spread like the learner's; on the logits the gradient
+is onehot(y) − q instead of onehot(y) − p, so any bias between the engines cancels
+(`tests/test_stable_reinforce.py`). `sampler_kl_coef` adds Tinker's sampler–learner KL
+term. Centering needs temperature 1.
 `tests/test_rl.py` checks that GRPO's gradient is the plain policy gradient, PPO's
 clipping, and AWR's weights.
 
@@ -85,7 +99,8 @@ one H100. Steps 1–3 are the `sampler` and `reuse` sources; the `file` source d
    for math and 384 for code. The shared sampler
    [`../trainer/rollout.py`](../trainer/rollout.py) samples a left-padded batch with a
    key/value cache; its greedy output matches unbatched, uncached decoding exactly
-   (`tests/test_rollout.py`).
+   (`tests/test_rollout.py`). It also records each sampled token's log-probability and,
+   for StableReinforce, the sampler's top tokens.
 3. **Rewards** ([`../data/rl_tasks.py`](../data/rl_tasks.py)). 1 or 0; an answer
    without EOS within the limit scores 0. Code answers are checked in the sandbox in a
    background thread while math is sampled.
@@ -115,10 +130,12 @@ not resume: a relaunch reruns an unfinished RL stage from its parent.
 ### Logged
 
 Every step: reward, share of uniform groups, answer length and truncation rate per task;
-answers trained on; optimizer updates so far; the algorithm's statistics (for `grpo`, the share of
-clipped tokens); mean NLL of the sampled tokens; KL to the parent; replay loss; gradient
-norm; resting prompts; generation and training seconds. Every evaluation: validation
-accuracy and truncation per task, and replay validation loss per source.
+answers trained on; optimizer updates so far; the algorithm's statistics (for `grpo`,
+the share of clipped tokens); mean NLL of the sampled tokens; KL to the parent; with
+StableReinforce, the sampler–learner mismatch (mean sampler minus learner
+log-probability of the sampled tokens); replay loss; gradient norm; resting prompts; generation and training seconds.
+Every evaluation: validation accuracy and truncation per task, and replay validation
+loss per source.
 
 Signs to watch: rewards rising while EvalPlus pass@1 does not (reward hacking), sampled
 NLL collapsing toward zero while reward plateaus (lost exploration), truncation rising.

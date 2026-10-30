@@ -10,7 +10,10 @@ Choosing a token: the repetition penalty divides positive and multiplies negativ
 logits of tokens the row already generated; temperature 0 is greedy; otherwise logits
 are divided by the temperature, cut to the `top_k` largest (0 keeps all) and to the
 smallest set whose probability reaches `top_p` (keeping the token that crosses it), and
-sampled.
+sampled. With `temperature` above 0 the sampler also returns its log-probability of each
+sampled token and, with `record_top_k`, its `record_top_k` likeliest tokens and their
+log-probabilities, all from the distribution the token was drawn from: what RL needs to
+compare sampler and learner (`trainer/rl/`).
 """
 
 from dataclasses import dataclass
@@ -66,13 +69,14 @@ def forward(model, tokens, positions, cache, start, valid):
 
 
 def choose(logits, seen, temperature, top_k, top_p, penalty, generator):
-    """Next token per row from `[batch, vocab]` logits; `seen` marks generated tokens."""
+    """(next token per row, log-probabilities `[batch, vocab]` it was drawn from, None
+    when greedy) from `[batch, vocab]` logits; `seen` marks generated tokens."""
     if penalty != 1.0:
         logits = torch.where(
             seen, torch.where(logits > 0, logits / penalty, logits * penalty), logits
         )
     if temperature == 0:
-        return logits.argmax(-1)
+        return logits.argmax(-1), None
     logits = logits / temperature
     if top_k:
         cutoff = logits.topk(min(top_k, logits.size(-1)), -1).values[:, -1:]
@@ -84,15 +88,22 @@ def choose(logits, seen, temperature, top_k, top_p, penalty, generator):
         drop = ordered.cumsum(-1) - ordered >= top_p
         probabilities = probabilities.scatter(-1, order, ordered.masked_fill(drop, 0))
         probabilities = probabilities / probabilities.sum(-1, keepdim=True)
-    return torch.multinomial(probabilities, 1, generator=generator)[:, 0]
+    chosen = torch.multinomial(probabilities, 1, generator=generator)[:, 0]
+    return chosen, probabilities.log()
 
 
 @dataclass
 class Samples:
-    """New token IDs per prompt (without EOS) and whether each ended in EOS."""
+    """New token IDs per prompt (without EOS) and whether each ended in EOS; when
+    sampling, the sampler's log-probability of each new token (EOS included) `logprobs`
+    `[batch, steps]`, and with `record_top_k` its likeliest tokens `top_ids` and their
+    `top_logprobs` `[batch, steps, record_top_k]`."""
 
     completions: list
     finished: list
+    logprobs: torch.Tensor | None = None
+    top_ids: torch.Tensor | None = None
+    top_logprobs: torch.Tensor | None = None
 
 
 @torch.no_grad()
@@ -107,6 +118,7 @@ def sample(
     top_p=1.0,
     penalty=1.0,
     stop=None,
+    record_top_k=0,
 ):
     """Decode up to `max_new_tokens` after each prompt (token ID lists); see `Samples`.
 
@@ -130,11 +142,22 @@ def sample(
     seen = torch.zeros((batch, model.config.vocab_size), dtype=torch.bool, device=device)
     done = torch.zeros(batch, dtype=torch.bool, device=device)
     ended = torch.zeros(batch, dtype=torch.bool, device=device)
+    record = temperature != 0
+    if record:
+        logprobs = torch.zeros((batch, max_new_tokens), device=device)
+        top_ids = torch.zeros(
+            (batch, max_new_tokens, record_top_k), dtype=torch.long, device=device
+        )
+        top_logprobs = torch.zeros((batch, max_new_tokens, record_top_k), device=device)
     with autocast:
         logits = forward(model, tokens, positions, cache, 0, valid)
     steps = 0
     for step in range(max_new_tokens):
-        chosen = choose(logits, seen, temperature, top_k, top_p, penalty, generator)
+        chosen, scores = choose(logits, seen, temperature, top_k, top_p, penalty, generator)
+        if record:
+            logprobs[:, step] = scores.gather(1, chosen[:, None])[:, 0]
+            if record_top_k:
+                top_logprobs[:, step], top_ids[:, step] = scores.topk(record_top_k, -1)
         chosen = torch.where(done | ended, eos, chosen)
         generated[:, step] = chosen
         seen[torch.arange(batch, device=device), chosen] = True
@@ -154,4 +177,9 @@ def sample(
     completions = []
     for row in generated[:, :steps].tolist():
         completions.append(row[: row.index(eos)] if eos in row else row)
-    return Samples(completions, done.tolist())
+    if not record:
+        return Samples(completions, done.tolist())
+    recorded = (logprobs[:, :steps], top_ids[:, :steps], top_logprobs[:, :steps])
+    if not record_top_k:
+        recorded = (recorded[0], None, None)
+    return Samples(completions, done.tolist(), *recorded)
