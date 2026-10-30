@@ -11,7 +11,7 @@ from contextlib import nullcontext
 from datetime import timedelta
 from pathlib import Path
 
-from training_data.subword import LOSS_IGNORE_INDEX
+from training_data.subword import EOS_TOKEN_ID, LOSS_IGNORE_INDEX
 
 
 def trial(manifest, microbatch, timed_steps, output, benchmark_replay=False):
@@ -29,7 +29,11 @@ def trial(manifest, microbatch, timed_steps, output, benchmark_replay=False):
     try:
         # Unequal nonpadding counts exercise the required world/global-token scaling.
         torch.manual_seed(123)
-        tiny = GPT(ModelConfig(vocab_size=64, block_size=16, n_layer=1, n_head=2, n_embd=32)).cuda()
+        tiny = GPT(
+            ModelConfig(
+                vocab_size=64, block_size=16, n_layer=1, n_head=2, n_embd=32, eos_id=EOS_TOKEN_ID
+            )
+        ).cuda()
         reference = copy.deepcopy(tiny) if rank == 0 else None
         tiny_ddp = DDP(tiny, device_ids=[rank])
         generator = torch.Generator().manual_seed(77)
@@ -65,7 +69,7 @@ def trial(manifest, microbatch, timed_steps, output, benchmark_replay=False):
         torch.cuda.empty_cache()
 
         torch.manual_seed(42)
-        config = ModelConfig(vocab_size=32768, block_size=2048)
+        config = ModelConfig(vocab_size=32768, block_size=2048, eos_id=EOS_TOKEN_ID)
         global_windows = 48
         local_windows = global_windows // world
         if global_windows % world or local_windows % microbatch:

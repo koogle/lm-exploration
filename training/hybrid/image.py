@@ -9,20 +9,15 @@ import modal
 CUDA_BASE = "nvidia/cuda:13.0.0-devel-ubuntu22.04"
 PACKAGES = ("torch==2.14.1", "numpy", "einops", "ninja", "fla-core==0.6.0", "packaging")
 
-
-def hybrid_image(*packages):
-    """Extra pip packages must precede local sources in a Modal image."""
-    return (
-        modal.Image.from_registry(CUDA_BASE, add_python="3.12")
-        .pip_install(*PACKAGES, *packages)
-        .env({"PYTHONPATH": "/project", "TORCH_CUDA_ARCH_LIST": "9.0"})
-        .add_local_dir("10m", "/project/model_10m", ignore=["__pycache__"])
-        .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__"])
-        .add_local_dir("tests", "/project/tests", ignore=["__pycache__", "fixtures"])
-    )
-
-
-image = hybrid_image()
+image = (
+    modal.Image.from_registry(CUDA_BASE, add_python="3.12")
+    .pip_install(*PACKAGES)
+    .env({"PYTHONPATH": "/project", "TORCH_CUDA_ARCH_LIST": "9.0"})
+    .add_local_dir("10m", "/project/model_10m", ignore=["__pycache__"])
+    .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
+    .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__"])
+    .add_local_dir("tests", "/project/tests", ignore=["__pycache__", "fixtures"])
+)
 
 # One function call per launch: no retries, and the call refuses to start once 24
 # hours have passed since launch (queue time included).

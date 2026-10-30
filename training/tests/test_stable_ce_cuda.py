@@ -78,7 +78,9 @@ class CudaCrossEntropyTests(unittest.TestCase):
         from trainer.loss import cross_entropy
 
         torch.manual_seed(3)
-        model = GPT(ModelConfig(vocab_size=512, block_size=64, n_layer=2, n_head=2, n_embd=64))
+        model = GPT(
+            ModelConfig(vocab_size=512, block_size=64, n_layer=2, n_head=2, n_embd=64, eos_id=2)
+        )
         model = model.cuda()
         x = torch.randint(0, 512, (4, 64), device="cuda")
         y = torch.randint(0, 512, (4, 64), device="cuda")

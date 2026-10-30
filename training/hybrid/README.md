@@ -172,8 +172,7 @@ yields `(parameter, role)` pairs (helper `declare` in [`roles.py`](roles.py)).
 | --- | --- | --- |
 | `muon` | Muon, LR 0.02, momentum 0.95, weight decay 0.1 | 2D hidden matrices in blocks and MTP: q/k/v/o, attention `gate_proj`, KDA `f_proj`/`g_proj`, SwiGLU, MTP `fuse` |
 | `adamw_decay` | AdamW, LR 3e-4, betas (0.9, 0.95), weight decay 0.1 | tied embedding/output table, KDA beta projection `b_proj` |
-| `adamw_no_decay` | AdamW, LR 3e-4, betas (0.9, 0.95), no weight decay | norm scales, attention sinks, gate biases, KDA `A_log`, `dt_bias`, convolution kernels, hint cell embeddings |
-| `adamw_fast` | AdamW, LR 3e-3, betas (0.9, 0.95), no weight decay | n-gram hint scales (models built with `hints=True`) |
+| `adamw_no_decay` | AdamW, LR 3e-4, betas (0.9, 0.95), no weight decay | norm scales, attention sinks, gate biases, KDA `A_log`, `dt_bias`, convolution kernels |
 
 Muon is `trainer.optimizers.Muon` (five-step Newton–Schulz with the original
 aspect-ratio scaling); its weight decay is decoupled, `p *= 1 - lr * 0.1`.
@@ -184,107 +183,59 @@ groups at `lr_scale = muon_lr / adamw_lr`, so `trainer.optimizers.set_learning_r
 applies one schedule factor to both. A parameter that no module declares, one
 declared twice, or a non-matrix declared for Muon raises.
 
+## Tokenizer and data recipe
+
+[`tokenizer.py`](tokenizer.py) pins zai-org/GLM-4.7-Flash's `tokenizer.json`
+(revision `7dd20894`, SHA-256 `19e77364…a82d`). On 2026-10-25 it was
+byte-identical to zai-org/GLM-5.3-Flash's (revision `46a050be`). It has 154,856
+entries; the model pads its embedding to 154,880. Documents end with
+`<|endoftext|>` (154820); GLM's chat (`<|system|>`, `<|user|>`, `<|assistant|>`,
+`<|observation|>`), reasoning (`<think>`) and tool (`<tool_call>`, `<arg_key>`, …)
+tokens keep their GLM ids, which `load()` verifies.
+
+[`recipes/hybrid-40b-v1.json`](recipes/hybrid-40b-v1.json) targets 40B tokens,
+each source read once (`max_passes: 1`):
+
+| Source | Share | Pinned input | Shards |
+| --- | ---: | --- | ---: |
+| ClimbMix | 70% | `karpathy/climbmix-400b-shuffle` | 600 |
+| Permissive code | 20% | `codeparrot/github-code-clean`, licenses MIT, Apache-2.0, BSD-2/3, ISC, CC0, Unlicense | 80 |
+| Math | 10% | `HuggingFaceTB/finemath` `finemath-4plus` | 38 |
+
+The last shard of each source is held out for evaluation. Preparation drops any
+document sharing a 13-token n-gram with the test sets of GSM8K, MATH, HumanEval,
+MBPP, MMLU, ARC and HellaSwag (validation), all pinned by revision.
+
+[`data.py`](data.py) turns each upstream parquet file into a shard of uint32 GLM
+ids (documents shuffled within the shard, each ending in EOS) plus per-document
+token and byte counts. `PreparedMixture` reads each source's shards in a seeded
+order and packs 4,097-token windows (consecutive windows share one token), each
+from the source furthest below its weight; it is resumable and waits for shards
+that are still being prepared, so training can start while preparation runs.
+
+[`modal_data.py`](modal_data.py) prepares shards on Modal CPUs (8 cores, one call
+per shard, up to 48 in parallel), held-out shards first and then in the order
+training reads them, onto the `lm-exploration-hybrid-data` volume:
+
+```sh
+uv run modal run --detach -m model_hybrid.modal_data::main --run-id <id>
+```
+
+The launch fixes a deadline 24 hours ahead; an independent supervisor cancels
+every recorded call then, and each call has `retries=0` and a timeout bounded by
+the deadline. Finished shards are skipped, so another launch continues. The
+coordinator writes `capacity.json` (train/held-out tokens, documents and drops
+per source) and the screen writes `screen.json`.
+
+Measured on the held-out shards (2026-10-25): ClimbMix 52.6M tokens per shard
+(103 of 84,992 documents screened out), code 139M (43,776 of 126,925 files outside
+the license allowlist, 740 screened out), FineMath-4+ 125M (8,281 of 104,680
+screened out). The screen holds 3,225,682 unique 13-grams. At those sizes the
+training shards hold about 31B ClimbMix, 11B code and 4.6B math tokens, above
+the 28B/8B/4B shares.
+
 The defaults (width 1536, 16 layers, 12 query / 4 KV heads, SwiGLU 4096) are
 placeholders until the 720M configuration is fixed in PR 8.
-
-## N-gram hints
-
-[`hints.py`](hints.py) implements the n-gram hints of the NanoGPT speedrun record
-([write-up](https://brunborg.com/n-gram-hinted-lm),
-[KellerJordan/modded-nanogpt PR 367](https://github.com/KellerJordan/modded-nanogpt/pull/367)).
-A position's contexts are its last 6, 10 and 20 input tokens within its document
-and row. A hint lists the tokens that followed the deepest matching context in an
-indexed corpus, with their counts. The deepest length, the total count (7 bins) and
-the top token's share (6 bins) form one of 168 cells (cell 0: no match).
-
-Keys are 48-bit context hashes with the 16-bit next token below them, held in
-sorted uint64 arrays with counts; a context's candidates form one range.
-`HintIndex` indexes training rows after their optimizer step, in background
-log-structured merges. It answers a step only from strictly earlier steps
-(typically lagging by up to `flush_steps`) and raises otherwise. A lookup reads a
-row's inputs up to the hinted position, never its labels, so a hint cannot carry a
-target. Evaluation tables come from training-split text only; `Table.filtered`
-keeps the contexts of a fixed validation set, so prefixes of billions of tokens fit
-in memory.
-
-`HybridConfig(hints=True)` adds `HintInjection`: the count-weighted mean of the
-candidates' (detached) embeddings times a per-cell scale, plus a per-cell
-embedding. The result joins the residual stream after the embedding, after the
-middle block and before the final norm, each with a learned scale. The scales use the
-record's warm starting values (4.0; 0.1, 8.0, 8.0) and the `adamw_fast` optimizer
-role at 10x the AdamW learning rate. Without hints, or where nothing matched, the
-model computes exactly what the same weights compute without the hint module.
-
-[`hint_pilot.py`](hint_pilot.py) trains two arms of the default configuration, one
-with hints from its own earlier steps, on the `climbmix-code-v6` snapshot (32K
-tokenizer). It then evaluates fixed validation rows without hints, with hints from
-the training rows, and with hints from longer training-split prefixes. With the
-32K vocabulary the default configuration has about 0.53B parameters; the 720M
-total in the plan assumes the GLM tokenizer's larger embedding table. From
-`training/` (one CPU supervisor, a CPU corpus job and two H100s):
-
-```sh
-uv run modal run --detach -m model_hybrid.modal_hint_pilot --run-id hint-pilot-01
-```
-
-### Pilot `hint-pilot-01` (2026-10-29)
-
-Both arms trained for 1900 steps (248,697,079 target tokens), seed 1234. Mean
-validation cross-entropy over the first 512 validation rows (1,047,109 targets):
-
-| Model | Hints at evaluation | Hinted targets | Validation loss |
-| --- | --- | --- | --- |
-| Baseline | none | — | 3.1401 |
-| Hinted | none | — | 3.1470 |
-| Hinted | its training rows (249M tokens) | 10.9% | 3.0614 |
-| Hinted | first 500M training-split tokens | 12.9% | 3.0473 |
-| Hinted | first 1B | 15.4% | 3.0269 |
-| Hinted | first 2B | 18.4% | 3.0038 |
-
-The training-row table rebuilt offline reproduced the online index's validation
-hints exactly. With hints from its own training rows the hinted arm is 0.079 nats
-below the baseline. Each doubling of the hint corpus took off another 0.014–0.023,
-reaching −0.136 at 2B tokens. Without hints, the hinted arm is 0.007 worse than the
-baseline, as the record also reports. Throughput was the same (about 47k tokens/s
-on one H100 per arm, about 88 minutes per arm). The learned site scales stayed near
-their starting values (0.062, 8.2, 7.4 at the end).
-
-#### Where the gain comes from
-
-`overlap_study` scores every validation target with both arms. It groups targets
-by segment, one document's span within a row. A segment's overlap is the share of
-its targets whose 20-token context occurs verbatim in the 2B-token table:
-
-| Segment overlap | Targets | Baseline | Hinted, own rows | Hinted, 2B | Share of the 2B gain |
-| --- | --- | --- | --- | --- | --- |
-| none | 76.0% | 3.2355 | 3.2262 | 3.2174 | 10% |
-| up to 10% | 16.6% | 2.8099 | 2.6915 | 2.5970 | 26% |
-| 10–50% | 5.8% | 2.9640 | 2.3743 | 2.0637 | 38% |
-| over 50% | 1.7% | 2.6837 | 1.6180 | 0.5843 | 26% |
-
-On the three quarters of validation text with no verbatim 20-token overlap, hints
-gain 0.009 (own rows) to 0.018 nats (2B). Most of the 0.136 total comes from the
-7.5% of targets in segments that substantially recur in the training split. There,
-hints mostly retrieve the continuation. Per position, the 2B table gives 20-token
-matches on 2.8% of targets: their loss falls from 2.87 to 0.31. Targets with no
-match at all move from 3.230 to 3.227. Without hints the hinted arm is no better on
-any group. This is exact-repeat retrieval, and the clean-text gain is small.
-Downstream evaluation has not been run.
-
-`model_hybrid.modal_hint_pilot::overlap_main --run-id <run>` reruns the study (one
-H100) and writes `overlap/overlap.json` and per-target `overlap/overlap-tokens.npz`. Metrics, logs, both checkpoints (safetensors with their configuration) and
-the hint tables are in the HF dataset `jfrick/lm-exploration-results` under
-`pr-109/hint-pilot-01/`. [`publish_hint_pilot.py`](publish_hint_pilot.py) copies a
-run there from the Modal volume:
-
-```sh
-uv run modal run -m model_hybrid.publish_hint_pilot --run-id hint-pilot-01
-```
-
-The supervisor records the call ids and deadline in
-`/runs/hint-pilot/<run>/supervisor.json` on the `lm-exploration-training` volume
-and cancels outstanding calls 24 hours after launch. Every function refuses to
-start unless its timeout ends before that deadline.
 
 ## Tests
 
@@ -293,7 +244,8 @@ From `training/`:
 ```sh
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
   tests.test_hybrid_sink_gate tests.test_hybrid_kda \
-  tests.test_hybrid_mtp tests.test_hybrid_optim tests.test_hybrid_hints -v
+  tests.test_hybrid_mtp tests.test_hybrid_optim \
+  tests.test_hybrid_tokenizer tests.test_hybrid_data -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
@@ -315,13 +267,11 @@ bf16 training steps of a small compiled hybrid model with the fla call outside t
 compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
 The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it.
 
-`test_hybrid_hints` compares lookups with a brute-force count over packed
-documents (all three lengths, cells and candidate weights). It checks that hints
-at positions up to t do not change when later tokens change, that contexts stop at
-document and row starts, and that the index refuses steps it holds. Filtered and
-saved tables must give identical hints. An all-unmatched batch must reproduce the
-model without hints exactly.
-`test_hybrid_optim` checks that every parameter lands in exactly one group, the
+`test_hybrid_data` prepares shards from small parquet files (license filter,
+empty documents, contamination drops, EOS layout, byte counts) and checks the
+mixture's weights, contiguity across shards, resume and the held-out windows;
+`test_hybrid_tokenizer` checks the pinned constants and the recipe, and the GLM
+file itself when downloaded. `test_hybrid_optim` checks that every parameter lands in exactly one group, the
 role of each parameter kind, the learning rates and decay per group, and a step
 plus state round trip. `test_hybrid_mtp` checks target alignment and boundary masking, the loss
 against an explicit computation, that the module never sees its own target,
