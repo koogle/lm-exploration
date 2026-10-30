@@ -125,7 +125,7 @@ The two recipes here run on the [generic toolkit](../sampling/README.md):
 [`decoding-presets.json`](decoding-presets.json) for the sweep and
 [`precision-fp32.json`](precision-fp32.json) for the FP32 check. Run them from `training/`
 with Modal credentials and the `lm-exploration-training` volume. Each launch uses one H100,
-a 30-minute hard timeout and no retries. The image pins PyTorch 2.6.0 and tokenizers 0.22.2.
+a 30-minute hard timeout and no retries. The image pins PyTorch 2.14.1 and tokenizers 0.22.2.
 
 ```sh
 modal run --detach -m sampling.modal_sample --recipe analysis/decoding-presets/decoding-presets.json \

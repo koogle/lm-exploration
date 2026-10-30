@@ -177,6 +177,7 @@ def train(
     model = GPT(
         ModelConfig(
             vocab_size=32768,
+            eos_id=EOS_TOKEN_ID,
             block_size=cfg["context"],
             **{k: cfg[k] for k in ("n_layer", "n_head", "n_embd")},
         )

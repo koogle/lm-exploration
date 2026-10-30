@@ -15,7 +15,9 @@ from trainer.optimizers import (
 
 class MuonTests(unittest.TestCase):
     def model(self):
-        return GPT(ModelConfig(vocab_size=64, block_size=8, n_layer=1, n_head=2, n_embd=16))
+        return GPT(
+            ModelConfig(vocab_size=64, block_size=8, n_layer=1, n_head=2, n_embd=16, eos_id=2)
+        )
 
     def test_partition_and_schedule(self):
         model = self.model()

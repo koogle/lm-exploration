@@ -22,7 +22,7 @@ def main(recipe, steps=20, warmup=3):
     from model_100m.model import GPT, ModelConfig
     from torch.nn import functional as F
     from torch.nn.parallel import DistributedDataParallel as DDP
-    from training_data.subword import VOCAB_SIZE
+    from training_data.subword import EOS_TOKEN_ID, VOCAB_SIZE
 
     from distributed.config import DistributedConfig
     from trainer import loss as loss_module
@@ -53,6 +53,7 @@ def main(recipe, steps=20, warmup=3):
                     n_layer=config.n_layer,
                     n_head=config.n_head,
                     n_embd=config.n_embd,
+                    eos_id=EOS_TOKEN_ID,
                 )
             ).cuda()
             ddp = DDP(

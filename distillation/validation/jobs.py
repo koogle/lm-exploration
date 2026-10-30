@@ -99,8 +99,9 @@ def student_run(settings, manifest, items, run_dir, deadline, eval_settings):
             print(json.dumps(entry), flush=True)
 
         torch.backends.cuda.matmul.allow_tf32 = True
+        eos = int(vocab.encode([IM_END])[0])
         model, summary = train(
-            settings, manifest["train"], vocab, run_dir, log, deadline
+            settings, manifest["train"], vocab, eos, run_dir, log, deadline
         )
         summary["vocabulary_size"] = vocab.size
         started = time.time()

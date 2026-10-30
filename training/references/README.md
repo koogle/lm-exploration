@@ -4,6 +4,9 @@ Source-backed reading notes and proposed experiments for our from-scratch models
 External results are attributed to their authors; proposals are not measured
 results or changes to the agreed training plan.
 
+- [N-gram hints on the hybrid model — 2026-10-29](n-gram-hints-2026-10-29.md):
+  a measured two-arm pilot of the NanoGPT speedrun's n-gram hints; the gain is mostly
+  retrieval of text that recurs in the training split.
 - [Mirendil Fern 0.1 and 10M-token context — 2026-10-26](mirendil-fern-2026-10-26.md):
   context-length BPB, RULER to 10M and agentic benchmarks, with a proposed
   byte-windowed context-length evaluation for our models.

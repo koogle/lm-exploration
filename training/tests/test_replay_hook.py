@@ -29,7 +29,7 @@ class ReplayHookTests(unittest.TestCase):
         )
         torch.manual_seed(0)
         self.model = GPT(
-            ModelConfig(vocab_size=32768, block_size=16, n_layer=1, n_head=2, n_embd=16)
+            ModelConfig(vocab_size=32768, eos_id=2, block_size=16, n_layer=1, n_head=2, n_embd=16)
         )
 
     def tearDown(self):
