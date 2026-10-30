@@ -57,8 +57,10 @@
               "math_share": 1.0
             },
             "algorithm": {
-              "name": "on_policy/grpo",
-              "score": "centered"
+              "name": "on_policy/grpo"
+            },
+            "stable_reinforce": {
+              "top_k": 32
             },
             "optimizer": {
               "lr": 1e-06,
@@ -93,8 +95,10 @@
               "math_share": 0.0
             },
             "algorithm": {
-              "name": "on_policy/grpo",
-              "score": "centered"
+              "name": "on_policy/grpo"
+            },
+            "stable_reinforce": {
+              "top_k": 32
             },
             "optimizer": {
               "lr": 1e-06,
@@ -129,8 +133,10 @@
               "math_share": 0.5
             },
             "algorithm": {
-              "name": "on_policy/grpo",
-              "score": "centered"
+              "name": "on_policy/grpo"
+            },
+            "stable_reinforce": {
+              "top_k": 32
             },
             "optimizer": {
               "lr": 1e-06,
