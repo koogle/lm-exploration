@@ -1,0 +1,58 @@
+{
+  "recipe": "/project/model_hybrid/recipes/hybrid-long32k-v1.json",
+  "model": {
+    "vocab_size": 154880,
+    "eos_id": 154820,
+    "block_size": 32768,
+    "n_layer": 16,
+    "n_embd": 1536,
+    "n_head": 12,
+    "n_kv_head": 4,
+    "head_dim": 128,
+    "mlp_hidden": 4224,
+    "layer_pattern": [
+      "kda",
+      "kda",
+      "kda",
+      "full"
+    ],
+    "n_kda_head": 12,
+    "rope_base": 1000000.0,
+    "z_loss": 0.0001,
+    "loss_chunk_size": 2048,
+    "mtp": false
+  },
+  "target_tokens": 2000000000,
+  "global_rows": 32,
+  "microbatch": 1,
+  "warmup_tokens": 50000000,
+  "decay_fraction": 1.0,
+  "optimizer": {
+    "muon_lr": 0.004,
+    "muon_momentum": 0.95,
+    "adamw_lr": 6e-05,
+    "adam_betas": [
+      0.9,
+      0.95
+    ],
+    "weight_decay": 0.1
+  },
+  "gradient_clip": 1.0,
+  "compile": true,
+  "checkpoint_seconds": 3600,
+  "keep_checkpoints": 1,
+  "eval_every_steps": 200,
+  "eval_documents": {
+    "repos": 40,
+    "books": 20,
+    "climbmix": 1000,
+    "code": 300,
+    "math": 300
+  },
+  "sample_every_steps": 400,
+  "log_every_steps": 10,
+  "hf_repo": "jfrick/hybrid-720m-long32k",
+  "hf_every_tokens": 100000000000,
+  "seed": 1234,
+  "init_from": "/runs/hybrid-720m-40b-01/export/tokens-039998980096"
+}

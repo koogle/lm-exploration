@@ -4,9 +4,9 @@ import json
 import unittest
 
 import numpy as np
-from model_hybrid import chat, sft_data
-from model_hybrid import tokenizer as glm
-from training_data import packed_shards
+from training_data import chat, chat_sft, packed_shards
+
+from tokenizer import glm
 
 XLAM_ROW = {
     "messages": [
@@ -55,7 +55,7 @@ def template_available():
 
 class ConversionTests(unittest.TestCase):
     def test_xlam_tool_calls_become_openai_tool_calls(self):
-        out = sft_data.convert(XLAM_ROW)
+        out = chat_sft.convert(XLAM_ROW)
         call = out["messages"][1]["tool_calls"][0]["function"]
         self.assertEqual(call["name"], "live_giveaways_by_type")
         self.assertEqual(json.loads(call["arguments"]), {"type": "beta"})
@@ -63,7 +63,7 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(out["tools"][0]["function"]["name"], "live_giveaways_by_type")
 
     def test_hermes_python_dicts_and_split_tool_responses(self):
-        out = sft_data.convert(HERMES_ROW)
+        out = chat_sft.convert(HERMES_ROW)
         roles = [m["role"] for m in out["messages"]]
         self.assertEqual(roles, ["system", "user", "assistant", "tool", "tool", "assistant"])
         calls = out["messages"][2]["tool_calls"]
@@ -73,9 +73,9 @@ class ConversionTests(unittest.TestCase):
 
     def test_thinking_and_unfinished_rows_are_dropped(self):
         thinking = {**XLAM_ROW, "chat_template_kwargs": {"enable_thinking": True}}
-        self.assertIsNone(sft_data.convert(thinking))
+        self.assertIsNone(chat_sft.convert(thinking))
         unfinished = {"messages": [{"role": "user", "content": "hi"}]}
-        self.assertIsNone(sft_data.convert(unfinished))
+        self.assertIsNone(chat_sft.convert(unfinished))
 
     def test_tool_instructions_go_to_system_and_trailing_turns_are_cut(self):
         block = (
@@ -86,7 +86,7 @@ class ConversionTests(unittest.TestCase):
             "messages": [*XLAM_ROW["messages"], {"role": "user", "content": "thanks"}],
             "chat_template_kwargs": {"xml_tools": [block]},
         }
-        out = sft_data.convert(row)
+        out = chat_sft.convert(row)
         self.assertEqual(
             out["messages"][0],
             {
@@ -110,7 +110,7 @@ class PackingTests(unittest.TestCase):
         return out
 
     def test_windows_keep_whole_conversations_and_mask_labels(self):
-        windows = list(sft_data.pack(self.conversations(), 11))
+        windows = list(chat_sft.pack(self.conversations(), 11))
         for inputs, labels in windows:
             self.assertEqual(inputs.shape, (11,))
             self.assertEqual(labels.shape, (11,))
@@ -126,14 +126,14 @@ class PackingTests(unittest.TestCase):
         from pathlib import Path
 
         with tempfile.TemporaryDirectory() as folder:
-            sft_data._write(Path(folder), "a", self.conversations())
-            sft_data._write(Path(folder), "b", self.conversations()[::-1])
+            chat_sft._write(Path(folder), "a", self.conversations())
+            chat_sft._write(Path(folder), "b", self.conversations()[::-1])
             recipe = {"files": ["a.parquet", "b.parquet"], "context": 11}
-            mixture = sft_data.ChatMixture(recipe, folder, seed=3)
+            mixture = chat_sft.ChatMixture(recipe, folder, seed=3)
             first = mixture.next_batch(2)
             state = mixture.state_dict()
             second = mixture.next_batch(2)
-            resumed = sft_data.ChatMixture(recipe, folder, seed=3)
+            resumed = chat_sft.ChatMixture(recipe, folder, seed=3)
             resumed.load_state_dict(state)
             again = resumed.next_batch(2)
             np.testing.assert_array_equal(second[0], again[0])
@@ -147,8 +147,8 @@ class PackingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             for name in ("chat", "agentic"):
                 Path(folder, name).mkdir()
-            sft_data._write(Path(folder, "chat"), "a", self.conversations())
-            sft_data._write(Path(folder, "agentic"), "b", self.conversations()[:2])
+            chat_sft._write(Path(folder, "chat"), "a", self.conversations())
+            chat_sft._write(Path(folder, "agentic"), "b", self.conversations()[:2])
             recipe = {
                 "name": "agentic",
                 "context": 11,
@@ -157,12 +157,12 @@ class PackingTests(unittest.TestCase):
                     {"name": "b", "repeat": 3},
                 ],
             }
-            mixture = sft_data.ChatMixture(recipe, Path(folder, "agentic"))
+            mixture = chat_sft.ChatMixture(recipe, Path(folder, "agentic"))
             self.assertEqual(len(mixture.order), 2 + 3 * 2)
-            again = sft_data.ChatMixture(recipe, Path(folder, "agentic"))
+            again = chat_sft.ChatMixture(recipe, Path(folder, "agentic"))
             self.assertEqual(mixture.order, again.order)
             self.assertEqual(
-                sft_data.subset_folder(recipe, Path(folder, "agentic"), "a"), Path(folder, "chat")
+                chat_sft.subset_folder(recipe, Path(folder, "agentic"), "a"), Path(folder, "chat")
             )
 
     def test_replay_rows_are_pretraining_windows_after_the_chat_rows(self):
@@ -187,21 +187,21 @@ class PackingTests(unittest.TestCase):
                 self.position = state["position"]
 
         with tempfile.TemporaryDirectory() as folder:
-            sft_data._write(Path(folder), "a", self.conversations())
-            sft_data._write(Path(folder), "b", self.conversations()[::-1])
+            chat_sft._write(Path(folder), "a", self.conversations())
+            chat_sft._write(Path(folder), "b", self.conversations()[::-1])
             recipe = {"files": ["a.parquet", "b.parquet"], "context": 11}
             mixture = packed_shards.ReplayMixture(
-                sft_data.ChatMixture(recipe, folder), Pretraining(), replay_rows=1
+                chat_sft.ChatMixture(recipe, folder), Pretraining(), replay_rows=1
             )
             inputs, labels, names = mixture.next_batch(3)
             self.assertEqual(names, ["chat", "chat", "climbmix"])
             self.assertEqual(inputs.shape, (3, 11))
             self.assertTrue((labels[2] >= 0).all())
-            self.assertTrue((labels[:2] == sft_data.IGNORE_INDEX).any())
+            self.assertTrue((labels[:2] == chat_sft.IGNORE_INDEX).any())
             state = mixture.state_dict()
             second = mixture.next_batch(2)
             resumed = packed_shards.ReplayMixture(
-                sft_data.ChatMixture(recipe, folder), Pretraining(), replay_rows=1
+                chat_sft.ChatMixture(recipe, folder), Pretraining(), replay_rows=1
             )
             resumed.load_state_dict(state)
             again = resumed.next_batch(2)
@@ -225,7 +225,7 @@ class RenderingTests(unittest.TestCase):
 
     def test_loss_mask_covers_assistant_output_and_turn_ends(self):
         tokenizer = glm.load()
-        conversation = sft_data.convert(HERMES_ROW)
+        conversation = chat_sft.convert(HERMES_ROW)
         ids, mask = chat.encode(tokenizer, conversation["messages"], conversation["tools"])
         trained = tokenizer.decode([i for i, m in zip(ids, mask) if m], skip_special_tokens=False)
         self.assertIn(

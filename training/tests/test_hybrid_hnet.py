@@ -335,7 +335,7 @@ class ByteDataTests(unittest.TestCase):
 
     @unittest.skipUnless(Path(LOCAL).exists(), "GLM tokenizer.json not downloaded")
     def test_glm_tokens_decode_to_utf8(self):
-        from model_hybrid import tokenizer as glm
+        from tokenizer import glm
 
         tokenizer = glm.load(LOCAL)
         table = byte_data.token_byte_table(tokenizer, glm.EOS_ID)

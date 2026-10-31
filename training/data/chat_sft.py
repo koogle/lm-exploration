@@ -1,6 +1,6 @@
 """Chat SFT data: OpenAI-style conversations in GLM's chat format, packed for training.
 
-A recipe (recipes/chat-sft-*.json) names a Hugging Face dataset at a pinned revision
+A recipe (data/recipes/chat-sft-*.json) names a Hugging Face dataset at a pinned revision
 and its parquet files, each one subset named by its file stem; `subsets` adds
 subsets prepared elsewhere (`prepared_in` another recipe's folder, or written into
 this recipe's folder by another stage), each read `repeat` times per pass (a
@@ -31,9 +31,9 @@ import re
 from pathlib import Path
 
 import numpy as np
+from training_data import chat
 
-from . import chat
-from . import tokenizer as glm
+from tokenizer import glm
 
 IGNORE_INDEX = -100
 STOP_IDS = (

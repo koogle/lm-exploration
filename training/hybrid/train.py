@@ -4,11 +4,12 @@
 loop: the hybrid model with role-declared Muon/AdamW, prepared-shard or chat SFT
 data with optional replay (budget: every window token), the objective mean
 next-token loss plus the decaying MTP weight times mean MTP loss (each over its
-global target count), held-out loss, bits per byte, gate and sink statistics,
-fixed-prompt samples, and bf16 exports to the run's HF repo every
-`hf_every_tokens` and at the end. `HNetFamily` does the same for a run config with
-`"architecture": "hnet"`: the byte-level H-Net (hnet.py) on the recipe's shards
-decoded to UTF-8 bytes (byte_data.py); budget, context and batch rows count bytes.
+global target count), held-out loss, bits per byte, gate and sink statistics and
+loss by in-document position above 4K context, fixed-prompt samples, and bf16
+exports to the run's HF repo every `hf_every_tokens` and at the end. `HNetFamily`
+does the same for a run config with `"architecture": "hnet"`: the byte-level H-Net
+(hnet.py) on the recipe's shards decoded to UTF-8 bytes (byte_data.py); budget,
+context and batch rows count bytes.
 
     torchrun --nproc_per_node=8 -m model_hybrid.train --config <run.json> \\
         --run-dir <dir> --data-root <dir> --stop-unix <time> [--max-tokens N] \\
@@ -20,6 +21,7 @@ A run directory resumes from `--resume` or else its latest checkpoint;
 
 import argparse
 import dataclasses
+import itertools
 import json
 import math
 import os
@@ -28,10 +30,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from tokenizer import glm
+
 from . import documents as doc_utils
 from . import hnet
 from . import model as hybrid
-from . import tokenizer as glm
 
 H100_BF16_FLOPS = 989e12
 SAMPLE_PROMPTS = (
@@ -140,9 +143,45 @@ def gate_sink_statistics(lm):
     return stats
 
 
+# In-document position buckets for long-context evaluation (used above 4K context).
+POSITION_EDGES = (0, 1024, 4096, 16384, 32768)
+
+
+def document_positions(inputs, eos_id):
+    """Each input token's position within its document; EOS ends a document."""
+    positions = np.zeros(inputs.shape, dtype=np.int64)
+    for row, tokens in enumerate(inputs):
+        position = 0
+        for column, token in enumerate(tokens):
+            positions[row, column] = position
+            position = 0 if token == eos_id else position + 1
+    return positions
+
+
+def position_losses(lm, inputs, labels, device, eos_id, edges):
+    """Held-out loss of the targets whose input sits in each in-document position bucket."""
+    positions = document_positions(inputs, eos_id)
+    out = {}
+    for low, high in itertools.pairwise(edges):
+        keep = (positions >= low) & (positions < high) & (labels != -100)
+        if not keep.any():
+            continue
+        ce, count = 0.0, 0
+        for start in range(0, len(inputs), 4):
+            x = torch.from_numpy(inputs[start : start + 4]).to(device)
+            y = torch.from_numpy(np.where(keep, labels, -100)[start : start + 4]).to(device)
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                losses = lm(x, y)
+            ce, count = ce + losses["ce"].item(), count + int(losses["count"])
+        if count:
+            out[f"{low}-{high}"] = ce / count
+    return out
+
+
 @torch.no_grad()
 def evaluate(lm, heldout, device, eos_id):
-    """Held-out loss, bits per byte and MTP loss per source; gate/sink activations."""
+    """Held-out loss, bits per byte and MTP loss per source; gate/sink activations; above
+    4K context also the loss per in-document position bucket."""
     lm.eval()
     results = {}
     hybrid.Attention.record_statistics = True
@@ -177,6 +216,12 @@ def evaluate(lm, heldout, device, eos_id):
                     float(np.mean([s["sink_weight"] for s in layer])) for layer in layers
                 ],
             }
+            if lm.config.block_size > POSITION_EDGES[2]:
+                edges = [e for e in POSITION_EDGES if e < lm.config.block_size]
+                edges.append(lm.config.block_size)
+                results[name]["loss_by_position"] = position_losses(
+                    lm, inputs, labels, device, eos_id, edges
+                )
             if chunking["chunks"]:
                 results[name]["bytes_per_chunk"] = chunking["positions"] / chunking["chunks"]
     finally:
@@ -260,10 +305,10 @@ def heldout_windows(recipe, root, name, context, max_documents):
 
     Pretraining sources concatenate whole documents into one stream
     (`packed_shards.heldout_windows`); chat subsets pack whole conversations and train
-    only assistant tokens (`sft_data.chat_heldout_windows`, None when empty).
+    only assistant tokens (`chat_sft.chat_heldout_windows`, None when empty).
     """
     if recipe.get("format") == "chat-sft":
-        from .sft_data import chat_heldout_windows
+        from training_data.chat_sft import chat_heldout_windows
 
         return chat_heldout_windows(recipe, root, name, context, max_documents)
     from training_data.packed_shards import heldout_windows as source_windows
@@ -319,16 +364,16 @@ def recipe_data(config, data_root):
         }
 
     if recipe.get("format") == "chat-sft":
-        from . import sft_data
+        from training_data import chat_sft
 
         def mixture():
-            return with_replay(sft_data.ChatMixture(recipe, root, config.seed))
+            return with_replay(chat_sft.ChatMixture(recipe, root, config.seed))
 
         def heldout(mixture, context):
             count = config.eval_documents["chat"]
             own = {
                 name: windows
-                for name, _, _ in sft_data.subsets(recipe)
+                for name, _, _ in chat_sft.subsets(recipe)
                 if (windows := heldout_windows(recipe, root, name, context, count)) is not None
             }
             return own | replay_heldout(context)
@@ -394,9 +439,9 @@ class HybridFamily:
             (identity, factory), self.heldout_factory, chat = data, None, False
         self.identity, self.factory = identity, factory
         if chat:
-            from . import sft_data
+            from training_data import chat_sft
 
-            self.sampling = (sft_data.sample_prompts(), sft_data.STOP_IDS, 160)
+            self.sampling = (chat_sft.sample_prompts(), chat_sft.STOP_IDS, 160)
         else:
             self.sampling = (SAMPLE_PROMPTS, (), self.sample_length)
         self.lm, self.uploads = None, []
@@ -448,37 +493,36 @@ class HybridFamily:
         }
 
     def source_files(self):
-        from training_data import mixture, packed_shards
+        from training_data import chat, chat_sft, mixture, packed_shards
+
+        from tokenizer import glm
 
         from . import (
-            chat,
             cuda_extension,
             documents,
             fused_loss,
             kda,
             kda_convolution,
-            sft_data,
             softmax_kernel,
         )
         from . import model as hybrid_model
-        from . import tokenizer as hybrid_tokenizer
 
         modules = (
-            chat,
             cuda_extension,
             documents,
             fused_loss,
             hybrid_model,
             kda,
             kda_convolution,
-            sft_data,
             softmax_kernel,
-            hybrid_tokenizer,
         )
         files = {f"hybrid.{Path(m.__file__).stem}": Path(m.__file__) for m in modules}
         return {
             "family": Path(__file__),
             **files,
+            "chat": Path(chat.__file__),
+            "chat_sft": Path(chat_sft.__file__),
+            "tokenizer_glm": Path(glm.__file__),
             "packed_shards": Path(packed_shards.__file__),
             "mixture": Path(mixture.__file__),
         }

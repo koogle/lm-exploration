@@ -2,7 +2,7 @@
 
 The hybrid LM with the pinned GLM tokenizer. A prompt text (from the data,
 `training_data.rl_tasks`) is one user turn in GLM's chat template (`chat.render`,
-generation prompt included); an answer ends at any of `sft_data.STOP_IDS` (EOS or the
+generation prompt included); an answer ends at any of `chat_sft.STOP_IDS` (EOS or the
 next turn's role token).
 Sampling is `generate.generate_batch` (one-pass prefill, CUDA-graph decoding) on a bf16
 copy of the policy that is refreshed in place before every rollout. Parents may carry
@@ -14,9 +14,11 @@ import dataclasses
 from pathlib import Path
 
 import torch
+from training_data import chat, chat_sft
 
-from . import chat, generate, sft_data
-from . import tokenizer as glm
+from tokenizer import glm
+
+from . import generate
 from .model import HybridConfig, HybridLM
 
 
@@ -30,7 +32,7 @@ class HybridModel:
     def __init__(self):
         self.tokenizer_sha256 = glm.SHA256
         self.special_tokens = {"eos": glm.EOS_ID}
-        self.stop_ids = tuple(sft_data.STOP_IDS)
+        self.stop_ids = tuple(chat_sft.STOP_IDS)
         self.sampler = None
 
     def tokenizer(self):
@@ -97,21 +99,21 @@ class HybridModel:
         )
 
         modules = (
-            chat,
             cuda_extension,
             documents,
             fused_loss,
             generate,
-            glm,
             kda,
             kda_convolution,
             model,
-            sft_data,
             softmax_kernel,
         )
         files = {f"hybrid_{Path(m.__file__).stem}": Path(m.__file__) for m in modules}
         kernels = Path(cuda_extension.__file__).with_name("kernels")
         files.update({f"hybrid_kernel_{p.stem}": p for p in sorted(kernels.glob("*.cu"))})
+        # The chat format and the tokenizer pin the family's prompts and stop tokens.
+        files.update(chat=Path(chat.__file__), chat_sft=Path(chat_sft.__file__))
+        files["tokenizer_glm"] = Path(glm.__file__)
         return {"hybrid_post_train": Path(__file__), **files}
 
     def export(self, model, output, progress, repo):
