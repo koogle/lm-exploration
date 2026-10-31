@@ -3,21 +3,20 @@
 A pool row is one problem: `id`, `task`, `split` (`train` or `validation`), `source`,
 `license` and `question`, plus for `math` the gold final answer `answer`, and for
 `code` the function `declaration` and unit `tests`, run in the sandbox's `test_style`
-(`functions` unless the row names `pytest`). The prompt is the SFT prompt of the
-task, so an SFT model answers in the trained format:
+(`functions` unless the row names `pytest`). Every row also holds its request text
+`prompt` and its `answer_format`, from the pool's prompt style (`PROMPT_STYLES`); a
+model family only renders the prompt text in its own format (`trainer/families.py`):
 
-- math: `Question: ...\\nAnswer:`; the completion is correct if Math-Verify finds its
-  final answer equal to `answer`.
-- code: `code_prompt`; the completion is the program, correct if every test passes in
-  the code sandbox (`training_data.sandbox`).
+- `sft`: the task's SFT prompt (`Question: ...\\nAnswer:`, `code_prompt`), so an SFT
+  model answers in the trained format; `plain` answers: math is correct if Math-Verify
+  finds the completion's final answer equal to `answer`, code is the whole completion.
+- `boxed`: the question with an instruction to finish with `\\boxed{answer}` or to give
+  one Python code block; `boxed` answers: the last `\\boxed{...}`, compared with `answer`
+  by Math-Verify (LaTeX and expressions), or the last fenced Python block.
 
-A completion that does not end in one of its family's stop tokens within the token
-limit scores 0 regardless. The family's `answer_format` says where the answer is:
-
-- `plain`: the whole completion (the subword SFT formats above).
-- `boxed`: for math the last `\\boxed{...}`, compared with `answer` by Math-Verify (LaTeX
-  and expressions); for code the last fenced Python block. Prompts asking for these are
-  the family's (`model_hybrid.post_train`).
+Code is correct if every test passes in the code sandbox (`training_data.sandbox`). A
+completion that does not end in one of its family's stop tokens within the token limit
+scores 0 regardless.
 """
 
 import hashlib
@@ -29,6 +28,12 @@ from training_data.code_sft import code_prompt, mbpp_row, opencodeinstruct_row
 from training_data.math_sft import answer_matches, ngrams, question_prompt
 
 FORMAT = "rl-pool-v1"
+PROMPT_STYLES = ("sft", "boxed")
+MATH_INSTRUCTION = "Solve the problem step by step, then give the final answer as \\boxed{answer}."
+CODE_INSTRUCTION = (
+    "Write the Python {kind} `{declaration}`. Give the complete solution, with any imports it "
+    "needs, in one ```python code block."
+)
 # (repo, revision) of the optional sources.
 MATH_LIGHTEVAL = ("DigitalLearningGmbH/MATH-lighteval", "0530c78699ea5e8eb5530600900e1f328b48acad")
 KODCODE = ("KodCode/KodCode-Light-RL-10K", "dcf78a8bbba9a613b596ce993c4921a38687dfcc")
@@ -38,9 +43,30 @@ CODE_BLOCK = re.compile(r"```(?:python|py)?\s*\n(.*?)```", re.DOTALL)
 
 
 def prompt(row):
+    """The task's SFT prompt of a problem."""
     if row["task"] == "math":
         return question_prompt(row["question"])
     return code_prompt(row["question"], row["declaration"])
+
+
+def instructed(row):
+    """The question with an instruction saying where the answer goes (`boxed` style)."""
+    if row["task"] == "math":
+        return f"{row['question'].strip()}\n\n{MATH_INSTRUCTION}"
+    # `def add(a, b):` asks for the function `add(a, b)`, `class Stack:` for the class `Stack`.
+    keyword, _, declaration = row["declaration"].partition(" ")
+    kind = "class" if keyword == "class" else "function"
+    instruction = CODE_INSTRUCTION.format(kind=kind, declaration=declaration.removesuffix(":"))
+    return f"{row['question'].strip()}\n\n{instruction}"
+
+
+def styled(row, style):
+    """The problem with its `prompt` and `answer_format` in prompt style `style`."""
+    if style == "sft":
+        return {**row, "prompt": prompt(row), "answer_format": "plain"}
+    if style == "boxed":
+        return {**row, "prompt": instructed(row), "answer_format": "boxed"}
+    raise ValueError(f"prompt style must be one of {PROMPT_STYLES}")
 
 
 def last_boxed(text):
@@ -80,14 +106,15 @@ def program(text, answer_format):
     return blocks[-1] if blocks else None
 
 
-def rewards(rows, completions, finished, sandbox, answer_format):
-    """1.0 or 0.0 per (row, completion text, ended in a stop token), reading answers in
-    `answer_format`; code runs in `sandbox`."""
-    if answer_format not in ANSWER_FORMATS:
-        raise ValueError(f"answer_format must be one of {ANSWER_FORMATS}")
+def rewards(rows, completions, finished, sandbox):
+    """1.0 or 0.0 per (row, completion text, ended in a stop token), reading each answer
+    in its row's `answer_format`; code runs in `sandbox`."""
     scores = [0.0] * len(rows)
     code = []
     for index, (row, text, done) in enumerate(zip(rows, completions, finished, strict=True)):
+        answer_format = row["answer_format"]
+        if answer_format not in ANSWER_FORMATS:
+            raise ValueError(f"answer_format must be one of {ANSWER_FORMATS}")
         if not done:
             continue
         if row["task"] == "math":
@@ -163,6 +190,8 @@ def load(path):
         row = json.loads(line)
         if row["task"] not in TASKS or row["split"] not in pool:
             raise ValueError(f"Invalid pool row {row.get('id')}")
+        if not row.get("prompt") or row.get("answer_format") not in ANSWER_FORMATS:
+            raise ValueError(f"Pool row {row['id']} has no prompt and answer format")
         pool[row["split"]].append(row)
     if not all(pool[split] for split in pool):
         raise ValueError("Pool needs train and validation rows")
@@ -184,6 +213,7 @@ def build(
     math_levels=("Level 1", "Level 2", "Level 3"),
     kodcode_difficulties=("easy", "medium"),
     heldout_fraction=0.02,
+    prompt_style="sft",
 ):
     """Write `pool.jsonl` and `report.json` to `output`.
 
@@ -198,8 +228,11 @@ def build(
     answer is the solution's last `\\boxed{}`) and KodCode-Light-RL problems of
     `kodcode_difficulties` with one function (`kodcode` rows; pytest tests), each with a
     hash-selected `heldout_fraction` as validation. A KodCode problem is kept only if its
-    reference solution passes its tests (`check`: the code sandbox's `run`).
+    reference solution passes its tests (`check`: the code sandbox's `run`). Every row
+    gets its prompt and answer format in `prompt_style` (`PROMPT_STYLES`).
     """
+    if prompt_style not in PROMPT_STYLES:
+        raise ValueError(f"prompt style must be one of {PROMPT_STYLES}")
     output = Path(output)
     blocked = {
         "math": set().union(*(ngrams(q) for q in math_tests)),
@@ -213,7 +246,7 @@ def build(
         elif ngrams(row["question"]) & blocked[row["task"]]:
             counts["contaminated"] += 1
         else:
-            rows.append(row)
+            rows.append(styled(row, prompt_style))
             key = f"{row['task']}/{row['split']}"
             counts[key] = counts.get(key, 0) + 1
 
@@ -262,6 +295,7 @@ def build(
         "format": FORMAT,
         "pool_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "decontamination": "13-word n-grams of GSM8K/SVAMP test and code benchmark problems",
+        "prompt_style": prompt_style,
         "kept": counts,
     }
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")

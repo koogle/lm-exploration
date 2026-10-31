@@ -381,12 +381,11 @@ class SubwordFamily:
 
 class SubwordModel:
     """The subword family for the post-training stages (`trainer/families.py`): the
-    model_100m GPT, the frozen subword tokenizer, prompts after BOS, answers ending in
-    EOS, read as plain text, and the custom-kernel sampler (`trainer/rollout.py`)."""
+    model_100m GPT, the frozen subword tokenizer, prompt texts after BOS, answers ending in
+    EOS, and the custom-kernel sampler (`trainer/rollout.py`)."""
 
     name = "subword"
     module = "model_100m.model"
-    answer_format = "plain"
     # The sampler records log-probabilities and top tokens (off-policy corrections).
     records_sampler = True
     # The checkpoint is the artifact: no exports.
@@ -425,11 +424,9 @@ class SubwordModel:
     def context(self, model):
         return model.config.block_size
 
-    def prompt_ids(self, tokenizer, row):
-        """BOS and the task's SFT prompt of a pool row (`rl_tasks.prompt`)."""
-        from training_data import rl_tasks
-
-        return [BOS_TOKEN_ID, *tokenizer.encode(rl_tasks.prompt(row), add_special_tokens=False).ids]
+    def prompt_ids(self, tokenizer, text):
+        """BOS and the prompt text."""
+        return [BOS_TOKEN_ID, *tokenizer.encode(text, add_special_tokens=False).ids]
 
     def sample(self, model, prompts, limit, temperature, generator, record_top_k, engine):
         """(rollout.Samples without the EOS, the token that ended each finished row)."""

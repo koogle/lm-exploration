@@ -32,7 +32,8 @@ def load(path):
         if row["task"] not in rl_tasks.TASKS or row["reward"] not in (0.0, 1.0):
             raise ValueError(f"Invalid trajectory {row.get('id')}")
         if row["split"] == "train":
-            rows.append(row)
+            # The answers are SFT-format texts: the problems keep their SFT prompts.
+            rows.append(rl_tasks.styled(row, "sft"))
     if not rows:
         raise ValueError("Trajectories need training rows")
     return rows, hashlib.sha256(raw).hexdigest()

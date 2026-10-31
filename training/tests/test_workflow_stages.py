@@ -220,7 +220,7 @@ class CheckpointTests(unittest.TestCase):
             torch.save(saved, path)
             _, description, family = parent(path)
             self.assertEqual(description.source_sha256, {"model": "earlier model code"})
-            self.assertEqual((family.name, family.answer_format), ("subword", "plain"))
+            self.assertEqual(family.name, "subword")
             saved["architecture"]["module"] = "model_hybrid.model"
             torch.save(saved, path)
             with self.assertRaisesRegex(ValueError, "tokenizer"):

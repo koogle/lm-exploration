@@ -134,7 +134,7 @@ def train(
     tokenizer = family.tokenizer()
 
     def with_prompt(row):
-        return {**row, "prompt_ids": family.prompt_ids(tokenizer, row)}
+        return {**row, "prompt_ids": family.prompt_ids(tokenizer, row["prompt"])}
 
     pool, pool_hash = rl_tasks.load(pool_path)
     pool = {

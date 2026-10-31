@@ -60,7 +60,10 @@ task's share is its share of rows; validation buckets are `task/bucket`.
 [`../data/rl_tasks.py`](../data/rl_tasks.py), `modal_sft_data::rl_pool`, format
 `rl-pool-v1`: problems with checkable answers and their rewards (1 if the answer ends in
 EOS and is correct, else 0). Math answers are checked with Math-Verify against the GSM8K
-final answer; code answers by running the tests in the sandbox. `rl-pool-math-code-03`:
+final answer; code answers by running the tests in the sandbox. Each problem holds its
+prompt text and answer format, here the `sft` style (the SFT prompts, plain answers).
+`rl-pool-math-code-04` (the problems of `rl-pool-math-code-03`, which predates the prompt
+fields):
 
 | Split | Math | Code |
 | --- | ---: | ---: |
@@ -77,7 +80,7 @@ uv run --all-extras modal run -m modal_scripts.modal_teacher --source code-oci-m
   --data-id code-teacher-qwen35-02 --shards 8 --samples 2
 uv run --all-extras modal run -m modal_scripts.modal_sft_data::mixture --data-id mixture-math-code-02 \
   --math math-gsm8k-metamath-02 --code code-teacher-qwen35-02
-uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool --data-id rl-pool-math-code-03
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool --data-id rl-pool-math-code-04
 ```
 
 Preparation reports are in `jfrick/lm-exploration-results` under `pr-87/data/`.
