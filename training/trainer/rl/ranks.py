@@ -2,8 +2,10 @@
 
 `Ranks` wraps the collectives the loop needs (a process group initialized by the caller):
 `shard` takes this rank's share of a list, `gather` concatenates every rank's lists,
-`sum` adds numbers across ranks, `average_gradients` replaces each gradient by its mean
-over ranks, and `broadcast` sends rank 0's value. `Ranks()` is the single process.
+`sum` adds numbers across ranks, `sum_values` adds dictionaries of numbers in one
+collective (every key any rank has, so a rank that trained no answers and recorded fewer
+statistics stays in step), `average_gradients` replaces each gradient by its mean over
+ranks, and `broadcast` sends rank 0's value. `Ranks()` is the single process.
 
 `run_ranks` starts one process per GPU. The launching process keeps what the ranks
 cannot hold themselves (the code sandbox, the volume, the stop request) and serves it to
@@ -40,6 +42,14 @@ class Ranks:
         if self.world == 1:
             return value
         return sum(self.gather([value]))
+
+    def sum_values(self, values):
+        """Each key of any rank's `values` with its sum over the ranks that have it."""
+        total = {}
+        for part in self.gather([values]):
+            for key, value in part.items():
+                total[key] = total.get(key, 0) + value
+        return total
 
     def broadcast(self, value):
         if self.world == 1:

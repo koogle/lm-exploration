@@ -431,7 +431,7 @@ def train(
             optimize(batch, sequences, advantage, sorted(answers), old, totals)
         step += 1
         timings["train_seconds"] = time.monotonic() - clock
-        totals = {key: ranks.sum(value) for key, value in totals.items()}
+        totals = ranks.sum_values(totals)
         trained_tokens += totals["tokens"]
         batch = merged(batch, ranks)
         values = {}
