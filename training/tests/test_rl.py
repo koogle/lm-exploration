@@ -6,7 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import torch
-from training_data import rl_trajectories
+from training_data import rl_tasks, rl_trajectories
 
 from trainer.rl.algorithms import ALGORITHMS, make
 from trainer.rl.batch import Batch, Tokens
@@ -186,13 +186,24 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(source.statistics(2), {"trajectory_passes": 2})
 
     def test_trajectories_load_training_rows(self):
-        good = {"id": "a", "task": "code", "split": "train", "completion": "x", "reward": 1.0}
+        good = {
+            "id": "a",
+            "task": "code",
+            "split": "train",
+            "question": "Add two numbers.",
+            "declaration": "def add(a, b):",
+            "completion": "x",
+            "reward": 1.0,
+        }
         held_out = {**good, "id": "b", "split": "validation"}
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "trajectories.jsonl")
             path.write_text("".join(json.dumps(r) + "\n" for r in (good, held_out)))
             loaded, digest = rl_trajectories.load(path)
             self.assertEqual([r["id"] for r in loaded], ["a"])
+            # Teacher answers are SFT-format texts, so the problems keep their SFT prompts.
+            self.assertEqual(loaded[0]["prompt"], rl_tasks.prompt(good))
+            self.assertEqual(loaded[0]["answer_format"], "plain")
             self.assertEqual(len(digest), 64)
             path.write_text(json.dumps({**good, "reward": 0.5}) + "\n")
             with self.assertRaises(ValueError):

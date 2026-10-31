@@ -9,8 +9,8 @@ beside the family's pretraining adapter:
 
 An adapter gives the stages what depends on the family: building the model from its
 config and loading a parent's weights, the tokenizer (object, SHA256, files to copy),
-prompt encoding, the tokens that end an answer, sampling, the answer format the rewards
-read, the optimizer, the source files a run hashes and copies, and exports.
+rendering a prompt text (the data supplies the text and its answer format), the tokens
+that end an answer, sampling, the source files a run hashes and copies, and exports.
 """
 
 import importlib
