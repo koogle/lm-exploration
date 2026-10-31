@@ -28,7 +28,9 @@ from workflows.modal_app import hybrid_data as volume
 secret = hf_secret
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install("numpy", "pyarrow==26.0.0", "tokenizers==0.22.2", "huggingface-hub==1.33.0")
+    .pip_install(
+        "numpy", "pyarrow==26.0.0", "tokenizers==0.22.2", "huggingface-hub==1.33.0", "jinja2==3.1.6"
+    )
     # Downloads land in /tmp/upstream, which each shard call clears when it finishes.
     .env(
         {
@@ -114,7 +116,14 @@ def prepare(recipe, name, index, deadline):
     os.environ["RAYON_NUM_THREADS"] = "8"
     glm = tokenizer.load(tokenizer.tokenizer_file("/tmp/tokenizer"))
     screen = np.load(screen_path(recipe))
-    meta = data.prepare_shard(recipe, name, index, folder, glm, screen, tokenizer.EOS_ID)
+    renderer = recipe["sources"][name].get("render")
+    if renderer:
+        from training_data import chat
+
+        renderer = chat.RENDERERS[renderer]
+    meta = data.prepare_shard(
+        recipe, name, index, folder, glm, screen, tokenizer.EOS_ID, render=renderer
+    )
     shutil.rmtree("/tmp/upstream", ignore_errors=True)
     volume.commit()
     return meta

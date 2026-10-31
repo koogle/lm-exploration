@@ -284,8 +284,10 @@ def open_hybrid(spec, done):
 
     import torch
     from huggingface_hub import HfApi
-    from model_hybrid import hnet, model, tokenizer
+    from model_hybrid import hnet, model
     from safetensors.torch import load_file
+
+    from tokenizer import glm as tokenizer
 
     if spec["name"] in done:
         return

@@ -1,0 +1,139 @@
+{
+  "name": "hybrid-long32k-v1",
+  "description": "32K-token continued pretraining: repository-level permissive code (files of one repository joined in path order) and PG19 books, with 40% replay of hybrid-40b-v1 read at the same context.",
+  "target_tokens": 2000000000,
+  "context": 32768,
+  "seed": 20261028,
+  "tokenizer_sha256": "19e773648cb4e65de8660ea6365e10acca112d42a854923df93db4a6f333a82d",
+  "replay": {
+    "recipe": "hybrid-40b-v1",
+    "fraction": 0.4
+  },
+  "screen": "hybrid-40b-v1/screen.npy",
+  "sources": {
+    "repos": {
+      "weight": 0.67,
+      "repo": "codeparrot/github-code-clean",
+      "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
+      "pattern": "data/train-{index:05d}-of-00880.parquet",
+      "file_offset": 100,
+      "shards": 14,
+      "column": "code",
+      "permissive_licenses_only": true,
+      "group_by": "repo_name",
+      "order_by": "path",
+      "min_tokens": 4096,
+      "max_passes": 1,
+      "estimated_tokens_per_shard": 70000000
+    },
+    "books": {
+      "weight": 0.33,
+      "repo": "emozilla/pg19",
+      "revision": "c021754c8e01c5b1cc83a1f549c1f97fbbb756b8",
+      "files": [
+        "data/train-00000-of-00023-5263dc4323e881d2.parquet",
+        "data/train-00001-of-00023-2b13c68dbeba63b5.parquet",
+        "data/train-00002-of-00023-8e4dd6b70d51dfcf.parquet",
+        "data/train-00003-of-00023-e7f0ba0d3c2eb6c0.parquet",
+        "data/train-00004-of-00023-3f9e7e096fa07f4b.parquet",
+        "data/train-00005-of-00023-87dece6a0ab708e8.parquet",
+        "data/train-00006-of-00023-c50fea56d0518a87.parquet"
+      ],
+      "shards": 7,
+      "column": "text",
+      "max_passes": 1,
+      "estimated_tokens_per_shard": 90000000
+    }
+  },
+  "contamination": {
+    "ngram": 13,
+    "benchmarks": [
+      {
+        "repo": "openai/gsm8k",
+        "revision": "740312add88f781978c0658806c59bc2815b9866",
+        "files": [
+          "main/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "question",
+          "answer"
+        ]
+      },
+      {
+        "repo": "openai/openai_humaneval",
+        "revision": "7dce6050a7d6d172f3cc5c32aa97f52fa1a2e544",
+        "files": [
+          "openai_humaneval/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "prompt",
+          "canonical_solution",
+          "test"
+        ]
+      },
+      {
+        "repo": "google-research-datasets/mbpp",
+        "revision": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
+        "files": [
+          "full/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "text",
+          "code",
+          "test_list"
+        ]
+      },
+      {
+        "repo": "cais/mmlu",
+        "revision": "c30699e8356da336a370243923dbaf21066bb9fe",
+        "files": [
+          "all/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "question",
+          "choices"
+        ]
+      },
+      {
+        "repo": "allenai/ai2_arc",
+        "revision": "210d026faf9955653af8916fad021475a3f00453",
+        "files": [
+          "ARC-Challenge/test-00000-of-00001.parquet",
+          "ARC-Easy/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "question",
+          "choices"
+        ]
+      },
+      {
+        "repo": "Rowan/hellaswag",
+        "revision": "218ec52e09a7e7462a5400043bb9a69a41d06b76",
+        "files": [
+          "data/validation-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "ctx",
+          "endings"
+        ]
+      },
+      {
+        "repo": "EleutherAI/hendrycks_math",
+        "revision": "21a5633873b6a120296cce3e2df9d5550074f4a3",
+        "files": [
+          "algebra/test-00000-of-00001.parquet",
+          "counting_and_probability/test-00000-of-00001.parquet",
+          "geometry/test-00000-of-00001.parquet",
+          "intermediate_algebra/test-00000-of-00001.parquet",
+          "number_theory/test-00000-of-00001.parquet",
+          "prealgebra/test-00000-of-00001.parquet",
+          "precalculus/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "problem",
+          "solution"
+        ]
+      }
+    ]
+  }
+}

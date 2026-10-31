@@ -278,7 +278,8 @@ which must be the GLM EOS), and DDP averages gradients. Each loss is normalized 
 its global target count. Rank 0 writes `metrics.jsonl` (loss, z, MTP loss,
 learning-rate factor, gradient norm, tokens/s, MFU, rows per source, peak memory per
 rank), and at start, every `eval_every_steps` and at the end `validation.jsonl`:
-held-out loss, bits per byte and MTP loss per source with per-layer gate openness
+held-out loss, bits per byte and MTP loss per source (above 4K context also per in-document
+position bucket) with per-layer gate openness
 and sink weight, sink, gate-bias and KDA-decay parameters, and (every
 `sample_every_steps` and at the end) greedy continuations of fixed prompts.
 Checkpoints (`step-<step>.pt`: model, optimizer, data cursor, every rank's RNG;
@@ -456,7 +457,7 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
   tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
   tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
   tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet \
-  tests.test_chat -v
+  tests.test_chat tests.test_hybrid_long_context -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
