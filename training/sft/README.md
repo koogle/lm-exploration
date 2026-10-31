@@ -182,7 +182,7 @@ uv run python -m workflows --workflow <workflow.json> --run-id <run-id>
 # Exact resume qualification of N steps for one SFT stage: uninterrupted run vs. stop,
 # fresh-container restore, continue, as runs <run-id>-<stage>-q-{full,part,resume}.
 uv run --all-extras modal run -m workflows.modal_train::main --workflow <workflow.json> \
-  --run-id <run-id> --start <stage> --end <stage> --qualify 2
+  --run-id <run-id> --start <stage> --end <stage> --qualify 2 --wait
 # Train; --checkpoint fine-tunes another parent than the workflow's `from`.
 uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --workflow <workflow.json> --run-id <run-id> [--checkpoint <run>/step-NNNNNNNNN.pt]
