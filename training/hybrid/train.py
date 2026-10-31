@@ -4,11 +4,12 @@
 loop: the hybrid model with role-declared Muon/AdamW, prepared-shard or chat SFT
 data with optional replay (budget: every window token), the objective mean
 next-token loss plus the decaying MTP weight times mean MTP loss (each over its
-global target count), held-out loss, bits per byte, gate and sink statistics,
-fixed-prompt samples, and bf16 exports to the run's HF repo every
-`hf_every_tokens` and at the end. `HNetFamily` does the same for a run config with
-`"architecture": "hnet"`: the byte-level H-Net (hnet.py) on the recipe's shards
-decoded to UTF-8 bytes (byte_data.py); budget, context and batch rows count bytes.
+global target count), held-out loss, bits per byte, gate and sink statistics and
+loss by in-document position above 4K context, fixed-prompt samples, and bf16
+exports to the run's HF repo every `hf_every_tokens` and at the end. `HNetFamily`
+does the same for a run config with `"architecture": "hnet"`: the byte-level H-Net
+(hnet.py) on the recipe's shards decoded to UTF-8 bytes (byte_data.py); budget,
+context and batch rows count bytes.
 
     torchrun --nproc_per_node=8 -m model_hybrid.train --config <run.json> \\
         --run-dir <dir> --data-root <dir> --stop-unix <time> [--max-tokens N] \\
@@ -20,6 +21,7 @@ A run directory resumes from `--resume` or else its latest checkpoint;
 
 import argparse
 import dataclasses
+import itertools
 import json
 import math
 import os
@@ -140,9 +142,45 @@ def gate_sink_statistics(lm):
     return stats
 
 
+# In-document position buckets for long-context evaluation (used above 4K context).
+POSITION_EDGES = (0, 1024, 4096, 16384, 32768)
+
+
+def document_positions(inputs, eos_id):
+    """Each input token's position within its document; EOS ends a document."""
+    positions = np.zeros(inputs.shape, dtype=np.int64)
+    for row, tokens in enumerate(inputs):
+        position = 0
+        for column, token in enumerate(tokens):
+            positions[row, column] = position
+            position = 0 if token == eos_id else position + 1
+    return positions
+
+
+def position_losses(lm, inputs, labels, device, eos_id, edges):
+    """Held-out loss of the targets whose input sits in each in-document position bucket."""
+    positions = document_positions(inputs, eos_id)
+    out = {}
+    for low, high in itertools.pairwise(edges):
+        keep = (positions >= low) & (positions < high) & (labels != -100)
+        if not keep.any():
+            continue
+        ce, count = 0.0, 0
+        for start in range(0, len(inputs), 4):
+            x = torch.from_numpy(inputs[start : start + 4]).to(device)
+            y = torch.from_numpy(np.where(keep, labels, -100)[start : start + 4]).to(device)
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                losses = lm(x, y)
+            ce, count = ce + losses["ce"].item(), count + int(losses["count"])
+        if count:
+            out[f"{low}-{high}"] = ce / count
+    return out
+
+
 @torch.no_grad()
 def evaluate(lm, heldout, device, eos_id):
-    """Held-out loss, bits per byte and MTP loss per source; gate/sink activations."""
+    """Held-out loss, bits per byte and MTP loss per source; gate/sink activations; above
+    4K context also the loss per in-document position bucket."""
     lm.eval()
     results = {}
     hybrid.Attention.record_statistics = True
@@ -177,6 +215,12 @@ def evaluate(lm, heldout, device, eos_id):
                     float(np.mean([s["sink_weight"] for s in layer])) for layer in layers
                 ],
             }
+            if lm.config.block_size > POSITION_EDGES[2]:
+                edges = [e for e in POSITION_EDGES if e < lm.config.block_size]
+                edges.append(lm.config.block_size)
+                results[name]["loss_by_position"] = position_losses(
+                    lm, inputs, labels, device, eos_id, edges
+                )
             if chunking["chunks"]:
                 results[name]["bytes_per_chunk"] = chunking["positions"] / chunking["chunks"]
     finally:
