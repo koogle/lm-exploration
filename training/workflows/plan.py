@@ -37,7 +37,15 @@ from pathlib import Path
 
 from workflows.checks import checkpoint, parent_path, run_id
 from workflows.config import FAMILIES
-from workflows.stages import KINDS, POST_TRAINING, TRAINING, data, pretrain, validate
+from workflows.stages import (
+    FAMILY_POST_TRAINING,
+    KINDS,
+    POST_TRAINING,
+    TRAINING,
+    data,
+    pretrain,
+    validate,
+)
 
 FIELDS = {"name", "description", "family", "from", "stages"}
 # Suffixes a stage's run ID may gain: relaunch attempts and pretraining sessions.
@@ -134,7 +142,7 @@ def resolve_stage(entry, family, previous, data_stages, start, run, project_root
             checkpoint(stage["resume"], "resume")
         stage["spec"] = pretrain.resolve(fields, family, resolved, project_root)
         return stage
-    if family != "subword" or kind not in POST_TRAINING:
+    if kind not in POST_TRAINING or kind not in FAMILY_POST_TRAINING[family]:
         raise ValueError(f"{family} has no {kind} stage yet")
     if {"run_id", "parent"} & set(entry):
         raise ValueError(f"Stage {name}: the workflow sets run_id and parent")

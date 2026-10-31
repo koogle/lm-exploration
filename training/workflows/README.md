@@ -50,12 +50,13 @@ uv run python -m workflows --workflow workflows/climbmix-124m-wsd-20b.json --run
 ```
 
 Launch it on Modal. One launch runs the selected stages in order, within one 24-hour
-deadline:
+deadline. The launch spawns the controller and returns, so a `--detach` launch keeps
+running when the launching machine goes away; `--wait` waits and prints the result:
 
 ```sh
 uv run modal run --detach -m workflows.modal_train::main \
   --workflow workflows/climbmix-124m-wsd-20b.json --run-id my-run-01 \
-  [--start <stage>] [--end <stage>] [--checkpoint <run>/step-NNNNNNNNN.pt]
+  [--start <stage>] [--end <stage>] [--checkpoint <run>/step-NNNNNNNNN.pt] [--wait]
 uv run modal run -m workflows.modal_train::stop --run-id my-run-01
 ```
 
@@ -143,9 +144,17 @@ See the [SFT guide](../sft/README.md). The parent is a checkpoint of any stage, 
 the trainer checks that its architecture and tokenizer fit
 ([`trainer/checkpoints.py`](../trainer/checkpoints.py)).
 
-An RL stage entry holds its `pool` and the trainer's `settings` ([`trainer/rl/`](../trainer/rl/__init__.py));
-it trains on one H100 and runs model-written code only in a network-blocked sandbox.
-See the [RL guide](../rl/README.md).
+An RL stage entry holds its `pool`, its `gpus` (1–8 H100s, one process each) and the
+trainer's `settings` ([`trainer/rl/`](../trainer/rl/__init__.py)); it runs model-written
+code only in a network-blocked sandbox. A run that stops short of its step target leaves
+the stage paused, and the next launch resumes it in the same run.
+The parent checkpoint's architecture picks the model family's adapter
+([`trainer/families.py`](../trainer/families.py)). Subword runs use the subword image and
+the training volume; hybrid runs use the hybrid image, with parents and runs on the
+hybrid runs volume and pools on the training volume. Subword workflows take SFT and RL
+stages, hybrid workflows RL stages (hybrid chat SFT is a `midtrain` stage with a chat
+run config). See the [RL guide](../rl/README.md).
 
 `math-sft-20b.json` and `math-sft-5b.json` run math SFT of the WSD end points, with
-and without pretraining replay.
+and without pretraining replay. `hybrid-720m-rl.json` runs chat SFT of the hybrid 720M 40B
+export, then RL from it.

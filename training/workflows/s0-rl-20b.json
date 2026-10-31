@@ -48,7 +48,7 @@
         {
           "name": "r1-math",
           "description": "Math-only RL from stage 0: validates the loop cheaply",
-          "pool": "rl-pool-math-code-03",
+          "pool": "rl-pool-math-code-04",
           "settings": {
             "steps": 300,
             "rollouts": {
@@ -86,7 +86,7 @@
         {
           "name": "r2-code",
           "description": "Code-only RL from stage 0: validates the sandbox reward",
-          "pool": "rl-pool-math-code-03",
+          "pool": "rl-pool-math-code-04",
           "settings": {
             "steps": 300,
             "rollouts": {
@@ -124,7 +124,7 @@
         {
           "name": "r3-joint",
           "description": "Joint math and code RL from stage 0",
-          "pool": "rl-pool-math-code-03",
+          "pool": "rl-pool-math-code-04",
           "settings": {
             "steps": 1000,
             "rollouts": {

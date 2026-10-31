@@ -434,15 +434,20 @@ simulated with the run's seed), and trains like pretraining
 
 ## Playground
 
-[`playground/`](playground) is a
-Gradio app for a private Hugging Face Space: text continuation, and for chat
-exports a chat tab with OpenAI tools whose replies are parsed back into OpenAI
-messages. `playground/publish.py` uploads the app and the inference modules; the
-Space downloads the export from the private model repo with its `HF_TOKEN` secret.
+[`playground/`](playground) is a Gradio app for a private Hugging Face Space on a GPU:
+text continuation, and for chat exports a chat tab with OpenAI tools whose replies
+are parsed back into OpenAI messages. It decodes with `generate.py` in bf16, one
+request at a time, and warms up (compiled prefill attention, captured decode graph)
+before serving. `playground/publish.py` uploads a Docker Space
+([`playground/Dockerfile`](playground/Dockerfile): CUDA 13.0 devel, torch 2.14.1, the
+family kernels prebuilt) with the inference modules and kernels, on L4 hardware by
+default (`--hardware`), sleeping after an hour without visitors (`--sleep-seconds`);
+GPU time is billed to the Space owner. The Space downloads the export from the
+private model repo with its `HF_TOKEN` secret.
 
 ```sh
 uv run --all-extras python -m model_hybrid.playground.publish \
-  --space jfrick/hybrid-720m-playground --export tokens-039998980096 [--chat]
+  --space jfrick/hybrid-720m-playground --export tokens-039998980096 [--chat] [--hardware l4x1]
 ```
 
 ## Benchmarks

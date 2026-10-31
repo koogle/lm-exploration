@@ -4,8 +4,9 @@ This file is copied into the code sandbox (`execution.py`) and run there as
 `python runner.py`: it reads `{"programs": [{"source", "nonce"}], "timeout"}` (and
 optionally `"python"`, the interpreter for programs; default this one) as JSON on stdin
 and writes one result per program as JSON on stdout. Each program runs as
-`python -I -` (source on stdin, so it has no `__file__`) in its own empty directory with
-CPU, memory and file-size limits, in its own process group, which is killed when it ends.
+`python -I -` (source on stdin, so it has no `__file__`) in its own empty directory, which
+is also its `TMPDIR` and `HOME` and is removed when it ends, with CPU, memory and
+file-size limits, in its own process group, which is killed when it ends.
 When the runner is root (as in the sandbox), each concurrently running program gets its
 own unprivileged user ID and a private directory, so it cannot read, change or delete
 another program's files or the runner's output capture. A program passes only if it
@@ -56,7 +57,13 @@ def run(program, seconds, uid, python):
                 stdout=stdout,
                 stderr=subprocess.PIPE,
                 cwd=folder,
-                env={"PATH": "/usr/bin:/bin", "PYTHONHASHSEED": "0"},
+                # Temporary files (pytest's included) stay in the program's own folder.
+                env={
+                    "PATH": "/usr/bin:/bin",
+                    "PYTHONHASHSEED": "0",
+                    "TMPDIR": folder,
+                    "HOME": folder,
+                },
                 process_group=0,
                 **({"user": uid, "group": uid, "extra_groups": []} if uid is not None else {}),
             )

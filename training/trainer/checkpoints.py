@@ -1,19 +1,19 @@
 """Checkpoints of every training stage, read one way. Only read our own checkpoints: they
 are pickles.
 
-Two layouts:
+Every checkpoint records `architecture`: the model module (which names the family,
+`trainer/families.py`) and its config. Two layouts:
 
-- Pretraining (`trainer/loop.py`): `architecture` (model module and config),
-  `source_sha256` and `data_identity`; the model's packages are copied to
-  `RUN-sNN/source`.
-- Post-training (SFT, RL and any later stage): `stage`, `model_config` and `identity`
-  (with `source_sha256`, `tokenizer_sha256` and the parent's `parent_sha256`);
-  `model.py` and `shared_model.py` are copied beside the checkpoint.
+- Pretraining (`trainer/loop.py`): `architecture`, `source_sha256` and `data_identity`;
+  the subword family copies its model packages to `RUN-sNN/source`.
+- Post-training (SFT, RL and any later stage): `stage`, `architecture` and `identity`
+  (with `source_sha256`, `tokenizer_sha256` and the parent's `parent_sha256`); the
+  family's source files are copied beside the checkpoint.
 
-Both keep the tokenizer in the run's `tokenizer/` folder. `describe` gives what a stage
-needs to start from any checkpoint, whatever stage wrote it; `load` builds the model with
-the checkpoint's own recorded code, checked against its source hashes, so any checkout
-can load any checkpoint.
+`describe` gives what a stage needs to start from any checkpoint, whatever stage and
+family wrote it, and `parent` the family's adapter with it. `load` builds a subword
+model with the checkpoint's own recorded code, checked against its source hashes, so
+any checkout can load any subword checkpoint.
 """
 
 import importlib
@@ -40,43 +40,35 @@ class Description:
 
 def describe(saved):
     """The `Description` of a loaded checkpoint dictionary of either layout."""
-    if "architecture" in saved:
-        return Description(
-            "pretrain",
-            saved["architecture"]["module"],
-            saved["architecture"]["config"],
-            saved["source_sha256"],
-            saved["data_identity"]["tokenizer_sha256"],
-        )
-    if "identity" in saved and "stage" in saved:
+    if "architecture" not in saved:
+        raise ValueError("Not a checkpoint of our trainers")
+    module, config = saved["architecture"]["module"], saved["architecture"]["config"]
+    if "stage" in saved:
         identity = saved["identity"]
-        return Description(
-            saved["stage"],
-            "model_100m.model",
-            saved["model_config"],
-            identity["source_sha256"],
-            identity["tokenizer_sha256"],
-        )
-    raise ValueError("Not a checkpoint of our trainers")
+        stage, sources, tokenizer = saved["stage"], identity["source_sha256"], identity
+    else:
+        stage, sources, tokenizer = "pretrain", saved["source_sha256"], saved["data_identity"]
+    return Description(stage, module, config, sources, tokenizer["tokenizer_sha256"])
 
 
-def parent(path, model_module, tokenizer_sha256):
-    """(checkpoint dictionary, `Description`) of a parent to continue training with
-    `model_module`'s code and the tokenizer of `tokenizer_sha256`, from any stage.
+def parent(path):
+    """(checkpoint dictionary, `Description`, family adapter) of a parent to continue
+    training, from any stage of any family.
 
-    The parent's model code may be an earlier version of `model_module`: the trainer
+    The parent's model code may be an earlier version of its family's: the trainer
     loads its weights strictly into the current model, so they must fit, and records
     the parent's source hashes (`Description.source_sha256`) beside its own."""
     import torch
 
+    from trainer import families
+
     # Only load our trusted private run-volume checkpoints, never dataset-supplied files.
     saved = torch.load(path, map_location="cpu", weights_only=False)
     description = describe(saved)
-    if description.module != model_module.__name__:
-        raise ValueError("Parent checkpoint is another model family")
-    if description.tokenizer_sha256 != tokenizer_sha256:
-        raise ValueError("Parent uses another tokenizer")
-    return saved, description
+    family = families.adapter(description.module)
+    if description.tokenizer_sha256 != family.tokenizer_sha256:
+        raise ValueError("Parent uses another tokenizer than its family")
+    return saved, description, family
 
 
 def import_model(source, name):
@@ -122,6 +114,8 @@ def load(path, device="cpu"):
     path = Path(path)
     saved = torch.load(path, map_location="cpu", weights_only=False)
     description = describe(saved)
+    if description.module != "model_100m.model":
+        raise ValueError("Recorded-code loading is for subword checkpoints")
     module = recorded_code(path, saved, description)
     tokenizer_path = path.parent / "tokenizer" / "tokenizer.json"
     if digest(tokenizer_path) != description.tokenizer_sha256:
