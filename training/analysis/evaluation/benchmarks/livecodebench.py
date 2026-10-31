@@ -1,10 +1,11 @@
 """LiveCodeBench code generation: prompts, greedy generation and execution grading.
 
 Problems come from `livecodebench/code_generation_lite` (a release file such as
-`test6.jsonl`, pinned by revision). Each problem gets LiveCodeBench's zero-shot
-prompt, as plain text for base models or as one user turn in the GLM chat format
-for chat exports; the first fenced Python block of the greedy completion is
-graded on every public and private test. Stdin problems (AtCoder) run the program
+`test6.jsonl`, pinned by revision). Prompts are family-neutral text: `base_prompt`
+(LiveCodeBench's plain prompt after one worked example) for pretrained checkpoints, and
+`instruction` (its system text and zero-shot question) for post-trained ones, which
+each family renders as its own user turn (`trainer/families.py`). The first fenced
+Python block of the greedy completion is graded on every public and private test. Stdin problems (AtCoder) run the program
 with the test input and compare whitespace-separated output tokens; functional
 problems (LeetCode) call the starter code's method on the JSON-decoded argument
 lines and compare JSON results. Each test runs in a separate `python -I`
@@ -120,8 +121,9 @@ def base_prompt(problem):
     return f"{SYSTEM}\n\n{shot}{_base_turn(problem)}"
 
 
-def chat_messages(problem):
-    return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": question(problem)}]
+def instruction(problem):
+    """LiveCodeBench's system text and zero-shot question, as one instruction."""
+    return f"{SYSTEM}\n\n{question(problem)}"
 
 
 def extract_code(completion):

@@ -6,7 +6,7 @@ import pickle
 import unittest
 import zlib
 
-from model_hybrid import livecodebench
+from evaluation.benchmarks import livecodebench
 
 STDIN = {
     "starter_code": "",
@@ -52,6 +52,12 @@ class LiveCodeBenchTests(unittest.TestCase):
         wrong = right.replace("n + k", "n")
         self.assertEqual(livecodebench.grade(FUNCTIONAL, fenced(right)), 1.0)
         self.assertEqual(livecodebench.grade(FUNCTIONAL, fenced(wrong)), 0.0)
+
+    def test_prompts_carry_the_question_and_its_format(self):
+        problem = {"question_content": "Add two numbers.", "starter_code": ""}
+        self.assertTrue(livecodebench.instruction(problem).startswith(livecodebench.SYSTEM))
+        self.assertIn("Question: Add two numbers.", livecodebench.instruction(problem))
+        self.assertTrue(livecodebench.base_prompt(problem).endswith("backticks)\n\n"))
 
     def test_summary_groups_by_difficulty_and_platform(self):
         problems = [

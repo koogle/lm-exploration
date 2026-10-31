@@ -1,17 +1,23 @@
-"""LiveCodeBench v6 pass@1 for hybrid exports and the reference models.
+"""LiveCodeBench v6 pass@1 for checkpoints of any model family and for reference models.
 
 Run from training/:
-    modal run --detach -m model_hybrid.modal_livecodebench [--models M,...] [--limit N]
+    modal run --detach -m evaluation.modal_livecodebench \
+        [--checkpoints runs/RUN/step-N.pt,training/RUN/step-M.pt] [--references M,...|all] \
+        [--limit N]
+
+A checkpoint path starts with the volume it is on: `runs/` (lm-exploration-hybrid-runs)
+or `training/` (lm-exploration-training). Checkpoints load through their family's
+adapter (`trainer/families.py`); pretrained checkpoints get LiveCodeBench's plain prompt
+(`base_prompt`) and post-trained ones its instruction as the family's user turn.
+Reference models (`--references`, Hugging Face base models at pinned revisions) get the
+plain prompt through transformers.
 
 One H100 call per model, in parallel. Each call downloads the pinned release file,
-generates one greedy completion per problem (up to `MAX_NEW_TOKENS`, stopping once
-a code block closes) and grades it inside the call's container with
-`livecodebench.grade_all`. Base models get LiveCodeBench's plain prompt; chat
-exports get the same question as a system and user turn in the GLM chat format.
-Each call has `retries=0`, a 6-hour timeout and refuses to start 24 hours after
-launch; an independent supervisor cancels any call still running at that deadline.
-Results (summary plus per-problem completions and scores) go to
-`lm-exploration-hybrid-runs/benchmarks/<launch>/lcb-<model>.json`.
+generates one greedy completion per problem (up to `MAX_NEW_TOKENS`) and grades it inside
+the call's container with `livecodebench.grade_all`. Each call has `retries=0`, a 6-hour
+timeout and refuses to start 24 hours after launch; an independent supervisor cancels
+any call still running at that deadline. Results (summary plus per-problem completions
+and scores) go to `lm-exploration-hybrid-runs/benchmarks/<launch>/lcb-<model>.json`.
 """
 
 import json
@@ -23,19 +29,16 @@ from model_hybrid import modal_benchmarks
 from model_hybrid.image import LAUNCH_LIMIT_SECONDS
 from model_hybrid.modal_benchmarks import REFERENCES, enforce_deadline, image, runs_volume, secret
 
-app = modal.App("lm-exploration-hybrid-livecodebench")
+app = modal.App("lm-exploration-livecodebench")
 app.include(modal_benchmarks.app)  # the deadline supervisor
+training_volume = modal.Volume.from_name("lm-exploration-training")
+# Checkpoint paths start with one of these mounts.
+MOUNTS = {"runs": runs_volume, "training": training_volume}
 DATASET = "livecodebench/code_generation_lite"
 DATASET_REVISION = "0fe84c3912ea0c4d4a78037083943e8f0c4dd505"
 RELEASE_FILE = "test6.jsonl"
 MAX_NEW_TOKENS = 2048
-# Hybrid exports as "<run>/<export>", with whether they take the chat format.
-EXPORTS = {
-    "hybrid-720m-40b-01/tokens-039998980096": False,
-    "hybrid-720m-chat-sft-01/tokens-001527250944": True,
-    "hybrid-720m-rl-lr-low-01/tokens-000158595563": True,
-    "hybrid-720m-mid32k-01/tokens-002999975936": False,
-}
+BATCH_ROWS = 32
 # Larger dense Qwen base models, beyond the shared benchmark references.
 LARGER_QWEN = {
     "Qwen/Qwen3-1.7B-Base": "ea980cb0a6c2ae4b936e82123acc929f1cec04c1",
@@ -46,49 +49,50 @@ LARGER_QWEN = {
     "Qwen/Qwen3.5-4B-Base": "1001bb4d826a52d1f399e183466143f4da7b741b",
     "Qwen/Qwen3.5-9B-Base": "68c46c4b3498877f3ef123c856ecfde50c39f404",
 }
+ALL_REFERENCES = {**REFERENCES, **LARGER_QWEN}
 
 
-def _hybrid_completions(export, chat_format, problems):
-    import torch
-    from model_hybrid import chat, generate, livecodebench, sft_data
-    from model_hybrid import tokenizer as glm
+def checkpoint_path(name):
+    """The container path of `name` (`runs/...` or `training/...`)."""
+    mount = name.split("/", 1)[0]
+    if mount not in MOUNTS or ".." in Path(name).parts:
+        raise ValueError(f"A checkpoint path starts with one of {sorted(MOUNTS)}: {name}")
+    return Path("/") / name
 
-    run, name = export.split("/")
-    lm = generate.load_export(
-        Path("/runs", run, "export", name), dtype=torch.bfloat16, device="cuda"
-    )
-    tokenizer = glm.load()
-    if chat_format:
-        texts = [
-            chat.render(livecodebench.chat_messages(p), add_generation_prompt=True)
-            for p in problems
-        ]
-        stop_ids = sft_data.STOP_IDS
+
+def _checkpoint_completions(name, problems):
+    from evaluation.benchmarks import livecodebench
+    from trainer import checkpoints
+
+    saved, description, family = checkpoints.parent(checkpoint_path(name))
+    model = family.build(description.model_config).cuda()
+    family.load(model, saved["model"])
+    del saved
+    model.eval()
+    tokenizer = family.tokenizer()
+    if description.stage == "pretrain":
+        prompts = [family.text_ids(tokenizer, livecodebench.base_prompt(p)) for p in problems]
     else:
-        texts = [livecodebench.base_prompt(p) for p in problems]
-        stop_ids = (lm.config.eos_id,)
-    room = lm.config.block_size - MAX_NEW_TOKENS
-    prompts = [tokenizer.encode(t, add_special_tokens=False).ids[-room:] for t in texts]
+        prompts = [family.prompt_ids(tokenizer, livecodebench.instruction(p)) for p in problems]
+    room = family.context(model) - MAX_NEW_TOKENS
+    prompts = [ids[-room:] for ids in prompts]
     outputs = [None] * len(problems)
     order = sorted(range(len(prompts)), key=lambda i: -len(prompts[i]))
-    for start in range(0, len(order), 32):
-        group = order[start : start + 32]
-
-        def done(row, ids):
-            return livecodebench.finished(tokenizer.decode(ids))
-
-        generated = generate.generate_batch(
-            lm, [prompts[i] for i in group], MAX_NEW_TOKENS, stop_ids, done=done
+    for start in range(0, len(order), BATCH_ROWS):
+        group = order[start : start + BATCH_ROWS]
+        samples, _ = family.sample(
+            model, [prompts[i] for i in group], MAX_NEW_TOKENS, 0.0, None, 0, "graph"
         )
         for row, index in enumerate(group):
-            outputs[index] = tokenizer.decode([t for t in generated[row] if t not in stop_ids])
-    return outputs
+            outputs[index] = tokenizer.decode(samples.completions[row])
+    return description.stage, family.name, outputs
 
 
 def _reference_completions(model, revision, problems):
     import torch
-    from model_hybrid import livecodebench
     from transformers import AutoModelForCausalLM, AutoTokenizer, StoppingCriteria
+
+    from evaluation.benchmarks import livecodebench
 
     tokenizer = AutoTokenizer.from_pretrained(model, revision=revision, padding_side="left")
     if tokenizer.pad_token is None:
@@ -133,27 +137,31 @@ def _reference_completions(model, revision, problems):
     timeout=6 * 60 * 60,
     retries=0,
     secrets=[secret],
-    volumes={"/runs": runs_volume},
+    volumes={"/runs": runs_volume, "/training": training_volume},
 )
 def evaluate_lcb(model, revision, deadline, folder, limit=0):
+    """`model` is `checkpoint:<path>` or a reference model's HF name at `revision`."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     from huggingface_hub import hf_hub_download
-    from model_hybrid import livecodebench
+
+    from evaluation.benchmarks import livecodebench
 
     path = hf_hub_download(DATASET, RELEASE_FILE, repo_type="dataset", revision=DATASET_REVISION)
     problems = livecodebench.load(path)[: limit or None]
     started = time.time()
-    if model.startswith("hybrid:"):
-        export = model.split(":", 1)[1]
-        completions = _hybrid_completions(export, EXPORTS[export], problems)
+    if model.startswith("checkpoint:"):
+        stage, family, completions = _checkpoint_completions(model.split(":", 1)[1], problems)
     else:
+        stage, family = "reference", None
         completions = _reference_completions(model, revision, problems)
     generation_seconds = round(time.time() - started, 1)
     scores = livecodebench.grade_all(problems, completions)
     out = {
         "model": model,
         "revision": revision,
+        "stage": stage,
+        "family": family,
         "dataset": {"repo": DATASET, "revision": DATASET_REVISION, "file": RELEASE_FILE},
         "max_new_tokens": MAX_NEW_TOKENS,
         "limit": limit or None,
@@ -165,7 +173,7 @@ def evaluate_lcb(model, revision, deadline, folder, limit=0):
         ],
     }
     print(json.dumps({"model": model, **out["summary"]}))
-    name = model.removeprefix("hybrid:").replace("/", "--")
+    name = model.removeprefix("checkpoint:").removesuffix(".pt").replace("/", "--")
     path = Path("/runs/benchmarks", folder, f"lcb-{name}.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(out, indent=1) + "\n")
@@ -174,18 +182,22 @@ def evaluate_lcb(model, revision, deadline, folder, limit=0):
 
 
 @app.local_entrypoint()
-def main(limit: int = 0, models: str = ""):
-    """Spawn one call per model (all exports and references, or the comma-separated
-    `--models`, "hybrid:<run>/<export>" for exports); calls outlive this client."""
-    deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    chosen = (
-        [(f"hybrid:{e}", None) for e in EXPORTS]
-        + list(REFERENCES.items())
-        + list(LARGER_QWEN.items())
+def main(checkpoints: str = "", references: str = "", limit: int = 0):
+    """Spawn one call per checkpoint (comma-separated `--checkpoints`) and reference model
+    (comma-separated `--references`, or `all`); calls outlive this client."""
+    chosen = [(f"checkpoint:{name}", None) for name in filter(None, checkpoints.split(","))]
+    for name in chosen:
+        checkpoint_path(name[0].split(":", 1)[1])
+    wanted = (
+        list(ALL_REFERENCES) if references == "all" else list(filter(None, references.split(",")))
     )
-    if models:
-        wanted = set(models.split(","))
-        chosen = [(m, r) for m, r in chosen if m in wanted]
+    unknown = [m for m in wanted if m not in ALL_REFERENCES]
+    if unknown:
+        raise ValueError(f"Unknown reference models: {unknown}")
+    chosen += [(m, ALL_REFERENCES[m]) for m in wanted]
+    if not chosen:
+        raise ValueError("Name --checkpoints and/or --references")
+    deadline = time.time() + LAUNCH_LIMIT_SECONDS
     folder = f"lcb-{int(time.time())}{'-limit' if limit else ''}"
     calls = [evaluate_lcb.spawn(m, r, deadline, folder, limit) for m, r in chosen]
     supervisor = enforce_deadline.spawn([c.object_id for c in calls], deadline)

@@ -60,6 +60,10 @@ class HybridModel:
         rendered = chat.render([{"role": "user", "content": text}], add_generation_prompt=True)
         return tokenizer.encode(rendered, add_special_tokens=False).ids
 
+    def text_ids(self, tokenizer, text):
+        """Plain text to continue, outside the chat format (pretrained checkpoints)."""
+        return tokenizer.encode(text, add_special_tokens=False).ids
+
     def sample(self, model, prompts, limit, temperature, generator, record_top_k, engine):
         """(rollout.Samples without the stop token, the stop token of each finished row)."""
         from trainer.rollout import Samples

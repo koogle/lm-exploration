@@ -469,20 +469,8 @@ results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
 uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
 ```
 
-## LiveCodeBench
-
-[`modal_livecodebench.py`](modal_livecodebench.py) scores LiveCodeBench v6
-(`test6.jsonl`, 175 problems, pinned revision) for the base, SFT and RL exports, the
-same reference models and the dense Qwen3 (1.7–14B) and Qwen3.5 (2–9B) base models: one greedy completion per problem (up to 2,048 tokens,
-stopping once a code block closes), graded inside the call's container by
-[`livecodebench.py`](livecodebench.py) on every public and private test. Base models
-get LiveCodeBench's prompt after one worked example of the same test mode; chat
-exports get the question as a system and user turn. Results go to
-`lm-exploration-hybrid-runs/benchmarks/lcb-<launch>/`:
-
-```sh
-uv run --all-extras modal run --detach -m model_hybrid.modal_livecodebench [--models M,...] [--limit N]
-```
+LiveCodeBench, for checkpoints of any family:
+[`analysis/evaluation`](../analysis/evaluation/README.md#livecodebench).
 
 ## Tests
 
@@ -493,7 +481,7 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
   tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
   tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
   tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet \
-  tests.test_hybrid_chat tests.test_hybrid_livecodebench -v
+  tests.test_hybrid_chat -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
