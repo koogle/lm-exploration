@@ -73,11 +73,13 @@ weights. Chance levels: about 25% for HellaSwag, ARC and OpenBookQA, 50% for Win
 (`test6.jsonl`, 175 problems, pinned revision) for checkpoints of any model family and
 for pinned reference base models (the hybrid benchmark references and the dense Qwen3
 1.7–14B and Qwen3.5 2–9B base models). A checkpoint loads through its family's adapter
-([`trainer/families.py`](../../trainer/families.py)): a pretrained checkpoint gets
-LiveCodeBench's plain prompt after one worked example of the same test mode
-(`base_prompt`), a post-trained one its system text and question as the family's user
-turn (`instruction`). Reference models get the plain prompt through transformers. One
-greedy completion per problem, up to 2,048 tokens; the first fenced Python block is
+([`trainer/families.py`](../../trainer/families.py)): a checkpoint trained to answer
+instructions (any post-training stage, or a chat-format midtraining recipe such as hybrid
+chat SFT) gets LiveCodeBench's system text and question as the family's user turn
+(`instruction`), any other its plain prompt after one worked example of the same test
+mode (`base_prompt`). Reference models get the plain prompt through transformers. One
+greedy completion per problem, up to 2,048 tokens (half the context for shorter-context
+models); the first fenced Python block is
 graded inside the call's container by
 [`benchmarks/livecodebench.py`](benchmarks/livecodebench.py) on every public and private
 test (stdin programs compare output tokens, LeetCode-style problems call the starter

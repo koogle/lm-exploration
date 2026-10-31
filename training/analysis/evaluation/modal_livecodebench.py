@@ -7,13 +7,15 @@ Run from training/:
 
 A checkpoint path starts with the volume it is on: `runs/` (lm-exploration-hybrid-runs)
 or `training/` (lm-exploration-training). Checkpoints load through their family's
-adapter (`trainer/families.py`); pretrained checkpoints get LiveCodeBench's plain prompt
-(`base_prompt`) and post-trained ones its instruction as the family's user turn.
+adapter (`trainer/families.py`); checkpoints trained to answer instructions
+(`checkpoints.Description.instructed`) get its instruction as the family's user turn,
+others LiveCodeBench's plain prompt (`base_prompt`).
 Reference models (`--references`, Hugging Face base models at pinned revisions) get the
 plain prompt through transformers.
 
 One H100 call per model, in parallel. Each call downloads the pinned release file,
-generates one greedy completion per problem (up to `MAX_NEW_TOKENS`) and grades it inside
+generates one greedy completion per problem (up to `MAX_NEW_TOKENS`, or half the
+context of a shorter-context model) and grades it inside
 the call's container with `livecodebench.grade_all`. Each call has `retries=0`, a 6-hour
 timeout and refuses to start 24 hours after launch; an independent supervisor cancels
 any call still running at that deadline. Results (summary plus per-problem completions
@@ -70,22 +72,29 @@ def _checkpoint_completions(name, problems):
     del saved
     model.eval()
     tokenizer = family.tokenizer()
-    if description.stage == "pretrain":
-        prompts = [family.text_ids(tokenizer, livecodebench.base_prompt(p)) for p in problems]
-    else:
+    if description.instructed:
         prompts = [family.prompt_ids(tokenizer, livecodebench.instruction(p)) for p in problems]
-    room = family.context(model) - MAX_NEW_TOKENS
+    else:
+        prompts = [family.text_ids(tokenizer, livecodebench.base_prompt(p)) for p in problems]
+    # Short-context models get half their context for the answer.
+    new_tokens = min(MAX_NEW_TOKENS, family.context(model) // 2)
+    room = family.context(model) - new_tokens
     prompts = [ids[-room:] for ids in prompts]
     outputs = [None] * len(problems)
     order = sorted(range(len(prompts)), key=lambda i: -len(prompts[i]))
     for start in range(0, len(order), BATCH_ROWS):
         group = order[start : start + BATCH_ROWS]
         samples, _ = family.sample(
-            model, [prompts[i] for i in group], MAX_NEW_TOKENS, 0.0, None, 0, "graph"
+            model, [prompts[i] for i in group], new_tokens, 0.0, None, 0, "graph"
         )
         for row, index in enumerate(group):
             outputs[index] = tokenizer.decode(samples.completions[row])
-    return description.stage, family.name, outputs
+    prompt = "instruction" if description.instructed else "base_prompt"
+    return (
+        {"stage": description.stage, "family": family.name, "prompt": prompt},
+        new_tokens,
+        outputs,
+    )
 
 
 def _reference_completions(model, revision, problems):
@@ -151,19 +160,19 @@ def evaluate_lcb(model, revision, deadline, folder, limit=0):
     problems = livecodebench.load(path)[: limit or None]
     started = time.time()
     if model.startswith("checkpoint:"):
-        stage, family, completions = _checkpoint_completions(model.split(":", 1)[1], problems)
+        loaded, new_tokens, completions = _checkpoint_completions(model.split(":", 1)[1], problems)
     else:
-        stage, family = "reference", None
+        loaded = {"stage": "reference", "family": None, "prompt": "base_prompt"}
+        new_tokens = MAX_NEW_TOKENS
         completions = _reference_completions(model, revision, problems)
     generation_seconds = round(time.time() - started, 1)
     scores = livecodebench.grade_all(problems, completions)
     out = {
         "model": model,
         "revision": revision,
-        "stage": stage,
-        "family": family,
+        **loaded,
         "dataset": {"repo": DATASET, "revision": DATASET_REVISION, "file": RELEASE_FILE},
-        "max_new_tokens": MAX_NEW_TOKENS,
+        "max_new_tokens": new_tokens,
         "limit": limit or None,
         "generation_seconds": generation_seconds,
         "summary": livecodebench.summary(problems, scores),
