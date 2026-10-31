@@ -16,8 +16,10 @@ from pathlib import Path
 import gradio as gr
 import torch
 from huggingface_hub import snapshot_download
-from model_hybrid import chat, generate, sft_data
-from model_hybrid import tokenizer as glm
+from model_hybrid import generate
+from training_data import chat, chat_sft
+
+from tokenizer import glm
 
 HERE = Path(__file__).parent
 SETTINGS = json.loads((HERE / "model-settings.json").read_text())
@@ -84,7 +86,7 @@ def respond(text, role, system, tools_json, history, temperature, top_p, max_new
     prompt = chat.render(system_turn + history, tools, add_generation_prompt=True)
     prompt_ids = TOKENIZER.encode(prompt, add_special_tokens=False).ids
     reply, status = "", ""
-    for ids, rate in stream(prompt_ids, temperature, top_p, max_new, sft_data.STOP_IDS):
+    for ids, rate in stream(prompt_ids, temperature, top_p, max_new, chat_sft.STOP_IDS):
         reply = TOKENIZER.decode(ids, skip_special_tokens=False)
         status = f"{len(ids)} tokens · {rate:.1f} tokens/s"
         partial = display(history) + [{"role": "assistant", "content": reply}]
@@ -113,7 +115,7 @@ with gr.Blocks(title="Hybrid 720M playground") as demo:
             with gr.Row():
                 system = gr.Textbox(lines=2, label="System prompt")
                 tools_json = gr.Code(
-                    json.dumps([sft_data.WEATHER_TOOL], indent=1),
+                    json.dumps([chat_sft.WEATHER_TOOL], indent=1),
                     language="json",
                     label="Tools (OpenAI format; empty for none)",
                 )

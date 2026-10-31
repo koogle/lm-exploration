@@ -24,10 +24,10 @@ import time
 import numpy as np
 
 from distributed.config import DistributedRuntime
+from tokenizer import glm
 from trainer import loop
 
 from . import hnet
-from . import tokenizer as glm
 from .train import RunConfig, family_of
 
 PROFILE_SKIP, PROFILE_STEPS = 6, 3

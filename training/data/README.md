@@ -19,6 +19,41 @@ shards with real EOS and per-document byte counts, a 13-gram benchmark screen, a
 being prepared. It shares the source-scheduling rule (`mixture.deficit_source`) with
 `TokenMixture`; recipes and the Modal launcher are in [`../hybrid/`](../hybrid/README.md).
 
+## Chat format and chat SFT data
+
+The GLM tokenizer is pinned in [`../tokenizer/glm.py`](../tokenizer/glm.py); models that
+use it (the hybrid family, [`../hybrid/`](../hybrid/README.md)) read chat data through
+the modules below. The prepared subsets are GLM token ids, so a family with another
+tokenizer would prepare its own.
+
+[`chat.py`](chat.py) maps OpenAI chat messages (`system`/`user`/`assistant`/`tool`,
+assistant `tool_calls`, a `tools` list of function schemas) onto GLM-4.7-Flash's
+own chat template, pinned by revision and SHA-256 like the tokenizer. Assistant
+turns render without reasoning (`<|assistant|></think>`); calls are GLM's
+`<tool_call>name<arg_key>…</arg_key><arg_value>…</arg_value></tool_call>` and
+results `<|observation|><tool_response>…</tool_response>`. `encode` returns token
+ids and a loss mask that covers each assistant turn after its prompt plus the token
+that ends it (the next role token, or the closing EOS); `parse_assistant` turns
+generated text back into an OpenAI assistant message.
+
+[`recipes/chat-sft-v1.json`](recipes/chat-sft-v1.json) takes the non-reasoning
+(`no_think`) files of `HuggingFaceTB/smoltalk2` SFT, pinned by revision: general
+chat and system prompts, rewriting and summarization, instruction following,
+tables, science, OpenThoughts3 answers and two tool-calling sets (xLAM traces,
+Hermes function calling). [`chat_sft.py`](chat_sft.py) converts each row to OpenAI
+messages (Hermes `<tool_call>` JSON or Python dicts become `tool_calls`, multiple
+`<tool_response>` blocks become separate `tool` turns, instructions around a
+`<tools>` block join the system prompt, turns after the last assistant reply are
+cut), drops rows with reasoning or unparsable calls, conversations longer than
+the context and those sharing a 13-gram with the pretraining benchmark screen,
+and holds out 0.5% by hash. [`modal_chat_sft_data.py`](../modal_scripts/modal_chat_sft_data.py) prepares
+each file in its own call (`retries=0`, refuses work 24 hours after launch):
+
+```sh
+uv run --all-extras modal run -m modal_scripts.modal_chat_sft_data
+```
+
+
 `datasets.json` records each dataset's source, license review and eligibility;
 [`registry.py`](registry.py) validates it with pydantic.
 Paths in it are relative to this `data/` directory. Active training consumes the

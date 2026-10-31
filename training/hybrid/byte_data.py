@@ -23,7 +23,8 @@ from training_data.packed_shards import (
     wait_for_heldout,
 )
 
-from . import tokenizer as glm
+from tokenizer import glm
+
 from .hnet import BYTE_EOS
 
 
