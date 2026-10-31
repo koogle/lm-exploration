@@ -72,7 +72,9 @@ Run `kda-concepts-1793489611` is launched on
 [Modal](https://modal.com/apps/radiantai/main/ap-0rR2mM5h8KzvdYxB8Lsfb2).
 The recurrence qualification passed on GPU: zero difference against the FP32
 reference, self-patch identity, unchanged prefix outputs and correct EOS reset.
-Training and final probe results are pending. This does not yet establish any
+The untrained controls completed and the first optimization step completed with
+finite loss and gradients. The model has 98,295,828 parameters; initial held-out
+CE is 12.0406. Training and final probe results are pending. This does not yet establish any
 interpretable concept or useful model capability.
 
 The preceding launch `kda-concepts-1793489410` failed in the supervisor's import
