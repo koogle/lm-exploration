@@ -351,7 +351,9 @@ def prepare_mixture(data_id, datasets, deadline):
 @app.function(
     image=data_image, cpu=2, memory=16384, timeout=3600, retries=0, volumes={"/runs": volume}
 )
-def prepare_rl_pool(data_id, deadline, math_lighteval=False, kodcode=False, code_train=10000):
+def prepare_rl_pool(
+    data_id, deadline, math_lighteval=False, kodcode=False, code_train=10000, prompt_style="sft"
+):
     from training_data.code_sft import MBPP, OPENCODEINSTRUCT, RL_SHARD, shard_name
     from training_data.hub_files import pinned_rows
     from training_data.math_sft import GSM8K
@@ -389,6 +391,7 @@ def prepare_rl_pool(data_id, deadline, math_lighteval=False, kodcode=False, code
             kodcode=pinned_rows(*KODCODE, "data/train-00000-of-00001.parquet") if kodcode else (),
             check=check,
             code_train=code_train,
+            prompt_style=prompt_style,
         )
     finally:
         for sandbox in sandboxes:
@@ -418,11 +421,19 @@ def rl_pool(
     math_lighteval: bool = False,
     kodcode: bool = False,
     code_train: int = 10000,
+    prompt_style: str = "sft",
 ):
     """`--math-lighteval` and `--kodcode` add MATH levels 1-3 and KodCode-Light-RL easy and
     medium problems; `--code-train` caps the OpenCodeInstruct training problems (0 for
-    none). The hybrid pool (`workflows/hybrid-720m-rl.json`) is GSM8K, MATH and KodCode:
-    `--math-lighteval --kodcode --code-train 0`."""
+    none); `--prompt-style` is `sft` (the SFT prompts, plain answers) or `boxed`
+    (instructions to box math answers and give one code block). The hybrid pool
+    (`workflows/hybrid-720m-rl.json`) is GSM8K, MATH and KodCode in the boxed style:
+    `--math-lighteval --kodcode --code-train 0 --prompt-style boxed`."""
     run_id(data_id, "data_id")
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    write(report, prepare_rl_pool.remote(data_id, deadline, math_lighteval, kodcode, code_train))
+    write(
+        report,
+        prepare_rl_pool.remote(
+            data_id, deadline, math_lighteval, kodcode, code_train, prompt_style
+        ),
+    )

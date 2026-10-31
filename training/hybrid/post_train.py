@@ -1,9 +1,9 @@
 """The hybrid family for the post-training stages (`trainer/families.py`).
 
-The hybrid LM with the pinned GLM tokenizer. A prompt is one user turn in GLM's chat
-template (`chat.render`, generation prompt included) asking for a `\\boxed{}` answer or
-one Python code block; an answer ends at any of `sft_data.STOP_IDS` (EOS or the next
-turn's role token) and is read in the `boxed` format (`training_data.rl_tasks`).
+The hybrid LM with the pinned GLM tokenizer. A prompt text (from the data,
+`training_data.rl_tasks`) is one user turn in GLM's chat template (`chat.render`,
+generation prompt included); an answer ends at any of `sft_data.STOP_IDS` (EOS or the
+next turn's role token).
 Sampling is `generate.generate_batch` (one-pass prefill, CUDA-graph decoding) on a bf16
 copy of the policy that is refreshed in place before every rollout. Parents may carry
 MTP heads; post-training builds the trunk without them. Exports are bf16 trunk weights
@@ -19,28 +19,10 @@ from . import chat, generate, sft_data
 from . import tokenizer as glm
 from .model import HybridConfig, HybridLM
 
-MATH_INSTRUCTION = "Solve the problem step by step, then give the final answer as \\boxed{answer}."
-CODE_INSTRUCTION = (
-    "Write the Python {kind} `{declaration}`. Give the complete solution, with any imports it "
-    "needs, in one ```python code block."
-)
-
-
-def user_message(row):
-    """The pool row as the user's request in the hybrid chat format."""
-    if row["task"] == "math":
-        return f"{row['question'].strip()}\n\n{MATH_INSTRUCTION}"
-    # `def add(a, b):` asks for the function `add(a, b)`, `class Stack:` for the class `Stack`.
-    keyword, _, declaration = row["declaration"].partition(" ")
-    kind = "class" if keyword == "class" else "function"
-    instruction = CODE_INSTRUCTION.format(kind=kind, declaration=declaration.removesuffix(":"))
-    return f"{row['question'].strip()}\n\n{instruction}"
-
 
 class HybridModel:
     name = "hybrid"
     module = "model_hybrid.model"
-    answer_format = "boxed"
     # generate.py returns tokens only: no sampler log-probabilities or top tokens.
     records_sampler = False
     exports = True
@@ -73,11 +55,10 @@ class HybridModel:
     def context(self, model):
         return model.config.block_size
 
-    def prompt_ids(self, tokenizer, row):
-        text = chat.render(
-            [{"role": "user", "content": user_message(row)}], add_generation_prompt=True
-        )
-        return tokenizer.encode(text, add_special_tokens=False).ids
+    def prompt_ids(self, tokenizer, text):
+        """The prompt text as the user's turn, up to the assistant's reply."""
+        rendered = chat.render([{"role": "user", "content": text}], add_generation_prompt=True)
+        return tokenizer.encode(rendered, add_special_tokens=False).ids
 
     def sample(self, model, prompts, limit, temperature, generator, record_top_k, engine):
         """(rollout.Samples without the stop token, the stop token of each finished row)."""

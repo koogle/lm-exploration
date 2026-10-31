@@ -2,7 +2,7 @@
 
 `Scheduler` draws training prompts per task and rests prompts that carry no signal.
 `collect` samples answers with the model family's sampler (`trainer/families.py`) and
-scores them (`training_data.rl_tasks`, in the family's answer format): 1 for an answer
+scores them (`training_data.rl_tasks`, in each problem's answer format): 1 for an answer
 that ends in one of the family's stop tokens and is correct (Math-Verify for math, every
 unit test passing in the code sandbox for code), else 0.
 `Sampler` is the trajectory source of on-policy training: every step it samples a group
@@ -81,14 +81,7 @@ def collect(family, model, rows, rollouts, temperature, generator, tokenizer, sa
                     )
             chosen = [rows[i] for i in indices]
             texts = [tokenizer.decode(c, skip_special_tokens=True) for c in samples.completions]
-            scores = (
-                rl_tasks.rewards,
-                chosen,
-                texts,
-                samples.finished,
-                sandbox,
-                family.answer_format,
-            )
+            scores = (rl_tasks.rewards, chosen, texts, samples.finished, sandbox)
             if task == "code":
                 pending = (indices, checker.submit(*scores))
             else:

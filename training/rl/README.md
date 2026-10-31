@@ -56,14 +56,17 @@ algorithm or a source of answers can change without touching the rest:
 
 **Model families.** The parent checkpoint's recorded architecture picks the family
 adapter ([`../trainer/families.py`](../trainer/families.py)); everything else in the
-loop is shared:
+loop is shared. The prompts come from the data: every pool row holds its `prompt` text
+and `answer_format`, written by the pool's prompt style (`--prompt-style`, see
+[`../data/rl_tasks.py`](../data/rl_tasks.py)): `sft` (the SFT prompts, whole-completion
+answers) or `boxed` (an instruction to end math with `\boxed{}` and give code as one
+Python block; the last box and the last block are read). A family only renders the text:
 
 | | Subword ([`../trainer/subword.py`](../trainer/subword.py) `SubwordModel`) | Hybrid ([`../hybrid/post_train.py`](../hybrid/post_train.py) `HybridModel`) |
 | --- | --- | --- |
 | Model, tokenizer | model_100m GPT, frozen subword tokenizer | hybrid LM (trunk, without MTP heads), pinned GLM tokenizer |
-| Prompt | BOS and the task's SFT prompt (`rl_tasks.prompt`) | one user turn in GLM's chat template asking for a `\boxed{}` answer or one Python block |
+| Prompt | BOS and the prompt text | the prompt text as one user turn in GLM's chat template |
 | Answer ends at | EOS | EOS, `<\|user\|>` or `<\|observation\|>` |
-| Answer format | `plain`: the whole completion | `boxed`: the last `\boxed{}`; the last fenced Python block |
 | Sampler | [`../trainer/rollout.py`](../trainer/rollout.py) (records log-probabilities and top tokens) | [`../hybrid/generate.py`](../hybrid/generate.py) on a bf16 copy of the policy (no log-probabilities, so no StableReinforce) |
 | Replay, exports | pretraining replay; the checkpoint is the artifact | no replay; a bf16 export at the end, uploaded to `hf_repo` if set |
 
@@ -292,7 +295,8 @@ uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --checkpoint math-code-sft-replay-20b-s0-r02-arch/step-000020000.pt
 # The hybrid pool, then chat SFT and RL.
 uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool \
-  --data-id rl-pool-hybrid-03 --math-lighteval --kodcode --code-train 0
+  --data-id rl-pool-hybrid-04 --math-lighteval --kodcode --code-train 0 \
+  --prompt-style boxed
 uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --workflow workflows/hybrid-720m-rl.json --run-id ID
 # Off-policy trajectories from the Qwen teacher's saved code answers:

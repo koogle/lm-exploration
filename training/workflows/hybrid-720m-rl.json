@@ -21,7 +21,7 @@
       "stage": "rl",
       "name": "rl",
       "description": "Dr. GRPO with Muon on 8 H100s at the rates of the rl-v1 run behind the Space's model (hybrid-720m-rl-lr-low-01): 128 prompts (16 per GPU) x 8 answers per step, 768-token answers",
-      "pool": "rl-pool-hybrid-03",
+      "pool": "rl-pool-hybrid-04",
       "gpus": 8,
       "settings": {
         "steps": 1000,
