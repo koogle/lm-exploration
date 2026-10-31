@@ -279,7 +279,7 @@ playground Space. Metrics, configs and launch records:
 
 Repository tasks for agentic coding, built from commits in
 `jfrick/mit-claude-codex-code-20261019` (revision `b157d0be`) by
-[`modal_pr_tasks.py`](../hybrid/modal_pr_tasks.py): the repository at the parent
+[`modal_pr_tasks.py`](../modal_scripts/modal_pr_tasks.py): the repository at the parent
 commit, an issue written by a teacher model, the commit's
 own test changes as the hidden check and the commit as the reference patch.
 

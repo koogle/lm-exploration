@@ -119,7 +119,7 @@ Outputs (metrics, configs, capacity, benchmarks, LiveCodeBench):
 
 ## Agentic SFT pilot (`agentic-sft-v1`, 2026-10-29)
 
-Agent episodes on the 506 verified PR tasks (`hybrid/agent.py`, `hybrid/modal_agentic.py`):
+Agent episodes on the 506 verified PR tasks (`data/pr_task_agent.py`, `modal_scripts/modal_agentic.py`):
 the agent starts from the parent revision with the commit's tests and git history
 removed, has bash, read/edit/write file and submit tools (40 turns), and is graded by the
 commit's hidden tests in a separate sandbox (resolved: every fail-to-pass and

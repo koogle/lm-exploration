@@ -392,6 +392,9 @@ The chat format ([`data/chat.py`](../data/chat.py), GLM-4.7-Flash's own chat
 template) and the chat SFT data ([`data/chat_sft.py`](../data/chat_sft.py), recipe
 [`data/recipes/chat-sft-v1.json`](../data/recipes/chat-sft-v1.json)) are data
 sources: see [Chat format and chat SFT data](../data/README.md#chat-format-and-chat-sft-data).
+PR tasks and the agent episodes on them are too
+([PR tasks and agent episodes](../data/README.md#pr-tasks-and-agent-episodes)); a hybrid
+export acts as the agent through [`agent_policy.py`](agent_policy.py).
 
 `chat_sft.ChatMixture` packs whole conversations, in one seeded order across files, into
 4,097-token windows padded with EOS; labels are `-100` outside the loss mask, and
@@ -446,31 +449,6 @@ results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
 
 ```sh
 uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
-```
-
-## PR-to-task data
-
-[`pr_tasks.py`](pr_tasks.py) turns collected commits into repository tasks: the
-repository at the parent commit, an issue, the commit's own test changes as the
-hidden check and the commit as the reference patch. [`modal_pr_tasks.py`](modal_pr_tasks.py)
-runs three stages on the `lm-exploration-hybrid-data` volume under `<name>/`:
-
-- `select` keeps single-language commits (Python, JS/TS, Go) that change 1–3 source
-  and 1–3 test files within `pr_tasks.LIMITS`, capped per repository. It runs no
-  repository code.
-- `verify` gives each task two disposable sandboxes: one installs dependencies with
-  network, and its filesystem snapshot runs the test files without network with source
-  files reverted to the parent and at the commit ([`pr_task_runner.py`](pr_task_runner.py)).
-  Verified tasks have at least one fail-to-pass test and no regression.
-- `issues` has GLM-5.3 (through OpenRouter) draft each task's issue from the commit
-  message and the test changes only, up to four drafts until one has no leaks (quoted
-  added source lines, new internal names the tests never use, mentions of tests or the
-  commit). Launch it with `OPENROUTER_API_KEY` set; the key is passed to that run only.
-
-```sh
-uv run modal run -m model_hybrid.modal_pr_tasks::select [--count 1000] [--name pr-tasks-pilot]
-uv run modal run --detach -m model_hybrid.modal_pr_tasks::verify [--limit N] [--workers 48]
-uv run modal run --detach -m model_hybrid.modal_pr_tasks::issues [--limit N]
 ```
 
 ## Tests

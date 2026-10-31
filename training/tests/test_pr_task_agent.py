@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from model_hybrid import agent
+from training_data import pr_task_agent as agent
 
-RUNNER = Path(__file__).parents[1] / "hybrid" / "pr_task_runner.py"
+RUNNER = Path(__file__).parents[1] / "data" / "pr_task_runner.py"
 
 
 def load_runner():

@@ -1,5 +1,5 @@
 {
-  "recipe": "/project/model_hybrid/recipes/agentic-sft-v1.json",
+  "recipe": "/project/training_data/recipes/agentic-sft-v1.json",
   "model": {
     "vocab_size": 154880,
     "eos_id": 154820,

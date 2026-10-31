@@ -1,9 +1,9 @@
-"""Agent episodes on verified PR tasks (see `agent.py`): teacher trajectories and evaluation.
+"""Agent episodes on verified PR tasks (see `data/pr_task_agent.py`): teacher trajectories and evaluation.
 
 Run from training/:
-    modal run --detach -m model_hybrid.modal_agentic::solve [--limit N] [--workers 32]
-    modal run --detach -m model_hybrid.modal_agentic::evaluate --export <run>/<export> [--limit N]
-    modal run -m model_hybrid.modal_agentic::prepare [--recipe hybrid/recipes/agentic-sft-v1.json]
+    modal run --detach -m modal_scripts.modal_agentic::solve [--limit N] [--workers 32]
+    modal run --detach -m modal_scripts.modal_agentic::evaluate --export <run>/<export> [--limit N]
+    modal run -m modal_scripts.modal_agentic::prepare [--recipe data/recipes/agentic-sft-v1.json]
 
 Tasks are the pilot's verified tasks with a clean issue (`pr-tasks-pilot/verified.jsonl`
 and `issues.jsonl` on the `lm-exploration-hybrid-data` volume). Each episode installs
@@ -18,7 +18,7 @@ usage, held-out flag) and `summary.json`. `evaluate` runs a hybrid export (greed
 GLM chat format) on the held-out repositories' tasks in one H100 call and writes
 `<name>/agentic/<run>/` the same way. `prepare` turns the recipe's `trajectories` run
 into the chat SFT subset `agentic` (resolved episodes from training repositories
-only, rendered with `sft_data.prepare_subset`). Every call has `retries=0`, a timeout of at
+only, rendered with `chat_sft.prepare_subset`). Every call has `retries=0`, a timeout of at
 most 6 hours and refuses work 24 hours after launch; sandboxes are capped at one
 hour and at the deadline, and a supervisor cancels the spawned call at the deadline.
 """
@@ -30,8 +30,10 @@ import time
 from pathlib import Path
 
 import modal
-from model_hybrid import modal_benchmarks, modal_pr_tasks, modal_sft_data
+from model_hybrid import modal_benchmarks
 from model_hybrid.image import build
+
+from modal_scripts import modal_chat_sft_data, modal_pr_tasks
 
 app = modal.App("lm-exploration-hybrid-agentic")
 app.include(modal_benchmarks.app)  # the deadline supervisor
@@ -45,7 +47,7 @@ EVAL_SANDBOX_SECONDS = 5 * 60 * 60
 
 def load_tasks(folder):
     """Verified tasks with a clean issue, each with its issue and held-out flag."""
-    from model_hybrid import agent
+    from training_data import pr_task_agent as agent
 
     issues = {}
     for line in (folder / "issues.jsonl").read_text().splitlines():
@@ -119,7 +121,7 @@ def _teacher_turn(messages, usage):
     import urllib.error
     import urllib.request
 
-    from model_hybrid import agent
+    from training_data import pr_task_agent as agent
 
     body = {
         "model": modal_pr_tasks.TEACHER,
@@ -160,7 +162,7 @@ def _teacher_turn(messages, usage):
 
 
 def _summary(rows, started):
-    from model_hybrid import agent
+    from training_data import pr_task_agent as agent
 
     def rate(selected):
         tasks = {(r["repository"], r["sha"]) for r in selected}
@@ -215,7 +217,7 @@ def _recorder(folder):
 
 
 def _row(task, episode, patch, grade, usage):
-    from model_hybrid import agent
+    from training_data import pr_task_agent as agent
 
     return {
         "repository": task["repository"],
@@ -258,7 +260,7 @@ def solve_tasks(name, run, limit, workers, attempts, deadline):
         raise RuntimeError("Launch with OPENROUTER_API_KEY set")
     from concurrent.futures import ThreadPoolExecutor
 
-    from model_hybrid import agent
+    from training_data import pr_task_agent as agent
 
     folder = Path("/data", name)
     out = folder / "agentic" / run
@@ -321,8 +323,10 @@ def evaluate_export(export, name, run, limit, workers, deadline):
     from concurrent.futures import ThreadPoolExecutor
 
     import torch
-    from model_hybrid import agent, generate
-    from model_hybrid import tokenizer as glm
+    from model_hybrid import agent_policy, generate
+    from training_data import pr_task_agent as agent
+
+    from tokenizer import glm
 
     folder = Path("/data", name)
     out = folder / "agentic" / run
@@ -332,7 +336,7 @@ def evaluate_export(export, name, run, limit, workers, deadline):
     lm = generate.load_export(
         Path("/runs", run_name, "export", export_name), dtype=torch.bfloat16, device="cuda"
     )
-    local = agent.LocalPolicy(lm, glm.load(), rows=96)
+    local = agent_policy.LocalPolicy(lm, glm.load(), rows=96)
     turn = [0]
 
     def policy(conversations):
@@ -392,26 +396,29 @@ def evaluate_export(export, name, run, limit, workers, deadline):
 
 
 @app.function(
-    image=modal_sft_data.image,
+    image=modal_chat_sft_data.image,
     cpu=8,
     memory=32768,
     timeout=2 * 60 * 60,
     retries=0,
-    secrets=[modal_sft_data.secret],
+    secrets=[modal_chat_sft_data.secret],
     volumes={"/data": volume},
 )
 def prepare_trajectories(recipe, deadline):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     import numpy as np
-    from model_hybrid import agent, sft_data, tokenizer
+    from training_data import chat_sft
+    from training_data import pr_task_agent as agent
+
+    from tokenizer import glm as tokenizer
 
     lines = Path("/data", recipe["trajectories"]).read_text().splitlines()
     rows = [json.loads(line) for line in lines]
     kept = [r for r in rows if r["resolved"] and not r["heldout"]]
     screen = np.load(Path("/data", recipe["screen"]))
     glm = tokenizer.load(tokenizer.tokenizer_file("/tmp/tokenizer"))
-    meta = sft_data.prepare_subset(
+    meta = chat_sft.prepare_subset(
         recipe,
         "agentic",
         kept,
@@ -461,7 +468,7 @@ def evaluate(
 
 
 @app.local_entrypoint()
-def prepare(recipe: str = "hybrid/recipes/agentic-sft-v1.json"):
+def prepare(recipe: str = "data/recipes/agentic-sft-v1.json"):
     settings = json.loads(Path(recipe).read_text())
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     print(json.dumps(prepare_trajectories.remote(settings, deadline), indent=2))

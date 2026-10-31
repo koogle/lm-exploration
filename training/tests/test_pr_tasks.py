@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from model_hybrid import pr_tasks
+from training_data import pr_tasks
 
 PATCH = (
     "diff --git a/pkg/limits.py b/pkg/limits.py\n"

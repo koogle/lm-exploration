@@ -34,6 +34,7 @@ uv run modal run -m workflows.modal_train::main \
 | `modal_muon_comparison.py` | Matched 100M-token Muon vs AdamW comparison; [guide](../distributed/MUON_COMPARISON.md); outputs on HF under `pr-24/training/results/` |
 | `modal_overlap_checks.py` | Bounded three-GPU equivalence/resume checks for the overlapped [`../modal_streaming_train.py`](../modal_streaming_train.py) launcher |
 | `modal_chat_sft_data.py` | Chat SFT data in GLM's chat format (`data/recipes/chat-sft-*.json`); [guide](../data/README.md#chat-format-and-chat-sft-data) |
+| `modal_pr_tasks.py`, `modal_agentic.py` | PR tasks from collected commits and agent episodes on them; [guide](../data/README.md#pr-tasks-and-agent-episodes) |
 | `modal_sft_data.py` | Repair-SFT data: verified arithmetic curriculum, CommitPackFT and private-patch preparation; [guide](../sft/README.md) |
 | `modal_sft_eval.py` | Executable repair diagnostic in network-blocked Sandboxes; same guide |
 

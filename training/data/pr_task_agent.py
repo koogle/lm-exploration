@@ -9,8 +9,9 @@ pass-to-pass test still passes.
 
 A policy maps a list of conversations to one assistant message each (or None when a
 conversation no longer fits), so a teacher API answers one conversation per call
-and a local model answers a whole batch per generation. `modal_agentic.py` provides
-the sandboxes and runs the stages.
+and a local model answers a whole batch per generation (the hybrid family's
+`model_hybrid.agent_policy.LocalPolicy`). `modal_scripts/modal_agentic.py` provides the
+sandboxes and runs the stages.
 """
 
 import hashlib
@@ -188,35 +189,3 @@ def training_row(messages):
         row.setdefault("content", "")
         rows.append(row)
     return {"messages": rows, "tools": TOOLS}
-
-
-class LocalPolicy:
-    """A hybrid export as the agent: GLM chat format with the tools, greedy decoding
-    in batches of `rows`, each turn up to `max_new_tokens`."""
-
-    def __init__(self, lm, tokenizer, max_new_tokens=1536, rows=32):
-        self.lm, self.tokenizer = lm, tokenizer
-        self.max_new_tokens, self.rows = max_new_tokens, rows
-
-    def __call__(self, conversations):
-        from . import chat, generate, sft_data
-
-        room = self.lm.config.block_size - self.max_new_tokens
-        prompts = []
-        for messages in conversations:
-            text = chat.render(
-                training_row(messages)["messages"], TOOLS, add_generation_prompt=True
-            )
-            ids = self.tokenizer.encode(text, add_special_tokens=False).ids
-            prompts.append(ids if len(ids) <= room else None)
-        replies = [None] * len(conversations)
-        order = sorted((i for i, p in enumerate(prompts) if p), key=lambda i: -len(prompts[i]))
-        for start in range(0, len(order), self.rows):
-            group = order[start : start + self.rows]
-            outputs = generate.generate_batch(
-                self.lm, [prompts[i] for i in group], self.max_new_tokens, sft_data.STOP_IDS
-            )
-            for index, ids in zip(group, outputs, strict=True):
-                text = self.tokenizer.decode(ids, skip_special_tokens=False)
-                replies[index] = chat.parse_assistant(text)
-        return replies

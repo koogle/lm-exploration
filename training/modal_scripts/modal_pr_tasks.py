@@ -1,9 +1,9 @@
-"""PR -> task pilot stages on Modal (see `pr_tasks.py`).
+"""PR -> task pilot stages on Modal (see `data/pr_tasks.py`).
 
 Run from training/, in order:
-    modal run -m model_hybrid.modal_pr_tasks::select [--count 1000] [--name pr-tasks-pilot]
-    modal run --detach -m model_hybrid.modal_pr_tasks::verify [--limit N] [--workers 48]
-    modal run --detach -m model_hybrid.modal_pr_tasks::issues [--limit N]
+    modal run -m modal_scripts.modal_pr_tasks::select [--count 1000] [--name pr-tasks-pilot]
+    modal run --detach -m modal_scripts.modal_pr_tasks::verify [--limit N] [--workers 48]
+    modal run --detach -m modal_scripts.modal_pr_tasks::issues [--limit N]
 
 `select` reads the `changes` rows of the MIT collection at its current revision
 (recorded), keeps single-language commits that change both source and test files
@@ -37,15 +37,16 @@ from pathlib import Path
 import modal
 from model_hybrid import modal_benchmarks
 
+from workflows.images import add_project
+
 app = modal.App("lm-exploration-hybrid-pr-tasks")
 app.include(modal_benchmarks.app)  # the deadline supervisor
 volume = modal.Volume.from_name("lm-exploration-hybrid-data")
 secret = modal.Secret.from_name("simple-llm-hf")
-image = (
+image = add_project(
     modal.Image.debian_slim(python_version="3.12")
     .pip_install("huggingface-hub==1.33.0")
     .env({"PYTHONPATH": "/project", "HF_HUB_DISABLE_PROGRESS_BARS": "1"})
-    .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__", "kernels"])
 )
 mirrors = modal.Volume.from_name("lm-exploration-pr-task-mirrors", create_if_missing=True)
 # Repository code runs only in these sandboxes: no secrets, the mirror volume read-only,
@@ -61,7 +62,7 @@ sandbox_image = (
         "pip install uv==0.9.5",
     )
     .env({"PATH": "/usr/local/go/bin:/root/go/bin:/usr/local/bin:/usr/bin:/bin"})
-    .add_local_file(Path(__file__).with_name("pr_task_runner.py"), "/runner/pr_task_runner.py")
+    .add_local_file("data/pr_task_runner.py", "/runner/pr_task_runner.py")
 )
 # The key comes from the launching shell's OPENROUTER_API_KEY and lives only for the run.
 openrouter = modal.Secret.from_dict(
@@ -79,7 +80,7 @@ LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
 def _shard_candidates(path):
     import gzip
 
-    from model_hybrid import pr_tasks
+    from training_data import pr_tasks
 
     shard = path.split("/changes/", 1)[1]
     rejected, candidates = {}, []
@@ -119,7 +120,7 @@ def select_candidates(name, count, per_repository, deadline):
     from concurrent.futures import ProcessPoolExecutor
 
     from huggingface_hub import HfApi, snapshot_download
-    from model_hybrid import pr_tasks
+    from training_data import pr_tasks
 
     revision = HfApi().dataset_info(COLLECTION).sha
     local = snapshot_download(
@@ -397,7 +398,7 @@ def write_issues(name, deadline, limit=0):
     import urllib.error
     from concurrent.futures import ThreadPoolExecutor
 
-    from model_hybrid import pr_tasks
+    from training_data import pr_tasks
 
     folder = Path("/data", name)
     tasks = [json.loads(line) for line in (folder / "selected.jsonl").read_text().splitlines()]
