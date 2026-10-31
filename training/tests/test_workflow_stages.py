@@ -164,6 +164,12 @@ class RLStageTests(unittest.TestCase):
         for stage in stages:
             self.assertEqual(stage["spec"]["settings"]["stable_reinforce"]["top_k"], 32)
 
+    def test_hybrid_workflows_run_rl_but_not_sft(self):
+        plan = plan_of([{**RL, "name": "rl"}], family="hybrid", **{"from": START})
+        self.assertEqual([s["stage"] for s in plan["stages"]], ["rl"])
+        with self.assertRaisesRegex(ValueError, "hybrid has no sft"):
+            plan_of([sft("chat")], family="hybrid", **{"from": START})
+
     def test_workflow_runs_rl_after_sft(self):
         grpo = {**RL, "name": "grpo", "settings": {"algorithm": {"name": "on_policy/grpo"}}}
         plan = plan_of(
@@ -188,37 +194,41 @@ class CheckpointTests(unittest.TestCase):
         self.assertEqual((pretrained.stage, pretrained.model_config), ("pretrain", config))
         tuned = describe(
             {
-                "stage": "sft",
-                "model_config": config,
+                "stage": "rl",
+                "architecture": {"module": "model_hybrid.model", "config": config},
                 "identity": {"source_sha256": {"model": "m"}, "tokenizer_sha256": "t"},
             }
         )
         self.assertEqual(
-            (tuned.stage, tuned.module, tuned.tokenizer_sha256), ("sft", "model_100m.model", "t")
+            (tuned.stage, tuned.module, tuned.model_config, tuned.tokenizer_sha256),
+            ("rl", "model_hybrid.model", config, "t"),
         )
         with self.assertRaises(ValueError):
             describe({"model": {}})
 
-    def test_parent_from_other_model_code_needs_family_and_tokenizer(self):
-        import model_100m.model as module
+    def test_parent_picks_its_family_and_checks_its_tokenizer(self):
         import torch
+        from training_data.subword import TOKENIZER_SHA256
 
         saved = {
-            "architecture": {"module": module.__name__, "config": {"n_layer": 2}},
+            "architecture": {"module": "model_100m.model", "config": {"n_layer": 2}},
             "source_sha256": {"model": "earlier model code"},
-            "data_identity": {"tokenizer_sha256": "t"},
+            "data_identity": {"tokenizer_sha256": TOKENIZER_SHA256},
         }
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "step-000000001.pt")
             torch.save(saved, path)
-            _, description = parent(path, module, "t")
+            _, description, family = parent(path)
             self.assertEqual(description.source_sha256, {"model": "earlier model code"})
-            with self.assertRaisesRegex(ValueError, "tokenizer"):
-                parent(path, module, "other")
+            self.assertEqual(family.name, "subword")
             saved["architecture"]["module"] = "model_hybrid.model"
             torch.save(saved, path)
-            with self.assertRaisesRegex(ValueError, "family"):
-                parent(path, module, "t")
+            with self.assertRaisesRegex(ValueError, "tokenizer"):
+                parent(path)
+            saved["architecture"]["module"] = "model_unknown.model"
+            torch.save(saved, path)
+            with self.assertRaisesRegex(ValueError, "adapter"):
+                parent(path)
 
 
 if __name__ == "__main__":

@@ -379,6 +379,83 @@ class SubwordFamily:
         }
 
 
+class SubwordModel:
+    """The subword family for the post-training stages (`trainer/families.py`): the
+    model_100m GPT, the frozen subword tokenizer, prompt texts after BOS, answers ending in
+    EOS, and the custom-kernel sampler (`trainer/rollout.py`)."""
+
+    name = "subword"
+    module = "model_100m.model"
+    # The sampler records log-probabilities and top tokens (off-policy corrections).
+    records_sampler = True
+    # The checkpoint is the artifact: no exports.
+    exports = False
+
+    def __init__(self):
+        from training_data.subword import TOKENIZER_SHA256
+
+        self.tokenizer_sha256 = TOKENIZER_SHA256
+        self.special_tokens = {"bos": BOS_TOKEN_ID, "eos": EOS_TOKEN_ID}
+        self.stop_ids = (EOS_TOKEN_ID,)
+
+    def tokenizer(self):
+        from training_data.subword import load_frozen
+
+        return load_frozen()
+
+    def copy_tokenizer(self, folder):
+        import shutil
+
+        from training_data.subword import DEFAULT_FOLDER
+
+        shutil.copytree(DEFAULT_FOLDER, folder)
+
+    def build(self, config):
+        from model_100m.model import GPT, ModelConfig
+
+        return GPT(ModelConfig(**config))
+
+    def load(self, model, state):
+        model.load_state_dict(state, strict=True)
+
+    def architecture(self, model):
+        return {"module": self.module, "config": asdict(model.config)}
+
+    def context(self, model):
+        return model.config.block_size
+
+    def prompt_ids(self, tokenizer, text):
+        """BOS and the prompt text."""
+        return [BOS_TOKEN_ID, *tokenizer.encode(text, add_special_tokens=False).ids]
+
+    def sample(self, model, prompts, limit, temperature, generator, record_top_k, engine):
+        """(rollout.Samples without the EOS, the token that ended each finished row)."""
+        from trainer import rollout
+
+        samples = rollout.sample(
+            model,
+            prompts,
+            limit,
+            EOS_TOKEN_ID,
+            temperature,
+            generator,
+            record_top_k=record_top_k,
+            engine=engine,
+        )
+        return samples, [EOS_TOKEN_ID if done else None for done in samples.finished]
+
+    def source_files(self):
+        """{name: path} of the model code; recorded beside post-training checkpoints as
+        `model.py` and `shared_model.py` (`checkpoints.recorded_code`)."""
+        import model_10m.model as shared_module
+        import model_100m.model as model_module
+
+        return {"model": model_module.__file__, "shared_model": shared_module.__file__}
+
+    def export(self, model, output, progress, repo):
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)

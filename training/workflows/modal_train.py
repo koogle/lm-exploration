@@ -857,9 +857,12 @@ def run_workflow(plan, selected, provenance, checkpoint="", examples=None, quali
     pending = {}
 
     def finish(name):
+        """Record a post-training call's result; an RL run that stopped short of its step
+        target is paused, and the next launch resumes it in the same run."""
         result = pending.pop(name).get()
+        reason = result.get("stop_reason", "steps")
         state["stages"][name].update(
-            status="completed",
+            status="completed" if reason == "steps" else "paused",
             output={"checkpoint": relative(result["checkpoint"])},
             result=result,
         )
@@ -925,15 +928,25 @@ def run_workflow(plan, selected, provenance, checkpoint="", examples=None, quali
                 continue
             # A stage an earlier launch started runs again from its parent in a new run.
             attempt = state["stages"].get(name, {}).get("attempt", 0) + 1
-            run = stage["run_id"] if attempt == 1 else f"{stage['run_id']}-a{attempt}"
+            # RL resumes its own run; other stages restart from their parent in a new run.
+            fresh = attempt == 1 or stage["stage"] == "rl"
+            run = stage["run_id"] if fresh else f"{stage['run_id']}-a{attempt}"
             recipe = {**stage["spec"], "run_id": run, "parent": parent["checkpoint"]}
             state["stages"][name] = {"status": "running", "run_id": run, "attempt": attempt}
             save()
             pending[name] = modal_post_train.run_stage(
-                stage["stage"], recipe, launch, deadline, (examples or {}).get(name, b"")
+                stage["stage"],
+                plan["family"],
+                recipe,
+                launch,
+                deadline,
+                (examples or {}).get(name, b""),
             )
         for name in list(pending):
             finish(name)
+        if any(state["stages"].get(n, {}).get("status") == "paused" for n in selected):
+            record(launch, "paused", stages=state["stages"], provenance=provenance)
+            return state["stages"]
     except BaseException as error:
         for done in state["stages"].values():
             if done.get("status") == "running":
@@ -953,11 +966,15 @@ def main(
     end: str = "",
     checkpoint: str = "",
     qualify: int = 0,
+    wait: bool = False,
 ):
     """Run a workflow, or its stages `--start` to `--end`, as workflow run `--run-id`;
     `--checkpoint` is the parent of the first selected stage if its parent stage has not
     finished in this run. Launching the same workflow and run ID again continues it.
-    `--qualify N` qualifies exact resume of one selected SFT stage over N steps."""
+    `--qualify N` qualifies exact resume of one selected SFT stage over N steps.
+
+    The controller is spawned, so a `--detach` launch keeps running after this client
+    exits; `--wait` waits for it and prints its result."""
     from workflows.checks import parent_path
     from workflows.deadline import new_deadline
     from workflows.plan import load_workflow, select
@@ -993,8 +1010,10 @@ def main(
             }
         )
     )
-    result = run_workflow.remote(plan, selected, provenance, checkpoint, examples, qualify)
-    print(json.dumps(result, indent=2))
+    controller = run_workflow.spawn(plan, selected, provenance, checkpoint, examples, qualify)
+    print(json.dumps({"controller": controller.object_id}))
+    if wait:
+        print(json.dumps(controller.get(), indent=2))
 
 
 @app.local_entrypoint()
