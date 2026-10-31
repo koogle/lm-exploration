@@ -12,6 +12,12 @@ cannot hold themselves (the code sandbox, the volume, the stop request) and serv
 them as `Services` over an authenticated local socket (`serve`, `connect`).
 """
 
+import datetime
+
+# How long a rank waits in a collective: the others wait while rank 0 alone writes a
+# checkpoint (model and optimizer state) or the final export and its upload.
+COLLECTIVE_TIMEOUT = datetime.timedelta(minutes=30)
+
 
 class Ranks:
     def __init__(self, rank=0, world=1):
@@ -154,9 +160,11 @@ def _rank(rank, world, target, args, result):
     if torch.cuda.is_available():
         torch.cuda.set_device(rank)
         device = torch.device("cuda", rank)
-        dist.init_process_group("nccl", rank=rank, world_size=world, device_id=device)
+        dist.init_process_group(
+            "nccl", rank=rank, world_size=world, device_id=device, timeout=COLLECTIVE_TIMEOUT
+        )
     else:  # CPU processes (tests)
-        dist.init_process_group("gloo", rank=rank, world_size=world)
+        dist.init_process_group("gloo", rank=rank, world_size=world, timeout=COLLECTIVE_TIMEOUT)
     try:
         value = target(Ranks(rank, world), *args)
         if rank == 0:
