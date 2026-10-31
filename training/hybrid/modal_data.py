@@ -63,8 +63,9 @@ def screen_path(recipe):
 )
 def build_screen(recipe, deadline):
     import numpy as np
-    from model_hybrid import tokenizer
     from training_data import packed_shards as data
+
+    from tokenizer import glm as tokenizer
 
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -102,8 +103,9 @@ def prepare(recipe, name, index, deadline):
     import shutil
 
     import numpy as np
-    from model_hybrid import tokenizer
     from training_data import packed_shards as data
+
+    from tokenizer import glm as tokenizer
 
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -116,7 +118,7 @@ def prepare(recipe, name, index, deadline):
     screen = np.load(screen_path(recipe))
     renderer = recipe["sources"][name].get("render")
     if renderer:
-        from model_hybrid import chat
+        from training_data import chat
 
         renderer = chat.RENDERERS[renderer]
     meta = data.prepare_shard(

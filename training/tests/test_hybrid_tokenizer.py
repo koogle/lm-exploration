@@ -5,8 +5,10 @@ import os
 import unittest
 from pathlib import Path
 
-from model_hybrid import model, tokenizer
+from model_hybrid import model
 from training_data import packed_shards as data
+
+from tokenizer import glm as tokenizer
 
 RECIPE = Path(__file__).parents[1] / "hybrid" / "recipes" / "hybrid-40b-v1.json"
 # Set HYBRID_GLM_TOKENIZER to a downloaded tokenizer.json to check the file itself.

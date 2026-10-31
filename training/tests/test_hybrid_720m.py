@@ -5,9 +5,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from model_hybrid import model, tokenizer
+from model_hybrid import model
 from model_hybrid.benchmark import SyntheticMixture, summarize
 from model_hybrid.train import RunConfig, flops_per_token, learning_rate_factor, model_config_of
+
+from tokenizer import glm as tokenizer
 
 CONFIG = Path(__file__).parents[1] / "hybrid" / "configs" / "hybrid-720m-40b.json"
 

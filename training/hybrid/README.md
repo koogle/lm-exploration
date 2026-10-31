@@ -192,7 +192,7 @@ declared for Muon raises.
 
 ## Tokenizer and data recipe
 
-[`tokenizer.py`](tokenizer.py) pins zai-org/GLM-4.7-Flash's `tokenizer.json`
+[`tokenizer/glm.py`](../tokenizer/glm.py) pins zai-org/GLM-4.7-Flash's `tokenizer.json`
 (revision `7dd20894`, SHA-256 `19e77364…a82d`). On 2026-10-25 it was
 byte-identical to zai-org/GLM-5.3-Flash's (revision `46a050be`). It has 154,856
 entries; the model pads its embedding to 154,880. Documents end with
@@ -388,34 +388,12 @@ prompts) at 4.1 ms per step, 15,550 tokens/s; the plain-PyTorch step it replaces
 
 ## Chat SFT
 
-[`chat.py`](chat.py) maps OpenAI chat messages (`system`/`user`/`assistant`/`tool`,
-assistant `tool_calls`, a `tools` list of function schemas) onto GLM-4.7-Flash's
-own chat template, pinned by revision and SHA-256 like the tokenizer. Assistant
-turns render without reasoning (`<|assistant|></think>`); calls are GLM's
-`<tool_call>name<arg_key>…</arg_key><arg_value>…</arg_value></tool_call>` and
-results `<|observation|><tool_response>…</tool_response>`. `encode` returns token
-ids and a loss mask that covers each assistant turn after its prompt plus the token
-that ends it (the next role token, or the closing EOS); `parse_assistant` turns
-generated text back into an OpenAI assistant message.
+The chat format ([`data/chat.py`](../data/chat.py), GLM-4.7-Flash's own chat
+template) and the chat SFT data ([`data/chat_sft.py`](../data/chat_sft.py), recipe
+[`data/recipes/chat-sft-v1.json`](../data/recipes/chat-sft-v1.json)) are data
+sources: see [Chat format and chat SFT data](../data/README.md#chat-format-and-chat-sft-data).
 
-[`recipes/chat-sft-v1.json`](recipes/chat-sft-v1.json) takes the non-reasoning
-(`no_think`) files of `HuggingFaceTB/smoltalk2` SFT, pinned by revision: general
-chat and system prompts, rewriting and summarization, instruction following,
-tables, science, OpenThoughts3 answers and two tool-calling sets (xLAM traces,
-Hermes function calling). [`sft_data.py`](sft_data.py) converts each row to OpenAI
-messages (Hermes `<tool_call>` JSON or Python dicts become `tool_calls`, multiple
-`<tool_response>` blocks become separate `tool` turns, instructions around a
-`<tools>` block join the system prompt, turns after the last assistant reply are
-cut), drops rows with reasoning or unparsable calls, conversations longer than
-the context and those sharing a 13-gram with the pretraining benchmark screen,
-and holds out 0.5% by hash. [`modal_sft_data.py`](modal_sft_data.py) prepares
-each file in its own call (`retries=0`, refuses work 24 hours after launch):
-
-```sh
-uv run --all-extras modal run -m model_hybrid.modal_sft_data
-```
-
-`ChatMixture` packs whole conversations, in one seeded order across files, into
+`chat_sft.ChatMixture` packs whole conversations, in one seeded order across files, into
 4,097-token windows padded with EOS; labels are `-100` outside the loss mask, and
 the document mask keeps conversations apart. One pass is one epoch. The recipe's
 `replay` takes a quarter of every batch's rows from the pretraining mixture
@@ -504,8 +482,7 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
   tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
   tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
   tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet \
-  tests.test_hybrid_chat tests.test_hybrid_long_context tests.test_hybrid_pr_tasks \
-  tests.test_hybrid_agent -v
+  tests.test_chat tests.test_hybrid_long_context -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):

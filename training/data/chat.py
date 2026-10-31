@@ -22,7 +22,7 @@ import json
 import re
 from pathlib import Path
 
-from . import tokenizer as glm
+from tokenizer import glm
 
 TEMPLATE = {**glm.SOURCE, "file": "chat_template.jinja"}
 TEMPLATE_SHA256 = "d63ad536c3c81880043e22ec7fd08db42b4d8fb7c89c7138bc562bfa25281375"

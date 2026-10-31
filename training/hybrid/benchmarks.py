@@ -14,8 +14,9 @@ from lm_eval.api.model import LM
 from lm_eval.utils import get_rolling_token_windows, make_disjoint_window
 from torch.nn import functional as F
 
+from tokenizer import glm
+
 from . import generate
-from . import tokenizer as glm
 
 LENGTHS = (256, 512, 1024, 2048, 4096)
 TOKENS_PER_BATCH = 32768

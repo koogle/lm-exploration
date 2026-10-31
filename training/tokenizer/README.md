@@ -10,6 +10,7 @@ BPE library. Modal entrypoints live separately in
 | `tokenizer_research.py` | Corpus collection, candidate fitting and evaluation |
 | `tokenizer_evaluation.py` | Broader held-out evaluation without refitting |
 | `tokenizer_report.py` | Learning-curve plots and reports |
+| `glm.py` | The pinned GLM-4.7-Flash tokenizer (revision and SHA-256) the hybrid family and the chat format use |
 | `mixture_tokenizer.py` | Sample a corpus recipe's training split, fit and compare |
 | `structured_tokenizer.py` | Code/JSON/diff/tool-call workloads and focused fitting |
 | `structured_tokenizer_report.py` | Structured-output comparison report |
