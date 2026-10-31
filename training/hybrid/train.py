@@ -28,10 +28,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from tokenizer import glm
+
 from . import documents as doc_utils
 from . import hnet
 from . import model as hybrid
-from . import tokenizer as glm
 
 H100_BF16_FLOPS = 989e12
 SAMPLE_PROMPTS = (
@@ -260,10 +261,10 @@ def heldout_windows(recipe, root, name, context, max_documents):
 
     Pretraining sources concatenate whole documents into one stream
     (`packed_shards.heldout_windows`); chat subsets pack whole conversations and train
-    only assistant tokens (`sft_data.chat_heldout_windows`, None when empty).
+    only assistant tokens (`chat_sft.chat_heldout_windows`, None when empty).
     """
     if recipe.get("format") == "chat-sft":
-        from .sft_data import chat_heldout_windows
+        from training_data.chat_sft import chat_heldout_windows
 
         return chat_heldout_windows(recipe, root, name, context, max_documents)
     from training_data.packed_shards import heldout_windows as source_windows
@@ -319,16 +320,16 @@ def recipe_data(config, data_root):
         }
 
     if recipe.get("format") == "chat-sft":
-        from . import sft_data
+        from training_data import chat_sft
 
         def mixture():
-            return with_replay(sft_data.ChatMixture(recipe, root, config.seed))
+            return with_replay(chat_sft.ChatMixture(recipe, root, config.seed))
 
         def heldout(mixture, context):
             count = config.eval_documents["chat"]
             own = {
                 name: windows
-                for name, _, _ in sft_data.subsets(recipe)
+                for name, _, _ in chat_sft.subsets(recipe)
                 if (windows := heldout_windows(recipe, root, name, context, count)) is not None
             }
             return own | replay_heldout(context)
@@ -394,9 +395,9 @@ class HybridFamily:
             (identity, factory), self.heldout_factory, chat = data, None, False
         self.identity, self.factory = identity, factory
         if chat:
-            from . import sft_data
+            from training_data import chat_sft
 
-            self.sampling = (sft_data.sample_prompts(), sft_data.STOP_IDS, 160)
+            self.sampling = (chat_sft.sample_prompts(), chat_sft.STOP_IDS, 160)
         else:
             self.sampling = (SAMPLE_PROMPTS, (), self.sample_length)
         self.lm, self.uploads = None, []
@@ -448,37 +449,36 @@ class HybridFamily:
         }
 
     def source_files(self):
-        from training_data import mixture, packed_shards
+        from training_data import chat, chat_sft, mixture, packed_shards
+
+        from tokenizer import glm
 
         from . import (
-            chat,
             cuda_extension,
             documents,
             fused_loss,
             kda,
             kda_convolution,
-            sft_data,
             softmax_kernel,
         )
         from . import model as hybrid_model
-        from . import tokenizer as hybrid_tokenizer
 
         modules = (
-            chat,
             cuda_extension,
             documents,
             fused_loss,
             hybrid_model,
             kda,
             kda_convolution,
-            sft_data,
             softmax_kernel,
-            hybrid_tokenizer,
         )
         files = {f"hybrid.{Path(m.__file__).stem}": Path(m.__file__) for m in modules}
         return {
             "family": Path(__file__),
             **files,
+            "chat": Path(chat.__file__),
+            "chat_sft": Path(chat_sft.__file__),
+            "tokenizer_glm": Path(glm.__file__),
             "packed_shards": Path(packed_shards.__file__),
             "mixture": Path(mixture.__file__),
         }

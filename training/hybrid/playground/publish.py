@@ -7,7 +7,8 @@ Run from training/ (needs HF_TOKEN with write access):
 
 Uploads this app as a Docker Space (Dockerfile: CUDA 13.0 devel, the family's
 kernels prebuilt) with the model code (the inference modules and kernels of hybrid/
-as model_hybrid/, 10m/model.py as model_10m/, trainer/roles.py, data/subword.py), on GPU hardware (`--hardware`, L4 by
+as model_hybrid/, 10m/model.py as model_10m/, trainer/roles.py, tokenizer/glm.py and
+data/subword.py, chat.py, chat_sft.py), on GPU hardware (`--hardware`, L4 by
 default; it sleeps after `--sleep-seconds` without visitors). GPU hardware is billed
 to the Space owner while it runs. Spaces hold at most 1 GB, so the app downloads the
 export from the private model repo at startup; add a read token as the Space secret
@@ -30,14 +31,16 @@ MODULES = (
     "kda",
     "documents",
     "generate",
-    "tokenizer",
     "fused_loss",
     "softmax_kernel",
     "cuda_extension",
     "kda_convolution",
-    "chat",
-    "sft_data",
 )
+# Beside them: the GLM tokenizer pin and chat format, and what they import.
+SHARED = {
+    "tokenizer": ("tokenizer/glm.py",),
+    "training_data": ("data/subword.py", "data/chat.py", "data/chat_sft.py"),
+}
 
 
 def main():
@@ -80,10 +83,11 @@ def main():
     (stage / "trainer").mkdir()
     shutil.copy(TRAINING / "trainer" / "roles.py", stage / "trainer" / "roles.py")
     (stage / "trainer" / "__init__.py").write_text("")
-    # The tokenizer checks its file with training_data.subword.digest.
-    (stage / "training_data").mkdir()
-    shutil.copy(TRAINING / "data" / "subword.py", stage / "training_data" / "subword.py")
-    (stage / "training_data" / "__init__.py").write_text("")
+    for package, files in SHARED.items():
+        (stage / package).mkdir()
+        (stage / package / "__init__.py").write_text("")
+        for file in files:
+            shutil.copy(TRAINING / file, stage / package / Path(file).name)
     shutil.copy(HERE / "app.py", stage / "app.py")
     shutil.copy(HERE / "requirements.txt", stage / "requirements.txt")
     shutil.copy(HERE / "Dockerfile", stage / "Dockerfile")

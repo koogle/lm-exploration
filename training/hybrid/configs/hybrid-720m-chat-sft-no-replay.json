@@ -1,5 +1,5 @@
 {
-  "recipe": "/project/model_hybrid/recipes/chat-sft-v1-no-replay.json",
+  "recipe": "/project/training_data/recipes/chat-sft-v1-no-replay.json",
   "model": {
     "vocab_size": 154880,
     "eos_id": 154820,

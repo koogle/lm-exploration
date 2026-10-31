@@ -325,7 +325,8 @@ def load_export(folder, dtype=torch.float32, device="cpu"):
 
     from safetensors.torch import load_file
 
-    from . import tokenizer as glm
+    from tokenizer import glm
+
     from .model import HybridConfig
 
     folder = Path(folder)
