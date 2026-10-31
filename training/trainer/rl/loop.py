@@ -431,7 +431,7 @@ def train(
             optimize(batch, sequences, advantage, sorted(answers), old, totals)
         step += 1
         timings["train_seconds"] = time.monotonic() - clock
-        totals = {key: ranks.sum(value) for key, value in totals.items()}
+        totals = ranks.sum_values(totals)
         trained_tokens += totals["tokens"]
         batch = merged(batch, ranks)
         values = {}
@@ -467,7 +467,9 @@ def train(
         record(**values)
         if step % settings.evaluate_every == 0:
             record(**evaluate())
-        if step % settings.save_every == 0 or time.monotonic() - saved_at >= settings.save_seconds:
+        # Rank 0's clock decides, so every rank enters save()'s collective together.
+        late = ranks.broadcast(time.monotonic() - saved_at >= settings.save_seconds)
+        if step % settings.save_every == 0 or late:
             save()
             last_saved, saved_at = step, time.monotonic()
     if reason == "steps":
