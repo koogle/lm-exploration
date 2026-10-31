@@ -31,8 +31,12 @@ with modal.enable_output(), app.run(detach=True):
     registry[run + "/calls"] = []
     registry[run + "/deadline"] = deadline
     sup = supervisor.spawn(run, deadline)
+    provenance["supervisor"] = sup.object_id
+    (folder / "launch.json").write_text(json.dumps(provenance, indent=2))
+    ready_deadline = time.time() + 300
     while not registry.get(run + "/ready", False):
-        if time.time() > deadline - 600:
+        if time.time() > min(ready_deadline, deadline - 600):
+            sup.cancel()
             raise TimeoutError("Supervisor not ready")
         time.sleep(1)
     call = worker.spawn(run, deadline, provenance)

@@ -18,7 +18,7 @@ probe_image = image.add_local_file(
 )
 
 
-@app.function(timeout=21600, retries=0)
+@app.function(image=probe_image, timeout=21600, retries=0)
 def supervisor(run, deadline):
     registry[run + "/ready"] = True
     while time.time() < deadline:
