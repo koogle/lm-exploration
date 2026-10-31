@@ -465,9 +465,9 @@ def train(
             if step % family.evaluate_every == 0:
                 evaluate()
             due = family.checkpoint_every and step % family.checkpoint_every == 0
-            late = (
-                family.checkpoint_seconds
-                and time.monotonic() - last_checkpoint >= family.checkpoint_seconds
+            # Rank 0's clock decides, so every rank enters checkpoint()'s collective together.
+            late = family.checkpoint_seconds and primary(
+                lambda since=last_checkpoint: time.monotonic() - since >= family.checkpoint_seconds
             )
             if save and (due or late):
                 checkpoint()

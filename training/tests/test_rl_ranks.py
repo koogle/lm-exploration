@@ -26,6 +26,11 @@ def collectives(ranks, address, key):
         "unshard": ranks.unshard([10 * x for x in mine]),
         "gather": ranks.gather([ranks.rank]),
         "sum": ranks.sum(ranks.rank + 1),
+        # Rank 0 trained nothing and recorded no clipping statistic.
+        "sum_values": ranks.sum_values(
+            {"tokens": 2} if ranks.main else {"tokens": 3, "clipped": 1}
+        ),
+        "after": ranks.gather([ranks.rank]),
         "broadcast": ranks.broadcast(f"from {ranks.rank}"),
         "grad": model.weight.grad.tolist(),
         "checked": ranks.gather([r["passed"] for r in checked]),
@@ -38,6 +43,7 @@ class RanksTests(unittest.TestCase):
         ranks = Ranks()
         self.assertEqual(ranks.shard([1, 2]), [1, 2])
         self.assertEqual((ranks.sum(3), ranks.broadcast("x")), (3, "x"))
+        self.assertEqual(ranks.sum_values({"tokens": 2}), {"tokens": 2})
         with self.assertRaisesRegex(ValueError, "split"):
             Ranks(0, 2).shard([1, 2, 3])
 
@@ -50,6 +56,8 @@ class RanksTests(unittest.TestCase):
         self.assertEqual(result["mine"], [0, 2, 4])
         self.assertEqual(result["unshard"], [0, 10, 20, 30, 40, 50])
         self.assertEqual((result["gather"], result["sum"]), ([0, 1], 3))
+        self.assertEqual(result["sum_values"], {"tokens": 5, "clipped": 1})
+        self.assertEqual(result["after"], [0, 1])
         self.assertEqual(result["broadcast"], "from 0")
         self.assertEqual(result["grad"], [[1.5, 1.5]])
         self.assertEqual(result["checked"], [True, True, False, True])
