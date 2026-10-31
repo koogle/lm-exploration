@@ -966,11 +966,15 @@ def main(
     end: str = "",
     checkpoint: str = "",
     qualify: int = 0,
+    wait: bool = False,
 ):
     """Run a workflow, or its stages `--start` to `--end`, as workflow run `--run-id`;
     `--checkpoint` is the parent of the first selected stage if its parent stage has not
     finished in this run. Launching the same workflow and run ID again continues it.
-    `--qualify N` qualifies exact resume of one selected SFT stage over N steps."""
+    `--qualify N` qualifies exact resume of one selected SFT stage over N steps.
+
+    The controller is spawned, so a `--detach` launch keeps running after this client
+    exits; `--wait` waits for it and prints its result."""
     from workflows.checks import parent_path
     from workflows.deadline import new_deadline
     from workflows.plan import load_workflow, select
@@ -1006,8 +1010,10 @@ def main(
             }
         )
     )
-    result = run_workflow.remote(plan, selected, provenance, checkpoint, examples, qualify)
-    print(json.dumps(result, indent=2))
+    controller = run_workflow.spawn(plan, selected, provenance, checkpoint, examples, qualify)
+    print(json.dumps({"controller": controller.object_id}))
+    if wait:
+        print(json.dumps(controller.get(), indent=2))
 
 
 @app.local_entrypoint()

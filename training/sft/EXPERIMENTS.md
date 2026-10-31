@@ -116,7 +116,7 @@ modal run --detach -m modal_scripts.modal_sft_data::private_patches \
 # Training (example: arithmetic pilot, a workflow with one SFT stage "pilot" from the
 # chosen base)
 modal run -m workflows.modal_train::main --workflow artifacts/sft/arithmetic-pilot.json \
-  --run-id <fresh-prefix> --start pilot --end pilot --qualify 2
+  --run-id <fresh-prefix> --start pilot --end pilot --qualify 2 --wait
 modal run -m workflows.modal_train::main --workflow artifacts/sft/arithmetic-pilot.json \
   --run-id <fresh-run-id>
 # Volume-backed runs set "data": {"volume": ...}; CIG long runs resume

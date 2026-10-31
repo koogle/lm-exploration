@@ -50,12 +50,13 @@ uv run python -m workflows --workflow workflows/climbmix-124m-wsd-20b.json --run
 ```
 
 Launch it on Modal. One launch runs the selected stages in order, within one 24-hour
-deadline:
+deadline. The launch spawns the controller and returns, so a `--detach` launch keeps
+running when the launching machine goes away; `--wait` waits and prints the result:
 
 ```sh
 uv run modal run --detach -m workflows.modal_train::main \
   --workflow workflows/climbmix-124m-wsd-20b.json --run-id my-run-01 \
-  [--start <stage>] [--end <stage>] [--checkpoint <run>/step-NNNNNNNNN.pt]
+  [--start <stage>] [--end <stage>] [--checkpoint <run>/step-NNNNNNNNN.pt] [--wait]
 uv run modal run -m workflows.modal_train::stop --run-id my-run-01
 ```
 
