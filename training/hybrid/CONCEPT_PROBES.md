@@ -65,3 +65,16 @@ Modal environment (truststore is injected before SDK calls). The launcher record
 source hashes, main revision, worker/supervisor IDs and the absolute deadline.
 The worker runs qualification, untrained probes, training and trained probes in
 that order and records failures in `completion.json`.
+
+## Launch record
+
+Run `kda-concepts-1793489611` is launched on
+[Modal](https://modal.com/apps/radiantai/main/ap-0rR2mM5h8KzvdYxB8Lsfb2).
+The recurrence qualification passed on GPU: zero difference against the FP32
+reference, self-patch identity, unchanged prefix outputs and correct EOS reset.
+Training and final probe results are pending. This does not yet establish any
+interpretable concept or useful model capability.
+
+The preceding launch `kda-concepts-1793489410` failed in the supervisor's import
+path before GPU training. Its app was stopped, the supervisor was given the
+project image, and the failed record was archived in the same HF results dataset.
