@@ -4,6 +4,8 @@ Run from training/:
     modal run --detach -m modal_scripts.modal_agentic::solve [--limit N] [--workers 32]
     modal run --detach -m modal_scripts.modal_agentic::evaluate --export <run>/<export> [--limit N]
     modal run -m modal_scripts.modal_agentic::prepare [--recipe data/recipes/agentic-sft-v1.json]
+    modal run --detach -m modal_scripts.modal_agentic::reference_train [--bases B1,B2] [--tag 01]
+    modal run --detach -m modal_scripts.modal_agentic::reference_evaluate --models M1,sft:<run>
 
 Tasks are the pilot's verified tasks with a clean issue (`pr-tasks-pilot/verified.jsonl`
 and `issues.jsonl` on the `lm-exploration-hybrid-data` volume). Each episode installs
@@ -18,7 +20,17 @@ usage, held-out flag) and `summary.json`. `evaluate` runs a hybrid export (greed
 GLM chat format) on the held-out repositories' tasks in one H100 call and writes
 `<name>/agentic/<run>/` the same way. `prepare` turns the recipe's `trajectories` run
 into the chat SFT subset `agentic` (resolved episodes from training repositories
-only, rendered with `chat_sft.prepare_subset`). Every call has `retries=0`, a timeout of at
+only, rendered with `chat_sft.prepare_subset`).
+
+The reference stages run Qwen3 models through the same tasks and data, to separate
+the effect of broad pretraining from the agent data. `reference_train` fully
+fine-tunes pinned Qwen3 base models on the recipe's resolved training-repository
+trajectories (in Qwen3's chat format, `training_data.qwen_agent_chat`) and writes
+`lm-exploration-hybrid-runs/agentic-reference/<run>/` (bf16 model, metrics, summary).
+`reference_evaluate` runs pinned Qwen3 chat models (zero-shot, thinking off) or
+those fine-tunes (`sft:<run>`) through vLLM on the held-out tasks, with the hybrid
+evaluation's greedy decoding, turn and token limits, and writes the same files as
+`evaluate`. Every call has `retries=0`, a timeout of at
 most 6 hours and refuses work 24 hours after launch; sandboxes are capped at one
 hour and at the deadline, and a supervisor cancels the spawned call at the deadline.
 """
@@ -34,6 +46,7 @@ from model_hybrid import modal_benchmarks
 from model_hybrid.image import build
 
 from modal_scripts import modal_chat_sft_data, modal_pr_tasks
+from workflows.images import add_project
 
 app = modal.App("lm-exploration-hybrid-agentic")
 app.include(modal_benchmarks.app)  # the deadline supervisor
@@ -43,6 +56,44 @@ gpu_image = build(("jinja2==3.1.6",))
 LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
 TEACHER_MAX_TOKENS = 8192
 EVAL_SANDBOX_SECONDS = 5 * 60 * 60
+
+# Reference models: Qwen3 with its broad pretraining, through the same tasks and data.
+REFERENCE_MODELS = {
+    "Qwen/Qwen3-0.6B-Base": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+    "Qwen/Qwen3-1.7B-Base": "ea980cb0a6c2ae4b936e82123acc929f1cec04c1",
+    "Qwen/Qwen3-0.6B": "c1899de289a04d12100db370d81485cdf75e47ca",
+    "Qwen/Qwen3-1.7B": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+}
+REFERENCE_FOLDER = "agentic-reference"  # on the runs volume
+REFERENCE_SFT = {
+    "context": 32768,
+    "epochs": 4,
+    "accumulation": 8,
+    "learning_rate": 2e-5,
+    "warmup_steps": 10,
+    "min_learning_rate_fraction": 0.1,
+    "weight_decay": 0.0,
+    "grad_clip": 1.0,
+    "loss_chunk": 4096,
+    "seed": 0,
+}
+# As the hybrid evaluation (agent_policy.LocalPolicy): greedy, 1,536 new tokens per turn.
+REFERENCE_MAX_NEW_TOKENS = 1536
+# vLLM's FlashInfer kernels compile at load time, so the image carries nvcc (as in
+# modal_teacher.py); training uses the torch and transformers that vLLM installs.
+reference_image = add_project(
+    modal.Image.from_registry("nvidia/cuda:13.0.1-devel-ubuntu22.04", add_python="3.12")
+    .pip_install("vllm==0.31.0", "huggingface-hub[hf_transfer]")
+    .env(
+        {
+            "HF_HOME": "/hf",
+            "HF_HUB_ENABLE_HF_TRANSFER": "1",
+            "PYTHONPATH": "/project",
+            "CUDA_HOME": "/usr/local/cuda",
+        }
+    )
+)
+hf_cache = modal.Volume.from_name("lm-exploration-hf-cache", create_if_missing=True)
 
 
 def load_tasks(folder):
@@ -320,23 +371,29 @@ def solve_tasks(name, run, limit, workers, attempts, deadline):
 def evaluate_export(export, name, run, limit, workers, deadline):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
-    from concurrent.futures import ThreadPoolExecutor
-
     import torch
     from model_hybrid import agent_policy, generate
-    from training_data import pr_task_agent as agent
 
     from tokenizer import glm
 
-    folder = Path("/data", name)
-    out = folder / "agentic" / run
-    tasks = _select(load_tasks(folder), limit, heldout_only=True)
-    record = _recorder(out)
     run_name, export_name = export.split("/")
     lm = generate.load_export(
         Path("/runs", run_name, "export", export_name), dtype=torch.bfloat16, device="cuda"
     )
     local = agent_policy.LocalPolicy(lm, glm.load(), rows=96)
+    return _evaluate_heldout(local, {"export": export}, name, run, limit, workers, deadline)
+
+
+def _evaluate_heldout(local, header, name, run, limit, workers, deadline):
+    """Run `local` (a batch policy) as the agent on the held-out repositories' tasks."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from training_data import pr_task_agent as agent
+
+    folder = Path("/data", name)
+    out = folder / "agentic" / run
+    tasks = _select(load_tasks(folder), limit, heldout_only=True)
+    record = _recorder(out)
     turn = [0]
 
     def policy(conversations):
@@ -390,7 +447,7 @@ def evaluate_export(export, name, run, limit, workers, deadline):
         _row(t, e, patch, grade, {})
         for t, e, (patch, grade) in zip(tasks, episodes, finished, strict=True)
     ]
-    summary = {"export": export, "run": run, **_summary(rows, started)}
+    summary = {**header, "run": run, **_summary(rows, started)}
     _write(out, rows, summary)
     return summary
 
@@ -432,15 +489,226 @@ def prepare_trajectories(recipe, deadline):
     return meta
 
 
-def _spawn(function, *arguments):
-    deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    call = function.spawn(*arguments, deadline)
-    supervisor = modal_benchmarks.enforce_deadline.spawn([call.object_id], deadline)
-    print(
-        json.dumps(
-            {"call": call.object_id, "supervisor": supervisor.object_id, "deadline_unix": deadline}
+@app.function(
+    image=reference_image,
+    gpu="H100",
+    cpu=8,
+    memory=65536,
+    timeout=4 * 60 * 60,
+    retries=0,
+    volumes={"/data": volume, "/runs": runs_volume, "/hf": hf_cache},
+)
+def train_reference(base, run, trajectories, deadline):
+    """Full fine-tune of a Qwen reference base on the resolved training-repository
+    trajectories, in Qwen3's chat format; loss on the assistant turns only."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    import math
+    import random
+
+    import torch
+    from torch.utils.checkpoint import checkpoint
+    from training_data import pr_task_agent as agent
+    from training_data import qwen_agent_chat
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    settings, revision = REFERENCE_SFT, REFERENCE_MODELS[base]
+    out = Path("/runs", REFERENCE_FOLDER, run)
+    out.mkdir(parents=True, exist_ok=True)
+    tokenizer = AutoTokenizer.from_pretrained(base, revision=revision)
+    rows = [json.loads(line) for line in Path("/data", trajectories).read_text().splitlines()]
+    kept = [r for r in rows if r["resolved"] and not r["heldout"]]
+    examples = []
+    for row in kept:
+        conversation = agent.training_row(row["messages"])["messages"]
+        ids, mask = qwen_agent_chat.encode(
+            lambda text: tokenizer.encode(text, add_special_tokens=False), conversation, agent.TOOLS
         )
+        if len(ids) <= settings["context"]:
+            examples.append((ids, mask))
+    model = AutoModelForCausalLM.from_pretrained(
+        base, revision=revision, dtype=torch.float32, attn_implementation="sdpa"
+    ).cuda()
+    model.gradient_checkpointing_enable()
+    model.config.use_cache = False
+    model.train()
+    head = model.get_output_embeddings()
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=settings["learning_rate"],
+        betas=(0.9, 0.95),
+        weight_decay=settings["weight_decay"],
+        fused=True,
     )
+    rng = random.Random(settings["seed"])
+    order = []
+    for _ in range(settings["epochs"]):
+        epoch = list(range(len(examples)))
+        rng.shuffle(epoch)
+        order += epoch
+    accumulation = settings["accumulation"]
+    steps = math.ceil(len(order) / accumulation)
+
+    def learning_rate(step):
+        peak, floor = settings["learning_rate"], settings["min_learning_rate_fraction"]
+        if step < settings["warmup_steps"]:
+            return peak * (step + 1) / settings["warmup_steps"]
+        progress = (step - settings["warmup_steps"]) / max(1, steps - settings["warmup_steps"])
+        return peak * (floor + (1 - floor) * 0.5 * (1 + math.cos(math.pi * progress)))
+
+    def chunk_loss(hidden, targets, weights):
+        losses = torch.nn.functional.cross_entropy(head(hidden).float(), targets, reduction="none")
+        return (losses * weights).sum()
+
+    started, metrics, stopped = time.time(), [], None
+    for step in range(steps):
+        if time.time() >= deadline - 1800:
+            stopped = "launch deadline"
+            break
+        group = order[step * accumulation : (step + 1) * accumulation]
+        target_tokens = sum(sum(examples[i][1][1:]) for i in group)
+        loss_sum = 0.0
+        for index in group:
+            ids, mask = examples[index]
+            inputs = torch.tensor(ids[:-1], device="cuda")[None]
+            targets = torch.tensor(ids[1:], device="cuda")
+            weights = torch.tensor(mask[1:], device="cuda", dtype=torch.float32)
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                hidden = model.model(input_ids=inputs).last_hidden_state[0]
+                total = hidden.new_zeros((), dtype=torch.float32)
+                for start in range(0, hidden.shape[0], settings["loss_chunk"]):
+                    end = start + settings["loss_chunk"]
+                    if weights[start:end].any():
+                        total = total + checkpoint(
+                            chunk_loss,
+                            hidden[start:end],
+                            targets[start:end],
+                            weights[start:end],
+                            use_reentrant=False,
+                        )
+            (total / target_tokens).backward()
+            loss_sum += total.item()
+        norm = torch.nn.utils.clip_grad_norm_(model.parameters(), settings["grad_clip"])
+        for parameter_group in optimizer.param_groups:
+            parameter_group["lr"] = learning_rate(step)
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        record = {
+            "step": step + 1,
+            "loss": round(loss_sum / target_tokens, 5),
+            "grad_norm": round(float(norm), 4),
+            "learning_rate": learning_rate(step),
+            "tokens": sum(len(examples[i][0]) for i in group),
+            "target_tokens": target_tokens,
+            "seconds": round(time.time() - started, 1),
+        }
+        metrics.append(record)
+        print(json.dumps(record), flush=True)
+    model.to(torch.bfloat16).save_pretrained(out / "model")
+    tokenizer.save_pretrained(out / "model")
+    with open(out / "metrics.jsonl", "w") as handle:
+        handle.writelines(json.dumps(m) + "\n" for m in metrics)
+    summary = {
+        "base": base,
+        "revision": revision,
+        "trajectories": trajectories,
+        "episodes": {"all": len(rows), "resolved_training_repositories": len(kept)},
+        "examples": len(examples),
+        "tokens_per_epoch": sum(len(ids) for ids, _ in examples),
+        "target_tokens_per_epoch": sum(sum(mask) for _, mask in examples),
+        "steps": len(metrics),
+        "planned_steps": steps,
+        "stopped": stopped,
+        "settings": settings,
+        "final_loss": metrics[-1]["loss"] if metrics else None,
+        "seconds": round(time.time() - started),
+    }
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    runs_volume.commit()
+    return summary
+
+
+@app.function(
+    image=reference_image,
+    gpu="H100",
+    cpu=8,
+    memory=65536,
+    timeout=6 * 60 * 60,
+    retries=0,
+    volumes={"/data": volume, "/runs": runs_volume, "/hf": hf_cache},
+)
+def evaluate_reference(model, name, run, limit, workers, deadline):
+    """A Qwen reference model as the agent on the held-out tasks, through vLLM.
+
+    `model` is a pinned Qwen3 chat model (zero-shot, thinking off) or `sft:<run>`, a
+    `train_reference` output (rendered without the empty thinking block, as trained).
+    """
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    from training_data import pr_task_agent as agent
+    from training_data import qwen_agent_chat
+    from vllm import LLM, SamplingParams
+
+    context = REFERENCE_SFT["context"]
+    if model.startswith("sft:"):
+        runs_volume.reload()
+        folder = Path("/runs", REFERENCE_FOLDER, model.removeprefix("sft:"))
+        trained = json.loads((folder / "summary.json").read_text())
+        source, revision, chat = str(folder / "model"), None, False
+        header = {"model": model, "base": trained["base"], "base_revision": trained["revision"]}
+    else:
+        source, revision, chat = model, REFERENCE_MODELS[model], True
+        header = {"model": model, "revision": revision}
+    llm = LLM(
+        model=source,
+        revision=revision,
+        max_model_len=context,
+        enable_prefix_caching=True,
+        gpu_memory_utilization=0.85,
+    )
+    tokenizer = llm.get_tokenizer()
+    params = SamplingParams(
+        temperature=0.0,
+        max_tokens=REFERENCE_MAX_NEW_TOKENS,
+        stop_token_ids=[tokenizer.convert_tokens_to_ids(qwen_agent_chat.TURN_END)],
+        skip_special_tokens=False,
+    )
+
+    def local(conversations):
+        replies, prompts, index = [None] * len(conversations), [], []
+        for i, messages in enumerate(conversations):
+            text = qwen_agent_chat.render(
+                agent.training_row(messages)["messages"],
+                agent.TOOLS,
+                add_generation_prompt=True,
+                chat=chat,
+            )
+            ids = tokenizer.encode(text, add_special_tokens=False)
+            if len(ids) + REFERENCE_MAX_NEW_TOKENS <= context:
+                prompts.append({"prompt_token_ids": ids})
+                index.append(i)
+        if prompts:
+            outputs = llm.generate(prompts, params, use_tqdm=False)
+            for i, output in zip(index, outputs, strict=True):
+                replies[i] = qwen_agent_chat.parse_assistant(output.outputs[0].text)
+        return replies
+
+    header["chat_format"] = "qwen3, thinking off" if chat else "qwen3, as trained"
+    return _evaluate_heldout(local, header, name, run, limit, workers, deadline)
+
+
+def _spawn(function, *arguments):
+    _spawn_all([(function, arguments)])
+
+
+def _spawn_all(launches):
+    """Spawn each (function, arguments) with one launch deadline and one supervisor."""
+    deadline = time.time() + LAUNCH_LIMIT_SECONDS
+    calls = [function.spawn(*arguments, deadline) for function, arguments in launches]
+    ids = [c.object_id for c in calls]
+    supervisor = modal_benchmarks.enforce_deadline.spawn(ids, deadline)
+    print(json.dumps({"calls": ids, "supervisor": supervisor.object_id, "deadline_unix": deadline}))
 
 
 @app.local_entrypoint()
@@ -465,6 +733,35 @@ def evaluate(
     )
     print(json.dumps({"results": f"lm-exploration-hybrid-data/{name}/agentic/{run}/"}))
     _spawn(evaluate_export, export, name, run, limit, workers)
+
+
+@app.local_entrypoint()
+def reference_train(
+    bases: str = "Qwen/Qwen3-0.6B-Base,Qwen/Qwen3-1.7B-Base",
+    recipe: str = "data/recipes/agentic-sft-v1.json",
+    tag: str = "01",
+):
+    trajectories = json.loads(Path(recipe).read_text())["trajectories"]
+    runs = {b: f"{b.split('/')[1].lower()}-agentic-sft-{tag}" for b in bases.split(",")}
+    print(json.dumps({"results": f"lm-exploration-hybrid-runs/{REFERENCE_FOLDER}/", **runs}))
+    _spawn_all([(train_reference, (b, r, trajectories)) for b, r in runs.items()])
+
+
+@app.local_entrypoint()
+def reference_evaluate(
+    models: str = "Qwen/Qwen3-0.6B,Qwen/Qwen3-1.7B",
+    name: str = "pr-tasks-pilot",
+    limit: int = 0,
+    workers: int = 48,
+):
+    """`models`: pinned Qwen3 chat models and `sft:<run>` outputs, comma-separated."""
+    stamp, launches = int(time.time()), []
+    for model in models.split(","):
+        slug = model.removeprefix("sft:").split("/")[-1].lower()
+        run = f"eval-{slug}-{stamp}{f'-limit{limit}' if limit else ''}"
+        print(json.dumps({"results": f"lm-exploration-hybrid-data/{name}/agentic/{run}/"}))
+        launches.append((evaluate_reference, (model, name, run, limit, workers)))
+    _spawn_all(launches)
 
 
 @app.local_entrypoint()
