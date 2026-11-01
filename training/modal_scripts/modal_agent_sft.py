@@ -366,7 +366,10 @@ def serve_model(run, seconds, deadline):
     env = {**os.environ, "VLLM_ALLOW_LONG_MAX_MODEL_LEN": "1"}
     server = subprocess.Popen(
         ["vllm", "serve", str(model), "--served-model-name", run, "--port", "8000",
-         "--max-model-len", str(CONTEXT), "--enable-prefix-caching", "--seed", "0"],
+         "--max-model-len", str(CONTEXT), "--enable-prefix-caching", "--seed", "0",
+         # vLLM sizes the RoPE cache from max_position_embeddings; positions past the
+         # base config's 32,768 would index outside it.
+         "--hf-overrides", json.dumps({"max_position_embeddings": CONTEXT})],
         env=env,
     )  # fmt: skip
     end = min(time.time() + seconds, deadline - 600, time.time() + SERVE_SECONDS - 300)
