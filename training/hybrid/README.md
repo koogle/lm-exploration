@@ -392,6 +392,9 @@ The chat format ([`data/chat.py`](../data/chat.py), GLM-4.7-Flash's own chat
 template) and the chat SFT data ([`data/chat_sft.py`](../data/chat_sft.py), recipe
 [`data/recipes/chat-sft-v1.json`](../data/recipes/chat-sft-v1.json)) are data
 sources: see [Chat format and chat SFT data](../data/README.md#chat-format-and-chat-sft-data).
+PR tasks and the agent episodes on them are too
+([PR tasks and agent episodes](../data/README.md#pr-tasks-and-agent-episodes)); a hybrid
+export acts as the agent through [`agent_policy.py`](agent_policy.py).
 
 `chat_sft.ChatMixture` packs whole conversations, in one seeded order across files, into
 4,097-token windows padded with EOS; labels are `-100` outside the loss mask, and

@@ -54,6 +54,48 @@ uv run --all-extras modal run -m modal_scripts.modal_chat_sft_data
 ```
 
 
+## PR tasks and agent episodes
+
+[`pr_tasks.py`](pr_tasks.py) turns collected commits into repository tasks: the
+repository at the parent commit, an issue, the commit's own test changes as the
+hidden check and the commit as the reference patch. [`modal_pr_tasks.py`](../modal_scripts/modal_pr_tasks.py)
+runs three stages on the `lm-exploration-hybrid-data` volume under `<name>/`:
+
+- `select` keeps single-language commits (Python, JS/TS, Go) that change 1–3 source
+  and 1–3 test files within `pr_tasks.LIMITS`, capped per repository. It runs no
+  repository code.
+- `verify` gives each task two disposable sandboxes: one installs dependencies with
+  network, and its filesystem snapshot runs the test files without network with source
+  files reverted to the parent and at the commit ([`pr_task_runner.py`](pr_task_runner.py)).
+  Verified tasks have at least one fail-to-pass test and no regression.
+- `issues` has GLM-5.3 (through OpenRouter) draft each task's issue from the commit
+  message and the test changes only, up to four drafts until one has no leaks (quoted
+  added source lines, new internal names the tests never use, mentions of tests or the
+  commit). Launch it with `OPENROUTER_API_KEY` set; the key is passed to that run only.
+
+```sh
+uv run modal run -m modal_scripts.modal_pr_tasks::select [--count 1000] [--name pr-tasks-pilot]
+uv run modal run --detach -m modal_scripts.modal_pr_tasks::verify [--limit N] [--workers 48]
+uv run modal run --detach -m modal_scripts.modal_pr_tasks::issues [--limit N]
+```
+
+[`pr_task_agent.py`](pr_task_agent.py) runs agent episodes on verified tasks: the
+repository at the parent revision with the commit's tests and git history removed, bash,
+read/edit/write file and submit tools (up to 40 turns), graded by the commit's hidden
+tests in a separate sandbox (resolved: every fail-to-pass and pass-to-pass test passes);
+repositories split by owner into training and held-out.
+[`modal_agentic.py`](../modal_scripts/modal_agentic.py) has a teacher (GLM-5.3 through
+OpenRouter) `solve` the tasks into trajectories, `evaluate` a hybrid export on the
+held-out repositories (`model_hybrid.agent_policy`), and `prepare` the resolved
+training-repository episodes as the chat SFT subset `agentic` of
+[`recipes/agentic-sft-v1.json`](recipes/agentic-sft-v1.json):
+
+```sh
+uv run modal run --detach -m modal_scripts.modal_agentic::solve [--limit N] [--workers 32]
+uv run modal run --detach -m modal_scripts.modal_agentic::evaluate --export <run>/<export> [--limit N]
+uv run modal run -m modal_scripts.modal_agentic::prepare [--recipe data/recipes/agentic-sft-v1.json]
+```
+
 `datasets.json` records each dataset's source, license review and eligibility;
 [`registry.py`](registry.py) validates it with pydantic.
 Paths in it are relative to this `data/` directory. Active training consumes the
