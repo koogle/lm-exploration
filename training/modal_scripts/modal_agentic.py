@@ -790,8 +790,13 @@ def evaluate_reference(
     header["chat_format"] = "qwen3, thinking off" if chat else "as trained"
     header["sampling"] = {"temperature": temperature, **(SAMPLING if temperature > 0 else {})}
     # Open-SWE's instructions name /testbed as the working directory.
+    # Open-SWE's instructions work in /testbed: the repository moves there (find and
+    # other tools do not descend into a symlinked starting directory) and /work/repo,
+    # which the harness uses, links to it.
     setup_command = (
-        f"ln -sfn /work/repo {open_swe_format.WORKDIR}" if agent_format == "open-swe" else None
+        f"cd / && mv /work/repo {open_swe_format.WORKDIR} && ln -s {open_swe_format.WORKDIR} /work/repo"
+        if agent_format == "open-swe"
+        else None
     )
     header["max_turns"] = max_turns or agent.MAX_TURNS
     return _evaluate_heldout(
