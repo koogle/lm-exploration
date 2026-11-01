@@ -35,6 +35,7 @@ import time
 from pathlib import Path
 
 import modal
+import training_data
 from model_hybrid import modal_benchmarks
 
 from workflows.images import add_project
@@ -49,6 +50,7 @@ image = add_project(
     .env({"PYTHONPATH": "/project", "HF_HUB_DISABLE_PROGRESS_BARS": "1"})
 )
 mirrors = modal.Volume.from_name("lm-exploration-pr-task-mirrors", create_if_missing=True)
+RUNNER = Path(training_data.__file__).with_name("pr_task_runner.py")
 # Repository code runs only in these sandboxes: no secrets, the mirror volume read-only,
 # and the test runs without network.
 sandbox_image = (
@@ -62,7 +64,8 @@ sandbox_image = (
         "pip install uv==0.9.5",
     )
     .env({"PATH": "/usr/local/go/bin:/root/go/bin:/usr/local/bin:/usr/bin:/bin"})
-    .add_local_file("data/pr_task_runner.py", "/runner/pr_task_runner.py")
+    # Through the package, so the image also builds inside a container (/project).
+    .add_local_file(RUNNER, "/runner/pr_task_runner.py")
 )
 # The key comes from the launching shell's OPENROUTER_API_KEY and lives only for the run.
 openrouter = modal.Secret.from_dict(
