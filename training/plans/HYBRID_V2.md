@@ -202,3 +202,58 @@ The fine-tuned weights are on the `lm-exploration-hybrid-runs` volume
 including the two 4-task smoke runs, the first of which failed before the sandbox
 image fix; SFT metrics and summaries; `qwen-reference-behavior.jsonl`):
 `training/results/agentic-sft-pilot/` in `jfrick/lm-exploration-results`.
+
+### Sampling, more trajectories and a working 1.7B agent (2026-11-01)
+
+The three follow-ups, on the same 179 held-out tasks:
+
+- **Sampling.** The two 365-trajectory fine-tunes, re-evaluated at temperature 0.7
+  (Qwen3's top-p 0.8, top-k 20) instead of greedy.
+- **A working small agent as control.** `ricdomolm/mini-coder-1.7b`, Qwen3-1.7B trained
+  on 396,515 trajectories of Qwen3-Coder-30B-A3B in mini-swe-agent on SWE-smith's Python
+  tasks (18.6% on SWE-bench Verified, bash only), run greedily in its own bash-only format
+  (`training_data.mini_swe_format`; the dataset's system prompt and instructions, one
+  command per turn, `submit` on its submission command).
+- **More trajectories.** Qwen3-0.6B-Base and Qwen3-1.7B-Base trained one epoch on 10,000
+  trajectories sampled from that dataset (`ricdomolm/mini-coder-trajs-400k`, pinned;
+  9,923 fit 32K: 132.7M tokens, 46.4M of them assistant tokens; 1,241 steps; 2.2 and 2.8
+  hours on one H100, final loss 0.353 and 0.306), and Qwen3-0.6B-Base on 20,000 (19,879:
+  264.3M tokens, 92.1M assistant; 2,485 steps; 4.3 hours; final loss 0.427). Same
+  optimizer settings as above; evaluated greedily in the bash-only format.
+
+| Agent | Trajectories | Resolved | Repeated calls | Episodes with patch | Submitted |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Qwen3-0.6B-Base, GLM-5.3 SFT, greedy | 365 | 0 | 64% | 12 | 0 |
+| same, sampled at 0.7 | 365 | 0 | 37% | 28 | 1 |
+| Qwen3-1.7B-Base, GLM-5.3 SFT, greedy | 365 | 0 | 52% | 10 | 0 |
+| same, sampled at 0.7 | 365 | 0 | 22% | 46 | 1 |
+| Qwen3-0.6B-Base, mini-coder SFT | 10,000 | 0 | 42% | 76 | 5 |
+| Qwen3-0.6B-Base, mini-coder SFT | 20,000 | 0 | 37% | 69 | 8 |
+| Qwen3-1.7B-Base, mini-coder SFT | 10,000 | 1 (Go) | 20% | 109 | 24 |
+| mini-coder-1.7b | 396,515 | 11 (6 Go, 5 Python) | 6% | 140 | 51 |
+
+- **The tasks are solvable at 1.7B.** mini-coder-1.7b resolves 11 of 179 (6.1%), all from
+  three repositories, despite Python-only training data and a 40-turn limit that cuts
+  its episodes short (its own trajectories have a median of 29 turns and a 90th
+  percentile of 61).
+- **Trajectory count moves behavior first, then success.** At 1.7B, 10,000 trajectories
+  give the first resolved task and move every behavior measure toward mini-coder. At
+  0.6B, 10,000 and 20,000 improve behavior over 365 but resolve nothing; doubling the
+  data changed little.
+- **Sampling reduces loops but does not substitute for data.** It halves repeated calls
+  and multiplies patches for the 365-trajectory models without a resolved task.
+- **Episodes that end as "answered"** (28–66 per model) are mostly replies that
+  degenerate into repeated text until the 1,536-token limit, leaving no closed bash
+  block; mini-coder-1.7b ends 48 episodes this way. mini-swe-agent would answer with a
+  format error and continue; this harness ends the episode.
+
+The mini-coder data is SWE-smith's 59,136 synthetic bug-fix tasks (all sampled instance
+ids are in SWE-smith), about 6.7 rollouts per task, unfiltered: 16% of trajectories
+pass their tests (22–36% for single procedural bugs, 3–6% for combined bugs). Its scale
+comes from synthetic tasks with executable environments and a cheap open teacher,
+which this repository's sandboxes and harness can reproduce on our own repositories.
+
+Outputs (evaluations with trajectories, SFT metrics and summaries,
+`mini-coder-behavior.jsonl`): `training/results/agentic-sft-pilot/` in
+`jfrick/lm-exploration-results`. Fine-tuned weights are on the `lm-exploration-hybrid-runs`
+volume (`agentic-reference/<run>/model`).
