@@ -114,7 +114,10 @@ Compare students at equal trajectory counts with the 10k mini-coder control (1 o
 2. **10k real trajectories.** Train Qwen3-1.7B-Base on 10k passing trajectories
    (SWE and shell mixed), the same recipe as the mini-coder 10k control. *Gate:* more
    than 1 of 179 held-out tasks resolved and non-zero Terminal-Bench 2.1, i.e. real
-   tasks beat synthetic at equal count.
+   tasks beat synthetic SWE-smith at equal count. Alongside, a shell-only comparison at
+   equal count (e.g. 5k each): trajectories on seeded synthetic tasks against
+   trajectories on Terminal-Lego tasks, scored on Terminal-Bench 2.1, decides how far
+   seeded synthesis is scaled.
 3. **Scale to 500k** with the mix below, in consecutive 24-hour launches; then our own
    hybrid models on the same data, and RL from the SFT checkpoint once it has a
    non-zero solve rate.
@@ -134,6 +137,7 @@ task gives about 300k tasks). Target mix 60% repository fixes, 40% shell tasks.
 | **Terminal-Lego-15k** (mixed in, below), SETA-Env | Real Q&A → shell tasks | 20k | Released (Apache-2.0) |
 | **Repository setup tasks on V2 repositories** | Real environment and dependency debugging | 10k–30k | To build |
 | **Shell tasks from GitHub issues** of permissive repositories (build, install, configuration, CLI usage), Terminal-Lego recipe | Real problems → shell tasks | 30k–60k | To build |
+| **Seeded synthetic shell tasks**, written by a large model from Terminal-Lego tasks, real tool documentation and GitHub issues | Synthetic, grounded in real seeds | 50k–150k | To build; scaled only if it matches real tasks (stage 2) |
 
 **Commit mining extends our PR→task route.** SWE-rebench V2 publishes, per task, the
 base image, install commands, test command and log parser (`install_config`), i.e.
@@ -170,6 +174,24 @@ GitHub issues about building, installing and configuring software in permissivel
 licensed repositories, converted with the Terminal-Lego recipe (oracle solution must
 pass, untouched environment must fail, 3 stable runs). If shell tasks stay short of
 200k, more rollouts per shell task and a larger repository-fix share fill the gap.
+
+**Seeded synthesis instead of scraping.** A large model writes new Stack-Overflow-style
+problems with their environment, reference solution and tests, so the text is ours
+and carries no Stack Exchange terms. Each new task starts from a seed: a Terminal-Lego
+task and its domain ("a different problem in this domain, with another tool or
+failure"), a real tool's documentation, man page or README from a permissively
+licensed project (real commands, versions and error messages), or a GitHub issue from
+the V2 repositories. Writing a task costs far fewer tokens than solving it, so the
+author is the largest model available (GLM-5.3, 753B, on 8×B200 or through its API),
+while GLM-5.3-Flash does the rollouts. A synthetic task is kept only if its image
+builds, the reference solution passes and the untouched environment fails in 3 runs,
+the tests do not reveal the solution (Harbor's `lint` and `check` reviews plus an LLM
+check), it is not a near-duplicate of another task or of Terminal-Bench (embedding and
+13-gram checks), and the teacher solves it in some but not all rollouts (too easy or
+broken otherwise). The risk is diversity: NVIDIA's mostly synthetic Terminal-Corpus
+needed about 490k examples to match Terminal-Lego's 15k real ones at 32B, so synthetic
+tasks are scaled only after stage 2 shows they train as well as real-question tasks
+at equal count.
 
 ## Cost
 
