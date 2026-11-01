@@ -4,8 +4,10 @@ Run from training/:
     modal run --detach -m modal_scripts.modal_agentic::solve [--limit N] [--workers 32]
     modal run --detach -m modal_scripts.modal_agentic::evaluate --export <run>/<export> [--limit N]
     modal run -m modal_scripts.modal_agentic::prepare [--recipe data/recipes/agentic-sft-v1.json]
-    modal run --detach -m modal_scripts.modal_agentic::reference_train [--bases B1,B2] [--tag 01]
+    modal run --detach -m modal_scripts.modal_agentic::reference_train [--bases B1,B2]
+        [--source pr | --source mini-coder --count N] [--tag 01]
     modal run --detach -m modal_scripts.modal_agentic::reference_evaluate --models M1,sft:<run>
+        [--agent-format qwen-tools|mini-swe] [--temperature T]
 
 Tasks are the pilot's verified tasks with a clean issue (`pr-tasks-pilot/verified.jsonl`
 and `issues.jsonl` on the `lm-exploration-hybrid-data` volume). Each episode installs
@@ -27,10 +29,12 @@ the effect of broad pretraining from the agent data. `reference_train` fully
 fine-tunes pinned Qwen3 base models on the recipe's resolved training-repository
 trajectories (in Qwen3's chat format, `training_data.qwen_agent_chat`) and writes
 `lm-exploration-hybrid-runs/agentic-reference/<run>/` (bf16 model, metrics, summary).
-`reference_evaluate` runs pinned Qwen3 chat models (zero-shot, thinking off) or
-those fine-tunes (`sft:<run>`) through vLLM on the held-out tasks, with the hybrid
-evaluation's greedy decoding, turn and token limits, and writes the same files as
-`evaluate`. Every call has `retries=0`, a timeout of at
+`--source mini-coder` instead trains on public mini-swe-agent trajectories
+(`ricdomolm/mini-coder-trajs-400k`, bash-only format, `training_data.mini_swe_format`).
+`reference_evaluate` runs pinned models (Qwen3 chat models with thinking off,
+mini-coder) or those fine-tunes (`sft:<run>`) through vLLM on the held-out tasks, in
+either agent format, greedy or sampled, with the hybrid evaluation's turn and token
+limits, and writes the same files as `evaluate`. Every call has `retries=0`, a timeout of at
 most 6 hours and refuses work 24 hours after launch; sandboxes are capped at one
 hour and at the deadline, and a supervisor cancels the spawned call at the deadline.
 """
@@ -63,11 +67,19 @@ REFERENCE_MODELS = {
     "Qwen/Qwen3-1.7B-Base": "ea980cb0a6c2ae4b936e82123acc929f1cec04c1",
     "Qwen/Qwen3-0.6B": "c1899de289a04d12100db370d81485cdf75e47ca",
     "Qwen/Qwen3-1.7B": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+    # Qwen3-1.7B trained on the 400k mini-coder trajectories (mini-swe-agent format).
+    "ricdomolm/mini-coder-1.7b": "5b7fbc90b6c4684c546de7f811865cff4414a96c",
 }
+# Public agent trajectories (Qwen3-Coder-30B-A3B on SWE-smith, mini-swe-agent, MIT).
+MINI_CODER_DATA = ("ricdomolm/mini-coder-trajs-400k", "90b240e09807bbfdead1a18c0a861e2c2d20fa14")
+MINI_CODER_ROWS_PER_SHARD = 6600  # 396,515 rows in 60 shards
+AGENT_FORMATS = ("qwen-tools", "mini-swe")
+# Qwen3's recommended non-thinking sampling, for runs that sample instead of decoding greedily.
+SAMPLING = {"top_p": 0.8, "top_k": 20}
+REFERENCE_TRAIN_SECONDS = 6 * 60 * 60
 REFERENCE_FOLDER = "agentic-reference"  # on the runs volume
 REFERENCE_SFT = {
     "context": 32768,
-    "epochs": 4,
     "accumulation": 8,
     "learning_rate": 2e-5,
     "warmup_steps": 10,
@@ -83,7 +95,7 @@ REFERENCE_MAX_NEW_TOKENS = 1536
 # modal_teacher.py); training uses the torch and transformers that vLLM installs.
 reference_image = add_project(
     modal.Image.from_registry("nvidia/cuda:13.0.1-devel-ubuntu22.04", add_python="3.12")
-    .pip_install("vllm==0.31.0", "huggingface-hub[hf_transfer]")
+    .pip_install("vllm==0.31.0", "huggingface-hub[hf_transfer]", "pyarrow==26.0.0")
     .env(
         {
             "HF_HOME": "/hf",
@@ -494,13 +506,19 @@ def prepare_trajectories(recipe, deadline):
     gpu="H100",
     cpu=8,
     memory=65536,
-    timeout=4 * 60 * 60,
+    timeout=REFERENCE_TRAIN_SECONDS,
     retries=0,
     volumes={"/data": volume, "/runs": runs_volume, "/hf": hf_cache},
 )
-def train_reference(base, run, trajectories, deadline):
-    """Full fine-tune of a Qwen reference base on the resolved training-repository
-    trajectories, in Qwen3's chat format; loss on the assistant turns only."""
+def train_reference(base, run, data, deadline):
+    """Full fine-tune of a Qwen reference base; loss on the assistant turns only.
+
+    `data["source"]` is "pr" (the resolved training-repository trajectories at
+    `data["path"]` on the data volume, in Qwen3's tool format) or "mini-coder"
+    (`data["count"]` trajectories sampled with `data["seed"]` from the first
+    `data["shards"]` shards of the mini-coder set, in mini-swe-agent format), read
+    `data["epochs"]` times. Training stops and saves 30 minutes before the timeout.
+    """
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -517,16 +535,48 @@ def train_reference(base, run, trajectories, deadline):
     out = Path("/runs", REFERENCE_FOLDER, run)
     out.mkdir(parents=True, exist_ok=True)
     tokenizer = AutoTokenizer.from_pretrained(base, revision=revision)
-    rows = [json.loads(line) for line in Path("/data", trajectories).read_text().splitlines()]
-    kept = [r for r in rows if r["resolved"] and not r["heldout"]]
-    examples = []
-    for row in kept:
-        conversation = agent.training_row(row["messages"])["messages"]
-        ids, mask = qwen_agent_chat.encode(
-            lambda text: tokenizer.encode(text, add_special_tokens=False), conversation, agent.TOOLS
+    budget_end = time.time() + REFERENCE_TRAIN_SECONDS - 1800
+    tokenize = lambda text: tokenizer.encode(text, add_special_tokens=False)
+    if data["source"] == "pr":
+        lines = Path("/data", data["path"]).read_text().splitlines()
+        rows = [json.loads(line) for line in lines]
+        kept = [r for r in rows if r["resolved"] and not r["heldout"]]
+        counts = {"all": len(rows), "resolved_training_repositories": len(kept)}
+        encoded = (
+            qwen_agent_chat.encode(
+                tokenize, agent.training_row(r["messages"])["messages"], agent.TOOLS
+            )
+            for r in kept
         )
-        if len(ids) <= settings["context"]:
-            examples.append((ids, mask))
+        agent_format = "qwen-tools"
+    else:
+        from huggingface_hub import hf_hub_download
+        from pyarrow import parquet
+        from training_data import mini_swe_format
+
+        repo, data_revision = MINI_CODER_DATA
+        tables = [
+            parquet.read_table(
+                hf_hub_download(
+                    repo,
+                    f"data/train-{shard:05d}-of-00060.parquet",
+                    repo_type="dataset",
+                    revision=data_revision,
+                ),
+                columns=["messages", "verified"],
+            )
+            for shard in range(data["shards"])
+        ]
+        pool = [row for table in tables for row in table.to_pylist()]
+        kept = random.Random(data["seed"]).sample(pool, data["count"])
+        counts = {
+            "pool": len(pool),
+            "sampled": len(kept),
+            "verified": sum(r["verified"] for r in kept),
+        }
+        encoded = (mini_swe_format.encode(tokenize, r["messages"]) for r in kept)
+        agent_format = "mini-swe"
+    examples = [(ids, mask) for ids, mask in encoded if len(ids) <= settings["context"]]
     model = AutoModelForCausalLM.from_pretrained(
         base, revision=revision, dtype=torch.float32, attn_implementation="sdpa"
     ).cuda()
@@ -543,7 +593,7 @@ def train_reference(base, run, trajectories, deadline):
     )
     rng = random.Random(settings["seed"])
     order = []
-    for _ in range(settings["epochs"]):
+    for _ in range(data["epochs"]):
         epoch = list(range(len(examples)))
         rng.shuffle(epoch)
         order += epoch
@@ -563,8 +613,8 @@ def train_reference(base, run, trajectories, deadline):
 
     started, metrics, stopped = time.time(), [], None
     for step in range(steps):
-        if time.time() >= deadline - 1800:
-            stopped = "launch deadline"
+        if time.time() >= min(deadline - 1800, budget_end):
+            stopped = "launch deadline" if time.time() >= deadline - 1800 else "time budget"
             break
         group = order[step * accumulation : (step + 1) * accumulation]
         target_tokens = sum(sum(examples[i][1][1:]) for i in group)
@@ -612,8 +662,9 @@ def train_reference(base, run, trajectories, deadline):
     summary = {
         "base": base,
         "revision": revision,
-        "trajectories": trajectories,
-        "episodes": {"all": len(rows), "resolved_training_repositories": len(kept)},
+        "data": data,
+        "format": agent_format,
+        "episodes": counts,
         "examples": len(examples),
         "tokens_per_epoch": sum(len(ids) for ids, _ in examples),
         "target_tokens_per_epoch": sum(sum(mask) for _, mask in examples),
@@ -638,18 +689,23 @@ def train_reference(base, run, trajectories, deadline):
     retries=0,
     volumes={"/data": volume, "/runs": runs_volume, "/hf": hf_cache},
 )
-def evaluate_reference(model, name, run, limit, workers, deadline):
-    """A Qwen reference model as the agent on the held-out tasks, through vLLM.
+def evaluate_reference(model, agent_format, temperature, name, run, limit, workers, deadline):
+    """A reference model as the agent on the held-out tasks, through vLLM.
 
-    `model` is a pinned Qwen3 chat model (zero-shot, thinking off) or `sft:<run>`, a
-    `train_reference` output (rendered without the empty thinking block, as trained).
+    `model` is a pinned model (Qwen3 chat models zero-shot with thinking off, or
+    mini-coder) or `sft:<run>`, a `train_reference` output. `agent_format` is
+    "qwen-tools" (Qwen3's tool format; chat models get the empty thinking block) or
+    "mini-swe" (bash-only, `training_data.mini_swe_format`). Decoding is greedy at
+    temperature 0, otherwise sampled with Qwen3's recommended top-p and top-k.
     """
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
+    from training_data import mini_swe_format, qwen_agent_chat
     from training_data import pr_task_agent as agent
-    from training_data import qwen_agent_chat
     from vllm import LLM, SamplingParams
 
+    if agent_format not in AGENT_FORMATS:
+        raise ValueError(f"Unknown agent format {agent_format}")
     context = REFERENCE_SFT["context"]
     if model.startswith("sft:"):
         runs_volume.reload()
@@ -658,7 +714,8 @@ def evaluate_reference(model, name, run, limit, workers, deadline):
         source, revision, chat = str(folder / "model"), None, False
         header = {"model": model, "base": trained["base"], "base_revision": trained["revision"]}
     else:
-        source, revision, chat = model, REFERENCE_MODELS[model], True
+        source, revision = model, REFERENCE_MODELS[model]
+        chat = agent_format == "qwen-tools"
         header = {"model": model, "revision": revision}
     llm = LLM(
         model=source,
@@ -666,35 +723,51 @@ def evaluate_reference(model, name, run, limit, workers, deadline):
         max_model_len=context,
         enable_prefix_caching=True,
         gpu_memory_utilization=0.85,
+        seed=0,
     )
     tokenizer = llm.get_tokenizer()
     params = SamplingParams(
-        temperature=0.0,
+        temperature=temperature,
+        **(SAMPLING if temperature > 0 else {}),
         max_tokens=REFERENCE_MAX_NEW_TOKENS,
         stop_token_ids=[tokenizer.convert_tokens_to_ids(qwen_agent_chat.TURN_END)],
         skip_special_tokens=False,
     )
 
+    def prompt_text(messages):
+        if agent_format == "mini-swe":
+            return mini_swe_format.render(
+                mini_swe_format.conversation(messages), add_generation_prompt=True
+            )
+        return qwen_agent_chat.render(
+            agent.training_row(messages)["messages"],
+            agent.TOOLS,
+            add_generation_prompt=True,
+            chat=chat,
+        )
+
+    parse = (
+        mini_swe_format.parse_assistant
+        if agent_format == "mini-swe"
+        else qwen_agent_chat.parse_assistant
+    )
+
     def local(conversations):
         replies, prompts, index = [None] * len(conversations), [], []
         for i, messages in enumerate(conversations):
-            text = qwen_agent_chat.render(
-                agent.training_row(messages)["messages"],
-                agent.TOOLS,
-                add_generation_prompt=True,
-                chat=chat,
-            )
-            ids = tokenizer.encode(text, add_special_tokens=False)
+            ids = tokenizer.encode(prompt_text(messages), add_special_tokens=False)
             if len(ids) + REFERENCE_MAX_NEW_TOKENS <= context:
                 prompts.append({"prompt_token_ids": ids})
                 index.append(i)
         if prompts:
             outputs = llm.generate(prompts, params, use_tqdm=False)
             for i, output in zip(index, outputs, strict=True):
-                replies[i] = qwen_agent_chat.parse_assistant(output.outputs[0].text)
+                replies[i] = parse(output.outputs[0].text)
         return replies
 
-    header["chat_format"] = "qwen3, thinking off" if chat else "qwen3, as trained"
+    header["agent_format"] = agent_format
+    header["chat_format"] = "qwen3, thinking off" if chat else "as trained"
+    header["sampling"] = {"temperature": temperature, **(SAMPLING if temperature > 0 else {})}
     return _evaluate_heldout(local, header, name, run, limit, workers, deadline)
 
 
@@ -738,29 +811,43 @@ def evaluate(
 @app.local_entrypoint()
 def reference_train(
     bases: str = "Qwen/Qwen3-0.6B-Base,Qwen/Qwen3-1.7B-Base",
+    source: str = "pr",
+    count: int = 0,
     recipe: str = "data/recipes/agentic-sft-v1.json",
     tag: str = "01",
 ):
-    trajectories = json.loads(Path(recipe).read_text())["trajectories"]
-    runs = {b: f"{b.split('/')[1].lower()}-agentic-sft-{tag}" for b in bases.split(",")}
+    """`--source pr` trains 4 epochs on the recipe's trajectories; `--source mini-coder
+    --count N` trains one epoch on N mini-coder trajectories."""
+    if source == "pr":
+        data = {"source": "pr", "path": json.loads(Path(recipe).read_text())["trajectories"]}
+        data["epochs"], name = 4, "agentic-sft"
+    else:
+        shards = -(-count * 3 // 2 // MINI_CODER_ROWS_PER_SHARD)  # 1.5x the sample, whole shards
+        data = {"source": "mini-coder", "count": count, "shards": shards, "seed": 0, "epochs": 1}
+        name = f"minicoder-{count // 1000}k"
+    runs = {b: f"{b.split('/')[1].lower()}-{name}-{tag}" for b in bases.split(",")}
     print(json.dumps({"results": f"lm-exploration-hybrid-runs/{REFERENCE_FOLDER}/", **runs}))
-    _spawn_all([(train_reference, (b, r, trajectories)) for b, r in runs.items()])
+    _spawn_all([(train_reference, (b, r, data)) for b, r in runs.items()])
 
 
 @app.local_entrypoint()
 def reference_evaluate(
     models: str = "Qwen/Qwen3-0.6B,Qwen/Qwen3-1.7B",
+    agent_format: str = "qwen-tools",
+    temperature: float = 0.0,
     name: str = "pr-tasks-pilot",
     limit: int = 0,
     workers: int = 48,
 ):
-    """`models`: pinned Qwen3 chat models and `sft:<run>` outputs, comma-separated."""
+    """`models`: pinned models and `sft:<run>` outputs, comma-separated, all in one format."""
     stamp, launches = int(time.time()), []
+    sampled = f"-t{temperature:g}" if temperature > 0 else ""
     for model in models.split(","):
         slug = model.removeprefix("sft:").split("/")[-1].lower()
-        run = f"eval-{slug}-{stamp}{f'-limit{limit}' if limit else ''}"
+        run = f"eval-{slug}{sampled}-{stamp}{f'-limit{limit}' if limit else ''}"
         print(json.dumps({"results": f"lm-exploration-hybrid-data/{name}/agentic/{run}/"}))
-        launches.append((evaluate_reference, (model, name, run, limit, workers)))
+        arguments = (model, agent_format, temperature, name, run, limit, workers)
+        launches.append((evaluate_reference, arguments))
     _spawn_all(launches)
 
 
