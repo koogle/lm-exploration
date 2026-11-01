@@ -154,8 +154,9 @@ same as ours) can go in as they are: DeepSeek-V3.2 on all 15k tasks
 (`Lego-X/Terminal-Lego-Traj-Deepseek-V3-2-15k`) and DeepSeek-V3.2 and GLM-5 on an 8k
 subset (`Lego-X/Terminal-Lego-Traj-8k`). Those two datasets carry no licence on HF
 (the tasks are Apache-2.0, the pipeline code MIT), so we ask the authors before using
-them; their Claude Opus 4.6 and Qwen3.5-Plus files are left out because those
-providers' terms restrict training on outputs. In SFT, Terminal-Lego is weighted up
+them; their Claude Opus 4.6 file is left out (Anthropic's terms do not allow using
+outputs to build competing models), and the Qwen3.5-Plus file until Alibaba Cloud's
+API terms are checked. In SFT, Terminal-Lego is weighted up
 (read twice) rather than diluted: its 15k traces alone took Qwen3-32B from 3.4 to 24.3
 on Terminal-Bench 2.0.
 
