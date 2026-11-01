@@ -18,7 +18,8 @@ not to confirm its interpretation by selecting new favorable heads.
 
 ## Frozen evaluation protocol
 
-Use main's native prefill and CUDA-graph decoder on FP32 weights/activations and
+Use main's native prefill and a dimension-independent FP32 probe decoder,
+captured by main's CUDA-graph/cache driver, with FP32 weights/activations and
 readout, without autocast and with Torch TF32 disabled. Compare selected cases to
 a full forward pass. Also record BF16-trunk/BF16-readout, BF16-trunk/FP32-readout,
 and FP32-forward baselines so changes in numerical precision are visible.
@@ -38,7 +39,8 @@ three distractor lengths. Test both intervention directions. Evaluate all eight
 K/C/A subsets; each replaces that route at every relevant layer. Also patch each
 of the three full-attention layer caches separately. Test the fixed city head and
 column, an adjacent column with matched perturbation norm, and matched-norm random
-directions within the same head/column. Seeds for the random directions are fixed.
+directions within the same head/column. Seeds for the random directions are fixed; reverse transplants negate the same
+random direction, so signed effects do not cancel by construction.
 These interventions produce 6,912 rows. The head/column are never reselected on
 these evaluation examples. Random directions are perturbation controls, not
 on-manifold counterfactuals. Cache swaps themselves may be off-manifold when only
@@ -67,3 +69,9 @@ and preserve partial results; no automatic relaunch of a timeout. Source hashes 
 launch identity go in `artifacts/results/<run>/launch.json`. Structured outputs go
 to Modal volume `lm-exploration-training/<run>`, then the private HF dataset
 `jfrick/lm-exploration-results/training/results/<run>`.
+
+The first route-probe launch `kda-routes-1793522731` stopped before producing
+comparisons because main's production decode kernel requires 128-wide heads.
+This 64-wide checkpoint uses a dimension-independent PyTorch probe recurrence;
+its equivalence to full forwards and cache-transplant identities is qualified
+before interpretation. The failed launch is preserved in the HF archive.

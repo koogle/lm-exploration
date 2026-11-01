@@ -90,16 +90,72 @@ def examples(tok):
                         }
 
 
+class ProbeDecoder(generate.Decoder):
+    """Dimension-independent FP32 recurrence, captured by main's cache/graph driver."""
+
+    def _kda(self, mixer, x, layer):
+        point = x[:, 0]
+        vectors = []
+        for name, projection, weight in zip(
+            "qkv",
+            (mixer.q_proj, mixer.k_proj, mixer.v_proj),
+            (mixer.q_conv, mixer.k_conv, mixer.v_conv),
+            strict=True,
+        ):
+            history = layer[name]
+            history.masked_fill_(self.fresh[:, None, None], 0)
+            window = torch.cat((history, projection(point)[:, None]), dim=1)
+            vector = F.silu((window * weight[:, 0].T[None]).sum(1))
+            vectors.append(vector.view(self.rows, mixer.heads, mixer.head_dim))
+            history.copy_(window[:, 1:])
+        q, key, value = vectors
+        q = F.normalize(q, dim=-1) / mixer.head_dim**0.5
+        key = F.normalize(key, dim=-1)
+        g = mixer.f_proj(point).view(self.rows, mixer.heads, mixer.head_dim)
+        decay = kda.kda_gate(g, mixer.A_log, mixer.dt_bias).exp()
+        state = layer["state"]
+        state.masked_fill_(self.fresh[:, None, None, None], 0)
+        faded = state * decay[..., None]
+        error = value - torch.einsum("bhk,bhkv->bhv", key, faded)
+        beta = mixer.b_proj(point).sigmoid()
+        state.copy_(faded + torch.einsum("bhk,bhv->bhkv", beta[..., None] * key, error))
+        read = torch.einsum("bhk,bhkv->bhv", q, state)
+        read = read * torch.rsqrt(read.square().mean(-1, keepdim=True) + mixer.norm_eps)
+        read = read * mixer.o_norm_weight
+        gate = mixer.g_proj(point).view_as(read).sigmoid()
+        return mixer.o_proj((read * gate).flatten(1))[:, None]
+
+    def _attention(self, attention, x, layer, rope):
+        query, key, value = attention.project(x, rope)
+        layer["key"].index_copy_(2, self.slot, key)
+        layer["value"].index_copy_(2, self.slot, value)
+        groups = query.shape[1] // layer["key"].shape[1]
+        keys = layer["key"].repeat_interleave(groups, dim=1)
+        values = layer["value"].repeat_interleave(groups, dim=1)
+        scores = (query @ keys.transpose(-1, -2)) / attention.head_dim**0.5
+        indices = torch.arange(self.capacity, device=x.device)
+        valid = (indices[None] >= self.starts[:, None]) & (indices[None] <= self.slot)
+        scores = scores.masked_fill(~valid[:, None, None], -torch.inf)
+        lse = scores.logsumexp(-1)
+        read = scores.softmax(-1) @ values
+        kept = torch.sigmoid(lse - attention.sink[None, :, None])
+        read = (read * kept[..., None]).transpose(1, 2).flatten(2)
+        gate = torch.sigmoid(attention.gate_proj(x) + attention.gate_bias)
+        return attention.o_proj(read * gate)
+
+
 @torch.no_grad()
 def continuation(model, cache, prefix_len, suffix, answers):
-    dec = generate.decoder(model, 1, 512)
+    if not hasattr(model, "_route_decoder"):
+        model._route_decoder = ProbeDecoder(model, 1, 512)
+    dec = model._route_decoder
     dec.load(cache, [prefix_len], prefix_len)
     for token in suffix:
         logits = dec.step(torch.tensor([token], device="cuda"))
     return float(logits[0, answers[0]] - logits[0, answers[1]])
 
 
-def transplant(target, donor, mode, noise_seed):
+def transplant(target, donor, mode, noise_seed, noise_sign):
     """K: all KDA states, C: all convolution histories, A: all full-attention KV."""
     cache = [{k: v.clone() for k, v in layer.items()} for layer in target]
     if mode in ["none"] + ["".join(r) for r in ROUTES if r]:
@@ -129,7 +185,7 @@ def transplant(target, donor, mode, noise_seed):
         region = d[:, 3] if mode == "random_head" else d[:, 3, :, 13]
         rng = torch.Generator(device="cuda").manual_seed(noise_seed)
         noise = torch.randn(region.shape, generator=rng, device="cuda")
-        noise *= region.norm() / noise.norm().clamp_min(1e-12)
+        noise *= noise_sign * region.norm() / noise.norm().clamp_min(1e-12)
         if mode == "random_head":
             s[:, 3] += noise
         else:
@@ -291,7 +347,7 @@ def run(folder, volume, deadline, provenance):
             sign = 1 if direction == 0 else -1
             donor, target = caches[direction], caches[1 - direction]
             for mode in MODES:
-                cache = transplant(target, donor, mode, 1793 + index)
+                cache = transplant(target, donor, mode, 1793 + index, sign)
                 changed = continuation(model, cache, length, suffix, answers)
                 if mode == "none":
                     assert abs(changed - base[1 - direction]) < 1e-5
