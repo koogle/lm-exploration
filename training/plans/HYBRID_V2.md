@@ -153,3 +153,52 @@ limit and 14 by answering without a tool call.
 
 Outputs (trajectories, summaries, run metrics, the failed launch's log):
 `training/results/agentic-sft-pilot/` in `jfrick/lm-exploration-results`.
+
+## Qwen reference runs (2026-11-01)
+
+Whether broad pretraining is what the 720M student lacks: Qwen3 models, pretrained on
+36T tokens, through the same 179 held-out tasks (`modal_agentic.py::reference_train`,
+`::reference_evaluate`; vLLM, greedy, 40 turns, 1,536 new tokens per turn, as the
+hybrid evaluation).
+
+- **Fine-tuned:** Qwen3-0.6B-Base and Qwen3-1.7B-Base, full fine-tune on the resolved
+  training-repository trajectories of `glm-5.3-1793298716` in Qwen3's chat format
+  (365 fit 32K with Qwen's tokenizer; 5.11M tokens, 1.26M of them assistant tokens per
+  epoch), 4 epochs, 183 steps of 8 trajectories, learning rate 2e-5 with cosine decay,
+  loss on assistant turns only. Unlike `hybrid-720m-agentic-sft-02`, no chat-SFT mix
+  and no pretraining replay. One H100 each: 17 and 24 minutes, final loss 0.173 and
+  0.108.
+- **Zero-shot:** Qwen3-0.6B and Qwen3-1.7B (post-trained chat models), thinking off.
+
+**Held-out resolved: 0 of 179 for all four.** Behavior from
+`evaluation.agentic_behavior`:
+
+| Agent | Resolved | Turn limit | Submitted | Bash calls | Repeated calls | Edits applied | Episodes with patch |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| GLM-5.3 teacher (held-out) | 113 | 66 | 82 | 74% | 0.3% | 857 / 973 | 174 |
+| Hybrid 720M, agentic SFT | 0 | 145 | 0 | 99% | 75% | 2 / 28 | 5 |
+| Qwen3-0.6B-Base, agentic SFT | 0 | 158 | 0 | 95% | 64% | 2 / 185 | 12 |
+| Qwen3-1.7B-Base, agentic SFT | 0 | 147 | 0 | 96% | 52% | 11 / 85 | 10 |
+| Qwen3-0.6B, zero-shot | 0 | 1 | 131 | 2% | 27% | 8 / 22 | 9 |
+| Qwen3-1.7B, zero-shot | 0 | 46 | 71 | 38% | 76% | 237 / 1,191 | 65 |
+
+The fine-tuned Qwen models fail like the 720M student: well-formed tool calls (99.8%
+of turns) that mostly repeat bash exploration until the turn limit, edits whose `old`
+text is not in the file, no submission. Broad pretraining does not change this with
+365 trajectories, so the 720M result is not explained by its pretraining alone. The
+zero-shot chat models behave differently but no better: Qwen3-0.6B submits at once in
+131 episodes; Qwen3-1.7B edits in 65 episodes (and calls tools that do not exist,
+such as `grep`), without a passing patch.
+
+Published small agents use far more trajectories: mini-coder-1.7b, about 400k
+(18.6% on SWE-bench Verified); SWE-smith's 7B model went from 2.2% at 100 trajectories
+to about 17% at 2.4k (see the
+[open-model frontier reference](../references/open-model-frontier-2026-11-01.md)). The
+next test is trajectory count, and sampling instead of greedy decoding, which every
+run here used and which favors repeated calls.
+
+The fine-tuned weights are on the `lm-exploration-hybrid-runs` volume
+(`agentic-reference/<run>/model`). Outputs (evaluation summaries and trajectories,
+including the two 4-task smoke runs, the first of which failed before the sandbox
+image fix; SFT metrics and summaries; `qwen-reference-behavior.jsonl`):
+`training/results/agentic-sft-pilot/` in `jfrick/lm-exploration-results`.
