@@ -11,6 +11,8 @@ directory, so episodes in our sandboxes run with `/testbed` linked to the reposi
 Messages render in Qwen3's tool format (`training_data.qwen_agent_chat`) without the
 teachers' reasoning. `training_messages` turns a dataset row into training messages;
 `conversation` turns a harness episode (OpenAI messages) into the same layout;
+`from_harness` turns a finished harness episode with our five tools into a training
+conversation that uses only the bash tool;
 `parse_assistant` maps generated text to harness calls (`bash`, or `submit` for the
 submission command).
 """
@@ -131,3 +133,101 @@ def parse_assistant(text):
         if SUBMIT in str(command):
             call["function"] = {"name": "submit", "arguments": "{}"}
     return message
+
+
+READ_LINES = 400  # pr_task_runner.READ_LINES
+NUMBERED = re.compile(r" *(\d+)  (.*)")
+
+
+def _bash(command):
+    return {"function": {"name": "bash", "arguments": json.dumps({"command": command})}}
+
+
+def _heredoc(text, word="EOF"):
+    while word in text.splitlines():
+        word += "_"
+    return word
+
+
+def _as_bash(call, result):
+    """(bash call, its result as `exit code: N\\n<output>`) for one of our tool calls."""
+    import shlex
+
+    name, arguments = call["function"]["name"], call["function"].get("arguments") or "{}"
+    arguments = json.loads(arguments) if isinstance(arguments, str) else arguments
+    if name == "bash":
+        return _bash(arguments.get("command", "")), result
+    path = shlex.quote(str(arguments.get("path", "")))
+    failed = result.startswith("error:")
+    if name == "read_file":
+        start = int(arguments.get("start_line") or 1)
+        end = int(arguments.get("end_line") or start + READ_LINES - 1)
+        command = f"nl -ba {path} | sed -n '{start},{end}p'"
+        if failed:
+            return _bash(
+                command
+            ), f"exit code: 0\nnl: {arguments.get('path')}: No such file or directory"
+        lines = []
+        for line in result.split("\n"):
+            match = NUMBERED.fullmatch(line)
+            if match:
+                lines.append(f"{int(match.group(1)):>6}\t{match.group(2)}")
+            elif not line.startswith("[") or not line.endswith("lines in total]"):
+                lines.append(line)
+        return _bash(command), "exit code: 0\n" + "\n".join(lines) + "\n"
+    if name == "write_file":
+        content = str(arguments.get("content", ""))
+        word = _heredoc(content)
+        command = f"mkdir -p \"$(dirname {path})\" && cat <<'{word}' > {path}\n{content}\n{word}"
+        return _bash(command), "exit code: 0\n"
+    if name == "edit_file":
+        old, new = str(arguments.get("old", "")), str(arguments.get("new", ""))
+        script = (
+            "from pathlib import Path\n"
+            f"p = Path({arguments.get('path')!r})\n"
+            "s = p.read_text()\n"
+            f"old = {old!r}\n"
+            f"new = {new!r}\n"
+            'assert s.count(old) == 1, f"old text occurs {s.count(old)} times"\n'
+            "p.write_text(s.replace(old, new))"
+        )
+        word = _heredoc(script, "PY")
+        command = f"python3 - <<'{word}'\n{script}\n{word}"
+        if failed:
+            count = re.search(r"occurs (\d+) times", result)
+            message = f"old text occurs {count.group(1) if count else 0} times"
+            return _bash(command), (
+                "exit code: 1\nTraceback (most recent call last):\n"
+                '  File "<stdin>", line 6, in <module>\n'
+                f"AssertionError: {message}\n"
+            )
+        return _bash(command), "exit code: 0\n"
+    raise ValueError(f"Unexpected tool {name}")
+
+
+def from_harness(messages):
+    """Training messages in the dataset's bash-only layout for a resolved harness episode
+    with our tools (bash, read_file, edit_file, write_file, submit). Every episode ends
+    with the dataset's submission: the diff written to patch.txt, then the submit
+    command (episodes that ran out of turns get the same ending)."""
+    task = TASK.match(messages[1]["content"])
+    title, body = task.groups() if task else ("", messages[1]["content"])
+    out = [_message("system", SYSTEM), _message("user", instance(title, body))]
+    position = 2
+    while position < len(messages):
+        message = messages[position]
+        if message["role"] != "assistant":
+            position += 1
+            continue
+        calls = [c for c in message.get("tool_calls") or [] if c["function"]["name"] != "submit"]
+        following = messages[position + 1 : position + 1 + len(calls)]
+        results = [m.get("content", "") for m in following if m["role"] == "tool"]
+        converted = [_as_bash(c, r) for c, r in zip(calls, results, strict=False)]
+        if converted or message.get("content"):
+            out.append(_message("assistant", message.get("content"), [c for c, _ in converted]))
+            out.extend(_message("tool", observation(r)) for _, r in converted)
+        position += 1 + len(results)
+    out.append(_message("assistant", "", [_bash("git diff > patch.txt")]))
+    out.append(_message("tool", observation("exit code: 0\n")))
+    out.append(_message("assistant", "", [_bash(f"echo {SUBMIT} && cat patch.txt")]))
+    return out

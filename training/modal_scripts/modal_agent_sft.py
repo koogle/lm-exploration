@@ -13,6 +13,8 @@ Run from training/:
 - `terminal-lego`: Terminal-Lego DeepSeek-V3.2 trajectories on real Stack Overflow
   tasks, reward 1 only (the dataset carries no licence on HF; see
   `plans/AGENTIC_TRAJECTORIES.md`), Terminus 2 format.
+- `pr-glm`: our GLM-5.3 trajectories on the PR tasks (resolved, training repositories),
+  converted to the Open-SWE bash-only layout; mixes can repeat it.
 - `nemotron-terminal`: NVIDIA Nemotron-Terminal-Corpus skill-based synthetic tasks
   (DeepSeek-V3.2), Terminus 2 format.
 
@@ -45,6 +47,9 @@ from modal_scripts.modal_agentic import (
     hf_cache,
     reference_image,
     runs_volume,
+)
+from modal_scripts.modal_agentic import (
+    volume as data_volume,
 )
 
 app = modal.App("lm-exploration-agent-sft")
@@ -83,6 +88,9 @@ SOURCES = {
         "revision": "922c2fcb019854911fc05eb1a208d2685ac6e006",
         "files": ["terminal-lego-deepseek-v3-2-15k.json"],
     },
+    # Our GLM-5.3 trajectories on the PR tasks (resolved, training repositories),
+    # converted to the bash-only Open-SWE layout (`open_swe_format.from_harness`).
+    "pr-glm": {"path": "pr-tasks-pilot/agentic/glm-5.3-1793298716/trajectories.jsonl"},
     "nemotron-terminal": {
         "repo": "nvidia/Nemotron-Terminal-Corpus",
         "revision": "a1667c4ffdadea02a89bffe4f1bb7ca2ff19f8d9",
@@ -98,6 +106,20 @@ MIXES = {
     "openswe-20k-terminal-30k": {
         "seed": 0,
         "parts": {"open-swe": 20000, "terminal-lego": 15000, "nemotron-terminal": 15000},
+    },
+    # Our own trajectories, all of them, each read 5 times.
+    "openswe-20k-pr5": {
+        "seed": 0,
+        "parts": {"open-swe": 20000, "pr-glm": {"count": None, "repeat": 5}},
+    },
+    "openswe-20k-terminal-30k-pr5": {
+        "seed": 0,
+        "parts": {
+            "open-swe": 20000,
+            "terminal-lego": 15000,
+            "nemotron-terminal": 15000,
+            "pr-glm": {"count": None, "repeat": 5},
+        },
     },
 }
 SETTINGS = {
@@ -141,12 +163,21 @@ def _download(source, name):
 
 
 def _sample(source, count, rng):
-    """(format, messages) items for one source, oversampled 1.5x for context drops."""
+    """(format, messages) items for one source, oversampled 1.5x for context drops
+    (every item when `count` is None)."""
     from pyarrow import parquet
     from training_data import open_swe_format, terminus_format
 
-    want, items = int(count * 1.5), []
-    if source == "open-swe":
+    want, items = (None if count is None else int(count * 1.5)), []
+    if source == "pr-glm":
+        from training_data import pr_task_agent
+
+        for line in Path("/data", SOURCES[source]["path"]).read_text().splitlines():
+            row = json.loads(line)
+            if row["resolved"] and not pr_task_agent.heldout(row["repository"]):
+                items.append(("open-swe", open_swe_format.from_harness(row["messages"])))
+        rng.shuffle(items)
+    elif source == "open-swe":
         files = _files(source)
         rng.shuffle(files)
         per_task = {}
@@ -208,7 +239,7 @@ def _encode(item):
     memory=131072,
     timeout=PREPARE_SECONDS,
     retries=0,
-    volumes={"/runs": runs_volume, "/hf": hf_cache},
+    volumes={"/runs": runs_volume, "/hf": hf_cache, "/data": data_volume},
 )
 def prepare_mix(mix, deadline):
     """Sample and tokenize a mix; sources keep their order, examples are shuffled."""
@@ -222,13 +253,20 @@ def prepare_mix(mix, deadline):
     spec, started = MIXES[mix], time.time()
     rng = random.Random(spec["seed"])
     kept, counts = [], {}
-    for source, count in spec["parts"].items():
+    for source, part in spec["parts"].items():
+        count, repeat = (part["count"], part["repeat"]) if isinstance(part, dict) else (part, 1)
         items = _sample(source, count, rng)
         with Pool(30) as pool:
             encoded = pool.map(_encode, items, chunksize=16)
         fits = [(ids, mask) for ids, mask in encoded if len(ids) <= CONTEXT and sum(mask)]
-        counts[source] = {"sampled": len(items), "fit": len(fits), "kept": min(count, len(fits))}
-        kept.extend((source, ids, mask) for ids, mask in fits[:count])
+        chosen = fits if count is None else fits[:count]
+        counts[source] = {
+            "sampled": len(items),
+            "fit": len(fits),
+            "kept": len(chosen),
+            "repeat": repeat,
+        }
+        kept.extend((source, ids, mask) for ids, mask in chosen * repeat)
     rng.shuffle(kept)
     out = Path("/runs", MIX_FOLDER, mix)
     out.mkdir(parents=True, exist_ok=True)

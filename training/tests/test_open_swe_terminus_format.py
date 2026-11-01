@@ -106,6 +106,79 @@ class OpenSweFormatTests(unittest.TestCase):
         self.assertIn("<tool_response>", text)
 
 
+HARNESS = [
+    {"role": "system", "content": "harness"},
+    {"role": "user", "content": "Repository: o/r\n\n# Bug\n\nBroken."},
+    {
+        "role": "assistant",
+        "content": "Read and edit.",
+        "tool_calls": [
+            {
+                "function": {
+                    "name": "read_file",
+                    "arguments": '{"path": "a.py", "start_line": 2, "end_line": 3}',
+                }
+            },
+            {
+                "function": {
+                    "name": "edit_file",
+                    "arguments": '{"path": "a.py", "old": "x = 1", "new": "x = 2"}',
+                }
+            },
+        ],
+    },
+    {"role": "tool", "content": "    2  x = 1\n    3  y = 2\n[9 lines in total]"},
+    {"role": "tool", "content": "edited a.py"},
+    {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{"function": {"name": "submit", "arguments": "{}"}}],
+    },
+    {"role": "tool", "content": "submitted"},
+]
+
+
+class FromHarnessTests(unittest.TestCase):
+    def test_tools_become_bash_and_episode_ends_with_submission(self):
+        out = swe.from_harness(HARNESS)
+        commands = [
+            json.loads(c["function"]["arguments"])["command"]
+            for m in out
+            if m["role"] == "assistant"
+            for c in m.get("tool_calls") or []
+        ]
+        self.assertEqual(commands[0], "nl -ba a.py | sed -n '2,3p'")
+        self.assertTrue(commands[1].startswith("python3 - <<'PY'\nfrom pathlib import Path"))
+        self.assertIn("old = 'x = 1'", commands[1])
+        self.assertEqual(
+            commands[2:], ["git diff > patch.txt", f"echo {swe.SUBMIT} && cat patch.txt"]
+        )
+        self.assertEqual(
+            json.loads(out[3]["content"]),
+            {"returncode": 0, "output": "     2\tx = 1\n     3\ty = 2\n"},
+        )
+        self.assertEqual(json.loads(out[4]["content"]), {"returncode": 0, "output": ""})
+        self.assertEqual(out[-1]["role"], "assistant")
+        self.assertTrue(
+            out[1]["content"].startswith(
+                "<pr_description>\nConsider the following PR description:\n# Title\nBug"
+            )
+        )
+
+    def test_edit_heredoc_runs(self):
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, "a.py").write_text("x = 1\n")
+            command = json.loads(
+                swe.from_harness(HARNESS)[2]["tool_calls"][1]["function"]["arguments"]
+            )["command"]
+            subprocess.run(["bash", "-c", command], cwd=folder, check=True)
+            self.assertEqual(Path(folder, "a.py").read_text(), "x = 2\n")
+
+
 class TerminusFormatTests(unittest.TestCase):
     def test_both_layouts_and_think_removal(self):
         lego = [{"from": "human", "value": "task"}, {"from": "gpt", "value": '{"analysis": "a"}'}]
