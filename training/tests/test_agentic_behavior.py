@@ -40,6 +40,9 @@ ROWS = [
         "messages": [
             {"role": "assistant", "content": "", "tool_calls": [call(1, "edit_file", path="y")]},
             {"role": "tool", "tool_call_id": "c1", "content": "error: `old` occurs 0 times"},
+            # A repeated call id still pairs with its own result, by position.
+            {"role": "assistant", "content": "", "tool_calls": [call(1, "write_file", path="z")]},
+            {"role": "tool", "tool_call_id": "c1", "content": "wrote z"},
             {"role": "assistant", "content": "I am done."},
         ],
     },
@@ -52,13 +55,16 @@ class AgenticBehaviorTests(unittest.TestCase):
         self.assertEqual(stats["episodes"], 2)
         self.assertEqual(stats["resolved"], 1)
         self.assertEqual(stats["ends"], {"answered": 1, "submitted": 1})
-        self.assertEqual(stats["assistant_turns"], 6)
-        self.assertEqual(stats["turns_with_tool_call"], round(5 / 6, 4))
-        self.assertEqual(stats["tool_calls"], 5)
-        self.assertEqual(stats["calls_by_tool"], {"bash": 0.4, "edit_file": 0.4, "submit": 0.2})
+        self.assertEqual(stats["assistant_turns"], 7)
+        self.assertEqual(stats["turns_with_tool_call"], round(6 / 7, 4))
+        self.assertEqual(stats["tool_calls"], 6)
+        self.assertEqual(
+            stats["calls_by_tool"],
+            {"bash": 0.3333, "edit_file": 0.3333, "submit": 0.1667, "write_file": 0.1667},
+        )
         # The second `ls` repeats the first; calls in another episode do not count.
-        self.assertEqual(stats["repeated_calls"], 0.2)
-        self.assertEqual(stats["edits"], {"attempted": 2, "applied": 1})
+        self.assertEqual(stats["repeated_calls"], 0.1667)
+        self.assertEqual(stats["edits"], {"attempted": 3, "applied": 2})
         self.assertEqual(stats["episodes_with_patch"], 1)
         self.assertEqual(stats["episodes_submitted"], 1)
 

@@ -171,20 +171,20 @@ hybrid evaluation).
 - **Zero-shot:** Qwen3-0.6B and Qwen3-1.7B (post-trained chat models), thinking off.
 
 **Held-out resolved: 0 of 179 for all four.** Behavior from
-`evaluation.agentic_behavior`:
+`evaluation.agentic_behavior` (edits pair with their results by position):
 
 | Agent | Resolved | Turn limit | Submitted | Bash calls | Repeated calls | Edits applied | Episodes with patch |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | GLM-5.3 teacher (held-out) | 113 | 66 | 82 | 74% | 0.3% | 857 / 973 | 174 |
-| Hybrid 720M, agentic SFT | 0 | 145 | 0 | 99% | 75% | 2 / 28 | 5 |
-| Qwen3-0.6B-Base, agentic SFT | 0 | 158 | 0 | 95% | 64% | 2 / 185 | 12 |
-| Qwen3-1.7B-Base, agentic SFT | 0 | 147 | 0 | 96% | 52% | 11 / 85 | 10 |
-| Qwen3-0.6B, zero-shot | 0 | 1 | 131 | 2% | 27% | 8 / 22 | 9 |
-| Qwen3-1.7B, zero-shot | 0 | 46 | 71 | 38% | 76% | 237 / 1,191 | 65 |
+| Hybrid 720M, agentic SFT | 0 | 145 | 0 | 99% | 75% | 8 / 28 | 5 |
+| Qwen3-0.6B-Base, agentic SFT | 0 | 158 | 0 | 95% | 64% | 18 / 185 | 12 |
+| Qwen3-1.7B-Base, agentic SFT | 0 | 147 | 0 | 96% | 52% | 26 / 85 | 10 |
+| Qwen3-0.6B, zero-shot | 0 | 1 | 131 | 2% | 27% | 9 / 22 | 9 |
+| Qwen3-1.7B, zero-shot | 0 | 46 | 71 | 38% | 76% | 349 / 1,191 | 65 |
 
 The fine-tuned Qwen models fail like the 720M student: well-formed tool calls (99.8%
-of turns) that mostly repeat bash exploration until the turn limit, edits whose `old`
-text is not in the file, no submission. Broad pretraining does not change this with
+of turns) that mostly repeat bash exploration until the turn limit, edits that mostly
+fail to apply, no submission. Broad pretraining does not change this with
 365 trajectories, so the 720M result is not explained by its pretraining alone. The
 zero-shot chat models behave differently but no better: Qwen3-0.6B submits at once in
 131 episodes; Qwen3-1.7B edits in 65 episodes (and calls tools that do not exist,

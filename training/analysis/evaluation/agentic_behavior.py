@@ -26,19 +26,18 @@ def behavior(rows):
         ends[row["end"]] += 1
         patched += bool(row.get("patch", "").strip())
         submitted += row["end"] == "submitted"
-        results = {
-            m.get("tool_call_id"): m.get("content", "")
-            for m in row["messages"]
-            if m["role"] == "tool"
-        }
         seen = set()
-        for message in row["messages"]:
+        messages = row["messages"]
+        for position, message in enumerate(messages):
             if message["role"] != "assistant":
                 continue
             turns += 1
             message_calls = message.get("tool_calls") or []
+            # Results follow their turn in call order (call ids need not be unique).
+            following = messages[position + 1 : position + 1 + len(message_calls)]
+            results = [m.get("content", "") for m in following if m["role"] == "tool"]
             with_call += bool(message_calls)
-            for call in message_calls:
+            for index, call in enumerate(message_calls):
                 name = call["function"]["name"]
                 key = (name, json.dumps(agent.arguments(call), sort_keys=True))
                 calls += 1
@@ -47,7 +46,8 @@ def behavior(rows):
                 seen.add(key)
                 if name in ("edit_file", "write_file"):
                     edits += 1
-                    applied += results.get(call.get("id"), "").startswith(("edited", "wrote"))
+                    result = results[index] if index < len(results) else ""
+                    applied += result.startswith(("edited", "wrote"))
     share = lambda part, whole: round(part / whole, 4) if whole else None
     return {
         "episodes": len(rows),

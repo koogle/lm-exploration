@@ -107,7 +107,7 @@ def parse_assistant(text):
     text = text.split(TURN_END)[0]
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
     calls = []
-    for index, match in enumerate(CALL.finditer(text)):
+    for match in CALL.finditer(text):
         try:
             data = json.loads(match.group(1))
         except json.JSONDecodeError:
@@ -116,8 +116,7 @@ def parse_assistant(text):
             continue
         arguments = data.get("arguments")
         calls.append(
-            {
-                "id": f"call_{index}",
+            {  # no id: the episode loop gives each call a unique one
                 "type": "function",
                 "function": {
                     "name": data["name"],
