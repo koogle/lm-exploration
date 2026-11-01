@@ -324,14 +324,19 @@ def serve_model(run, seconds, deadline):
         raise TimeoutError("Launch deadline passed; refusing work")
     runs_volume.reload()
     model = Path("/runs", REFERENCE_FOLDER, run, "model")
+    # Trained at CONTEXT, beyond the Qwen3 base configs' 32,768 positions (RoPE).
+    env = {**os.environ, "VLLM_ALLOW_LONG_MAX_MODEL_LEN": "1"}
     server = subprocess.Popen(
         ["vllm", "serve", str(model), "--served-model-name", run, "--port", "8000",
-         "--max-model-len", str(CONTEXT), "--enable-prefix-caching", "--seed", "0"]
+         "--max-model-len", str(CONTEXT), "--enable-prefix-caching", "--seed", "0"],
+        env=env,
     )  # fmt: skip
     end = min(time.time() + seconds, deadline - 600, time.time() + SERVE_SECONDS - 300)
     try:
         with modal.forward(8000) as tunnel:
             while time.time() < end:
+                if server.poll() is not None:
+                    raise RuntimeError(f"vLLM exited with {server.returncode}")
                 try:
                     urllib.request.urlopen("http://localhost:8000/health", timeout=5)
                     break

@@ -137,6 +137,11 @@ def main(config_path):
                 print(json.dumps(record), flush=True)
     if rank == 0:
         out = Path(config["out"])
+        # Trained at the mix's context, which may exceed the base config's positions.
+        model.config.max_position_embeddings = max(
+            model.config.max_position_embeddings, settings["context"]
+        )
+        model.config.use_cache = True
         model.to(torch.bfloat16).save_pretrained(out / "model")
         AutoTokenizer.from_pretrained(config["base"], revision=config["revision"]).save_pretrained(
             out / "model"
