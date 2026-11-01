@@ -182,8 +182,11 @@ task and its domain ("a different problem in this domain, with another tool or
 failure"), a real tool's documentation, man page or README from a permissively
 licensed project (real commands, versions and error messages), or a GitHub issue from
 the V2 repositories. Writing a task costs far fewer tokens than solving it, so the
-author is the largest model available (GLM-5.3, 753B, on 8×B200 or through its API),
-while GLM-5.3-Flash does the rollouts. A synthetic task is kept only if its image
+author is the larger GLM-5.3 (753B) through OpenRouter (`z-ai/glm-5.3`, as the PR-task
+pipeline's issue writing already does; $0.08/$3.60 per million input/output tokens
+on 2026-11-01), while GLM-5.3-Flash does the rollouts. At about 8k prompt and up to
+10k output tokens per draft and the 42% yield Terminal-Lego reports, a kept task costs
+about $0.09 (estimate): about $5k for 50k tasks; a 500-task pilot is $20–50. A synthetic task is kept only if its image
 builds, the reference solution passes and the untouched environment fails in 3 runs,
 the tests do not reveal the solution (Harbor's `lint` and `check` reviews plus an LLM
 check), it is not a near-duplicate of another task or of Terminal-Bench (embedding and
@@ -202,9 +205,13 @@ roughly a thousand 8×H100 node-hours, plus sandbox time. Thinking tokens are mo
 it, so low effort or thinking off can cut this severalfold if the solve rate holds;
 stage 1 decides. Every launch stays within
 the repository's 24-hour limit with its own supervisor; long generation runs as
-consecutive 24-hour launches that resume from the written trajectories. API teachers
-remain a fallback if self-hosting costs more per passing trajectory than API prices
-($0.15/$0.50 per million input/output tokens for GLM-5.3-Flash).
+consecutive 24-hour launches that resume from the written trajectories. GLM-5.3-Flash is
+also on OpenRouter at $0.029/$0.092 per million input/output tokens (2026-11-01). At
+about 200k input tokens across the turns of a mini-coder-sized trajectory and up to
+50k output tokens, a rollout is about $0.01 there (estimate), i.e. about $14k for 1.25M
+rollouts, which may undercut self-hosting. Stage 1 measures both on the same tasks and
+generation uses the cheaper one per passing trajectory, after checking that the serving
+provider's terms allow training on outputs (the weights are MIT).
 
 Research behind this plan (task sources, Terminal-Bench harness and corpora, teacher
 comparison, each with sources): `training/references/agentic-data-2026-11-01/` in
