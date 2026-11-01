@@ -7,7 +7,7 @@ and leaderboards; nothing here is measured by us.
 
 - Data and page: HF dataset `jfrick/lm-exploration-results`, folder
   `training/references/open-model-frontier/` (`sources/` as collected,
-  `models.json`, `pairs.json`, `open-model-frontier.html`).
+  `models.json`, `pairs.json`, `open-model-frontier.html`, `images/`).
 - Code: [`open-model-frontier/build.py`](open-model-frontier/build.py) builds
   `models.json`, `pairs.json` and the page from the source files;
   [`page.html`](open-model-frontier/page.html) is the page template (Pareto frontier
@@ -27,6 +27,34 @@ Agentic scores keep their harness and attempts. Where Artificial Analysis ran a 
 independently, that run is used over the vendor's; best-of-N, verifier-reranked,
 subset and expert-assisted results are left out of the chart. `pairs.json` holds 92
 same-paper scores of a base model before and after agentic SFT or RL.
+
+## Charts
+
+Rendered from the page; the step line is the Pareto frontier (no smaller model scores
+higher), dashed lines mark our 150M, 720M, 1B and 2B sizes, and hollow markers are
+research agent fine-tunes. Zoomed views rescale the score axis.
+
+**Agentic**
+
+![SWE-bench Verified, all sizes](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/swe-bench-verified-all.png)
+![SWE-bench Verified, up to 40B](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/swe-bench-verified-40b.png)
+![Terminal-Bench 2.1, up to 40B](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/terminal-bench-2-1-40b.png)
+![Terminal-Bench hard subset (Artificial Analysis), up to 2B](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/terminal-bench-hard-2b.png)
+
+**Coding, knowledge and math**
+
+![LiveCodeBench, up to 2B](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/livecodebench-2b.png)
+![LiveCodeBench, all sizes](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/livecodebench-all.png)
+![HumanEval, up to 2B](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/humaneval-2b.png)
+![MMLU-Pro, up to 2B](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/mmlu-pro-2b.png)
+![MMLU-Pro, all sizes](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/mmlu-pro-all.png)
+![GPQA Diamond, all sizes](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/gpqa-diamond-all.png)
+![AIME 2025, all sizes](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/aime-2025-all.png)
+
+**Knowledge against agentic score, and before/after agentic training**
+
+![MMLU-Pro against SWE-bench Verified; before/after agentic training](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/knowledge-vs-agentic-swe-bench-verified.png)
+![MMLU-Pro against Terminal-Bench 2.1; before/after agentic training](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/images/knowledge-vs-agentic-terminal-bench-2-1.png)
 
 ## Findings
 
