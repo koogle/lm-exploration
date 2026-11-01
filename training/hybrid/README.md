@@ -448,6 +448,9 @@ results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
 uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
 ```
 
+LiveCodeBench, for checkpoints of any family:
+[`analysis/evaluation`](../analysis/evaluation/README.md#livecodebench).
+
 ## Tests
 
 From `training/`:

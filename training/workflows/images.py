@@ -13,6 +13,7 @@ SOURCES = (
     ("distributed", "distributed"),
     ("workflows", "workflows"),
     ("data", "training_data"),
+    ("analysis/evaluation", "evaluation"),
     ("tokenizer", "tokenizer"),
     ("modal_scripts", "modal_scripts"),
     ("tests", "tests"),

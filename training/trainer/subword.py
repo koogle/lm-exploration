@@ -428,6 +428,10 @@ class SubwordModel:
         """BOS and the prompt text."""
         return [BOS_TOKEN_ID, *tokenizer.encode(text, add_special_tokens=False).ids]
 
+    def text_ids(self, tokenizer, text):
+        """BOS and plain text to continue (the subword chat format is plain text too)."""
+        return self.prompt_ids(tokenizer, text)
+
     def sample(self, model, prompts, limit, temperature, generator, record_top_k, engine):
         """(rollout.Samples without the EOS, the token that ended each finished row)."""
         from trainer import rollout

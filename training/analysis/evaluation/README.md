@@ -11,6 +11,7 @@ by hand in the owning study's docs. uv installs this folder as `evaluation`.
 | `scoring.py` | The scored model interface of a checkpoint (loaded by [`trainer/checkpoints.py`](../../trainer/checkpoints.py) with its run's verified model code), log-likelihood batching, greedy generation, answer checking, bits per byte |
 | `heldout.py` | Validation windows of a raw snapshot |
 | `modal_evaluate.py` | Modal launcher: one H100, 3-hour timeout, no retries; a code sandbox for code benchmarks |
+| `benchmarks/livecodebench.py`, `modal_livecodebench.py` | LiveCodeBench v6 for checkpoints of any family and reference models ([below](#livecodebench)) |
 
 ## Run
 
@@ -65,3 +66,32 @@ such as `gsm8k,svamp`. The call refuses new work 24 hours after launch. Results 
 
 Datasets are pinned to HF commits in `configs/benchmarks.json`. Inference uses BF16 autocast with FP32
 weights. Chance levels: about 25% for HellaSwag, ARC and OpenBookQA, 50% for Winogrande.
+
+## LiveCodeBench
+
+[`modal_livecodebench.py`](modal_livecodebench.py) scores LiveCodeBench v6
+(`test6.jsonl`, 175 problems, pinned revision) for checkpoints of any model family and
+for pinned reference base models (the hybrid benchmark references and the dense Qwen3
+1.7–14B and Qwen3.5 2–9B base models). A checkpoint loads through its family's adapter
+([`trainer/families.py`](../../trainer/families.py)): a checkpoint trained to answer
+instructions (any post-training stage, or a chat-format midtraining recipe such as hybrid
+chat SFT) gets LiveCodeBench's system text and question as the family's user turn
+(`instruction`), any other its plain prompt after one worked example of the same test
+mode (`base_prompt`). Reference models get the plain prompt through transformers. One
+greedy completion per problem, up to 2,048 tokens (half the context for shorter-context
+models); the first fenced Python block is
+graded inside the call's container by
+[`benchmarks/livecodebench.py`](benchmarks/livecodebench.py) on every public and private
+test (stdin programs compare output tokens, LeetCode-style problems call the starter
+method; each test in its own `python -I` subprocess with time and memory limits). One
+H100 call per model, `retries=0`, 6-hour timeout, refused 24 hours after launch with an
+independent deadline supervisor. Results go to
+`lm-exploration-hybrid-runs/benchmarks/lcb-<launch>/`. Checkpoint paths start with their
+volume, `runs/` (`lm-exploration-hybrid-runs`) or `training/` (`lm-exploration-training`):
+
+```sh
+uv run --all-extras modal run --detach -m evaluation.modal_livecodebench \
+  --checkpoints runs/RUN/step-N.pt,training/RUN/step-M.pt [--references M,...|all] [--limit N]
+```
+
+Findings: [hybrid 720M plan](../../plans/HYBRID_720M.md#livecodebench-v6).

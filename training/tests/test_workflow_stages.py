@@ -203,6 +203,17 @@ class CheckpointTests(unittest.TestCase):
             (tuned.stage, tuned.module, tuned.model_config, tuned.tokenizer_sha256),
             ("rl", "model_hybrid.model", config, "t"),
         )
+        chat = describe(
+            {
+                "architecture": {"module": "model_hybrid.model", "config": config},
+                "source_sha256": {"model": "m"},
+                "data_identity": {"recipe": {"format": "chat-sft"}, "tokenizer_sha256": "t"},
+            }
+        )
+        self.assertEqual(
+            (pretrained.instructed, chat.stage, chat.instructed, tuned.instructed),
+            (False, "pretrain", True, True),
+        )
         with self.assertRaises(ValueError):
             describe({"model": {}})
 

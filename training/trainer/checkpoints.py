@@ -29,13 +29,16 @@ from training_data.subword import digest
 @dataclass(frozen=True)
 class Description:
     """The stage that wrote a checkpoint, its model module and config, the source hashes
-    of its model code and its tokenizer's hash."""
+    of its model code, its tokenizer's hash, and whether it was trained to answer
+    instructions: any post-training stage, or the pretraining loop on a chat-format recipe
+    (hybrid chat SFT is a `midtrain` stage of that loop)."""
 
     stage: str
     module: str
     model_config: dict
     source_sha256: dict
     tokenizer_sha256: str
+    instructed: bool
 
 
 def describe(saved):
@@ -46,9 +49,12 @@ def describe(saved):
     if "stage" in saved:
         identity = saved["identity"]
         stage, sources, tokenizer = saved["stage"], identity["source_sha256"], identity
+        instructed = True
     else:
         stage, sources, tokenizer = "pretrain", saved["source_sha256"], saved["data_identity"]
-    return Description(stage, module, config, sources, tokenizer["tokenizer_sha256"])
+        recipe = tokenizer.get("recipe")
+        instructed = isinstance(recipe, dict) and recipe.get("format") == "chat-sft"
+    return Description(stage, module, config, sources, tokenizer["tokenizer_sha256"], instructed)
 
 
 def parent(path):

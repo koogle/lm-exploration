@@ -1,7 +1,8 @@
 """One module per benchmark: its prompt format and `score(model, rows, exemplars, settings,
 shots) -> (scores, generated answers or None)`. `BENCHMARKS` maps config names to them.
 A module with `SANDBOX = True` runs model-written code and takes the code sandbox as a
-sixth argument."""
+sixth argument. `livecodebench` grades its own execution tests and has its own launcher
+(`evaluation.modal_livecodebench`)."""
 
 from . import (
     arc,
