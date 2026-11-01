@@ -11,6 +11,8 @@ from statistics import mean
 import modal
 from huggingface_hub import HfApi
 
+from hybrid.route_analysis import allocations
+
 parser = argparse.ArgumentParser()
 parser.add_argument("run")
 args = parser.parse_args()
@@ -56,6 +58,8 @@ for name in ["routes.json", "atlas.json", "completion.json"]:
                 "n_rows": len(rows),
                 "n_entities": len(entities),
                 "mean_effect": mean(r["oriented_effect"] for r in rows),
+                "mean_abs_effect": mean(abs(r["oriented_effect"]) for r in rows),
+                "positive_fraction": mean(r["oriented_effect"] > 0 for r in rows),
                 "mean_clean_gap": mean(r["clean_gap"] for r in rows),
                 "paired_correct_fraction": mean(r["paired_correct"] for r in rows),
                 "entity_mean_effect_min": min(entity_means),
@@ -66,6 +70,7 @@ for name in ["routes.json", "atlas.json", "completion.json"]:
         json.dumps(
             {
                 "groups": summary,
+                "route_allocations": allocations(d["rows"]),
                 "note": "Directions/templates/lags repeat entities; row counts are not independent sample counts.",
             },
             indent=2,
