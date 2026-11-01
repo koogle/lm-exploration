@@ -396,9 +396,12 @@ def evaluate_export(export, name, run, limit, workers, deadline):
     return _evaluate_heldout(local, {"export": export}, name, run, limit, workers, deadline)
 
 
-def _evaluate_heldout(local, header, name, run, limit, workers, deadline, setup=None):
+def _evaluate_heldout(
+    local, header, name, run, limit, workers, deadline, setup_command=None, max_turns=None
+):
     """Run `local` (a batch policy) as the agent on the held-out repositories' tasks;
-    `setup` is a bash command run in each workspace before the episode."""
+    `setup_command` is a bash command run in each workspace before the episode, and
+    `max_turns` overrides `pr_task_agent.MAX_TURNS`."""
     from concurrent.futures import ThreadPoolExecutor
 
     from training_data import pr_task_agent as agent
@@ -427,8 +430,11 @@ def _evaluate_heldout(local, header, name, run, limit, workers, deadline, setup=
                 return None, f"setup: {setup.get('stage')}"
             # Every episode advances in lockstep with the batch, so sandboxes live longer.
             workspace = Workspace(task, snapshot, deadline, record, EVAL_SANDBOX_SECONDS)
-            if setup:
-                workspace.call("bash", {"command": setup})
+            if setup_command:
+                result = workspace.call("bash", {"command": setup_command})
+                if not result.startswith("exit code: 0"):
+                    workspace.close()
+                    return None, f"setup command: {result[:500]}"
             return workspace, None
         except Exception as error:  # noqa: BLE001
             return None, f"{type(error).__name__}: {error}"[:2000]
@@ -445,6 +451,7 @@ def _evaluate_heldout(local, header, name, run, limit, workers, deadline, setup=
         live,
         policy,
         lambda episode, name, arguments: episode["workspace"].call(name, arguments),
+        max_turns=max_turns or agent.MAX_TURNS,
         workers=workers,
     )
 
@@ -693,7 +700,9 @@ def train_reference(base, run, data, deadline):
     retries=0,
     volumes={"/data": volume, "/runs": runs_volume, "/hf": hf_cache},
 )
-def evaluate_reference(model, agent_format, temperature, name, run, limit, workers, deadline):
+def evaluate_reference(
+    model, agent_format, temperature, name, run, limit, workers, max_turns, deadline
+):
     """A reference model as the agent on the held-out tasks, through vLLM.
 
     `model` is a pinned model (Qwen3 chat models zero-shot with thinking off, or
@@ -781,8 +790,13 @@ def evaluate_reference(model, agent_format, temperature, name, run, limit, worke
     header["chat_format"] = "qwen3, thinking off" if chat else "as trained"
     header["sampling"] = {"temperature": temperature, **(SAMPLING if temperature > 0 else {})}
     # Open-SWE's instructions name /testbed as the working directory.
-    setup = f"ln -sfn /work/repo {open_swe_format.WORKDIR}" if agent_format == "open-swe" else None
-    return _evaluate_heldout(local, header, name, run, limit, workers, deadline, setup)
+    setup_command = (
+        f"ln -sfn /work/repo {open_swe_format.WORKDIR}" if agent_format == "open-swe" else None
+    )
+    header["max_turns"] = max_turns or agent.MAX_TURNS
+    return _evaluate_heldout(
+        local, header, name, run, limit, workers, deadline, setup_command, max_turns
+    )
 
 
 def _spawn(function, *arguments):
@@ -849,6 +863,7 @@ def reference_evaluate(
     models: str = "Qwen/Qwen3-0.6B,Qwen/Qwen3-1.7B",
     agent_format: str = "qwen-tools",
     temperature: float = 0.0,
+    max_turns: int = 0,
     name: str = "pr-tasks-pilot",
     limit: int = 0,
     workers: int = 48,
@@ -856,11 +871,12 @@ def reference_evaluate(
     """`models`: pinned models and `sft:<run>` outputs, comma-separated, all in one format."""
     stamp, launches = int(time.time()), []
     sampled = f"-t{temperature:g}" if temperature > 0 else ""
+    sampled += f"-turns{max_turns}" if max_turns else ""
     for model in models.split(","):
         slug = model.removeprefix("sft:").split("/")[-1].lower()
         run = f"eval-{slug}{sampled}-{stamp}{f'-limit{limit}' if limit else ''}"
         print(json.dumps({"results": f"lm-exploration-hybrid-data/{name}/agentic/{run}/"}))
-        arguments = (model, agent_format, temperature, name, run, limit, workers)
+        arguments = (model, agent_format, temperature, name, run, limit, workers, max_turns or None)
         launches.append((evaluate_reference, arguments))
     _spawn_all(launches)
 
