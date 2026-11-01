@@ -131,7 +131,7 @@ task gives about 300k tasks). Target mix 60% repository fixes, 40% shell tasks.
 | SWE-rebench V2 | Real issue fixes | 32,079 | Released with images and `install_config` |
 | SWE-rebench V2-PRs | Real PRs, LLM-written statements | 126,300 | Released; images unverified |
 | **Commit mining on V2's 3,617 repositories** | Real commits, teacher-written issues (our PR→task method) | 50k–150k | To build |
-| Terminal-Lego-15k, SETA-Env | Real Q&A → shell tasks | 20k | Released (Apache-2.0) |
+| **Terminal-Lego-15k** (mixed in, below), SETA-Env | Real Q&A → shell tasks | 20k | Released (Apache-2.0) |
 | **Repository setup tasks on V2 repositories** | Real environment and dependency debugging | 10k–30k | To build |
 | **Shell tasks from GitHub issues** of permissive repositories (build, install, configuration, CLI usage), Terminal-Lego recipe | Real problems → shell tasks | 30k–60k | To build |
 
@@ -145,6 +145,19 @@ environment work: reuse the repository's image and recipe, reinstall at the pare
 commit, verify fail-to-pass in sandboxes. Our pilot capped 40 tasks per repository;
 3,617 repositories at 15–40 verified tasks each gives the range above. Our own MIT
 collection stays the held-out evaluation set.
+
+**Terminal-Lego is mixed in twice.** Its 15,389 tasks are already in Harbor's format
+(`instruction.md`, `environment/Dockerfile`, `solution/solve.sh`, `tests/`), so they run
+in the same rollout jobs as everything else: 4 GLM-5.3-Flash rollouts per task, up to
+about 25k–40k passing trajectories. Its released trajectories (Terminus 2 format, the
+same as ours) can go in as they are: DeepSeek-V3.2 on all 15k tasks
+(`Lego-X/Terminal-Lego-Traj-Deepseek-V3-2-15k`) and DeepSeek-V3.2 and GLM-5 on an 8k
+subset (`Lego-X/Terminal-Lego-Traj-8k`). Those two datasets carry no licence on HF
+(the tasks are Apache-2.0, the pipeline code MIT), so we ask the authors before using
+them; their Claude Opus 4.6 and Qwen3.5-Plus files are left out because those
+providers' terms restrict training on outputs. In SFT, Terminal-Lego is weighted up
+(read twice) rather than diluted: its 15k traces alone took Qwen3-32B from 3.4 to 24.3
+on Terminal-Bench 2.0.
 
 **Shell tasks are the scarce half.** Extending Terminal-Lego by scraping Stack Overflow
 ourselves is not planned: Stack Exchange has restricted its dumps and, by secondary
