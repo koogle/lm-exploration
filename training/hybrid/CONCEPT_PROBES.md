@@ -80,3 +80,47 @@ interpretable concept or useful model capability.
 The preceding launch `kda-concepts-1793489410` failed in the supervisor's import
 path before GPU training. Its app was stopped, the supervisor was given the
 project image, and the failed record was archived in the same HF results dataset.
+
+## Completed findings
+
+The run completed 100,007,936 training positions and all probes in 2,874 seconds
+(about 48 minutes). Held-out CE decreased from 12.0406 to 4.7181. This is one
+undertrained 98.3M model, not evidence about a mature billion-parameter model.
+Artifacts, including the 1,296 trained intervention rows, are archived in the
+private dataset `jfrick/lm-exploration-results`, folder
+`training/results/kda-concepts-1793489611`.
+
+The clearest localized effect is the Paris/Rome contrast in block 8, head 3,
+value column 13 (all zero-based). The head was chosen using four discovery names;
+the effect was tested on four other names in both transplant directions. Head
+transplants moved answer log-odds toward the donor in all 24 tested cases across
+0/32/128 distractor tokens. Mean oriented effects were 0.0781, 0.0469 and 0.0410
+nats. Column-only effects were 0.0605, 0.0273 and 0.0215; other-head and random
+whole-state-direction controls were near zero or negative. These are small
+predictive shifts, not answer flips: the model preferred Paris even in Rome
+contexts. The result supports a causally used state component carrying this
+specific contrast, not a general location neuron or monosemantic matrix cell.
+The column intervention acts on all key rows of a value column, not one scalar.
+
+The model correctly preferred red versus blue for every held-out test pair at
+all three distractor lengths, but swapping one tested KDA layer's recurrent
+state had little effect. This does not locate color memory in full attention:
+other KDA layers, convolution histories and full attention remained intact.
+The experiment demonstrates limited leverage of these particular single-layer
+interventions, not absence of color information in KDA. Boolean preferences
+remained biased toward True and did not demonstrate reliable copying.
+
+Numerical precision limits interpretation. Answer logits were computed under
+BF16 autocast then cast to FP32, leaving visibly quantized log-odds. Several
+color/boolean effects are at this resolution. The trained production/reference
+log-odds qualification discrepancy was at most 0.001953; self-patch errors were
+zero. A follow-up should compute the final readout in FP32 and replicate across
+seeds, more entities, templates and lexical alternatives before interpreting
+small effects or claiming semantic selectivity.
+
+The signed read-channel atlas contains 144 fixed coordinates over 24 held-out
+windows. It supplies examples for hypotheses, not validated semantic labels:
+several apparent clusters are adjacent tokens in the same passage. The study
+therefore does not confirm the essay's broad cleanliness hypothesis. Its useful
+output is a reproducible native-state causal assay and one modest localized
+memory effect, with explicit competence and precision limitations.
