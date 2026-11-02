@@ -142,10 +142,14 @@ def main(config_path):
             model.config.max_position_embeddings, settings["context"]
         )
         model.config.use_cache = True
+        # Turns end with <|im_end|>; the base generation config stops only at <|endoftext|>.
+        tokenizer = AutoTokenizer.from_pretrained(config["base"], revision=config["revision"])
+        model.generation_config.eos_token_id = [
+            tokenizer.convert_tokens_to_ids("<|im_end|>"),
+            tokenizer.eos_token_id,
+        ]
         model.to(torch.bfloat16).save_pretrained(out / "model")
-        AutoTokenizer.from_pretrained(config["base"], revision=config["revision"]).save_pretrained(
-            out / "model"
-        )
+        tokenizer.save_pretrained(out / "model")
         with open(out / "metrics.jsonl", "w") as handle:
             handle.writelines(json.dumps(m) + "\n" for m in metrics)
         manifest = json.loads((Path(config["mix"]) / "manifest.json").read_text())

@@ -339,6 +339,7 @@ def train_mix(base, mix, run, deadline):
 
 
 SERVE_SECONDS = 6 * 60 * 60
+IM_END_ID = 151645  # <|im_end|> in the Qwen3 tokenizer
 endpoints = modal.Dict.from_name("lm-exploration-agent-endpoints", create_if_missing=True)
 
 
@@ -362,6 +363,15 @@ def serve_model(run, seconds, deadline):
         raise TimeoutError("Launch deadline passed; refusing work")
     runs_volume.reload()
     model = Path("/runs", REFERENCE_FOLDER, run, "model")
+    # The models end every turn with <|im_end|>; the Qwen3 base generation config only
+    # stops at <|endoftext|>, so vLLM's server would generate past each turn.
+    generation = json.loads((model / "generation_config.json").read_text())
+    stops = generation.get("eos_token_id")
+    stops = stops if isinstance(stops, list) else [stops]
+    if IM_END_ID not in stops:
+        generation["eos_token_id"] = [IM_END_ID, *[s for s in stops if s is not None]]
+        (model / "generation_config.json").write_text(json.dumps(generation, indent=2) + "\n")
+        runs_volume.commit()
     # Trained at CONTEXT, beyond the Qwen3 base configs' 32,768 positions (RoPE).
     env = {**os.environ, "VLLM_ALLOW_LONG_MAX_MODEL_LEN": "1"}
     server = subprocess.Popen(

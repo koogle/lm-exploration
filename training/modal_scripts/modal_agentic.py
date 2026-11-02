@@ -224,7 +224,7 @@ def _teacher_turn(messages, usage):
     return reply
 
 
-def _summary(rows, started):
+def _summary(rows, started, max_turns=None):
     from training_data import pr_task_agent as agent
 
     def rate(selected):
@@ -254,7 +254,7 @@ def _summary(rows, started):
         "ends": dict(sorted(ends.items())),
         "turns_mean": round(sum(r["turns"] for r in rows) / max(1, len(rows)), 2),
         "usage": usage,
-        "max_turns": agent.MAX_TURNS,
+        "max_turns": max_turns or agent.MAX_TURNS,
         "seconds": round(time.time() - started),
     }
 
@@ -470,7 +470,7 @@ def _evaluate_heldout(
         _row(t, e, patch, grade, {})
         for t, e, (patch, grade) in zip(tasks, episodes, finished, strict=True)
     ]
-    summary = {**header, "run": run, **_summary(rows, started)}
+    summary = {**header, "run": run, **_summary(rows, started, max_turns)}
     _write(out, rows, summary)
     return summary
 
