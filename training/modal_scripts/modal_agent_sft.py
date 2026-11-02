@@ -45,12 +45,14 @@ from modal_scripts.modal_agentic import (
     REFERENCE_FOLDER,
     REFERENCE_MODELS,
     hf_cache,
+    reference_base,
     reference_image,
     runs_volume,
 )
 from modal_scripts.modal_agentic import (
     volume as data_volume,
 )
+from workflows.images import add_project
 
 app = modal.App("lm-exploration-agent-sft")
 app.include(modal_benchmarks.app)  # the deadline supervisor
@@ -343,24 +345,8 @@ IM_END_ID = 151645  # <|im_end|> in the Qwen3 tokenizer
 endpoints = modal.Dict.from_name("lm-exploration-agent-endpoints", create_if_missing=True)
 
 
-@app.function(
-    image=reference_image,
-    gpu="H100",
-    cpu=8,
-    memory=65536,
-    timeout=SERVE_SECONDS,
-    retries=0,
-    volumes={"/runs": runs_volume, "/hf": hf_cache},
-)
-def serve_model(run, seconds, deadline):
-    """Serve `agentic-reference/<run>/model` with vLLM's OpenAI API through a Modal tunnel
-    for `seconds` (bounded by the timeout and the launch deadline). The tunnel URL is
-    stored in the `lm-exploration-agent-endpoints` Dict under the run name, for Harbor
-    (Terminal-Bench through Terminus 2) to call as `hosted_vllm/<run>`."""
-    import urllib.request
-
-    if time.time() >= deadline:
-        raise TimeoutError("Launch deadline passed; refusing work")
+def _start_server(run):
+    """vLLM's OpenAI server for `agentic-reference/<run>/model` on localhost:8000."""
     runs_volume.reload()
     model = Path("/runs", REFERENCE_FOLDER, run, "model")
     # The models end every turn with <|im_end|>; the Qwen3 base generation config only
@@ -374,7 +360,7 @@ def serve_model(run, seconds, deadline):
         runs_volume.commit()
     # Trained at CONTEXT, beyond the Qwen3 base configs' 32,768 positions (RoPE).
     env = {**os.environ, "VLLM_ALLOW_LONG_MAX_MODEL_LEN": "1"}
-    server = subprocess.Popen(
+    return subprocess.Popen(
         ["vllm", "serve", str(model), "--served-model-name", run, "--port", "8000",
          "--max-model-len", str(CONTEXT), "--enable-prefix-caching", "--seed", "0",
          # vLLM sizes the RoPE cache from max_position_embeddings; positions past the
@@ -382,17 +368,42 @@ def serve_model(run, seconds, deadline):
          "--hf-overrides", json.dumps({"max_position_embeddings": CONTEXT})],
         env=env,
     )  # fmt: skip
+
+
+def _wait_healthy(server, end):
+    import urllib.request
+
+    while time.time() < end:
+        if server.poll() is not None:
+            raise RuntimeError(f"vLLM exited with {server.returncode}")
+        try:
+            urllib.request.urlopen("http://localhost:8000/health", timeout=5)
+            return
+        except OSError:
+            time.sleep(10)
+    raise TimeoutError("vLLM did not become healthy")
+
+
+@app.function(
+    image=reference_image,
+    gpu="H100",
+    cpu=8,
+    memory=65536,
+    timeout=SERVE_SECONDS,
+    retries=0,
+    volumes={"/runs": runs_volume, "/hf": hf_cache},
+)
+def serve_model(run, seconds, deadline):
+    """Serve `agentic-reference/<run>/model` with vLLM's OpenAI API through a Modal tunnel
+    for `seconds` (bounded by the timeout and the launch deadline). The tunnel URL is
+    stored in the `lm-exploration-agent-endpoints` Dict under the run name."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    server = _start_server(run)
     end = min(time.time() + seconds, deadline - 600, time.time() + SERVE_SECONDS - 300)
     try:
         with modal.forward(8000) as tunnel:
-            while time.time() < end:
-                if server.poll() is not None:
-                    raise RuntimeError(f"vLLM exited with {server.returncode}")
-                try:
-                    urllib.request.urlopen("http://localhost:8000/health", timeout=5)
-                    break
-                except OSError:
-                    time.sleep(10)
+            _wait_healthy(server, end)
             endpoints[run] = {"url": tunnel.url, "until_unix": end}
             print(json.dumps({"run": run, "url": tunnel.url, "until_unix": end}), flush=True)
             while time.time() < end and server.poll() is None:
@@ -401,6 +412,72 @@ def serve_model(run, seconds, deadline):
         endpoints.pop(run, None)
         server.terminate()
     return {"run": run, "served_until": time.time()}
+
+
+TERMINAL_BENCH = "terminal-bench/terminal-bench-2-1"
+TERMINAL_BENCH_SECONDS = 9 * 60 * 60
+# Harbor (the Terminal-Bench runner) in its own tool environment, next to vLLM.
+terminal_bench_image = add_project(
+    reference_base.run_commands(
+        "pip install uv==0.9.5",
+        "uv tool install 'harbor[modal]==0.25.0' --with 'modal[api-proxy-support]'",
+    ).env({"PATH": "/root/.local/bin:/usr/local/bin:/usr/bin:/bin"})
+)
+
+
+@app.function(
+    image=terminal_bench_image,
+    gpu="H100",
+    cpu=16,
+    memory=65536,
+    timeout=TERMINAL_BENCH_SECONDS,
+    retries=0,
+    volumes={"/runs": runs_volume, "/hf": hf_cache},
+)
+def terminal_bench(run, attempts, concurrency, deadline):
+    """Terminal-Bench 2.1 for a trained run: vLLM on localhost and Harbor's Terminus 2 in
+    the same container, task sandboxes on Modal (each capped below this call's end),
+    temperature 0.7. Harbor's job folder goes to `terminal-bench/<run>/` on the runs
+    volume; returns the reward summary."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    started = time.time()
+    end = min(deadline - 900, started + TERMINAL_BENCH_SECONDS - 900)
+    server = _start_server(run)
+    out = Path("/runs", "terminal-bench", run)
+    out.mkdir(parents=True, exist_ok=True)
+    try:
+        _wait_healthy(server, end)
+        model_info = {"max_input_tokens": CONTEXT, "max_output_tokens": 4096,
+                      "input_cost_per_token": 0, "output_cost_per_token": 0}  # fmt: skip
+        command = [
+            "harbor", "run", "-d", TERMINAL_BENCH, "-a", "terminus-2",
+            "-m", f"hosted_vllm/{run}", "--ak", "api_base=http://localhost:8000/v1",
+            "--ak", "temperature=0.7", "--ak", f"model_info={json.dumps(model_info)}",
+            "-e", "modal", "--ek", f"sandbox_timeout_secs={int(end - time.time())}",
+            "-k", str(attempts), "-n", str(concurrency), "-o", str(out),
+        ]  # fmt: skip
+        # Harbor's preflight looks for a Modal token file or variables; inside a Modal
+        # container the SDK authenticates with the container's own credentials.
+        Path.home().joinpath(".modal.toml").touch()
+        env = {**os.environ, "HOSTED_VLLM_API_KEY": "none"}
+        subprocess.run(command, env=env, timeout=max(60, end - time.time()), check=False)
+    finally:
+        server.terminate()
+        runs_volume.commit()
+    rewards, exceptions = [], {}
+    for result in out.glob("*/*/result.json"):
+        data = json.loads(result.read_text())
+        reward = ((data.get("verifier_result") or {}).get("rewards") or {}).get("reward")
+        rewards.append(reward == 1)
+        kind = (data.get("exception_info") or {}).get("exception_type") or "none"
+        exceptions[kind] = exceptions.get(kind, 0) + 1
+    summary = {"run": run, "dataset": TERMINAL_BENCH, "trials": len(rewards),
+               "solved": sum(rewards), "exceptions": exceptions,
+               "seconds": round(time.time() - started)}  # fmt: skip
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    runs_volume.commit()
+    return summary
 
 
 def _launch(function, *arguments):
@@ -412,6 +489,12 @@ def _launch(function, *arguments):
             {"call": call.object_id, "supervisor": supervisor.object_id, "deadline_unix": deadline}
         )
     )
+
+
+@app.local_entrypoint()
+def bench(run: str, attempts: int = 1, concurrency: int = 24):
+    """Terminal-Bench 2.1 for a trained run, entirely on Modal."""
+    _launch(terminal_bench, run, attempts, concurrency)
 
 
 @app.local_entrypoint()

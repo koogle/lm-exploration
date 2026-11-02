@@ -93,7 +93,7 @@ REFERENCE_SFT = {
 REFERENCE_MAX_NEW_TOKENS = 1536
 # vLLM's FlashInfer kernels compile at load time, so the image carries nvcc (as in
 # modal_teacher.py); training uses the torch and transformers that vLLM installs.
-reference_image = add_project(
+reference_base = (
     modal.Image.from_registry("nvidia/cuda:13.0.1-devel-ubuntu22.04", add_python="3.12")
     .pip_install("vllm==0.31.0", "huggingface-hub[hf_transfer]", "pyarrow==26.0.0")
     .env(
@@ -105,6 +105,7 @@ reference_image = add_project(
         }
     )
 )
+reference_image = add_project(reference_base)
 hf_cache = modal.Volume.from_name("lm-exploration-hf-cache", create_if_missing=True)
 
 

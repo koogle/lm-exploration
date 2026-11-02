@@ -77,6 +77,11 @@ def observation(result):
         )
     else:
         value["output"] = output
+    return _dump(value)
+
+
+def _dump(value):
+    """JSON as the dataset writes it: indented, HTML-safe escapes."""
     text = json.dumps(value, indent=2)
     for character, escape in ESCAPES.items():
         text = text.replace(character, escape)
@@ -231,3 +236,66 @@ def from_harness(messages):
     out.append(_message("tool", observation("exit code: 0\n")))
     out.append(_message("assistant", "", [_bash(f"echo {SUBMIT} && cat patch.txt")]))
     return out
+
+
+MINI_PR = re.compile(r"Consider the following PR description:\n(.*)\n</pr_description>", re.DOTALL)
+MINI_BLOCK = re.compile(r"```bash\s*\n(.*?)\n```", re.DOTALL)
+MINI_OUTPUT = re.compile(r"<returncode>(-?\d+)</returncode>\n<output>\n(.*)</output>", re.DOTALL)
+MINI_LONG = re.compile(
+    r"<returncode>(-?\d+)</returncode>\n<warning>.*?</warning>"
+    r"<output_head>\n(.*)\n</output_head>\n<elided_chars>\n(\d+) characters elided\n"
+    r"</elided_chars>\n<output_tail>\n(.*)\n</output_tail>",
+    re.DOTALL,
+)
+
+
+def from_mini_swe(messages):
+    """A mini-swe-agent v1 trajectory (bash blocks in text, `<returncode>` observations,
+    as in `ricdomolm/mini-coder-trajs-400k`) in this format: the thought as content, the
+    command as a bash call, observations as the dataset's JSON (long output elided), and
+    the two-step submission. None for trajectories with format errors, timeouts or no
+    submission."""
+    task = MINI_PR.search(messages[1]["content"])
+    if not task:
+        return None
+    out = [
+        _message("system", SYSTEM),
+        _message(
+            "user",
+            "<pr_description>\nConsider the following PR description:\n"
+            f"{task.group(1)}\n</pr_description>{instructions()}",
+        ),
+    ]
+    for message in messages[2:]:
+        content = message["content"]
+        if message["role"] == "assistant":
+            blocks = MINI_BLOCK.findall(content)
+            if len(blocks) != 1:
+                return None
+            thought = MINI_BLOCK.sub("", content).strip()
+            thought = re.sub(r"^THOUGHT:\s*", "", thought)
+            command = blocks[0].strip()
+            if SUBMIT in command:
+                out.append(_message("assistant", thought, [_bash("git diff > patch.txt")]))
+                out.append(_message("tool", observation("exit code: 0\n")))
+                out.append(_message("assistant", "", [_bash(f"echo {SUBMIT} && cat patch.txt")]))
+                return out
+            out.append(_message("assistant", thought, [_bash(command)]))
+            continue
+        long = MINI_LONG.fullmatch(content)
+        plain = MINI_OUTPUT.fullmatch(content)
+        if long:
+            code, head, elided, tail = long.groups()
+            value = {
+                "returncode": int(code),
+                "output_head": head,
+                "output_tail": tail,
+                "elided_chars": int(elided),
+                "warning": "Output too long.",
+            }
+        elif plain:
+            value = {"returncode": int(plain.group(1)), "output": plain.group(2)}
+        else:  # format errors and timeouts have no counterpart in this format
+            return None
+        out.append(_message("tool", _dump(value)))
+    return None

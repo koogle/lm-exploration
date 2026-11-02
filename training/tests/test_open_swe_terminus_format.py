@@ -179,6 +179,43 @@ class FromHarnessTests(unittest.TestCase):
             self.assertEqual(Path(folder, "a.py").read_text(), "x = 2\n")
 
 
+MINI = [
+    {"role": "system", "content": "mini system"},
+    {
+        "role": "user",
+        "content": "<pr_description>\nConsider the following PR description:\nFix x\n"
+        "</pr_description>\n\nmini instructions",
+    },
+    {"role": "assistant", "content": "THOUGHT: Look.\n\n```bash\nls\n```"},
+    {"role": "user", "content": "<returncode>0</returncode>\n<output>\na.py\n</output>"},
+    {"role": "assistant", "content": "THOUGHT: Done.\n\n```bash\necho " + swe.SUBMIT + "\n```"},
+]
+
+
+class FromMiniSweTests(unittest.TestCase):
+    def test_blocks_become_bash_calls_and_submission(self):
+        out = swe.from_mini_swe(MINI)
+        self.assertTrue(out[1]["content"].startswith(swe.instance("", "")[:40]))
+        self.assertIn("Fix x\n</pr_description>", out[1]["content"])
+        self.assertEqual(out[2]["content"], "Look.")
+        self.assertEqual(
+            json.loads(out[2]["tool_calls"][0]["function"]["arguments"]), {"command": "ls"}
+        )
+        self.assertEqual(json.loads(out[3]["content"]), {"returncode": 0, "output": "a.py\n"})
+        self.assertEqual(out[4]["content"], "Done.")
+        commands = [
+            json.loads(m["tool_calls"][0]["function"]["arguments"])["command"] for m in out[4::2]
+        ]
+        self.assertEqual(commands, ["git diff > patch.txt", f"echo {swe.SUBMIT} && cat patch.txt"])
+
+    def test_format_errors_and_unfinished_episodes_are_dropped(self):
+        self.assertIsNone(swe.from_mini_swe(MINI[:4]))
+        broken = MINI[:3] + [
+            {"role": "user", "content": "Please always provide EXACTLY ONE action"}
+        ]
+        self.assertIsNone(swe.from_mini_swe(broken + MINI[4:]))
+
+
 class TerminusFormatTests(unittest.TestCase):
     def test_both_layouts_and_think_removal(self):
         lego = [{"from": "human", "value": "task"}, {"from": "gpt", "value": '{"analysis": "a"}'}]
