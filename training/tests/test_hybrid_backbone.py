@@ -129,7 +129,8 @@ class HybridBackboneTests(unittest.TestCase):
         results = []
         for recompute in (False, True):
             torch.manual_seed(5)
-            lm = model.HybridLM(tiny_config(activation_checkpointing=recompute)).double()
+            config = tiny_config(activation_checkpointing=recompute, layer_pattern=("kda", "full"))
+            lm = model.HybridLM(config).double()
             lm.train()
             loss = lm(tokens, labels)["loss"]
             loss.backward()

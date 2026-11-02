@@ -146,8 +146,10 @@ class HybridConfig:
     init_std: float = 0.02
     z_loss: float = 1e-4
     loss_chunk_size: int = 8192
-    # Recompute each block in backward instead of storing its activations (training
+    # Recompute each KDA block in backward instead of storing its activations (training
     # only), for contexts whose activations do not fit, such as 40,960 tokens on an H100.
+    # Full-attention blocks keep theirs: recomputed under torch.compile, FlexAttention
+    # falls back to dense attention, which needs [T, T] scores.
     activation_checkpointing: bool = False
 
     def __post_init__(self):
@@ -395,7 +397,7 @@ class HybridLM(nn.Module):
         x = self.token_embedding(tokens)
         recompute = self.config.activation_checkpointing and self.training
         for block in self.blocks:
-            if recompute and torch.is_grad_enabled():
+            if recompute and block.kind == "kda" and torch.is_grad_enabled():
                 x = checkpoint(block, x, rope, mask, use_reentrant=False)
             else:
                 x = block(x, rope, mask)
