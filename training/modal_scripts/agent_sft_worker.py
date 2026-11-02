@@ -187,6 +187,13 @@ def main(config_path):
         global_targets = counts[0].item()
         loss_sum = 0.0
         for ids, mask in batch:
+            # Lengths padded to a multiple of `pad_to_multiple` give the attention and
+            # Triton kernels a few shapes to plan for instead of a new one per
+            # trajectory; the padding comes last and is not a target, so under causal
+            # attention it changes nothing before it.
+            pad = -(len(ids) - 1) % settings["pad_to_multiple"]
+            ids = np.concatenate([ids, np.zeros(pad, ids.dtype)])
+            mask = np.concatenate([mask, np.zeros(pad, mask.dtype)])
             inputs = torch.from_numpy(ids[:-1]).cuda()[None]
             targets = torch.from_numpy(ids[1:]).cuda()
             labels = torch.where(torch.from_numpy(mask[1:]).cuda() > 0, targets, -100)

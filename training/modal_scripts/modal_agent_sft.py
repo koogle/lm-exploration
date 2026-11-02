@@ -182,6 +182,7 @@ SETTINGS = {
     # with Liger kernels: 0.44 s at 15,000 tokens, 1.69 s at 40,960).
     "balance_window_steps": 64,
     "balance_quadratic_tokens": 48000,
+    "pad_to_multiple": 1024,  # see agent_sft_worker
     "checkpoint_steps": 2000,  # about two hours of 16 trajectories per step
 }
 cpu_image = reference_image
