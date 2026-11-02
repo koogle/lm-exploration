@@ -192,10 +192,14 @@ def decoder(lm, rows, capacity):
     return decoders[key]
 
 
-def _sample(logits, temperature, top_p, generator):
+def _sample(logits, temperature, top_p, generator, top_k=0):
     if temperature <= 0:
         return logits.argmax(-1)
     probs = torch.softmax(logits / temperature, -1)
+    if top_k:
+        kth = probs.topk(top_k, -1).values[:, -1:]
+        probs = probs * (probs >= kth)
+        probs = probs / probs.sum(-1, keepdim=True)
     if top_p >= 1:
         return torch.multinomial(probs, 1, generator=generator)[:, 0]
     ordered, index = probs.sort(-1, descending=True)
@@ -271,9 +275,18 @@ def prefill(lm, prompts, new_tokens):
 
 @torch.no_grad()
 def generate_batch(
-    lm, prompts, max_new_tokens, stop_ids, temperature=0.0, top_p=1.0, generator=None, done=None
+    lm,
+    prompts,
+    max_new_tokens,
+    stop_ids,
+    temperature=0.0,
+    top_p=1.0,
+    generator=None,
+    done=None,
+    top_k=0,
 ):
-    """New token ids per prompt, each up to and including its first stop id.
+    """New token ids per prompt, each up to and including its first stop id; sampled
+    tokens come from the `top_k` most likely (0: all) within nucleus `top_p`.
 
     Prompts are read by `prefill` (one document each), so each row decodes as it
     would alone. `done(row, ids)` may end a row early (for example on a stop string).
@@ -285,7 +298,7 @@ def generate_batch(
     finished = [False] * len(prompts)
     stops = torch.tensor(sorted(stop_ids), device=logits.device)
     for index in range(limit):
-        token = _sample(logits, temperature, top_p, generator)
+        token = _sample(logits, temperature, top_p, generator, top_k)
         stopped = torch.isin(token, stops).tolist()
         for row, value in enumerate(token.tolist()):
             if finished[row]:

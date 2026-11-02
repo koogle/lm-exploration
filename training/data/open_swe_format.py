@@ -13,8 +13,8 @@ teachers' reasoning. `training_messages` turns a dataset row into training messa
 `conversation` turns a harness episode (OpenAI messages) into the same layout;
 `from_harness` turns a finished harness episode with our five tools into a training
 conversation that uses only the bash tool;
-`parse_assistant` maps generated text to harness calls (`bash`, or `submit` for the
-submission command).
+`parse_assistant` maps generated Qwen3 text to harness calls (`bash`, or `submit` for
+the submission command); `mark_submission` does the last step for any parsed message.
 """
 
 import json
@@ -127,10 +127,16 @@ def conversation(messages):
 
 
 def parse_assistant(text):
-    """Generated text as a harness assistant message (`bash` calls, `submit` on submission)."""
+    """Generated Qwen3 text as a harness assistant message (`bash` calls, `submit` on
+    submission)."""
     from training_data import qwen_agent_chat
 
-    message = qwen_agent_chat.parse_assistant(text)
+    return mark_submission(qwen_agent_chat.parse_assistant(text))
+
+
+def mark_submission(message):
+    """A parsed assistant message with each bash call that runs the submission command
+    turned into the harness's `submit`."""
     for call in message.get("tool_calls") or []:
         if call["function"]["name"] != "bash":
             continue

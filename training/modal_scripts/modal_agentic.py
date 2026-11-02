@@ -3,6 +3,7 @@
 Run from training/:
     modal run --detach -m modal_scripts.modal_agentic::solve [--limit N] [--workers 32]
     modal run --detach -m modal_scripts.modal_agentic::evaluate --export <run>/<export> [--limit N]
+        [--agent-format tools|open-swe] [--temperature T] [--max-turns N]
     modal run -m modal_scripts.modal_agentic::prepare [--recipe data/recipes/agentic-sft-v1.json]
     modal run --detach -m modal_scripts.modal_agentic::reference_train [--bases B1,B2]
         [--source pr | --source mini-coder --count N] [--tag 01]
@@ -18,8 +19,9 @@ works in a sandbox from that snapshot without network, and is graded in a third 
 `OPENROUTER_API_KEY`) work every task with the tools (training repositories'
 tasks `attempts` times, held-out ones once) and writes
 `<name>/agentic/<run>/trajectories.jsonl` (messages, patch, grade, resolved, token
-usage, held-out flag) and `summary.json`. `evaluate` runs a hybrid export (greedy,
-GLM chat format) on the held-out repositories' tasks in one H100 call and writes
+usage, held-out flag) and `summary.json`. `evaluate` runs a hybrid export (GLM chat format, the
+harness's tools or Open-SWE's bash tool, greedy or sampled) on the held-out
+repositories' tasks in one H100 call and writes
 `<name>/agentic/<run>/` the same way. `prepare` turns the recipe's `trajectories` run
 into the chat SFT subset `agentic` (resolved episodes from training repositories
 only, rendered with `chat_sft.prepare_subset`).
@@ -377,15 +379,22 @@ def solve_tasks(name, run, limit, workers, attempts, deadline):
     gpu="H100",
     cpu=8,
     memory=65536,
-    timeout=6 * 60 * 60,
+    timeout=EVAL_SANDBOX_SECONDS + 60 * 60,
     retries=0,
     volumes={"/data": volume, "/runs": runs_volume},
 )
-def evaluate_export(export, name, run, limit, workers, deadline):
+def evaluate_export(
+    export, agent_format, temperature, name, run, limit, workers, max_turns, deadline
+):
+    """A hybrid export as the agent on the held-out tasks, in `agent_format` ("tools" or
+    "open-swe", `model_hybrid.agent_policy`), greedy at temperature 0, otherwise sampled
+    with the reference evaluation's top-p and top-k."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     import torch
     from model_hybrid import agent_policy, generate
+    from training_data import open_swe_format
+    from training_data import pr_task_agent as agent
 
     from tokenizer import glm
 
@@ -393,8 +402,26 @@ def evaluate_export(export, name, run, limit, workers, deadline):
     lm = generate.load_export(
         Path("/runs", run_name, "export", export_name), dtype=torch.bfloat16, device="cuda"
     )
-    local = agent_policy.LocalPolicy(lm, glm.load(), rows=96)
-    return _evaluate_heldout(local, {"export": export}, name, run, limit, workers, deadline)
+    sampling = SAMPLING if temperature > 0 else {}
+    local = agent_policy.LocalPolicy(
+        lm, glm.load(), rows=96, agent_format=agent_format, temperature=temperature, **sampling
+    )
+    header = {
+        "export": export,
+        "agent_format": agent_format,
+        "context": lm.config.block_size,
+        "sampling": {"temperature": temperature, **sampling},
+        "max_turns": max_turns or agent.MAX_TURNS,
+    }
+    # As in `evaluate_reference`: Open-SWE's instructions work in /testbed.
+    setup_command = (
+        f"cd / && mv /work/repo {open_swe_format.WORKDIR} && ln -s {open_swe_format.WORKDIR} /work/repo"
+        if agent_format == "open-swe"
+        else None
+    )
+    return _evaluate_heldout(
+        local, header, name, run, limit, workers, deadline, setup_command, max_turns
+    )
 
 
 def _call(workspace, name, arguments):
@@ -847,13 +874,25 @@ def solve(
 
 @app.local_entrypoint()
 def evaluate(
-    export: str, name: str = "pr-tasks-pilot", limit: int = 0, workers: int = 48, run: str = ""
+    export: str,
+    agent_format: str = "tools",
+    temperature: float = 0.0,
+    max_turns: int = 0,
+    name: str = "pr-tasks-pilot",
+    limit: int = 0,
+    workers: int = 48,
+    run: str = "",
 ):
-    run = (
-        run or f"eval-{export.split('/')[0]}-{int(time.time())}{f'-limit{limit}' if limit else ''}"
+    suffix = (
+        (f"-{agent_format}" if agent_format != "tools" else "")
+        + (f"-t{temperature}" if temperature else "")
+        + (f"-turns{max_turns}" if max_turns else "")
+    )
+    run = run or (
+        f"eval-{export.split('/')[0]}{suffix}-{int(time.time())}{f'-limit{limit}' if limit else ''}"
     )
     print(json.dumps({"results": f"lm-exploration-hybrid-data/{name}/agentic/{run}/"}))
-    _spawn(evaluate_export, export, name, run, limit, workers)
+    _spawn(evaluate_export, export, agent_format, temperature, name, run, limit, workers, max_turns)
 
 
 @app.local_entrypoint()

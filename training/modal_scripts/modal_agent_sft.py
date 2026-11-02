@@ -1,7 +1,7 @@
 """Agent SFT on mixes of public trajectories, on eight H100s.
 
 Run from training/:
-    modal run --detach -m modal_scripts.modal_agent_sft::prepare --mix <name>
+    modal run --detach -m modal_scripts.modal_agent_sft::prepare --mix <name> [--chat glm]
     modal run --detach -m modal_scripts.modal_agent_sft::train --mix <name> --base B [--tag 01] [--hours 20]
     modal run --detach -m modal_scripts.modal_agent_sft::serve --run <run> [--hours 3]
     modal run --detach -m modal_scripts.modal_agent_sft::bench --run <run> [--attempts 1]
@@ -296,30 +296,86 @@ def _convert(source, row):
     return "terminus", terminus_format.training_messages(row["conversations"])
 
 
-_tokenizer = None
+CHAT_FORMATS = ("qwen", "glm")
+_tokenizers = {}
+
+
+def _tokenizer(chat_format):
+    if chat_format not in _tokenizers:
+        if chat_format == "glm":
+            from tokenizer import glm
+
+            _tokenizers[chat_format] = glm.load()
+        else:
+            from transformers import AutoTokenizer
+
+            _tokenizers[chat_format] = AutoTokenizer.from_pretrained(
+                TOKENIZER, revision=REFERENCE_MODELS[TOKENIZER]
+            )
+    return _tokenizers[chat_format]
 
 
 def _encode(job):
-    """(rank, (token ids, loss mask) or None when the row does not convert or fit)."""
+    """(rank, (token ids, loss mask, held out) or None when the row does not convert or
+    fit). Qwen3 ChatML for the Qwen bases; GLM's chat format (`training_data.chat`) with
+    a conversation's final EOS, as the hybrid's chat SFT reads it, for the hybrid."""
     import numpy as np
-    from training_data import mini_swe_format, open_swe_format, qwen_agent_chat
-    from transformers import AutoTokenizer
+    from training_data import chat, chat_sft, mini_swe_format, open_swe_format, qwen_agent_chat
 
-    global _tokenizer
-    if _tokenizer is None:
-        _tokenizer = AutoTokenizer.from_pretrained(TOKENIZER, revision=REFERENCE_MODELS[TOKENIZER])
-    source, rank, row = job
+    source, rank, row, chat_format, heldout_fraction = job
     kind, messages = _convert(source, row)
     if not messages:
         return rank, None
-    tokenize = lambda text: _tokenizer.encode(text, add_special_tokens=False)
-    if kind == "open-swe":
-        ids, mask = qwen_agent_chat.encode(tokenize, messages, open_swe_format.TOOLS)
+    tokenizer = _tokenizer(chat_format)
+    tools = open_swe_format.TOOLS if kind == "open-swe" else None
+    if chat_format == "glm":
+        try:
+            ids, mask = chat.encode(tokenizer, messages, tools)
+        except (ValueError, StopIteration, TypeError, KeyError):
+            return rank, None
+        limit = CONTEXT + 1  # a window holds context + 1 tokens
     else:
-        ids, mask = mini_swe_format.encode(tokenize, messages)
-    if len(ids) > CONTEXT or not sum(mask):
+        tokenize = lambda text: tokenizer.encode(text, add_special_tokens=False)
+        if kind == "open-swe":
+            ids, mask = qwen_agent_chat.encode(tokenize, messages, tools)
+        else:
+            ids, mask = mini_swe_format.encode(tokenize, messages)
+        limit = CONTEXT
+    if len(ids) > limit or not sum(mask):
         return rank, None
-    return rank, (np.asarray(ids, dtype=np.uint32), np.asarray(mask, dtype=np.uint8))
+    heldout = bool(heldout_fraction) and chat_sft.is_heldout(messages, heldout_fraction)
+    return rank, (np.asarray(ids, dtype=np.uint32), np.asarray(mask, dtype=np.uint8), heldout)
+
+
+def _stream_part(source, count, rng, pool, chat_format, heldout_fraction, write):
+    """Encode a source's candidates in rank order, a chunk at a time, until `count`
+    training examples fit (all of them when `count` is None); `write(rank, ids, mask,
+    heldout)` stores each example that fits. Returns (candidates, encoded)."""
+    keys, encoded, trained, begin = _candidates(source, rng), 0, 0, 0
+    while begin < len(keys) and (count is None or trained < count):
+        # A small margin over what the part still needs covers rows that do not fit.
+        size = CHUNK if count is None else min(CHUNK, (count - trained) * 5 // 4 + 64)
+        by_file = {}
+        for rank, (name, index) in enumerate(keys[begin : begin + size], begin):
+            by_file.setdefault(name, []).append((index, rank))
+        for name, rows in by_file.items():
+            raw = _rows(source, name, [index for index, _ in rows])
+            jobs = [
+                (source, rank, row, chat_format, heldout_fraction)
+                for (_, rank), row in zip(rows, raw, strict=True)
+            ]
+            encoded += len(jobs)
+            for rank, example in pool.imap_unordered(_encode, jobs, chunksize=8):
+                if example is not None:
+                    write(rank, *example)
+                    trained += not example[2]
+        begin += size
+    return len(keys), encoded
+
+
+def _part(part):
+    """(count or None for all, repeat) of a mix part."""
+    return (part["count"], part["repeat"]) if isinstance(part, dict) else (part, 1)
 
 
 @app.function(
@@ -331,10 +387,11 @@ def _encode(job):
     volumes={"/runs": runs_volume, "/hf": hf_cache, "/data": data_volume},
 )
 def prepare_mix(mix, deadline):
-    """Tokenize a mix, streaming: each source's candidates are encoded in rank order, a
-    chunk at a time, and appended to `tokens.u32`/`mask.u8` until the part's count fits;
-    `offsets.npy` bounds the stored examples and `order.npy` is the training order
-    (the kept examples of every part, repeated, shuffled)."""
+    """Tokenize a mix for the Qwen bases, streaming: each source's candidates are
+    encoded in rank order, a chunk at a time, and appended to `tokens.u32`/`mask.u8`
+    until the part's count fits; `offsets.npy` bounds the stored examples and
+    `order.npy` is the training order (the kept examples of every part, repeated,
+    shuffled)."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     import random
@@ -353,35 +410,22 @@ def prepare_mix(mix, deadline):
         Pool(30) as pool,
     ):
         for source, part in spec["parts"].items():
-            count, repeat = (part["count"], part["repeat"]) if isinstance(part, dict) else (part, 1)
-            keys, first, fitted = _candidates(source, rng), len(lengths), []
-            encoded = 0
-            begin = 0
-            while begin < len(keys) and (count is None or len(fitted) < count):
-                # A small margin over what the part still needs covers rows that do not fit.
-                size = CHUNK if count is None else min(CHUNK, (count - len(fitted)) * 5 // 4 + 64)
-                by_file = {}
-                for rank, (name, index) in enumerate(keys[begin : begin + size], begin):
-                    by_file.setdefault(name, []).append((index, rank))
-                for name, rows in by_file.items():
-                    raw = _rows(source, name, [index for index, _ in rows])
-                    jobs = [(source, rank, row) for (_, rank), row in zip(rows, raw, strict=True)]
-                    encoded += len(jobs)
-                    for rank, example in pool.imap_unordered(_encode, jobs, chunksize=8):
-                        if example is None:
-                            continue
-                        ids, mask = example
-                        ids.tofile(tokens_file)
-                        mask.tofile(mask_file)
-                        fitted.append((rank, len(lengths)))
-                        lengths.append(len(ids))
-                        targets.append(int(mask.sum()))
-                begin += size
+            count, repeat = _part(part)
+            first, fitted = len(lengths), []
+
+            def write(rank, ids, mask, heldout, fitted=fitted):
+                ids.tofile(tokens_file)
+                mask.tofile(mask_file)
+                fitted.append((rank, len(lengths)))
+                lengths.append(len(ids))
+                targets.append(int(mask.sum()))
+
+            candidates, encoded = _stream_part(source, count, rng, pool, "qwen", 0, write)
             fitted.sort()
             kept = [example for _, example in (fitted if count is None else fitted[:count])]
             order.extend(kept * repeat)
             counts[source] = {
-                "candidates": len(keys),
+                "candidates": candidates,
                 "encoded": encoded,
                 "fit": len(fitted),
                 "kept": len(kept),
@@ -408,6 +452,149 @@ def prepare_mix(mix, deadline):
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     runs_volume.commit()
+    return manifest
+
+
+class _ChatSubset:
+    """One chat SFT subset written while streaming (`training_data.chat_sft` layout):
+    tokens and masks go to raw files, and `close` writes the `.npy` arrays with the
+    training conversations (the first `count` by rank) and the held-out ones."""
+
+    def __init__(self, folder, name):
+        self.folder, self.name = Path(folder), name
+        self.files = {
+            # Closed in `close`, after the whole source has streamed through.
+            kind: open(self.folder / f"{name}.{kind}.raw", "wb")  # noqa: SIM115
+            for kind in ("tokens", "mask")
+        }
+        self.position, self.rows = 0, []  # (rank, start, length, targets, held out)
+
+    def write(self, rank, ids, mask, heldout):
+        ids.tofile(self.files["tokens"])
+        mask.tofile(self.files["mask"])
+        self.rows.append((rank, self.position, len(ids), int(mask.sum()), heldout))
+        self.position += len(ids)
+
+    def close(self, count):
+        import numpy as np
+
+        for handle in self.files.values():
+            handle.close()
+        self.rows.sort()
+        trained = [r for r in self.rows if not r[4]]
+        trained = trained if count is None else trained[:count]
+        heldout = [r for r in self.rows if r[4]]
+        arrays = {
+            kind: np.memmap(self.folder / f"{self.name}.{kind}.raw", dtype=dtype, mode="r")
+            for kind, dtype in (("tokens", np.uint32), ("mask", np.uint8))
+        }
+        # Training conversations point into the full arrays; held-out ones get their own.
+        for kind, array in arrays.items():
+            np.save(self.folder / f"{self.name}.{kind}.npy", array)
+        docs = np.array([(start, length) for _, start, length, _, _ in trained], np.int64)
+        np.save(self.folder / f"{self.name}.docs.npy", docs.reshape(-1, 2))
+        held_docs, position = [], 0
+        for kind, array in arrays.items():
+            pieces = [np.asarray(array[s : s + n]) for _, s, n, _, _ in heldout]
+            empty = np.zeros(0, array.dtype)
+            np.save(
+                self.folder / f"{self.name}.heldout.{kind}.npy", np.concatenate(pieces or [empty])
+            )
+        for _, _, length, _, _ in heldout:
+            held_docs.append((position, length))
+            position += length
+        np.save(
+            self.folder / f"{self.name}.heldout.docs.npy",
+            np.array(held_docs, np.int64).reshape(-1, 2),
+        )
+        for kind in arrays:
+            (self.folder / f"{self.name}.{kind}.raw").unlink()
+        meta = {
+            "subset": self.name,
+            "conversations": len(trained),
+            "tokens": int(sum(r[2] for r in trained)),
+            "target_tokens": int(sum(r[3] for r in trained)),
+            "heldout_conversations": len(heldout),
+            "heldout_tokens": int(sum(r[2] for r in heldout)),
+            "heldout_target_tokens": int(sum(r[3] for r in heldout)),
+            "stored_conversations": len(self.rows),
+        }
+        (self.folder / f"{self.name}.json").write_text(json.dumps(meta, indent=2) + "\n")
+        return meta
+
+
+def glm_recipe(mix):
+    """The hybrid chat SFT recipe (`data/recipes/agent-<mix>-glm.json`) for a mix."""
+    import training_data
+
+    path = Path(training_data.__file__).parent / "recipes" / f"agent-{mix}-glm.json"
+    recipe = json.loads(path.read_text())
+    parts = MIXES[recipe["agent_mix"]]["parts"]
+    listed = {s["name"]: s.get("repeat", 1) for s in recipe["subsets"]}
+    if listed != {source: _part(part)[1] for source, part in parts.items()}:
+        raise ValueError(f"{path.name} must list the mix's sources with its repeats")
+    if recipe["context"] != CONTEXT:
+        raise ValueError(f"{path.name} must use the mix context {CONTEXT}")
+    return recipe
+
+
+@app.function(
+    image=cpu_image,
+    cpu=32,
+    memory=131072,
+    timeout=PREPARE_SECONDS,
+    retries=0,
+    volumes={"/runs": runs_volume, "/hf": hf_cache, "/data": data_volume},
+)
+def prepare_glm_mix(mix, deadline):
+    """The same mix for the hybrid: the same candidates in the same rank order, encoded
+    in GLM's chat format with the GLM tokenizer and written as one chat SFT subset per
+    source into the recipe's folder on the hybrid data volume (`agent-<mix>-glm`), with
+    the recipe's hash-selected held-out fraction. The recipe carries the repeats."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import random
+    from multiprocessing import Pool
+
+    from training_data import chat
+
+    from tokenizer import glm
+
+    # Downloaded and verified once, before the workers load them.
+    glm.tokenizer_file()
+    chat.template()
+    recipe, started = glm_recipe(mix), time.time()
+    spec = MIXES[mix]
+    rng = random.Random(spec["seed"])
+    out = Path("/data", recipe["name"])
+    out.mkdir(parents=True, exist_ok=True)
+    counts = {}
+    with Pool(30) as pool:
+        for source, part in spec["parts"].items():
+            count, _ = _part(part)
+            subset = _ChatSubset(out, source)
+            candidates, encoded = _stream_part(
+                source, count, rng, pool, "glm", recipe["heldout_fraction"], subset.write
+            )
+            counts[source] = {
+                "candidates": candidates,
+                "encoded": encoded,
+                **subset.close(count),
+            }
+            print(json.dumps({source: counts[source]}), flush=True)
+            data_volume.commit()
+    manifest = {
+        "recipe": recipe["name"],
+        "mix": mix,
+        "spec": spec,
+        "sources": {s: SOURCES[s] for s in spec["parts"]},
+        "tokenizer": [glm.SOURCE["repo"], glm.SOURCE["revision"]],
+        "context": CONTEXT,
+        "counts": counts,
+        "seconds": round(time.time() - started),
+    }
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    data_volume.commit()
     return manifest
 
 
@@ -618,9 +805,18 @@ def serve(run: str, hours: float = 3.0):
 
 
 @app.local_entrypoint()
-def prepare(mix: str):
-    print(json.dumps({"results": f"lm-exploration-hybrid-runs/{MIX_FOLDER}/{mix}/"}))
-    _launch(prepare_mix, mix)
+def prepare(mix: str, chat: str = "qwen"):
+    """Prepare a mix for the Qwen bases (`--chat qwen`) or for the hybrid (`--chat glm`,
+    the chat SFT recipe `agent-<mix>-glm` on the hybrid data volume)."""
+    if chat not in CHAT_FORMATS:
+        raise ValueError(f"--chat is one of {CHAT_FORMATS}")
+    if chat == "glm":
+        name = glm_recipe(mix)["name"]
+        print(json.dumps({"results": f"lm-exploration-hybrid-data/{name}/"}))
+        _launch(prepare_glm_mix, mix)
+    else:
+        print(json.dumps({"results": f"lm-exploration-hybrid-runs/{MIX_FOLDER}/{mix}/"}))
+        _launch(prepare_mix, mix)
 
 
 @app.local_entrypoint()

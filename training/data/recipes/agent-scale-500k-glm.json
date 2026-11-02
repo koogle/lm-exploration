@@ -1,0 +1,26 @@
+{
+  "name": "agent-scale-500k-glm",
+  "format": "chat-sft",
+  "description": "The scale-500k agent mix (modal_scripts/modal_agent_sft.py MIXES) in GLM's chat format for the hybrid: one subset per source, written by `prepare --mix scale-500k --chat glm`, with the mix's repeats and a hash-selected held-out fraction.",
+  "agent_mix": "scale-500k",
+  "subsets": [
+    {
+      "name": "open-swe"
+    },
+    {
+      "name": "mini-coder"
+    },
+    {
+      "name": "nemotron-terminal"
+    },
+    {
+      "name": "terminal-lego"
+    },
+    {
+      "name": "pr-glm",
+      "repeat": 5
+    }
+  ],
+  "context": 40960,
+  "heldout_fraction": 0.002
+}
