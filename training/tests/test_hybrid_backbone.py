@@ -123,6 +123,21 @@ class HybridBackboneTests(unittest.TestCase):
         losses["loss"].backward()
         self.assertTrue(all(p.grad is not None for p in lm.parameters()))
 
+    def test_activation_checkpointing_gives_the_same_loss_and_gradients(self):
+        tokens = torch.randint(0, 37, (2, 12))
+        labels = torch.randint(0, 37, (2, 12))
+        results = []
+        for recompute in (False, True):
+            torch.manual_seed(5)
+            lm = model.HybridLM(tiny_config(activation_checkpointing=recompute)).double()
+            lm.train()
+            loss = lm(tokens, labels)["loss"]
+            loss.backward()
+            results.append((loss.detach(), [p.grad.clone() for p in lm.parameters()]))
+        torch.testing.assert_close(results[0][0], results[1][0])
+        for plain, recomputed in zip(results[0][1], results[1][1], strict=True):
+            torch.testing.assert_close(plain, recomputed)
+
 
 if __name__ == "__main__":
     unittest.main()

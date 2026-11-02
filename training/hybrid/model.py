@@ -146,6 +146,9 @@ class HybridConfig:
     init_std: float = 0.02
     z_loss: float = 1e-4
     loss_chunk_size: int = 8192
+    # Recompute each block in backward instead of storing its activations (training
+    # only), for contexts whose activations do not fit, such as 40,960 tokens on an H100.
+    activation_checkpointing: bool = False
 
     def __post_init__(self):
         for name in POSITIVE_FIELDS:
@@ -390,8 +393,12 @@ class HybridLM(nn.Module):
         mask = DocumentMask(documents)
         rope = (self.rope_cos[mask.positions][:, None], self.rope_sin[mask.positions][:, None])
         x = self.token_embedding(tokens)
+        recompute = self.config.activation_checkpointing and self.training
         for block in self.blocks:
-            x = block(x, rope, mask)
+            if recompute and torch.is_grad_enabled():
+                x = checkpoint(block, x, rope, mask, use_reentrant=False)
+            else:
+                x = block(x, rope, mask)
         return x, rope, mask
 
     def hidden_states(self, tokens):
