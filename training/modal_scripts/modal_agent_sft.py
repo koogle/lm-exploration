@@ -145,13 +145,14 @@ MIXES = {
             "pr-glm": {"count": None, "repeat": 5},
         },
     },
-    # About 500k trajectories, mini-coder's scale: every resolved Open-SWE trajectory,
-    # 250k mini-coder (verified first), all terminal data, our own five times.
+    # About 500k trajectories, mini-coder's scale: every trajectory of each source that
+    # passes its filters (about 29k Open-SWE, 314k mini-coder, 140k Nemotron, 12k
+    # Terminal-Lego fit the context in `smoke-200`'s candidate counts), our own five times.
     "scale-500k": {
         "seed": 0,
         "parts": {
             "open-swe": None,
-            "mini-coder": 250000,
+            "mini-coder": None,
             "nemotron-terminal": None,
             "terminal-lego": None,
             "pr-glm": {"count": None, "repeat": 5},
@@ -353,11 +354,12 @@ def prepare_mix(mix, deadline):
             count, repeat = (part["count"], part["repeat"]) if isinstance(part, dict) else (part, 1)
             keys, first, fitted = _candidates(source, rng), len(lengths), []
             encoded = 0
-            for begin in range(0, len(keys), CHUNK):
-                if count is not None and len(fitted) >= count:
-                    break
+            begin = 0
+            while begin < len(keys) and (count is None or len(fitted) < count):
+                # A small margin over what the part still needs covers rows that do not fit.
+                size = CHUNK if count is None else min(CHUNK, (count - len(fitted)) * 5 // 4 + 64)
                 by_file = {}
-                for rank, (name, index) in enumerate(keys[begin : begin + CHUNK], begin):
+                for rank, (name, index) in enumerate(keys[begin : begin + size], begin):
                     by_file.setdefault(name, []).append((index, rank))
                 for name, rows in by_file.items():
                     raw = _rows(source, name, [index for index, _ in rows])
@@ -372,6 +374,7 @@ def prepare_mix(mix, deadline):
                         fitted.append((rank, len(lengths)))
                         lengths.append(len(ids))
                         targets.append(int(mask.sum()))
+                begin += size
             fitted.sort()
             kept = [example for _, example in (fitted if count is None else fitted[:count])]
             order.extend(kept * repeat)

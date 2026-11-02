@@ -299,8 +299,10 @@ in `jfrick/lm-exploration-results`.
 ### Next: about 500k trajectories (`scale-500k`)
 
 mini-coder's scale, to test whether trajectory count, not source, is what the arms above
-lack: every resolved Open-SWE-Traces trajectory (at most two per task), 250k of
-mini-coder's own trajectories converted to the Open-SWE format (verified ones first),
-all Nemotron-Terminal skill-based and Terminal-Lego trajectories, and our PR-task
-trajectories five times. At the measured 70k tokens/s this is more than one 20-hour
+lack: every trajectory that passes each source's filters and fits 40,960 tokens. The
+candidate counts measured by the `smoke-200` preparation: 39,921 resolved Open-SWE-Traces
+trajectories (at most two per task; 28,846 fit), 316,306 mini-coder trajectories
+(converted to the Open-SWE format; 99.3% convert and fit), 139,841 Nemotron-Terminal
+skill-based and 12,400 Terminal-Lego trajectories, plus our PR-task trajectories five
+times: about 497k. At the measured 70k tokens/s this is more than one 20-hour
 launch; `train` checkpoints and continues across launches.
