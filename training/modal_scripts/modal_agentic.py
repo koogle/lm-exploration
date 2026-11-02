@@ -59,7 +59,7 @@ runs_volume = modal.Volume.from_name("lm-exploration-hybrid-runs")
 gpu_image = build(("jinja2==3.1.6",))
 LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
 TEACHER_MAX_TOKENS = 8192
-EVAL_SANDBOX_SECONDS = 5 * 60 * 60
+EVAL_SANDBOX_SECONDS = 7 * 60 * 60  # long-turn agent evaluations run for hours
 
 # Reference models: Qwen3 with its broad pretraining, through the same tasks and data.
 REFERENCE_MODELS = {
@@ -396,6 +396,15 @@ def evaluate_export(export, name, run, limit, workers, deadline):
     return _evaluate_heldout(local, {"export": export}, name, run, limit, workers, deadline)
 
 
+def _call(workspace, name, arguments):
+    """A tool call whose sandbox failure becomes the tool's result, so one lost sandbox
+    ends its own episode's progress instead of the whole evaluation."""
+    try:
+        return workspace.call(name, arguments)
+    except Exception as error:  # noqa: BLE001
+        return f"error: sandbox failure: {type(error).__name__}: {error}"[:2000]
+
+
 def _evaluate_heldout(
     local, header, name, run, limit, workers, deadline, setup_command=None, max_turns=None
 ):
@@ -450,7 +459,7 @@ def _evaluate_heldout(
     agent.run_episodes(
         live,
         policy,
-        lambda episode, name, arguments: episode["workspace"].call(name, arguments),
+        lambda episode, name, arguments: _call(episode["workspace"], name, arguments),
         max_turns=max_turns or agent.MAX_TURNS,
         workers=workers,
     )
@@ -696,7 +705,7 @@ def train_reference(base, run, data, deadline):
     gpu="H100",
     cpu=8,
     memory=65536,
-    timeout=6 * 60 * 60,
+    timeout=8 * 60 * 60,
     retries=0,
     volumes={"/data": volume, "/runs": runs_volume, "/hf": hf_cache},
 )
