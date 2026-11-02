@@ -73,7 +73,7 @@ REFERENCE_MODELS = {
 # Public agent trajectories (Qwen3-Coder-30B-A3B on SWE-smith, mini-swe-agent, MIT).
 MINI_CODER_DATA = ("ricdomolm/mini-coder-trajs-400k", "90b240e09807bbfdead1a18c0a861e2c2d20fa14")
 MINI_CODER_ROWS_PER_SHARD = 6600  # 396,515 rows in 60 shards
-AGENT_FORMATS = ("qwen-tools", "mini-swe")
+AGENT_FORMATS = ("qwen-tools", "mini-swe", "open-swe")
 # Qwen3's recommended non-thinking sampling, for runs that sample instead of decoding greedily.
 SAMPLING = {"top_p": 0.8, "top_k": 20}
 REFERENCE_TRAIN_SECONDS = 6 * 60 * 60
@@ -396,8 +396,12 @@ def evaluate_export(export, name, run, limit, workers, deadline):
     return _evaluate_heldout(local, {"export": export}, name, run, limit, workers, deadline)
 
 
-def _evaluate_heldout(local, header, name, run, limit, workers, deadline):
-    """Run `local` (a batch policy) as the agent on the held-out repositories' tasks."""
+def _evaluate_heldout(
+    local, header, name, run, limit, workers, deadline, setup_command=None, max_turns=None
+):
+    """Run `local` (a batch policy) as the agent on the held-out repositories' tasks;
+    `setup_command` is a bash command run in each workspace before the episode, and
+    `max_turns` overrides `pr_task_agent.MAX_TURNS`."""
     from concurrent.futures import ThreadPoolExecutor
 
     from training_data import pr_task_agent as agent
@@ -425,7 +429,13 @@ def _evaluate_heldout(local, header, name, run, limit, workers, deadline):
             if snapshot is None:
                 return None, f"setup: {setup.get('stage')}"
             # Every episode advances in lockstep with the batch, so sandboxes live longer.
-            return Workspace(task, snapshot, deadline, record, EVAL_SANDBOX_SECONDS), None
+            workspace = Workspace(task, snapshot, deadline, record, EVAL_SANDBOX_SECONDS)
+            if setup_command:
+                result = workspace.call("bash", {"command": setup_command})
+                if not result.startswith("exit code: 0"):
+                    workspace.close()
+                    return None, f"setup command: {result[:500]}"
+            return workspace, None
         except Exception as error:  # noqa: BLE001
             return None, f"{type(error).__name__}: {error}"[:2000]
 
@@ -441,6 +451,7 @@ def _evaluate_heldout(local, header, name, run, limit, workers, deadline):
         live,
         policy,
         lambda episode, name, arguments: episode["workspace"].call(name, arguments),
+        max_turns=max_turns or agent.MAX_TURNS,
         workers=workers,
     )
 
@@ -689,18 +700,21 @@ def train_reference(base, run, data, deadline):
     retries=0,
     volumes={"/data": volume, "/runs": runs_volume, "/hf": hf_cache},
 )
-def evaluate_reference(model, agent_format, temperature, name, run, limit, workers, deadline):
+def evaluate_reference(
+    model, agent_format, temperature, name, run, limit, workers, max_turns, deadline
+):
     """A reference model as the agent on the held-out tasks, through vLLM.
 
     `model` is a pinned model (Qwen3 chat models zero-shot with thinking off, or
     mini-coder) or `sft:<run>`, a `train_reference` output. `agent_format` is
     "qwen-tools" (Qwen3's tool format; chat models get the empty thinking block) or
-    "mini-swe" (bash-only, `training_data.mini_swe_format`). Decoding is greedy at
+    "mini-swe" (bash-only, `training_data.mini_swe_format`) or "open-swe" (Open-SWE-Traces'
+    bash tool, `training_data.open_swe_format`). Decoding is greedy at
     temperature 0, otherwise sampled with Qwen3's recommended top-p and top-k.
     """
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
-    from training_data import mini_swe_format, qwen_agent_chat
+    from training_data import mini_swe_format, open_swe_format, qwen_agent_chat
     from training_data import pr_task_agent as agent
     from vllm import LLM, SamplingParams
 
@@ -713,6 +727,8 @@ def evaluate_reference(model, agent_format, temperature, name, run, limit, worke
         trained = json.loads((folder / "summary.json").read_text())
         source, revision, chat = str(folder / "model"), None, False
         header = {"model": model, "base": trained["base"], "base_revision": trained["revision"]}
+        # Evaluate at the context the run was trained at (agent mixes: 40,960).
+        context = trained["settings"]["context"]
     else:
         source, revision = model, REFERENCE_MODELS[model]
         chat = agent_format == "qwen-tools"
@@ -721,6 +737,8 @@ def evaluate_reference(model, agent_format, temperature, name, run, limit, worke
         model=source,
         revision=revision,
         max_model_len=context,
+        # vLLM sizes the RoPE cache from max_position_embeddings (32,768 in Qwen3 bases).
+        hf_overrides=({"max_position_embeddings": context} if model.startswith("sft:") else None),
         enable_prefix_caching=True,
         gpu_memory_utilization=0.85,
         seed=0,
@@ -735,6 +753,13 @@ def evaluate_reference(model, agent_format, temperature, name, run, limit, worke
     )
 
     def prompt_text(messages):
+        if agent_format == "open-swe":
+            return qwen_agent_chat.render(
+                open_swe_format.conversation(messages),
+                open_swe_format.TOOLS,
+                add_generation_prompt=True,
+                chat=chat,
+            )
         if agent_format == "mini-swe":
             return mini_swe_format.render(
                 mini_swe_format.conversation(messages), add_generation_prompt=True
@@ -746,11 +771,11 @@ def evaluate_reference(model, agent_format, temperature, name, run, limit, worke
             chat=chat,
         )
 
-    parse = (
-        mini_swe_format.parse_assistant
-        if agent_format == "mini-swe"
-        else qwen_agent_chat.parse_assistant
-    )
+    parse = {
+        "mini-swe": mini_swe_format.parse_assistant,
+        "open-swe": open_swe_format.parse_assistant,
+        "qwen-tools": qwen_agent_chat.parse_assistant,
+    }[agent_format]
 
     def local(conversations):
         replies, prompts, index = [None] * len(conversations), [], []
@@ -766,9 +791,22 @@ def evaluate_reference(model, agent_format, temperature, name, run, limit, worke
         return replies
 
     header["agent_format"] = agent_format
+    header["context"] = context
     header["chat_format"] = "qwen3, thinking off" if chat else "as trained"
     header["sampling"] = {"temperature": temperature, **(SAMPLING if temperature > 0 else {})}
-    return _evaluate_heldout(local, header, name, run, limit, workers, deadline)
+    # Open-SWE's instructions name /testbed as the working directory.
+    # Open-SWE's instructions work in /testbed: the repository moves there (find and
+    # other tools do not descend into a symlinked starting directory) and /work/repo,
+    # which the harness uses, links to it.
+    setup_command = (
+        f"cd / && mv /work/repo {open_swe_format.WORKDIR} && ln -s {open_swe_format.WORKDIR} /work/repo"
+        if agent_format == "open-swe"
+        else None
+    )
+    header["max_turns"] = max_turns or agent.MAX_TURNS
+    return _evaluate_heldout(
+        local, header, name, run, limit, workers, deadline, setup_command, max_turns
+    )
 
 
 def _spawn(function, *arguments):
@@ -835,6 +873,7 @@ def reference_evaluate(
     models: str = "Qwen/Qwen3-0.6B,Qwen/Qwen3-1.7B",
     agent_format: str = "qwen-tools",
     temperature: float = 0.0,
+    max_turns: int = 0,
     name: str = "pr-tasks-pilot",
     limit: int = 0,
     workers: int = 48,
@@ -842,11 +881,12 @@ def reference_evaluate(
     """`models`: pinned models and `sft:<run>` outputs, comma-separated, all in one format."""
     stamp, launches = int(time.time()), []
     sampled = f"-t{temperature:g}" if temperature > 0 else ""
+    sampled += f"-turns{max_turns}" if max_turns else ""
     for model in models.split(","):
         slug = model.removeprefix("sft:").split("/")[-1].lower()
         run = f"eval-{slug}{sampled}-{stamp}{f'-limit{limit}' if limit else ''}"
         print(json.dumps({"results": f"lm-exploration-hybrid-data/{name}/agentic/{run}/"}))
-        arguments = (model, agent_format, temperature, name, run, limit, workers)
+        arguments = (model, agent_format, temperature, name, run, limit, workers, max_turns or None)
         launches.append((evaluate_reference, arguments))
     _spawn_all(launches)
 
