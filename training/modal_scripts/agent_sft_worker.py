@@ -26,13 +26,30 @@ import torch.distributed as dist
 from torch.utils.checkpoint import checkpoint
 
 
+def save_model(model, base, revision, context, folder):
+    """The fine-tuned model in bf16 for vLLM, with the base's tokenizer."""
+    from transformers import AutoTokenizer
+
+    # Trained at the mix's context, which may exceed the base config's positions.
+    model.config.max_position_embeddings = max(model.config.max_position_embeddings, context)
+    model.config.use_cache = True
+    # Turns end with <|im_end|>; the base generation config stops only at <|endoftext|>.
+    tokenizer = AutoTokenizer.from_pretrained(base, revision=revision)
+    model.generation_config.eos_token_id = [
+        tokenizer.convert_tokens_to_ids("<|im_end|>"),
+        tokenizer.eos_token_id,
+    ]
+    model.to(torch.bfloat16).save_pretrained(folder)
+    tokenizer.save_pretrained(folder)
+
+
 def main(config_path):
     config = json.loads(Path(config_path).read_text())
     settings = config["settings"]
     dist.init_process_group("nccl")
     rank, world = dist.get_rank(), dist.get_world_size()
     torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM
 
     mix = Path(config["mix"])
     offsets = np.load(mix / "offsets.npy")
@@ -176,19 +193,7 @@ def main(config_path):
         if (step + 1) % settings["checkpoint_steps"] == 0 and step + 1 < steps:
             save_checkpoint(step + 1)
     if rank == 0:
-        # Trained at the mix's context, which may exceed the base config's positions.
-        model.config.max_position_embeddings = max(
-            model.config.max_position_embeddings, settings["context"]
-        )
-        model.config.use_cache = True
-        # Turns end with <|im_end|>; the base generation config stops only at <|endoftext|>.
-        tokenizer = AutoTokenizer.from_pretrained(config["base"], revision=config["revision"])
-        model.generation_config.eos_token_id = [
-            tokenizer.convert_tokens_to_ids("<|im_end|>"),
-            tokenizer.eos_token_id,
-        ]
-        model.to(torch.bfloat16).save_pretrained(out / "model")
-        tokenizer.save_pretrained(out / "model")
+        save_model(model, config["base"], config["revision"], settings["context"], out / "model")
         with open(out / "metrics.jsonl", "w") as handle:
             handle.writelines(json.dumps(m) + "\n" for m in metrics)
         manifest = json.loads((Path(config["mix"]) / "manifest.json").read_text())

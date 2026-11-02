@@ -3,6 +3,7 @@
 Run from training/:
     modal run --detach -m modal_scripts.modal_agent_sft::prepare --mix <name> [--chat glm]
     modal run -m modal_scripts.modal_agent_sft::glm_target --mix <name> --config <hybrid config>
+    modal run --detach -m modal_scripts.modal_agent_sft::export --run <run>
     modal run --detach -m modal_scripts.modal_agent_sft::train --mix <name> --base B [--tag 01] [--hours 20]
     modal run --detach -m modal_scripts.modal_agent_sft::serve --run <run> [--hours 3]
     modal run --detach -m modal_scripts.modal_agent_sft::bench --run <run> [--attempts 1]
@@ -665,6 +666,52 @@ def train_mix(base, mix, run, seconds, deadline):
     return json.loads(Path(config["out"], "summary.json").read_text())
 
 
+@app.function(
+    image=reference_image,
+    cpu=8,
+    memory=65536,
+    timeout=3600,
+    retries=0,
+    volumes={"/runs": runs_volume, "/hf": hf_cache},
+)
+def export_checkpoint(run, deadline):
+    """A training run's latest checkpoint as a model to evaluate, while training
+    continues: `agentic-reference/<run>-step<N>/` holds the bf16 model and a summary
+    naming the run, the step and the trajectories read so far."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import torch
+    from transformers import AutoModelForCausalLM
+
+    from modal_scripts.agent_sft_worker import save_model
+
+    runs_volume.reload()
+    folder = Path("/runs", REFERENCE_FOLDER, run)
+    config = json.loads((folder / "train-config.json").read_text())
+    state = torch.load(folder / "checkpoint" / "state.pt", map_location="cpu", mmap=True,
+                       weights_only=True)  # fmt: skip
+    model = AutoModelForCausalLM.from_pretrained(
+        config["base"], revision=config["revision"], dtype=torch.float32
+    )
+    model.load_state_dict(state["model"])
+    step, settings = state["step"], config["settings"]
+    out = Path("/runs", REFERENCE_FOLDER, f"{run}-step{step}")
+    save_model(model, config["base"], config["revision"], settings["context"], out / "model")
+    summary = {
+        "base": config["base"],
+        "revision": config["revision"],
+        "run": run,
+        "mix": Path(config["mix"]).name,
+        "step": step,
+        "planned_steps": state["planned_steps"],
+        "trajectories_read": step * settings["gpus"] * settings["accumulation"],
+        "settings": settings,
+    }
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    runs_volume.commit()
+    return summary
+
+
 SERVE_SECONDS = 6 * 60 * 60
 IM_END_ID = 151645  # <|im_end|> in the Qwen3 tokenizer
 endpoints = modal.Dict.from_name("lm-exploration-agent-endpoints", create_if_missing=True)
@@ -841,6 +888,12 @@ def prepare(mix: str, chat: str = "qwen"):
     else:
         print(json.dumps({"results": f"lm-exploration-hybrid-runs/{MIX_FOLDER}/{mix}/"}))
         _launch(prepare_mix, mix)
+
+
+@app.local_entrypoint()
+def export(run: str):
+    """Export a run's latest checkpoint (`<run>-step<N>`) for `modal_agentic::reference_evaluate`."""
+    _launch(export_checkpoint, run)
 
 
 @app.local_entrypoint()
