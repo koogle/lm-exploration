@@ -40,7 +40,7 @@ LENGTHS = (16384, 40960)  # about the scale-500k mean trajectory, and the contex
 VARIANTS = ("worker", "sdpa-flash", "sdpa-cudnn", "fa3", "compiled-layers")
 FA3 = {
     "repo": "kernels-community/flash-attn3",
-    "revision": "e29f138fc363b396e5d2706c8a5f6fa7d36f41e0",
+    "revision": "3c1451f803c146c54222305a8c350f7f46bb5135",
 }
 CATEGORIES = {  # kernel-name fragments, checked in order
     "attention": ("flash", "fmha", "attention", "cudnn"),
