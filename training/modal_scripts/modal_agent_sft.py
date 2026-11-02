@@ -2,8 +2,9 @@
 
 Run from training/:
     modal run --detach -m modal_scripts.modal_agent_sft::prepare --mix <name>
-    modal run --detach -m modal_scripts.modal_agent_sft::train --mix <name> --base B [--tag 01]
+    modal run --detach -m modal_scripts.modal_agent_sft::train --mix <name> --base B [--tag 01] [--hours 20]
     modal run --detach -m modal_scripts.modal_agent_sft::serve --run <run> [--hours 3]
+    modal run --detach -m modal_scripts.modal_agent_sft::bench --run <run> [--attempts 1]
 
 `MIXES` names each mix: sources, counts and the seed. Sources (`SOURCES`), all pinned:
 - `open-swe`: NVIDIA Open-SWE-Traces, mini-swe-agent v2 subset (real SWE-rebench V2 and
@@ -15,20 +16,29 @@ Run from training/:
   `plans/AGENTIC_TRAJECTORIES.md`), Terminus 2 format.
 - `pr-glm`: our GLM-5.3 trajectories on the PR tasks (resolved, training repositories),
   converted to the Open-SWE bash-only layout; mixes can repeat it.
+- `mini-coder`: `ricdomolm/mini-coder-trajs-400k` (MIT), the mini-coder models' training
+  data: Qwen3-Coder-30B mini-swe-agent v1 rollouts on SWE-smith tasks, verified ones
+  preferred, converted to the bash-tool format (`open_swe_format.from_mini_swe`).
 - `nemotron-terminal`: NVIDIA Nemotron-Terminal-Corpus skill-based synthetic tasks
   (DeepSeek-V3.2), Terminus 2 format.
 
 Every source drops trajectories from the SWE-bench Verified repositories and from the
 repositories held out from our PR tasks (`pr_task_agent.heldout`), and drops reasoning.
 
-`prepare` (CPU) samples and tokenizes a mix with the Qwen3 tokenizer into
-`lm-exploration-hybrid-runs/agent-mix/<mix>/` (tokens, loss mask, offsets, manifest).
+`prepare` (CPU) chooses rows from metadata, uniformly over each source's files, and
+streams them through the Qwen3 tokenizer into `lm-exploration-hybrid-runs/agent-mix/<mix>/`
+(tokens, loss mask, offsets, the shuffled training order with repeats, manifest).
 `train` fully fine-tunes a pinned Qwen3 base on it with `torchrun` over eight GPUs
 (`modal_scripts.agent_sft_worker`) and writes the model, metrics and summary to
-`agentic-reference/<run>/`, where `modal_agentic.py::reference_evaluate` finds it.
-`serve` runs a trained model behind vLLM's OpenAI API through a Modal tunnel for Harbor's
-Terminal-Bench runs (Terminus 2). All have `retries=0` and a timeout under 24 hours; training stops and saves 30 minutes
-before its timeout; one supervisor per launch cancels the call at 24 hours.
+`agentic-reference/<run>/`, where `modal_agentic.py::reference_evaluate` finds it. It
+checkpoints every `checkpoint_steps` and when its time budget ends; launching `train`
+again for the same run continues from the checkpoint, so a mix longer than one launch
+trains over consecutive launches.
+`serve` runs a trained model behind vLLM's OpenAI API through a Modal tunnel; `bench`
+runs Terminal-Bench 2.1 (Harbor, Terminus 2, Modal sandboxes) against a trained model
+served inside the same function. All have `retries=0` and a timeout under 24 hours;
+training stops and saves 30 minutes before its timeout; one supervisor per launch
+cancels the call at 24 hours.
 """
 
 import json
@@ -58,8 +68,8 @@ app = modal.App("lm-exploration-agent-sft")
 app.include(modal_benchmarks.app)  # the deadline supervisor
 MIX_FOLDER = "agent-mix"
 CONTEXT = 40960  # Qwen3's position limit; Open-SWE trajectories are long
-TRAIN_SECONDS = 10 * 60 * 60
-PREPARE_SECONDS = 4 * 60 * 60
+TRAIN_SECONDS = 20 * 60 * 60  # one launch; longer mixes resume from the checkpoint
+PREPARE_SECONDS = 10 * 60 * 60
 TOKENIZER = "Qwen/Qwen3-1.7B-Base"  # the Qwen3 0.6B-4B models share it
 SWE_BENCH_VERIFIED_REPOS = {
     "django/django",
@@ -93,6 +103,13 @@ SOURCES = {
     # Our GLM-5.3 trajectories on the PR tasks (resolved, training repositories),
     # converted to the bash-only Open-SWE layout (`open_swe_format.from_harness`).
     "pr-glm": {"path": "pr-tasks-pilot/agentic/glm-5.3-1793298716/trajectories.jsonl"},
+    # mini-coder's own training data (MIT): Qwen3-Coder-30B mini-swe-agent v1 rollouts on
+    # SWE-smith tasks, 16% verified, converted to the bash-tool format.
+    "mini-coder": {
+        "repo": "ricdomolm/mini-coder-trajs-400k",
+        "revision": "90b240e09807bbfdead1a18c0a861e2c2d20fa14",
+        "prefixes": ["data/"],
+    },
     "nemotron-terminal": {
         "repo": "nvidia/Nemotron-Terminal-Corpus",
         "revision": "a1667c4ffdadea02a89bffe4f1bb7ca2ff19f8d9",
@@ -102,7 +119,12 @@ SOURCES = {
 MIXES = {
     "smoke-200": {
         "seed": 0,
-        "parts": {"open-swe": 100, "terminal-lego": 50, "nemotron-terminal": 50},
+        "parts": {
+            "open-swe": 100,
+            "mini-coder": 50,
+            "terminal-lego": 50,
+            "nemotron-terminal": 50,
+        },
     },
     "openswe-20k": {"seed": 0, "parts": {"open-swe": 20000}},
     "openswe-20k-terminal-30k": {
@@ -123,6 +145,18 @@ MIXES = {
             "pr-glm": {"count": None, "repeat": 5},
         },
     },
+    # About 500k trajectories, mini-coder's scale: every resolved Open-SWE trajectory,
+    # 250k mini-coder (verified first), all terminal data, our own five times.
+    "scale-500k": {
+        "seed": 0,
+        "parts": {
+            "open-swe": None,
+            "mini-coder": 250000,
+            "nemotron-terminal": None,
+            "terminal-lego": None,
+            "pr-glm": {"count": None, "repeat": 5},
+        },
+    },
 }
 SETTINGS = {
     "context": CONTEXT,
@@ -135,6 +169,7 @@ SETTINGS = {
     "grad_clip": 1.0,
     "loss_chunk": 4096,
     "epochs": 1,
+    "checkpoint_steps": 2000,  # about two hours of 16 trajectories per step
 }
 cpu_image = reference_image
 
@@ -164,75 +199,124 @@ def _download(source, name):
     return hf_hub_download(spec["repo"], name, repo_type="dataset", revision=spec["revision"])
 
 
-def _sample(source, count, rng):
-    """(format, messages) items for one source, oversampled 1.5x for context drops
-    (every item when `count` is None)."""
-    from pyarrow import parquet
-    from training_data import open_swe_format, terminus_format
+# Columns read to choose rows before any trajectory is loaded.
+LIGHT_COLUMNS = {
+    "open-swe": ["instance_id", "repo", "resolved"],
+    "mini-coder": ["instance_id", "verified"],
+}
+TRAJECTORY_COLUMNS = {
+    "open-swe": "messages",
+    "mini-coder": "messages",
+    "nemotron-terminal": "conversations",
+}
+CHUNK = 50000  # candidates encoded per pass over a source's files
 
-    want, items = (None if count is None else int(count * 1.5)), []
+
+def mini_coder_repo(instance_id):
+    """`owner/repo` from a SWE-smith instance id (`owner__repo.commit.mutation`)."""
+    return instance_id.split(".")[0].replace("__", "/", 1)
+
+
+def _candidates(source, rng):
+    """(file, row) keys for every row a source may contribute, in random order with
+    preferred rows first: verified mini-coder trajectories, at most two Open-SWE
+    trajectories per task."""
+    from pyarrow import parquet
+
+    keys = []  # (file, row, priority, task)
     if source == "pr-glm":
         from training_data import pr_task_agent
 
-        for line in Path("/data", SOURCES[source]["path"]).read_text().splitlines():
+        lines = Path("/data", SOURCES[source]["path"]).read_text().splitlines()
+        for index, line in enumerate(lines):
             row = json.loads(line)
             if row["resolved"] and not pr_task_agent.heldout(row["repository"]):
-                items.append(("open-swe", open_swe_format.from_harness(row["messages"])))
-        rng.shuffle(items)
-    elif source == "open-swe":
-        files = _files(source)
-        rng.shuffle(files)
-        per_task = {}
-        for name in files:
-            columns = ["instance_id", "repo", "resolved", "messages"]
-            rows = parquet.read_table(_download(source, name), columns=columns).to_pylist()
-            rng.shuffle(rows)
-            for row in rows:
-                if not row["resolved"] or excluded(row["repo"]):
-                    continue
-                if per_task.get(row["instance_id"], 0) >= 2:
-                    continue
-                per_task[row["instance_id"]] = per_task.get(row["instance_id"], 0) + 1
-                items.append(("open-swe", open_swe_format.training_messages(row)))
-            if len(items) >= want:
-                break
+                keys.append((None, index, 0, None))
     elif source == "terminal-lego":
-        rows = json.loads(Path(_download(source, SOURCES[source]["files"][0])).read_text())
-        rng.shuffle(rows)
-        for row in rows:
-            if (row.get("metadata") or {}).get("reward") != 1:
-                continue
-            messages = terminus_format.training_messages(row["conversations"])
-            if messages:
-                items.append(("terminus", messages))
+        name = SOURCES[source]["files"][0]
+        rows = json.loads(Path(_download(source, name)).read_text())
+        keys = [
+            (name, index, 0, None)
+            for index, row in enumerate(rows)
+            if (row.get("metadata") or {}).get("reward") == 1
+        ]
     else:
-        rows = []
         for name in _files(source):
-            table = parquet.read_table(_download(source, name), columns=["conversations"])
-            rows.extend(table.to_pylist())
-        rng.shuffle(rows)
-        for row in rows[:want]:
-            messages = terminus_format.training_messages(row["conversations"])
-            if messages:
-                items.append(("terminus", messages))
-    return items[:want]
+            path = _download(source, name)
+            if source == "nemotron-terminal":
+                count = parquet.ParquetFile(path).metadata.num_rows
+                keys.extend((name, index, 0, None) for index in range(count))
+                continue
+            rows = parquet.read_table(path, columns=LIGHT_COLUMNS[source]).to_pylist()
+            for index, row in enumerate(rows):
+                if source == "open-swe" and row["resolved"] and not excluded(row["repo"]):
+                    keys.append((name, index, 0, row["instance_id"]))
+                elif source == "mini-coder" and not excluded(mini_coder_repo(row["instance_id"])):
+                    keys.append((name, index, 0 if row["verified"] else 1, None))
+    rng.shuffle(keys)
+    keys.sort(key=lambda key: key[2])
+    if source == "open-swe":
+        per_task, capped = {}, []
+        for key in keys:
+            per_task[key[3]] = per_task.get(key[3], 0) + 1
+            if per_task[key[3]] <= 2:
+                capped.append(key)
+        keys = capped
+    return [(name, index) for name, index, _, _ in keys]
+
+
+def _rows(source, name, indices):
+    """The rows at `indices` of one source file."""
+    if source == "pr-glm":
+        lines = Path("/data", SOURCES[source]["path"]).read_text().splitlines()
+        return [json.loads(lines[index]) for index in indices]
+    if source == "terminal-lego":
+        rows = json.loads(Path(_download(source, name)).read_text())
+        return [rows[index] for index in indices]
+    from pyarrow import parquet
+
+    column = TRAJECTORY_COLUMNS[source]
+    table = parquet.read_table(_download(source, name), columns=[column])
+    return table.take(indices).to_pylist()
+
+
+def _convert(source, row):
+    """(chat format, training messages or None) for one raw row."""
+    from training_data import open_swe_format, terminus_format
+
+    if source == "pr-glm":
+        return "open-swe", open_swe_format.from_harness(row["messages"])
+    if source == "open-swe":
+        return "open-swe", open_swe_format.training_messages(row)
+    if source == "mini-coder":
+        return "open-swe", open_swe_format.from_mini_swe(row["messages"])
+    return "terminus", terminus_format.training_messages(row["conversations"])
 
 
 _tokenizer = None
 
 
-def _encode(item):
+def _encode(job):
+    """(rank, (token ids, loss mask) or None when the row does not convert or fit)."""
+    import numpy as np
     from training_data import mini_swe_format, open_swe_format, qwen_agent_chat
     from transformers import AutoTokenizer
 
     global _tokenizer
     if _tokenizer is None:
         _tokenizer = AutoTokenizer.from_pretrained(TOKENIZER, revision=REFERENCE_MODELS[TOKENIZER])
+    source, rank, row = job
+    kind, messages = _convert(source, row)
+    if not messages:
+        return rank, None
     tokenize = lambda text: _tokenizer.encode(text, add_special_tokens=False)
-    kind, messages = item
     if kind == "open-swe":
-        return qwen_agent_chat.encode(tokenize, messages, open_swe_format.TOOLS)
-    return mini_swe_format.encode(tokenize, messages)
+        ids, mask = qwen_agent_chat.encode(tokenize, messages, open_swe_format.TOOLS)
+    else:
+        ids, mask = mini_swe_format.encode(tokenize, messages)
+    if len(ids) > CONTEXT or not sum(mask):
+        return rank, None
+    return rank, (np.asarray(ids, dtype=np.uint32), np.asarray(mask, dtype=np.uint8))
 
 
 @app.function(
@@ -244,7 +328,10 @@ def _encode(item):
     volumes={"/runs": runs_volume, "/hf": hf_cache, "/data": data_volume},
 )
 def prepare_mix(mix, deadline):
-    """Sample and tokenize a mix; sources keep their order, examples are shuffled."""
+    """Tokenize a mix, streaming: each source's candidates are encoded in rank order, a
+    chunk at a time, and appended to `tokens.u32`/`mask.u8` until the part's count fits;
+    `offsets.npy` bounds the stored examples and `order.npy` is the training order
+    (the kept examples of every part, repeated, shuffled)."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     import random
@@ -254,32 +341,53 @@ def prepare_mix(mix, deadline):
 
     spec, started = MIXES[mix], time.time()
     rng = random.Random(spec["seed"])
-    kept, counts = [], {}
-    for source, part in spec["parts"].items():
-        count, repeat = (part["count"], part["repeat"]) if isinstance(part, dict) else (part, 1)
-        items = _sample(source, count, rng)
-        with Pool(30) as pool:
-            encoded = pool.map(_encode, items, chunksize=16)
-        fits = [(ids, mask) for ids, mask in encoded if len(ids) <= CONTEXT and sum(mask)]
-        chosen = fits if count is None else fits[:count]
-        counts[source] = {
-            "sampled": len(items),
-            "fit": len(fits),
-            "kept": len(chosen),
-            "repeat": repeat,
-        }
-        kept.extend((source, ids, mask) for ids, mask in chosen * repeat)
-    rng.shuffle(kept)
     out = Path("/runs", MIX_FOLDER, mix)
     out.mkdir(parents=True, exist_ok=True)
-    lengths = np.array([len(ids) for _, ids, _ in kept], dtype=np.int64)
-    np.save(out / "offsets.npy", np.concatenate([[0], np.cumsum(lengths)]))
-    np.concatenate([np.asarray(ids, dtype=np.uint32) for _, ids, _ in kept]).tofile(
-        out / "tokens.u32"
-    )
-    np.concatenate([np.asarray(mask, dtype=np.uint8) for _, _, mask in kept]).tofile(
-        out / "mask.u8"
-    )
+    lengths, targets, counts, order = [], [], {}, []
+    with (
+        open(out / "tokens.u32", "wb") as tokens_file,
+        open(out / "mask.u8", "wb") as mask_file,
+        Pool(30) as pool,
+    ):
+        for source, part in spec["parts"].items():
+            count, repeat = (part["count"], part["repeat"]) if isinstance(part, dict) else (part, 1)
+            keys, first, fitted = _candidates(source, rng), len(lengths), []
+            encoded = 0
+            for begin in range(0, len(keys), CHUNK):
+                if count is not None and len(fitted) >= count:
+                    break
+                by_file = {}
+                for rank, (name, index) in enumerate(keys[begin : begin + CHUNK], begin):
+                    by_file.setdefault(name, []).append((index, rank))
+                for name, rows in by_file.items():
+                    raw = _rows(source, name, [index for index, _ in rows])
+                    jobs = [(source, rank, row) for (_, rank), row in zip(rows, raw, strict=True)]
+                    encoded += len(jobs)
+                    for rank, example in pool.imap_unordered(_encode, jobs, chunksize=8):
+                        if example is None:
+                            continue
+                        ids, mask = example
+                        ids.tofile(tokens_file)
+                        mask.tofile(mask_file)
+                        fitted.append((rank, len(lengths)))
+                        lengths.append(len(ids))
+                        targets.append(int(mask.sum()))
+            fitted.sort()
+            kept = [example for _, example in (fitted if count is None else fitted[:count])]
+            order.extend(kept * repeat)
+            counts[source] = {
+                "candidates": len(keys),
+                "encoded": encoded,
+                "fit": len(fitted),
+                "kept": len(kept),
+                "repeat": repeat,
+                "stored": [first, len(lengths)],
+            }
+            print(json.dumps({source: counts[source]}), flush=True)
+    order = np.random.default_rng(spec["seed"]).permutation(np.array(order, dtype=np.int64))
+    np.save(out / "order.npy", order)
+    np.save(out / "offsets.npy", np.concatenate([[0], np.cumsum(lengths, dtype=np.int64)]))
+    lengths, targets = np.array(lengths), np.array(targets)
     manifest = {
         "mix": mix,
         "spec": spec,
@@ -287,15 +395,15 @@ def prepare_mix(mix, deadline):
         "tokenizer": [TOKENIZER, REFERENCE_MODELS[TOKENIZER]],
         "context": CONTEXT,
         "counts": counts,
-        "examples": len(kept),
-        "source_of_example": [source for source, _, _ in kept],
-        "tokens": int(lengths.sum()),
-        "target_tokens": int(sum(sum(mask) for _, _, mask in kept)),
+        "examples": len(order),
+        "stored_examples": len(lengths),
+        "tokens": int(lengths[order].sum()),
+        "target_tokens": int(targets[order].sum()),
         "seconds": round(time.time() - started),
     }
-    (out / "manifest.json").write_text(json.dumps(manifest) + "\n")
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     runs_volume.commit()
-    return {k: v for k, v in manifest.items() if k != "source_of_example"}
+    return manifest
 
 
 @app.function(
@@ -307,7 +415,8 @@ def prepare_mix(mix, deadline):
     retries=0,
     volumes={"/runs": runs_volume, "/hf": hf_cache},
 )
-def train_mix(base, mix, run, deadline):
+def train_mix(base, mix, run, seconds, deadline):
+    """Train (or continue) `run` for at most `seconds` of this launch."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     runs_volume.reload()
@@ -317,7 +426,7 @@ def train_mix(base, mix, run, deadline):
         "mix": str(Path("/runs", MIX_FOLDER, mix)),
         "out": str(Path("/runs", REFERENCE_FOLDER, run)),
         "settings": SETTINGS,
-        "stop_unix": min(deadline - 1800, time.time() + TRAIN_SECONDS - 1800),
+        "stop_unix": min(deadline - 1800, time.time() + min(seconds, TRAIN_SECONDS) - 1800),
     }
     Path(config["out"]).mkdir(parents=True, exist_ok=True)
     config_path = Path(config["out"], "train-config.json")
@@ -510,7 +619,8 @@ def prepare(mix: str):
 
 
 @app.local_entrypoint()
-def train(mix: str, base: str = "Qwen/Qwen3-1.7B-Base", tag: str = "01"):
+def train(mix: str, base: str = "Qwen/Qwen3-1.7B-Base", tag: str = "01", hours: float = 20.0):
+    """Train a run, or continue it from its checkpoint; `hours` bounds this launch."""
     run = f"{base.split('/')[1].lower()}-{mix}-{tag}"
     print(json.dumps({"results": f"lm-exploration-hybrid-runs/{REFERENCE_FOLDER}/{run}/"}))
-    _launch(train_mix, base, mix, run)
+    _launch(train_mix, base, mix, run, int(hours * 3600))

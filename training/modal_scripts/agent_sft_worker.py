@@ -2,12 +2,15 @@
 
 Started by `torch.distributed.run` with a config path. Every rank holds the whole model
 (fp32 weights, bf16 autocast, gradient checkpointing, AdamW) and reads the mix's
-memory-mapped tokens; example i of the shuffled mix goes to rank i % world. A step is
+memory-mapped tokens; position i of the mix's training order (`order.npy`) goes to rank
+i % world. A step is
 `accumulation` trajectories per rank; the loss is summed cross-entropy on assistant
 tokens divided by the step's target tokens over all ranks, and gradients are summed
 across ranks with all-reduce, so each step averages over every target token in it.
 The loss runs in chunks recomputed in backward, so the full logit matrix is never held.
-Rank 0 writes metrics, the bf16 model and the summary.
+Rank 0 writes metrics, the bf16 model and the summary. Every `checkpoint_steps` and at the
+time budget it saves weights, optimizer state and the step to `checkpoint/state.pt`; a
+later launch with the same output folder loads them and continues at that step.
 """
 
 import json
@@ -35,7 +38,7 @@ def main(config_path):
     offsets = np.load(mix / "offsets.npy")
     tokens = np.memmap(mix / "tokens.u32", dtype=np.uint32, mode="r")
     masks = np.memmap(mix / "mask.u8", dtype=np.uint8, mode="r")
-    mine = list(range(rank, len(offsets) - 1, world))
+    mine = np.load(mix / "order.npy")[rank::world]
     accumulation = settings["accumulation"]
     steps = len(mine) // accumulation
     steps_tensor = torch.tensor(steps, device="cuda")
@@ -76,13 +79,48 @@ def main(config_path):
             masks[start:end], dtype=np.float32
         )
 
-    started, metrics, stopped = time.time(), [], None
+    out = Path(config["out"])
+    state_path = out / "checkpoint" / "state.pt"
+    start, earlier_seconds, metrics = 0, 0.0, []
+    if state_path.exists():
+        state = torch.load(state_path, map_location="cuda", mmap=True, weights_only=True)
+        if state["mix"] != config["mix"] or state["planned_steps"] != steps:
+            raise ValueError(f"{state_path} belongs to another mix or schedule")
+        model.load_state_dict(state["model"])
+        optimizer.load_state_dict(state["optimizer"])
+        start, earlier_seconds = state["step"], state["seconds"]
+        del state
+        with open(out / "metrics.jsonl") as handle:
+            metrics = [json.loads(line) for line in handle][:start]
+        if rank == 0:
+            print(json.dumps({"resumed_at_step": start}), flush=True)
+
+    def save_checkpoint(done):
+        if rank == 0:
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            partial = state_path.with_suffix(".partial")
+            state = {
+                "model": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "step": done,
+                "planned_steps": steps,
+                "mix": config["mix"],
+                "seconds": earlier_seconds + time.time() - started,
+            }
+            torch.save(state, partial)
+            partial.rename(state_path)
+            with open(out / "metrics.jsonl", "w") as handle:
+                handle.writelines(json.dumps(m) + "\n" for m in metrics)
+        dist.barrier()
+
+    started, stopped = time.time(), None
     per_epoch = len(mine) // accumulation
-    for step in range(steps):
+    for step in range(start, steps):
         stop = torch.tensor(int(time.time() >= config["stop_unix"]), device="cuda")
         dist.all_reduce(stop, op=dist.ReduceOp.MAX)
         if stop.item():
             stopped = "time budget"
+            save_checkpoint(step)
             break
         position = (step % per_epoch) * accumulation
         batch = [example(i) for i in mine[position : position + accumulation]]
@@ -130,13 +168,14 @@ def main(config_path):
                 "learning_rate": learning_rate(step),
                 "tokens": int(counts[1].item()),
                 "target_tokens": int(global_targets),
-                "seconds": round(time.time() - started, 1),
+                "seconds": round(earlier_seconds + time.time() - started, 1),
             }
             metrics.append(record)
             if step % 10 == 0:
                 print(json.dumps(record), flush=True)
+        if (step + 1) % settings["checkpoint_steps"] == 0 and step + 1 < steps:
+            save_checkpoint(step + 1)
     if rank == 0:
-        out = Path(config["out"])
         # Trained at the mix's context, which may exceed the base config's positions.
         model.config.max_position_embeddings = max(
             model.config.max_position_embeddings, settings["context"]
@@ -162,13 +201,13 @@ def main(config_path):
             "examples": manifest["examples"],
             "tokens": manifest["tokens"],
             "target_tokens": manifest["target_tokens"],
-            "steps": len(metrics),
+            "steps": metrics[-1]["step"] if metrics else 0,
             "planned_steps": steps,
             "stopped": stopped,
             "settings": settings,
             "world": world,
             "final_loss": metrics[-1]["loss"] if metrics else None,
-            "seconds": round(time.time() - started),
+            "seconds": round(earlier_seconds + time.time() - started),
         }
         (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     dist.barrier()

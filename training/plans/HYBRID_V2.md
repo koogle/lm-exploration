@@ -257,3 +257,50 @@ Outputs (evaluations with trajectories, SFT metrics and summaries,
 `mini-coder-behavior.jsonl`): `training/results/agentic-sft-pilot/` in
 `jfrick/lm-exploration-results`. Fine-tuned weights are on the `lm-exploration-hybrid-runs`
 volume (`agentic-reference/<run>/model`).
+
+## Public trajectory mixes on eight H100s (2026-11-02)
+
+Qwen3-1.7B-Base fully fine-tuned for one epoch on mixes of public trajectories
+(`modal_scripts/modal_agent_sft.py`, data-parallel over 8×H100, 16 trajectories per
+step, lr 2e-5, cosine to 10%, 40,960-token context), all rendered in the Open-SWE-Traces
+format (mini-swe-agent v2, one `bash` tool, JSON observations) or Terminus 2 for the
+terminal data, and evaluated on the same 179 held-out PR tasks in the Open-SWE format:
+
+| Arm | Mix | Trajectories | Tokens | Hours | Final loss |
+| --- | --- | ---: | ---: | ---: | ---: |
+| A | 20k resolved Open-SWE-Traces | 20,000 | 466M | 1.8 | 0.358 |
+| C | A + our 364 GLM-5.3 PR-task trajectories ×5 | 21,820 | 498M | 1.9 | 0.391 |
+| B′ | C + 12,364 Terminal-Lego + 15,000 Nemotron-Terminal | 49,184 | 797M | 3.4 | 0.357 |
+
+Resolved of 179 (sampled runs at temperature 0.7, top-p 0.8, top-k 20):
+
+| Arm | 40 turns, greedy | 40 turns, sampled | 100 turns, sampled | Repeated calls (100 turns) | Episodes with patch (100 turns) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A | 0 | 1 | 0 | 57% | 62 |
+| C | 2 | 1 | 1 | 72% | 41 |
+| B′ | 0 | 1 | 3 | 73% | 44 |
+| mini-coder SFT, 10k (above) | 1 | | | | |
+| mini-coder-1.7b (396k) | 11 | | | | |
+
+- **50k public trajectories do not reach mini-coder.** The best arm resolves 3 of 179
+  with 100 turns; mini-coder-1.7b resolves 11 with 40. Between arms the differences are
+  one to three tasks, within run-to-run noise at this rate.
+- **Long episodes loop.** With 100 turns, a third of the episodes fill the 40,960-token
+  context, and over 55% of calls repeat an earlier one (6% for mini-coder-1.7b at 40
+  turns). Open-SWE-Traces trajectories average 23k tokens, mini-coder's about 16k in the
+  same format.
+- **Terminal data does not hurt the repository tasks** (B′ ≥ C on the 100-turn run).
+  Terminal-Bench 2.1 for B′ (Harbor, Terminus 2, one attempt per task): see below.
+
+Outputs (mix manifests, training metrics and summaries, evaluations with trajectories,
+`behavior.jsonl`, a README naming the invalid evaluations): `training/results/agent-mix-sft/`
+in `jfrick/lm-exploration-results`.
+
+### Next: about 500k trajectories (`scale-500k`)
+
+mini-coder's scale, to test whether trajectory count, not source, is what the arms above
+lack: every resolved Open-SWE-Traces trajectory (at most two per task), 250k of
+mini-coder's own trajectories converted to the Open-SWE format (verified ones first),
+all Nemotron-Terminal skill-based and Terminal-Lego trajectories, and our PR-task
+trajectories five times. At the measured 70k tokens/s this is more than one 20-hour
+launch; `train` checkpoints and continues across launches.
