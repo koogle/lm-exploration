@@ -176,7 +176,9 @@ def main(config_path):
             stopped = "time budget"
             save_checkpoint(step)
             break
+        began = time.perf_counter()
         batch = [example(order[p]) for p in schedule[step % len(schedule)][rank]]
+        loaded = time.perf_counter()
         local_targets = sum(float(mask[1:].sum()) for _, mask in batch)
         counts = torch.tensor(
             [local_targets, sum(len(ids) for ids, _ in batch)], device="cuda", dtype=torch.float64
@@ -199,9 +201,13 @@ def main(config_path):
                 total = fused_loss(head.weight, hidden, labels)
             (total / global_targets).backward()
             loss_sum += total.item()
+        torch.cuda.synchronize()
+        computed = time.perf_counter()
         for parameter in model.parameters():
             if parameter.grad is not None:
                 dist.all_reduce(parameter.grad)
+        torch.cuda.synchronize()
+        reduced = time.perf_counter()
         loss = torch.tensor(loss_sum, device="cuda", dtype=torch.float64)
         dist.all_reduce(loss)
         norm = torch.nn.utils.clip_grad_norm_(model.parameters(), settings["grad_clip"])
@@ -209,7 +215,16 @@ def main(config_path):
             group["lr"] = learning_rate(step)
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
+        torch.cuda.synchronize()
+        # Per-rank phase times: data, forward and backward, gradient all-reduce, optimizer.
+        phases = torch.tensor(
+            [loaded - began, computed - loaded, reduced - computed, time.perf_counter() - reduced],
+            device="cuda",
+        )
+        gathered = [torch.zeros_like(phases) for _ in range(world)]
+        dist.all_gather(gathered, phases)
         if rank == 0:
+            gathered = torch.stack(gathered).tolist()
             record = {
                 "step": step + 1,
                 "loss": round(loss.item() / global_targets, 5),
@@ -218,6 +233,13 @@ def main(config_path):
                 "tokens": int(counts[1].item()),
                 "target_tokens": int(global_targets),
                 "seconds": round(earlier_seconds + time.time() - started, 1),
+                "phase_seconds": {
+                    name: [
+                        round(min(r[i] for r in gathered), 3),
+                        round(max(r[i] for r in gathered), 3),
+                    ]
+                    for i, name in enumerate(("data", "compute", "all_reduce", "optimizer"))
+                },
             }
             metrics.append(record)
             if step % 10 == 0:
