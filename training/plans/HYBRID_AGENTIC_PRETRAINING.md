@@ -69,7 +69,7 @@ the code and agentic data, where it acts most per token.
 | Web, highest-quality slice | 30% | ClimbMix's top clusters or FineWeb-Edu (ODC-By) |
 | Repository-level code (files of one repository in path order) | 20% | prepared by `hybrid-long32k-v1` |
 | Commits and PR diffs | 10% | CommitPack; histories of our PR-task training repositories |
-| Agent trajectories not used in SFT, loss on every token | 10% | Open-SWE-Traces unresolved trajectories (~59% of its mini-swe-agent subset), the mini-coder trajectories `scale-500k` leaves out (~150k), `SWE-bench/SWE-smith-trajectories` (MIT); rendered in the SFT format; held-out and SWE-bench Verified repositories dropped as in SFT |
+| Agent trajectories not used in SFT, loss on every token | 10% | Open-SWE-Traces unresolved trajectories (~59% of its mini-swe-agent subset) and resolved ones beyond the two per task `scale-500k` keeps, `SWE-bench/SWE-smith-trajectories` (MIT); `scale-500k` uses every mini-coder trajectory that fits, so none are left for the anneal; rendered in the SFT format; held-out and SWE-bench Verified repositories dropped as in SFT |
 | Synthetic code instruction and answer data | 10% | OpenCoder's annealing corpus (`OpenCoder-LLM/opc-annealing-corpus`, ODC-By) |
 | Reasoning traces | 10% | OpenThoughts3 and smoltalk2 think splits (as in `hybrid-mid32k-v1`) |
 | Math | 5% | FineMath |
