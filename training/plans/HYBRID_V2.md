@@ -304,5 +304,9 @@ candidate counts measured by the `smoke-200` preparation: 39,921 resolved Open-S
 trajectories (at most two per task; 28,846 fit), 316,306 mini-coder trajectories
 (converted to the Open-SWE format; 99.3% convert and fit), 139,841 Nemotron-Terminal
 skill-based and 12,400 Terminal-Lego trajectories, plus our PR-task trajectories five
-times: about 497k. At the measured 70k tokens/s this is more than one 20-hour
-launch; `train` checkpoints and continues across launches.
+times. Prepared: 493,711 trajectories (310,878 mini-coder, 139,803 Nemotron-Terminal,
+28,846 Open-SWE-Traces, 12,364 Terminal-Lego, 364 × 5 ours), 7.41B tokens of which 2.57B
+are assistant tokens, 30,857 steps of 16 trajectories. At the measured 70k tokens/s
+this is about 29 hours, more than one 20-hour launch; `train` checkpoints every 2,000
+steps and continues across launches. Run `qwen3-1.7b-base-scale-500k-01`, first launch
+2026-11-02 10:20 UTC.
