@@ -2,6 +2,7 @@
 
 Run from training/:
     modal run --detach -m modal_scripts.modal_agent_sft::prepare --mix <name> [--chat glm]
+    modal run -m modal_scripts.modal_agent_sft::glm_target --mix <name> --config <hybrid config>
     modal run --detach -m modal_scripts.modal_agent_sft::train --mix <name> --base B [--tag 01] [--hours 20]
     modal run --detach -m modal_scripts.modal_agent_sft::serve --run <run> [--hours 3]
     modal run --detach -m modal_scripts.modal_agent_sft::bench --run <run> [--attempts 1]
@@ -599,6 +600,29 @@ def prepare_glm_mix(mix, deadline):
 
 
 @app.function(
+    image=cpu_image, cpu=4, memory=32768, timeout=1800, retries=0, volumes={"/data": data_volume}
+)
+def glm_pass(mix, seed, rows, deadline):
+    """One pass of a mix's GLM recipe as the hybrid reads it with `seed`: the windows
+    `ChatMixture` packs, and the budget tokens of its whole batches of `rows`."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    from training_data import chat_sft
+
+    recipe = glm_recipe(mix)
+    mixture = chat_sft.ChatMixture(recipe, Path("/data", recipe["name"]), seed)
+    windows = chat_sft.pass_windows(mixture)
+    batches = windows // rows
+    return {
+        "recipe": recipe["name"],
+        "conversations": len(mixture.order),
+        "windows": windows,
+        "batches": batches,
+        "target_tokens": batches * rows * recipe["context"],
+    }
+
+
+@app.function(
     image=reference_image,
     gpu="H100:8",
     cpu=32,
@@ -817,6 +841,14 @@ def prepare(mix: str, chat: str = "qwen"):
     else:
         print(json.dumps({"results": f"lm-exploration-hybrid-runs/{MIX_FOLDER}/{mix}/"}))
         _launch(prepare_mix, mix)
+
+
+@app.local_entrypoint()
+def glm_target(mix: str, config: str):
+    """The `target_tokens` of one pass of a mix's GLM recipe for a hybrid run config."""
+    settings = json.loads(Path(config).read_text())
+    print(json.dumps(glm_pass.remote(mix, settings["seed"], settings["global_rows"],
+                                     time.time() + 3600)))  # fmt: skip
 
 
 @app.local_entrypoint()

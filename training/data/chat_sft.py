@@ -334,6 +334,18 @@ class ChatMixture:
         self.position = state["position"]
 
 
+def pass_windows(mixture):
+    """The windows one pass of a `ChatMixture` packs (from its position), counted from
+    the conversation lengths alone, as `next_batch` packs them."""
+    windows, used = 0, 0
+    for subset, index in mixture.order[mixture.position :]:
+        length = int(mixture.subsets[subset][2][index][1])
+        if used and used + length > mixture.context + 1:
+            windows, used = windows + 1, 0
+        used += length
+    return windows + bool(used)
+
+
 def chat_heldout_windows(recipe, root, name, context, max_conversations):
     """One subset's held-out conversations packed whole into windows (see
     `train.heldout_windows`); None when the subset has no held-out conversations.
