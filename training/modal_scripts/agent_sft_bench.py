@@ -52,6 +52,7 @@ CATEGORIES = {  # kernel-name fragments, checked in order
 def _fa3_attention():
     """An `AttentionInterface` function running FlashAttention-3, causal."""
     import torch
+
     from kernels import get_kernel
 
     flash = get_kernel(FA3["repo"], revision=FA3["revision"])
