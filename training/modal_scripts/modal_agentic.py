@@ -727,6 +727,8 @@ def evaluate_reference(
         trained = json.loads((folder / "summary.json").read_text())
         source, revision, chat = str(folder / "model"), None, False
         header = {"model": model, "base": trained["base"], "base_revision": trained["revision"]}
+        # Evaluate at the context the run was trained at (agent mixes: 40,960).
+        context = trained["settings"]["context"]
     else:
         source, revision = model, REFERENCE_MODELS[model]
         chat = agent_format == "qwen-tools"
@@ -735,6 +737,8 @@ def evaluate_reference(
         model=source,
         revision=revision,
         max_model_len=context,
+        # vLLM sizes the RoPE cache from max_position_embeddings (32,768 in Qwen3 bases).
+        hf_overrides=({"max_position_embeddings": context} if model.startswith("sft:") else None),
         enable_prefix_caching=True,
         gpu_memory_utilization=0.85,
         seed=0,
@@ -787,6 +791,7 @@ def evaluate_reference(
         return replies
 
     header["agent_format"] = agent_format
+    header["context"] = context
     header["chat_format"] = "qwen3, thinking off" if chat else "as trained"
     header["sampling"] = {"temperature": temperature, **(SAMPLING if temperature > 0 else {})}
     # Open-SWE's instructions name /testbed as the working directory.
