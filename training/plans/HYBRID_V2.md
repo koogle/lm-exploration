@@ -37,6 +37,8 @@ Each stage has a gate; a failed gate stops the plan for a decision.
    ~1.5B variant (24 layers, width 2048, same layer pattern).
    *Gate:* HumanEval/MBPP at or above Qwen3-0.6B-Base's 30/39, measured, before any
    larger run.
+   The mix and token budget for agentic post-training are planned in
+   [HYBRID_AGENTIC_PRETRAINING.md](HYBRID_AGENTIC_PRETRAINING.md).
 3. **Reasoning SFT** at 16–32K: thinking traces for code and math (smoltalk2's think
    splits, OpenCodeReasoning-style data, GLM-5.3-written traces kept only when their
    code passes tests), then the existing RL loop with thinking on.
