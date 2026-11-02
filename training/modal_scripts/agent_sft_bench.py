@@ -51,11 +51,22 @@ CATEGORIES = {  # kernel-name fragments, checked in order
 
 def _fa3_attention():
     """An `AttentionInterface` function running FlashAttention-3, causal."""
+    import importlib
+    import sys
+
     import torch
 
-    from kernels import get_kernel
-
-    flash = get_kernel(FA3["repo"], revision=FA3["revision"])
+    # The project's own `kernels` package (training/kernels) shadows the kernel hub's.
+    project = [p for p in sys.path if p in ("", "/project")]
+    sys.path[:] = [p for p in sys.path if p not in project]
+    shadowed = sys.modules.pop("kernels", None)
+    try:
+        hub = importlib.import_module("kernels")
+    finally:
+        sys.path[:0] = project
+        if shadowed is not None:
+            sys.modules["kernels"] = shadowed
+    flash = hub.get_kernel(FA3["repo"], revision=FA3["revision"])
 
     def attention(module, query, key, value, attention_mask, scaling=None, dropout=0.0, **_):
         # [batch, heads, tokens, dim] -> [batch, tokens, heads, dim]
@@ -177,9 +188,13 @@ def _profile(step, ids, mask):
 
 
 @app.local_entrypoint()
-def main(bases: str = "Qwen/Qwen3-0.6B-Base"):
+def main(bases: str = "Qwen/Qwen3-0.6B-Base", variants: str = ",".join(VARIANTS)):
     deadline = time.time() + DEADLINE_SECONDS
-    calls = [bench.spawn(b, v, v == "worker", deadline) for b in bases.split(",") for v in VARIANTS]
+    calls = [
+        bench.spawn(b, v, v == "worker", deadline)
+        for b in bases.split(",")
+        for v in variants.split(",")
+    ]
     ids = [call.object_id for call in calls]
     supervisor = modal_benchmarks.enforce_deadline.spawn(ids, deadline)
     print(json.dumps({"calls": ids, "supervisor": supervisor.object_id, "deadline_unix": deadline}))
