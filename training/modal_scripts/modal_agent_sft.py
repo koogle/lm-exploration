@@ -117,8 +117,10 @@ SOURCES = {
     },
 }
 MIXES = {
+    # Checkpoints every five steps, to exercise resuming.
     "smoke-200": {
         "seed": 0,
+        "settings": {"checkpoint_steps": 5},
         "parts": {
             "open-swe": 100,
             "mini-coder": 50,
@@ -428,7 +430,7 @@ def train_mix(base, mix, run, seconds, deadline):
         "revision": REFERENCE_MODELS[base],
         "mix": str(Path("/runs", MIX_FOLDER, mix)),
         "out": str(Path("/runs", REFERENCE_FOLDER, run)),
-        "settings": SETTINGS,
+        "settings": {**SETTINGS, **MIXES[mix].get("settings", {})},
         "stop_unix": min(deadline - 1800, time.time() + min(seconds, TRAIN_SECONDS) - 1800),
     }
     Path(config["out"]).mkdir(parents=True, exist_ok=True)
