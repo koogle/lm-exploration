@@ -1,13 +1,16 @@
 """One rank of `modal_agent_sft.train_mix`: data-parallel full fine-tune of a Qwen3 base.
 
 Started by `torch.distributed.run` with a config path. Every rank holds the whole model
-(fp32 weights, bf16 autocast, gradient checkpointing, AdamW) and reads the mix's
-memory-mapped tokens; position i of the mix's training order (`order.npy`) goes to rank
-i % world. A step is
-`accumulation` trajectories per rank; the loss is summed cross-entropy on assistant
-tokens divided by the step's target tokens over all ranks, and gradients are summed
-across ranks with all-reduce, so each step averages over every target token in it.
-The loss runs in chunks recomputed in backward, so the full logit matrix is never held.
+(fp32 weights, bf16 autocast, AdamW) with Liger's Triton kernels for RMSNorm, SwiGLU and
+RoPE and its fused output-layer cross-entropy (no [tokens, vocab] logits), and reads the
+mix's memory-mapped tokens. `balanced_steps` cuts the mix's training order
+(`order.npy`) into steps of `world * accumulation` trajectories on average and gives
+each rank about the same work per step (trajectories differ from 1k to 40k tokens and
+every step waits for the slowest rank). Trajectories longer than
+`checkpoint_above_tokens` run with gradient checkpointing (none when it is null). The
+loss is summed cross-entropy on assistant tokens divided by the step's target tokens
+over all ranks, and gradients are summed across ranks with all-reduce, so each step
+averages over every target token in it.
 Rank 0 writes metrics, the bf16 model and the summary. Every `checkpoint_steps` and at the
 time budget it saves weights, optimizer state and the step to `checkpoint/state.pt`; a
 later launch with the same output folder loads them and continues at that step.
@@ -23,7 +26,34 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.distributed as dist
-from torch.utils.checkpoint import checkpoint
+
+
+def step_cost(length, quadratic_tokens):
+    """Relative time of a trajectory: linear in tokens, plus attention's quadratic term
+    (`quadratic_tokens` is the length at which the two are equal)."""
+    return length + length * length / quadratic_tokens
+
+
+def balanced_steps(lengths, world, per_step, window_steps, quadratic_tokens):
+    """Steps of `per_step` trajectories on average, as `world` lists of positions in
+    the training order, one per rank. Each window of `window_steps` steps assigns its
+    trajectories, costliest first, to the least-loaded (step, rank) slot, so every rank
+    of a step does about the same work; a trailing partial step is dropped."""
+    import heapq
+
+    usable = len(lengths) - len(lengths) % per_step
+    steps = []
+    for begin in range(0, usable, per_step * window_steps):
+        positions = range(begin, min(begin + per_step * window_steps, usable))
+        slots = [[] for _ in range(len(positions) // per_step * world)]
+        heap = [(0.0, slot) for slot in range(len(slots))]
+        costs = {p: step_cost(int(lengths[p]), quadratic_tokens) for p in positions}
+        for position in sorted(positions, key=lambda p: (-costs[p], p)):
+            load, slot = heapq.heappop(heap)
+            slots[slot].append(position)
+            heapq.heappush(heap, (load + costs[position], slot))
+        steps += [slots[i : i + world] for i in range(0, len(slots), world)]
+    return steps
 
 
 def save_model(model, base, revision, context, folder):
@@ -49,23 +79,35 @@ def main(config_path):
     dist.init_process_group("nccl")
     rank, world = dist.get_rank(), dist.get_world_size()
     torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+    from liger_kernel.transformers import (
+        LigerFusedLinearCrossEntropyLoss,
+        apply_liger_kernel_to_qwen3,
+    )
     from transformers import AutoModelForCausalLM
 
     mix = Path(config["mix"])
     offsets = np.load(mix / "offsets.npy")
     tokens = np.memmap(mix / "tokens.u32", dtype=np.uint32, mode="r")
     masks = np.memmap(mix / "mask.u8", dtype=np.uint8, mode="r")
-    mine = np.load(mix / "order.npy")[rank::world]
-    accumulation = settings["accumulation"]
-    steps = len(mine) // accumulation
-    steps_tensor = torch.tensor(steps, device="cuda")
-    dist.all_reduce(steps_tensor, op=dist.ReduceOp.MIN)
-    steps = int(steps_tensor) * settings["epochs"]
+    order = np.load(mix / "order.npy")
+    schedule = balanced_steps(
+        np.diff(offsets)[order],
+        world,
+        world * settings["accumulation"],
+        settings["balance_window_steps"],
+        settings["balance_quadratic_tokens"],
+    )
+    steps = len(schedule) * settings["epochs"]
 
+    apply_liger_kernel_to_qwen3(
+        rope=True, rms_norm=True, swiglu=True, cross_entropy=False,
+        fused_linear_cross_entropy=False,
+    )  # fmt: skip
+    fused_loss = LigerFusedLinearCrossEntropyLoss(reduction="sum")
     model = AutoModelForCausalLM.from_pretrained(
         config["base"], revision=config["revision"], dtype=torch.float32, attn_implementation="sdpa"
     ).cuda()
-    model.gradient_checkpointing_enable()
+    checkpoint_above = settings["checkpoint_above_tokens"]
     model.config.use_cache = False
     model.train()
     for parameter in model.parameters():  # identical start on every rank
@@ -85,10 +127,6 @@ def main(config_path):
             return peak * (step + 1) / settings["warmup_steps"]
         progress = (step - settings["warmup_steps"]) / max(1, steps - settings["warmup_steps"])
         return peak * (floor + (1 - floor) * 0.5 * (1 + math.cos(math.pi * progress)))
-
-    def chunk_loss(hidden, targets, weights):
-        losses = torch.nn.functional.cross_entropy(head(hidden).float(), targets, reduction="none")
-        return (losses * weights).sum()
 
     def example(index):
         start, end = int(offsets[index]), int(offsets[index + 1])
@@ -131,7 +169,6 @@ def main(config_path):
         dist.barrier()
 
     started, stopped = time.time(), None
-    per_epoch = len(mine) // accumulation
     for step in range(start, steps):
         stop = torch.tensor(int(time.time() >= config["stop_unix"]), device="cuda")
         dist.all_reduce(stop, op=dist.ReduceOp.MAX)
@@ -139,8 +176,7 @@ def main(config_path):
             stopped = "time budget"
             save_checkpoint(step)
             break
-        position = (step % per_epoch) * accumulation
-        batch = [example(i) for i in mine[position : position + accumulation]]
+        batch = [example(order[p]) for p in schedule[step % len(schedule)][rank]]
         local_targets = sum(float(mask[1:].sum()) for _, mask in batch)
         counts = torch.tensor(
             [local_targets, sum(len(ids) for ids, _ in batch)], device="cuda", dtype=torch.float64
@@ -151,20 +187,16 @@ def main(config_path):
         for ids, mask in batch:
             inputs = torch.from_numpy(ids[:-1]).cuda()[None]
             targets = torch.from_numpy(ids[1:]).cuda()
-            weights = torch.from_numpy(mask[1:]).cuda()
+            labels = torch.where(torch.from_numpy(mask[1:]).cuda() > 0, targets, -100)
+            recompute = checkpoint_above is not None and len(ids) > checkpoint_above
+            if recompute != model.is_gradient_checkpointing:
+                if recompute:
+                    model.gradient_checkpointing_enable()
+                else:
+                    model.gradient_checkpointing_disable()
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 hidden = model.model(input_ids=inputs).last_hidden_state[0]
-                total = hidden.new_zeros((), dtype=torch.float32)
-                for begin in range(0, hidden.shape[0], settings["loss_chunk"]):
-                    end = begin + settings["loss_chunk"]
-                    if weights[begin:end].any():
-                        total = total + checkpoint(
-                            chunk_loss,
-                            hidden[begin:end],
-                            targets[begin:end],
-                            weights[begin:end],
-                            use_reentrant=False,
-                        )
+                total = fused_loss(head.weight, hidden, labels)
             (total / global_targets).backward()
             loss_sum += total.item()
         for parameter in model.parameters():

@@ -26,13 +26,12 @@ import time
 import modal
 from model_hybrid import modal_benchmarks
 
-from modal_scripts.modal_agentic import REFERENCE_MODELS, hf_cache, reference_base
-from workflows.images import add_project
+from modal_scripts.modal_agent_sft import train_image as image
+from modal_scripts.modal_agentic import REFERENCE_MODELS, hf_cache
 
 app = modal.App("lm-exploration-agent-sft-bench")
 app.include(modal_benchmarks.app)  # the deadline supervisor
 DEADLINE_SECONDS = 6 * 60 * 60  # queued calls included
-image = add_project(reference_base.pip_install("liger-kernel==0.8.4"))
 LENGTHS = (15000, 40960)  # the scale-500k mean trajectory, and the context
 VARIANTS = ("worker", "no-checkpointing", "liger", "liger-no-checkpointing")
 LOSS_CHUNK = 4096  # agent_sft_worker's loss_chunk

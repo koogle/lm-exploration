@@ -163,6 +163,10 @@ MIXES = {
         },
     },
 }
+# Trajectories above this many tokens train with gradient checkpointing; below it the
+# activations fit an H100 next to the weights, gradients and AdamW state
+# (`agent_sft_bench`: Qwen3-0.6B fits 40,960 tokens without it, Qwen3-1.7B about 20,000).
+CHECKPOINT_ABOVE_TOKENS = {"Qwen/Qwen3-0.6B-Base": None, "Qwen/Qwen3-1.7B-Base": 20000}
 SETTINGS = {
     "context": CONTEXT,
     "gpus": 8,
@@ -172,11 +176,17 @@ SETTINGS = {
     "min_learning_rate_fraction": 0.1,
     "weight_decay": 0.0,
     "grad_clip": 1.0,
-    "loss_chunk": 4096,
     "epochs": 1,
+    # Load balance (`agent_sft_worker.balanced_steps`): trajectories are assigned within
+    # windows of 64 steps by a step-time model fitted to `agent_sft_bench` (Qwen3-0.6B
+    # with Liger kernels: 0.44 s at 15,000 tokens, 1.69 s at 40,960).
+    "balance_window_steps": 64,
+    "balance_quadratic_tokens": 48000,
     "checkpoint_steps": 2000,  # about two hours of 16 trajectories per step
 }
 cpu_image = reference_image
+# Training adds Liger's Triton kernels (`agent_sft_worker`).
+train_image = add_project(reference_base.pip_install("liger-kernel==0.8.4"))
 
 
 def excluded(repo):
@@ -624,7 +634,7 @@ def glm_pass(mix, seed, rows, deadline):
 
 
 @app.function(
-    image=reference_image,
+    image=train_image,
     gpu="H100:8",
     cpu=32,
     memory=262144,
@@ -642,7 +652,11 @@ def train_mix(base, mix, run, seconds, deadline):
         "revision": REFERENCE_MODELS[base],
         "mix": str(Path("/runs", MIX_FOLDER, mix)),
         "out": str(Path("/runs", REFERENCE_FOLDER, run)),
-        "settings": {**SETTINGS, **MIXES[mix].get("settings", {})},
+        "settings": {
+            **SETTINGS,
+            "checkpoint_above_tokens": CHECKPOINT_ABOVE_TOKENS[base],
+            **MIXES[mix].get("settings", {}),
+        },
         "stop_unix": min(deadline - 1800, time.time() + min(seconds, TRAIN_SECONDS) - 1800),
     }
     Path(config["out"]).mkdir(parents=True, exist_ok=True)
