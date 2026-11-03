@@ -4,6 +4,10 @@ Source-backed reading notes and proposed experiments for our from-scratch models
 External results are attributed to their authors; proposals are not measured
 results or changes to the agreed training plan.
 
+- [Open-model size frontier — 2026-11-01](open-model-frontier-2026-11-01.md):
+  published scores of 2025–2026 open models against parameter count, agentic
+  results (SWE-bench, Terminal-Bench) down to sub-1B, and same-paper before/after
+  agentic training pairs; the dataset and page are on HF.
 - [N-gram hints on the hybrid model — 2026-10-29](n-gram-hints-2026-10-29.md):
   a measured two-arm pilot of the NanoGPT speedrun's n-gram hints; the gain is mostly
   retrieval of text that recurs in the training split.
