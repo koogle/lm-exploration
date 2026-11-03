@@ -38,7 +38,7 @@
     "weight_decay": 0.1
   },
   "gradient_clip": 1.0,
-  "compile": true,
+  "compile": false,
   "checkpoint_seconds": 1800,
   "keep_checkpoints": 1,
   "eval_every_steps": 240,

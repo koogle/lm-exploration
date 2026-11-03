@@ -96,7 +96,7 @@ tokens of the `hybrid-mid32k-v1` recipe read in 8K windows (run-config `context`
 tokens per step, seed 4321, mid32k's learning rates with linear decay), as two
 branches from the same parent on 8 × H100 each. Workflow training stages run one
 after another, so each branch is its own launch (`--start` / `--end` with the
-branch's name) under run IDs `hybrid-720m-loop-test-02a` (control) and `-02b`
+branch's name) under run IDs `hybrid-720m-loop-test-02c` (control) and `-02b`
 (looped):
 
 | Branch | Model |
@@ -114,6 +114,11 @@ supervisor.
 Launch `hybrid-720m-loop-test-01` stopped at the control's first training step:
 the recipe's 32K windows exceeded the model's 8K `block_size` (the step-0 held-out
 evaluation, which uses the model's context, had run). The looped branch never started.
+
+In `-02a` the control hung twice, 20+ minutes, compiling its first training step's
+backward (Inductor codegen; the trainer's hang dump fired) while the looped branch
+compiled its four graphs in under two minutes. The control runs uncompiled
+(`compile: false`) as `-02c`; compilation does not change the computed function.
 
 It passes if the looped model at `k = 1` stays within 0.01 nats of the control on
 every held-out source and `k = 2..4` are below the control, most on code, math and
