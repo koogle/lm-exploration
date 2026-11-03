@@ -297,6 +297,7 @@ def open_hybrid(spec, done):
     folder = folder / spec["folder"]
     saved = json.loads((folder / "config.json").read_text())
     progress = json.loads((folder / "progress.json").read_text())
+    loops = spec.get("loops")
     if spec["architecture"] == "hnet":
         config_class, build = hnet.HNetConfig, hnet.HNetLM
         text = hnet.ByteTokenizer()
@@ -316,6 +317,8 @@ def open_hybrid(spec, done):
     weights = load_file(str(folder / "model.safetensors"))
     lm.load_state_dict({k: v.float() for k, v in weights.items()}, strict=True)
     lm = lm.cuda().eval()
+    if loops is not None and not lm.config.looped:
+        raise ValueError(f"{spec['name']}: loops needs a looped export")
     parameters = sum(p.numel() for p in lm.parameters())
     assert parameters == spec["parameters"]
     assert all(torch.isfinite(p).all() for p in lm.parameters())
@@ -330,6 +333,7 @@ def open_hybrid(spec, done):
         "trained_tokens": progress["tokens"],
         "parameters": parameters,
         "weights_sha256": sha256(folder / "model.safetensors"),
+        "loops": loops,
     }
     print(json.dumps(info), flush=True)
 
@@ -341,7 +345,8 @@ def open_hybrid(spec, done):
         """
         pad = -tokens.size(1) % 128
         padding = torch.full((tokens.size(0), pad), eos, dtype=tokens.dtype, device=tokens.device)
-        return lm(torch.cat((padding, tokens), 1))[:, pad:]
+        padded = torch.cat((padding, tokens), 1)
+        return (lm(padded, loops=loops) if loops else lm(padded))[:, pad:]
 
     yield (
         info,

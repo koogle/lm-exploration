@@ -108,6 +108,14 @@ class RecipeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate(bad)
 
+    def test_loops_are_positive_integers_on_hybrid_exports(self):
+        hybrid = {"kind": "hybrid", "name": "h", "repo": "x/y", "revision": "a" * 40}
+        validate(recipe(models=[hybrid | {"loops": 2}]))
+        transformers = {"kind": "transformers", "name": "m", "repo": "x/y", "revision": "a" * 40}
+        for bad in (hybrid | {"loops": 0}, hybrid | {"loops": 1.5}, transformers | {"loops": 2}):
+            with self.assertRaises(ValueError):
+                validate(recipe(models=[bad]))
+
     def test_run_records_samples_resumes_and_respects_deadline(self):
         spec = recipe()
         validate(spec)
