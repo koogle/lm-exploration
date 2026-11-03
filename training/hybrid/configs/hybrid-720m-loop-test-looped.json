@@ -60,5 +60,6 @@
   "hf_repo": "jfrick/hybrid-720m-loop-test-looped",
   "hf_every_tokens": 100000000000,
   "seed": 4321,
-  "one_loop_ranks": 1
+  "one_loop_ranks": 1,
+  "context": 8192
 }

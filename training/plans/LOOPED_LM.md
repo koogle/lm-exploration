@@ -92,9 +92,12 @@ Design notes:
 
 [`workflows/hybrid-720m-loop-test.json`](../workflows/hybrid-720m-loop-test.json)
 continues the [mid32k export](HYBRID_V2.md#mid-training-run-hybrid-mid32k-v1) for 1B
-tokens of the `hybrid-mid32k-v1` recipe at 8K context (1M tokens per step, seed 4321,
-mid32k's learning rates with linear decay), as two branches from the same parent on
-8 × H100 each:
+tokens of the `hybrid-mid32k-v1` recipe read in 8K windows (run-config `context`; 1M
+tokens per step, seed 4321, mid32k's learning rates with linear decay), as two
+branches from the same parent on 8 × H100 each. Workflow training stages run one
+after another, so each branch is its own launch (`--start` / `--end` with the
+branch's name) under run IDs `hybrid-720m-loop-test-02a` (control) and `-02b`
+(looped):
 
 | Branch | Model |
 | --- | --- |
@@ -105,8 +108,12 @@ The looped branch costs 1.45× the control's FLOPs per token (`flops_per_token` 
 `k̄`). Estimated at ~450K tokens/s for the control (mid32k measured 513K at 32K):
 about 40 minutes of training for the control and 55 for the looped branch, plus
 start-up, compilation and evaluation, so about 1.5 hours of wall time and about 20
-H100-hours in total. Both run in one 4-hour session under the workflow's deadline
+H100-hours in total. Each runs in one 4-hour session under the workflow's deadline
 supervisor.
+
+Launch `hybrid-720m-loop-test-01` stopped at the control's first training step:
+the recipe's 32K windows exceeded the model's 8K `block_size` (the step-0 held-out
+evaluation, which uses the model's context, had run). The looped branch never started.
 
 It passes if the looped model at `k = 1` stays within 0.01 nats of the control on
 every held-out source and `k = 2..4` are below the control, most on code, math and

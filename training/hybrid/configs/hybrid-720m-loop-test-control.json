@@ -55,5 +55,6 @@
   "log_every_steps": 10,
   "hf_repo": "jfrick/hybrid-720m-loop-test-control",
   "hf_every_tokens": 100000000000,
-  "seed": 4321
+  "seed": 4321,
+  "context": 8192
 }

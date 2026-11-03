@@ -77,6 +77,9 @@ class RunConfig:
     # Before `loop_start_tokens` every microbatch runs one loop.
     one_loop_ranks: int = 0
     loop_start_tokens: int = 0
+    # Training window length when it differs from the recipe's `context` (the
+    # prepared shards are token streams, so any window length reads them).
+    context: int = 0
 
     @classmethod
     def load(cls, path):
@@ -85,7 +88,7 @@ class RunConfig:
     def __post_init__(self):
         if self.architecture not in ("hybrid", "hnet"):
             raise ValueError("architecture must be 'hybrid' or 'hnet'")
-        if min(self.one_loop_ranks, self.loop_start_tokens) < 0:
+        if min(self.one_loop_ranks, self.loop_start_tokens, self.context) < 0:
             raise ValueError("one_loop_ranks and loop_start_tokens must be non-negative")
 
 
@@ -375,6 +378,8 @@ def recipe_data(config, data_root):
     from training_data.packed_shards import PreparedMixture, ReplayMixture
 
     recipe = json.loads(Path(config.recipe).read_text())
+    if config.context:
+        recipe["context"] = config.context
     root = Path(data_root) / recipe["name"]
     replay = recipe.get("replay")
     if replay:
