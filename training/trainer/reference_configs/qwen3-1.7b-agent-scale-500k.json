@@ -2,7 +2,7 @@
   "base": "Qwen/Qwen3-1.7B-Base",
   "revision": "ea980cb0a6c2ae4b936e82123acc929f1cec04c1",
   "recipe": "/project/training_data/recipes/agent-scale-500k-qwen.json",
-  "target_tokens": 0,
+  "target_tokens": 9474211840,
   "global_rows": 8,
   "microbatch": 1,
   "learning_rate": 2e-05,
