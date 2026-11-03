@@ -4,6 +4,7 @@ Run from training/:
     modal run --detach -m modal_scripts.modal_agent_sft::prepare --mix <name> [--chat glm]
     modal run -m modal_scripts.modal_agent_sft::glm_target --mix <name> --config <hybrid config>
     modal run --detach -m modal_scripts.modal_agent_sft::export --run <run>
+    modal run --detach -m modal_scripts.modal_agent_sft::publish --run <run> --repo <owner/name> [--revision B]
     modal run --detach -m modal_scripts.modal_agent_sft::train --mix <name> --base B [--tag 01] [--hours 20]
     modal run --detach -m modal_scripts.modal_agent_sft::serve --run <run> [--hours 3]
     modal run --detach -m modal_scripts.modal_agent_sft::bench --run <run> [--attempts 1]
@@ -727,6 +728,35 @@ def export_checkpoint(run, deadline):
     return summary
 
 
+@app.function(
+    image=cpu_image,
+    cpu=4,
+    memory=16384,
+    timeout=3600,
+    retries=0,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes={"/runs": runs_volume},
+)
+def publish_run(run, repo, revision, deadline):
+    """Upload `agentic-reference/<run>/` (the bf16 model and the run's summary, metrics
+    and training config) to the private HF model `repo` at branch `revision`."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    from huggingface_hub import HfApi
+
+    api = HfApi()
+    api.create_repo(repo, private=True, exist_ok=True)
+    if revision != "main":
+        api.create_branch(repo, branch=revision, exist_ok=True)
+    folder = Path("/runs", REFERENCE_FOLDER, run)
+    commit = api.upload_folder(
+        repo_id=repo, revision=revision, folder_path=folder,
+        allow_patterns=["model/*", "summary.json", "metrics.jsonl", "train-config.json"],
+        commit_message=f"{run}: model and run files",
+    )  # fmt: skip
+    return {"repo": repo, "revision": revision, "commit": commit.oid}
+
+
 SERVE_SECONDS = 6 * 60 * 60
 IM_END_ID = 151645  # <|im_end|> in the Qwen3 tokenizer
 endpoints = modal.Dict.from_name("lm-exploration-agent-endpoints", create_if_missing=True)
@@ -909,6 +939,12 @@ def prepare(mix: str, chat: str = "qwen"):
 def export(run: str):
     """Export a run's latest checkpoint (`<run>-step<N>`) for `modal_agentic::reference_evaluate`."""
     _launch(export_checkpoint, run)
+
+
+@app.local_entrypoint()
+def publish(run: str, repo: str, revision: str = "main"):
+    """Upload a run (or a `<run>-step<N>` export) to a private HF model repo and branch."""
+    _launch(publish_run, run, repo, revision)
 
 
 @app.local_entrypoint()
