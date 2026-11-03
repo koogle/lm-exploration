@@ -96,13 +96,19 @@ def flops_per_token(model_config, lm, attended_keys):
     """Training FLOPs per token: 6 x matmul weights (incl. both output-layer uses) + attention.
 
     The MTP module reuses the output layer for its sampled fraction of positions.
+    A looped model's recurrent blocks and loop gate count once per loop (at n_loops).
     """
     matmul = sum(p.numel() for n, p in lm.named_parameters() if p.ndim == 2)
+    uses = model_config.block_uses()
+    for block, count in zip(lm.blocks, uses, strict=True):
+        matmul += (count - 1) * sum(p.numel() for p in block.parameters() if p.ndim == 2)
+    if model_config.looped:
+        matmul += (model_config.n_loops - 1) * lm.loop_update.gate.weight.numel()
     if model_config.mtp:
         matmul += model_config.mtp_loss_fraction * lm.output_weight.numel()
-    full_layers = model_config.layer_kinds.count("full") + (
-        1 if model_config.mtp and model_config.mtp_layer_kind == "full" else 0
-    )
+    full_layers = sum(
+        count for kind, count in zip(model_config.layer_kinds, uses, strict=True) if kind == "full"
+    ) + (1 if model_config.mtp and model_config.mtp_layer_kind == "full" else 0)
     attention = 12 * full_layers * model_config.n_head * model_config.head_dim * attended_keys
     return 6 * matmul + attention
 

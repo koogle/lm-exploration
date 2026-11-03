@@ -4,6 +4,11 @@ Source-backed reading notes and proposed experiments for our from-scratch models
 External results are attributed to their authors; proposals are not measured
 results or changes to the agreed training plan.
 
+- [Looped LMs: Dory1.0-4B and Elastic Latent Recurrence — 2026-11-03](looped-lms-2026-11-03.md):
+  NVIDIA's looped 4B models (Dory's nGPT design from its weights and vLLM code; ELR's
+  adaptive-delta update, mixed-depth training and last-loop KV cache) against our
+  hybrid, 124M and phone-inference experience; the implementation plan is
+  [LOOPED_LM.md](../plans/LOOPED_LM.md).
 - [Open-model size frontier — 2026-11-01](open-model-frontier-2026-11-01.md):
   published scores of 2025–2026 open models against parameter count, agentic
   results (SWE-bench, Terminal-Bench) down to sub-1B, and same-paper before/after

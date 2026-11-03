@@ -34,6 +34,8 @@ class Decoder:
     def __init__(self, lm: HybridLM, rows, capacity):
         if not lm.token_embedding.weight.is_cuda:
             raise ValueError("decoding runs on CUDA")
+        if lm.config.looped:
+            raise NotImplementedError("cached decoding of looped models: see plans/LOOPED_LM.md")
         self.lm, self.rows, self.capacity = lm, rows, capacity
         config, device = lm.config, lm.token_embedding.weight.device
         dtype = lm.token_embedding.weight.dtype
@@ -211,6 +213,8 @@ def _prefill_row(lm, prompt, device):
     context), so compiled attention sees few shapes; the padding is one second
     document and changes nothing in the prompt.
     """
+    if lm.config.looped:
+        raise NotImplementedError("cached decoding of looped models: see plans/LOOPED_LM.md")
     length = len(prompt)
     width = length
     if lm.token_embedding.weight.is_cuda:

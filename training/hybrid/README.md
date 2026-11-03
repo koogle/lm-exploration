@@ -167,6 +167,19 @@ Inference does not run the module: `forward(tokens)` returns trunk logits, and
 a model built with `mtp=False` loads the trunk weights (all keys outside `mtp.`)
 and produces identical logits.
 
+## Looping
+
+With `n_loops > 1`, blocks `[loop_prelude, n_layer - loop_coda)` form one shared
+recurrent group that runs `n_loops` times per token (or `loops` times, passed to
+`forward`), following Elastic Latent Recurrence
+([arXiv:2610.12582](https://arxiv.org/abs/2610.12582)). The prelude output `h` is
+re-injected at every loop: the recurrent blocks run on `state + h`, and `LoopUpdate`
+takes a gated step `state + beta * (proposal - state)` with
+`beta = sigmoid(W (state + h) + b) * softplus(gamma)`, all zero-initialized (step ≈
+0.35). `n_loops = 1` is the plain stack. FLOP accounting counts the recurrent blocks
+once per loop; cached decoding of looped models is not implemented. The plan, from
+trainer changes to a matched 720M pilot, is [plans/LOOPED_LM.md](../plans/LOOPED_LM.md).
+
 ## Optimizer grouping
 
 Each module declares the optimizer role of the parameters it creates, next to its
@@ -463,7 +476,7 @@ uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents
   tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
   tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
   tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet \
-  tests.test_chat tests.test_hybrid_long_context -v
+  tests.test_chat tests.test_hybrid_long_context tests.test_hybrid_looped -v
 ```
 
 On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
