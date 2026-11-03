@@ -47,6 +47,9 @@ def validate(recipe):
             raise ValueError(f"{model['name']}: revisions must be full commit hashes")
         if not 0 < model.get("max_new_tokens", 1) <= 1024:
             raise ValueError(f"{model['name']}: max_new_tokens must be in 1..1024")
+        loops = model.get("loops")
+        if loops is not None and (model["kind"] != "hybrid" or type(loops) is not int or loops < 1):
+            raise ValueError(f"{model['name']}: loops is a positive integer for hybrid exports")
         if model["kind"] == "volume" and not re.fullmatch(
             r"[A-Za-z0-9_-]+/step-[0-9]{9}\.pt", model["checkpoint"]
         ):

@@ -146,6 +146,15 @@ class HybridConfig:
     init_std: float = 0.02
     z_loss: float = 1e-4
     loss_chunk_size: int = 8192
+    # Looping (Elastic Latent Recurrence, arXiv:2610.12582): blocks
+    # [loop_prelude, n_layer - loop_coda) form one shared recurrent group, applied
+    # n_loops times by default. n_loops == 1 is the plain stack.
+    loop_prelude: int = 0
+    loop_coda: int = 0
+    n_loops: int = 1
+    # Converting a trained plain model: the loop state starts at zero instead of the
+    # prelude output and the step size at 1, so one loop computes the plain stack.
+    loop_retrofit: bool = False
 
     def __post_init__(self):
         for name in POSITIVE_FIELDS:
@@ -167,10 +176,31 @@ class HybridConfig:
             raise ValueError("mtp_layer_kind must be 'kda' or 'full'")
         if self.n_layer % len(self.layer_pattern):
             raise ValueError("n_layer must be a multiple of the layer pattern length")
+        if min(self.loop_prelude, self.loop_coda) < 0 or self.n_loops < 1:
+            raise ValueError("loop_prelude and loop_coda must be >= 0 and n_loops >= 1")
+        if self.n_loops > 1 and self.loop_prelude + self.loop_coda >= self.n_layer:
+            raise ValueError("a looped model needs at least one recurrent block")
+        if self.n_loops == 1 and (self.loop_prelude + self.loop_coda or self.loop_retrofit):
+            raise ValueError("loop_prelude, loop_coda and loop_retrofit need n_loops > 1")
 
     @property
     def layer_kinds(self):
         return tuple(self.layer_pattern[i % len(self.layer_pattern)] for i in range(self.n_layer))
+
+    @property
+    def looped(self):
+        return self.n_loops > 1
+
+    @property
+    def recurrent_blocks(self):
+        """Indices of the shared recurrent blocks (all blocks when not looped)."""
+        return range(self.loop_prelude, self.n_layer - self.loop_coda)
+
+    def block_uses(self, loops=None):
+        """How many times each block runs per token at `loops` (default n_loops)."""
+        loops = self.n_loops if loops is None else loops
+        recurrent = self.recurrent_blocks
+        return tuple(loops if i in recurrent else 1 for i in range(self.n_layer))
 
 
 def rope_tables(length, head_dim, base, device):
@@ -337,6 +367,42 @@ def mtp_weight(config, progress):
     return config.mtp_weight_start + (config.mtp_weight_end - config.mtp_weight_start) * progress
 
 
+class LoopUpdate(nn.Module):
+    """ELR's adaptive-delta state update, shared by every loop:
+
+        beta = sigmoid(W entry + b) * softplus(gamma)
+        state <- state + beta * (proposal - state)
+
+    `entry` is the recurrent blocks' input (state plus the re-injected prelude
+    output) and `proposal` their output. W, b and gamma start at zero, so every
+    token and channel starts with step size softplus(0) / 2 ~ 0.35. In the paper's
+    ablations this is the only update rule that matches the unlooped baseline at one
+    loop; replacing the state with the proposal, or adding it, does worse.
+
+    With `initial_step = 1` (a converted plain model) gamma starts at
+    softplus^-1(2), so the first loop's state is exactly the recurrent blocks' output.
+    """
+
+    def __init__(self, width, initial_step=None):
+        super().__init__()
+        self.gate = nn.Linear(width, width)
+        self.rate = nn.Parameter(torch.zeros(width))
+        self.initial_rate = 0.0 if initial_step is None else math.log(math.expm1(2 * initial_step))
+
+    def reset_parameters(self):
+        nn.init.zeros_(self.gate.weight)
+        nn.init.zeros_(self.gate.bias)
+        nn.init.constant_(self.rate, self.initial_rate)
+
+    def optimizer(self):
+        yield from declare("muon", self.gate.weight)
+        yield from declare("adamw_no_decay", self.gate.bias, self.rate)
+
+    def forward(self, state, proposal, entry):
+        step = torch.sigmoid(self.gate(entry)) * F.softplus(self.rate)
+        return state + step * (proposal - state)
+
+
 class HybridLM(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -344,6 +410,9 @@ class HybridLM(nn.Module):
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embd)
         self.blocks = nn.ModuleList(Block(config, kind) for kind in config.layer_kinds)
         self.final_norm = RMSNorm(config.n_embd, config.norm_eps)
+        self.loop_update = None
+        if config.looped:
+            self.loop_update = LoopUpdate(config.n_embd, 1.0 if config.loop_retrofit else None)
         self.mtp = MultiTokenPrediction(config) if config.mtp else None
         self.apply(self.initialize)
         cos, sin = rope_tables(config.block_size, config.head_dim, config.rope_base, None)
@@ -370,18 +439,26 @@ class HybridLM(nn.Module):
         yield from declare("adamw_no_decay", self.final_norm)
 
     def initialize(self, module):
-        """Normal(0, 0.02); residual output projections scaled by 1/sqrt(2 * n_layer)."""
-        if isinstance(module, (nn.Linear, nn.Embedding)):
+        """Normal(0, 0.02); residual output projections scaled by 1/sqrt(2 * n_layer).
+
+        The loop update's gate starts at zero (see `LoopUpdate`)."""
+        if isinstance(module, LoopUpdate):
+            module.reset_parameters()
+        elif isinstance(module, (nn.Linear, nn.Embedding)):
             std = self.config.init_std
             if getattr(module, "residual_output", False):
                 std /= math.sqrt(2 * self.config.n_layer)
             nn.init.normal_(module.weight, std=std)
 
-    def trunk(self, tokens):
+    def trunk(self, tokens, loops=None):
         """Residual stream after the last block, with the shared mask and RoPE tables.
 
         Each EOS ends a document: attention, convolutions, KDA state and RoPE
-        positions restart after it.
+        positions restart after it. A looped model runs its prelude once, the
+        recurrent blocks `loops` times (default `n_loops`) and its coda once. The
+        state starts as the prelude output `h` (zero with `loop_retrofit`); each loop
+        re-injects `h`, runs the recurrent blocks on `state + h` and takes a gated step
+        towards their output (`LoopUpdate`).
         """
         length = tokens.size(1)
         if not 0 < length <= self.config.block_size:
@@ -390,12 +467,33 @@ class HybridLM(nn.Module):
         mask = DocumentMask(documents)
         rope = (self.rope_cos[mask.positions][:, None], self.rope_sin[mask.positions][:, None])
         x = self.token_embedding(tokens)
-        for block in self.blocks:
+        config = self.config
+        if not config.looped:
+            if loops not in (None, 1):
+                raise ValueError("loops applies to looped models only")
+            for block in self.blocks:
+                x = block(x, rope, mask)
+            return x, rope, mask
+        loops = config.n_loops if loops is None else loops
+        if loops < 1:
+            raise ValueError("loops must be at least 1")
+        recurrent = config.recurrent_blocks
+        for block in self.blocks[: recurrent.start]:
+            x = block(x, rope, mask)
+        injected = x
+        state = torch.zeros_like(x) if config.loop_retrofit else x
+        for _ in range(loops):
+            x = entry = state + injected
+            for block in self.blocks[recurrent.start : recurrent.stop]:
+                x = block(x, rope, mask)
+            state = self.loop_update(state, x, entry)
+        x = state
+        for block in self.blocks[recurrent.stop :]:
             x = block(x, rope, mask)
         return x, rope, mask
 
-    def hidden_states(self, tokens):
-        return self.final_norm(self.trunk(tokens)[0])
+    def hidden_states(self, tokens, loops=None):
+        return self.final_norm(self.trunk(tokens, loops)[0])
 
     def loss_sums(self, hidden, labels, prefix=""):
         if hidden.is_cuda and torch.is_grad_enabled():
@@ -414,8 +512,11 @@ class HybridLM(nn.Module):
             f"{prefix}count": (labels != IGNORE_INDEX).sum(),
         }
 
-    def forward(self, tokens, labels=None, mtp_labels=None):
+    def forward(self, tokens, labels=None, mtp_labels=None, loops=None):
         """Logits, or summed losses when `labels` are given.
+
+        `loops` sets a looped model's recurrent loop count for this call (default
+        `n_loops`); the same weights serve every loop count.
 
         Returns {"loss", "ce", "z", "count"}: `loss = ce + z_loss * z` summed over
         valid targets; divide by the global valid-target count to get the mean.
@@ -427,7 +528,7 @@ class HybridLM(nn.Module):
         output layer and loss; divide `mtp_loss` by the expected valid count
         (all valid MTP targets times the fraction).
         """
-        x, rope, mask = self.trunk(tokens)
+        x, rope, mask = self.trunk(tokens, loops)
         hidden = self.final_norm(x)
         if labels is None:
             return F.linear(hidden, self.output_weight)
