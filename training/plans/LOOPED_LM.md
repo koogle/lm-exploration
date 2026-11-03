@@ -17,7 +17,7 @@ hybrid at one loop and gain on reasoning and code at two to four loops, for abou
 | --- | --- | --- |
 | 1 | Model: prelude / recurrent / coda split, input re-injection, adaptive-delta update, `loops` per forward call, FLOPs accounting | Implemented, CPU-tested |
 | 2 | Trainer: mixed-depth sampling with one-loop rank overrides, delayed switch, per-`k` held-out loss; converting a plain export (`loop_retrofit`) | Implemented, CPU-tested |
-| 2b | Conversion test: Hybrid v2 base (mid32k export), 1B tokens, plain vs looped | Launched 2026-11-03 |
+| 2b | Conversion test: Hybrid v2 base (mid32k export), 1B tokens, plain vs looped | Done 2026-11-03: one-loop cost within the gate, no gain from extra loops |
 | 3 | Matched pilot: baseline vs looped 720M at 10B tokens | Proposed; needs approval and budget |
 | 4 | Decoding: per-loop and last-loop caches in `generate.py`; benchmarks at `k = 1..4` | Proposed |
 | 5 | Loop-conditioned modulation grafted at the switch | Proposed, after stage 3 succeeds |
@@ -105,11 +105,10 @@ branch's name) under run IDs `hybrid-720m-loop-test-02c` (control) and `-02b`
 | `looped` | 4 / 8 / 4 blocks, `loop_retrofit`, `n_loops = 4`, one of eight ranks at `k = 1` (`p_1 = 0.34`, `k̄ = 2.31`) |
 
 The looped branch costs 1.45× the control's FLOPs per token (`flops_per_token` at
-`k̄`). Estimated at ~450K tokens/s for the control (mid32k measured 513K at 32K):
-about 40 minutes of training for the control and 55 for the looped branch, plus
-start-up, compilation and evaluation, so about 1.5 hours of wall time and about 20
-H100-hours in total. Each runs in one 4-hour session under the workflow's deadline
-supervisor.
+`k̄`). Measured: the looped branch trained at 280–345K tokens/s (25–26% MFU, 45.6 GB
+peak per GPU), 1B tokens in about 55 minutes; the uncompiled control at 130K
+tokens/s (51.8 GB peak), about 2.1 hours. Each ran in one session under the
+workflow's deadline supervisor.
 
 Launch `hybrid-720m-loop-test-01` stopped at the control's first training step:
 the recipe's 32K windows exceeded the model's 8K `block_size` (the step-0 held-out
@@ -124,6 +123,46 @@ It passes if the looped model at `k = 1` stays within 0.01 nats of the control o
 every held-out source and `k = 2..4` are below the control, most on code, math and
 reasoning traces. 1B tokens is far shorter than ELR's 250B-token mixed-depth phase,
 so a null result here does not rule out looping at a larger budget.
+
+### Result
+
+Held-out loss (nats per token, 8K windows) at the end, 999,292,928 tokens; looped
+minus control:
+
+| Source | Control | `k = 1` | `k = 2` | `k = 3` | `k = 4` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Repository code | 0.9686 | +0.0036 | −0.0001 | +0.0006 | +0.0032 |
+| Unseen GitHub files | 0.9305 | +0.0040 | −0.0004 | +0.0002 | +0.0028 |
+| Code (replay) | 0.9362 | +0.0052 | +0.0007 | +0.0015 | +0.0044 |
+| Thinking traces | 1.6979 | +0.0072 | −0.0011 | −0.0006 | +0.0025 |
+| Math (replay) | 1.7794 | +0.0060 | −0.0012 | −0.0002 | +0.0037 |
+| ClimbMix (replay) | 2.6281 | +0.0066 | −0.0026 | −0.0020 | +0.0019 |
+| PG19 books | 2.9378 | +0.0057 | −0.0026 | −0.0017 | +0.0024 |
+
+- The converted model computes its parent exactly at one loop before training
+  (step-0 held-out losses equal the control's to four decimals). Untrained, extra
+  loops are far worse (+0.15 to +1.4 nats at `k = 2..4`).
+- Gate 1 passes: one loop stays 0.004–0.007 above the control at every evaluation
+  (steps 240, 480, 720, 953).
+- Gate 2 fails: two loops only matches the control (−0.003 to +0.001), three is the
+  same within 0.002, and four is 0.002–0.004 worse. The pattern was the same at every
+  evaluation; the extra loops recover what one loop loses and add nothing, for 1.45×
+  the training compute.
+- Both branches rose about 0.1 nats from the parent at the first evaluation and fell
+  back as the learning rate decayed: re-warming the decayed export, not looping.
+- The loop update's base step stayed at 1.0 (0.995–1.001 across channels), so the
+  model kept the conversion's "rerun the recurrent blocks" update throughout.
+- Greedy and sampled generations (`analysis/sampling/recipes/looped-720m-samples.json`,
+  20 prompts, parent and `k = 1..4`; the control was not sampled): extra loops change
+  the text but not its quality. Greedy repeated 4-grams rise from 0.47 at `k = 1` to
+  0.56 at `k = 4`, and four loops makes more factual slips.
+
+A converted Hybrid v2 base can loop without losing one-loop quality, but 1B tokens of
+mixed-depth training does not teach it to use the extra loops. Records (both
+branches' held-out losses, metrics, reports, configs and the samples):
+`training/results/hybrid-720m-loop-test/` in `jfrick/lm-exploration-results`; the
+looped export is `jfrick/hybrid-720m-loop-test-looped`, the control's
+`jfrick/hybrid-720m-loop-test-control`.
 
 ## Stage 3: matched pilot
 
