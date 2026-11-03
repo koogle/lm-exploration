@@ -364,3 +364,38 @@ Held-out PR tasks (179, Open-SWE format, temperature 0.7, 100 turns):
 Outputs (mix manifests, run metrics and summaries, the evaluations with trajectories,
 `scale-500k-behavior.jsonl`, step benchmarks, the Terminal-Bench job folder):
 `training/results/agent-mix-sft/` in `jfrick/lm-exploration-results`.
+
+### Sparse weight-edit follow-up (2026-11-03)
+
+A gradient-free edit to 64 output columns in each of MLP layers 14 and 17 of the
+full-pass 0.6B checkpoint changes 0.022% of its weights. On 94 task-held-out frozen
+histories, exact repeated next commands fall from 37 to 7 and valid, distinct
+commands rise from 31 to 48, with two truncated edited responses. In a paired live
+check on 16 of those tasks, repeated calls fall from 54% to 28%, but both models
+resolve 0 tasks, make a patch in one episode and submit none; episodes ending
+without a tool call increase from 2 to 8. This is an experimental reduction in
+repetition, not a reliable fix for the agent. The original checkpoint is preserved.
+See the [weight-space study](../analysis/weight_space/README.md) for the protocol,
+limitations, reproducible scripts and artifact locations.
+
+A second round tests four distinct alternatives, including command-content-only
+contrasts with tool-format subspace protection. The selected conservative edit
+changes 0.02176% of weights and preserves the original tokenizer/configuration.
+On 16 fresh live tasks, original / first edit / second edit repeat 41.5% / 17.1% /
+54.6% of calls and resolve 0 / 0 / 0 tasks. Raw outputs show 3 / 5 / 0 truncated
+tool-call endings; both edits also exhaust the context once. Protecting call
+validity gives back the repetition improvement and does not repair task completion.
+
+The [expanded investigation](../analysis/weight_space/INVESTIGATION.md) keeps all
+three checkpoints fixed and grades 431 episodes across 48 tasks, three seeds and
+a 100-turn budget. One baseline episode repeatedly times out and is censored;
+the matched comparison uses 143 task/seed pairs per model. Original / first edit /
+second edit resolve 0 / 1 / 0, with 26 / 78 / 19 truncated endings. The first
+edit reduces mean per-episode repeated calls from 63.8% to 30.2%, but 67 of its
+78 truncated replies are themselves highly repetitive. Its two successes over
+all 144 runs are on one task, including the excluded pair; neither ends cleanly.
+The second edit's repetition and truncation differences from the original are
+uncertain, and it still solves no tasks. Frozen-context probes support testing
+history/recovery handling on the original before further weight changes; they
+do not yet establish improved task completion. All workers and tracked sandboxes
+are stopped, and the evaluated checkpoint hashes are unchanged.
