@@ -290,23 +290,66 @@ Resolved of 179 (sampled runs at temperature 0.7, top-p 0.8, top-k 20):
   turns). Open-SWE-Traces trajectories average 23k tokens, mini-coder's about 16k in the
   same format.
 - **Terminal data does not hurt the repository tasks** (B′ ≥ C on the 100-turn run).
-  Terminal-Bench 2.1 for B′ (Harbor, Terminus 2, one attempt per task): see below.
+- **Terminal-Bench 2.1 for B′** (Harbor 0.25.0, Terminus 2, one attempt per task,
+  temperature 0.7): 0 of 89 solved; 80 trials ended at the agent timeout.
 
 Outputs (mix manifests, training metrics and summaries, evaluations with trajectories,
 `behavior.jsonl`, a README naming the invalid evaluations): `training/results/agent-mix-sft/`
 in `jfrick/lm-exploration-results`.
 
-### Next: about 500k trajectories (`scale-500k`)
+### About 500k trajectories (`scale-500k`, 2026-11-02/03)
 
 mini-coder's scale, to test whether trajectory count, not source, is what the arms above
-lack: every trajectory that passes each source's filters and fits 40,960 tokens. The
-candidate counts measured by the `smoke-200` preparation: 39,921 resolved Open-SWE-Traces
-trajectories (at most two per task; 28,846 fit), 316,306 mini-coder trajectories
-(converted to the Open-SWE format; 99.3% convert and fit), 139,841 Nemotron-Terminal
-skill-based and 12,400 Terminal-Lego trajectories, plus our PR-task trajectories five
-times. Prepared: 493,711 trajectories (310,878 mini-coder, 139,803 Nemotron-Terminal,
-28,846 Open-SWE-Traces, 12,364 Terminal-Lego, 364 × 5 ours), 7.41B tokens of which 2.57B
-are assistant tokens, 30,857 steps of 16 trajectories. At the measured 70k tokens/s
-this is about 29 hours, more than one 20-hour launch; `train` checkpoints every 2,000
-steps and continues across launches. Run `qwen3-1.7b-base-scale-500k-01`, first launch
-2026-11-02 10:20 UTC.
+lack: every trajectory that passes each source's filters and fits 40,960 tokens.
+Prepared: 493,711 trajectories (310,878 mini-coder converted to the Open-SWE format,
+139,803 Nemotron-Terminal skill-based, 28,846 Open-SWE-Traces of 39,921 resolved,
+12,364 Terminal-Lego, 364 × 5 ours), 7.41B tokens of which 2.57B are assistant tokens,
+30,856 steps of 16 trajectories.
+
+**Training speed.** The first launches ran at 2.56 s per step (Qwen3-0.6B) and 3.4 s
+(Qwen3-1.7B), 9–15% of H100 bf16 peak. Every step waited for the rank with the longest
+trajectories: on the `scale-500k` order the GPUs were busy 54–64% of the time. The
+worker now assigns each window of 64 steps' trajectories, costliest first, to the
+least-loaded (step, rank) slot (98.6% busy on the same order, same steps), uses
+Liger's RMSNorm, SwiGLU, RoPE and fused linear cross-entropy kernels, checkpoints only
+trajectories above a per-base length (none for 0.6B, 20,000 tokens for 1.7B), and pads
+each trajectory to a multiple of 1,024 tokens, so attention and Triton kernels see 40
+shapes instead of a new one per trajectory (which had doubled compute per token).
+Qwen3-0.6B: 1.07 s per step, 2.4× faster. On one H100 (`agent_sft_bench`), PyTorch's
+SDPA already uses cuDNN's Hopper flash kernels; FlashAttention-3 from the kernel hub
+is 6.5% faster at 16,384 tokens and 10.5% at 40,960, compiled decoder layers 0–2%, and
+a 16,384-token step spends 40% of GPU time in attention, 37% in matmuls and 23% in
+Liger and other Triton kernels, including 10% re-casting fp32 weights to bf16.
+
+**Runs.** Qwen3-0.6B-Base, one full pass (`qwen3-0.6b-base-scale-500k-02`): 9.0 hours on
+8×H100, final loss 0.344. Qwen3-1.7B-Base (`-01`, the earlier worker) paused at step
+4,571 at 64k trajectories, to free the GPUs for gate 0. Checkpoints at the peak learning
+rate were evaluated during training.
+
+Held-out PR tasks (179, Open-SWE format, temperature 0.7, 100 turns):
+
+| Model | Trajectories read | Resolved | Repeated calls | Episodes with patch | Submitted |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Qwen3-0.6B, step 2,000 | 32k | 0 | 76% | 8 | 1 |
+| Qwen3-0.6B, step 4,000 | 64k | 0 | 81% | 2 | 0 |
+| Qwen3-0.6B, full pass | 494k | 0 | 75% | 28 | 2 |
+| Qwen3-1.7B, step 4,000 | 64k | 1 | 78% | 6 | 1 |
+
+- **Qwen3-0.6B resolves nothing after the full pass.** More data and the decayed
+  learning rate raise patches from 2–8 to 28, but three quarters of its calls still
+  repeat an earlier one; of about 14,400 calls, most are `grep` and `ls`.
+- **Gate 0 is not decided yet.** The 0.6B result falls in the plan's "size is the limit"
+  branch ([HYBRID_AGENTIC_PRETRAINING.md](HYBRID_AGENTIC_PRETRAINING.md)), but
+  the 1.7B control on the same mix has not finished its pass: at 64k trajectories it
+  resolves 1, and mini-coder-1.7b, trained on the same mini-coder rollouts in their own
+  bash-block format, resolves 11 with 40 turns. Until the 1.7B pass finishes, the 0.6B
+  result does not separate model size from the converted mix.
+- The 720M hybrid's preparation of the same candidates in GLM's chat format
+  (`agent-scale-500k-glm`: 496,217 conversations, 6.94B tokens) and its fine-tune
+  (`hybrid-720m-agent-scale-500k-01`, 40,960 context, KDA activation checkpointing,
+  about 23k tokens/s per GPU because `torch.compile` hits its recompile limit) were
+  stopped after about 45 minutes, before the first checkpoint.
+
+Outputs (mix manifests, run metrics and summaries, the evaluations with trajectories,
+`scale-500k-behavior.jsonl`, step benchmarks, the Terminal-Bench job folder):
+`training/results/agent-mix-sft/` in `jfrick/lm-exploration-results`.
