@@ -72,6 +72,11 @@ class RunConfig:
     # An export folder (config.json, model.safetensors) whose trunk weights start the
     # run when it has no checkpoint yet: a pretrained model for mid-training or SFT.
     init_from: str = ""
+    # Looped models (n_loops > 1): every microbatch draws k ~ Uniform{1..n_loops}, the
+    # same on every rank; `one_loop_ranks` of the ranks (rotating) run k = 1 instead.
+    # Before `loop_start_tokens` every microbatch runs one loop.
+    one_loop_ranks: int = 0
+    loop_start_tokens: int = 0
 
     @classmethod
     def load(cls, path):
@@ -80,6 +85,8 @@ class RunConfig:
     def __post_init__(self):
         if self.architecture not in ("hybrid", "hnet"):
             raise ValueError("architecture must be 'hybrid' or 'hnet'")
+        if min(self.one_loop_ranks, self.loop_start_tokens) < 0:
+            raise ValueError("one_loop_ranks and loop_start_tokens must be non-negative")
 
 
 def learning_rate_factor(config, tokens):
@@ -92,18 +99,20 @@ def learning_rate_factor(config, tokens):
     return max(0.0, (config.target_tokens - tokens) / (config.target_tokens - decay_start))
 
 
-def flops_per_token(model_config, lm, attended_keys):
+def flops_per_token(model_config, lm, attended_keys, loops=None):
     """Training FLOPs per token: 6 x matmul weights (incl. both output-layer uses) + attention.
 
     The MTP module reuses the output layer for its sampled fraction of positions.
-    A looped model's recurrent blocks and loop gate count once per loop (at n_loops).
+    A looped model's recurrent blocks and loop gate count once per loop: `loops`, which
+    may be a mean, or n_loops.
     """
+    loops = model_config.n_loops if loops is None else loops
     matmul = sum(p.numel() for n, p in lm.named_parameters() if p.ndim == 2)
-    uses = model_config.block_uses()
+    uses = model_config.block_uses(loops)
     for block, count in zip(lm.blocks, uses, strict=True):
         matmul += (count - 1) * sum(p.numel() for p in block.parameters() if p.ndim == 2)
     if model_config.looped:
-        matmul += (model_config.n_loops - 1) * lm.loop_update.gate.weight.numel()
+        matmul += (loops - 1) * lm.loop_update.gate.weight.numel()
     if model_config.mtp:
         matmul += model_config.mtp_loss_fraction * lm.output_weight.numel()
     full_layers = sum(
@@ -111,6 +120,24 @@ def flops_per_token(model_config, lm, attended_keys):
     ) + (1 if model_config.mtp and model_config.mtp_layer_kind == "full" else 0)
     attention = 12 * full_layers * model_config.n_head * model_config.head_dim * attended_keys
     return 6 * matmul + attention
+
+
+def runtime_rank():
+    """(rank, world size) of this process; (0, 1) outside torch.distributed."""
+    import torch.distributed as dist
+
+    if dist.is_available() and dist.is_initialized():
+        return dist.get_rank(), dist.get_world_size()
+    return 0, 1
+
+
+@torch.no_grad()
+def loop_step_statistics(lm):
+    """The loop update's base step softplus(gamma) / 2 (its value at a zero gate input):
+    mean, min and max over channels."""
+    update = lm.loop_update
+    base = torch.nn.functional.softplus(update.rate.float()) / 2
+    return {"mean": float(base.mean()), "min": float(base.min()), "max": float(base.max())}
 
 
 def mean_attended_keys(positions):
@@ -164,7 +191,7 @@ def document_positions(inputs, eos_id):
     return positions
 
 
-def position_losses(lm, inputs, labels, device, eos_id, edges):
+def position_losses(lm, inputs, labels, device, eos_id, edges, loops=None):
     """Held-out loss of the targets whose input sits in each in-document position bucket."""
     positions = document_positions(inputs, eos_id)
     out = {}
@@ -177,7 +204,7 @@ def position_losses(lm, inputs, labels, device, eos_id, edges):
             x = torch.from_numpy(inputs[start : start + 4]).to(device)
             y = torch.from_numpy(np.where(keep, labels, -100)[start : start + 4]).to(device)
             with torch.autocast("cuda", dtype=torch.bfloat16):
-                losses = lm(x, y)
+                losses = lm(x, y, loops=loops) if loops else lm(x, y)
             ce, count = ce + losses["ce"].item(), count + int(losses["count"])
         if count:
             out[f"{low}-{high}"] = ce / count
@@ -185,9 +212,10 @@ def position_losses(lm, inputs, labels, device, eos_id, edges):
 
 
 @torch.no_grad()
-def evaluate(lm, heldout, device, eos_id):
+def evaluate(lm, heldout, device, eos_id, loops=None):
     """Held-out loss, bits per byte and MTP loss per source; gate/sink activations; above
-    4K context also the loss per in-document position bucket."""
+    4K context also the loss per in-document position bucket. `loops` sets a looped
+    model's loop count."""
     lm.eval()
     results = {}
     hybrid.Attention.record_statistics = True
@@ -201,7 +229,7 @@ def evaluate(lm, heldout, device, eos_id):
                 y = torch.from_numpy(labels[start : start + 4]).to(device)
                 targets = doc_utils.mtp_labels(x, y, eos_id) if lm.config.mtp else None
                 with torch.autocast("cuda", dtype=torch.bfloat16):
-                    losses = lm(x, y, targets)
+                    losses = lm(x, y, targets, loops=loops) if loops else lm(x, y, targets)
                 # Models without MTP (the H-Net) return no mtp_ sums; chunk counts are H-Net only.
                 for key in sums:
                     if key in losses:
@@ -226,7 +254,7 @@ def evaluate(lm, heldout, device, eos_id):
                 edges = [e for e in POSITION_EDGES if e < lm.config.block_size]
                 edges.append(lm.config.block_size)
                 results[name]["loss_by_position"] = position_losses(
-                    lm, inputs, labels, device, eos_id, edges
+                    lm, inputs, labels, device, eos_id, edges, loops
                 )
             if chunking["chunks"]:
                 results[name]["bytes_per_chunk"] = chunking["positions"] / chunking["chunks"]
@@ -452,6 +480,7 @@ class HybridFamily:
             self.sampling = (SAMPLE_PROMPTS, (), self.sample_length)
         self.lm, self.uploads = None, []
         self.next_upload = None
+        self.loop_step, self.microbatches, self.loop_counts = None, 0, []
 
     sample_length = 48
 
@@ -473,7 +502,14 @@ class HybridFamily:
             from safetensors.torch import load_file
 
             path = Path(self.config.init_from) / "model.safetensors"
-            model.load_state_dict(load_file(path, device="cpu"))
+            weights = load_file(path, device="cpu")
+            if not self.model_config.looped:
+                model.load_state_dict(weights)
+                return
+            # A plain export starts a looped model; only the loop update is new.
+            missing, unexpected = model.load_state_dict(weights, strict=False)
+            if unexpected or any(not k.startswith("loop_update.") for k in missing):
+                raise ValueError(f"export does not fit: missing {missing}, unexpected {unexpected}")
 
     def compile(self, model):
         return torch.compile(model) if self.config.compile else model
@@ -549,10 +585,17 @@ class HybridFamily:
         if heldout is None:
             return {}
         device = next(model.parameters()).device
+        eos_id = self.model_config.eos_id
         result = {
-            "heldout": evaluate(model, heldout["windows"], device, self.model_config.eos_id),
+            "heldout": evaluate(model, heldout["windows"], device, eos_id),
             "parameters": gate_sink_statistics(model),
         }
+        if getattr(self.model_config, "looped", False):  # H-Net configs do not loop
+            result["heldout_by_loops"] = {
+                str(k): evaluate(model, heldout["windows"], device, eos_id, loops=k)
+                for k in range(1, self.model_config.n_loops)
+            }
+            result["loop_step"] = loop_step_statistics(model)
         if final or progress["step"] % self.config.sample_every_steps == 0:
             prompts, stop_ids, new_tokens = self.sampling
             result["samples"] = samples(
@@ -567,8 +610,29 @@ class HybridFamily:
         targets = doc_utils.mtp_labels(inputs, labels, self.model_config.eos_id)
         return {"mtp_labels": targets}, counts | {"mtp": (targets != -100).sum()}
 
+    def loop_count(self, progress):
+        """This rank's loop count for the next microbatch of `progress["step"]`."""
+        config = self.model_config
+        step = progress["step"]
+        index = self.microbatches + 1 if self.loop_step == step else 0
+        self.loop_step, self.microbatches = step, index
+        if not config.looped or progress["tokens"] < self.config.loop_start_tokens:
+            return 1
+        rank, world = runtime_rank()
+        if self.config.one_loop_ranks >= world:
+            raise ValueError("one_loop_ranks must leave at least one rank sampling")
+        if (rank + step + index) % world < self.config.one_loop_ranks:
+            return 1
+        generator = np.random.default_rng([self.seed, step, index])
+        return int(generator.integers(1, config.n_loops + 1))
+
     def loss(self, model, inputs, labels, extras, counts, progress):
-        losses = model(inputs, labels, extras.get("mtp_labels"))
+        if self.model_config.looped:
+            loops = self.loop_count(progress)
+            self.loop_counts.append(loops)
+            losses = model(inputs, labels, extras.get("mtp_labels"), loops=loops)
+        else:
+            losses = model(inputs, labels, extras.get("mtp_labels"))
         objective = losses["loss"] / counts["ntp"]
         sums = {"ce": losses["ce"], "z": losses["z"]}
         if self.model_config.mtp:
@@ -592,8 +656,14 @@ class HybridFamily:
     def step_metrics(self, inputs, seconds, budget, world):
         documents = doc_utils.document_ids(inputs[:8], self.model_config.eos_id)
         keys = mean_attended_keys(doc_utils.document_positions(documents))
-        flops = flops_per_token(self.model_config, self.lm, keys)
-        return {"mfu": budget / seconds * flops / (world * H100_BF16_FLOPS)}
+        if not self.model_config.looped:
+            flops = flops_per_token(self.model_config, self.lm, keys)
+            return {"mfu": budget / seconds * flops / (world * H100_BF16_FLOPS)}
+        # Rank 0's loop counts this step; other ranks differ by their overrides.
+        loops = float(np.mean(self.loop_counts))
+        self.loop_counts = []
+        flops = flops_per_token(self.model_config, self.lm, keys, loops)
+        return {"mfu": budget / seconds * flops / (world * H100_BF16_FLOPS), "loops": loops}
 
     def after_step(self, data, model, progress):
         """A bf16 export to the HF repo every `hf_every_tokens`."""

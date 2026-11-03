@@ -3,7 +3,7 @@
 import unittest
 
 import torch
-from model_hybrid import model
+from model_hybrid import model, train
 from model_hybrid.train import flops_per_token
 from torch.nn import functional as F
 
@@ -121,6 +121,69 @@ class LoopedHybridTests(unittest.TestCase):
         self.assertIn("loop_update.rate", no_decay)
         self.assertIn("loop_update.gate.bias", no_decay)
 
+    def test_retrofit_at_one_loop_is_the_plain_model(self):
+        plain = model.HybridLM(looped_config(loop_prelude=0, loop_coda=0, n_loops=1)).double()
+        looped = model.HybridLM(looped_config(loop_retrofit=True)).double()
+        missing, unexpected = looped.load_state_dict(plain.state_dict(), strict=False)
+        self.assertEqual(unexpected, [])
+        self.assertTrue(all(name.startswith("loop_update.") for name in missing))
+        tokens = torch.randint(3, 37, (2, 13))
+        tokens[1, 4] = looped.config.eos_id
+        torch.testing.assert_close(looped(tokens, loops=1), plain(tokens))
+        self.assertFalse(torch.allclose(looped(tokens, loops=2), plain(tokens)))
+        # Two loops start as: rerun the recurrent blocks on their output plus the input.
+        mask = model.DocumentMask(model.document_ids(tokens, looped.config.eos_id))
+        rope = (looped.rope_cos[mask.positions][:, None], looped.rope_sin[mask.positions][:, None])
+        prelude, first, second, coda = looped.blocks
+        h = prelude(looped.token_embedding(tokens), rope, mask)
+        once = second(first(h, rope, mask), rope, mask)
+        twice = second(first(once + h, rope, mask), rope, mask)
+        torch.testing.assert_close(looped.trunk(tokens, 2)[0], coda(twice, rope, mask))
+        with self.assertRaises(ValueError):
+            tiny_config(loop_retrofit=True)
+
+    def test_loop_counts_are_shared_across_ranks_with_one_loop_overrides(self):
+        def family(one_loop_ranks, start=0):
+            f = train.HybridFamily.__new__(train.HybridFamily)
+            f.config = train.RunConfig(
+                recipe="",
+                model={},
+                target_tokens=1,
+                one_loop_ranks=one_loop_ranks,
+                loop_start_tokens=start,
+            )
+            f.model_config, f.seed = looped_config(n_loops=4), 7
+            f.loop_step, f.microbatches = None, 0
+            return f
+
+        def draws(f, rank, world, steps=50, micro=4):
+            original = train.runtime_rank
+            train.runtime_rank = lambda: (rank, world)
+            try:
+                return [
+                    f.loop_count({"step": s, "tokens": 10})
+                    for s in range(steps)
+                    for _ in range(micro)
+                ]
+            finally:
+                train.runtime_rank = original
+
+        shared = [draws(family(0), rank, 8) for rank in range(8)]
+        self.assertTrue(all(row == shared[0] for row in shared))
+        self.assertEqual(set(shared[0]), {1, 2, 3, 4})
+        overridden = [draws(family(1), rank, 8) for rank in range(8)]
+        for i in range(len(shared[0])):
+            column = [row[i] for row in overridden]
+            forced = [row[i] == 1 and shared[0][i] != 1 for row in overridden]
+            self.assertLessEqual(sum(forced), 1)
+            self.assertTrue(all(c in (1, shared[0][i]) for c in column))
+        self.assertEqual(
+            sum(row.count(1) for row in overridden) > sum(row.count(1) for row in shared), True
+        )
+        self.assertEqual(set(draws(family(0, start=100), 0, 8)), {1})
+        with self.assertRaises(ValueError):
+            draws(family(8), 0, 8)
+
     def test_flops_count_recurrent_blocks_once_per_loop(self):
         config = looped_config()
         lm = model.HybridLM(config)
@@ -134,6 +197,10 @@ class LoopedHybridTests(unittest.TestCase):
         full_uses = 3 + 1  # full blocks: 1 (recurrent, x3) and 3 (coda, x1)
         expected = 6 * matmul + 12 * full_uses * config.n_head * config.head_dim * 10
         self.assertEqual(flops_per_token(config, lm, 10), expected)
+        one = flops_per_token(config, lm, 10, loops=1)
+        self.assertAlmostEqual(
+            flops_per_token(config, lm, 10, loops=2.5), one + 1.5 * (expected - one) / 2
+        )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,37 @@
+{
+  "name": "hybrid-720m-loop-test",
+  "description": "Can the Hybrid v2 base loop? 1B tokens of the mid32k recipe at 8K from the mid32k export: plain control vs a converted looped model (4/8/4 blocks, k ~ U{1..4}, one rank of eight at k = 1)",
+  "family": "hybrid",
+  "from": "hybrid-720m-mid32k-01/export/tokens-002999975936",
+  "stages": [
+    {
+      "stage": "midtrain",
+      "branches": [
+        {
+          "name": "control",
+          "description": "Plain continuation, the comparison for every loop count",
+          "model_config": "hybrid/configs/hybrid-720m-loop-test-control.json",
+          "gpu": "H100",
+          "world_size": 8,
+          "segment_seconds": 14400,
+          "worker_timeout_seconds": 16200,
+          "max_segments": 1,
+          "segments_per_call": 1,
+          "qualification_segments": 0
+        },
+        {
+          "name": "looped",
+          "description": "Converted looped model; one loop equals the parent at the start",
+          "model_config": "hybrid/configs/hybrid-720m-loop-test-looped.json",
+          "gpu": "H100",
+          "world_size": 8,
+          "segment_seconds": 14400,
+          "worker_timeout_seconds": 16200,
+          "max_segments": 1,
+          "segments_per_call": 1,
+          "qualification_segments": 0
+        }
+      ]
+    }
+  ]
+}

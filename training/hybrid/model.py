@@ -152,6 +152,9 @@ class HybridConfig:
     loop_prelude: int = 0
     loop_coda: int = 0
     n_loops: int = 1
+    # Converting a trained plain model: the loop state starts at zero instead of the
+    # prelude output and the step size at 1, so one loop computes the plain stack.
+    loop_retrofit: bool = False
 
     def __post_init__(self):
         for name in POSITIVE_FIELDS:
@@ -177,8 +180,8 @@ class HybridConfig:
             raise ValueError("loop_prelude and loop_coda must be >= 0 and n_loops >= 1")
         if self.n_loops > 1 and self.loop_prelude + self.loop_coda >= self.n_layer:
             raise ValueError("a looped model needs at least one recurrent block")
-        if self.n_loops == 1 and self.loop_prelude + self.loop_coda:
-            raise ValueError("loop_prelude and loop_coda need n_loops > 1")
+        if self.n_loops == 1 and (self.loop_prelude + self.loop_coda or self.loop_retrofit):
+            raise ValueError("loop_prelude, loop_coda and loop_retrofit need n_loops > 1")
 
     @property
     def layer_kinds(self):
@@ -375,17 +378,21 @@ class LoopUpdate(nn.Module):
     token and channel starts with step size softplus(0) / 2 ~ 0.35. In the paper's
     ablations this is the only update rule that matches the unlooped baseline at one
     loop; replacing the state with the proposal, or adding it, does worse.
+
+    With `initial_step = 1` (a converted plain model) gamma starts at
+    softplus^-1(2), so the first loop's state is exactly the recurrent blocks' output.
     """
 
-    def __init__(self, width):
+    def __init__(self, width, initial_step=None):
         super().__init__()
         self.gate = nn.Linear(width, width)
         self.rate = nn.Parameter(torch.zeros(width))
+        self.initial_rate = 0.0 if initial_step is None else math.log(math.expm1(2 * initial_step))
 
     def reset_parameters(self):
         nn.init.zeros_(self.gate.weight)
         nn.init.zeros_(self.gate.bias)
-        nn.init.zeros_(self.rate)
+        nn.init.constant_(self.rate, self.initial_rate)
 
     def optimizer(self):
         yield from declare("muon", self.gate.weight)
@@ -403,7 +410,9 @@ class HybridLM(nn.Module):
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embd)
         self.blocks = nn.ModuleList(Block(config, kind) for kind in config.layer_kinds)
         self.final_norm = RMSNorm(config.n_embd, config.norm_eps)
-        self.loop_update = LoopUpdate(config.n_embd) if config.looped else None
+        self.loop_update = None
+        if config.looped:
+            self.loop_update = LoopUpdate(config.n_embd, 1.0 if config.loop_retrofit else None)
         self.mtp = MultiTokenPrediction(config) if config.mtp else None
         self.apply(self.initialize)
         cos, sin = rope_tables(config.block_size, config.head_dim, config.rope_base, None)
@@ -447,9 +456,9 @@ class HybridLM(nn.Module):
         Each EOS ends a document: attention, convolutions, KDA state and RoPE
         positions restart after it. A looped model runs its prelude once, the
         recurrent blocks `loops` times (default `n_loops`) and its coda once. The
-        state starts as the prelude output `h`; each loop re-injects `h`, runs the
-        recurrent blocks on `state + h` and takes a gated step towards their output
-        (`LoopUpdate`).
+        state starts as the prelude output `h` (zero with `loop_retrofit`); each loop
+        re-injects `h`, runs the recurrent blocks on `state + h` and takes a gated step
+        towards their output (`LoopUpdate`).
         """
         length = tokens.size(1)
         if not 0 < length <= self.config.block_size:
@@ -471,7 +480,8 @@ class HybridLM(nn.Module):
         recurrent = config.recurrent_blocks
         for block in self.blocks[: recurrent.start]:
             x = block(x, rope, mask)
-        injected = state = x
+        injected = x
+        state = torch.zeros_like(x) if config.loop_retrofit else x
         for _ in range(loops):
             x = entry = state + injected
             for block in self.blocks[recurrent.start : recurrent.stop]:

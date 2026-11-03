@@ -16,7 +16,8 @@ hybrid at one loop and gain on reasoning and code at two to four loops, for abou
 | Stage | Scope | State |
 | --- | --- | --- |
 | 1 | Model: prelude / recurrent / coda split, input re-injection, adaptive-delta update, `loops` per forward call, FLOPs accounting | Implemented, CPU-tested |
-| 2 | Trainer: mixed-depth sampling with one-loop rank overrides, delayed switch, per-`k` held-out loss | Proposed |
+| 2 | Trainer: mixed-depth sampling with one-loop rank overrides, delayed switch, per-`k` held-out loss; converting a plain export (`loop_retrofit`) | Implemented, CPU-tested |
+| 2b | Conversion test: Hybrid v2 base (mid32k export), 1B tokens, plain vs looped | Launched 2026-11-03 |
 | 3 | Matched pilot: baseline vs looped 720M at 10B tokens | Proposed; needs approval and budget |
 | 4 | Decoding: per-loop and last-loop caches in `generate.py`; benchmarks at `k = 1..4` | Proposed |
 | 5 | Loop-conditioned modulation grafted at the switch | Proposed, after stage 3 succeeds |
@@ -59,7 +60,18 @@ recurrent block). The recurrent blocks 4–11 hold 6 KDA and 2 full-attention la
 (blocks 7 and 11). Non-embedding parameters are 469M; the recurrent group is 235M,
 so `k = 2` touches about 1.5× and `k = 4` about 2.5× the one-loop weights.
 
-## Stage 2: the trainer
+## Stage 2: the trainer (implemented)
+
+Run-config fields `one_loop_ranks` and `loop_start_tokens` (see `RunConfig`); the
+loop count of each microbatch comes from `HybridFamily.loop_count`. Held-out
+evaluation reports `heldout` at `n_loops` and `heldout_by_loops` at every smaller
+count, plus the loop update's base step; metrics log the mean loop count and MFU at
+that count. `init_from` loads a plain export into a looped model (only `loop_update`
+is new). With `loop_retrofit` the state starts at zero and the step at 1, so the
+converted model at one loop computes exactly its parent, and two loops start as
+"rerun the recurrent blocks on their own output plus the prelude output".
+
+Design notes:
 
 - **Loop count per microbatch.** `k ~ Uniform{1..K}` with `K = 4`, drawn from a seeded
   generator and shared by all ranks (synchronized), with a rotating set of ranks
@@ -75,6 +87,31 @@ so `k = 2` touches about 1.5× and `k = 4` about 2.5× the one-loop weights.
   DDP sees every parameter used at any `k`.
 - **Evaluation.** Held-out loss per source at `k = 1..K` at every evaluation step,
   plus the step size `beta` (mean and spread) per loop.
+
+## Conversion test: can the Hybrid v2 base loop?
+
+[`workflows/hybrid-720m-loop-test.json`](../workflows/hybrid-720m-loop-test.json)
+continues the [mid32k export](HYBRID_V2.md#mid-training-run-hybrid-mid32k-v1) for 1B
+tokens of the `hybrid-mid32k-v1` recipe at 8K context (1M tokens per step, seed 4321,
+mid32k's learning rates with linear decay), as two branches from the same parent on
+8 × H100 each:
+
+| Branch | Model |
+| --- | --- |
+| `control` | plain continuation |
+| `looped` | 4 / 8 / 4 blocks, `loop_retrofit`, `n_loops = 4`, one of eight ranks at `k = 1` (`p_1 = 0.34`, `k̄ = 2.31`) |
+
+The looped branch costs 1.45× the control's FLOPs per token (`flops_per_token` at
+`k̄`). Estimated at ~450K tokens/s for the control (mid32k measured 513K at 32K):
+about 40 minutes of training for the control and 55 for the looped branch, plus
+start-up, compilation and evaluation, so about 1.5 hours of wall time and about 20
+H100-hours in total. Both run in one 4-hour session under the workflow's deadline
+supervisor.
+
+It passes if the looped model at `k = 1` stays within 0.01 nats of the control on
+every held-out source and `k = 2..4` are below the control, most on code, math and
+reasoning traces. 1B tokens is far shorter than ELR's 250B-token mixed-depth phase,
+so a null result here does not rule out looping at a larger budget.
 
 ## Stage 3: matched pilot
 
