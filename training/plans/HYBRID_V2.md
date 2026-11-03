@@ -337,9 +337,9 @@ Held-out PR tasks (179, Open-SWE format, temperature 0.7, 100 turns):
 
 - **Qwen3-0.6B resolves nothing after the full pass.** More data and the decayed
   learning rate raise patches from 2–8 to 28, but three quarters of its calls still
-  repeat an earlier one; of about 14,400 calls, most are `grep` and `ls`.
+  repeat an earlier one; 75% of its 14,378 calls are `grep`.
 - **Gate 0 is not decided yet.** The 0.6B result falls in the plan's "size is the limit"
-  branch ([HYBRID_AGENTIC_PRETRAINING.md](HYBRID_AGENTIC_PRETRAINING.md)), but
+  branch (the agentic pre-training plan, PR #131), but
   the 1.7B control on the same mix has not finished its pass: at 64k trajectories it
   resolves 1, and mini-coder-1.7b, trained on the same mini-coder rollouts in their own
   bash-block format, resolves 11 with 40 turns. Until the 1.7B pass finishes, the 0.6B
