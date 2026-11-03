@@ -4,6 +4,7 @@ Run from training/:
     modal run --detach -m modal_scripts.modal_agent_sft::prepare --mix <name> [--chat glm]
     modal run -m modal_scripts.modal_agent_sft::glm_target --mix <name> --config <hybrid config>
     modal run --detach -m modal_scripts.modal_agent_sft::export --run <run>
+    modal run --detach -m modal_scripts.modal_agent_sft::publish_mix --mix <name> --repo <owner/name>
     modal run --detach -m modal_scripts.modal_agent_sft::publish --run <run> --repo <owner/name> [--revision B]
     modal run --detach -m modal_scripts.modal_agent_sft::train --mix <name> --base B [--tag 01] [--hours 20]
     modal run --detach -m modal_scripts.modal_agent_sft::serve --run <run> [--hours 3]
@@ -466,6 +467,114 @@ def prepare_mix(mix, deadline):
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     runs_volume.commit()
+    return manifest
+
+
+# Sources whose trajectories are trained on but not republished (no licence on HF).
+NOT_REPUBLISHED = {"terminal-lego"}
+EXPORT_SHARD_ROWS = 20000
+
+
+def _export_row(job):
+    """(rank, row for the published mix, or None when the row is not in the mix):
+    the training messages as JSON, with the Qwen3 token count the mix's fit test used."""
+    source, rank, row, name, index = job
+    _, example = _encode((source, rank, row, "qwen", 0))
+    if example is None:
+        return rank, None
+    kind, messages = _convert(source, row)
+    return rank, {
+        "source": source,
+        "source_file": name,
+        "source_row": index,
+        "format": kind,
+        "messages": json.dumps(messages, ensure_ascii=False),
+        "qwen3_tokens": len(example[0]),
+    }
+
+
+@app.function(
+    image=cpu_image,
+    cpu=32,
+    memory=131072,
+    timeout=PREPARE_SECONDS,
+    retries=0,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes={"/hf": hf_cache, "/data": data_volume},
+)
+def export_mix(mix, repo, deadline):
+    """A mix's trajectories as conversations, to the private HF dataset `repo`: the same
+    candidates in the same order as `prepare_mix` (every part's random draws, also for
+    sources not republished) and its fit test, as parquet shards
+    `data/<source>/<shard>.parquet` of `EXPORT_SHARD_ROWS` rows, uploaded as written.
+    Parts with a count, and repeats, are recorded in `mix.json`, not applied."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import random
+    import tempfile
+    from multiprocessing import Pool
+
+    import pyarrow as pa
+    from huggingface_hub import HfApi
+    from pyarrow import parquet
+
+    spec = MIXES[mix]
+    if any(_part(part)[0] is not None for part in spec["parts"].values()):
+        raise ValueError("Only mixes that keep every fitting trajectory export exactly")
+    api = HfApi()
+    api.create_repo(repo, repo_type="dataset", private=True, exist_ok=True)
+    rng, counts, scratch = random.Random(spec["seed"]), {}, Path(tempfile.mkdtemp())
+
+    def upload(source, shard, rows):
+        path = scratch / f"{shard:05d}.parquet"
+        parquet.write_table(pa.Table.from_pylist(rows), path, compression="zstd")
+        api.upload_file(
+            path_or_fileobj=path, path_in_repo=f"data/{source}/{shard:05d}.parquet",
+            repo_id=repo, repo_type="dataset", commit_message=f"{source} shard {shard}",
+        )  # fmt: skip
+        path.unlink()
+
+    with Pool(30) as pool:
+        for source, part in spec["parts"].items():
+            keys = _candidates(source, rng)
+            if source in NOT_REPUBLISHED:
+                counts[source] = {"candidates": len(keys), "published": 0}
+                continue
+            kept, rows, shard = [], [], 0
+            by_file = {}
+            for rank, (name, index) in enumerate(keys):
+                by_file.setdefault(name, []).append((index, rank))
+            for name, entries in by_file.items():
+                raw = _rows(source, name, [index for index, _ in entries])
+                jobs = [(source, rank, row, name, index)
+                        for (index, rank), row in zip(entries, raw, strict=True)]  # fmt: skip
+                for _, row in pool.imap(_export_row, jobs, chunksize=8):
+                    if row is None:
+                        continue
+                    rows.append(row)
+                    if len(rows) == EXPORT_SHARD_ROWS:
+                        upload(source, shard, rows)
+                        kept.append(len(rows))
+                        rows, shard = [], shard + 1
+            if rows:
+                upload(source, shard, rows)
+                kept.append(len(rows))
+            counts[source] = {"candidates": len(keys), "published": sum(kept),
+                              "repeat": _part(part)[1]}  # fmt: skip
+            print(json.dumps({source: counts[source]}), flush=True)
+    manifest = {
+        "mix": mix,
+        "spec": spec,
+        "sources": {s: SOURCES[s] for s in spec["parts"]},
+        "not_republished": sorted(NOT_REPUBLISHED & set(spec["parts"])),
+        "tokenizer": [TOKENIZER, REFERENCE_MODELS[TOKENIZER]],
+        "context": CONTEXT,
+        "counts": counts,
+    }
+    api.upload_file(
+        path_or_fileobj=(json.dumps(manifest, indent=2) + "\n").encode(), path_in_repo="mix.json",
+        repo_id=repo, repo_type="dataset", commit_message="mix.json",
+    )  # fmt: skip
     return manifest
 
 
@@ -945,6 +1054,12 @@ def export(run: str):
 def publish(run: str, repo: str, revision: str = "main"):
     """Upload a run (or a `<run>-step<N>` export) to a private HF model repo and branch."""
     _launch(publish_run, run, repo, revision)
+
+
+@app.local_entrypoint()
+def publish_mix(mix: str, repo: str):
+    """Publish a mix's trajectories as conversations to a private HF dataset."""
+    _launch(export_mix, mix, repo)
 
 
 @app.local_entrypoint()
