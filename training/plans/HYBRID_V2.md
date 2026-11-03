@@ -338,9 +338,20 @@ Held-out PR tasks (179, Open-SWE format, temperature 0.7, 100 turns):
 - **Qwen3-0.6B resolves nothing after the full pass.** More data and the decayed
   learning rate raise patches from 2–8 to 28, but three quarters of its calls still
   repeat an earlier one; 75% of its 14,378 calls are `grep`.
-- **Gate 0 is not decided yet.** The 0.6B result falls in the plan's "size is the limit"
-  branch (the agentic pre-training plan, PR #131), but
-  the 1.7B control on the same mix has not finished its pass: at 64k trajectories it
+- **The looping is not in the training data.** Over the whole published mix
+  (`evaluation.agentic_behavior --mix`, the same definition of a repeated call: same
+  tool and arguments earlier in the episode), mini-coder's 310,878 trajectories repeat
+  10.4% of their 10.6M calls, Open-SWE-Traces 2.5% and our GLM-5.3 trajectories 0.7%;
+  1,264 trajectories (0.4%) repeat more than 30%. The trained 0.6B repeats 75% of its
+  calls on the held-out tasks, seven times its noisiest source. Its loops are its own
+  errors compounding over a long episode, not copied behaviour, so filtering repetitive
+  trajectories alone cannot remove them; a harness that answers a repeated command
+  with its earlier output, training on corrections of the student's own episodes, or a
+  repetition penalty in RL target that failure.
+- **Gate 0 is not decided yet.** Gate 0 asks whether a 0.6B-class model resolves
+  held-out tasks after about 500k trajectories, before the 720M hybrid gets more
+  pre-training; resolving nothing points at model size. But the 1.7B control on the
+  same mix has not finished its pass: at 64k trajectories it
   resolves 1, and mini-coder-1.7b, trained on the same mini-coder rollouts in their own
   bash-block format, resolves 11 with 40 turns. Until the 1.7B pass finishes, the 0.6B
   result does not separate model size from the converted mix.

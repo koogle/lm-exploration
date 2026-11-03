@@ -3,12 +3,16 @@
 Run from training/ on downloaded evaluation outputs (`modal_scripts/modal_agentic.py`):
 
     python -m evaluation.agentic_behavior <trajectories.jsonl> [...]
+    python -m evaluation.agentic_behavior --mix <shard.parquet> [...]
 
 Prints one JSON object per file: episodes, resolved, how episodes ended, assistant
 turns and the share that carry a tool call, calls per tool, the share of calls that
 repeat an earlier call of the same episode (same tool and arguments), edits attempted
 and applied (`edit_file`/`write_file` results), and episodes that changed the
-repository (a non-empty patch) or submitted.
+repository (a non-empty patch) or submitted. `--mix` reads training conversations
+published by `modal_agent_sft.py::publish_mix` (parquet with `source` and JSON
+`messages`) and prints, per source, the same share of repeated calls and the
+trajectories in which more than 30% of calls repeat.
 """
 
 import collections
@@ -17,6 +21,43 @@ import sys
 from pathlib import Path
 
 from training_data import pr_task_agent as agent
+
+
+def repeats(messages):
+    """(tool calls, calls repeating an earlier call of the episode: same tool and arguments)."""
+    seen, calls, repeated = set(), 0, 0
+    for message in messages:
+        for call in message.get("tool_calls") or [] if message["role"] == "assistant" else []:
+            key = (call["function"]["name"], json.dumps(agent.arguments(call), sort_keys=True))
+            calls += 1
+            repeated += key in seen
+            seen.add(key)
+    return calls, repeated
+
+
+def mix_repeats(paths):
+    """Per source of published training conversations: trajectories, tool calls, the
+    share of repeated calls and the trajectories with more than 30% repeated calls."""
+    from pyarrow import parquet
+
+    totals = collections.defaultdict(lambda: [0, 0, 0, 0])
+    for path in paths:
+        for row in parquet.read_table(path, columns=["source", "messages"]).to_pylist():
+            calls, repeated = repeats(json.loads(row["messages"]))
+            total = totals[row["source"]]
+            total[0] += 1
+            total[1] += calls
+            total[2] += repeated
+            total[3] += bool(calls) and repeated / calls > 0.3
+    return {
+        source: {
+            "trajectories": n,
+            "tool_calls": calls,
+            "repeated_calls": round(repeated / calls, 4) if calls else None,
+            "trajectories_over_30_percent": loops,
+        }
+        for source, (n, calls, repeated, loops) in sorted(totals.items())
+    }
 
 
 def behavior(rows):
@@ -65,6 +106,9 @@ def behavior(rows):
 
 
 def main():
+    if sys.argv[1:2] == ["--mix"]:
+        print(json.dumps(mix_repeats(sys.argv[2:])))
+        return
     for path in sys.argv[1:]:
         rows = [json.loads(line) for line in Path(path).read_text().splitlines()]
         print(json.dumps({"file": path, **behavior(rows)}))

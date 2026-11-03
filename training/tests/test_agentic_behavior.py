@@ -2,7 +2,7 @@
 
 import unittest
 
-from evaluation.agentic_behavior import behavior
+from evaluation.agentic_behavior import behavior, mix_repeats
 
 
 def call(index, name, **arguments):
@@ -70,6 +70,38 @@ class AgenticBehaviorTests(unittest.TestCase):
 
     def test_empty(self):
         self.assertIsNone(behavior([])["turns_with_tool_call"])
+
+    def test_mix_repeats(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        import pyarrow as pa
+        from pyarrow import parquet
+
+        looping = [
+            {"role": "assistant", "content": "", "tool_calls": [call(i, "bash", command="ls")]}
+            for i in range(4)
+        ]
+        varied = [
+            {"role": "assistant", "content": "", "tool_calls": [call(i, "bash", command=f"ls {i}")]}
+            for i in range(4)
+        ]
+        rows = [
+            {"source": "a", "messages": json.dumps(looping)},
+            {"source": "a", "messages": json.dumps(varied)},
+            {"source": "b", "messages": json.dumps([{"role": "user", "content": "x"}])},
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "shard.parquet")
+            parquet.write_table(pa.Table.from_pylist(rows), path)
+            result = mix_repeats([path])
+        self.assertEqual(
+            result["a"],
+            {"trajectories": 2, "tool_calls": 8, "repeated_calls": 0.375,
+             "trajectories_over_30_percent": 1},
+        )  # fmt: skip
+        self.assertIsNone(result["b"]["repeated_calls"])
 
 
 if __name__ == "__main__":
