@@ -1,0 +1,19 @@
+{
+  "name": "hybrid-720m-agent-sft-smoke",
+  "family": "hybrid",
+  "description": "Smoke test of agent-mix SFT for the 720M hybrid: 12 steps of agent-smoke-200-glm at 40,960 context from the 32K mid-training export, on one H100",
+  "stages": [
+    {
+      "stage": "pretrain",
+      "name": "sft",
+      "model_config": "hybrid/configs/hybrid-720m-agent-smoke.json",
+      "gpu": "H100",
+      "world_size": 1,
+      "segment_seconds": 3600,
+      "worker_timeout_seconds": 5400,
+      "max_segments": 1,
+      "segments_per_call": 1,
+      "qualification_segments": 0
+    }
+  ]
+}

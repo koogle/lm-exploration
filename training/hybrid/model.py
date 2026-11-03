@@ -155,6 +155,11 @@ class HybridConfig:
     # Converting a trained plain model: the loop state starts at zero instead of the
     # prelude output and the step size at 1, so one loop computes the plain stack.
     loop_retrofit: bool = False
+    # Recompute each KDA block in backward instead of storing its activations (training
+    # only), for contexts whose activations do not fit, such as 40,960 tokens on an H100.
+    # Full-attention blocks keep theirs: recomputed under torch.compile, FlexAttention
+    # falls back to dense attention, which needs [T, T] scores.
+    activation_checkpointing: bool = False
 
     def __post_init__(self):
         for name in POSITIVE_FIELDS:
@@ -472,25 +477,36 @@ class HybridLM(nn.Module):
             if loops not in (None, 1):
                 raise ValueError("loops applies to looped models only")
             for block in self.blocks:
-                x = block(x, rope, mask)
+                x = self.run_block(block, x, rope, mask)
             return x, rope, mask
         loops = config.n_loops if loops is None else loops
         if loops < 1:
             raise ValueError("loops must be at least 1")
         recurrent = config.recurrent_blocks
         for block in self.blocks[: recurrent.start]:
-            x = block(x, rope, mask)
+            x = self.run_block(block, x, rope, mask)
         injected = x
         state = torch.zeros_like(x) if config.loop_retrofit else x
         for _ in range(loops):
             x = entry = state + injected
             for block in self.blocks[recurrent.start : recurrent.stop]:
-                x = block(x, rope, mask)
+                x = self.run_block(block, x, rope, mask)
             state = self.loop_update(state, x, entry)
         x = state
         for block in self.blocks[recurrent.stop :]:
-            x = block(x, rope, mask)
+            x = self.run_block(block, x, rope, mask)
         return x, rope, mask
+
+    def run_block(self, block, x, rope, mask):
+        """One block; a KDA block recomputes in backward under `activation_checkpointing`."""
+        if (
+            self.config.activation_checkpointing
+            and self.training
+            and block.kind == "kda"
+            and torch.is_grad_enabled()
+        ):
+            return checkpoint(block, x, rope, mask, use_reentrant=False)
+        return block(x, rope, mask)
 
     def hidden_states(self, tokens, loops=None):
         return self.final_norm(self.trunk(tokens, loops)[0])

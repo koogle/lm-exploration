@@ -1,0 +1,19 @@
+{
+  "name": "hybrid-720m-agent-sft",
+  "family": "hybrid",
+  "description": "Gate 0: the 720M hybrid's 32K mid-training export fine-tuned on the scale-500k agent trajectories (agent-scale-500k-glm) at 40,960 context, one pass, on 8 H100s",
+  "stages": [
+    {
+      "stage": "pretrain",
+      "name": "sft",
+      "model_config": "hybrid/configs/hybrid-720m-agent-scale-500k.json",
+      "gpu": "H100",
+      "world_size": 8,
+      "segment_seconds": 82000,
+      "worker_timeout_seconds": 84000,
+      "max_segments": 2,
+      "segments_per_call": 1,
+      "qualification_segments": 0
+    }
+  ]
+}
