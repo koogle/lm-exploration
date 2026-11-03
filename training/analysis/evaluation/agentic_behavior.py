@@ -10,7 +10,7 @@ turns and the share that carry a tool call, calls per tool, the share of calls t
 repeat an earlier call of the same episode (same tool and arguments), edits attempted
 and applied (`edit_file`/`write_file` results), and episodes that changed the
 repository (a non-empty patch) or submitted. `--mix` reads training conversations
-published by `modal_agent_sft.py::publish_mix` (parquet with `source` and JSON
+published by `modal_agent_mix.py::publish_mix` (parquet with `source` and JSON
 `messages`) and prints, per source, the same share of repeated calls and the
 trajectories in which more than 30% of calls repeat.
 """

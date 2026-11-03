@@ -98,6 +98,13 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(out["tools"][0]["function"]["name"], "live_giveaways_by_type")
 
 
+def write_subset(folder, name, conversations):
+    writer = chat_sft.SubsetWriter(folder, name)
+    for ids, mask in conversations:
+        writer.write(ids, mask, False)
+    writer.close()
+
+
 class PackingTests(unittest.TestCase):
     def conversations(self):
         rng = np.random.default_rng(0)
@@ -126,8 +133,8 @@ class PackingTests(unittest.TestCase):
         from pathlib import Path
 
         with tempfile.TemporaryDirectory() as folder:
-            chat_sft._write(Path(folder), "a", self.conversations())
-            chat_sft._write(Path(folder), "b", self.conversations()[::-1])
+            write_subset(Path(folder), "a", self.conversations())
+            write_subset(Path(folder), "b", self.conversations()[::-1])
             recipe = {"files": ["a.parquet", "b.parquet"], "context": 11}
             mixture = chat_sft.ChatMixture(recipe, folder, seed=3)
             first = mixture.next_batch(2)
@@ -147,8 +154,8 @@ class PackingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             for name in ("chat", "agentic"):
                 Path(folder, name).mkdir()
-            chat_sft._write(Path(folder, "chat"), "a", self.conversations())
-            chat_sft._write(Path(folder, "agentic"), "b", self.conversations()[:2])
+            write_subset(Path(folder, "chat"), "a", self.conversations())
+            write_subset(Path(folder, "agentic"), "b", self.conversations()[:2])
             recipe = {
                 "name": "agentic",
                 "context": 11,
@@ -187,8 +194,8 @@ class PackingTests(unittest.TestCase):
                 self.position = state["position"]
 
         with tempfile.TemporaryDirectory() as folder:
-            chat_sft._write(Path(folder), "a", self.conversations())
-            chat_sft._write(Path(folder), "b", self.conversations()[::-1])
+            write_subset(Path(folder), "a", self.conversations())
+            write_subset(Path(folder), "b", self.conversations()[::-1])
             recipe = {"files": ["a.parquet", "b.parquet"], "context": 11}
             mixture = packed_shards.ReplayMixture(
                 chat_sft.ChatMixture(recipe, folder), Pretraining(), replay_rows=1
@@ -244,6 +251,46 @@ class RenderingTests(unittest.TestCase):
         self.assertIsNone(message["content"])
         arguments = json.loads(message["tool_calls"][0]["function"]["arguments"])
         self.assertEqual(arguments, {"id": "a", "minutes": 30})
+
+
+class SubsetWriterTests(unittest.TestCase):
+    def test_count_rank_and_heldout(self):
+        import tempfile
+
+        import numpy as np
+
+        examples = {  # rank: (ids, mask, held out)
+            2: ([5, 6, 7, 1], [0, 1, 1, 1], False),
+            0: ([8, 9, 1], [0, 1, 1], False),
+            1: ([3, 4, 1], [0, 1, 1], True),
+            3: ([10, 11, 1], [0, 1, 1], False),
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            writer = chat_sft.SubsetWriter(folder, "src")
+            for rank, (ids, mask, heldout) in examples.items():
+                writer.write(np.array(ids), np.array(mask), heldout, rank)
+            meta = writer.close(count=2)
+            self.assertEqual(
+                (
+                    meta["conversations"],
+                    meta["heldout_conversations"],
+                    meta["stored_conversations"],
+                ),
+                (2, 1, 4),
+            )
+            self.assertFalse(list(chat_sft.Path(folder).glob("*.raw")))
+            tokens, _, docs = chat_sft._load(folder, "src")
+            # The two lowest-ranked training conversations, ranks 0 and 2.
+            self.assertEqual(
+                sorted(tokens[s : s + n].tolist() for s, n in docs), [[5, 6, 7, 1], [8, 9, 1]]
+            )
+            held_tokens, held_mask, held_docs = chat_sft._load(folder, "src.heldout")
+            self.assertEqual((held_tokens.tolist(), held_mask.tolist()), ([3, 4, 1], [0, 1, 1]))
+            self.assertEqual(held_docs.tolist(), [[0, 3]])
+
+    def test_recipe_eos_pads_windows(self):
+        windows = list(chat_sft.pack([(np.array([1, 2]), np.array([0, 1]))], 4, eos=7))
+        self.assertEqual(windows[0][0].tolist(), [1, 2, 7, 7])
 
 
 if __name__ == "__main__":

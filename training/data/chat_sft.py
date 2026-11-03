@@ -1,4 +1,8 @@
-"""Chat SFT data: OpenAI-style conversations in GLM's chat format, packed for training.
+"""Chat SFT data: conversations as token ids and loss masks, packed for training.
+
+Subsets are in GLM's chat format unless their recipe names another tokenizer
+(`eos_id`, `tokenizer`), such as the Qwen3 agent mixes of
+`modal_scripts/modal_agent_mix.py`.
 
 A recipe (data/recipes/chat-sft-*.json) names a Hugging Face dataset at a pinned revision
 and its parquet files, each one subset named by its file stem; `subsets` adds
@@ -8,11 +12,13 @@ fraction reads a seeded sample of that share). `convert` turns a smoltalk2 row
 (Hermes-style tool calls in the text, tool schemas in
 `chat_template_kwargs.xml_tools`) into OpenAI messages and tools; `prepare_subset` renders each conversation with `chat.encode`, drops those
 longer than the context or sharing a 13-gram with the benchmark screen, holds out
-a hash-selected fraction, and writes per subset:
+a hash-selected fraction, and writes per subset through `SubsetWriter`, which also
+serves sources streamed in rank order:
 
     <subset>.tokens.npy  uint32, every conversation ending with EOS
     <subset>.mask.npy    uint8, 1 where the token is a training target
-    <subset>.docs.npy    int64 [conversations, 2]: start offset, length
+    <subset>.docs.npy    int64 [conversations, 2]: start offset and length of each
+                         training conversation (the arrays may hold more)
     <subset>.heldout.*   the same three arrays for the held-out conversations
     <subset>.json        counts
 
@@ -180,15 +186,87 @@ def is_heldout(messages, fraction):
     return int.from_bytes(digest[:8], "little") / 2**64 < fraction
 
 
-def _write(folder, stem, conversations):
-    tokens = np.fromiter((t for ids, _ in conversations for t in ids), np.uint32)
-    mask = np.fromiter((m for _, mask in conversations for m in mask), np.uint8)
-    lengths = np.array([len(ids) for ids, _ in conversations], np.int64)
-    starts = np.concatenate(([0], np.cumsum(lengths)[:-1])).astype(np.int64)
-    np.save(folder / f"{stem}.tokens.npy", tokens)
-    np.save(folder / f"{stem}.mask.npy", mask)
-    np.save(folder / f"{stem}.docs.npy", np.stack((starts, lengths), 1))
-    return int(tokens.size), int(mask.sum())
+def recipe_eos(recipe):
+    """The token that ends a recipe's conversations and pads its windows: GLM's EOS,
+    unless the recipe names its tokenizer's (`eos_id`)."""
+    return recipe.get("eos_id", glm.EOS_ID)
+
+
+def recipe_decoder(recipe):
+    """Token ids -> text for a recipe's tokenizer: GLM's, unless the recipe names a
+    Hugging Face tokenizer (`tokenizer`: {"repo", "revision"})."""
+    if "tokenizer" not in recipe:
+        tokenizer = glm.load()
+        return lambda ids: tokenizer.decode(ids, skip_special_tokens=False)
+    from tokenizers import Tokenizer
+
+    source = recipe["tokenizer"]
+    tokenizer = Tokenizer.from_pretrained(source["repo"], revision=source["revision"])
+    return lambda ids: tokenizer.decode(ids, skip_special_tokens=False)
+
+
+class SubsetWriter:
+    """One subset written while conversations stream in: tokens and masks go to raw
+    files, and `close` writes the layout above with the training conversations (all,
+    or the first `count` by rank) and the held-out ones."""
+
+    def __init__(self, folder, name):
+        self.folder, self.name = Path(folder), name
+        self.folder.mkdir(parents=True, exist_ok=True)
+        self.files = {
+            # Closed in `close`, after every conversation has been written.
+            kind: open(self.folder / f"{name}.{kind}.raw", "wb")  # noqa: SIM115
+            for kind in ("tokens", "mask")
+        }
+        self.position, self.rows = 0, []  # (rank, start, length, targets, held out)
+
+    def write(self, ids, mask, heldout, rank=None):
+        """Append one conversation; `rank` orders it for `close(count)` (default: arrival)."""
+        np.asarray(ids, np.uint32).tofile(self.files["tokens"])
+        np.asarray(mask, np.uint8).tofile(self.files["mask"])
+        rank = len(self.rows) if rank is None else rank
+        self.rows.append((rank, self.position, len(ids), int(np.sum(mask)), bool(heldout)))
+        self.position += len(ids)
+
+    def close(self, count=None):
+        """Write the subset's arrays and `<name>.json`; returns the counts."""
+        for handle in self.files.values():
+            handle.close()
+        self.rows.sort()
+        trained = [r for r in self.rows if not r[4]]
+        trained = trained if count is None else trained[:count]
+        heldout = [r for r in self.rows if r[4]]
+        arrays = {
+            kind: np.memmap(self.folder / f"{self.name}.{kind}.raw", dtype=dtype, mode="r")
+            if self.position else np.zeros(0, dtype)
+            for kind, dtype in (("tokens", np.uint32), ("mask", np.uint8))
+        }  # fmt: skip
+        # Training conversations point into the full arrays; held-out ones get their own.
+        for kind, array in arrays.items():
+            np.save(self.folder / f"{self.name}.{kind}.npy", array)
+            pieces = [np.asarray(array[s : s + n]) for _, s, n, _, _ in heldout]
+            held = np.concatenate(pieces) if pieces else np.zeros(0, array.dtype)
+            np.save(self.folder / f"{self.name}.heldout.{kind}.npy", held)
+        docs = np.array([(start, length) for _, start, length, _, _ in trained], np.int64)
+        np.save(self.folder / f"{self.name}.docs.npy", docs.reshape(-1, 2))
+        lengths = np.array([length for _, _, length, _, _ in heldout], np.int64)
+        starts = np.concatenate(([0], np.cumsum(lengths)[:-1])) if len(lengths) else lengths
+        held_docs = np.stack((starts, lengths), 1) if len(lengths) else np.zeros((0, 2), np.int64)
+        np.save(self.folder / f"{self.name}.heldout.docs.npy", held_docs.astype(np.int64))
+        for kind in ("tokens", "mask"):
+            (self.folder / f"{self.name}.{kind}.raw").unlink()
+        meta = {
+            "subset": self.name,
+            "conversations": len(trained),
+            "tokens": int(sum(r[2] for r in trained)),
+            "target_tokens": int(sum(r[3] for r in trained)),
+            "heldout_conversations": len(heldout),
+            "heldout_tokens": int(sum(r[2] for r in heldout)),
+            "heldout_target_tokens": int(sum(r[3] for r in heldout)),
+            "stored_conversations": len(self.rows),
+        }
+        (self.folder / f"{self.name}.json").write_text(json.dumps(meta, indent=2) + "\n")
+        return meta
 
 
 def prepare_subset(recipe, name, rows, folder, tokenizer, screen=None, converter=convert):
@@ -196,9 +274,7 @@ def prepare_subset(recipe, name, rows, folder, tokenizer, screen=None, converter
     write one subset; returns its counts."""
     from training_data.packed_shards import contaminated
 
-    folder = Path(folder)
-    folder.mkdir(parents=True, exist_ok=True)
-    kept, heldout = [], []
+    writer = SubsetWriter(folder, name)
     dropped = {"unparsed": 0, "too_long": 0, "contaminated": 0}
     for row in rows:
         conversation = converter(row)
@@ -216,23 +292,9 @@ def prepare_subset(recipe, name, rows, folder, tokenizer, screen=None, converter
         if screen is not None and contaminated(ids, screen, recipe["screen_ngram"]):
             dropped["contaminated"] += 1
             continue
-        target = (
-            heldout if is_heldout(conversation["messages"], recipe["heldout_fraction"]) else kept
-        )
-        target.append((ids, mask))
-    train_tokens, train_targets = _write(folder, name, kept)
-    heldout_tokens, heldout_targets = _write(folder, f"{name}.heldout", heldout)
-    meta = {
-        "subset": name,
-        "conversations": len(kept),
-        "tokens": train_tokens,
-        "target_tokens": train_targets,
-        "heldout_conversations": len(heldout),
-        "heldout_tokens": heldout_tokens,
-        "heldout_target_tokens": heldout_targets,
-        "dropped": dropped,
-    }
-    (folder / f"{name}.json").write_text(json.dumps(meta, indent=2) + "\n")
+        writer.write(ids, mask, is_heldout(conversation["messages"], recipe["heldout_fraction"]))
+    meta = writer.close() | {"dropped": dropped}
+    (Path(folder) / f"{name}.json").write_text(json.dumps(meta, indent=2) + "\n")
     return meta
 
 
@@ -245,22 +307,23 @@ def _load(folder, stem):
     )
 
 
-def pack(conversations, context):
-    """Pack (tokens, mask) conversations into windows; yields (inputs, labels) arrays."""
+def pack(conversations, context, eos=glm.EOS_ID):
+    """Pack (tokens, mask) conversations into windows padded with `eos`; yields
+    (inputs, labels) arrays."""
     window, targets = [], []
     for tokens, mask in conversations:
         if len(window) + len(tokens) > context + 1 and window:
-            yield _finish(window, targets, context)
+            yield _finish(window, targets, context, eos)
             window, targets = [], []
         window.extend(tokens.tolist())
         targets.extend(mask.tolist())
     if window:
-        yield _finish(window, targets, context)
+        yield _finish(window, targets, context, eos)
 
 
-def _finish(window, targets, context):
+def _finish(window, targets, context, eos):
     pad = context + 1 - len(window)
-    tokens = np.array(window + [glm.EOS_ID] * pad, np.int64)
+    tokens = np.array(window + [eos] * pad, np.int64)
     trained = np.array(targets + [0] * pad, bool)
     labels = np.where(trained[1:], tokens[1:], IGNORE_INDEX)
     return tokens[:-1], labels
@@ -276,6 +339,7 @@ class ChatMixture:
 
     def __init__(self, recipe, root, seed=0):
         self.recipe, self.root, self.context = recipe, Path(root), recipe["context"]
+        self.eos = recipe_eos(recipe)
         listed = subsets(recipe)
         self.subsets = [_load(subset_folder(recipe, root, name), name) for name, _, _ in listed]
         rng = np.random.default_rng(seed)
@@ -314,7 +378,7 @@ class ChatMixture:
             else:
                 tokens, mask = conversation
             if tokens is None or (len(window) + len(tokens) > self.context + 1 and window):
-                x, y = _finish(window, targets, self.context)
+                x, y = _finish(window, targets, self.context, self.eos)
                 inputs.append(x)
                 labels.append(y)
                 names.append("chat")
@@ -359,9 +423,9 @@ def chat_heldout_windows(recipe, root, name, context, max_conversations):
     ]
     if not conversations:
         return None
-    windows = list(pack(conversations, context))
+    windows = list(pack(conversations, context, recipe_eos(recipe)))
     inputs = np.stack([x for x, _ in windows])
     labels = np.stack([y for _, y in windows])
     targets = labels[labels != IGNORE_INDEX]
-    total_bytes = len(glm.load().decode(targets.tolist(), skip_special_tokens=False).encode())
+    total_bytes = len(recipe_decoder(recipe)(targets.tolist()).encode())
     return inputs, labels, total_bytes

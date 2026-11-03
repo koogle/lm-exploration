@@ -1,0 +1,22 @@
+{
+  "base": "Qwen/Qwen3-1.7B-Base",
+  "revision": "ea980cb0a6c2ae4b936e82123acc929f1cec04c1",
+  "recipe": "/project/training_data/recipes/agent-scale-500k-qwen.json",
+  "target_tokens": 0,
+  "global_rows": 8,
+  "microbatch": 1,
+  "learning_rate": 2e-05,
+  "warmup_tokens": 50000000,
+  "min_learning_rate_fraction": 0.1,
+  "weight_decay": 0.0,
+  "gradient_clip": 1.0,
+  "gradient_checkpointing": true,
+  "seed": 1234,
+  "log_every_steps": 10,
+  "eval_every_steps": 1000,
+  "eval_conversations": 64,
+  "checkpoint_seconds": 3600,
+  "keep_checkpoints": 1,
+  "export_every_tokens": 0,
+  "hf_repo": ""
+}

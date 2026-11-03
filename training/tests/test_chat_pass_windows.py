@@ -12,11 +12,10 @@ class PassWindowsTests(unittest.TestCase):
         rng = np.random.default_rng(0)
         with tempfile.TemporaryDirectory() as folder:
             for name in ("a", "b"):
-                lengths = rng.integers(2, 30, 40)
-                conversations = [
-                    (list(rng.integers(0, 100, n)), [0] + [1] * (n - 1)) for n in lengths
-                ]
-                chat_sft._write(chat_sft.Path(folder), name, conversations)
+                writer = chat_sft.SubsetWriter(folder, name)
+                for n in rng.integers(2, 30, 40):
+                    writer.write(rng.integers(0, 100, n), [0] + [1] * (n - 1), False)
+                writer.close()
             recipe = {"subsets": [{"name": "a"}, {"name": "b", "repeat": 1.5}], "context": 32}
             expected = chat_sft.pass_windows(chat_sft.ChatMixture(recipe, folder))
             mixture, packed = chat_sft.ChatMixture(recipe, folder), 0

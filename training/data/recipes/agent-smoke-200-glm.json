@@ -1,7 +1,7 @@
 {
   "name": "agent-smoke-200-glm",
   "format": "chat-sft",
-  "description": "The smoke-200 agent mix (modal_scripts/modal_agent_sft.py MIXES) in GLM's chat format for the hybrid: one subset per source, written by `prepare --mix smoke-200 --chat glm`, with the mix's repeats and a hash-selected held-out fraction.",
+  "description": "The smoke-200 agent mix (modal_scripts/modal_agent_mix.py MIXES) in GLM's chat format for the hybrid: one subset per source, written by `prepare --mix smoke-200 --chat glm`, with the mix's repeats and a hash-selected held-out fraction.",
   "agent_mix": "smoke-200",
   "subsets": [
     {
