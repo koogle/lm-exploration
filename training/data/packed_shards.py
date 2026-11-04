@@ -89,7 +89,22 @@ def build_screen(recipe, tokenizer, download=hub_download):
         texts = []
         for file in benchmark["files"]:
             path = download(benchmark["repo"], benchmark["revision"], file)
-            texts.extend(benchmark_texts(benchmark, pq.read_table(path)))
+            if Path(path).suffix == ".jsonl":
+                # LiveCodeBench releases are JSONL; only inspect declared fields.
+                # Test payloads can be large and are not training inputs.
+                import pyarrow as pa
+
+                with Path(path).open() as handle:
+                    rows = [
+                        {key: row[key] for key in benchmark["columns"]}
+                        for line in handle
+                        if line.strip()
+                        for row in [json.loads(line)]
+                    ]
+                table = pa.Table.from_pylist(rows)
+            else:
+                table = pq.read_table(path, columns=benchmark["columns"])
+            texts.extend(benchmark_texts(benchmark, table))
         encodings = tokenizer.encode_batch(texts, add_special_tokens=False)
         found = [ngram_hashes(e.ids, n) for e in encodings]
         hashes.extend(found)
