@@ -285,6 +285,45 @@ comparisons, not each arm's own training distribution. Small models may score ze
 on hard LCB tasks, so also evaluate short executable problems and source-stratified
 BPB. Recheck the winner at target scale before extrapolating.
 
+## Evidence from failed agent-trajectory training
+
+The merged [public-trajectory and scale-500k findings](HYBRID_V2.md#public-trajectory-mixes-on-eight-h100s-2026-11-02)
+constrain this plan. These experiments used **trajectory SFT**, not policy-gradient
+RL, even when their source trajectories came from agent/RL environments.
+
+- Qwen3-0.6B completed approximately 494k trajectories, finishing at loss 0.344,
+  yet resolved **0/179** held-out PR tasks. It repeated about 75% of calls and
+  submitted only two episodes. The prepared mix contained 7.41B total tokens,
+  including 2.57B assistant tokens.
+- Source repetition was much lower: mini-coder 10.4%, Open-SWE-Traces 2.5%, our
+  GLM trajectories 0.7%. Filtering repetitive teacher traces alone does not address
+  the student's observed failure to recover during long episodes.
+- The roughly 49k mixed arm resolved 3/179 with 100 turns and **0/89** on
+  Terminal-Bench 2.1; 80 terminal trials timed out. Low SFT loss, patches and longer
+  episodes did not establish reliable task completion.
+- The same-mix 1.7B control stopped before a full pass; its 64k-trajectory evaluation
+  resolved one task. Separate mini-coder-1.7b resolved 11/179 in its own format with
+  40 turns. Size, mixture and format effects are not isolated. The 720M hybrid run
+  stopped before its first checkpoint and is not a completed negative result.
+
+**Decision:** retain the near-1B target for single-problem coding and explicit
+reasoning training. More agent trajectories, lower SFT loss, or moving from 0.6B to
+1B cannot be assumed to establish agentic capability. These findings do not directly
+measure LiveCodeBench or rule out gains from verifiable code reasoning.
+
+Allocate no large agent-trajectory SFT run from this plan's budget until a bounded
+pilot shows independent resolved-task improvement and substantially better completion
+and repetition behavior. Keep task split, format, sampling, turn limit and output
+budget fixed for comparisons. Long-episode agent work remains secondary to coding
+pass@1. If revisited, test corrections on student-generated failures or verifiable
+outcome RL in a small ablation; these are hypotheses, not demonstrated fixes.
+
+Reuse the merged shared-loop reference adapter and chat-SFT layout for controls.
+Track conversation and assistant tokens separately from packed-window and padding
+tokens when comparing throughput or allocating budget. The current 128M pretraining
+plumbing run keeps its launched commit and recipe; it does not consume agent
+trajectories and cannot answer this capability question.
+
 ## Stage gates and token budgets
 
 | Stage | Planned scope | Required evidence before advancing |
