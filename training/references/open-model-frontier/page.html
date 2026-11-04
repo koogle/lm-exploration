@@ -128,7 +128,7 @@ tr.fr td:first-child { font-weight: 600; }
 <div class="wrap">
   <header>
     <h1>Open Model Size Frontier</h1>
-    <p class="lede">Self-reported benchmark scores for open-weight models released from January 2025 to October 2026 (plus a few 2024 small-model references), plotted against parameter count on a log scale, plus agentic results (SWE-bench, Terminal-Bench) for research fine-tunes and independent runs by Artificial Analysis. The step line is the Pareto frontier: models that no smaller model beats on the selected benchmark. The amber lines mark our model sizes: the 150M Simple LLM, the 720M hybrid, and 1B and 2B, the largest we would train. Use the size range to zoom into small models.</p>
+    <p class="lede">Self-reported benchmark scores for open-weight models released from January 2025 to October 2026 (plus a few 2024 small-model references), plotted against parameter count on a log scale, plus agentic results (SWE-bench, Terminal-Bench) for research fine-tunes and independent runs by Artificial Analysis. The step line is the Pareto frontier: models that no smaller model beats on the selected benchmark. The amber lines mark our model sizes: the 150M Simple LLM, the 720M hybrid, the strict 1B target ceiling, and a 2B comparison marker. Use the size range to zoom into small models.</p>
     <p class="meta" id="meta"></p>
   </header>
 
@@ -148,6 +148,7 @@ tr.fr td:first-child { font-weight: 600; }
       <div class="crow">
         <span class="clabel">Size range</span>
         <div class="chips">
+          <button class="chip" id="rg-1" aria-pressed="false">Up to 1B</button>
           <button class="chip" id="rg-2" aria-pressed="false">Up to 2B</button>
           <button class="chip" id="rg-40" aria-pressed="true">Up to 40B</button>
           <button class="chip" id="rg-all" aria-pressed="false">All sizes</button>
@@ -191,8 +192,8 @@ tr.fr td:first-child { font-weight: 600; }
     <h2>How small can an agent be?</h2>
     <div class="findings">
       <div class="finding">
-        <h3>Nothing at or below 1B solves agentic tasks yet</h3>
-        <p>Artificial Analysis ran Terminal-Bench Hard on every model it lists. All of them at 1.6B or below scored <span class="num">0</span>, including Gemma 3 270M, Granite 4.0 350M, Qwen3.5-0.8B, LFM2.5-1.2B, EXAONE 4.0 1.2B and MiniCPM5-1B. On Terminal-Bench 2.1 the best sub-1B results are noise: Qwen3.5-0.8B solved 1 of 267 trials (<span class="num">0.37</span>) and K2 Horizon 0.9B 3 of 267 (<span class="num">1.12</span>). No SWE-bench result exists for any model at or below 1B, not even a zero. Any reproducible solve at 720M–1B would be new.</p>
+        <h3>Sub-1B agentic evidence remains sparse</h3>
+        <p>In the collected independent runs, Qwen3.5-0.8B solved 1 of 267 Terminal-Bench 2.1 trials (<span class="num">0.37%</span>). K2 Horizon “0.9B” solved 3 of 267 (<span class="num">1.12%</span>), but its stored weights contain <span class="num">1.078B</span> parameters, above our strict cutoff. These small counts do not establish reliable agentic ability. The collected SWE-bench entries contain no result at or below 1B; this is a coverage statement, not proof that no such result exists.</p>
       </div>
       <div class="finding">
         <h3>The smallest working SWE agent is 1.7B</h3>
@@ -225,8 +226,8 @@ tr.fr td:first-child { font-weight: 600; }
         <p>The best GPQA Diamond under 750M is <span class="num">30.6</span> against a 25% guess rate, and base MMLU-Pro tops out at <span class="num">31</span> (10% chance). For 150M and 720M checkpoints, code pass@1, GSM8K, HellaSwag and held-out loss carry signal. MMLU-Pro, GPQA and SWE-bench do not.</p>
       </div>
       <div class="finding">
-        <h3>Post-training moves small models furthest</h3>
-        <p>Reasoning-tuned small models jump far above their base versions: Qwen3-0.6B reaches <span class="num">77.6</span> on MATH-500 in thinking mode, and VibeThinker-1.5B reports AIME25 <span class="num">74.4</span> and LiveCodeBench <span class="num">51.1</span>. Above about 30B the frontier flattens. 27B dense models report LiveCodeBench and GPQA scores within a few points of trillion-parameter models.</p>
+        <h3>A stronger reasoning target below 1B</h3>
+        <p>MobileLLM-R1.5-950M reports <span class="num">29.1%</span> on LiveCodeBench v6, up from R1’s <span class="num">19.9%</span>; the 360M update reaches <span class="num">8.6%</span>. K2 Horizon reports <span class="num">37.4%</span> at 1.078B total parameters. Use the version-confirmed v6 view for these additions; the broader LiveCodeBench view retains historical v3–v6 results. These are published claims, not measurements from our harness.</p>
       </div>
     </div>
   </section>
@@ -266,6 +267,7 @@ tr.fr td:first-child { font-weight: 600; }
 (function () {
   const D = JSON.parse(document.getElementById('data').textContent);
   const BENCH = [
+    { k: 'livecodebench_v6', f: 1, l: 'LiveCodeBench v6', g: 'code', note: 'Version-confirmed subset from the November 4 refresh: MobileLLM-R1/R1.5 and K2 Horizon. Not a complete v6 leaderboard. MobileLLM reports average pass@1 over 16 samples, not pass@16. Protocols and output budgets still differ.' },
     { k: 'livecodebench', f: 1, l: 'LiveCodeBench', g: 'code', note: 'Pass@1 on recent competitive-programming problems. Versions differ between cards (v3–v6, date windows).' },
     { k: 'swe_bench_verified', f: 1, l: 'SWE-bench Verified', g: 'code', note: 'Share of 500 human-verified GitHub issues resolved by an agent (OpenHands, SWE-agent, mini-SWE-agent, Agentless or a vendor harness). Pass@1 or averaged runs only; best-of-N, verifier-reranked and subset results are left out.' },
     { k: 'swe_bench_pro', f: 1, l: 'SWE-bench Pro', g: 'code', note: 'Harder, contamination-resistant repository tasks from Scale AI. Mostly reported for 2026 models.' },
@@ -295,8 +297,8 @@ tr.fr td:first-child { font-weight: 600; }
     { k: 'reasoning', l: 'Reasoning', c: '--s-reasoning', shape: 'diamond' },
   ];
   const VK = Object.fromEntries(VAR.map(v => [v.k, v]));
-  const TARGETS = [{ x: 0.15, l: 'Simple LLM 150M' }, { x: 0.72, l: 'Hybrid 720M' }, { x: 1, l: '1B' }, { x: 2, l: '2B ceiling' }];
-  const RANGES = { '2': 2.6, '40': 50, 'all': Infinity };
+  const TARGETS = [{ x: 0.15, l: 'Simple LLM 150M' }, { x: 0.72, l: 'Hybrid 720M' }, { x: 1, l: '1B' }, { x: 2, l: '2B reference' }];
+  const RANGES = { '1': 1, '2': 2.6, '40': 50, 'all': Infinity };
 
   let st = { axis: 'total', show: { base: true, instruct: true, reasoning: true }, y2024: true, fmode: 'all', pinned: null, sum: 'base', range: '40', res: true, bench: 'swe_bench_verified' };
   try { const s = JSON.parse(localStorage.getItem('frontier-state') || 'null'); if (s && BK[s.bench] && RANGES[s.range]) st = Object.assign(st, s, { pinned: null }); } catch (e) {}
@@ -314,7 +316,7 @@ tr.fr td:first-child { font-weight: 600; }
   const icon = v => `<svg viewBox="0 0 12 12" aria-hidden="true">${shapeSvg(v.shape, 6, 6, 4, `var(${v.c})`)}</svg>`;
 
   const years = D.map(e => e.release).filter(Boolean).sort();
-  $('meta').textContent = `${D.length} model entries · ${new Set(D.map(e => e.org)).size} organisations · releases ${years[0]} to ${years[years.length - 1]} · collected 2026-11-01 · ${D.filter(e => e.research).length} research agent fine-tunes`;
+  $('meta').textContent = `${D.length} model entries · ${new Set(D.map(e => e.org)).size} organisations · releases ${years[0]} to ${years[years.length - 1]} · collected 2026-11-01 · small reasoning update 2026-11-04 · ${D.filter(e => e.research).length} research agent fine-tunes`;
 
   function chips() {
     for (const [id, f] of [['b-focus', 1], ['b-more', 0]]) {
@@ -326,7 +328,7 @@ tr.fr td:first-child { font-weight: 600; }
     $('variants').innerHTML = VAR.map(v => `<button class="chip" data-v="${v.k}" aria-pressed="${st.show[v.k]}">${icon(v)}${v.l}</button>`).join('');
     $('t-2024').setAttribute('aria-pressed', st.y2024); $('t-res').setAttribute('aria-pressed', st.res);
     $('ax-total').setAttribute('aria-pressed', st.axis === 'total'); $('ax-active').setAttribute('aria-pressed', st.axis === 'active');
-    for (const r of ['2', '40', 'all']) $('rg-' + r).setAttribute('aria-pressed', st.range === r);
+    for (const r of ['1', '2', '40', 'all']) $('rg-' + r).setAttribute('aria-pressed', st.range === r);
     $('fr-all').setAttribute('aria-pressed', st.fmode === 'all'); $('fr-type').setAttribute('aria-pressed', st.fmode === 'type');
     $('sum-base').setAttribute('aria-pressed', st.sum === 'base'); $('sum-post').setAttribute('aria-pressed', st.sum === 'post');
   }
@@ -380,8 +382,8 @@ tr.fr td:first-child { font-weight: 600; }
     const surf = css('--surface');
     let g = '';
     for (let v = 0; v <= ymax; v += ystep) g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)" stroke-width="1"/><text class="tick" x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
-    const tickSets = { '2': [0.05, 0.1, 0.2, 0.3, 0.5, 1, 2], '40': [0.05, 0.1, 0.3, 1, 3, 10, 30], 'all': [0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000] };
-    const narrowSets = { '2': [0.05, 0.1, 0.2, 0.5, 1, 2], '40': [0.1, 1, 10], 'all': [0.1, 1, 10, 100, 1000] };
+    const tickSets = { '1': [0.05, 0.1, 0.2, 0.3, 0.5, 1], '2': [0.05, 0.1, 0.2, 0.3, 0.5, 1, 2], '40': [0.05, 0.1, 0.3, 1, 3, 10, 30], 'all': [0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000] };
+    const narrowSets = { '1': [0.05, 0.1, 0.2, 0.5, 1], '2': [0.05, 0.1, 0.2, 0.5, 1, 2], '40': [0.1, 1, 10], 'all': [0.1, 1, 10, 100, 1000] };
     const ticks = (narrow ? narrowSets : tickSets)[st.range].filter(t => t >= xmin && t <= xmax);
     for (const t of ticks) g += `<line x1="${X(t)}" x2="${X(t)}" y1="${m.t}" y2="${H - m.b}" stroke="var(--grid)" stroke-width="1"/><text class="tick" x="${X(t)}" y="${H - m.b + 18}" text-anchor="middle">${fmtP(t)}</text>`;
     g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--rule)"/>`;
@@ -389,7 +391,7 @@ tr.fr td:first-child { font-weight: 600; }
     const bm = BK[st.bench];
     if (bm.chance && bm.chance < ymax) g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(bm.chance)}" y2="${Y(bm.chance)}" stroke="var(--fg-3)" stroke-dasharray="2 4"/><text class="clabel-svg" x="${W - m.r - 4}" y="${Y(bm.chance) - 5}" text-anchor="end">chance ${bm.chance}</text>`;
     const TV = TARGETS.filter(t => t.x <= xmax);
-    TV.forEach((t, i) => { const x = X(t.x); const left = TV[i + 1] && X(TV[i + 1].x) - x < t.l.length * 6.4 + 10; g += `<line x1="${x}" x2="${x}" y1="${m.t}" y2="${H - m.b}" stroke="var(--target)" stroke-width="1.5" stroke-dasharray="5 4"/><text class="tlabel" x="${left ? x - 5 : x + 5}" y="${m.t + 12 + i * 15}" text-anchor="${left ? 'end' : 'start'}">${t.l}</text>`; });
+    TV.forEach((t, i) => { const x = X(t.x); const left = x > W - 80 || TV[i + 1] && X(TV[i + 1].x) - x < t.l.length * 6.4 + 10; g += `<line x1="${x}" x2="${x}" y1="${m.t}" y2="${H - m.b}" stroke="var(--target)" stroke-width="1.5" stroke-dasharray="5 4"/><text class="tlabel" x="${left ? x - 5 : x + 5}" y="${m.t + 12 + i * 15}" text-anchor="${left ? 'end' : 'start'}">${t.l}</text>`; });
 
     // frontiers
     if (!pts.length) g += `<text class="axis-title" x="${(m.l + W - m.r) / 2}" y="${(m.t + H - m.b) / 2}" text-anchor="middle">No model in this size range reports ${esc(bm.l)}</text>`;

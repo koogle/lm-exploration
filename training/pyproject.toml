@@ -54,7 +54,7 @@ playground = "analysis/playground"
 trainer = ["kernels/*.cu"]
 model_hybrid = ["kernels/*.cu", "recipes/*.json", "configs/*.json"]
 workflows = ["*.json", "model_configs/*.json", "model_configs/historical/*.json", "datasets/*.json"]
-training_data = ["mini_swe_instructions.txt"]
+training_data = ["mini_swe_instructions.txt", "open_swe_instructions.txt"]
 
 [dependency-groups]
 dev = [

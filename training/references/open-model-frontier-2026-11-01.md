@@ -15,10 +15,34 @@ and leaderboards; nothing here is measured by us.
   per benchmark, size ranges, best score at or below each size, knowledge against
   agentic scores, before/after agentic training).
 
+## November 4 refresh
+
+Added MobileLLM-R1.5-360M and 950M, and K2 Horizon's reasoning benchmarks.
+LiveCodeBench v6 scores are 8.6, 29.1 and 37.4 respectively. The broad LCB chart
+continues to mix historical versions; the new v6 selector is a version-confirmed
+subset of this refresh, not a complete v6 leaderboard. MobileLLM averages pass@1
+over 16 samples, which is different from pass@16.
+
+HF safetensors metadata gives 949,685,760 parameters for MobileLLM-R1.5-950M,
+1,078,285,824 for K2 Horizon “0.9B”, and 873,438,784 for Qwen3.5-0.8B including
+vision. K2's agentic entries now use the same corrected total. The page has a
+strict ≤1B range and treats 2B as a comparison marker, not our training ceiling.
+
+The refreshed sources, generated page, data and screenshots are in the HF results
+repository under `training/references/open-model-frontier/updates/2026-11-04/`.
+[Browse the refreshed sources and outputs](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/references/open-model-frontier/updates/2026-11-04).
+Rebuild with the existing `build.py --sources <downloaded update>/sources --out <output>`.
+
+![Updated LiveCodeBench frontier](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/updates/2026-11-04/images/livecodebench-2b.png)
+![Updated Terminal-Bench 2.1 frontier](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/references/open-model-frontier/updates/2026-11-04/images/terminal_bench_2_1-2b.png)
+
+The original source snapshot and charts in the Charts section remain the November 1 archive.
+See [reasoning training](reasoning-training-2026-11-04.md) for the recipe comparison.
+
 ## Coverage
 
-579 entries: 242 model variants from cards (base, instruct and reasoning separately,
-each with its source URL) and 337 more from agentic results, 147 of them research
+581 entries after the November 4 refresh: 245 model variants from cards (base, instruct and reasoning separately,
+each with its source URL) and 336 more from agentic results, 147 of them research
 fine-tunes (SWE-Gym, SWE-smith, SWE-Hero, SWE-Lego, mini-coder, TMax and others).
 Benchmarks: LiveCodeBench, SWE-bench Verified/Pro/Multilingual, Terminal-Bench
 1.0/2.0/2.1 and Artificial Analysis's hard subset, MMLU-Pro, GPQA Diamond, AIME 2025,
@@ -65,11 +89,12 @@ research agent fine-tunes. Zoomed views rescale the score axis.
   HumanEval 36.0, MBPP 52.1, GSM8K 60.2, MMLU 55.0.
 - **Knowledge benchmarks sit near chance under 1B.** Best GPQA Diamond under 750M
   is 30.6 (chance 25); base MMLU-Pro tops out at 31 (chance 10).
-- **No agentic result at or below 1B.** Every model of 1.6B or less on Artificial
+- **Sub-1B agentic evidence is sparse.** Every model of 1.6B or less on Artificial
   Analysis's Terminal-Bench hard subset scores 0 (Gemma 3 270M, Granite 4.0 350M,
   Qwen3.5-0.8B, LFM2.5-1.2B, EXAONE 4.0 1.2B, MiniCPM5-1B). On Terminal-Bench 2.1
-  the best sub-1B result is K2 Horizon 0.9B, 3 solves in 267 trials. No SWE-bench
-  result exists for any model at or below 1B.
+  Qwen3.5-0.8B has 1 solve in 267 trials. K2 Horizon 0.9B has 3, but its
+  1.078B stored parameters exceed the strict cutoff. The collected SWE-bench
+  entries contain no result at or below 1B; this is not an exhaustive absence claim.
 - **The smallest working SWE agent is 1.7B.** mini-coder-1.7b (Qwen3-1.7B trained on
   about 400k SWE-smith trajectories from Qwen3-Coder-30B-A3B) resolves 18.6% of
   SWE-bench Verified with bash-only mini-SWE-agent; the untrained model scores 0%

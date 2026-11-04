@@ -1,0 +1,31 @@
+{
+  "name": "agent-scale-500k-qwen",
+  "format": "chat-sft",
+  "description": "The scale-500k agent mix (modal_scripts/modal_agent_mix.py MIXES) in Qwen3 ChatML for the Qwen reference bases: one subset per source, written by `prepare --mix scale-500k --chat qwen`, with the mix's repeats and a hash-selected held-out fraction.",
+  "agent_mix": "scale-500k",
+  "subsets": [
+    {
+      "name": "open-swe"
+    },
+    {
+      "name": "mini-coder"
+    },
+    {
+      "name": "nemotron-terminal"
+    },
+    {
+      "name": "terminal-lego"
+    },
+    {
+      "name": "pr-glm",
+      "repeat": 5
+    }
+  ],
+  "context": 40960,
+  "heldout_fraction": 0.002,
+  "eos_id": 151643,
+  "tokenizer": {
+    "repo": "Qwen/Qwen3-1.7B-Base",
+    "revision": "ea980cb0a6c2ae4b936e82123acc929f1cec04c1"
+  }
+}
