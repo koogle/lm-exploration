@@ -48,6 +48,31 @@ checkpoint continuity and successful export. A loss reduction on this tiny run
 is not sufficient evidence of mixture quality. Published run outputs belong in
 HF `jfrick/lm-exploration-results`, under `training/sub1b-pilot/`.
 
+### Reproduce the control pilot
+
+Run from `training/` with corpus dependencies and the Modal CLI installed:
+
+```sh
+python -m training_data.audit_coding_mix \
+  --plan data/coding-control-ccmath-sample-v1.json \
+  --out artifacts/coding-control-ccmath-pilot \
+  --rows-per-source 2048 --windows 100
+modal volume put lm-exploration-hybrid-data \
+  artifacts/coding-control-ccmath-pilot/prepared /coding-control-ccmath-pilot
+modal run --detach -m workflows.modal_train::main \
+  --workflow workflows/sub1b-control-smoke.json --run-id sub1b-control-20261104-01
+```
+
+The audit refuses an existing output directory. Compare the generated recipe with
+the checked-in active recipe before uploading; a changed source sample requires a
+new recipe identity and run ID. In the managed cloud environment, use the existing
+`python data/eu/modal_cli.py` wrapper in place of `modal` to retain CA trust, with
+`modal[api-proxy-support]` installed. Do not bypass TLS verification or the proxy.
+
+Stop gracefully with `modal run -m workflows.modal_train::stop --run-id <run>`.
+The data and checkpoint volumes persist after an app exits. Preparation evidence:
+[HF control audit](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/control-ccmath-20261104/preparation).
+
 ## Architecture candidate
 
 [`hybrid-960m-model.json`](../hybrid/configs/hybrid-960m-model.json) defines a
