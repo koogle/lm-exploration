@@ -58,8 +58,9 @@ Authenticated data-byte probes on November 4, not just model-card access:
 | --- | --- | --- |
 | [Nemotron-CC-Code-v1](https://huggingface.co/datasets/nvidia/Nemotron-CC-Code-v1) | Extracted web code text for pretraining | HTTP 403: awaiting author review after terms acceptance. Keep its planned slot pending. |
 | [Nemotron-Pretraining-Code-v3](https://huggingface.co/datasets/nvidia/Nemotron-Pretraining-Code-v3) | Incremental GitHub corpus metadata | HTTP 206. Contains commit IDs, paths and language, not source text. Requires retrieval plus license/provenance validation; intended alongside v1/v2. |
-| [Nemotron-CC-Math-v1](https://huggingface.co/datasets/nvidia/Nemotron-CC-Math-v1) | Math web text for pretraining | HTTP 403. Its 4+ subset is a candidate comparison against FineMath, pending access. |
+| [Nemotron-CC-Math-v1](https://huggingface.co/datasets/nvidia/Nemotron-CC-Math-v1) | Math web text for pretraining | Access confirmed after the permission update: authenticated HTTP 206 and Parquet header read from `3/part_000000.parquet`. Its 4+ subset remains a candidate comparison against FineMath; subset selection and sample preparation are still pending. |
 | [Nemotron-Math-v2](https://huggingface.co/datasets/nvidia/Nemotron-Math-v2) | Reasoning trajectories at multiple budgets, with/without tools | HTTP 206. Useful for a length/budget curriculum and tool-free initial SFT. |
+| [Nemotron-SFT-Math-v3](https://huggingface.co/datasets/nvidia/Nemotron-SFT-Math-v3) | Reasoning SFT with and without Python tools | HTTP 206 verified against `data/train.jsonl`. Shares seed problems with v2/v4. |
 | [Nemotron-SFT-Math-v4](https://huggingface.co/datasets/nvidia/Nemotron-SFT-Math-v4) | Newer reasoning SFT candidate | HTTP 206. DeepSeek-V4-Pro high-mode solutions on Math-v2 problems, filtered by final-answer agreement. Compare length and learnability against v2 before selecting. |
 
 Math-v2, SFT-Math-v3 and v4 reuse seed problems: split by problem identity across

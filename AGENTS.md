@@ -30,6 +30,30 @@ format fallbacks, version switches). Old artifacts stay on HF with their provena
 if one is needed later, write the compatibility code then, for that one use. Safety and
 correctness checks against the current format stay.
 
+## Reuse existing infrastructure
+
+Before writing a training loop, data layout, data loader, launcher, deadline
+supervisor, evaluation harness, export/upload step or benchmark, find the one the
+repository already has and extend it. In `training/`, read `trainer/README.md`,
+`workflows/README.md`, `publication/README.md` and the owning folder's README first.
+
+- One training loop: `trainer/loop.py`. A new model or model family is a family
+  adapter for it (see `trainer/README.md`), not a new loop with its own optimizer
+  steps, checkpoints, resume or metrics.
+- One packed SFT data layout: chat-SFT subsets (`training_data.chat_sft`), packed by
+  `ChatMixture`. New sources and tokenizers write that layout. They do not get a new
+  token-file format, sampler or load balancer.
+- One launch pattern per Modal app. Reuse the existing deadline-supervisor helpers
+  (`modal_benchmarks.enforce_deadline`, `modal_agentic._spawn_all`, the workflows) and
+  existing model-serving and evaluation code rather than copying them into a new script.
+- Speed problems in shared infrastructure are fixed in that infrastructure, where
+  every family gets the fix.
+- If the existing piece cannot serve the new case, extend it (a parameter, a hook, a
+  family) and say in the pull request why. A parallel implementation needs a stated
+  reason, and the old one is consolidated into it in the same change.
+- Pull requests are split by meaning: code changes in reviewable units, and findings
+  (plans, measured results) in their own documentation change.
+
 ## Modal job runtime
 
 Every Modal job launched by an agent must stop automatically within 24 hours

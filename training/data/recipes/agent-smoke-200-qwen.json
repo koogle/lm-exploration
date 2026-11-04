@@ -1,0 +1,27 @@
+{
+  "name": "agent-smoke-200-qwen",
+  "format": "chat-sft",
+  "description": "The smoke-200 agent mix (modal_scripts/modal_agent_mix.py MIXES) in Qwen3 ChatML for the Qwen reference bases: one subset per source, written by `prepare --mix smoke-200 --chat qwen`, with the mix's repeats and a hash-selected held-out fraction.",
+  "agent_mix": "smoke-200",
+  "subsets": [
+    {
+      "name": "open-swe"
+    },
+    {
+      "name": "mini-coder"
+    },
+    {
+      "name": "terminal-lego"
+    },
+    {
+      "name": "nemotron-terminal"
+    }
+  ],
+  "context": 40960,
+  "heldout_fraction": 0.05,
+  "eos_id": 151643,
+  "tokenizer": {
+    "repo": "Qwen/Qwen3-1.7B-Base",
+    "revision": "ea980cb0a6c2ae4b936e82123acc929f1cec04c1"
+  }
+}

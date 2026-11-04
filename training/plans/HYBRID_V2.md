@@ -157,9 +157,9 @@ Outputs (trajectories, summaries, run metrics, the failed launch's log):
 ## Qwen reference runs (2026-11-01)
 
 Whether broad pretraining is what the 720M student lacks: Qwen3 models, pretrained on
-36T tokens, through the same 179 held-out tasks (`modal_agentic.py::reference_train`,
-`::reference_evaluate`; vLLM, greedy, 40 turns, 1,536 new tokens per turn, as the
-hybrid evaluation).
+36T tokens, through the same 179 held-out tasks (the single-GPU `reference_train` and
+`reference_evaluate` of `modal_agentic.py` at `89a2f61`; vLLM, greedy, 40 turns, 1,536
+new tokens per turn, as the hybrid evaluation).
 
 - **Fine-tuned:** Qwen3-0.6B-Base and Qwen3-1.7B-Base, full fine-tune on the resolved
   training-repository trajectories of `glm-5.3-1793298716` in Qwen3's chat format
@@ -257,3 +257,125 @@ Outputs (evaluations with trajectories, SFT metrics and summaries,
 `mini-coder-behavior.jsonl`): `training/results/agentic-sft-pilot/` in
 `jfrick/lm-exploration-results`. Fine-tuned weights are on the `lm-exploration-hybrid-runs`
 volume (`agentic-reference/<run>/model`).
+
+## Public trajectory mixes on eight H100s (2026-11-02)
+
+Qwen3-1.7B-Base fully fine-tuned for one epoch on mixes of public trajectories (the
+standalone trainer of PR #130, `modal_scripts/modal_agent_sft.py` and
+`agent_sft_worker.py` up to `2208513`: data-parallel over 8×H100, 16 trajectories per
+step, one trajectory per forward, lr 2e-5, cosine to 10%, 40,960-token context), all rendered in the Open-SWE-Traces
+format (mini-swe-agent v2, one `bash` tool, JSON observations) or Terminus 2 for the
+terminal data, and evaluated on the same 179 held-out PR tasks in the Open-SWE format:
+
+| Arm | Mix | Trajectories | Tokens | Hours | Final loss |
+| --- | --- | ---: | ---: | ---: | ---: |
+| A | 20k resolved Open-SWE-Traces | 20,000 | 466M | 1.8 | 0.358 |
+| C | A + our 364 GLM-5.3 PR-task trajectories ×5 | 21,820 | 498M | 1.9 | 0.391 |
+| B′ | C + 12,364 Terminal-Lego + 15,000 Nemotron-Terminal | 49,184 | 797M | 3.4 | 0.357 |
+
+Resolved of 179 (sampled runs at temperature 0.7, top-p 0.8, top-k 20):
+
+| Arm | 40 turns, greedy | 40 turns, sampled | 100 turns, sampled | Repeated calls (100 turns) | Episodes with patch (100 turns) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A | 0 | 1 | 0 | 57% | 62 |
+| C | 2 | 1 | 1 | 72% | 41 |
+| B′ | 0 | 1 | 3 | 73% | 44 |
+| mini-coder SFT, 10k (above) | 1 | | | | |
+| mini-coder-1.7b (396k) | 11 | | | | |
+
+- **50k public trajectories do not reach mini-coder.** The best arm resolves 3 of 179
+  with 100 turns; mini-coder-1.7b resolves 11 with 40. Between arms the differences are
+  one to three tasks, within run-to-run noise at this rate.
+- **Long episodes loop.** With 100 turns, a third of the episodes fill the 40,960-token
+  context, and over 55% of calls repeat an earlier one (6% for mini-coder-1.7b at 40
+  turns). Open-SWE-Traces trajectories average 23k tokens, mini-coder's about 16k in the
+  same format.
+- **Terminal data does not hurt the repository tasks** (B′ ≥ C on the 100-turn run).
+- **Terminal-Bench 2.1 for B′** (Harbor 0.25.0, Terminus 2, one attempt per task,
+  temperature 0.7): 0 of 89 solved; 80 trials ended at the agent timeout.
+
+Outputs (mix manifests, training metrics and summaries, evaluations with trajectories,
+`behavior.jsonl`, a README naming the invalid evaluations): `training/results/agent-mix-sft/`
+in `jfrick/lm-exploration-results`.
+
+### About 500k trajectories (`scale-500k`, 2026-11-02/03)
+
+mini-coder's scale, to test whether trajectory count, not source, is what the arms above
+lack: every trajectory that passes each source's filters and fits 40,960 tokens.
+Prepared: 493,711 trajectories (310,878 mini-coder converted to the Open-SWE format,
+139,803 Nemotron-Terminal skill-based, 28,846 Open-SWE-Traces of 39,921 resolved,
+12,364 Terminal-Lego, 364 × 5 ours), 7.41B tokens of which 2.57B are assistant tokens,
+30,856 steps of 16 trajectories.
+
+**Training speed** (PR #130's standalone worker, up to `2208513`). The first launches ran at 2.56 s per step (Qwen3-0.6B) and 3.4 s
+(Qwen3-1.7B), 9–15% of H100 bf16 peak. Every step waited for the rank with the longest
+trajectories: on the `scale-500k` order the GPUs were busy 54–64% of the time. The
+worker now assigns each window of 64 steps' trajectories, costliest first, to the
+least-loaded (step, rank) slot (98.6% busy on the same order, same steps), uses
+Liger's RMSNorm, SwiGLU, RoPE and fused linear cross-entropy kernels, checkpoints only
+trajectories above a per-base length (none for 0.6B, 20,000 tokens for 1.7B), and pads
+each trajectory to a multiple of 1,024 tokens, so attention and Triton kernels see 40
+shapes instead of a new one per trajectory (which had doubled compute per token).
+Qwen3-0.6B: 1.07 s per step, 2.4× faster. On one H100 (`agent_sft_bench.py` at
+`2208513`), PyTorch's
+SDPA already uses cuDNN's Hopper flash kernels; FlashAttention-3 from the kernel hub
+is 6.5% faster at 16,384 tokens and 10.5% at 40,960, compiled decoder layers 0–2%, and
+a 16,384-token step spends 40% of GPU time in attention, 37% in matmuls and 23% in
+Liger and other Triton kernels, including 10% re-casting fp32 weights to bf16.
+
+**On the shared training loop.** Agent SFT for the Qwen bases now runs as a
+`trainer.loop` family (`trainer/reference.py`): the mix as Qwen3 ChatML chat SFT
+subsets (`agent-scale-500k-qwen`: 492,729 training conversations, 7.39B tokens), packed
+by `ChatMixture` into 231,311 windows of 40,961 tokens (78% of window tokens are
+conversation tokens), attention confined to each conversation with the hybrid's
+document-masked FlexAttention, and Liger kernels. Two conversations packed in one
+window give the same summed loss as each alone through Transformers' SDPA (relative
+difference 2.4e-5; `modal_agentic.py::check_reference`). Qwen3-0.6B on 8×H100: 1.635 s
+per step of 8 windows (200k window tokens/s, 21% MFU; about 156k conversation tokens/s
+against the standalone worker's 225k), so a pass of `agent-scale-500k-qwen` takes about
+13 hours against 9.0. The gap is the packing's 22% padding and FlexAttention against
+cuDNN attention: 19.0k tokens/s on one 40,960-token conversation against 24.2k.
+
+**Runs.** Qwen3-0.6B-Base, one full pass (`qwen3-0.6b-base-scale-500k-02`): 9.0 hours on
+8×H100, final loss 0.344. Qwen3-1.7B-Base (`-01`, the earlier worker) paused at step
+4,571 at 64k trajectories, to free the GPUs for gate 0. Checkpoints at the peak learning
+rate were evaluated during training.
+
+Held-out PR tasks (179, Open-SWE format, temperature 0.7, 100 turns):
+
+| Model | Trajectories read | Resolved | Repeated calls | Episodes with patch | Submitted |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Qwen3-0.6B, step 2,000 | 32k | 0 | 76% | 8 | 1 |
+| Qwen3-0.6B, step 4,000 | 64k | 0 | 81% | 2 | 0 |
+| Qwen3-0.6B, full pass | 494k | 0 | 75% | 28 | 2 |
+| Qwen3-1.7B, step 4,000 | 64k | 1 | 78% | 6 | 1 |
+
+- **Qwen3-0.6B resolves nothing after the full pass.** More data and the decayed
+  learning rate raise patches from 2–8 to 28, but three quarters of its calls still
+  repeat an earlier one; 75% of its 14,378 calls are `grep`.
+- **The looping is not in the training data.** Over the whole published mix
+  (`evaluation.agentic_behavior --mix`, the same definition of a repeated call: same
+  tool and arguments earlier in the episode), mini-coder's 310,878 trajectories repeat
+  10.4% of their 10.6M calls, Open-SWE-Traces 2.5% and our GLM-5.3 trajectories 0.7%;
+  1,264 trajectories (0.4%) repeat more than 30%. The trained 0.6B repeats 75% of its
+  calls on the held-out tasks, seven times its noisiest source. Its loops are its own
+  errors compounding over a long episode, not copied behaviour, so filtering repetitive
+  trajectories alone cannot remove them; a harness that answers a repeated command
+  with its earlier output, training on corrections of the student's own episodes, or a
+  repetition penalty in RL target that failure.
+- **Gate 0 is not decided yet.** Gate 0 asks whether a 0.6B-class model resolves
+  held-out tasks after about 500k trajectories, before the 720M hybrid gets more
+  pre-training; resolving nothing points at model size. But the 1.7B control on the
+  same mix has not finished its pass: at 64k trajectories it
+  resolves 1, and mini-coder-1.7b, trained on the same mini-coder rollouts in their own
+  bash-block format, resolves 11 with 40 turns. Until the 1.7B pass finishes, the 0.6B
+  result does not separate model size from the converted mix.
+- The 720M hybrid's preparation of the same candidates in GLM's chat format
+  (`agent-scale-500k-glm`: 496,217 conversations, 6.94B tokens) and its fine-tune
+  (`hybrid-720m-agent-scale-500k-01`, 40,960 context, KDA activation checkpointing,
+  about 23k tokens/s per GPU because `torch.compile` hits its recompile limit) were
+  stopped after about 45 minutes, before the first checkpoint.
+
+Outputs (mix manifests, run metrics and summaries, the evaluations with trajectories,
+`scale-500k-behavior.jsonl`, step benchmarks, the Terminal-Bench job folder):
+`training/results/agent-mix-sft/` in `jfrick/lm-exploration-results`.
