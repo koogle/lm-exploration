@@ -17,7 +17,7 @@ from workflows.images import add_project
 cpu_image = add_project(
     modal.Image.debian_slim(python_version="3.12")
     .pip_install(
-        "tokenizers==0.22.2", "requests==2.34.2", "pyarrow==26.0.0", "huggingface-hub==1.33.0"
+        "numpy", "tokenizers==0.22.2", "requests==2.34.2", "pyarrow==26.0.0", "huggingface-hub==1.33.0"
     )
     .env({"PYTHONPATH": "/project"})
 )
