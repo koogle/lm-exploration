@@ -6,7 +6,6 @@ Run from training/: python -m training_data.audit_coding_mix --plan <json> --out
 
 import argparse
 import copy
-import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -16,18 +15,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from training_data import packed_shards as packed
 from training_data.licenses import PERMISSIVE_LICENSES
+from training_data.packed_shards import document_key, partition
 
 from tokenizer import glm
-
-
-def document_key(text):
-    text = "\n".join(line.rstrip() for line in text.replace("\r\n", "\n").splitlines()).strip()
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
-def partition(key):
-    """Content-stable split shared by all sources: 10% held out."""
-    return int(key[:16], 16) % 10 == 0
 
 
 def select_rows(rows, source, seen):

@@ -64,6 +64,44 @@ def check_capacity(report, target):
         raise ValueError("Every source needs validation data")
 
 
+def check_hybrid_capacity(recipe, root, target, context):
+    """Verify every required shard before allocating training GPUs; single pass only."""
+    import json
+    from pathlib import Path
+
+    from training_data.packed_shards import heldout_index, shard_paths, source_root
+
+    if recipe.get("format") == "chat-sft":
+        return None  # ChatMixture owns conversation packing and its capacity.
+    capacity = {}
+    for name, source in recipe["sources"].items():
+        if source["max_passes"] != 1:
+            raise ValueError(f"{name}: only single-pass capacity is supported")
+        train, validation = 0, 0
+        for index in range(source["shards"]):
+            binary, docs, metadata = shard_paths(source_root(recipe, Path(root), name), name, index)
+            meta = json.loads(metadata.read_text())
+            if not docs.is_file() or binary.stat().st_size != meta["tokens"] * 4:
+                raise ValueError(f"{name}/{index}: incomplete prepared shard")
+            if bool(meta["heldout"]) != (index == heldout_index(source)):
+                raise ValueError(f"{name}/{index}: incorrect heldout assignment")
+            if meta["heldout"]:
+                validation += meta["tokens"]
+            else:
+                train += meta["tokens"]
+        needed = math.ceil(target * source["weight"]) + context + 1
+        if train < needed or validation <= 0:
+            raise ValueError(
+                f"{name}: {train} train tokens, needs {needed}; validation={validation}"
+            )
+        capacity[name] = {
+            "train_tokens": train,
+            "needed_tokens": needed,
+            "validation_tokens": validation,
+        }
+    return capacity
+
+
 def _numbers(value):
     if isinstance(value, dict):
         return [n for v in value.values() for n in _numbers(v)]

@@ -41,6 +41,7 @@ image = (
     )
     .add_local_dir("workflows", "/project/workflows", ignore=["__pycache__"])
     .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
+    .add_local_dir("tokenizer", "/project/tokenizer", ignore=["__pycache__"])
     .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__", "kernels"])
 )
 ROOT = Path("/data")

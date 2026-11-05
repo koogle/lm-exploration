@@ -49,7 +49,14 @@ def run_torchrun(module, args, gpus, timeout):
     image=image, gpu="H100:8", cpu=32, memory=262144, timeout=1800, retries=0, volumes=VOLUMES
 )
 def benchmark(
-    config, gpus, steps, microbatch, global_rows, document_tokens, deadline, profile=False,
+    config,
+    gpus,
+    steps,
+    microbatch,
+    global_rows,
+    document_tokens,
+    deadline,
+    profile=False,
     run_id="",
 ):
     if time.time() >= deadline:
@@ -75,8 +82,11 @@ def benchmark(
         "microbatch": microbatch or config["microbatch"],
         "torch": torch.__version__,
         **(summarize(lines, skip=10 if profile else 5) if code == 0 else {}),
-        **({"profile": json.loads(Path("/tmp/profile.json").read_text())}
-           if profile and Path("/tmp/profile.json").exists() else {}),
+        **(
+            {"profile": json.loads(Path("/tmp/profile.json").read_text())}
+            if profile and Path("/tmp/profile.json").exists()
+            else {}
+        ),
     }
     if run_id:
         folder = Path("/runs/throughput") / run_id
@@ -175,8 +185,17 @@ def bench(
     except Exception:
         call.cancel()
         raise
-    print(json.dumps({"run_id": run_id, "call": call.object_id,
-                      "supervisor": supervisor.object_id, "deadline": deadline}), flush=True)
+    print(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "call": call.object_id,
+                "supervisor": supervisor.object_id,
+                "deadline": deadline,
+            }
+        ),
+        flush=True,
+    )
     print(json.dumps(call.get(), indent=2))
 
 

@@ -669,6 +669,14 @@ def launch_hybrid(run_id, bundle, provenance, resume="", init_from=""):
     recipe = json.loads(Path(settings["recipe"]).read_text())
     if not (Path("/hybrid-data") / recipe["name"]).is_dir():
         raise ValueError(f"Prepare the {recipe['name']} recipe on the hybrid data volume first")
+    from workflows.checks import check_hybrid_capacity
+
+    capacity = check_hybrid_capacity(
+        recipe,
+        Path("/hybrid-data") / recipe["name"],
+        settings["target_tokens"],
+        settings.get("context") or settings["model"]["block_size"],
+    )
     if resume and not (Path("/hybrid-runs") / resume).exists():
         raise ValueError(f"No checkpoint {resume} on the hybrid runs volume")
     if init_from and not (Path("/hybrid-runs") / init_from / "model.safetensors").exists():
@@ -676,7 +684,14 @@ def launch_hybrid(run_id, bundle, provenance, resume="", init_from=""):
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=False)
     provenance = {**provenance, "resolved_workflow": bundle}
-    record(run_id, "launched", recipe=recipe["name"], resume=resume, provenance=provenance)
+    record(
+        run_id,
+        "launched",
+        recipe=recipe["name"],
+        resume=resume,
+        provenance=provenance,
+        capacity=capacity,
+    )
     call_id = spawn_training(run_id, None, bundle, provenance, initial_resume=resume)
     return {"training_call_id": call_id, "recipe": recipe["name"]}
 

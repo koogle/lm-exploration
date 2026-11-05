@@ -147,7 +147,9 @@ def main():
                 json.dump(summary, out, indent=2)
 
         activities = [torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA]
-        schedule = torch.profiler.schedule(wait=PROFILE_SKIP - 1, warmup=1, active=PROFILE_STEPS)
+        schedule = torch.profiler.schedule(
+            wait=PROFILE_SKIP - 1, warmup=1, active=PROFILE_STEPS, repeat=1
+        )
         profiler = torch.profiler.profile(
             activities=activities, schedule=schedule, on_trace_ready=write
         )

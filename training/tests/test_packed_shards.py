@@ -123,6 +123,75 @@ class HybridDataTests(unittest.TestCase):
         self.assertEqual(meta["tokens"], len(expected) + 1)
         self.assertEqual(meta["bytes"], len(expected.encode()))
 
+    def test_content_and_repository_splits_across_files(self):
+        texts = [f"unique text {i}" for i in range(200)]
+        repos = [f"repo-{i}" for i in range(200)]
+        table = pa.table({"text": texts + texts, "repo": repos + repos})
+        pq.write_table(table, self.root / "split.parquet")
+        source = {"column": "text", "hash_split": True, "split_column": "repo"}
+        partitions = []
+        for heldout in (False, True):
+            dropped = {"empty": 0}
+            found = [
+                text
+                for batch in data._text_batches(
+                    source, pq.ParquetFile(self.root / "split.parquet"), dropped, heldout=heldout
+                )
+                for text in batch
+            ]
+            self.assertEqual(len(found), len(set(found)))
+            self.assertGreater(len(found), 0)
+            self.assertGreater(dropped["duplicate"], 0)
+            for text in found:
+                i = texts.index(text)
+                self.assertEqual(data.partition(data.document_key(text)), heldout)
+                self.assertEqual(data.partition(data.document_key(repos[i])), heldout)
+            partitions.append(set(found))
+        self.assertFalse(partitions[0] & partitions[1])
+
+    def test_capacity_rejects_incomplete_and_insufficient_shards(self):
+        from workflows.checks import check_hybrid_capacity
+
+        self.prepare()
+        root = self.root / "out"
+        check_hybrid_capacity(self.recipe, root, 16, 8)
+        with self.assertRaisesRegex(ValueError, "needs"):
+            check_hybrid_capacity(self.recipe, root, 10**9, 8)
+        binary = data.shard_paths(root, "code", 0)[0]
+        binary.write_bytes(binary.read_bytes()[:-4])
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            check_hybrid_capacity(self.recipe, root, 16, 8)
+
+    def test_row_group_parts_cover_upstream_once(self):
+        pq.write_table(
+            pa.table({"text": [f"row-{i}" for i in range(24)]}),
+            self.root / "parts-0.parquet",
+            row_group_size=4,
+        )
+        self.recipe["sources"] = {
+            "web": {
+                **self.recipe["sources"]["web"],
+                "pattern": "parts-{index}.parquet",
+                "shards": 3,
+                "parts_per_file": 3,
+            }
+        }
+        metas = [
+            data.prepare_shard(
+                self.recipe,
+                "web",
+                i,
+                self.root / "out",
+                self.tokenizer,
+                np.empty(0, np.uint64),
+                EOS,
+                self.download,
+            )
+            for i in range(3)
+        ]
+        self.assertEqual(sum(m["documents"] for m in metas), 24)
+        self.assertEqual([m["upstream"]["row_groups"] for m in metas], [[0, 1], [2, 3], [4, 5]])
+
     def test_sources_prepared_under_another_recipe(self):
         self.prepare()
         other = dict(self.recipe, name="other-recipe")
