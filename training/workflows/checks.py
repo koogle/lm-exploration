@@ -108,5 +108,11 @@ def check_resume(previous, resumed, relative=0.0):
     """A resumed session's first evaluation reproduces the previous session's last one,
     exactly, or within `relative` for families whose evaluation kernels are not
     bit-reproducible across processes (generated samples are then not compared)."""
-    if not _matches(previous["final_validation"], resumed["initial_validation"], relative):
+    before, after = previous["final_validation"], resumed["initial_validation"]
+    if relative > 0:
+        # Final evaluations always sample; an initial evaluation on resume may
+        # fall between sampling steps. Samples are diagnostics, not resume evidence.
+        before = {key: value for key, value in before.items() if key != "samples"}
+        after = {key: value for key, value in after.items() if key != "samples"}
+    if not _matches(before, after, relative):
         raise ValueError("Checkpoint resume changed validation")
