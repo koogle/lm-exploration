@@ -13,7 +13,7 @@
       "name": "pretrain",
       "data": "corpus",
       "model_config": "hybrid/configs/kda-960m-100b.json",
-      "gpu": "H100",
+      "gpu": "H100!",
       "world_size": 8,
       "segment_seconds": 21600,
       "worker_timeout_seconds": 22800,
