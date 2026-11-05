@@ -154,7 +154,10 @@ from the untouched final set and report task-level uncertainty. Sparse
 Terminal-Bench solves are a secondary goal, with repeated trials and distinct
 solved tasks reported separately.
 
-## Initial mixture
+## Original mixture proposal
+
+The [KDA/data study](KDA_DATA_STUDY.md) owns the revised foundation weights and
+comparison sequence. The table below preserves the original audit hypothesis.
 
 The preparation manifest is
 [`coding-mix-sample-v1.json`](../data/coding-mix-sample-v1.json). Its source commits

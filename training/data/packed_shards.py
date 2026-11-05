@@ -155,9 +155,8 @@ def _text_batches(source, parquet, dropped, render=None):
     columns = [source["column"], *(["license"] if licenses else [])]
     columns += [c for c in (group_by, order_by) if c]
     groups = {}
-    for index in range(parquet.num_row_groups):
-        table = parquet.read_row_group(index, columns=columns)
-        rows = table.to_pylist()
+    for batch in parquet.iter_batches(batch_size=1024, columns=columns):
+        rows = batch.to_pylist()
         if licenses:
             allowed = [row["license"].lower() in PERMISSIVE_LICENSES for row in rows]
             dropped["license"] += allowed.count(False)

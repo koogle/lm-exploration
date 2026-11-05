@@ -1,0 +1,174 @@
+{
+  "name": "kda-data-study-20261105",
+  "target_tokens": 0,
+  "context": 2048,
+  "seed": 20261025,
+  "tokenizer_sha256": "19e773648cb4e65de8660ea6365e10acca112d42a854923df93db4a6f333a82d",
+  "sources": {
+    "climbmix": {
+      "repo": "karpathy/climbmix-400b-shuffle",
+      "revision": "915333b4f8b8684f39aeaafea600fea6f43fb703",
+      "column": "text",
+      "weight": 0.7,
+      "sample_files": [
+        "shard_00017.parquet",
+        "shard_00089.parquet",
+        "shard_00163.parquet",
+        "shard_00241.parquet",
+        "shard_00317.parquet",
+        "shard_00389.parquet",
+        "shard_00463.parquet",
+        "shard_00541.parquet"
+      ],
+      "sample_rows": 480000,
+      "sample_seed": 20261105
+    },
+    "code": {
+      "repo": "codeparrot/github-code-clean",
+      "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
+      "column": "code",
+      "weight": 0.2,
+      "permissive_licenses_only": true,
+      "sample_files": [
+        "data/train-00011-of-00880.parquet",
+        "data/train-00113-of-00880.parquet",
+        "data/train-00227-of-00880.parquet",
+        "data/train-00331-of-00880.parquet",
+        "data/train-00443-of-00880.parquet",
+        "data/train-00557-of-00880.parquet",
+        "data/train-00661-of-00880.parquet",
+        "data/train-00773-of-00880.parquet"
+      ],
+      "sample_rows": 240000,
+      "split_column": "repo_name",
+      "sample_seed": 20261105
+    },
+    "math": {
+      "repo": "nvidia/Nemotron-CC-Math-v1",
+      "revision": "397a2502f2028c659ba411a6c4935b464a7f03aa",
+      "column": "text",
+      "weight": 0.1,
+      "sample_files": [
+        "3/part_000007.parquet",
+        "3/part_000039.parquet",
+        "3/part_000071.parquet",
+        "3/part_000103.parquet"
+      ],
+      "sample_rows": 24000,
+      "sample_row_groups": 1,
+      "sample_seed": 20261105
+    }
+  },
+  "heldout": {
+    "shard": "last",
+    "documents": 2000
+  },
+  "contamination": {
+    "ngram": 13,
+    "benchmarks": [
+      {
+        "repo": "openai/gsm8k",
+        "revision": "740312add88f781978c0658806c59bc2815b9866",
+        "files": [
+          "main/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "question",
+          "answer"
+        ]
+      },
+      {
+        "repo": "openai/openai_humaneval",
+        "revision": "7dce6050a7d6d172f3cc5c32aa97f52fa1a2e544",
+        "files": [
+          "openai_humaneval/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "prompt",
+          "canonical_solution",
+          "test"
+        ]
+      },
+      {
+        "repo": "google-research-datasets/mbpp",
+        "revision": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
+        "files": [
+          "full/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "text",
+          "code",
+          "test_list"
+        ]
+      },
+      {
+        "repo": "cais/mmlu",
+        "revision": "c30699e8356da336a370243923dbaf21066bb9fe",
+        "files": [
+          "all/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "question",
+          "choices"
+        ]
+      },
+      {
+        "repo": "allenai/ai2_arc",
+        "revision": "210d026faf9955653af8916fad021475a3f00453",
+        "files": [
+          "ARC-Challenge/test-00000-of-00001.parquet",
+          "ARC-Easy/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "question",
+          "choices"
+        ]
+      },
+      {
+        "repo": "Rowan/hellaswag",
+        "revision": "218ec52e09a7e7462a5400043bb9a69a41d06b76",
+        "files": [
+          "data/validation-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "ctx",
+          "endings"
+        ]
+      },
+      {
+        "repo": "EleutherAI/hendrycks_math",
+        "revision": "21a5633873b6a120296cce3e2df9d5550074f4a3",
+        "files": [
+          "algebra/test-00000-of-00001.parquet",
+          "counting_and_probability/test-00000-of-00001.parquet",
+          "geometry/test-00000-of-00001.parquet",
+          "intermediate_algebra/test-00000-of-00001.parquet",
+          "number_theory/test-00000-of-00001.parquet",
+          "prealgebra/test-00000-of-00001.parquet",
+          "precalculus/test-00000-of-00001.parquet"
+        ],
+        "columns": [
+          "problem",
+          "solution"
+        ]
+      },
+      {
+        "repo": "livecodebench/code_generation_lite",
+        "revision": "0fe84c3912ea0c4d4a78037083943e8f0c4dd505",
+        "files": [
+          "test.jsonl",
+          "test2.jsonl",
+          "test3.jsonl",
+          "test4.jsonl",
+          "test5.jsonl",
+          "test6.jsonl"
+        ],
+        "columns": [
+          "question_content",
+          "starter_code"
+        ]
+      }
+    ]
+  },
+  "description": "Independent 70/20/10 general/code/CC-Math-3+ control for GPU plumbing. Does not substitute for the pending CC-Code mix."
+}

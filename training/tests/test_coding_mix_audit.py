@@ -5,13 +5,76 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from training_data.audit_coding_mix import audit, document_key, partition, select_rows
+from training_data.audit_coding_mix import (
+    audit,
+    document_key,
+    partition,
+    sample_parquet,
+    select_rows,
+)
 from training_data.packed_shards import build_screen, contaminated
 
 from tests.test_packed_shards import CharTokenizer
 
 
 class CodingMixAuditTests(unittest.TestCase):
+    def test_stratified_sample_is_deterministic_and_records_actual_rows(self):
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "sample.parquet"
+            pq.write_table(
+                pa.table({"text": [str(i) for i in range(100)]}), path, row_group_size=10
+            )
+            source = {"column": "text", "sample_row_groups": 3}
+            first = sample_parquet(pq.ParquetFile(path), source, 12, 42)
+            second = sample_parquet(pq.ParquetFile(path), source, 12, 42)
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 12)
+        self.assertEqual(len({r["_source_row"] for r in first}), 12)
+        self.assertGreater(len({r["_source_row"] // 10 for r in first}), 1)
+        self.assertTrue(all(int(r["text"]) == r["_source_row"] for r in first))
+
+    def test_repository_group_cannot_cross_split(self):
+        source = {
+            "repo": "source",
+            "revision": "pin",
+            "file": "part",
+            "column": "code",
+            "split_column": "repo_name",
+        }
+        rows = [{"code": f"value = {i}", "repo_name": "owner/project"} for i in range(20)]
+        splits, _ = select_rows(rows, source, set())
+        self.assertEqual(sorted(map(len, splits)), [0, 20])
+        self.assertTrue(all(r["split_group"] == "owner/project" for split in splits for r in split))
+
+    def test_resume_rejects_a_changed_plan(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            plan = root / "plan.json"
+            plan.write_text(json.dumps({"sources": {"code": {"weight": 1.0}}}))
+            out = root / "out"
+            out.mkdir()
+            (out / "plan.json").write_text("{}")
+            with self.assertRaisesRegex(ValueError, "identical sample plan"):
+                audit(plan, out, 512, 100, resume=True)
+
+    def test_resume_rejects_changed_raw_sample(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            plan = root / "plan.json"
+            plan.write_text(json.dumps({"sources": {"code": {"weight": 1.0}}}))
+            out = root / "out"
+            (out / "raw").mkdir(parents=True)
+            (out / "plan.json").write_bytes(plan.read_bytes())
+            (out / "raw/code-0.parquet").write_bytes(b"modified")
+            (out / "audit.json").write_text(
+                json.dumps({"sources": {"code": {"raw_sha256": ["wrong", "wrong"]}}})
+            )
+            with self.assertRaisesRegex(ValueError, "checksum mismatch"):
+                audit(plan, out, 512, 100, resume=True)
+
     def test_pending_source_blocks_preparation_before_creating_outputs(self):
         with tempfile.TemporaryDirectory() as folder:
             plan = Path(folder) / "plan.json"
