@@ -1,5 +1,12 @@
 # KDA foundation pretraining — November 5
 
+**Current status:** the user requested real-data profiling and substantial MFU
+improvement before full training. The production app was stopped during corpus
+preparation; no pretraining stage had started. Preparation continues separately
+as `kda-foundation-data-20261105-04`, which contains no training stage. Full
+pretraining remains on hold while real-data baseline, optimization and numerical
+correctness results are compared. The synthetic results below are not the gate.
+
 The user authorized pretraining with KDA and the tested 50/40/10 mixture, and
 asked to measure and improve throughput/MFU before committing the main budget.
 The 128M study's middle mix improved code BPB by 11.7% at a 3.8% general-text
