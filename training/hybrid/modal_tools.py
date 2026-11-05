@@ -61,6 +61,7 @@ def benchmark(
     real_data=False,
     compare_output_gradient=False,
     larger_microbatch=0,
+    autotune=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -97,6 +98,8 @@ def benchmark(
     )
     if larger_microbatch:
         cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))
+    if autotune:
+        cases.append(("autotuned", ["--compile-mode", "max-autotune-no-cudagraphs"]))
     measurements, all_lines = {}, []
     code = 0
     for name, extra in cases:
@@ -130,7 +133,7 @@ def benchmark(
         "torch": torch.__version__,
         **(
             measurements["direct"]
-            if not compare_output_gradient and not larger_microbatch and code == 0
+            if not compare_output_gradient and not larger_microbatch and not autotune and code == 0
             else {}
         ),
         **(
@@ -208,6 +211,7 @@ def bench(
     compare_output_gradient: bool = False,
     larger_microbatch: int = 0,
     gpu: str = "H100",
+    autotune: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -218,7 +222,7 @@ def bench(
 
     if gpu not in ("H100", "H200"):
         raise ValueError("Throughput qualification supports H100 and H200")
-    if compare_output_gradient and larger_microbatch:
+    if sum([compare_output_gradient, bool(larger_microbatch), autotune]) > 1:
         raise ValueError("Compare one optimization at a time")
     settings = load_config(config)
     if mtp_loss_fraction:
@@ -241,6 +245,7 @@ def bench(
         real_data,
         compare_output_gradient,
         larger_microbatch,
+        autotune,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)

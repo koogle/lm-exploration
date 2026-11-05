@@ -138,6 +138,9 @@ def main():
     )
     parser.add_argument("--data-root", default="/data")
     parser.add_argument("--reference-output-gradient", action="store_true")
+    parser.add_argument(
+        "--compile-mode", default="default", choices=["default", "max-autotune-no-cudagraphs"]
+    )
     args = parser.parse_args()
     if args.reference_output_gradient:
         # Benchmark-only reference for a matched before/after on the same GPU.
@@ -196,6 +199,10 @@ def main():
             mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
             data = ({"synthetic": True}, lambda: mixture)
         family = family_of(config)(config, run_dir, data=data)
+        if args.compile_mode != "default":
+            import torch
+
+            family.compile = lambda model: torch.compile(model, mode=args.compile_mode)
         if profiler:
             family.after_step = lambda data, model, progress: profiler.step()
         report = loop.train(
