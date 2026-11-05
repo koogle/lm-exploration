@@ -289,17 +289,14 @@ training improvement on a fixed minibatch, held-out evaluation, checkpoint resum
 and matching CPU/CUDA behavior. A tiny successful run does not establish coding
 ability or mixture quality.
 
-Next qualify mixtures at approximately 128M and 0.5–1B tokens per arm:
-
-1. Existing 70% ClimbMix / 20% GitHub / 10% math control.
-2. 40% ClimbMix / 50% GitHub / 10% math, isolating raw-code quantity.
-3. The six-source instructional mixture above.
-
-Hold architecture, initialization, optimizer, token budget, cooldown, evaluation
-and general-data retention tests fixed. Use common held-out data for cross-arm
-comparisons, not each arm's own training distribution. Small models may score zero
-on hard LCB tasks, so also evaluate short executable problems and source-stratified
-BPB. Recheck the winner at target scale before extrapolating.
+The next authorized comparison is the four-arm, approximately 128M study in
+[KDA_DATA_STUDY.md](KDA_DATA_STUDY.md#authorized-fast-comparison--november-5):
+KDA versus all-full attention, each on 70/20/10 and 40/50/10
+ClimbMix/GitHub/CC-Math, at 250M tokens per arm. It holds tokenizer, held-out
+corpus, context, optimizer and training budget fixed. The broader revised
+foundation mixture remains conditional on source access and separate qualification.
+Small-model results guide the next experiment; they do not establish target-scale
+coding or reasoning capability.
 
 ## Evidence from failed agent-trajectory training
 
