@@ -58,6 +58,7 @@ def benchmark(
     deadline,
     profile=False,
     run_id="",
+    real_data=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -72,12 +73,17 @@ def benchmark(
         args += ["--global-rows", str(global_rows)]
     if profile:
         args += ["--profile", "/tmp/profile.json"]
+    if real_data:
+        args += ["--real-data", "--data-root", "/data"]
     code, lines = run_torchrun("model_hybrid.benchmark", args, gpus, 1500)
     import torch
 
     result = {
         "exit_code": code,
         "config": config,
+        "real_data": real_data,
+        "recipe": json.loads(Path(config["recipe"]).read_text()) if real_data else None,
+        "global_rows": global_rows or config["global_rows"],
         "gpus": gpus,
         "microbatch": microbatch or config["microbatch"],
         "torch": torch.__version__,
@@ -153,6 +159,7 @@ def bench(
     profile: bool = False,
     mtp_loss_fraction: float = 0.0,
     run_id: str = "",
+    real_data: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -179,6 +186,7 @@ def bench(
         deadline,
         profile,
         run_id,
+        real_data,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)

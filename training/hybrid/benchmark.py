@@ -28,7 +28,7 @@ from tokenizer import glm
 from trainer import loop
 
 from . import hnet
-from .train import RunConfig, family_of
+from .train import RunConfig, family_of, recipe_data
 
 PROFILE_SKIP, PROFILE_STEPS = 6, 3
 # First match wins; names are CUDA kernel names as the profiler reports them.
@@ -124,9 +124,15 @@ def main():
     parser.add_argument("--global-rows", type=int)
     parser.add_argument("--document-tokens", type=int, default=1000)
     parser.add_argument("--profile", help="write a kernel-time summary JSON here (rank 0)")
+    parser.add_argument(
+        "--real-data", action="store_true", help="read the configured prepared mixture"
+    )
+    parser.add_argument("--data-root", default="/data")
     args = parser.parse_args()
     config = RunConfig.load(args.config)
-    overrides = {"recipe": "", "hf_repo": "", "log_every_steps": 1, "checkpoint_seconds": 10**9}
+    overrides = {"hf_repo": "", "log_every_steps": 1, "checkpoint_seconds": 10**9}
+    if not args.real_data:
+        overrides["recipe"] = ""
     if args.microbatch:
         overrides["microbatch"] = args.microbatch
     if args.global_rows:
@@ -156,8 +162,19 @@ def main():
         profiler.start()
 
     with tempfile.TemporaryDirectory() as run_dir:
-        mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
-        family = family_of(config)(config, run_dir, data=({"synthetic": True}, lambda: mixture))
+        if args.real_data:
+            identity, factory, _, _ = recipe_data(config, args.data_root)
+
+            def open_mixture():
+                mixture = factory()
+                mixture.wait_seconds = 0
+                return mixture
+
+            data = (identity, open_mixture)
+        else:
+            mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
+            data = ({"synthetic": True}, lambda: mixture)
+        family = family_of(config)(config, run_dir, data=data)
         if profiler:
             family.after_step = lambda data, model, progress: profiler.step()
         loop.train(
