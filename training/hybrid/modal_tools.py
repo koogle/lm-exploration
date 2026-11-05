@@ -255,7 +255,8 @@ def bench(
     )
     deadline = new_deadline()
     run_id = run_id or f"bench-{time.time_ns()}"
-    call = benchmark.with_options(gpu=f"{gpu}:{gpus}").spawn(
+    requested_gpu = "H100!" if gpu == "H100" and require_gpu_model else gpu
+    call = benchmark.with_options(gpu=f"{requested_gpu}:{gpus}").spawn(
         settings,
         gpus,
         steps,
