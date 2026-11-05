@@ -1,6 +1,6 @@
 {
   "name": "kda-study-20261105-v2",
-  "target_tokens": 250019840,
+  "target_tokens": 200015872,
   "context": 2048,
   "seed": 20261025,
   "tokenizer_sha256": "19e773648cb4e65de8660ea6365e10acca112d42a854923df93db4a6f333a82d",

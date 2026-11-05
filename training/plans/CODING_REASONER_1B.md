@@ -292,7 +292,7 @@ ability or mixture quality.
 The next authorized comparison is the four-arm, approximately 128M study in
 [KDA_DATA_STUDY.md](KDA_DATA_STUDY.md#authorized-fast-comparison--november-5):
 KDA versus all-full attention, each on 70/20/10 and 40/50/10
-ClimbMix/GitHub/CC-Math, at 250M tokens per arm. It holds tokenizer, held-out
+ClimbMix/GitHub/CC-Math, at 200M tokens per arm. It holds tokenizer, held-out
 corpus, context, optimizer and training budget fixed. The broader revised
 foundation mixture remains conditional on source access and separate qualification.
 Small-model results guide the next experiment; they do not establish target-scale

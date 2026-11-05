@@ -1,7 +1,7 @@
 {
   "name": "study-128m-kda-codeheavy",
   "family": "hybrid",
-  "description": "250M-token 2K-context matched small-model study, one H100, independent deadline; 8-step qualification then bounded continuation.",
+  "description": "200M-token 2K-context matched small-model study, one H100, independent deadline; 8-step qualification then bounded continuation.",
   "stages": [
     {
       "stage": "pretrain",

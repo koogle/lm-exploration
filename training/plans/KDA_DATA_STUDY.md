@@ -187,7 +187,7 @@ zero retries. Training launches use the checked-in workflow configs and their bo
 The user requested parallel tests. Use a four-arm factorial instead of waiting
 for a mixture winner: KDA and all-full attention, each on A (70/20/10) and B
 (40/50/10). All arms use the same sampled ClimbMix/GitHub/CC-Math corpus, tokenizer,
-held-out documents and 2K context. Each targets 250,019,840 tokens (7,630 updates
+held-out documents and 2K context. Each targets 200,015,872 tokens (6,104 updates
 of 32,768 tokens), with the same seed, 5M-token warmup and final 20% cooldown.
 The first eight updates qualify checkpoint/resume, followed by up to two bounded
 continuation sessions. Four separate workflow launches allow actual parallelism.
@@ -237,3 +237,7 @@ The shared tokenizer uses about 79.3M embedding parameters in these small models
 so most of the 128M count is vocabulary capacity. This proportion is much larger
 than at the intended near-1B scale; do not treat the small mixer ranking as a
 precise forecast. Hold tokenizer fixed here to isolate the requested comparisons.
+
+The completed sample audit provides 23,729,413 math training tokens. The execution
+target is therefore 200M tokens per arm, leaving capacity margin at 10% math,
+rather than repeating examples to reach the initial 250M proposal.

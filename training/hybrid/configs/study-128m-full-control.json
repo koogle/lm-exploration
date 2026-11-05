@@ -21,7 +21,7 @@
     "mtp_weight_start": 0.3,
     "mtp_weight_end": 0.1
   },
-  "target_tokens": 250019840,
+  "target_tokens": 200015872,
   "global_rows": 16,
   "microbatch": 4,
   "warmup_tokens": 5000000,
