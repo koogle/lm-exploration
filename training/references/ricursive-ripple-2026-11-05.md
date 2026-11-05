@@ -46,5 +46,5 @@ The earlier agent-trajectory SFT failures in [HYBRID_V2](../plans/HYBRID_V2.md)
 show why imitation loss cannot replace execution evaluation. They were not a
 controlled negative test of policy-gradient RL or LiveCodeBench.
 
-The [KDA and data study](../plans/KDA_DATA_STUDY.md) specifies revised weights,
+The [KDA and data study in PR #143](https://github.com/koogle/lm-exploration/pull/143) specifies revised weights,
 small experiments and advancement criteria. It is a proposal, not a launched run.
