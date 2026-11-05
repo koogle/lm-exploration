@@ -4,6 +4,8 @@ Source-backed reading notes and proposed experiments for our from-scratch models
 External results are attributed to their authors; proposals are not measured
 results or changes to the agreed training plan.
 
+- [SFT task vectors after RL — 2026-11-05](sft-task-vectors-2026-11-05.md):
+  task arithmetic, limits of dataset attribution, and checkpoint/grader evaluation lessons.
 - [Ricursive Ripple — 2026-11-05](ricursive-ripple-2026-11-05.md):
   source-backed lessons for our KDA model, data curriculum and reasoning training.
 - [Looped LMs: Dory1.0-4B and Elastic Latent Recurrence — 2026-11-03](looped-lms-2026-11-03.md):
