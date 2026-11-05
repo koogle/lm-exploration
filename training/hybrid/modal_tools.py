@@ -49,7 +49,8 @@ def run_torchrun(module, args, gpus, timeout):
     image=image, gpu="H100:8", cpu=32, memory=262144, timeout=1800, retries=0, volumes=VOLUMES
 )
 def benchmark(
-    config, gpus, steps, microbatch, global_rows, document_tokens, deadline, profile=False
+    config, gpus, steps, microbatch, global_rows, document_tokens, deadline, profile=False,
+    run_id="",
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -65,17 +66,35 @@ def benchmark(
     if profile:
         args += ["--profile", "/tmp/profile.json"]
     code, lines = run_torchrun("model_hybrid.benchmark", args, gpus, 1500)
-    if code:
-        raise RuntimeError("".join(lines[-60:]))
     import torch
 
-    return {
+    result = {
+        "exit_code": code,
+        "config": config,
         "gpus": gpus,
         "microbatch": microbatch or config["microbatch"],
         "torch": torch.__version__,
-        **summarize(lines),
-        **({"profile": json.loads(Path("/tmp/profile.json").read_text())} if profile else {}),
+        **(summarize(lines, skip=10 if profile else 5) if code == 0 else {}),
+        **({"profile": json.loads(Path("/tmp/profile.json").read_text())}
+           if profile and Path("/tmp/profile.json").exists() else {}),
     }
+    if run_id:
+        folder = Path("/runs/throughput") / run_id
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "torchrun.log").write_text("".join(lines))
+        (folder / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+        runs_volume.commit()
+    if code:
+        raise RuntimeError("".join(lines[-60:]))
+    return result
+
+
+@app.function(image=image, cpu=0.25, memory=512, timeout=86400, retries=0)
+def enforce_deadline(call_ids, deadline):
+    """Use the shared supervisor for bounded throughput calls, including queue time."""
+    from workflows.deadline import calls_finished, cancel_at_deadline
+
+    return cancel_at_deadline(deadline, lambda: call_ids, lambda: calls_finished(call_ids))
 
 
 @app.function(
@@ -123,13 +142,14 @@ def bench(
     document_tokens: int = 1000,
     profile: bool = False,
     mtp_loss_fraction: float = 0.0,
+    run_id: str = "",
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
     `--profile` adds GPU kernel time per category for a few steps (see benchmark.py);
     `--mtp-loss-fraction` overrides the model's MTP loss fraction.
     """
-    from workflows.deadline import MAX_LAUNCH_SECONDS
+    from workflows.deadline import new_deadline
 
     settings = load_config(config)
     if mtp_loss_fraction:
@@ -137,17 +157,27 @@ def bench(
     rows = global_rows or (
         settings["global_rows"] if gpus == 8 else 8 * (microbatch or settings["microbatch"]) * gpus
     )
-    result = benchmark.with_options(gpu=f"H100:{gpus}").remote(
+    deadline = new_deadline()
+    run_id = run_id or f"bench-{time.time_ns()}"
+    call = benchmark.with_options(gpu=f"H100:{gpus}").spawn(
         settings,
         gpus,
         steps,
         microbatch,
         rows,
         document_tokens,
-        time.time() + MAX_LAUNCH_SECONDS,
+        deadline,
         profile,
+        run_id,
     )
-    print(json.dumps(result, indent=2))
+    try:
+        supervisor = enforce_deadline.spawn([call.object_id], deadline)
+    except Exception:
+        call.cancel()
+        raise
+    print(json.dumps({"run_id": run_id, "call": call.object_id,
+                      "supervisor": supervisor.object_id, "deadline": deadline}), flush=True)
+    print(json.dumps(call.get(), indent=2))
 
 
 @app.function(
