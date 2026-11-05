@@ -15,6 +15,7 @@ no retries.
 """
 
 import json
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -165,6 +166,9 @@ def benchmark(
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "torchrun.log").write_text("".join(lines))
         (folder / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+        trace = Path("/tmp/profile.json.trace.json.gz")
+        if profile and trace.exists():
+            shutil.copyfile(trace, folder / "trace.json.gz")
         runs_volume.commit()
     if code:
         raise RuntimeError("".join(lines[-60:]))

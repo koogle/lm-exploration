@@ -15,9 +15,11 @@ per kernel category and the slowest kernels.
 import argparse
 import collections
 import dataclasses
+import gzip
 import json
 import os
 import re
+import shutil
 import tempfile
 import time
 
@@ -113,8 +115,49 @@ def profile_summary(profiler, steps):
     for name, ms in kernels.items():
         categories[kernel_category(name)] += ms
     total = sum(categories.values())
+    phases = collections.defaultdict(lambda: {"cpu_ms_per_step": 0.0, "device_ms_per_step": 0.0})
+    for event in profiler.events():
+        if event.is_user_annotation and event.name.startswith("train/"):
+            phases[event.name]["cpu_ms_per_step"] += event.cpu_time_total / 1000 / steps
+            phases[event.name]["device_ms_per_step"] += event.device_time_total / 1000 / steps
+    # Union device intervals: overlapping streams count once. This is observed
+    # CUDA activity, not tensor-core utilization or a prediction of removable idle.
+    spans = [e.time_range for e in profiler.events() if e.name.startswith("ProfilerStep#")]
+    window = (min(s.start for s in spans), max(s.end for s in spans)) if spans else None
+    intervals = sorted(
+        (max(e.time_range.start, window[0]), min(e.time_range.end, window[1]))
+        for e in profiler.events()
+        if window
+        and e.device_type.name == "CUDA"
+        and not e.is_user_annotation
+        and e.time_range.end > window[0]
+        and e.time_range.start < window[1]
+    )
+    busy, previous_end = 0.0, window[0] if window else 0.0
+    for start, end in intervals:
+        busy += max(0.0, end - max(start, previous_end))
+        previous_end = max(previous_end, end)
+    averages = list(profiler.key_averages(group_by_input_shape=True))
+    operations = [
+        {
+            "name": e.key,
+            "shapes": e.input_shapes,
+            "calls_per_step": e.count / steps,
+            "self_device_ms_per_step": e.self_device_time_total / 1000 / steps,
+            "self_cpu_ms_per_step": e.self_cpu_time_total / 1000 / steps,
+        }
+        for e in sorted(averages, key=lambda e: e.self_device_time_total, reverse=True)[:40]
+    ]
     return {
         "steps": steps,
+        "phases": dict(phases),
+        "operations_by_shape": operations,
+        "cpu_operations": [
+            {"name": e.key, "self_cpu_ms_per_step": e.self_cpu_time_total / 1000 / steps}
+            for e in sorted(averages, key=lambda e: e.self_cpu_time_total, reverse=True)[:20]
+        ],
+        "trace_window_ms_per_step": (window[1] - window[0]) / 1000 / steps if window else None,
+        "device_busy_ms_per_step": busy / 1000 / steps,
         "gpu_kernel_ms_per_step": total,
         "categories_ms": dict(categories.most_common()),
         "categories_share": {k: v / total for k, v in categories.most_common()},
@@ -182,13 +225,18 @@ def main():
             summary = profile_summary(finished, PROFILE_STEPS)
             with open(args.profile, "w") as out:
                 json.dump(summary, out, indent=2)
+            trace = args.profile + ".trace.json"
+            finished.export_chrome_trace(trace)
+            with open(trace, "rb") as source, gzip.open(trace + ".gz", "wb") as target:
+                shutil.copyfileobj(source, target)
+            os.unlink(trace)
 
         activities = [torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA]
         schedule = torch.profiler.schedule(
             wait=PROFILE_SKIP - 1, warmup=1, active=PROFILE_STEPS, repeat=1
         )
         profiler = torch.profiler.profile(
-            activities=activities, schedule=schedule, on_trace_ready=write
+            activities=activities, schedule=schedule, on_trace_ready=write, record_shapes=True
         )
         profiler.start()
 

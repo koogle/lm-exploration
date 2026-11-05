@@ -93,9 +93,15 @@ def accumulate(ddp, parts, objective, world):
         last = index == len(parts) - 1
         # no_sync must cover forward and backward for earlier microbatches.
         with contextlib.nullcontext() if last else ddp.no_sync():
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with (
+                torch.profiler.record_function("train/forward_and_loss"),
+                torch.autocast("cuda", dtype=torch.bfloat16),
+            ):
                 value, sums = objective(*part)
-            (value * world).backward()
+            with torch.profiler.record_function(
+                "train/backward_sync" if last else "train/backward_local"
+            ):
+                (value * world).backward()
         for key, sum_ in sums.items():
             totals[key] = totals.get(key, 0) + sum_.detach()
     return totals
@@ -376,7 +382,8 @@ def train(
             torch.cuda.synchronize()
             tick = time.monotonic()
             try:
-                batch = primary(fetch)
+                with torch.profiler.record_function("train/data_fetch"):
+                    batch = primary(fetch)
             except RuntimeError as exc:
                 # All ranks received the same producer failure. Save the last
                 # completed optimizer boundary, without acknowledging bad data.
@@ -386,14 +393,19 @@ def train(
             if "stop" in batch:
                 reason = batch["stop"]
                 break
-            inputs = torch.empty((rows, batch["context"]), dtype=torch.long, device=device)
-            labels = torch.empty_like(inputs)
-            dist.scatter(inputs, list(full["inputs"].chunk(world)) if rank == 0 else None, src=0)
-            dist.scatter(labels, list(full["labels"].chunk(world)) if rank == 0 else None, src=0)
-            full.clear()
-            extras, counts = family.prepare(inputs, labels)
-            for value in counts.values():
-                dist.all_reduce(value)
+            with torch.profiler.record_function("train/scatter_prepare"):
+                inputs = torch.empty((rows, batch["context"]), dtype=torch.long, device=device)
+                labels = torch.empty_like(inputs)
+                dist.scatter(
+                    inputs, list(full["inputs"].chunk(world)) if rank == 0 else None, src=0
+                )
+                dist.scatter(
+                    labels, list(full["labels"].chunk(world)) if rank == 0 else None, src=0
+                )
+                full.clear()
+                extras, counts = family.prepare(inputs, labels)
+                for value in counts.values():
+                    dist.all_reduce(value)
             progress = {"step": step, "tokens": tokens}
             factor = family.learning_rate_factor(tokens + batch["budget"])
             set_learning_rate(optimizer, factor)
@@ -413,19 +425,23 @@ def train(
             def objective(x, y, *rest, keys=keys, counts=counts, progress=progress):
                 return family.loss(ddp, x, y, dict(zip(keys, rest, strict=True)), counts, progress)
 
-            sums = accumulate(ddp, parts, objective, world)
-            norm = torch.nn.utils.clip_grad_norm_(
-                model.parameters(), family.gradient_clip, foreach=True
-            )
-            for value in sums.values():
-                dist.all_reduce(value)
-            logged = family.log(sums, counts)
-            values = [float(norm), *(v for v in logged.values() if isinstance(v, float))]
-            if not all(math.isfinite(v) for v in values):
-                reason = "non_finite"
-                break
-            optimizer.step()
-            torch.cuda.synchronize()
+            with torch.profiler.record_function("train/accumulate"):
+                sums = accumulate(ddp, parts, objective, world)
+            with torch.profiler.record_function("train/clip_reduce_metrics"):
+                norm = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), family.gradient_clip, foreach=True
+                )
+                for value in sums.values():
+                    dist.all_reduce(value)
+                logged = family.log(sums, counts)
+                values = [float(norm), *(v for v in logged.values() if isinstance(v, float))]
+                if not all(math.isfinite(v) for v in values):
+                    reason = "non_finite"
+                    break
+            with torch.profiler.record_function("train/optimizer"):
+                optimizer.step()
+            with torch.profiler.record_function("train/device_wait"):
+                torch.cuda.synchronize()
             rank_stats = [None] * world
             dist.all_gather_object(
                 rank_stats,
@@ -461,7 +477,8 @@ def train(
                 if row["step"] == start_step + 1 or row["step"] % family.log_every == 0:
                     print(json.dumps(row), flush=True)
 
-            primary(record)
+            with torch.profiler.record_function("train/logging"):
+                primary(record)
             if step % family.evaluate_every == 0:
                 evaluate()
             due = family.checkpoint_every and step % family.checkpoint_every == 0
