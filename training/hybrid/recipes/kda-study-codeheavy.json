@@ -1,5 +1,5 @@
 {
-  "name": "kda-study-20261105",
+  "name": "kda-study-20261105-v2",
   "target_tokens": 250019840,
   "context": 2048,
   "seed": 20261025,
@@ -120,7 +120,7 @@
     "climbmix": {
       "weight": 0.4,
       "repo": "local-audit-samples",
-      "revision": "b5b380a1198dfc63e4de31bbb365b4159b79fee347716fc98ece4136d7b2642e",
+      "revision": "c0ec7bcbe4a746b3e26424a9a484a8b48006e0d950d931c85d98f9cb0d3a063f",
       "files": [
         "climbmix-0.parquet",
         "climbmix-1.parquet"
@@ -132,7 +132,7 @@
     "code": {
       "weight": 0.5,
       "repo": "local-audit-samples",
-      "revision": "b5b380a1198dfc63e4de31bbb365b4159b79fee347716fc98ece4136d7b2642e",
+      "revision": "c0ec7bcbe4a746b3e26424a9a484a8b48006e0d950d931c85d98f9cb0d3a063f",
       "files": [
         "code-0.parquet",
         "code-1.parquet"
@@ -144,7 +144,7 @@
     "math": {
       "weight": 0.1,
       "repo": "local-audit-samples",
-      "revision": "b5b380a1198dfc63e4de31bbb365b4159b79fee347716fc98ece4136d7b2642e",
+      "revision": "c0ec7bcbe4a746b3e26424a9a484a8b48006e0d950d931c85d98f9cb0d3a063f",
       "files": [
         "math-0.parquet",
         "math-1.parquet"

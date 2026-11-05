@@ -50,9 +50,9 @@
       "weight": 0.1,
       "sample_files": [
         "3/part_000007.parquet",
+        "3/part_000019.parquet",
         "3/part_000039.parquet",
-        "3/part_000071.parquet",
-        "3/part_000103.parquet"
+        "3/part_000051.parquet"
       ],
       "sample_rows": 24000,
       "sample_row_groups": 1,
