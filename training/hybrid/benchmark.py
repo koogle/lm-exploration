@@ -177,7 +177,7 @@ def main():
         family = family_of(config)(config, run_dir, data=data)
         if profiler:
             family.after_step = lambda data, model, progress: profiler.step()
-        loop.train(
+        report = loop.train(
             family,
             run_dir,
             runtime=DistributedRuntime.from_torchrun(os.environ),
@@ -185,6 +185,8 @@ def main():
             max_steps=args.steps,
             save=False,
         )
+        if report["steps"] != args.steps or report["stop_reason"] != "step_limit":
+            raise RuntimeError(f"Benchmark did not complete its requested steps: {report}")
     if profiler:
         profiler.stop()
 
