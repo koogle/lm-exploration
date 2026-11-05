@@ -75,6 +75,15 @@ def summarize(lines, skip=5):
         "tokens_per_second": float(np.median([s["tokens_per_second"] for s in timed])),
         "mfu": float(np.median([s["mfu"] for s in timed])),
         **(
+            {
+                "peak_allocated_bytes": max(
+                    r["peak_allocated_bytes"] for s in timed for r in s["ranks"]
+                )
+            }
+            if timed and "ranks" in timed[0]
+            else {}
+        ),
+        **(
             {"bytes_per_chunk": float(np.median([s["bytes_per_chunk"] for s in timed]))}
             if timed and "bytes_per_chunk" in timed[0]
             else {}
@@ -128,7 +137,19 @@ def main():
         "--real-data", action="store_true", help="read the configured prepared mixture"
     )
     parser.add_argument("--data-root", default="/data")
+    parser.add_argument("--reference-output-gradient", action="store_true")
     args = parser.parse_args()
+    if args.reference_output_gradient:
+        # Benchmark-only reference for a matched before/after on the same GPU.
+        # Production always uses the implementation in fused_loss.py.
+        import torch
+
+        from . import output_gradient
+
+        def reference(destination, grad, hidden):
+            destination.add_(torch.mm(grad.T, hidden, out_dtype=torch.float32))
+
+        output_gradient.accumulate_output_gradient_ = reference
     config = RunConfig.load(args.config)
     overrides = {"hf_repo": "", "log_every_steps": 1, "checkpoint_seconds": 10**9}
     if not args.real_data:

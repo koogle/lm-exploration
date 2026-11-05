@@ -59,6 +59,7 @@ def benchmark(
     profile=False,
     run_id="",
     real_data=False,
+    compare_output_gradient=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -75,11 +76,48 @@ def benchmark(
         args += ["--profile", "/tmp/profile.json"]
     if real_data:
         args += ["--real-data", "--data-root", "/data"]
-    code, lines = run_torchrun("model_hybrid.benchmark", args, gpus, 1500)
+    hardware = (
+        subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,uuid,memory.total,power.limit",
+                "--format=csv,noheader,nounits",
+            ],
+            text=True,
+        )
+        .strip()
+        .splitlines()
+    )
+    print(json.dumps({"hardware": hardware}), flush=True)
+    cases = (
+        [("reference", ["--reference-output-gradient"]), ("direct", [])]
+        if compare_output_gradient
+        else [("direct", [])]
+    )
+    measurements, all_lines = {}, []
+    code = 0
+    for name, extra in cases:
+        code, lines = run_torchrun("model_hybrid.benchmark", args + extra, gpus, 1500)
+        measurements[name] = {
+            "exit_code": code,
+            **(summarize(lines, skip=10 if profile else 5) if code == 0 else {}),
+        }
+        all_lines.extend([json.dumps({"case": name}) + "\n", *lines])
+        if run_id:
+            folder = Path("/runs/throughput") / run_id
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / f"{name}.log").write_text("".join(lines))
+            (folder / f"{name}.json").write_text(json.dumps(measurements[name], indent=2))
+            runs_volume.commit()
+        if code:
+            break
+    lines = all_lines
     import torch
 
     result = {
         "exit_code": code,
+        "hardware": hardware,
+        "measurements": measurements,
         "config": config,
         "real_data": real_data,
         "recipe": json.loads(Path(config["recipe"]).read_text()) if real_data else None,
@@ -87,7 +125,7 @@ def benchmark(
         "gpus": gpus,
         "microbatch": microbatch or config["microbatch"],
         "torch": torch.__version__,
-        **(summarize(lines, skip=10 if profile else 5) if code == 0 else {}),
+        **(measurements["direct"] if not compare_output_gradient and code == 0 else {}),
         **(
             {"profile": json.loads(Path("/tmp/profile.json").read_text())}
             if profile and Path("/tmp/profile.json").exists()
@@ -160,6 +198,7 @@ def bench(
     mtp_loss_fraction: float = 0.0,
     run_id: str = "",
     real_data: bool = False,
+    compare_output_gradient: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -187,6 +226,7 @@ def bench(
         profile,
         run_id,
         real_data,
+        compare_output_gradient,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)
