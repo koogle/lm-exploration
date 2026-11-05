@@ -1,4 +1,4 @@
-"""Training-step throughput and MFU of a hybrid run config on synthetic packed documents.
+"""Training-step throughput and MFU of a hybrid run config on prepared or synthetic packed documents.
 
     torchrun --nproc_per_node=<gpus> -m model_hybrid.benchmark --config <run.json> \\
         --steps 20 [--microbatch 4] [--document-tokens 1000] [--profile <out.json>]
@@ -141,7 +141,14 @@ def main():
     parser.add_argument(
         "--compile-mode", default="default", choices=["default", "max-autotune-no-cudagraphs"]
     )
+    parser.add_argument("--kda-save-intermediates", action="store_true")
     args = parser.parse_args()
+    if args.kda_save_intermediates:
+        from functools import partial
+
+        import fla.ops.kda
+
+        fla.ops.kda.chunk_kda = partial(fla.ops.kda.chunk_kda, disable_recompute=True)
     if args.reference_output_gradient:
         # Benchmark-only reference for a matched before/after on the same GPU.
         # Production always uses the implementation in fused_loss.py.

@@ -442,6 +442,22 @@ def decode_timing(rows=64, prompt=512, new_tokens=256):
 
 
 def checks(only=""):
+    if only == "kda_saved":
+        from functools import partial
+
+        import fla.ops.kda
+
+        original = fla.ops.kda.chunk_kda
+        try:
+            fla.ops.kda.chunk_kda = partial(original, disable_recompute=True)
+            return {
+                "gpu": torch.cuda.get_device_name(),
+                "torch": torch.__version__,
+                "kda_saved_fp32": kda_against_reference(torch.float32, 1e-2),
+                "kda_saved_bf16": kda_against_reference(torch.bfloat16, 5e-2),
+            }
+        finally:
+            fla.ops.kda.chunk_kda = original
     if only == "loss":
         return {
             "gpu": torch.cuda.get_device_name(),

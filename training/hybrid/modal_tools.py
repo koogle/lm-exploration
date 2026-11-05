@@ -62,6 +62,7 @@ def benchmark(
     compare_output_gradient=False,
     larger_microbatch=0,
     autotune=False,
+    kda_save_intermediates=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -100,6 +101,8 @@ def benchmark(
         cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))
     if autotune:
         cases.append(("autotuned", ["--compile-mode", "max-autotune-no-cudagraphs"]))
+    if kda_save_intermediates:
+        cases.append(("kda_saved", ["--kda-save-intermediates"]))
     measurements, all_lines = {}, []
     code = 0
     for name, extra in cases:
@@ -133,7 +136,7 @@ def benchmark(
         "torch": torch.__version__,
         **(
             measurements["direct"]
-            if not compare_output_gradient and not larger_microbatch and not autotune and code == 0
+            if len(cases) == 1 and code == 0
             else {}
         ),
         **(
@@ -212,6 +215,7 @@ def bench(
     larger_microbatch: int = 0,
     gpu: str = "H100",
     autotune: bool = False,
+    kda_save_intermediates: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -222,7 +226,7 @@ def bench(
 
     if gpu not in ("H100", "H200"):
         raise ValueError("Throughput qualification supports H100 and H200")
-    if sum([compare_output_gradient, bool(larger_microbatch), autotune]) > 1:
+    if sum([compare_output_gradient, bool(larger_microbatch), autotune, kda_save_intermediates]) > 1:
         raise ValueError("Compare one optimization at a time")
     settings = load_config(config)
     if mtp_loss_fraction:
@@ -246,6 +250,7 @@ def bench(
         compare_output_gradient,
         larger_microbatch,
         autotune,
+        kda_save_intermediates,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)
