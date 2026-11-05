@@ -14,10 +14,10 @@ Adjust final dimensions toward the desired deployed size after tokenizer choice.
 Settle tokenizer/teacher compatibility and target-scale throughput
 before allocating the main pretraining budget.
 
-The first Modal launch is a 127.6M **pretraining pipeline control**, not the main
+The reusable Modal workflow check is a 127.6M **pretraining pipeline control**, not the main
 model or a reasoning capability claim. Workflow:
 [`sub1b-control-smoke.json`](../workflows/sub1b-control-smoke.json).
-It uses 131,072 tokens, 512-token windows, one H100, a two-step qualification
+It uses 8,192 tokens (four optimizer steps), 512-token windows, one H100, a two-step qualification
 checkpoint and one resumed session. Each GPU call has a 1,800-second timeout,
 900 seconds of training time and zero retries; at most two GPU sessions are
 allowed. The existing independent remote supervisor tracks calls and enforces
@@ -72,6 +72,19 @@ new recipe identity and run ID. In the managed cloud environment, use the existi
 Stop gracefully with `modal run -m workflows.modal_train::stop --run-id <run>`.
 The data and checkpoint volumes persist after an app exits. Preparation evidence:
 [HF control audit](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/control-ccmath-20261104/preparation).
+
+### Completed original checks
+
+The original November 4 pilot trained 131,072 tokens in 64 steps, but the
+workflow reported failure because final evaluation included optional generated
+samples while resumed evaluation did not. Non-sample validation matched exactly.
+[PR #145](https://github.com/koogle/lm-exploration/pull/145) fixed the comparison.
+The November 5 rerun completed all 64 steps and passed the checkpoint/resume
+workflow. Its [reports](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/control-ccmath-20261105/results)
+are archived on HF. Following those checks, the reusable configuration was reduced
+to four steps and one validation document per source. No additional GPU run was
+launched for that config-only reduction; startup and sampling can still dominate
+these tiny checks. The pilot establishes plumbing, not coding ability.
 
 ## Architecture candidate
 
@@ -236,7 +249,7 @@ only; the intended CC-Code mixture remains pending. It is not a published experi
 - Read 512 rows from each of six sources (3,072 total). One GitHub row failed the
   license filter. The benchmark screen rejected another 187 rows; 2,884 remained.
 - Prepared 3,912,142 training tokens and 422,684 validation tokens. Conservative
-  single-pass mixture capacity is 723,699 tokens, enough for the 131,072-token
+  single-pass mixture capacity is 723,699 tokens, enough for the 8,192-token
   plumbing configuration. Total stored tokens exceed usable mixture capacity
   because source lengths differ; the limiting source must not silently repeat.
 - Across 100 windows, actual source counts were exactly 30/20/20/15/10/5.
@@ -262,7 +275,7 @@ No Modal GPU job was launched for these checks.
 
 [`hybrid-128m-coding-smoke.json`](../hybrid/configs/hybrid-128m-coding-smoke.json)
 uses the same tokenizer, 3:1 mixer pattern and MTP objective: 12 layers, width 512,
-127,631,028 total training parameters. Its 131,072-token target is only a plumbing
+127,631,028 total training parameters. Its 8,192-token target is only a plumbing
 check. The launcher must verify the generated recipe has at least this single-pass capacity before scheduling it.
 It points to the frozen control recipe staged on the hybrid data volume.
 The sample is prepared locally; the workflow runs the production GPU trainer. GPU jobs
@@ -328,7 +341,7 @@ trajectories and cannot answer this capability question.
 
 | Stage | Planned scope | Required evidence before advancing |
 | --- | --- | --- |
-| GPU plumbing | Current 128M / 131K-token control | Finite metrics, two-step checkpoint/resume continuity, export and source audit |
+| GPU plumbing | Current 128M / 8K-token control | Finite metrics, two-step checkpoint/resume continuity, export and source audit |
 | Mixture qualification | 128M / 0.5–1B tokens per selected arm, within pilot budget | Representative deduplicated corpus; held-out BPB and executable-code improvement; comparable cooldowns |
 | Architecture/tokenizer qualification | Short target-scale throughput run; matched-compute attention control where affordable | Exact parameter count below 1B, measured dollars/token, teacher compatibility, stable optimization |
 | Main pretraining | Approximately 100–130B tokens only if measured costs fit $5,000 | Frozen source capacity, contamination/split review, stable loss, regular cooled checkpoints and independent coding evaluations |

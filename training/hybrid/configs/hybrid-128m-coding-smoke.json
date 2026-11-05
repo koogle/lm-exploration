@@ -24,10 +24,10 @@
     "mtp_weight_start": 0.3,
     "mtp_weight_end": 0.1
   },
-  "target_tokens": 131072,
+  "target_tokens": 8192,
   "global_rows": 4,
   "microbatch": 1,
-  "warmup_tokens": 8192,
+  "warmup_tokens": 2048,
   "decay_fraction": 0.2,
   "optimizer": {
     "muon_lr": 0.02,
@@ -45,9 +45,9 @@
   "keep_checkpoints": 2,
   "eval_every_steps": 10,
   "eval_documents": {
-    "climbmix": 8,
-    "code": 8,
-    "math": 8
+    "climbmix": 1,
+    "code": 1,
+    "math": 1
   },
   "sample_every_steps": 64,
   "log_every_steps": 1,

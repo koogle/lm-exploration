@@ -1,7 +1,7 @@
 {
   "name": "sub1b-control-smoke",
   "family": "hybrid",
-  "description": "127.6M GPU pipeline control, 131072 tokens, one H100; two-step checkpoint qualification then exact resume.",
+  "description": "127.6M GPU workflow check, 8192 tokens (four steps), one H100; two-step checkpoint qualification then two resumed steps.",
   "stages": [
     {
       "stage": "pretrain",
