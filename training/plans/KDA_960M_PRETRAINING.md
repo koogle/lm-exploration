@@ -6,6 +6,8 @@ preparation; no pretraining stage had started. Preparation continues separately
 as `kda-foundation-data-20261105-04`, which contains no training stage. Full
 pretraining remains on hold while real-data baseline, optimization and numerical
 correctness results are compared. The synthetic results below are not the gate.
+See [the real-data profiling findings](KDA_REAL_DATA_MFU.md) for measured hardware,
+custom-operation correctness, memory savings and the limited throughput gains.
 
 The user authorized pretraining with KDA and the tested 50/40/10 mixture, and
 asked to measure and improve throughput/MFU before committing the main budget.
@@ -19,7 +21,10 @@ Use the implemented 24-layer, width-1536 KDA/full-attention 3:1 architecture,
 927,589,920 deployed trunk parameters. Preserve the reasoning SFT/RL budget.
 
 The first throughput comparison used the real shared training step on synthetic
-packed documents (mean length 1,000), one H100, microbatch 2 and 16 global rows.
+packed documents (mean length 1,000), an H100 request, microbatch 2 and 16 global rows.
+Those runs did not record the delivered GPU SKU; Modal can fulfill an H100 request
+with H200. Treat their cross-allocation speed ratios as exploratory and use the
+subsequent same-allocation real-data comparisons for implementation decisions.
 All arms used the same model, optimizer, seed and objective. Medians below use
 steps 10–14 and 19–20, excluding compile/warmup and profiler-active steps. The
 profiler initially repeated; its schedule now records one cycle only.
@@ -30,7 +35,8 @@ profiler initially repeated; its schedule now records one cycle only.
 | Eager, loss chunk 2048 | 24,862 | 18.3% | 45.1 |
 | Compiled, loss chunk 2048 | 33,445 | 24.7% | 36.7 |
 
-Larger loss chunks and compilation yield 2.1x throughput with lower memory.
+The compiled configuration measured 2.1x the initial throughput with lower memory;
+delivered hardware was not recorded, so this is not a controlled software speedup.
 Compiled kernel time is approximately 43% matrix multiplication, 21% KDA,
 16% compiled elementwise and 3% full attention. Data fetch is about 1–2 ms/step.
 MFU uses the repository's matmul-plus-full-attention FLOP estimate and 989 TFLOP/s
@@ -39,8 +45,9 @@ recurrence FLOPs. These synthetic timings exclude evaluation, checkpoints,
 startup and corpus I/O.
 
 The subsequent unprofiled microbatch-4 benchmarks completed 20 steps each.
-Steps 6–20 measured 39,814 tokens/s and 29.3% MFU on one H100 (32 global rows),
-and 327,369 tokens/s and 30.1% MFU on eight H100s (256 global rows). Peak allocated
+Steps 6–20 measured 39,814 tokens/s and 29.3% MFU on a one-H100 request
+(32 global rows), and 327,369 tokens/s and 30.1% MFU on an eight-H100 request
+(256 global rows). Delivered GPU identities were not recorded. Peak allocated
 memory was 55.24 GiB/GPU. The slightly superlinear ratio is a short-run hardware/
 timing observation, not an expected scaling guarantee. Select microbatch 4,
 loss chunks 2048 and compilation for the production workflow.
