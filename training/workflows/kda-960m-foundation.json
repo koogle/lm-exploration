@@ -1,0 +1,26 @@
+{
+  "name": "kda-960m-foundation",
+  "family": "hybrid",
+  "stages": [
+    {
+      "stage": "data",
+      "name": "corpus",
+      "recipe": "hybrid/recipes/kda-foundation-100b-504010-v1.json",
+      "parallel": 8
+    },
+    {
+      "stage": "pretrain",
+      "name": "pretrain",
+      "data": "corpus",
+      "model_config": "hybrid/configs/kda-960m-100b.json",
+      "gpu": "H100",
+      "world_size": 8,
+      "segment_seconds": 21600,
+      "worker_timeout_seconds": 22800,
+      "max_segments": 100,
+      "segments_per_call": 1,
+      "qualification_segments": 1,
+      "qualification_steps": 8
+    }
+  ]
+}

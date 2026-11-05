@@ -183,9 +183,19 @@ def coordinate(launch, recipe, deadline, parallel):
                 meta = call.get(timeout=0)
             except (TimeoutError, modal.exception.TimeoutError):
                 continue
-            except Exception as error:  # noqa: BLE001 - recorded; other shards continue.
+            except Exception as error:
                 failed.append({"source": name, "index": index, "error": str(error)[:500]})
-                meta = None
+                # A systematic auth/schema/worker failure must not consume the
+                # entire corpus budget. Completed shards remain resumable.
+                for other_id, (_, _, other) in running.items():
+                    if other_id != call_id:
+                        other.cancel()
+                folder.mkdir(parents=True, exist_ok=True)
+                (folder / f"failure-{launch}.json").write_text(json.dumps(failed, indent=2))
+                volume.commit()
+                raise RuntimeError(
+                    f"Preparation stopped after a shard failure: {failed[-1]}"
+                ) from error
             del running[call_id]
             if meta:
                 done[f"{name}/{index}"] = meta
