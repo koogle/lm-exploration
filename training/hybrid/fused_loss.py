@@ -50,7 +50,9 @@ class FusedLinearCrossEntropy(torch.autograd.Function):
             z = z + torch.where(valid, lse.square(), 0.0).sum()
             grad_hidden[start : start + chunk_size] = grad @ w
             if compute == torch.bfloat16 and grad.is_cuda:
-                grad_weight += torch.mm(grad.T, h, out_dtype=torch.float32)
+                from .output_gradient import accumulate_output_gradient_
+
+                accumulate_output_gradient_(grad_weight, grad, h)
             else:
                 grad_weight += (grad.T @ h).to(accumulate)
         ctx.save_for_backward(grad_hidden, grad_weight)

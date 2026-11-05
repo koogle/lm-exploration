@@ -122,6 +122,27 @@ def fused_loss_against_autograd():
     return errors
 
 
+def output_gradient_against_reference():
+    from model_hybrid.output_gradient import accumulate_output_gradient_
+
+    torch.manual_seed(121)
+    results = []
+    compiled = torch.compile(accumulate_output_gradient_)
+    for rows, vocab, width in [(7, 31, 17), (2048, 4096, 128), (257, 154880, 1536)]:
+        grad = torch.randn(rows, vocab, device="cuda", dtype=torch.bfloat16) * 0.02
+        hidden = torch.randn(rows, width, device="cuda", dtype=torch.bfloat16) * 0.02
+        destination = torch.randn(vocab, width, device="cuda") * 0.01
+        expected = destination.clone()
+        for operation in (accumulate_output_gradient_, compiled, compiled):
+            expected += torch.mm(grad.T, hidden, out_dtype=torch.float32)
+            operation(destination, grad, hidden)
+            torch.testing.assert_close(destination, expected, rtol=1e-4, atol=2e-5)
+        results.append(
+            {"shape": [rows, vocab, width], "max_absolute_error": max_error(destination, expected)}
+        )
+    return results
+
+
 def compiled_model():
     torch.manual_seed(1)
     # Full attention only, so this isolates the compiled FlexAttention path.
@@ -421,6 +442,13 @@ def decode_timing(rows=64, prompt=512, new_tokens=256):
 
 
 def checks(only=""):
+    if only == "loss":
+        return {
+            "gpu": torch.cuda.get_device_name(),
+            "torch": torch.__version__,
+            "output_gradient": output_gradient_against_reference(),
+            "fused_loss_vs_autograd": fused_loss_against_autograd(),
+        }
     if only == "decode":
         return {
             "gpu": torch.cuda.get_device_name(),

@@ -550,6 +550,7 @@ class HybridFamily:
             fused_loss,
             kda,
             kda_convolution,
+            output_gradient,
             softmax_kernel,
         )
         from . import model as hybrid_model
@@ -561,12 +562,14 @@ class HybridFamily:
             hybrid_model,
             kda,
             kda_convolution,
+            output_gradient,
             softmax_kernel,
         )
         files = {f"hybrid.{Path(m.__file__).stem}": Path(m.__file__) for m in modules}
         return {
             "family": Path(__file__),
             **files,
+            "output_gradient_cuda": Path(__file__).with_name("kernels") / "output_gradient.cu",
             "chat": Path(chat.__file__),
             "chat_sft": Path(chat_sft.__file__),
             "tokenizer_glm": Path(glm.__file__),
