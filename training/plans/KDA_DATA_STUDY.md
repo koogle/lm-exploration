@@ -5,7 +5,9 @@ deployed parameters. This documents the user's requested study and reassesses th
 proposal in [PR #143](https://github.com/koogle/lm-exploration/pull/143), which is
 still open. It supersedes that proposal's mixture-study ordering and recommended
 foundation weights; historical manifests and completed pilot provenance remain
-unchanged. These are proposed experiments, not runnable recipes or measured gains.
+unchanged. The authorized four-arm execution is specified at the end of this document;
+its checked-in configurations are runnable after capacity-checked preparation.
+Mixture improvements remain hypotheses until results arrive.
 
 Read the [Ripple findings in PR #148](https://github.com/koogle/lm-exploration/pull/148) and
 [reasoning training comparison](../references/reasoning-training-2026-11-04.md).
@@ -178,7 +180,7 @@ repeat/confirmation. Additional full-mix or synthetic arms require remaining roo
 reduce token targets equally or defer them rather than consume main-training funds.
 Measure dollars/token before launch, persist explicit spending/token limits and
 use existing independent remote deadlines under 24 hours with bounded calls and
-zero retries. No GPU work is launched by this documentation PR.
+zero retries. Training launches use the checked-in workflow configs and their bounded sessions.
 
 ## Authorized fast comparison — November 5
 
@@ -218,3 +220,20 @@ launch IDs and measurements are published in HF `jfrick/lm-exploration-results`
 under `training/sub1b-pilot/kda-data-study-20261105/` once available.
 CC-Code was rechecked on November 5 and still returned HTTP 403; its 15% proposed
 foundation allocation remains pending, outside these explicitly named controls.
+
+### Reproduction and interpretation
+
+From `training/`, prepare the manifest through `training_data.audit_coding_mix`
+with `--plan data/kda-study-sample-v1.json --out artifacts/kda-study-20261105-v2
+--windows 100`. Use `--resume` only for an existing identical-plan sample whose
+raw checksums pass. Each arm's prepared recipe uses that same volume folder.
+Verify filtered source capacity against both recipes before uploading `prepared/`
+to `/kda-study-20261105-v2` on `lm-exploration-hybrid-data`. Launch each of the four
+`workflows/study-128m-*.json` files with a unique run ID using the existing
+`workflows.modal_train::main` entry point. The managed environment's
+`data/eu/modal_cli.py` wrapper preserves its TLS/proxy settings.
+
+The shared tokenizer uses about 79.3M embedding parameters in these small models,
+so most of the 128M count is vocabulary capacity. This proportion is much larger
+than at the intended near-1B scale; do not treat the small mixer ranking as a
+precise forecast. Hold tokenizer fixed here to isolate the requested comparisons.
