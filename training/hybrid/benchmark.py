@@ -115,16 +115,23 @@ def profile_summary(profiler, steps):
     for name, ms in kernels.items():
         categories[kernel_category(name)] += ms
     total = sum(categories.values())
-    phases = collections.defaultdict(lambda: {"cpu_ms_per_step": 0.0, "device_ms_per_step": 0.0})
+    phases = collections.defaultdict(lambda: {"cpu_ms_per_step": 0.0})
     for event in profiler.events():
-        if event.is_user_annotation and event.name.startswith("train/"):
+        if (
+            event.is_user_annotation
+            and event.device_type.name == "CPU"
+            and event.name.startswith("train/")
+        ):
             phases[event.name]["cpu_ms_per_step"] += event.cpu_time_total / 1000 / steps
-            phases[event.name]["device_ms_per_step"] += event.device_time_total / 1000 / steps
     # Union device intervals: overlapping streams count once. This is observed
     # CUDA activity, not tensor-core utilization or a prediction of removable idle.
     # Scheduled profilers do not expose ProfilerStep annotations in every torch
     # build. Use our closed step-work ranges as the window in that case.
-    spans = [e.time_range for e in profiler.events() if e.name.startswith("ProfilerStep#")]
+    spans = [
+        e.time_range
+        for e in profiler.events()
+        if e.device_type.name == "CPU" and e.name.startswith("ProfilerStep")
+    ]
     if not spans:
         spans = [
             e.time_range
@@ -193,7 +200,13 @@ def main():
         "--compile-mode", default="default", choices=["default", "max-autotune-no-cudagraphs"]
     )
     parser.add_argument("--kda-save-intermediates", action="store_true")
+    parser.add_argument("--reference-kda-offsets", action="store_true")
     args = parser.parse_args()
+    if args.reference_kda_offsets:
+        from .documents import cu_seqlens
+        from .model import DocumentMask
+
+        DocumentMask.kda_offsets = property(lambda mask: cu_seqlens(mask.documents).long())
     if args.kda_save_intermediates:
         from functools import partial
 

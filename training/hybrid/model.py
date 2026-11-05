@@ -22,7 +22,7 @@ from torch.utils.checkpoint import checkpoint
 
 from trainer.roles import declare
 
-from .documents import document_ids, document_positions
+from .documents import cu_seqlens, document_ids, document_positions
 from .fused_loss import fused_cross_entropy
 from .kda import KimiDeltaAttention
 
@@ -47,6 +47,14 @@ class DocumentMask:
         self.documents = documents
         self.positions = document_positions(documents)
         self._block = None
+        self._kda_offsets = None
+
+    @property
+    def kda_offsets(self):
+        """One immutable offset tensor shared by every KDA layer in this batch."""
+        if self._kda_offsets is None:
+            self._kda_offsets = cu_seqlens(self.documents).long()
+        return self._kda_offsets
 
     @property
     def block(self):
