@@ -60,6 +60,7 @@ def benchmark(
     run_id="",
     real_data=False,
     compare_output_gradient=False,
+    larger_microbatch=0,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -94,6 +95,8 @@ def benchmark(
         if compare_output_gradient
         else [("direct", [])]
     )
+    if larger_microbatch:
+        cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))
     measurements, all_lines = {}, []
     code = 0
     for name, extra in cases:
@@ -125,7 +128,11 @@ def benchmark(
         "gpus": gpus,
         "microbatch": microbatch or config["microbatch"],
         "torch": torch.__version__,
-        **(measurements["direct"] if not compare_output_gradient and code == 0 else {}),
+        **(
+            measurements["direct"]
+            if not compare_output_gradient and not larger_microbatch and code == 0
+            else {}
+        ),
         **(
             {"profile": json.loads(Path("/tmp/profile.json").read_text())}
             if profile and Path("/tmp/profile.json").exists()
@@ -199,6 +206,8 @@ def bench(
     run_id: str = "",
     real_data: bool = False,
     compare_output_gradient: bool = False,
+    larger_microbatch: int = 0,
+    gpu: str = "H100",
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -207,6 +216,10 @@ def bench(
     """
     from workflows.deadline import new_deadline
 
+    if gpu not in ("H100", "H200"):
+        raise ValueError("Throughput qualification supports H100 and H200")
+    if compare_output_gradient and larger_microbatch:
+        raise ValueError("Compare one optimization at a time")
     settings = load_config(config)
     if mtp_loss_fraction:
         settings["model"]["mtp_loss_fraction"] = mtp_loss_fraction
@@ -215,7 +228,7 @@ def bench(
     )
     deadline = new_deadline()
     run_id = run_id or f"bench-{time.time_ns()}"
-    call = benchmark.with_options(gpu=f"H100:{gpus}").spawn(
+    call = benchmark.with_options(gpu=f"{gpu}:{gpus}").spawn(
         settings,
         gpus,
         steps,
@@ -227,6 +240,7 @@ def bench(
         run_id,
         real_data,
         compare_output_gradient,
+        larger_microbatch,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)
