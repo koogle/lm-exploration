@@ -1,5 +1,8 @@
 # KDA foundation pretraining — November 5
 
+**Hardware target:** eight 80GB H100s. The foundation workflow requests
+`H100!:8`, which disables Modal's automatic H200 upgrades.
+
 **Current status:** the user requested real-data profiling and substantial MFU
 improvement before full training. The production app was stopped during corpus
 preparation; no pretraining stage had started. Preparation continues separately
