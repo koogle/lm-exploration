@@ -92,6 +92,31 @@ Parts of `kda.py` follow Mamba's code directly
 The hybrid layout follows Kimi Linear's uniform 3:1 ratio of KDA to full-attention
 layers, the best validation perplexity among the ratios they tested (§4, §5.2).
 
+## Further reading: selective decay and preserving memory
+
+- **Row-and-column decay:** [Gated Linear Attention (GLA), §4.1 and footnote 5](https://arxiv.org/html/2312.06635v6#S4.SS1)
+  discusses Decaying Fast Weights' outer-product gate. In our `[K, V]` layout,
+  this is `S_decay = row_gate[:, None] * S * col_gate[None, :]`, controlling
+  retention along both key and value channels. GLA's authors report only marginal
+  gains over row-only gating in preliminary experiments; this is evidence for
+  GLA, not a measured result for adding column decay to our KDA.
+- **Exact state preservation:** [Skip RNN (ICLR 2018)](https://arxiv.org/abs/1708.06834)
+  learns to skip recurrent state updates, providing precedent for a learned
+  hold decision. This is an RNN study rather than a KDA experiment. In our KDA,
+  all decay gates equal to 1 stop fading, but the delta write can still change
+  memory; setting β to 0 as well would preserve the state within a document.
+  The current exponential/softplus decay and sigmoid β approach those endpoints
+  but do not attain them for finite inputs in exact arithmetic. An explicit
+  skip could hold the state exactly while the query still reads it.
+- **Separate erase and write controls:** [Gated DeltaNet-2 (May 2026), §3.1](https://arxiv.org/html/2605.22791v1#S3.SS1)
+  replaces KDA's shared scalar β with independent channel-wise erase and write
+  gates, alongside key-channel decay. This makes the active memory edit more
+  selective; it is distinct from fading both rows and columns. Tying both gates
+  to the same scalar recovers KDA.
+
+Column decay and an exact hold option are separate candidate experiments for
+our model; their effects here remain unmeasured.
+
 ## The short convolution
 
 `short_convolution` (q, k and v each have their own weights) is a causal
