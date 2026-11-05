@@ -5,8 +5,10 @@ parameters**, trained from scratch through pretraining, mid-training, reasoning
 SFT and RL, within approximately $10,000 of remaining Modal credits. The small
 model below is a pipeline and mixture proxy, not the final target.
 
-Current next run: [the final middle-ground KDA check](KDA_DATA_STUDY.md#final-middle-ground-mixture-check),
-using 50% general text, 40% GitHub code and 10% CC-Math at 200M tokens.
+Current decision (November 5): the user selected KDA and 50% general text,
+40% GitHub code and 10% CC-Math after the completed 200M-token study, and authorized
+pretraining. [The target-scale launch plan](KDA_960M_PRETRAINING.md) records
+throughput qualification, corpus preparation and the bounded first launch.
 
 ## Decision and first authorized run
 

@@ -266,6 +266,18 @@ include the independently enforced deadlines and Modal app links. The stopped
 
 ## Final middle-ground mixture check
 
+**Completed November 5:** `study-128m-kda-middle-20261105-02` reached
+200,015,872 tokens and its workflow completed. Final BPB was 0.82666 code,
+1.20195 general, and 1.14534 math. Relative to KDA 70/20/10, this is 11.7% better
+code prediction, 3.8% worse general prediction and 1.6% worse math prediction.
+The proposed 2% general-retention guardrail failed. The user reviewed this tradeoff
+and selected 50/40/10 with KDA for pretraining. See
+[target-scale launch and throughput](KDA_960M_PRETRAINING.md).
+
+Source-label correction: the sampled math files are from Nemotron CC-Math's `3/`
+directory (score 3), not the combined 3+ corpus. The card defines 3+ as `3/` plus
+`4plus/`. All study arms used the same files, so the comparison remains valid.
+
 The four trainers finished 200,015,872 tokens. Their final held-out BPB was:
 
 | Arm | Code | General text | Math |
