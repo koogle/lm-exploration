@@ -122,7 +122,15 @@ def profile_summary(profiler, steps):
             phases[event.name]["device_ms_per_step"] += event.device_time_total / 1000 / steps
     # Union device intervals: overlapping streams count once. This is observed
     # CUDA activity, not tensor-core utilization or a prediction of removable idle.
+    # Scheduled profilers do not expose ProfilerStep annotations in every torch
+    # build. Use our closed step-work ranges as the window in that case.
     spans = [e.time_range for e in profiler.events() if e.name.startswith("ProfilerStep#")]
+    if not spans:
+        spans = [
+            e.time_range
+            for e in profiler.events()
+            if e.is_user_annotation and e.name in ("train/data_fetch", "train/device_wait")
+        ]
     window = (min(s.start for s in spans), max(s.end for s in spans)) if spans else None
     intervals = sorted(
         (max(e.time_range.start, window[0]), min(e.time_range.end, window[1]))
@@ -157,7 +165,7 @@ def profile_summary(profiler, steps):
             for e in sorted(averages, key=lambda e: e.self_cpu_time_total, reverse=True)[:20]
         ],
         "trace_window_ms_per_step": (window[1] - window[0]) / 1000 / steps if window else None,
-        "device_busy_ms_per_step": busy / 1000 / steps,
+        "device_busy_ms_per_step": busy / 1000 / steps if window else None,
         "gpu_kernel_ms_per_step": total,
         "categories_ms": dict(categories.most_common()),
         "categories_share": {k: v / total for k, v in categories.most_common()},
