@@ -205,7 +205,7 @@ def continue_training(
 ):
     from workflows.checks import check_progress, check_resume, validate_paths
     from workflows.config import resolve_payload, step_tokens
-    from workflows.deadline import bounded_timeout, segment_seconds
+    from workflows.deadline import bounded_timeout, recorded_call, segment_seconds
 
     policy, dataset, config = resolve_payload(bundle)
     settings = config if policy.family == "hybrid" else config.as_dict()
@@ -239,21 +239,33 @@ def continue_training(
                 pending_data_audits=provenance.get("pending_data_audits", []),
             )
             timeout = bounded_timeout(deadline, policy.worker_timeout_seconds)
-            call = session.with_options(
-                gpu=f"{policy.gpu}:{policy.world_size}",
-                cpu=4 * policy.world_size,
-                memory=32768 * policy.world_size,
-                timeout=timeout,
-            ).spawn(
-                segment_id,
-                snapshot,
-                bundle,
-                provenance,
-                resume,
-                policy.qualification_steps if segment < policy.qualification_segments else None,
-                segment_seconds(timeout, policy.segment_seconds),
+
+            def spawn_session(
+                timeout=timeout, segment_id=segment_id, resume=resume, segment=segment
+            ):
+                return session.with_options(
+                    gpu=f"{policy.gpu}:{policy.world_size}",
+                    cpu=4 * policy.world_size,
+                    memory=32768 * policy.world_size,
+                    timeout=timeout,
+                ).spawn(
+                    segment_id,
+                    snapshot,
+                    bundle,
+                    provenance,
+                    resume,
+                    policy.qualification_steps if segment < policy.qualification_segments else None,
+                    segment_seconds(timeout, policy.segment_seconds),
+                )
+
+            run_volume.reload()
+            call = recorded_call(
+                Path("/runs/.calls") / launch,
+                f"train_segment:{segment_id}",
+                spawn_session,
+                modal.FunctionCall.from_id,
+                run_volume.commit,
             )
-            track_call(launch, call.object_id, "train_segment")
             report = call.get()
             if report["stop_reason"] == "stop_requested":
                 record(

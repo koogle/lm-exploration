@@ -263,3 +263,55 @@ rates, allowing for initialization, evaluation and checkpointing.
 [Preparation, diagnostic attempts and corrected launch records](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/kda-data-study-20261105)
 include the independently enforced deadlines and Modal app links. The stopped
 `-01` attempts are retained separately from the corrected study.
+
+## Final middle-ground mixture check
+
+The four trainers finished 200,015,872 tokens. Their final held-out BPB was:
+
+| Arm | Code | General text | Math |
+| --- | ---: | ---: | ---: |
+| KDA, 70/20/10 | 0.93620 | 1.15824 | 1.12703 |
+| KDA, 40/50/10 | 0.78313 | 1.23492 | 1.15558 |
+| Full attention, 70/20/10 | 0.91405 | 1.15326 | 1.12111 |
+| Full attention, 40/50/10 | 0.76837 | 1.22455 | 1.14831 |
+
+The 50%-code arms improved code BPB by about 16%, with 6–7% worse general-text
+BPB. Full attention was slightly better and faster at this size/context. These
+single-seed language-modeling results do not establish executable coding ability.
+All final checkpoints exist and resumed numerical evaluations match. KDA/control's
+controller recorded a directory-exists failure while its trainer completed; the
+original workflow status is preserved with the
+[final reports](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/kda-data-study-20261105/results).
+
+The user chose to retain KDA and authorize one middle-ground run before the large
+pretraining decision: **50% ClimbMix / 40% permissive GitHub / 10% CC-Math**.
+`hybrid/recipes/kda-study-middle.json` is the candidate mixture; its source shards
+and held-out data are identical to the completed arms. This is the next working
+three-source recipe. The broader five-source foundation candidate remains a
+separate, unqualified proposal, including its pending CC-Code allocation.
+
+Run `workflows/study-128m-kda-middle.json` from scratch with the same seed, model,
+optimizer, 2K context, 200,015,872 tokens and cooldown as the completed KDA arms.
+Only mixture weights change. Preserve disabled previews and the same eight-step
+qualification/resume. The existing corpus has sufficient single-pass capacity:
+this arm requires approximately 100M general, 80M code and 20M math tokens.
+One H100, three calls at most, 8,100 seconds per call, zero retries and the
+independent under-24-hour deadline remain the resource bounds. Reserve up to $75
+from the existing pilot budget, including earlier diagnostics and control overhead
+at reconciliation; do not launch a new matrix automatically.
+
+Judge it against the two completed KDA arms on identical held-out documents.
+Seek code BPB improvement over 20% code with less general-text regression than
+50% code. Keep the proposed 2% general-retention guardrail visible; if it still
+fails, report the tradeoff rather than silently relaxing the criterion. Do not
+select on training loss, which changes with the mixture.
+
+The workflow controller now reconnects to recorded segment calls after an
+interruption instead of spawning an already-recorded segment again. Tests cover
+reattachment and duplicate-record rejection. The spawn-to-record interval is not
+an atomic transaction; the change does not promise exactly-once execution.
+
+Before the large run: review this result, qualify the near-1B configuration's
+measured throughput/cost, and prepare/audit full-corpus capacity and splits for
+the selected mixture. A tiny model's BPB alone cannot authorize a frontier-quality
+claim or substitute for executable coding and reasoning evaluations.

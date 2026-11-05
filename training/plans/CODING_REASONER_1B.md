@@ -5,6 +5,9 @@ parameters**, trained from scratch through pretraining, mid-training, reasoning
 SFT and RL, within approximately $10,000 of remaining Modal credits. The small
 model below is a pipeline and mixture proxy, not the final target.
 
+Current next run: [the final middle-ground KDA check](KDA_DATA_STUDY.md#final-middle-ground-mixture-check),
+using 50% general text, 40% GitHub code and 10% CC-Math at 200M tokens.
+
 ## Decision and first authorized run
 
 Target **950–980M total deployed parameters**, with a strict ceiling below 1B.
