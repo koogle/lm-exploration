@@ -165,3 +165,25 @@ class WorkflowProgressTests(unittest.TestCase):
         far = {"initial_validation": {"heldout": {"code": {"loss": 1.1}}, "samples": ["a"]}}
         with self.assertRaises(ValueError):
             check_resume(hybrid, far, 1e-3)
+
+    def test_resume_excludes_optional_samples_but_checks_metrics(self):
+        metrics = {"step": 2, "tokens": 4096, "heldout": {"code": {"loss": 12.0}}}
+        sampled = {**metrics, "samples": [{"prompt": "def f():", "completion": "pass"}]}
+        for before, after in (
+            (sampled, metrics),
+            (metrics, sampled),
+            (sampled, {**metrics, "samples": []}),
+        ):
+            with self.subTest(before=before, after=after):
+                check_resume({"final_validation": before}, {"initial_validation": after}, 1e-3)
+                with self.assertRaises(ValueError):
+                    check_resume({"final_validation": before}, {"initial_validation": after})
+        self.assertIn("samples", sampled)  # Comparing must preserve the original report.
+        for changed in (
+            {**metrics, "heldout": {"code": {"loss": 13.0}}},
+            {**metrics, "heldout": {}},
+            {**metrics, "heldout": {"code": {"loss": float("nan")}}},
+            {**metrics, "step": 3},
+        ):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                check_resume({"final_validation": sampled}, {"initial_validation": changed}, 1e-3)
