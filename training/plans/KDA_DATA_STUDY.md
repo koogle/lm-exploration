@@ -248,3 +248,18 @@ causing an unfused attention fallback. They are diagnostic attempts, not study
 results. The corrected `-02` runs disable preview generation with
 `sample_every_steps: 0`; held-out numerical evaluation remains enabled. All four
 arms restart from their original random seeds, preserving comparability.
+
+### Active run status
+
+The corrected four-arm study launched on November 5 at approximately 11:07 Madrid
+(timezone Europe/Madrid), from commit `90aae63`, with run IDs
+`study-128m-{kda,full}-{control,codeheavy}-20261105-02`. Each completed the eight-step
+qualification with finite losses and gradients. The attention arms measured about
+63–69K tokens/s; KDA about 50K tokens/s at the end of qualification. These are early
+step timings, not end-to-end cost or quality results. Final loss and capability
+comparisons are pending. Budget approximately 1–2 hours after startup at these
+rates, allowing for initialization, evaluation and checkpointing.
+
+[Preparation, diagnostic attempts and corrected launch records](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/kda-data-study-20261105)
+include the independently enforced deadlines and Modal app links. The stopped
+`-01` attempts are retained separately from the corrected study.
