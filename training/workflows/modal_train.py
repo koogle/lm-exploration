@@ -242,6 +242,7 @@ def continue_training(
             call = session.with_options(
                 gpu=f"{policy.gpu}:{policy.world_size}",
                 cpu=4 * policy.world_size,
+                memory=32768 * policy.world_size,
                 timeout=timeout,
             ).spawn(
                 segment_id,
