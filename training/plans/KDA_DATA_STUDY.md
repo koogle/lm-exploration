@@ -241,3 +241,10 @@ precise forecast. Hold tokenizer fixed here to isolate the requested comparisons
 The completed sample audit provides 23,729,413 math training tokens. The execution
 target is therefore 200M tokens per arm, leaving capacity margin at 10% math,
 rather than repeating examples to reach the initial 250M proposal.
+
+The initial `-01` launches were stopped during qualification after preview
+sampling exhausted FlexAttention's compilation cache (changing prompt lengths),
+causing an unfused attention fallback. They are diagnostic attempts, not study
+results. The corrected `-02` runs disable preview generation with
+`sample_every_steps: 0`; held-out numerical evaluation remains enabled. All four
+arms restart from their original random seeds, preserving comparability.

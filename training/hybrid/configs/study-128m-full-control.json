@@ -46,7 +46,7 @@
     "code": 128,
     "math": 128
   },
-  "sample_every_steps": 100000,
+  "sample_every_steps": 0,
   "log_every_steps": 20,
   "hf_repo": "",
   "hf_every_tokens": 100000000,

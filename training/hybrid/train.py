@@ -601,7 +601,9 @@ class HybridFamily:
                 for k in range(1, self.model_config.n_loops)
             }
             result["loop_step"] = loop_step_statistics(model)
-        if final or progress["step"] % self.config.sample_every_steps == 0:
+        if self.config.sample_every_steps > 0 and (
+            final or progress["step"] % self.config.sample_every_steps == 0
+        ):
             prompts, stop_ids, new_tokens = self.sampling
             result["samples"] = samples(
                 model, heldout["tokenizer"], device, prompts, stop_ids, new_tokens
