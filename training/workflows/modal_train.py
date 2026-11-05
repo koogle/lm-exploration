@@ -807,7 +807,7 @@ def run_data_stage(stage, plan, consumer, provenance, resume=False):
     if plan["family"] == "hybrid":
         from training_data.packed_shards import load_recipe
 
-        recipe = load_recipe(stage["spec"]["recipe"])
+        recipe = load_recipe(stage["spec"]["container_recipe"])
         call = modal_data.coordinate.with_options(timeout=bounded_timeout(deadline, 86400)).spawn(
             plan["run_id"], recipe, deadline, stage["spec"]["parallel"]
         )
