@@ -4,6 +4,9 @@ Source-backed reading notes and proposed experiments for our from-scratch models
 External results are attributed to their authors; proposals are not measured
 results or changes to the agreed training plan.
 
+- [Ricursive Ripple — 2026-11-05](ricursive-ripple-2026-11-05.md):
+  source-backed lessons and the [KDA/data comparison plan](../plans/KDA_DATA_STUDY.md),
+  including revised pretraining weights and reasoning-stage allocation.
 - [Looped LMs: Dory1.0-4B and Elastic Latent Recurrence — 2026-11-03](looped-lms-2026-11-03.md):
   NVIDIA's looped 4B models (Dory's nGPT design from its weights and vLLM code; ELR's
   adaptive-delta update, mixed-depth training and last-loop KV cache) against our
