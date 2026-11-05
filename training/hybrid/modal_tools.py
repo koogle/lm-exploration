@@ -63,6 +63,7 @@ def benchmark(
     larger_microbatch=0,
     autotune=False,
     kda_save_intermediates=False,
+    required_gpu_model="",
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -92,6 +93,24 @@ def benchmark(
         .splitlines()
     )
     print(json.dumps({"hardware": hardware}), flush=True)
+    if required_gpu_model and any(
+        required_gpu_model not in row.split(",", 1)[0] for row in hardware
+    ):
+        if run_id:
+            folder = Path("/runs/throughput") / run_id
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "hardware-rejected.json").write_text(
+                json.dumps(
+                    {
+                        "required_gpu_model": required_gpu_model,
+                        "hardware": hardware,
+                        "reason": "Delivered hardware does not match qualification target",
+                    },
+                    indent=2,
+                )
+            )
+            runs_volume.commit()
+        raise RuntimeError(f"Required {required_gpu_model}; delivered hardware: {hardware}")
     cases = (
         [("reference", ["--reference-output-gradient"]), ("direct", [])]
         if compare_output_gradient
@@ -134,11 +153,7 @@ def benchmark(
         "gpus": gpus,
         "microbatch": microbatch or config["microbatch"],
         "torch": torch.__version__,
-        **(
-            measurements["direct"]
-            if len(cases) == 1 and code == 0
-            else {}
-        ),
+        **(measurements["direct"] if len(cases) == 1 and code == 0 else {}),
         **(
             {"profile": json.loads(Path("/tmp/profile.json").read_text())}
             if profile and Path("/tmp/profile.json").exists()
@@ -216,6 +231,7 @@ def bench(
     gpu: str = "H100",
     autotune: bool = False,
     kda_save_intermediates: bool = False,
+    require_gpu_model: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -226,7 +242,10 @@ def bench(
 
     if gpu not in ("H100", "H200"):
         raise ValueError("Throughput qualification supports H100 and H200")
-    if sum([compare_output_gradient, bool(larger_microbatch), autotune, kda_save_intermediates]) > 1:
+    if (
+        sum([compare_output_gradient, bool(larger_microbatch), autotune, kda_save_intermediates])
+        > 1
+    ):
         raise ValueError("Compare one optimization at a time")
     settings = load_config(config)
     if mtp_loss_fraction:
@@ -251,6 +270,7 @@ def bench(
         larger_microbatch,
         autotune,
         kda_save_intermediates,
+        gpu if require_gpu_model else "",
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)
