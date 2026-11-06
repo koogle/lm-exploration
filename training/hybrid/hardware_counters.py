@@ -55,6 +55,10 @@ def probe(folder):
     ncu = executable()
     command = [
         ncu,
+        "--clock-control",
+        "none",
+        "--cache-control",
+        "none",
         "--metrics",
         "sm__cycles_elapsed.avg,dram__bytes_read.sum",
         "--launch-count",
