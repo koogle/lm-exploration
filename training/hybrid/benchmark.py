@@ -261,6 +261,11 @@ def main():
     with tempfile.TemporaryDirectory() as run_dir:
         if args.real_data:
             identity, factory, _, _ = recipe_data(config, args.data_root)
+            if identity["recipe"]["context"] != context:
+                raise ValueError(
+                    f"Benchmark recipe context {identity['recipe']['context']} "
+                    f"does not match model context {context}"
+                )
 
             def open_mixture():
                 mixture = factory()
