@@ -878,3 +878,80 @@ benefit, but this run does not establish that it enables a larger microbatch.
 The existing qualified configuration remains the training default, and full
 pretraining stays held. The complete matched results, phase summaries and logs
 are in the linked HF consolidation archive under `matched-h100x8-fixed`.
+
+### Independent MFU review after consolidation
+
+The remaining problem is predominantly time spent executing work outside dense
+GEMMs, rather than GPUs waiting for data. The refreshed rank-zero trace has
+2.742 seconds of device activity in a 2.998-second instrumented window: about
+91.5% busy. This is compatible with 33% model FLOP utilization; activity does
+not imply tensor-core saturation. Even eliminating every observed idle interval
+would recover only 256 ms in that trace, insufficient by itself for 40% MFU.
+This is an optimistic diagnostic bound, not a transferable unprofiled saving.
+
+The numerator in `HybridFamily.step_metrics` counts six FLOPs per matrix weight
+per token, the additional MTP vocabulary use, and full-attention pair products.
+It omits KDA recurrence/chunk algebra, convolution, normalization, optimizer and
+most elementwise work. The denominator is eight times 989 TFLOP/s, the dense
+BF16 H100 peak. Thus it is a dense-model FLOP estimate, not hardware-counter
+utilization. Attention keys are estimated from the first eight rank-zero rows;
+a global document-position reduction would make that estimate more exact but
+would not speed training up. Keep the present definition for historical
+comparisons and report any expanded accounting separately.
+
+The first control's timed steps imply a median 7.267 GFLOP/token under that
+definition. Computing each step's target duration before taking the median gives
+2.408 seconds for 40% and 1.605 seconds for 60%, against the measured 2.912-second
+median: approximately 504 ms and 1,307 ms still need to be recovered. Differences
+from earlier estimates reflect the newer control and document-dependent count.
+The median spread of rank compute timers is only 1.05 ms. Those timers include
+collective waits, so this rules out a large *visible end-of-step* skew, not an
+underlying rank-local imbalance hidden by collectives. All-rank timelines would
+be needed to make the latter claim.
+
+The existing shape-attributed GEMM audit already shows good effective rates:
+
+| BF16 operation shape (M, K, N) | Attributed time/step | Effective TFLOP/s |
+| --- | ---: | ---: |
+| Output logits (2,048, 1,536, 154,880) | 172 ms | 724 |
+| Output hidden gradient (2,048, 154,880, 1,536) | 160 ms | 779 |
+| MLP projection (24,576, 1,536, 4,096) | 153 ms | 758 |
+| MLP down/input gradient (24,576, 4,096, 1,536) | 150 ms | 773 |
+| Width projection (24,576, 1,536, 1,536) | 148 ms | 730 |
+| MLP weight gradient (4,096, 24,576, 1,536) | 98 ms | 785 |
+
+These rates divide recognized shape FLOPs by attributed kernel duration; they
+are not hardware counters and do not cover every GEMM. They show why packing
+already-large projections did not help. The audit's zero-active-block occupancy
+entries for kernels which demonstrably executed are not credible evidence of
+zero occupancy; use actual hardware counters for occupancy conclusions.
+
+The aggregate GEMM kernel sum is 1.378 seconds. A hypothetical 1.25x acceleration
+of *all* those GEMMs saves only 276 ms; 1.5x saves 459 ms; 2x saves 689 ms, before
+conversion overhead or overlap. Improving only the two listed output GEMMs by
+1.5x saves at most 111 ms. A single kernel replacement cannot plausibly recover
+the full gap unless its affected scope is much larger than these individual
+groups. Similarly, eliminating the 105-ms optimizer or 7-ms data fetch alone
+cannot achieve 40%. CPU offload has no demonstrated throughput case here.
+
+The next substantive study should therefore be a bounded precision/traffic
+experiment rather than another round of projection concatenation. First replay
+the dominant MLP and output GEMM shapes with FP8 scaling, conversions and output
+precision included, against the current BF16 path; retain FP32 KDA state,
+normalization reductions and optimizer state. Require finite outputs, explicit
+gradient-error measurements, and weighted projected savings near 500 ms across
+the *actual eligible scope* before attempting an eight-H100 integration. FP8 is
+a numerical-policy change requiring subsequent short training and held-out loss
+checks, not a drop-in correctness-preserving optimization. Report BF16-equivalent
+throughput and the precision-specific peak separately; switching denominators
+must not masquerade as progress.
+
+If that replay cannot support the budget, objective-preserving BF16 work needs
+a combination of large memory-pass elimination and KDA improvements. A true
+residual/norm/cast boundary fusion is different from the tested standalone
+RMSNorm, but its maximum recoverable time must first be measured by exact
+consumer/producer groups. Larger microbatches should be tested only after an
+activation-liveness budget demonstrates fit; saving 0.805 GiB is not that proof.
+There is still no evidenced path to 60%. This review launched no GPU jobs and
+keeps full pretraining held. All numerical inputs above come from the existing
+linked trace/operator audit and completed matched-control logs.
