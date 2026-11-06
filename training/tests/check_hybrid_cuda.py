@@ -464,6 +464,50 @@ def checks(only=""):
                 torch.testing.assert_close(actual, expected, rtol=0, atol=0)
             results.append({"shape": shape, "replays": 3, "bitwise_equal": True})
         return {"graphed_muon": results}
+    if only == "kda_intra_accuracy":
+        import importlib
+        from unittest.mock import patch
+
+        from model_hybrid import kda_bench
+        from model_hybrid.kernels.kda_intra import intra_backward
+
+        module = importlib.import_module("fla.ops.kda.chunk_intra")
+        calls = []
+
+        class Candidate:
+            def __getitem__(self, grid):
+                def launch(**kwargs):
+                    calls.append(1)
+                    return intra_backward[grid](
+                        **kwargs,
+                        IS_VARLEN=kwargs["cu_seqlens"] is not None,
+                        num_warps=2,
+                        num_stages=1,
+                    )
+
+                return launch
+
+        results = {}
+        with patch.object(module, "chunk_kda_bwd_kernel_intra", Candidate()):
+            for dtype, length, shift in (
+                (torch.float32, 193, 0),
+                (torch.bfloat16, 17, 0),
+                (torch.bfloat16, 65, 0),
+                (torch.bfloat16, 193, 0),
+                (torch.bfloat16, 257, 0),
+                (torch.bfloat16, 65, 4),
+                (torch.bfloat16, 193, 4),
+            ):
+                results[f"{dtype}-{length}-shift{shift}"] = kda_bench.accuracy(
+                    kda.kda_kernel,
+                    dtype,
+                    length=length,
+                    width=128,
+                    tolerance=5e-3 if dtype == torch.float32 else 2e-2,
+                    gate_bias_shift=shift,
+                )
+        assert len(calls) == 7, calls
+        return {"gpu": torch.cuda.get_device_name(), "cases": results, "calls": len(calls)}
     if only == "kda_wy_accuracy":
         from model_hybrid import kda_bench, kda_wy
 

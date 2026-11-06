@@ -150,11 +150,13 @@ def convolution_accuracy(implementation, dtype, tolerance):
     return errors
 
 
-def accuracy(implementation, dtype, length=512, tolerance=5e-2, width=64):
+def accuracy(implementation, dtype, length=512, tolerance=5e-2, width=64, gate_bias_shift=0):
     """Relative max error of outputs and all input gradients against kda_reference."""
     generator = torch.Generator().manual_seed(2)
     documents = packed_documents(2, length, 150, generator)
     tensors, documents = layer_inputs(2, length, 4, width, documents, dtype, generator)
+    if gate_bias_shift:
+        tensors[-1] = (tensors[-1] + gate_bias_shift).detach().requires_grad_()
     upstream = torch.randn(2, length, 4, width, generator=generator).cuda()
     out = implementation(*tensors, documents)
     grads = torch.autograd.grad(out, tensors, upstream.to(out.dtype))

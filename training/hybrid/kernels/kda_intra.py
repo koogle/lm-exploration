@@ -137,7 +137,7 @@ def intra_backward(
     gate_max = tl.max(tl.where(m_ck, b_g, float("-inf")), axis=0)
     anchor = (gate_min + gate_max) * 0.5
     use_dot = tl.max(tl.where(m_k, gate_max - gate_min, 0.0), axis=0) <= 32.0
-    # match the forward anchor when recomputing query-side gate factors
+    # Use the same centered factorization for query- and key-side gradients.
     if use_dot:
         b_gn = anchor[None, :]
 
