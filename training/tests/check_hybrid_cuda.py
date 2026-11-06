@@ -442,6 +442,14 @@ def decode_timing(rows=64, prompt=512, new_tokens=256):
 
 
 def checks(only=""):
+    if only == "muon_batch":
+        from tests.test_optimizers import check_muon_batching
+
+        return {
+            "gpu": torch.cuda.get_device_name(),
+            "torch": torch.__version__,
+            "muon_batch": check_muon_batching("cuda", production_shapes=True),
+        }
     if only == "kda_saved":
         from functools import partial
 

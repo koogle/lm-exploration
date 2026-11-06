@@ -32,7 +32,7 @@ def main(output: str = "", only: str = ""):
     from workflows.deadline import new_deadline
 
     deadline = new_deadline()
-    call = check.spawn(deadline, only)
+    call = check.with_options(gpu="H100!").spawn(deadline, only)
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)
     except Exception:

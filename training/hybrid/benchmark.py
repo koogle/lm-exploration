@@ -201,7 +201,10 @@ def main():
     )
     parser.add_argument("--kda-save-intermediates", action="store_true")
     parser.add_argument("--reference-kda-offsets", action="store_true")
+    parser.add_argument("--muon-batch-size", type=int, default=1)
     args = parser.parse_args()
+    if args.muon_batch_size < 1:
+        parser.error("--muon-batch-size must be positive")
     if args.reference_kda_offsets:
         from .documents import cu_seqlens
         from .model import DocumentMask
@@ -275,6 +278,15 @@ def main():
             mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
             data = ({"synthetic": True}, lambda: mixture)
         family = family_of(config)(config, run_dir, data=data)
+        if args.muon_batch_size != 1:
+            make_optimizer = family.make_optimizer
+
+            def batched_optimizer(model):
+                optimizer = make_optimizer(model)
+                optimizer.muon.batch_size = args.muon_batch_size
+                return optimizer
+
+            family.make_optimizer = batched_optimizer
         if args.compile_mode != "default":
             import torch
 
