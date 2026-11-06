@@ -603,7 +603,7 @@ intra-chunk backward and repeated elementwise/cast traffic are concrete targets
 from the earlier trace. Their optimization benefits are not established by this
 batch-size comparison. The 40–60% MFU target remains unmet.
 
-### Adaptive intra-chunk backward candidate
+### Qualified adaptive intra-chunk backward
 
 The remaining intra backward computes diagonal 16-token interactions with scalar
 loops when gates are unbounded. The candidate in `hybrid/kernels/kda_intra.py`
@@ -632,9 +632,27 @@ not per-element relative-error guarantees.
 
 The same-allocation original/candidate/original eight-H100 qualification is
 `kda-intra-adaptive-h100x8-20261106-01`, using microbatch six, global rows 256,
-30 steps per arm and all-rank phase timing. The candidate remains benchmark-only
-pending that result. The foundation configuration still uses the qualified WY
-kernel, individual-matrix Muon graph replay and microbatch six.
+30 steps per arm and all-rank phase timing. It completed with:
+
+| Variant | Tokens/s | MFU | Peak allocated GiB/GPU |
+| --- | ---: | ---: | ---: |
+| Original, first control | 345,615 | 31.85% | 65.50 |
+| Adaptive intra backward | 355,471 | 32.72% | 65.50 |
+| Original, repeated control | 346,043 | 31.85% | 65.50 |
+
+The improvement is 2.72–2.85%, against 0.124% control drift. Rank-zero accumulated
+forward/backward stream time falls from 2.909–2.913 s to 2.828 s. Local backward
+falls from approximately 1.410 s to 1.327 s; forward/loss and the 105 ms optimizer
+remain essentially unchanged. All 90 steps have finite losses and gradient norms.
+Maximum matched NTP/MTP loss differences are 0.000295/0.000327. The backend is
+enabled for supported H100 shapes and included in checkpoint source provenance;
+`--compare-intra` retains the original/revised/original benchmark. The foundation
+also uses the qualified WY kernel, individual-matrix Muon graph replay and
+microbatch six. After activation, 39 CPU regression checks and Ruff pass.
+
+These checks qualify short-run correctness and throughput, not convergence.
+Learned gate spans can change the fraction of tiles taking the faster branch.
+The 40–60% MFU target remains unmet; full pretraining remains held.
 
 [Kernel timings, full gradient checks and dispatch validation](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/intra-adaptive)
 include all measured variants and source provenance. The earlier microbatch-four

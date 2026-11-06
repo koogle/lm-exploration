@@ -604,3 +604,12 @@ uv run modal run --detach -m model_hybrid.modal_tools::bench \
   --gpus 8 --gpu H100 --require-gpu-model --microbatch 4 --global-rows 256 \
   --steps 30 --real-data --run-id <wy-comparison> --compare-kda-wy
 ```
+
+The family also registers `kda_intra.py`. Its diagonal backward uses centered
+gate factors and tensor-core matrix products for tiles with a bounded observed
+gate range, retaining the scalar calculation for wider ranges. This preserves
+the model's unbounded gate function. On H100 the isolated kernel takes 1.181 ms
+versus 1.992 ms. The matched eight-H100 microbatch-six comparison measures
+355,471 tokens/s versus 345,615/346,043 for its controls (32.72% versus 31.85% MFU).
+Full gradient and fallback-path checks pass. Use `--compare-intra` with
+`--microbatch 6 --phase-timings` for the corresponding comparison.
