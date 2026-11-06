@@ -602,3 +602,44 @@ Further substantial gains must address model execution: the remaining KDA
 intra-chunk backward and repeated elementwise/cast traffic are concrete targets
 from the earlier trace. Their optimization benefits are not established by this
 batch-size comparison. The 40–60% MFU target remains unmet.
+
+### Adaptive intra-chunk backward candidate
+
+The remaining intra backward computes diagonal 16-token interactions with scalar
+loops when gates are unbounded. The candidate in `hybrid/kernels/kda_intra.py`
+centers each key-channel's cumulative log gates and uses matrix products only
+when the maximum per-channel span in the tile is at most 32 (base-2 log units).
+The scalar calculation handles wider ranges. The model's gate function and
+forward pass are unchanged. This is adapted from the pinned FLA 0.6.0 kernel
+under its MIT license; it does not enable the model-changing bounded-gate option.
+
+On an actual H100, using six real packed 4K windows and generated layer values,
+the isolated original kernel measured 1.9918 ms versus 1.1809 ms for the candidate
+(two warps, one stage): 40.7% less time. Compiler-reported registers fall from
+254 to 163; both report zero spills. All four output buffers pass comparison
+with the original, with maximum normalized error 0.00000620. Four/eight-warp
+variants are preserved in the archive; eight warps regresses to 2.6676 ms.
+This is an isolated-kernel result, not a whole-training speedup.
+
+Full forward and all seven input gradients pass FP64-reference checks across
+lengths 17, 65, 193 and 257, including a +4 shift to the raw gate bias to exercise
+large decays. Maximum normalized errors across those checks are 0.001873 in
+FP32 and 0.01118 in BF16. Seven custom kernel invocations are confirmed. A separate
+backend-dispatch check confirms two actual custom backward calls and both guard
+branches: sampled ordinary blocks contain 12 fast / 4 scalar tiles, while the
+large-decay sample contains 0 fast / 16 scalar tiles. These normalized errors are
+not per-element relative-error guarantees.
+
+The same-allocation original/candidate/original eight-H100 qualification is
+`kda-intra-adaptive-h100x8-20261106-01`, using microbatch six, global rows 256,
+30 steps per arm and all-rank phase timing. The candidate remains benchmark-only
+pending that result. The foundation configuration still uses the qualified WY
+kernel, individual-matrix Muon graph replay and microbatch six.
+
+[Kernel timings, full gradient checks and dispatch validation](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/intra-adaptive)
+include all measured variants and source provenance. The earlier microbatch-four
+trace attributes approximately 49 ms of eager float additions to activation-sized
+`[4, 4096, 1536]` tensors and 29 ms to `[154880, 1536]` tied-embedding-sized tensors.
+These are specific follow-up targets for gradient accumulation, not evidence of
+an implemented fusion speedup. Several other large elementwise kernels are already
+compiler-fused.
