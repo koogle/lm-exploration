@@ -661,3 +661,105 @@ trace attributes approximately 49 ms of eager float additions to activation-size
 These are specific follow-up targets for gradient accumulation, not evidence of
 an implemented fusion speedup. Several other large elementwise kernels are already
 compiler-fused.
+
+## Step back: the remaining execution budget
+
+The qualified 960M model, global batch 256, context 4096 and eight H100s take
+2.950 seconds per optimizer step at 355,471 tokens/s and 32.72% MFU. Using the
+same FLOP accounting and workload, 40% requires approximately 2.413 seconds
+(435k tokens/s), saving 537 ms; 60% requires 1.609 seconds (652k tokens/s), saving
+1,341 ms. At 100B tokens these steady-state rates imply approximately 625, 511
+and 341 GPU-hours respectively, before startup, evaluation, checkpoints and
+interruptions. MFU measures useful model FLOPs relative to BF16 peak; it does
+not measure the fraction of time that a GPU is active.
+
+The unprofiled candidate's rank-zero CUDA-event medians are:
+
+| Work | Stream interval | Interpretation |
+| --- | ---: | --- |
+| Forward and loss | 1,364 ms | Includes output-layer backward math computed inside the fused loss forward |
+| Local backward accumulation | 1,327 ms | First five microbatches, without DDP gradient reduction |
+| Final backward with synchronization | 135 ms | Smaller two-row microbatch plus communication; not pure communication time |
+| Accumulated forward/backward, combined | 2,828 ms | Parent interval; do not add it to the preceding children |
+| Optimizer | 105 ms | Individual-matrix Muon graph replay plus AdamW |
+| Data fetch | 7.7 ms | Production prepared-data path and transfer |
+| Scatter and target preparation | 0.8 ms | Rank-zero measurement |
+| Clip and metric reduction | 4.3 ms | Host waiting time is not extra GPU work |
+
+Medians do not add exactly. All-rank accumulated intervals are 2,828.06–2,828.41
+ms, with median end-of-step rank compute spread 0.69 ms. That does not prove
+zero earlier rank imbalance: faster ranks can wait in the final backward.
+Even eliminating optimizer, data, scatter and clipping entirely would yield
+only about 34.1% MFU. The missing half-second must principally come from model
+execution. Full pretraining remains held.
+
+### Required arithmetic versus implementation overhead
+
+The model contains 959,843,116 parameters. Its tied 154,880-by-1,536 embedding
+table contains 237,895,680 parameters. Next-token and full-position MTP losses
+each evaluate that entire vocabulary. Together they account for 39.74% of
+counted dense-model FLOPs: 2.855B of 7.184B FLOPs/token. The dense arithmetic
+alone has an ideal floor of 952 ms/rank/step at nominal 989 TFLOP/s; this excludes
+attention, recurrence, normalization, optimizer work and memory movement.
+
+The earlier microbatch-four trace's recognized `aten::mm` shapes total 844.6
+TFLOPs in 1.181 seconds, approximately 715 TFLOP/s. This is partial operator
+coverage, including recognized optimizer GEMMs and excluding custom GEMMs; it
+is not an end-to-end model utilization measurement. It corroborates the earlier
+estimate that large matrix multiplication is relatively efficient. A pipeline
+of GEMMs, bandwidth-bound kernels and recurrent state work can stay busy while
+scoring far below dense-GEMM peak in model FLOPs.
+
+The trace reader now links device kernels to their originating operators and
+input shapes. It also separates host duration from device-idle time inside
+those host intervals. In that earlier trace, `nonzero` occupies 598 ms of host
+time but only 38 ms of concurrent device-idle time. Nested `repeat_interleave`
+calls occupy a 27 ms host union, with 23 ms of device idle. These intervals can
+overlap and come from an instrumented run: they are neither additive savings
+nor evidence that CPU metadata preparation can recover 600 ms. The previous
+shared-offset implementation regressed throughput by 4.68%; it is not revived.
+
+### CPU placement and consolidation priorities
+
+| Candidate | Why it matters | Constraint / evidence needed |
+| --- | --- | --- |
+| Joint NTP/MTP output-gradient accumulation | Both losses currently create separate approximately 0.95 GB FP32 weight-gradient tensors and scale/combine them through autograd | Preserve both global valid-target normalizers, scheduled MTP weight, tied input-embedding contribution and DDP reduction. Consolidating gradients does not remove the two vocabulary evaluations. |
+| Combined projections and direct gradient accumulation | KDA Q/K/V projections share an input; branches generate separate input gradients, casts and additions. Similar opportunities exist in the MLP. | Preserve independent Muon matrix updates; changing parameter packing must not turn several optimizer matrices into one. Avoid a large per-call weight-concatenation copy. |
+| Fuse residual/norm/cast boundaries | FP32 embedding output keeps the residual stream FP32, while linear operations consume BF16. The trace shows repeated conversions and FP32 gradient additions. | Keep FP32-sensitive reductions; first investigate eliminating redundant passes while preserving the precision policy. BF16 residuals are a separate numerical change. |
+| Prepare compact document metadata on CPU | Boundaries are known from the CPU token batch; CPU lengths can avoid GPU-to-host dynamic-size queries. FLA supports CPU sequence lengths and a separate fixed-shape graph path. | Preserve every document/row boundary and overlap preparation/transfers. The failed sharing experiment means compiler behavior, allocations and full-step performance must be checked. Current custom backend dispatch does not qualify FLA graph mode. |
+| GPU graph replay across larger regions | Reduce CPU dispatch where kernels wait for submission | Requires stable buffers and control flow; dynamic sequence metadata currently obstructs capture. Host launch duration mostly overlaps GPU work and is not itself a saving. |
+| CPU data prefetch and publication | CPU is suitable for token/shard preparation, metadata, serialization and uploading immutable snapshots | Loading is already only about 8 ms. Checkpoint/publication improvements affect total training cost, not the measured steady-state MFU. |
+
+The earlier trace's activation-sized FP32 additions cost 49 ms/step and its
+embedding-sized additions 29 ms/step. Their logical read/read/write traffic
+implies approximately 3.0 TB/s. The softmax-gradient pass similarly moves about
+244 GB in 86 ms, or 2.84 TB/s of logical traffic. These are estimates, not measured
+DRAM counters; caching and profiler effects matter. They point toward removing
+intermediate passes rather than expecting a large gain from another plain add
+or softmax kernel. Related groups overlap with broader elementwise categories;
+do not add every category's time into a fictitious saving.
+
+CPU optimizer offload is a poor throughput default for this fitting model.
+FP32 parameters and gradients each occupy 3.839 GB/rank. Sequential gradient
+download and parameter upload would take at least about 120 ms even at an
+idealized 64 GB/s in each direction, before CPU optimizer work, versus the
+measured 105 ms GPU optimizer. Overlapping gradient download can reduce exposed
+transfer time, but global clipping and updated-weight dependencies constrain
+overlap, and eight GPUs may share host bandwidth. Muon's matrix iterations are
+particularly unsuitable for moving from H100 tensor cores to CPU. Activation
+offload is likewise a capacity tradeoff, not a demonstrated speed optimization.
+
+The priority is therefore to measure and consolidate output/gradient and
+projection traffic, then evaluate whether the saved memory permits fewer
+microbatches without recomputation. CPU metadata and graph replay are secondary
+opportunities whose exposed gap must justify the complexity. Another 40% gain
+in one small kernel cannot close the full remaining budget.
+
+If objective-preserving BF16 consolidation cannot recover the required 537 ms,
+larger alternatives need an explicit quality/performance study: selective FP8
+GEMMs with FP32-sensitive recurrence/reductions retained, or a different MTP
+sampling policy. Reducing the vocabulary changes tokenization and the model;
+reducing MTP changes the objective. FP8 changes numerical behavior and the
+appropriate hardware peak denominator. None qualifies merely because the BF16
+kernels pass, and a relabeled MFU is not a throughput gain. There is no measured
+path to 60% yet.
