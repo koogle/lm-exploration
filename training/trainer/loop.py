@@ -78,7 +78,7 @@ def latest_checkpoint(output):
     return Path(output) / json.loads(latest.read_text())["checkpoint"]
 
 
-def accumulate(ddp, parts, objective, world):
+def accumulate(ddp, parts, objective, world, timing=None):
     """Backward each microbatch's objective; returns the summed detached sums.
 
     `parts` are microbatch argument tuples; `objective(*part)` returns (objective,
@@ -88,19 +88,20 @@ def accumulate(ddp, parts, objective, world):
     """
     import torch
 
+    from trainer.timing import StepTiming
+
+    timing = timing or StepTiming()
     totals = {}
     for index, part in enumerate(parts):
         last = index == len(parts) - 1
         # no_sync must cover forward and backward for earlier microbatches.
         with contextlib.nullcontext() if last else ddp.no_sync():
             with (
-                torch.profiler.record_function("train/forward_and_loss"),
+                timing.phase("forward_and_loss"),
                 torch.autocast("cuda", dtype=torch.bfloat16),
             ):
                 value, sums = objective(*part)
-            with torch.profiler.record_function(
-                "train/backward_sync" if last else "train/backward_local"
-            ):
+            with timing.phase("backward_sync" if last else "backward_local"):
                 (value * world).backward()
         for key, sum_ in sums.items():
             totals[key] = totals.get(key, 0) + sum_.detach()
@@ -134,6 +135,7 @@ def train(
     stop_file=None,
     commit=None,
     save=True,
+    phase_timings=False,
 ):
     """Train until `family.target_tokens`; returns the report (every rank).
 
@@ -148,6 +150,7 @@ def train(
     from torch.nn.parallel import DistributedDataParallel as DDP
 
     from trainer.optimizers import set_learning_rate
+    from trainer.timing import StepTiming
 
     if max_steps is not None and max_steps < 1:
         raise ValueError("max_steps must be positive")
@@ -360,6 +363,7 @@ def train(
             if limit:
                 reason = limit
                 break
+            timing = StepTiming(phase_timings)
             full = {}
 
             def fetch(tokens=tokens, full=full):
@@ -382,7 +386,7 @@ def train(
             torch.cuda.synchronize()
             tick = time.monotonic()
             try:
-                with torch.profiler.record_function("train/data_fetch"):
+                with timing.phase("data_fetch"):
                     batch = primary(fetch)
             except RuntimeError as exc:
                 # All ranks received the same producer failure. Save the last
@@ -393,7 +397,7 @@ def train(
             if "stop" in batch:
                 reason = batch["stop"]
                 break
-            with torch.profiler.record_function("train/scatter_prepare"):
+            with timing.phase("scatter_prepare"):
                 inputs = torch.empty((rows, batch["context"]), dtype=torch.long, device=device)
                 labels = torch.empty_like(inputs)
                 dist.scatter(
@@ -425,9 +429,9 @@ def train(
             def objective(x, y, *rest, keys=keys, counts=counts, progress=progress):
                 return family.loss(ddp, x, y, dict(zip(keys, rest, strict=True)), counts, progress)
 
-            with torch.profiler.record_function("train/accumulate"):
-                sums = accumulate(ddp, parts, objective, world)
-            with torch.profiler.record_function("train/clip_reduce_metrics"):
+            with timing.phase("accumulate"):
+                sums = accumulate(ddp, parts, objective, world, timing)
+            with timing.phase("clip_reduce_metrics"):
                 norm = torch.nn.utils.clip_grad_norm_(
                     model.parameters(), family.gradient_clip, foreach=True
                 )
@@ -438,7 +442,7 @@ def train(
                 if not all(math.isfinite(v) for v in values):
                     reason = "non_finite"
                     break
-            with torch.profiler.record_function("train/optimizer"):
+            with timing.phase("optimizer"):
                 optimizer.step()
             with torch.profiler.record_function("train/device_wait"):
                 torch.cuda.synchronize()
@@ -449,6 +453,7 @@ def train(
                     "compute_seconds": time.monotonic() - compute_tick,
                     "peak_allocated_bytes": torch.cuda.max_memory_allocated(),
                     "peak_reserved_bytes": torch.cuda.max_memory_reserved(),
+                    **({"phases": timing.result()} if phase_timings else {}),
                 },
             )
             step += 1
@@ -477,7 +482,7 @@ def train(
                 if row["step"] == start_step + 1 or row["step"] % family.log_every == 0:
                     print(json.dumps(row), flush=True)
 
-            with torch.profiler.record_function("train/logging"):
+            with timing.phase("logging"):
                 primary(record)
             if step % family.evaluate_every == 0:
                 evaluate()

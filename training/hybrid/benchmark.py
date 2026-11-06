@@ -202,6 +202,8 @@ def main():
     parser.add_argument("--kda-save-intermediates", action="store_true")
     parser.add_argument("--hardware-counters", action="store_true")
     parser.add_argument("--reference-kda-wy", action="store_true")
+    parser.add_argument("--phase-timings", action="store_true")
+    parser.add_argument("--compiled-muon", action="store_true")
     args = parser.parse_args()
     if args.hardware_counters and args.profile:
         parser.error("Counter replay and timeline profiling must run separately")
@@ -222,6 +224,17 @@ def main():
             destination.add_(torch.mm(grad.T, hidden, out_dtype=torch.float32))
 
         output_gradient.accumulate_output_gradient_ = reference
+    if args.compiled_muon:
+        import torch
+
+        from trainer import optimizers
+
+        optimizers.orthogonalize = torch.compile(
+            optimizers.orthogonalize,
+            fullgraph=True,
+            dynamic=False,
+            options={"emulate_precision_casts": True},
+        )
     config = RunConfig.load(args.config)
     overrides = {"hf_repo": "", "log_every_steps": 1, "checkpoint_seconds": 10**9}
     if not args.real_data:
@@ -315,6 +328,7 @@ def main():
             stop_unix=time.time() + 3600,
             max_steps=args.steps,
             save=False,
+            phase_timings=args.phase_timings,
         )
         if report["steps"] != args.steps or report["stop_reason"] != "step_limit":
             raise RuntimeError(f"Benchmark did not complete its requested steps: {report}")

@@ -74,6 +74,8 @@ def benchmark(
     required_gpu_model="",
     hardware_kernel="",
     compare_kda_wy=False,
+    phase_timings=False,
+    compare_compiled_muon=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -86,6 +88,8 @@ def benchmark(
         args += ["--microbatch", str(microbatch)]
     if global_rows:
         args += ["--global-rows", str(global_rows)]
+    if phase_timings:
+        args += ["--phase-timings"]
     if profile:
         args += ["--profile", "/tmp/profile.json"]
     if real_data:
@@ -138,6 +142,12 @@ def benchmark(
             ("original_first", ["--reference-kda-wy"]),
             ("kda_wy", []),
             ("original_repeat", ["--reference-kda-wy"]),
+        ]
+    if compare_compiled_muon:
+        cases = [
+            ("original_first", []),
+            ("compiled_muon", ["--compiled-muon"]),
+            ("original_repeat", []),
         ]
     if larger_microbatch:
         cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))
@@ -294,6 +304,8 @@ def bench(
     require_gpu_model: bool = False,
     hardware_kernel: str = "",
     compare_kda_wy: bool = False,
+    phase_timings: bool = False,
+    compare_compiled_muon: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -309,6 +321,7 @@ def bench(
             [
                 compare_output_gradient,
                 compare_kda_wy,
+                compare_compiled_muon,
                 bool(larger_microbatch),
                 autotune,
                 kda_save_intermediates,
@@ -330,6 +343,7 @@ def bench(
             profile
             or compare_output_gradient
             or compare_kda_wy
+            or compare_compiled_muon
             or larger_microbatch
             or autotune
             or kda_save_intermediates
@@ -364,6 +378,8 @@ def bench(
         gpu if require_gpu_model else "",
         hardware_kernel,
         compare_kda_wy,
+        phase_timings,
+        compare_compiled_muon,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)

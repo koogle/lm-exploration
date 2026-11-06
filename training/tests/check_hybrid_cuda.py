@@ -442,6 +442,38 @@ def decode_timing(rows=64, prompt=512, new_tokens=256):
 
 
 def checks(only=""):
+    if only == "compiled_muon":
+        from trainer.optimizers import orthogonalize
+
+        compiled = torch.compile(
+            orthogonalize,
+            fullgraph=True,
+            dynamic=False,
+            options={"emulate_precision_casts": True},
+        )
+        results = []
+        for shape in (
+            (1536, 1536),
+            (4096, 1536),
+            (128, 1536),
+            (1536, 128),
+            (1536, 4096),
+            (512, 1536),
+            (1536, 3072),
+        ):
+            torch.manual_seed(sum(shape))
+            value = torch.randn(shape, device="cuda")
+            expected = orthogonalize(value)
+            actual = compiled(value)
+            difference = actual.float() - expected.float()
+            normalized_max = float(difference.abs().max() / expected.abs().max())
+            relative_rms = float(difference.norm() / expected.float().norm())
+            if normalized_max > 0.01 or relative_rms > 0.01:
+                raise AssertionError((shape, normalized_max, relative_rms))
+            results.append(
+                {"shape": shape, "normalized_max": normalized_max, "relative_rms": relative_rms}
+            )
+        return {"compiled_muon": results}
     if only == "kda_wy_accuracy":
         from model_hybrid import kda_bench, kda_wy
 
