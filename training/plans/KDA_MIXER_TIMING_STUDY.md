@@ -82,8 +82,8 @@ max-norm-normalized short checks, not per-element guarantees or learning results
 
 The matched throughput run is `kda-scalar-delta-h100x8-20261106-01`, source
 `d9479aa`, with KDA/scalar/KDA arms and the same 30-minute worker timeout,
-zero retries and independent launch deadline. Its speed result and the new
-all-rank trace are pending. Scalar gating is benchmark-only; the production
+zero retries and independent launch deadline. Its completed speed result and corrected
+all-rank audit are recorded below. Scalar gating is benchmark-only; the production
 architecture and full-pretraining hold remain in effect.
 
 ## Completed matched mixer comparison
@@ -143,3 +143,74 @@ causality and profiling instruments these same wrappers. CPU synchronization
 sums cannot be counted as removable wall time: 627 ms of `nonzero` host time
 coincides with only 20 ms of GPU idle. Reaching 40% also requires reducing
 busy-device work; CPU offload or loading changes do not explain the remaining gap.
+
+## Completed eight-rank audit
+
+Capture `-02` completed 16 steps with finite losses/norms and three complete
+trace windows on **each of eight ranks**. Profiling remains marked unsuitable
+for throughput qualification. Timed training steps 7–9 have median 3.031 s,
+versus 2.940 s for post-capture steps 11–16: approximately **3.1% instrumentation
+overhead**. Complete profiler windows include logging and average 3.037 s;
+they deliberately differ from the trainer's `seconds` field. First-step startup
+was 264.4 s and the second step 5.18 s before steady-state execution. This audit
+covers training steps; evaluation/checkpoint overhead is outside this benchmark.
+
+Mean exclusive time over the three windows, in milliseconds (rounded):
+
+| Rank | Non-communication kernels alone | Communication alone | Memory operations alone | Cross-category overlap | Idle |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0 | 2621.0 | 42.1 | 7.8 | 124.5 | 241.9 |
+| 1 | 2696.7 | 36.1 | 6.2 | 58.0 | 240.2 |
+| 2 | 2605.8 | 70.1 | 6.0 | 124.3 | 231.0 |
+| 3 | 2617.2 | 59.4 | 6.2 | 124.5 | 229.9 |
+| 4 | 2614.7 | 60.0 | 6.0 | 125.1 | 231.5 |
+| 5 | 2627.4 | 53.9 | 6.0 | 124.5 | 225.4 |
+| 6 | 2690.2 | 34.0 | 6.3 | 67.8 | 239.1 |
+| 7 | 2612.4 | 68.6 | 6.1 | 124.5 | 225.7 |
+
+Every unrounded ledger sums to its complete window; residuals are numerical
+roundoff. Non-communication kernels include memory-bound elementwise work,
+not just tensor-core arithmetic. The GPUs show **92.0–92.6% activity**, while
+the model FLOP estimate remains about 33% of BF16 peak. These measure different
+things. Higher kernel-only time on ranks 1/6 mostly reflects less overlap, not
+90 ms of slower arithmetic.
+
+Independent kernel-duration sums are similar across ranks: GEMMs 1,384–1,408 ms,
+compiled elementwise 413.5–414.5 ms, KDA 364.9–369.4 ms, KDA convolutions
+90.5–91.3 ms and loss softmax-gradient 85.65–86.00 ms. These sums can overlap
+and must not be added to the exclusive table. NCCL sums vary from 94 to 194 ms,
+but only 34–70 ms occurs without other device work; communication time can also
+include waiting. Large host sync durations likewise cannot be treated as savings.
+
+Under the explicit same-Modal-worker/shared-host-clock assumption, observed
+end-of-step device completion spans only 0.229–0.240 ms, with different latest
+ranks across the three windows. There is no stable end-of-step straggler in this
+capture. Synchronization can conceal earlier skew: this is not a calibrated
+clock result or proof of a causal critical rank. The compact audit records the
+assumption and validates rank/world/base-time metadata instead of inferring it
+from the generic host label `modal`.
+
+[All eight raw traces, ledgers and conditional alignment](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-allrank-profile-h100x8-20261106-02)
+are archived with the [fresh representative rank-zero interactive viewer](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-allrank-profile-h100x8-20261106-02/rank0-timeline.html?download=true).
+The viewer is scoped to rank zero; the compact audit covers all eight. Kernel
+and CPU attribution flames retain unattributed categories and distinguish
+inclusive durations from exclusive elapsed time.
+
+## What to fix next
+
+The evidence supports reducing recurrent and elementwise execution cost, plus
+small repeated dispatch gaps. It does not support input-loading work or CPU
+offload as a route to the missing hundreds of milliseconds. Scalar gating has
+already produced a measured 256–262 ms gain with the same context, batch and
+sources, but needs a learning-quality comparison before a model decision.
+
+For either architecture, a tightly scoped metadata/dispatch improvement can
+be tested against the exposed tens-of-milliseconds budget above. If pursuing
+the faster scalar candidate, its 2.09 GiB memory saving also motivates a bounded
+larger-microbatch test; capacity and speed have not yet been established at that
+batch. Larger remaining gains likely require reducing busy-device work, such as
+a separately qualified precision or GEMM change. FP8 would change numerical
+policy and the appropriate peak denominator, so evaluate actual tokens/s,
+quality and per-precision accounting rather than claiming BF16 MFU improvement
+by relabeling it. No proposed next experiment is automatically a production
+change, and this evidence does not establish a route to 60% MFU.
