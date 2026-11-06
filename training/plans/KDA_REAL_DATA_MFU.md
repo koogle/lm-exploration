@@ -69,8 +69,8 @@ states and 0.264% for weights, inside the existing BF16 tolerance. Matched
 30-step runs stayed finite; final main losses differed by less than 0.00024.
 This establishes implementation agreement over these checks, not long-run quality.
 
-The reference implementation is selectable only in the benchmark for controlled
-comparisons. Production uses the tested direct-accumulation operation for its
+The output-gradient reference implementation is selectable in the benchmark for
+controlled comparisons. Production uses the tested direct-accumulation operation for its
 memory benefit. Its Python and CUDA sources are included in checkpoint provenance.
 
 Every GPU call has a 30-minute server timeout, zero retries and an independent
@@ -190,11 +190,8 @@ the separate `timeline-audit.json` derives activity intervals from raw Chrome
 trace events. The reader now recognizes those normalized names and avoids adding
 GPU annotation ranges to CPU phase attribution.
 
-Shared immutable document offsets are implemented in `DocumentMask` and reused
-by all KDA layers in each microbatch. A test covers EOS boundaries, row boundaries,
-and isolation between different batches. The benchmark can restore per-layer
-reconstruction for a matched reference. Its eight-H100 comparison is pending;
-full training remains held and no speedup is claimed for this change yet.
+The shared-offset prototype and its boundary-isolation checks were evaluated
+in the completed comparisons below. The active path uses kernel-local offsets.
 
 
 ## November 6: shared offsets and batched Muon qualification
@@ -214,12 +211,11 @@ activity during that phase. NCCL kernel times across the three profiled steps we
 40, 562 and 42 ms; the large spike makes the average unreliable as a steady-state
 communication estimate. Communication settings remain unchanged.
 
-Muon now supports bounded batches of equal-shape, equal-dtype, same-device
-matrices within each parameter group. Every matrix keeps its own normalization,
-momentum buffer and aspect-ratio scaling. The default remains one matrix at a
-time. The benchmark candidate uses batches of up to 16, reducing GEMM dispatch
-without changing the optimizer equations. No production recipe enables batching
-yet.
+The evaluated Muon prototype grouped equal-shape, equal-dtype, same-device
+matrices within each parameter group, retaining independent normalization,
+momentum and aspect-ratio scaling. It tested batches of up to 16. The active
+optimizer processes matrices individually; the prototype source is preserved
+in Git history and its measurements in the HF archive.
 
 CPU tests cover different shapes and learning rates, zero and absent gradients,
 partial batches, momentum agreement and state restore. H100 CUDA checks cover the
@@ -253,8 +249,8 @@ by 4.68%; the combined candidate regresses by 4.07%, relative to the first
 original. Batched Muon adds only 0.64% over the shared-offset arm, too small to
 establish a meaningful gain. Neither candidate is adopted. The default model
 uses original kernel-local offset reconstruction, and the default optimizer
-processes one matrix at a time. Shared offsets and batching are available only
-as explicit benchmark experiments.
+processes one matrix at a time. Historical prototype sources and measurements remain available in Git history
+and the HF archive; active training and benchmark defaults use the original path.
 
 The earlier +3.7% result compared shared offsets with per-layer reconstruction
 in the mask property. That control moved work out of its original kernel call
@@ -268,3 +264,87 @@ performance: final main losses across these arms differ by less than 0.0004.
 Raw per-case logs, arguments, hardware identities and the repeated baseline are
 preserved in the linked HF archive. The evidence supports keeping the original
 path, not launching full pretraining on the slower candidate.
+
+
+## MFU diagnosis and the requested 40–60% target
+
+The user requests findings and the original training path, with rejected
+shared-offset and batched-Muon prototypes retained as historical evidence.
+This analysis reuses the completed eight-H100 trace; no new GPU optimization
+runs are required for these findings.
+
+### The size of the gap
+
+The original-path median step is 3.200 s for 1,048,576 global tokens. The logged
+MFU formula implies about 7.279 GFLOPs/token for this mixture and model, including
+both main and MTP output projections and estimated full attention. Its denominator
+is eight times the **dense** H100 BF16 peak of 989 TFLOP/s, not the sparse peak.
+Attention lengths are sampled on rank zero; KDA recurrence, optimizer arithmetic,
+normalization and softmax are not comprehensively counted as model FLOPs. This
+is a model-FLOP efficiency estimate, not a hardware activity percentage. Changing
+the accounting would not make training faster.
+
+| Target MFU | Required step time | Required tokens/s | Step time to recover |
+| --- | ---: | ---: | ---: |
+| 40% | 2.412 s | 434,807 | 0.789 s |
+| 50% | 1.929 s | 543,508 | 1.271 s |
+| 60% | 1.608 s | 652,210 | 1.592 s |
+
+These targets hold the current model, objective, context and global batch fixed.
+The trace's CUDA activity union is 3.077 s in a 3.470 s instrumented window
+(88.7% activity), with profiler-induced stalls. It does not support the claim
+that 70% of wall time is idle. Nor is its roughly 11% inactive interval a measured
+recoverable fraction of unprofiled runtime.
+
+### What the kernels reveal
+
+- **Dense GEMMs are relatively efficient.** The arithmetic model gives about
+  941.6 TFLOPs of dense model GEMMs per rank per step, plus 27.7 TFLOPs for Muon's
+  Newton–Schulz work. Dividing by the trace's 1.375 s GEMM kernel-time sum gives
+  roughly 705 TFLOP/s, or 71% of nominal peak. This is an approximate aggregate
+  estimate, not a tensor-pipe counter. Even perfect GEMM execution would recover
+  only about 0.40 s under this accounting, short of the 0.79 s needed for 40% MFU.
+- **KDA has a substantial non-GEMM cost.** KDA kernels consume about 0.673 s per
+  profiled step. Two backward kernels account for 0.404 s of that. Their launch
+  metadata records 254 and 255 registers/thread. With 64K 32-bit registers/SM,
+  their allocations permit at most eight resident warps per SM: approximately
+  12.5% of the 64-warp limit. This is a concrete register-pressure constraint,
+  not measured achieved occupancy or proof of register spilling. Dense GEMMs
+  can also work well at low warp occupancy through different execution pipelines.
+- **Elementwise work is material.** Compiled elementwise kernels consume about
+  0.432 s. Examples include dtype copies (one named kernel totals 53 ms and
+  2,560 launches/step); eager addition kernels add another 102 ms in the separate
+  `other` category. FLOP-based MFU gives little credit to these operations even
+  when they keep execution units and memory paths busy.
+- **The output objective moves substantial data.** Main plus full-fraction MTP
+  loss processes 262,144 token positions per rank through a 154,880-token
+  vocabulary. The softmax-gradient kernel reads logits twice and writes them
+  once: about 243.6 GB of logical loads/stores per step. Its 85.8 ms kernel time
+  implies 2.84 TB/s effective logical bandwidth. Caches may serve some traffic;
+  this is not a measurement of DRAM bandwidth. The number is consistent with
+  substantial bandwidth work, and the entire kernel is under 3% of step time.
+- **Data loading and stable communication are smaller targets.** Fetch is a few
+  milliseconds. NCCL kernel times in the three trace steps are 40/562/42 ms;
+  the isolated spike prevents interpreting their average as normal collective
+  cost. CPU wait durations include waiting for useful GPU execution and cannot
+  be counted again as free time to eliminate.
+
+### What is established, and what is still unknown
+
+The gap is largely a mixture of high-throughput GEMMs and much slower-per-FLOP
+recurrence, elementwise, normalization and data-movement work. Register-heavy KDA
+backward kernels are an evidence-backed focus for deeper diagnosis; the failed
+setup/optimizer prototypes did not address their main cost. The 40% target
+requires substantial reductions in these kernel costs, not just host cleanup.
+The evidence does not establish that 40% or 60% is achievable for this unchanged
+workload, and 60% would require nearly halving the current step time.
+
+The trace does **not** contain measured DRAM/L2 bandwidth, tensor-pipe utilization,
+SM clocks, warp-stall reasons or local-memory spill traffic. Consequently it
+cannot distinguish register-induced latency from memory or instruction-pipeline
+limits inside KDA conclusively. Its generic occupancy estimator even reports
+zero for some executing high-shared-memory GEMMs, so those automatic estimates
+are not treated as measured hardware utilization. Kernel resource metadata and
+arithmetic/traffic budgets are archived with these explicit limitations. Hardware
+counter profiling, rather than another speculative optimization, is the missing
+evidence needed for a firmer kernel-level root cause.
