@@ -8,6 +8,7 @@ kernel from the PyTorch profiler, and compares outputs and gradients with
 """
 
 import collections
+import math
 import time
 
 import torch
@@ -145,7 +146,7 @@ def convolution_accuracy(implementation, dtype, tolerance):
     names = ("q", "k", "v", "dq", "dk", "dv", "dwq", "dwk", "dwv")
     for name, a, b in zip(names, (*outs, *grads), (*expected, *expected_grads), strict=True):
         errors[name] = ((a.double() - b).abs().max() / b.abs().max().clamp_min(1e-12)).item()
-    if max(errors.values()) > tolerance:
+    if any(not math.isfinite(error) or error > tolerance for error in errors.values()):
         raise AssertionError(f"Convolutions differ from the reference: {errors}")
     return errors
 
@@ -218,7 +219,7 @@ def backward_tiling(data_root="/data", hoisted=False, intra=False):
         def __getitem__(self, grid):
             def launch(*args, **kwargs):
                 if args:
-                    raise AssertionError("Expected named WY launch arguments")
+                    raise AssertionError("Expected named backward-kernel launch arguments")
                 captured.update(grid=grid, kwargs=kwargs)
                 return original[grid](**kwargs)
 
