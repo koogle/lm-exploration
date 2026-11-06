@@ -91,6 +91,10 @@ class WorkflowResolutionTests(unittest.TestCase):
         partial = copy.deepcopy(bundle)
         partial["model"]["microbatch"] = 6
         self.assertEqual(resolve_payload(partial)[2]["microbatch"], 6)
+        partial["model"]["model"]["n_loops"] = 2
+        with self.assertRaisesRegex(ValueError, "microbatches"):
+            resolve_payload(partial)
+        partial["model"]["model"]["n_loops"] = 1
         partial["model"]["architecture"] = "hnet"
         with self.assertRaisesRegex(ValueError, "microbatches"):
             resolve_payload(partial)

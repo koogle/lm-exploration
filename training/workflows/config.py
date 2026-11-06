@@ -144,9 +144,12 @@ def resolve_hybrid(workflow, run):
     if any(type(v) is not int or v < 1 for v in (rows, microbatch, run["target_tokens"])):
         raise ValueError("Hybrid rows, microbatch and target must be positive integers")
     if rows % workflow.world_size or (
-        run.get("architecture", "hybrid") == "hnet" and rows % (workflow.world_size * microbatch)
+        (run.get("architecture", "hybrid") == "hnet" or run["model"].get("n_loops", 1) > 1)
+        and rows % (workflow.world_size * microbatch)
     ):
-        raise ValueError("Global rows must divide across GPUs, with whole microbatches when required")
+        raise ValueError(
+            "Global rows must divide across GPUs, with whole microbatches when required"
+        )
     return run
 
 
