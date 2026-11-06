@@ -35,9 +35,43 @@ def orthogonalize(update, steps=5):
     return x.T if transposed else x
 
 
+class GraphedOrthogonalize:
+    """Replay the existing Muon operation sequence, with one graph per CUDA shape.
+
+    Outputs are borrowed buffers: consume before the next call of the same shape.
+    Muon consumes each result on the calling stream before advancing parameters.
+    """
+
+    def __init__(self):
+        self.graphs = {}
+
+    def __call__(self, update, steps=5):
+        if not update.is_cuda:
+            return orthogonalize(update, steps)
+        key = (update.device, tuple(update.shape), update.dtype, steps)
+        if key not in self.graphs:
+            source = torch.empty_like(update)
+            source.copy_(update)
+            stream = torch.cuda.Stream(device=update.device)
+            stream.wait_stream(torch.cuda.current_stream(update.device))
+            with torch.cuda.stream(stream):
+                for _ in range(3):
+                    orthogonalize(source, steps)
+            torch.cuda.current_stream(update.device).wait_stream(stream)
+            graph = torch.cuda.CUDAGraph()
+            with torch.cuda.graph(graph, stream=stream):
+                output = orthogonalize(source, steps)
+            self.graphs[key] = (source, output, graph)
+        source, output, graph = self.graphs[key]
+        source.copy_(update)
+        graph.replay()
+        return output
+
+
 class Muon(torch.optim.Optimizer):
     def __init__(self, params, *, lr, momentum, weight_decay):
         super().__init__(params, {"lr": lr, "momentum": momentum, "weight_decay": weight_decay})
+        self.orthogonalize = orthogonalize
 
     @torch.no_grad()
     def step(self):
@@ -51,7 +85,7 @@ class Muon(torch.optim.Optimizer):
                 buffer = state["momentum_buffer"]
                 buffer.lerp_(p.grad, 1 - group["momentum"])
                 update = p.grad.lerp(buffer, group["momentum"])
-                update = orthogonalize(update)
+                update = self.orthogonalize(update)
                 # Original Muon aspect-ratio scaling, not AdamW RMS matching.
                 scale = max(1, p.size(0) / p.size(1)) ** 0.5
                 p.mul_(1 - group["lr"] * group["weight_decay"])

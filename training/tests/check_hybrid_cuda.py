@@ -442,15 +442,10 @@ def decode_timing(rows=64, prompt=512, new_tokens=256):
 
 
 def checks(only=""):
-    if only == "compiled_muon":
-        from trainer.optimizers import orthogonalize
+    if only == "graphed_muon":
+        from trainer.optimizers import GraphedOrthogonalize, orthogonalize
 
-        compiled = torch.compile(
-            orthogonalize,
-            fullgraph=True,
-            dynamic=False,
-            options={"emulate_precision_casts": True},
-        )
+        graphed = GraphedOrthogonalize()
         results = []
         for shape in (
             (1536, 1536),
@@ -462,18 +457,13 @@ def checks(only=""):
             (1536, 3072),
         ):
             torch.manual_seed(sum(shape))
-            value = torch.randn(shape, device="cuda")
-            expected = orthogonalize(value)
-            actual = compiled(value)
-            difference = actual.float() - expected.float()
-            normalized_max = float(difference.abs().max() / expected.abs().max())
-            relative_rms = float(difference.norm() / expected.float().norm())
-            if normalized_max > 0.01 or relative_rms > 0.01:
-                raise AssertionError((shape, normalized_max, relative_rms))
-            results.append(
-                {"shape": shape, "normalized_max": normalized_max, "relative_rms": relative_rms}
-            )
-        return {"compiled_muon": results}
+            for iteration in range(3):
+                value = torch.randn(shape, device="cuda")
+                expected = orthogonalize(value)
+                actual = graphed(value)
+                torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+            results.append({"shape": shape, "replays": 3, "bitwise_equal": True})
+        return {"graphed_muon": results}
     if only == "kda_wy_accuracy":
         from model_hybrid import kda_bench, kda_wy
 
