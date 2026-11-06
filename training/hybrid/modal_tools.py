@@ -48,7 +48,13 @@ def run_torchrun(module, args, gpus, timeout):
 
 
 @app.function(
-    image=image, gpu="H100:8", cpu=32, memory=262144, timeout=1800, retries=0, volumes=VOLUMES
+    image=counter_image,
+    gpu="H100:8",
+    cpu=32,
+    memory=262144,
+    timeout=1800,
+    retries=0,
+    volumes=VOLUMES,
 )
 def benchmark(
     config,
@@ -326,9 +332,7 @@ def bench(
     deadline = new_deadline()
     run_id = run_id or f"bench-{time.time_ns()}"
     requested_gpu = "H100!" if gpu == "H100" and require_gpu_model else gpu
-    call = benchmark.with_options(
-        gpu=f"{requested_gpu}:{gpus}", image=counter_image if hardware_kernel else image
-    ).spawn(
+    call = benchmark.with_options(gpu=f"{requested_gpu}:{gpus}").spawn(
         settings,
         gpus,
         steps,
