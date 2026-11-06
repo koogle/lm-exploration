@@ -31,6 +31,14 @@ DEFAULT_CONFIG = "hybrid/configs/hybrid-720m-40b.json"
 VOLUMES = {"/data": data_volume, "/runs": runs_volume}
 
 
+def consolidation_variants(selection):
+    allowed = ("joint-loss", "projections", "norm", "all")
+    cases = tuple(selection.split(",")) if selection else allowed
+    if len(set(cases)) != len(cases) or any(case not in allowed for case in cases):
+        raise ValueError(f"Select distinct consolidation variants from {allowed}")
+    return cases
+
+
 def run_torchrun(module, args, gpus, timeout):
     """torchrun's exit code and output lines (printed as they arrive)."""
     command = ["torchrun", "--standalone", f"--nproc_per_node={gpus}", "-m", module, *args]
@@ -78,6 +86,7 @@ def benchmark(
     compare_graphed_muon=False,
     compare_intra=False,
     compare_consolidation=False,
+    consolidation_cases="",
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -162,7 +171,7 @@ def benchmark(
             [("original_first", [])]
             + [
                 (candidate, ["--consolidation", candidate])
-                for candidate in ("joint-loss", "projections", "norm", "all")
+                for candidate in consolidation_variants(consolidation_cases)
             ]
             + [("original_repeat", [])]
         )
@@ -327,6 +336,7 @@ def bench(
     compare_graphed_muon: bool = False,
     compare_intra: bool = False,
     compare_consolidation: bool = False,
+    consolidation_cases: str = "",
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -335,6 +345,10 @@ def bench(
     """
     from workflows.deadline import new_deadline
 
+    if consolidation_cases and not compare_consolidation:
+        raise ValueError("consolidation_cases requires compare_consolidation")
+    if compare_consolidation:
+        consolidation_variants(consolidation_cases)
     if gpu not in ("H100", "H200"):
         raise ValueError("Throughput qualification supports H100 and H200")
     if (
@@ -407,6 +421,7 @@ def bench(
         compare_graphed_muon,
         compare_intra,
         compare_consolidation,
+        consolidation_cases,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)
