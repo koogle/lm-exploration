@@ -26,13 +26,13 @@ def small_model():
 
 
 @torch.no_grad()
-def check_muon_batching(device="cpu", production_shapes=False):
+def check_muon_batching(device="cpu", production_shapes=False, batch_size=3):
     """Compare updates, momentum, missing gradients and state resume across batches."""
     import copy
 
     torch.manual_seed(947)
     shapes = (
-        [(1536, 1536)] * 3 + [(128, 1536)] * 3 + [(1536, 128)] * 3 + [(4096, 1536)] * 2
+        [(1536, 1536)] * 17 + [(128, 1536)] * 3 + [(1536, 128)] * 3 + [(4096, 1536)] * 2
         if production_shapes
         else [(9, 17)] * 5 + [(17, 9)] * 3 + [(8, 8)] * 4
     )
@@ -48,7 +48,7 @@ def check_muon_batching(device="cpu", production_shapes=False):
             batch_size=batch_size,
         )
 
-    ref, batched = make(reference, 1), make(candidate, 3)
+    ref, batched = make(reference, 1), make(candidate, batch_size)
     largest = 0.0
     for step in range(4):
         for i, (p, q) in enumerate(zip(reference, candidate, strict=True)):
@@ -78,10 +78,15 @@ def check_muon_batching(device="cpu", production_shapes=False):
                 atol=0,
             )
         if step == 1:
-            restored = make(candidate, 3)
+            restored = make(candidate, batch_size)
             restored.load_state_dict(copy.deepcopy(batched.state_dict()))
             batched = restored
-    return {"max_relative_update_l2_error": largest, "steps": 4, "matrices": len(shapes)}
+    return {
+        "max_relative_update_l2_error": largest,
+        "steps": 4,
+        "matrices": len(shapes),
+        "batch_size": batch_size,
+    }
 
 
 class OptimizerGroupingTests(unittest.TestCase):

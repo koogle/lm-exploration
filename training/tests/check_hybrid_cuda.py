@@ -448,7 +448,7 @@ def checks(only=""):
         return {
             "gpu": torch.cuda.get_device_name(),
             "torch": torch.__version__,
-            "muon_batch": check_muon_batching("cuda", production_shapes=True),
+            "muon_batch": check_muon_batching("cuda", production_shapes=True, batch_size=16),
         }
     if only == "kda_saved":
         from functools import partial
