@@ -200,16 +200,15 @@ def main():
         "--compile-mode", default="default", choices=["default", "max-autotune-no-cudagraphs"]
     )
     parser.add_argument("--kda-save-intermediates", action="store_true")
-    parser.add_argument("--reference-kda-offsets", action="store_true")
+    parser.add_argument("--shared-kda-offsets", action="store_true")
     parser.add_argument("--muon-batch-size", type=int, default=1)
     args = parser.parse_args()
     if args.muon_batch_size < 1:
         parser.error("--muon-batch-size must be positive")
-    if args.reference_kda_offsets:
-        from .model import DocumentMask
+    if args.shared_kda_offsets:
+        from .kda import KimiDeltaAttention
 
-        # Reconstruct inside kda_kernel, at the original pre-optimization site.
-        DocumentMask.kda_offsets = property(lambda mask: None)
+        KimiDeltaAttention.share_document_offsets = True
     if args.kda_save_intermediates:
         from functools import partial
 

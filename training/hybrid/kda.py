@@ -101,6 +101,9 @@ def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False, o
 
 
 class KimiDeltaAttention(nn.Module):
+    # Experimental sharing is enabled only by the benchmark.
+    share_document_offsets = False
+
     def __init__(self, config):
         super().__init__()
         heads, width = config.n_kda_head, config.head_dim
@@ -181,7 +184,7 @@ class KimiDeltaAttention(nn.Module):
                 self.dt_bias,
                 mask.documents,
                 keep,
-                offsets=mask.kda_offsets,
+                offsets=mask.kda_offsets if self.share_document_offsets else None,
             )
         else:
             out = kda_reference(q, k, v, g, beta, self.A_log, self.dt_bias, positions, keep)

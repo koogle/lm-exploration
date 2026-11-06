@@ -121,7 +121,7 @@ def benchmark(
         else [("direct", [])]
     )
     if compare_kda_offsets:
-        cases = [("reference_offsets", ["--reference-kda-offsets"]), ("shared_offsets", [])]
+        cases = [("original", []), ("shared_offsets", ["--shared-kda-offsets"])]
     if muon_batch_size:
         cases.append(("batched_muon", ["--muon-batch-size", str(muon_batch_size)]))
     if larger_microbatch:
@@ -131,11 +131,14 @@ def benchmark(
     if kda_save_intermediates:
         cases.append(("kda_saved", ["--kda-save-intermediates"]))
     if pipeline_batch_size:
-        original = ["--reference-kda-offsets"]
+        original = []
         cases = [
             ("original_first", original),
-            ("shared_offsets", []),
-            ("batched_muon", ["--muon-batch-size", str(pipeline_batch_size)]),
+            ("shared_offsets", ["--shared-kda-offsets"]),
+            (
+                "batched_muon",
+                ["--shared-kda-offsets", "--muon-batch-size", str(pipeline_batch_size)],
+            ),
             ("original_repeat", original),
         ]
     measurements, all_lines = {}, []
