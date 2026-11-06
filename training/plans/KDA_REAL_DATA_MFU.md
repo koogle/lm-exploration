@@ -764,12 +764,50 @@ appropriate hardware peak denominator. None qualifies merely because the BF16
 kernels pass, and a relabeled MFU is not a throughput gain. There is no measured
 path to 60% yet.
 
-An updated three-step instrumented trace is queued as part of the bounded
+An updated three-step instrumented trace completed as part of the bounded
 16-step diagnostic `kda-current-profile-h100x8-20261106-01` (training source
 `01f57ef`, eight strict H100s). It has a 30-minute execution timeout, zero retries
-and an independent launch deadline. At this review it has not acquired GPUs;
-the operator-level evidence above is explicitly from the earlier trace, while
-the 2.950-second step budget is from the completed unprofiled qualification.
-The new trace must not be used as an unprofiled throughput result. The source
-checks now total 43 passing CPU tests, including delayed-kernel attribution,
-overlapping intervals and host-wait versus device-idle distinctions.
+and an independent launch deadline. Its three instrumented windows are
+2.994–3.000 seconds, with 2.734–2.748 seconds of CUDA activity. Kernel sums include
+1.378 s of matrix multiplication, 414 ms of compiled elementwise work, 366 ms of
+KDA kernels, 90 ms of KDA convolution and 86 ms of softmax-gradient work. These
+are diagnostic sums, not disjoint wall-clock costs. The recorded 108 `nonzero`
+calls occupy 627 ms of host time but only 20 ms of concurrent device-idle time;
+the repeated chunk-index setup adds about 19 ms of concurrent idle. The largest
+activation-sized eager additions account for 45 ms and embedding-sized additions
+for 22 ms. This reinforces the focus on consolidation rather than CPU offload.
+
+[The optimized-configuration trace and operator audit](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/current-step-audit)
+are archived with source provenance. These instrumented results do not replace
+the unprofiled 2.950-second qualification. The trace-reader checks cover delayed
+kernel attribution, overlapping intervals and host-wait versus device-idle
+distinctions.
+
+### Three consolidation candidates under qualification
+
+The benchmark can independently select joint NTP/MTP gradient accumulation,
+combined Q/K/V plus MLP gate/up projections, or a grouped RMSNorm backward.
+`--compare-consolidation` runs a control, the three individual candidates, their
+combination and a repeated control on one allocation. None is a training default.
+
+The joint loss keeps the original masked sums and externally supplied global
+normalization/MTP scales. cuBLAS accumulates scaled products directly into one
+FP32 weight-gradient buffer; logits and hidden gradients retain their existing
+precision. Combined projections concatenate weights for the computation while
+retaining the original parameter objects and independent Muon matrix updates.
+That concatenation and any layout copies count against measured performance.
+The RMSNorm candidate combines input-gradient work with partial weight-gradient
+reduction, retaining the FP32 residual stream and reductions; it does not claim
+to eliminate every cast elsewhere in the model.
+
+The 52 CPU checks pass, including unequal loss-head lengths, masked labels,
+upstream gradient scaling, tied-embedding gradients and parameter identity.
+Isolated H100 RMSNorm forward/backward at 24,576-by-1,536 measures approximately
+0.272 versus 0.260 ms, with normalized errors below 2e-7. The joint-loss check
+uses 2,048 NTP and 513 MTP positions, width 1,536 and vocabulary 154,880: about
+14.37 versus 11.62 ms, with maximum normalized gradient error 8.5e-8. Its shorter
+token batches overrepresent gradient-buffer overhead compared with training.
+Compiled-model validation and whole-training results are required before any
+promotion. An initial timing-harness stream-capture failure and the baseline
+short-sequence FlexAttention tiling failure are retained with the check logs;
+the model check now uses a 257-token training sequence.
