@@ -800,14 +800,26 @@ The RMSNorm candidate combines input-gradient work with partial weight-gradient
 reduction, retaining the FP32 residual stream and reductions; it does not claim
 to eliminate every cast elsewhere in the model.
 
-The 52 CPU checks pass, including unequal loss-head lengths, masked labels,
+The 53 CPU checks pass, including unequal loss-head lengths, masked labels,
 upstream gradient scaling, tied-embedding gradients and parameter identity.
+The joint objective also reproduces the original global gradients through the
+shared loop's partial-microbatch and two-rank averaging check.
 Isolated H100 RMSNorm forward/backward at 24,576-by-1,536 measures approximately
 0.272 versus 0.260 ms, with normalized errors below 2e-7. The joint-loss check
 uses 2,048 NTP and 513 MTP positions, width 1,536 and vocabulary 154,880: about
 14.37 versus 11.62 ms, with maximum normalized gradient error 8.5e-8. Its shorter
 token batches overrepresent gradient-buffer overhead compared with training.
-Compiled-model validation and whole-training results are required before any
-promotion. An initial timing-harness stream-capture failure and the baseline
+All four variants pass compiled H100 model checks: maximum normalized gradient
+errors are 0.000000184 for joint loss, 0.00775 for projections, 0.01372 for
+normalization and 0.00816 for the combination, below the preselected 0.03 limit.
+Maximum relative loss difference is 0.000000117. These are max-norm-normalized
+errors, not per-element relative-error guarantees or convergence evidence.
+An initial timing-harness stream-capture failure and the baseline
 short-sequence FlexAttention tiling failure are retained with the check logs;
 the model check now uses a 257-token training sequence.
+
+The bounded run `kda-consolidation-h100x8-20261106-01` compares all six arms at
+20 steps each, excluding the first five from timing, using the frozen real
+mixture, global rows 256 and microbatch six. Whole-training results are required
+before promotion. [Numerical checks and isolated measurements](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/consolidation)
+include failures and source provenance.
