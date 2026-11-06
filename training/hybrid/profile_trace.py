@@ -15,6 +15,64 @@ import json
 from pathlib import Path
 
 
+def operator_kernel_times(events, kernels, steps):
+    """Link device work to the originating operator's shapes, not its execution time.
+
+    FLOPs cover recognized two-dimensional aten::mm calls only; custom GEMMs,
+    attention, optimizer work and recurrent kernels are not inferred from names.
+    Each operator's FLOPs count once even when it launches several kernels.
+    """
+    operators = {
+        e["args"]["External id"]: e
+        for e in events
+        if e.get("cat") == "cpu_op" and "External id" in e.get("args", {})
+    }
+    grouped = {}
+    for kernel in kernels:
+        identity = kernel.get("args", {}).get("External id")
+        op = operators.get(identity, {})
+        args = op.get("args", {})
+        shapes, dtypes = args.get("Input Dims", []), args.get("Input type", [])
+        name = op.get("name", "unattributed")
+        key = (name, json.dumps(shapes), json.dumps(dtypes))
+        if key not in grouped:
+            grouped[key] = {
+                "operator": name,
+                "input_shapes": shapes,
+                "input_types": dtypes,
+                "kernel_ms_per_step": 0.0,
+                "kernel_calls_per_step": 0.0,
+                "recognized_mm_flops_per_step": 0.0,
+                "operators": set(),
+            }
+        row = grouped[key]
+        row["kernel_ms_per_step"] += kernel["dur"] / 1000 / steps
+        row["kernel_calls_per_step"] += 1 / steps
+        if identity not in row["operators"]:
+            row["operators"].add(identity)
+            if name == "aten::mm" and len(shapes) >= 2:
+                a, b = shapes[:2]
+                if len(a) == len(b) == 2 and a[1] == b[0]:
+                    row["recognized_mm_flops_per_step"] += 2 * a[0] * a[1] * b[1] / steps
+    for row in grouped.values():
+        row["operator_calls_per_step"] = len(row.pop("operators")) / steps
+    return sorted(grouped.values(), key=lambda r: r["kernel_ms_per_step"], reverse=True)
+
+
+def activity_union_ms(events, lo, hi):
+    """Union within a window: overlaps on separate streams count once."""
+    intervals = sorted(
+        (max(lo, e["ts"]), min(hi, e["ts"] + e["dur"]))
+        for e in events
+        if e["ts"] < hi and e["ts"] + e["dur"] > lo
+    )
+    total, end = 0.0, lo
+    for a, b in intervals:
+        total += max(0, b - max(a, end))
+        end = max(end, b)
+    return total / 1000
+
+
 def launch_phase_times(events, kernels, steps):
     """Attribute kernel duration to its CPU launch phase, not execution-time overlap.
 
@@ -151,6 +209,20 @@ def summarize(trace):
         )
     r = {
         "kernel_resources": resources,
+        "operators_by_device_time": operator_kernel_times(events, kernels, n),
+        "activity_by_step": [
+            {
+                "step": step["name"],
+                "window_ms": step["dur"] / 1000,
+                "all_device_ms": activity_union_ms(kernels, step["ts"], step["ts"] + step["dur"]),
+                "non_nccl_device_ms": activity_union_ms(
+                    [k for k in kernels if "nccl" not in k.get("name", "").lower()],
+                    step["ts"],
+                    step["ts"] + step["dur"],
+                ),
+            }
+            for step in steps
+        ],
         "launch_phase_kernel_ms_per_step": launch_phase_times(events, kernels, n),
         "steps": n,
         "window_ms_per_step": (hi - lo) / 1000 / n,

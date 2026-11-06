@@ -195,7 +195,7 @@ def benchmark(
     result = {
         "exit_code": code,
         "hardware_counter_kernel": hardware_kernel,
-        "throughput_valid": not bool(hardware_kernel),
+        "throughput_valid": not (hardware_kernel or profile),
         "hardware": hardware,
         "measurements": measurements,
         "config": config,
