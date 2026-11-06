@@ -65,14 +65,22 @@ def kda_reference(q, k, v, g, beta, A_log, dt_bias, positions, final_state=False
     v, beta = v.to(dtype), torch.sigmoid(beta.to(dtype))
     decay = kda_gate(g, A_log, dt_bias).to(dtype).exp()
     batch, length, heads, key_width = k.shape
+    # Fixed-size memory per head: rows are key channels, columns are value channels.
     state = q.new_zeros(batch, heads, key_width, v.size(-1))
     outputs = []
     for t in range(length):
         keep = (positions[:, t] > 0).to(dtype)[:, None, None, None]
+        # Forget per key channel (and reset at document starts) before predicting.
         state = state * keep * decay[:, t, ..., None]
         k_t = k[:, t]
+        # v_hat = k_t^T @ state: what the decayed memory predicts for this key.
+        # v is the learned value target; error measures what still needs writing.
         error = v[:, t] - torch.einsum("bhk,bhkv->bhv", k_t, state)
+        # Both k and v drive the write: k directs it, (v - v_hat) supplies the change.
+        # With unit-length k, the read at k moves beta of the way toward v.
+        # A correct prediction writes nothing; adding outer(k, v) would add it again.
         state = state + torch.einsum("bhk,bhv->bhkv", beta[:, t, :, None] * k_t, error)
+        # The query reads the updated memory: q_t^T @ state in this [K, V] layout.
         outputs.append(torch.einsum("bhk,bhkv->bhv", q[:, t], state))
     out = torch.stack(outputs, 1)
     return (out, state) if final_state else out
@@ -156,6 +164,7 @@ class KimiDeltaAttention(nn.Module):
         batch, length, _ = x.shape
         heads = (batch, length, self.heads, self.head_dim)
         positions = mask.positions
+        # Learned q/k/v projections supply each token's reads and writes.
         if self.combined_projections:
             from .consolidation import linear_group
 

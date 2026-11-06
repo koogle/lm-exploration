@@ -1,329 +1,74 @@
-# KDA coding model: data reassessment and bounded comparison
+# Why the foundation mixture is 50/40/10
 
-2026-11-05. Keep KDA as the preferred mixer and a final target just below 1B total
-deployed parameters. This documents the user's requested study and reassesses the
-proposal in [PR #143](https://github.com/koogle/lm-exploration/pull/143), which is
-still open. It supersedes that proposal's mixture-study ordering and recommended
-foundation weights; historical manifests and completed pilot provenance remain
-unchanged. The authorized four-arm execution is specified at the end of this document;
-its checked-in configurations are runnable after capacity-checked preparation.
-Mixture improvements remain hypotheses until results arrive.
+Decision recorded November 6, 2026. The selected foundation mixture is **50%
+ClimbMix / 40% permissive GitHub code / 10% Nemotron CC-Math score-3 data**.
+Shares describe intended post-filter token exposure, not source rows or bytes.
+This is a coding-focused compromise supported by a small directional study,
+not a demonstrated optimum or a reproduction of another model's private recipe.
 
-Read the [Ripple findings in PR #148](https://github.com/koogle/lm-exploration/pull/148) and
-[reasoning training comparison](../references/reasoning-training-2026-11-04.md).
-
-## Reevaluate the mixture
-
-The old six-source proposal allocates 20% to Code Concepts and 5% to STEM-SFT.
-That is 25% explicitly synthetic instructional exposure before demonstrating
-transfer. Code Concepts' AST validity is not execution correctness; the earlier
-512-row sample had 115 conservative benchmark-screen hits, requiring attribution
-review rather than a claim of confirmed contamination. Source names also do not
-establish exclusive content categories: audit ClimbMix's actual code/math overlap.
-
-The revised starting hypothesis gives more room to real implementations and
-coding prose, and introduces concentrated synthetic instruction later. This is
-our hypothesis, not a reproduction of Ripple's undisclosed proportions.
-
-All percentages below are post-filter, nonpadding training-token exposure, not
-rows, bytes, or loss-weight percentages. Each column sums to 100%.
-
-| Source | Original proposal | Recommended foundation candidate |
+| Source | Share | Conditional 100B-token allocation |
 | --- | ---: | ---: |
-| ClimbMix general text | 30% | 30% |
-| Permissive GitHub code | 20% | 40% |
-| Nemotron-CC-Code-v1 | 15% | 15% |
-| FineMath-4+ | 10% | 5% |
-| Nemotron-CC-Math-v1, released 3+ data | 0% | 10% |
-| Nemotron Code Concepts | 20% | 0% |
-| Nemotron STEM-SFT | 5% | 0% |
+| [ClimbMix](https://huggingface.co/datasets/karpathy/climbmix-400b-shuffle) | 50% | 50B |
+| [GitHub Code Clean](https://huggingface.co/datasets/codeparrot/github-code-clean), permissive licenses | 40% | 40B |
+| [Nemotron CC-Math](https://huggingface.co/datasets/nvidia/Nemotron-CC-Math-v1), `3/` subset | 10% | 10B |
 
-This proposes 55% explicitly code-oriented sources, 15% mathematical web text,
-and 30% broad text. It tests code emphasis without assuming math automatically
-transfers to coding. FineMath and CC-Math require cross-source near-deduplication;
-15% math is provisional and should be reduced if it displaces better coding data.
+The math study used **score 3**, not the combined 3+ release (`3/` plus `4plus/`).
+All arms used the same math files, so their comparison remains valid.
+ClimbMix may itself contain code and math: source shares are not exclusive
+semantic-category measurements.
 
-CC-Code's 15% remains reserved and pending. Last recorded authenticated byte probe
-(November 4) returned 403 awaiting author review; that is historical status, not a
-fresh access check. Recheck before preparation. Do not substitute or silently
-redistribute this slot. The separately named three-source control below can be
-studied while access remains pending.
+## Evidence and the accepted tradeoff
 
-### Source choices and readiness
+Approximately 128M-parameter models trained for 200,015,872 tokens each, with
+one seed, common held-out documents, tokenizer, 2K context, optimizer, MTP and
+cooldown. The four-arm comparison varied mixer and source weights. The final
+middle-ground arm held KDA fixed and changed only the weights.
 
-- Use the existing permissive GitHub source for a bounded comparison, with
-  repository-level splits, deduplication, generated/minified/vendor filtering and
-  a frozen language distribution. Audit useful implementation/test/doc coverage.
-  Python is important for executable evaluation, but do not silently make the
-  entire corpus Python-only. Publish the measured language proportions before launch.
-- [Nemotron-Pretraining-Code-v3](https://huggingface.co/datasets/nvidia/Nemotron-Pretraining-Code-v3)
-  is metadata (repository, path, commit, language), not ready-to-tokenize code.
-  Treat it as a later source-quality replacement study after retrieval, license
-  checks and capacity auditing. Do not credit its advertised tokens as ours.
-- CC-Math access and a bounded sample were verified. Use the released 3+ source
-  explicitly; a higher-quality subset requires actual score filtering and a new
-  capacity measurement. FineMath-4+ is a separate source, not that filter.
-- Code Concepts remains a midtraining candidate, with capped exposure and
-  executable verification where feasible. Do not equate explanatory prose with
-  verified problem solutions. STEM-SFT belongs in a later technical curriculum.
-- Nemotron Math-v2 and SFT-Math-v4 are reasoning-stage candidates. Split shared
-  seed problems across versions before sampling traces; favor complete tool-free
-  traces that fit the current context. Preserve final answers and termination.
-
-ClimbMix's research-only terms and record-level source licenses still apply.
-A public metadata license does not override the licenses of retrieved code.
-
-## Small study: separate data from architecture
-
-Reuse the shared trainer, prepared shards, evaluation and supervised Modal
-workflows. No new training loop or automatic launch is part of this document.
-
-### 1. Data comparison, holding KDA fixed
-
-Start with the approximately 128M hybrid configuration from PR #143, the same
-frozen tokenizer and a qualified 2K context for all arms. The previous 512-token
-plumbing check does not qualify this context. Freeze initialization, optimizer,
-MTP setting, batch tokens, LR schedule and cooldown, data order rules and evaluators.
-
-| Arm | ClimbMix | GitHub | CC-Math-3+ | Purpose |
-| --- | ---: | ---: | ---: | --- |
-| A | 70% | 20% | 10% | Fresh representative version of the pilot control |
-| B | 40% | 50% | 10% | Isolate code quantity with the same sources |
-
-Train each for 250M nonpadding tokens initially; compare at matched cooled
-endpoints. The 2,048-row prefix pilot is insufficient: prepare representative
-shards and verify per-source capacity first. One seed screens large effects only.
-If results are close, spend the reserved repeat on a second paired seed instead
-of declaring a winner. Extend both to 500M only within the remaining pilot cap,
-with identical continuation/cooldown treatment.
-
-Once all sources are qualified, compare the recommended foundation candidate to
-B at the same budget. This is a combined source/mix comparison, not an isolated
-math-quality or CC-Code effect. If access stays pending, keep the full candidate
-pending and report only the three-source result.
-
-To test synthetic timing later, branch the same foundation checkpoint for equal
-continuation-token budgets: selected foundation mix versus 80% of that mix plus
-15% Code Concepts and 5% STEM-SFT. This tests a late instructional curriculum;
-it does not establish whether including synthetic data from the start is worse.
-Do not add this arm before the basic data and architecture comparisons fit budget.
-
-### 2. Mixer comparison on the selected accessible mixture
-
-Compare 3:1 KDA/full attention against all-full attention using the existing
-`HybridConfig.layer_pattern` support. Keep depth, width, tokenizer, FFN dimensions,
-context, MTP and training settings fixed; report the resulting parameter and
-FLOP differences. This is a mixer substitution, not an exact parameter match.
-An all-full control is not an implementation of Ripple's sliding-window design.
-
-Start both from scratch for 250M tokens. Reuse the selected KDA data-arm run if
-its complete configuration matches, avoiding a redundant run. Record:
-
-- Common held-out code, math and general-text BPB, plus short executable tasks.
-- Actual nonpadding tokens/s, GPU-hours, dollars, peak memory and instability.
-- Prefill and decode cost at 2K and 8K, clearly separating systems measurements
-  from quality: a 2K-trained model has not demonstrated 8K competence.
-
-Equal tokens diagnose learning efficiency; they do not imply equal compute.
-Report quality-versus-dollar curves at shared cost points, labeling intermediate
-uncool checkpoints. If a close decision depends on matched-cost quality, reserve
-paired runs with predeclared equal-dollar budgets and their own cooldowns.
-Do not compare one cooled final checkpoint against another's unfinished schedule.
-
-KDA remains the default if evidence is inconclusive. A consistent disadvantage
-requires a follow-up, not an automatic switch. Before freezing the main run,
-measure both candidates near the intended 950–980M deployed size on actual
-hardware; use a short throughput check and bounded learning confirmation if the
-small-scale ranking drives an architecture change. A speed check alone cannot
-establish target-scale quality.
-
-## Evaluation and advancement
-
-Freeze common held-out repositories, problem families and dated task windows
-before preparation. Deduplicate across sources before splitting; audit near-duplicate
-clusters and repository forks. Report source exposure/repetition and rejection
-rates, and inspect screen hits rather than treating every 13-gram hit as leakage.
-For target T and source weight w, require at least T*w usable source tokens for
-single-pass training. Never fill a short source with unreported repeated epochs.
-
-Use independent short executable tasks as the pilot capability signal; hard
-LiveCodeBench may stay at zero at this scale. Report pass@1 at fixed prompts,
-sampling and output budgets, paired task uncertainty, valid completion and loops.
-Keep the final LCB window untouched. HumanEval cannot be the sole selection metric
-for Code Concepts. BPB is reported by source on identical held-out documents.
-
-Provisional advancement rule: prefer lower code BPB with no more than 2% relative
-regression in general-text BPB and no clear executable-task regression. This 2%
-threshold is a proposed retention guardrail, not a measured tolerance. Conflicting
-or noisy metrics require a repeat or an explicit tradeoff, not a weighted score
-chosen after seeing results. A pilot winner is a candidate for scale-up, not a
-forecast of sub-1B frontier performance.
-
-## Reasoning stages and spending
-
-Keep pretraining, midtraining and reasoning SFT as separate measurable stages.
-For the first reasoning SFT candidate, propose 70% verified code, 20% tool-free
-math and 10% general/direct-answer assistant-token exposure. These are starting
-weights conditional on data capacity and trace lengths, not an already prepared
-recipe. Compare answer-only and reasoning supervision from the same base at
-matched training budgets and fixed inference budgets. Implement the thinking
-encoder/masks first: current non-thinking chat-SFT would discard the target behavior.
-
-Start bounded RL/distillation only after SFT solves held-out tasks. Match task
-curriculum to demonstrated success, reward executable outcomes and measure new-task
-transfer. Long agent trajectories remain secondary after the recorded SFT failures.
-
-Use the existing $1,000 preparation/pilot/evaluation envelope within the $10,000
-plan, subtracting actual previous spend first. Provisionally allocate the remaining
-pilot balance: 20% preparation/evaluation, 45% A/B, 20% attention control and 15%
-repeat/confirmation. Additional full-mix or synthetic arms require remaining room;
-reduce token targets equally or defer them rather than consume main-training funds.
-Measure dollars/token before launch, persist explicit spending/token limits and
-use existing independent remote deadlines under 24 hours with bounded calls and
-zero retries. Training launches use the checked-in workflow configs and their bounded sessions.
-
-## Authorized fast comparison — November 5
-
-The user requested parallel tests. Use a four-arm factorial instead of waiting
-for a mixture winner: KDA and all-full attention, each on A (70/20/10) and B
-(40/50/10). All arms use the same sampled ClimbMix/GitHub/CC-Math corpus, tokenizer,
-held-out documents and 2K context. Each targets 200,015,872 tokens (6,104 updates
-of 32,768 tokens), with the same seed, 5M-token warmup and final 20% cooldown.
-The first eight updates qualify checkpoint/resume, followed by up to two bounded
-continuation sessions. Four separate workflow launches allow actual parallelism.
-
-The KDA model has 127,631,028 training parameters; all-full has 127,558,452.
-The small count difference is measured, not corrected by changing other dimensions.
-Both retain the same MTP objective. Single-seed results can identify large effects;
-a close result keeps KDA preferred and requires a paired repeat, not a claimed win.
-
-The new sample manifest is `data/kda-study-sample-v1.json`: eight separated shards
-for each of ClimbMix and code, four for CC-Math; seeded rows within shards (one
-random row group per math file to bound I/O). Code splits by repository; all
-sources use normalized exact-content deduplication and the benchmark screen.
-This is broader than the prefix smoke sample, but repository forks, global
-near-duplicates and generated/vendor-code quality remain limitations. Results
-qualify a bounded directional comparison, not final-corpus readiness. Reusing
-this sampler requires checksum-verified raw samples and the identical plan.
-
-Each arm uses one H100, at most three calls of 8,100 seconds with at most 7,200
-training seconds each, retries zero, and the independent workflow deadline under
-24 hours. Total maximum GPU allocation is 27 H100-hours across the four arms;
-qualification should use only a small fraction of its cap. Record actual CPU,
-memory and GPU billing; reserve up to $300 of the existing pilot envelope for
-this wave including evaluation, rather than treating GPU-only cost as total cost.
-No automatic extension or additional matrix is authorized by these configs.
-
-Configurations: `hybrid/configs/study-128m-{kda,full}-{control,codeheavy}.json`;
-workflows have the same stems under `workflows/`. Prepared recipe hashes, capacity,
-launch IDs and measurements are published in HF `jfrick/lm-exploration-results`
-under `training/sub1b-pilot/kda-data-study-20261105/` once available.
-CC-Code was rechecked on November 5 and still returned HTTP 403; its 15% proposed
-foundation allocation remains pending, outside these explicitly named controls.
-
-### Reproduction and interpretation
-
-From `training/`, prepare the manifest through `training_data.audit_coding_mix`
-with `--plan data/kda-study-sample-v1.json --out artifacts/kda-study-20261105-v2
---windows 100`. Use `--resume` only for an existing identical-plan sample whose
-raw checksums pass. Each arm's prepared recipe uses that same volume folder.
-Verify filtered source capacity against both recipes before uploading `prepared/`
-to `/kda-study-20261105-v2` on `lm-exploration-hybrid-data`. Launch each of the four
-`workflows/study-128m-*.json` files with a unique run ID using the existing
-`workflows.modal_train::main` entry point. The managed environment's
-`data/eu/modal_cli.py` wrapper preserves its TLS/proxy settings.
-
-The shared tokenizer uses about 79.3M embedding parameters in these small models,
-so most of the 128M count is vocabulary capacity. This proportion is much larger
-than at the intended near-1B scale; do not treat the small mixer ranking as a
-precise forecast. Hold tokenizer fixed here to isolate the requested comparisons.
-
-The completed sample audit provides 23,729,413 math training tokens. The execution
-target is therefore 200M tokens per arm, leaving capacity margin at 10% math,
-rather than repeating examples to reach the initial 250M proposal.
-
-The initial `-01` launches were stopped during qualification after preview
-sampling exhausted FlexAttention's compilation cache (changing prompt lengths),
-causing an unfused attention fallback. They are diagnostic attempts, not study
-results. The corrected `-02` runs disable preview generation with
-`sample_every_steps: 0`; held-out numerical evaluation remains enabled. All four
-arms restart from their original random seeds, preserving comparability.
-
-### Active run status
-
-The corrected four-arm study launched on November 5 at approximately 11:07 Madrid
-(timezone Europe/Madrid), from commit `90aae63`, with run IDs
-`study-128m-{kda,full}-{control,codeheavy}-20261105-02`. Each completed the eight-step
-qualification with finite losses and gradients. The attention arms measured about
-63–69K tokens/s; KDA about 50K tokens/s at the end of qualification. These are early
-step timings, not end-to-end cost or quality results. Final loss and capability
-comparisons are pending. Budget approximately 1–2 hours after startup at these
-rates, allowing for initialization, evaluation and checkpointing.
-
-[Preparation, diagnostic attempts and corrected launch records](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/kda-data-study-20261105)
-include the independently enforced deadlines and Modal app links. The stopped
-`-01` attempts are retained separately from the corrected study.
-
-## Final middle-ground mixture check
-
-**Completed November 5:** `study-128m-kda-middle-20261105-02` reached
-200,015,872 tokens and its workflow completed. Final BPB was 0.82666 code,
-1.20195 general, and 1.14534 math. Relative to KDA 70/20/10, this is 11.7% better
-code prediction, 3.8% worse general prediction and 1.6% worse math prediction.
-The proposed 2% general-retention guardrail failed. The user reviewed this tradeoff
-and selected 50/40/10 with KDA for pretraining. See
-[target-scale launch and throughput](KDA_960M_PRETRAINING.md).
-
-Source-label correction: the sampled math files are from Nemotron CC-Math's `3/`
-directory (score 3), not the combined 3+ corpus. The card defines 3+ as `3/` plus
-`4plus/`. All study arms used the same files, so the comparison remains valid.
-
-The four trainers finished 200,015,872 tokens. Their final held-out BPB was:
-
-| Arm | Code | General text | Math |
+| Model and mixture (general/code/math) | Code BPB | General BPB | Math BPB |
 | --- | ---: | ---: | ---: |
-| KDA, 70/20/10 | 0.93620 | 1.15824 | 1.12703 |
-| KDA, 40/50/10 | 0.78313 | 1.23492 | 1.15558 |
-| Full attention, 70/20/10 | 0.91405 | 1.15326 | 1.12111 |
-| Full attention, 40/50/10 | 0.76837 | 1.22455 | 1.14831 |
+| KDA 70/20/10 | 0.93620 | 1.15824 | 1.12703 |
+| KDA 40/50/10 | 0.78313 | 1.23492 | 1.15558 |
+| Full attention 70/20/10 | 0.91405 | 1.15326 | 1.12111 |
+| Full attention 40/50/10 | 0.76837 | 1.22455 | 1.14831 |
+| **KDA 50/40/10, selected** | **0.82666** | **1.20195** | **1.14534** |
 
-The 50%-code arms improved code BPB by about 16%, with 6–7% worse general-text
-BPB. Full attention was slightly better and faster at this size/context. These
-single-seed language-modeling results do not establish executable coding ability.
-All final checkpoints exist and resumed numerical evaluations match. KDA/control's
-controller recorded a directory-exists failure while its trainer completed; the
-original workflow status is preserved with the
-[final reports](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/kda-data-study-20261105/results).
+Lower BPB is better. Raising code to 50% improved code prediction by about 16%
+but worsened general-text BPB by 6–7%. The selected middle ground improves code
+BPB **11.7%** relative to KDA 70/20/10, with **3.8% worse general** and **1.6%
+worse math** BPB. It therefore **fails the proposed 2% general-retention guardrail**.
+The user accepted this explicit tradeoff in favor of coding and selected 50/40/10.
 
-The user chose to retain KDA and authorize one middle-ground run before the large
-pretraining decision: **50% ClimbMix / 40% permissive GitHub / 10% CC-Math**.
-`hybrid/recipes/kda-study-middle.json` is the candidate mixture; its source shards
-and held-out data are identical to the completed arms. This is the next working
-three-source recipe. The broader five-source foundation candidate remains a
-separate, unqualified proposal, including its pending CC-Code allocation.
+Full attention was slightly better and faster at this size/context. Retaining
+KDA is the chosen research direction, not a claim that the study established
+its superiority. Single-seed, short small-model runs do not establish target-scale
+convergence, executable coding ability or LiveCodeBench frontier performance.
 
-Run `workflows/study-128m-kda-middle.json` from scratch with the same seed, model,
-optimizer, 2K context, 200,015,872 tokens and cooldown as the completed KDA arms.
-Only mixture weights change. Preserve disabled previews and the same eight-step
-qualification/resume. The existing corpus has sufficient single-pass capacity:
-this arm requires approximately 100M general, 80M code and 20M math tokens.
-One H100, three calls at most, 8,100 seconds per call, zero retries and the
-independent under-24-hour deadline remain the resource bounds. Reserve up to $75
-from the existing pilot budget, including earlier diagnostics and control overhead
-at reconciliation; do not launch a new matrix automatically.
+[Archived study evidence](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/kda-data-study-20261105)
+includes preparation, diagnostic attempts and final reports. Initial runs hit
+preview-sampling compilation problems and were restarted from the original seeds
+with previews disabled. The completed study uses the corrected runs. One control's
+controller recorded a directory-exists error even though its trainer completed;
+checkpoint and resumed numerical evaluations are retained with the raw status.
 
-Judge it against the two completed KDA arms on identical held-out documents.
-Seek code BPB improvement over 20% code with less general-text regression than
-50% code. Keep the proposed 2% general-retention guardrail visible; if it still
-fails, report the tradeoff rather than silently relaxing the criterion. Do not
-select on training loss, which changes with the mixture.
+## Why these sources and what remains unqualified
 
-The workflow controller now reconnects to recorded segment calls after an
-interruption instead of spawning an already-recorded segment again. Tests cover
-reattachment and duplicate-record rejection. The spawn-to-record interval is not
-an atomic transaction; the change does not promise exactly-once execution.
+ClimbMix preserves broad language coverage, real code supplies implementations,
+and math supplies a controlled reasoning-relevant component. The three sources
+were available in a common audited study corpus. A richer earlier proposal
+included CC-Code and concentrated synthetic instruction; it was not the mixture
+that produced these results. Accepted dataset terms alone do not qualify a new
+source's quality or capacity, so Nemotron CC-Code has no reserved share in this
+selected recipe. Nemotron Pretraining Code v3 requires code retrieval from its
+metadata before it can be compared as a replacement source.
 
-Before the large run: review this result, qualify the near-1B configuration's
-measured throughput/cost, and prepare/audit full-corpus capacity and splits for
-the selected mixture. A tiny model's BPB alone cannot authorize a frontier-quality
-claim or substitute for executable coding and reasoning evaluations.
+Code Concepts, STEM-SFT and reasoning math traces remain later-stage candidates.
+Their inclusion or timing needs matched continuation comparisons and executable
+verification where possible. No conclusion here establishes that synthetic data
+is intrinsically inferior or that math automatically transfers to coding.
+
+The sampled corpus used separated source shards, repository splits for code,
+normalized exact-document deduplication and conservative benchmark screening.
+Fork-aware near-deduplication, global cross-shard deduplication, generated/vendor
+code filtering and representative language coverage remain limitations. Broad
+corpus qualification must precede scale-up; study quality is not proof of final
+corpus readiness. See [pretraining constraints](KDA_960M_PRETRAINING.md).

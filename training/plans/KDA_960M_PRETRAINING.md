@@ -1,114 +1,53 @@
-# KDA foundation pretraining — November 5
+# KDA foundation pretraining constraints
 
-**Hardware target:** eight 80GB H100s. The foundation workflow requests
-`H100!:8`, which disables Modal's automatic H200 upgrades.
+The selected model and stages are in [the training plan](CODING_REASONER_1B.md);
+[the mixture study](KDA_DATA_STUDY.md) explains the 50/40/10 decision and its
+accepted retention cost. This document defines the scale-up requirements.
 
-**Latest performance decision:** the matched eight-H100 four-arm test found the
-shared-offset/batched-Muon candidate 4.1% slower than the original. The original
-kernel-local offset setup and unbatched Muon remain the defaults.
+## Corpus
 
-**Current status:** the user requested real-data profiling and substantial MFU
-improvement before full training. The production app was stopped during corpus
-preparation; no pretraining stage had started. Preparation continues separately
-as `kda-foundation-data-20261105-04`, which contains no training stage. Full
-pretraining remains on hold while real-data baseline, optimization and numerical
-correctness results are compared. The synthetic results below are not the gate.
-See [the real-data profiling findings](KDA_REAL_DATA_MFU.md) for measured hardware,
-custom-operation correctness, memory savings and the limited throughput gains.
+Plan a conditional single-pass 100B-token schedule: 50B ClimbMix, 40B permissive
+GitHub and 10B Nemotron CC-Math score-3 tokens. Freeze source revisions,
+tokenizer identity, filtering and train/held-out partitions in the preparation
+manifest. Require measured usable capacity of at least target tokens times
+source weight; estimates size preparation but cannot authorize training. Do not
+fill a short source with silent repetition or substitute a new source.
 
-The user authorized pretraining with KDA and the tested 50/40/10 mixture, and
-asked to measure and improve throughput/MFU before committing the main budget.
-The 128M study's middle mix improved code BPB by 11.7% at a 3.8% general-text
-regression; this explicitly exceeds the proposed 2% retention guardrail.
+Require content-hash train/validation separation across sources and repository
+separation for GitHub. Screen conservative 13-token overlaps against the frozen
+benchmark manifests, including the six LiveCodeBench releases used in the study.
+Inspect hits and rejection rates: this screen does not establish complete
+contamination freedom. Preserve source-license restrictions, language coverage,
+source exposure and repetition audits. Bound math preparation by Parquet row
+groups and persist progress through the shared workflow infrastructure.
 
-## Target and throughput
+Global near-deduplication, fork-aware separation and generated/vendor-code quality
+remain explicit gaps. Archive prepared-corpus audits before describing the entire
+100B-token corpus as qualified.
 
-Use the implemented 24-layer, width-1536 KDA/full-attention 3:1 architecture,
-4K context, GLM tokenizer and MTP objective: 959,843,116 training parameters,
-927,589,920 deployed trunk parameters. Preserve the reasoning SFT/RL budget.
+## Training and budget
 
-The first throughput comparison used the real shared training step on synthetic
-packed documents (mean length 1,000), an H100 request, microbatch 2 and 16 global rows.
-Those runs did not record the delivered GPU SKU; Modal can fulfill an H100 request
-with H200. Treat their cross-allocation speed ratios as exploratory and use the
-subsequent same-allocation real-data comparisons for implementation decisions.
-All arms used the same model, optimizer, seed and objective. Medians below use
-steps 10–14 and 19–20, excluding compile/warmup and profiler-active steps. The
-profiler initially repeated; its schedule now records one cycle only.
+Use exactly eight 80GB H100s, the shared trainer, frozen model/tokenizer and MTP
+objective. Select execution details from matched real-data correctness and
+performance checks. Full pretraining remains held during performance
+qualification; hardware and MFU experiments belong to the stacked implementation
+PR and do not alter this mixture decision.
 
-| Configuration | Tokens/s | Estimated MFU | Peak allocated GiB |
-| --- | ---: | ---: | ---: |
-| Eager, loss chunk 128 | 15,868 | 11.7% | 44.6 |
-| Eager, loss chunk 2048 | 24,862 | 18.3% | 45.1 |
-| Compiled, loss chunk 2048 | 33,445 | 24.7% | 36.7 |
+Start with a bounded qualification segment and verify finite losses, per-source
+held-out evaluation, checkpoint/resume and source consumption before extending
+that checkpoint lineage. Preserve periodic checkpoints and numerical evaluation;
+preview generation is optional and must not invalidate performance measurement.
+No midtraining, SFT or RL stage starts automatically with foundation training.
 
-The compiled configuration measured 2.1x the initial throughput with lower memory;
-delivered hardware was not recorded, so this is not a controlled software speedup.
-Compiled kernel time is approximately 43% matrix multiplication, 21% KDA,
-16% compiled elementwise and 3% full attention. Data fetch is about 1–2 ms/step.
-MFU uses the repository's matmul-plus-full-attention FLOP estimate and 989 TFLOP/s
-per H100; it is not a hardware-utilization reading and omits detailed KDA
-recurrence FLOPs. These synthetic timings exclude evaluation, checkpoints,
-startup and corpus I/O.
+Keep the main-pretraining allocation at $5,000 within the overall plan. Set the
+final token commitment from actual dollars per token, including preparation,
+CPU, memory, storage, evaluation and checkpoint overhead. Reconcile previous
+spend before each continuation and preserve the later-stage reserve. A 100B-token
+target is conditional on capacity, observed learning and remaining budget.
 
-The subsequent unprofiled microbatch-4 benchmarks completed 20 steps each.
-Steps 6–20 measured 39,814 tokens/s and 29.3% MFU on a one-H100 request
-(32 global rows), and 327,369 tokens/s and 30.1% MFU on an eight-H100 request
-(256 global rows). Delivered GPU identities were not recorded. Peak allocated
-memory was 55.24 GiB/GPU. The slightly superlinear ratio is a short-run hardware/
-timing observation, not an expected scaling guarantee. The current eight-H100
-workflow uses microbatch six, loss chunks 2048 and compilation, following the
-later real-data four/six/four qualification: 337k → 346k tokens/s, 31.1% → 31.9%
-MFU and 65.5 GiB peak allocated memory per GPU. The global batch stays at 256;
-each rank processes `[6, 6, 6, 6, 6, 2]`. See
-[the matched results](KDA_REAL_DATA_MFU.md).
-
-[Raw results and profiles](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/throughput-960m-20261105)
-preserve every arm, configuration and the timing-step selection. Every GPU call
-has a 30-minute server timeout, zero retries and an independent deadline supervisor.
-
-## Corpus and launch constraints
-
-`hybrid/recipes/kda-foundation-100b-504010-v1.json` prepares a single-pass corpus
-for a conditional 100B-token schedule: 50B ClimbMix, 40B permissive GitHub and
-10B Nemotron CC-Math. Math remains the tested **score-3 subset**, not combined
-3+ or 4+. The manifest pins upstream revisions; capacity estimates only size
-preparation. The launcher now checks actual token counts and shard files before
-allocating GPUs.
-
-Preparation uses eight CPU workers, existing workflow supervision and the same
-13-token benchmark screen including all six LiveCodeBench releases. Content-hash
-partitions exclude exact train/validation overlap across sources; GitHub also
-requires repository-hash separation. Duplicate normalized documents are dropped
-within each preparation shard. Math files are partitioned by Parquet row groups
-to bound worker memory. Global training deduplication, fork-aware near-deduplication
-and generated/vendor-code filtering are not established by these checks; keep
-this limitation in downstream benchmark interpretation.
-
-`workflows/kda-960m-foundation.json` owns the production launch. Its data stage
-prepares the frozen corpus with eight CPU workers; its eight-H100 training stage
-uses `hybrid/configs/kda-960m-100b.json`. The large job must wait for preparation and capacity validation. Qualification
-uses the final model/schedule, then resumes the same checkpoint lineage. Save
-every 30 minutes, retain numerical held-out evaluation, and disable preview generation
-to avoid the study's changing-shape compilation issue. No mid-training, SFT or RL
-stage is launched automatically. Each launch remains independently bounded below
-24 hours; continuation requires checking actual throughput, spend and progress.
-GPU sessions have 21,600 seconds of training time, a 22,800-second server timeout
-and zero retries. The first session stops after eight qualification steps. The
-independent supervisor bounds all children, including preparation, below 24 hours.
-Private inference exports go to `jfrick/kda-960m-504010-100b`; optimizer checkpoints
-remain on `lm-exploration-hybrid-runs`.
-
-The $5,000 main-pretraining allocation remains the ceiling. Modal's published
-H100 rate checked November 5 is $0.001097/GPU-second ($3.9492/hour); CPU, memory,
-preparation, storage and checkpoint/evaluation overhead must also be counted.
-Set the final token commitment from measured scaling and real-data throughput,
-not ideal eight-GPU linear extrapolation. The measured synthetic eight-GPU rate
-projects 84.9 hours and approximately $2,681 in GPU charges for 100B tokens before
-overheads. This leaves room within the allocation, but is not a billing guarantee.
-Reconcile actual spend and real-data throughput before each subsequent launch;
-do not start post-training from the reserved budget automatically.
-
-The initial data-controller attempts failed before shard preparation: missing
-NumPy, then a local path used instead of its resolved container path. Both are
-fixed in the shared workflow; failed launch records remain preserved.
+Every launch must have a server-side timeout, zero retries and an independent
+remote deadline covering queued work and children, no later than 24 hours after
+launch. Preserve shorter diagnostic limits. Publish measurements, negative
+results and checkpoints in the existing HF/Modal artifact stores, with source
+provenance; executable launch/configuration details belong to the implementation
+review rather than this planning-only change.
