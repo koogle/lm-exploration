@@ -1,9 +1,9 @@
 # Real-data MFU qualification — November 5
 
-**Latest decision (November 6):** the four-arm same-allocation H100 test rejects
-shared offsets and the combined shared-offset/batched-Muon candidate. The original
-kernel-local setup is restored as the default; Muon remains unbatched. Full
-pretraining remains held. See the final qualification table below.
+**Latest decision (November 6):** the qualified WY kernel and exact Muon CUDA-graph
+replay are enabled on the supported Hopper path. Muon retains individual-matrix
+arithmetic. Full pretraining remains held. All-rank step measurements and matched
+qualifications are recorded below.
 
 Full pretraining is paused at the user's request. Its production app was stopped
 during corpus preparation, before any pretraining stage started. The separate
@@ -492,3 +492,73 @@ Whole-training MFU remains about 31.2%, below the requested 40–60%. The isolat
 kernel's 50.6% time reduction must not be presented as a whole-step reduction.
 Full pretraining remains held. Matched results and logs are in the archive's
 `wy-fix/matched-h100x8` folder.
+
+### Accounting for elapsed time and testing optimizer launch overhead
+
+The earlier three-category summary was incomplete: subtracting GEMM, KDA and
+compiled-elementwise kernel sums from an unprofiled wall-clock step does not
+produce a valid estimate of unexplained or idle time. The archived trace also
+contains approximately 215 ms of communication, 207 ms of other kernels, 91 ms
+of KDA convolutions, 87 ms of full attention, 86 ms of loss softmax/gradient work,
+9 ms of memory operations and 6 ms classified by optimizer kernel names. These
+categories sum across streams; they are distinct from exclusive wall-clock
+phases. Optimizer GEMMs and additions appear in the GEMM and other categories.
+
+The trace reader now correlates each device operation with its CPU launch and
+chooses the innermost enclosing training phase. On the earlier trace, backward
+launches account for about 1,854 ms of summed kernel time; forward/loss launches
+account for 1,223 ms. The clipping/metrics phase launches only 4.1 ms of device
+work despite its 176 ms host interval: the host also waits for delayed backward
+work. Optimizer launches account for 97.6 ms of kernel work within a 176 ms host
+interval. This is a concrete reason to measure optimizer submission overhead,
+not evidence that the entire host interval is recoverable. The trace includes
+an anomalous communication event and remains diagnostic rather than a normal-step
+latency measurement.
+
+`--phase-timings` adds CUDA-event and host timings on every rank without new
+synchronization barriers. CUDA-event intervals include stream waits and host
+submission gaps. Parent `accumulate` and child forward/backward intervals overlap.
+These measurements complement the kernel trace; they do not measure tensor-core
+utilization or expose every NCCL stream separately.
+
+Ordinary compilation of the Muon orthogonalization was rejected by its numerical
+gate: even with precision-cast emulation, the first production shape differed by
+3.23% normalized maximum and 1.39% relative RMS. The subsequent CUDA-graph candidate
+replays the existing operation sequence and passes bit-for-bit checks on all seven
+production matrix shapes, with three different inputs per shape. Its graph output
+is a borrowed buffer, consumed by the parameter update before the next replay.
+The candidate keeps individual-matrix Muon arithmetic and the checkpoint state
+layout. A queued microbatch-eight retest was cancelled before GPU allocation:
+existing measurements already show that its memory requirement exceeds H100 capacity.
+
+
+The same-allocation graph qualification completed 30 steps per arm on eight H100
+80GB GPUs, using the real mixture, 4K context, global batch 256 and microbatch four.
+All arms use lightweight event timing; the first five steps are excluded.
+
+| Arm | Tokens/second | MFU | Rank-zero optimizer stream interval |
+| --- | ---: | ---: | ---: |
+| Original first | 335,055 | 30.87% | 114.5 ms |
+| Muon graph replay | 337,132 | 31.03% | 104.8 ms |
+| Original repeat | 335,973 | 30.91% | 116.2 ms |
+
+The whole-step gain is modest: 0.35–0.62%, versus 0.27% control drift. The reduced
+optimizer interval supports a small local improvement, not a large utilization
+claim. Its host submission interval falls from 104.4 to 51.8 ms, but much of
+that host work already overlapped device execution. Candidate peak allocation is 50.51 GiB/GPU; maximum matched main/MTP loss
+differences are 0.000216/0.000362. All 90 steps finish with finite losses. Default
+Muon dispatch selects graph replay for FP32 parameters on compute capability 9.0;
+H100 is the qualified hardware. Graph buffers are rebuilt on resume; the saved
+momentum/parameter-group state layout is unchanged.
+
+The first control's median wall step is 3.130 s. Rank-zero CUDA-stream intervals
+are approximately 2.994 s for accumulated forward/backward, 114.5 ms for the
+optimizer, 7.1 ms for fetch, 0.8 ms for preparation and 4.3 ms for clipping/metrics.
+Medians need not add exactly. Forward/backward includes dependency waits and
+communication; it is not a kernel-busy measurement. Across ranks, the accumulated
+interval agrees closely, while faster local work can shift waiting into the final
+synchronized backward. Feeding data is not the dominant steady-state bottleneck.
+
+Raw logs, all-rank phase medians, numerical checks, the rejected compilation and
+cancelled queued test are in the archive's `phase-graph` folder. The graph gain
+is measured against controls from its own allocation, not the earlier WY run.
