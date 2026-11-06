@@ -56,8 +56,12 @@ Steps 6–20 measured 39,814 tokens/s and 29.3% MFU on a one-H100 request
 (32 global rows), and 327,369 tokens/s and 30.1% MFU on an eight-H100 request
 (256 global rows). Delivered GPU identities were not recorded. Peak allocated
 memory was 55.24 GiB/GPU. The slightly superlinear ratio is a short-run hardware/
-timing observation, not an expected scaling guarantee. Select microbatch 4,
-loss chunks 2048 and compilation for the production workflow.
+timing observation, not an expected scaling guarantee. The current eight-H100
+workflow uses microbatch six, loss chunks 2048 and compilation, following the
+later real-data four/six/four qualification: 337k → 346k tokens/s, 31.1% → 31.9%
+MFU and 65.5 GiB peak allocated memory per GPU. The global batch stays at 256;
+each rank processes `[6, 6, 6, 6, 6, 2]`. See
+[the matched results](KDA_REAL_DATA_MFU.md).
 
 [Raw results and profiles](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/throughput-960m-20261105)
 preserve every arm, configuration and the timing-step selection. Every GPU call

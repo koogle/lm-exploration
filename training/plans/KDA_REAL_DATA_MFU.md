@@ -1,7 +1,8 @@
 # Real-data MFU qualification — November 5
 
 **Latest decision (November 6):** the qualified WY kernel and exact Muon CUDA-graph
-replay are enabled on the supported Hopper path. Muon retains individual-matrix
+replay are enabled on the supported Hopper path; the eight-H100 recipe uses
+microbatch six after matched qualification. Muon retains individual-matrix
 arithmetic. Full pretraining remains held. All-rank step measurements and matched
 qualifications are recorded below.
 
@@ -570,12 +571,34 @@ path to the non-looped model. CPU tests confirm that averaging two ranks' NTP/MT
 gradients with masked targets matches the unsplit global objective. All 52
 regression tests pass, including the other model families' validation boundaries.
 
-The bounded comparison is queued as
-`kda-phase-microbatch6-h100x8-20261106-01`
-([Modal app](https://modal.com/apps/radiantai/main/ap-bekBaYIESy9BEtSHchpikY)).
-It requests exactly eight H100s, 30 steps each for four/six/four microbatches,
-with server-side execution timeout and independent launch deadline. Its per-arm
-logs and results are persisted under `throughput/<run-id>` on the hybrid runs
-volume. As of November 6, 13:48 UTC it has not received a GPU allocation; no
-throughput, memory or training-loss result is established for microbatch six.
-The production recipe remains at four pending that qualification.
+The bounded comparison `kda-phase-microbatch6-h100x8-20261106-01` completed
+successfully on exactly eight H100 80GB GPUs after the capacity wait. Each arm
+ran 30 steps, with the first five excluded; all arms include lightweight phase
+timing and the qualified WY/Muon implementations.
+
+| Microbatch arm | Tokens/second | MFU | Peak allocated GiB/GPU |
+| --- | ---: | ---: | ---: |
+| Four, first control | 337,518 | 31.06% | 50.41 |
+| Six, with two-row final chunk | 346,480 | 31.93% | 65.50 |
+| Four, repeated control | 337,407 | 31.08% | 50.51 |
+
+The throughput gain is 2.66–2.69%; controls differ by only 0.033%. Rank-zero
+accumulated forward/backward stream time falls from 2.987 to 2.905 seconds,
+about 82 ms, while optimizer time stays approximately 104.6 ms. Forward/loss
+falls from 1.379 to 1.346 seconds; summed local/synchronized backward medians
+fall from approximately 1.604 to 1.556 seconds. These CUDA-stream intervals
+include dependencies and waits, not exclusively active computation. Summed
+medians need not equal the median of the combined interval.
+
+All 90 steps have finite losses. Maximum matched NTP/MTP loss differences are
+0.000466/0.000313. Peak reserved memory is 66.26 GiB/GPU, leaving headroom on the
+measured H100s. This establishes short-run correctness and throughput; it is not
+a long-run convergence test. The foundation recipe now uses microbatch six with
+global rows 256 and the same model/objective. Full pretraining remains held.
+
+Raw per-arm logs, all-rank phase medians and source provenance are in the
+[HF archive's microbatch6 folder](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/microbatch6).
+Further substantial gains must address model execution: the remaining KDA
+intra-chunk backward and repeated elementwise/cast traffic are concrete targets
+from the earlier trace. Their optimization benefits are not established by this
+batch-size comparison. The 40–60% MFU target remains unmet.
