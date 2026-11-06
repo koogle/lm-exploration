@@ -311,6 +311,10 @@ def bench(
     if hardware_kernel:
         from model_hybrid.hardware_counters import KERNELS
 
+        if gpus != 1:
+            raise ValueError(
+                "Kernel replay is qualified only on one GPU; use timeline profiling for DDP"
+            )
         if hardware_kernel not in KERNELS:
             raise ValueError(f"Select one of {KERNELS}")
         if (
