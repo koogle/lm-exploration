@@ -17,6 +17,12 @@ from trainer.loop import accumulate
 
 class PartialMicrobatchTests(unittest.TestCase):
     def test_two_rank_average_matches_unsplit_ntp_and_mtp(self):
+        self.check_two_rank_average(joint=False)
+
+    def test_joint_loss_partial_microbatches_match_original_global_objective(self):
+        self.check_two_rank_average(joint=True)
+
+    def check_two_rank_average(self, joint):
         torch.set_num_threads(1)
         torch.manual_seed(72)
         config = tiny_config(mtp=True)
@@ -35,6 +41,7 @@ class PartialMicrobatchTests(unittest.TestCase):
         progress = {"tokens": 0, "step": 0}
         objective, _ = family.loss(model, inputs, labels, extras, counts, progress)
         objective.backward()
+        family.joint_loss = joint
         gradients = []
         for rank in range(2):
             replica = copy.deepcopy(model)
