@@ -62,3 +62,27 @@ attribution and flame views. Artifacts and raw traces belong on HF, with source
 and profiling-scope provenance. No claim of a 40–60% MFU solution follows merely
 from producing a flame graph: proposed changes must target measured costs and
 then improve an unprofiled, repeated-control comparison.
+
+## Implemented and running
+
+The [first standalone interactive viewer](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/rank0-timeline.html?download=true)
+and its structured ledger/screenshot are archived under
+[deep-dive](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive).
+It adds detailed CPU/runtime lanes, inclusive CPU and GPU attribution flames,
+recorded callsites and kernel-launch correlations. Host display truncation is
+explicit; aggregate host totals retain all events. Idle-adjacent launches provide
+context, not causal proof. The compressed standalone payload requires a modern
+browser with native gzip decompression. Renderer validation covers all three
+canvases and interactive selection without JavaScript errors.
+
+Thirty-three focused CPU tests pass. Initial scalar H100 checks pass with maximum
+normalized errors 0.00857 for recurrence/all-input gradients and 0.01377 for the
+compiled model. The expanded production BF16/gate-range recurrence check passes
+at 0.00756; its repeated compiled-model check is still running. These are
+max-norm-normalized short checks, not per-element guarantees or learning results.
+
+The matched throughput run is `kda-scalar-delta-h100x8-20261106-01`, source
+`d9479aa`, with KDA/scalar/KDA arms and the same 30-minute worker timeout,
+zero retries and independent launch deadline. Its speed result and the new
+all-rank trace are pending. Scalar gating is benchmark-only; the production
+architecture and full-pretraining hold remain in effect.
