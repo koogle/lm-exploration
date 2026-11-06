@@ -1,5 +1,10 @@
 # Real-data MFU qualification — November 5
 
+**Latest decision (November 6):** the four-arm same-allocation H100 test rejects
+shared offsets and the combined shared-offset/batched-Muon candidate. The original
+kernel-local setup is restored as the default; Muon remains unbatched. Full
+pretraining remains held. See the final qualification table below.
+
 Full pretraining is paused at the user's request. Its production app was stopped
 during corpus preparation, before any pretraining stage started. The separate
 preparation-only workflow can finish the corpus but cannot allocate training GPUs.
@@ -222,10 +227,44 @@ production matrix dimensions, a full batch of 16 and partial batches over four
 steps. Tested updates and momentum buffers match the individual-matrix reference
 exactly. This is a correctness result, not a speed or long-run training claim.
 
-One bounded eight-H100 comparison is queued for four sequential arms on the same
+The completed bounded eight-H100 comparison ran four sequential arms on the same
 allocation: original kernel-local document setup, shared offsets, shared offsets
 plus batched Muon, then the original setup again. All use the frozen real mixture,
 context 4096, global rows 256, microbatch 4 and 30 steps. The final repeated
 baseline checks for clock/warm-up drift. Per-case outputs persist immediately;
 server timeout remains 30 minutes, retries zero, with an independent launch
-supervisor. Full pretraining remains held pending this qualification.
+supervisor. Its completed outcome is recorded below; full pretraining remains held.
+
+
+## Final four-arm qualification: candidate rejected
+
+All four arms completed on the same eight verified H100 80GB HBM3 devices, with
+30 steps each and 25 timed steps per arm. No profiler was active.
+
+| Variant | Tokens/s | MFU | Peak allocated GiB/GPU |
+| --- | ---: | ---: | ---: |
+| Original, first | 327,665 | 30.18% | 50.07 |
+| Shared offsets | 312,322 | 28.77% | 55.24 |
+| Shared offsets + Muon batch 16 | 314,321 | 28.92% | 55.24 |
+| Original, repeated | 328,127 | 30.23% | 50.18 |
+
+The repeated original differs by only +0.14%. Shared offsets regress throughput
+by 4.68%; the combined candidate regresses by 4.07%, relative to the first
+original. Batched Muon adds only 0.64% over the shared-offset arm, too small to
+establish a meaningful gain. Neither candidate is adopted. The default model
+uses original kernel-local offset reconstruction, and the default optimizer
+processes one matrix at a time. Shared offsets and batching are available only
+as explicit benchmark experiments.
+
+The earlier +3.7% result compared shared offsets with per-layer reconstruction
+in the mask property. That control moved work out of its original kernel call
+site and did not establish an improvement over the original implementation.
+The faithful original-path comparison supersedes that apparent overall gain.
+Compiler behavior is a plausible reason for the slowdown and approximately
+5.2 GiB additional peak memory, but the responsible generated kernels have not
+been isolated. Correctness checks and finite short-run losses did not predict
+performance: final main losses across these arms differ by less than 0.0004.
+
+Raw per-case logs, arguments, hardware identities and the repeated baseline are
+preserved in the linked HF archive. The evidence supports keeping the original
+path, not launching full pretraining on the slower candidate.

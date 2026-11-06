@@ -3,6 +3,10 @@
 **Hardware target:** eight 80GB H100s. The foundation workflow requests
 `H100!:8`, which disables Modal's automatic H200 upgrades.
 
+**Latest performance decision:** the matched eight-H100 four-arm test found the
+shared-offset/batched-Muon candidate 4.1% slower than the original. The original
+kernel-local offset setup and unbatched Muon remain the defaults.
+
 **Current status:** the user requested real-data profiling and substantial MFU
 improvement before full training. The production app was stopped during corpus
 preparation; no pretraining stage had started. Preparation continues separately
