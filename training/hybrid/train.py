@@ -582,6 +582,8 @@ class HybridFamily:
             "kda_wy_kernel": Path(__file__).with_name("kernels") / "kda_wy.py",
             "kda_intra_launcher": Path(__file__).with_name("kda_intra.py"),
             "kda_intra_kernel": Path(__file__).with_name("kernels") / "kda_intra.py",
+            "consolidation": Path(__file__).with_name("consolidation.py"),
+            "consolidated_rmsnorm": Path(__file__).with_name("kernels") / "rmsnorm.py",
             "chat": Path(chat.__file__),
             "chat_sft": Path(chat_sft.__file__),
             "tokenizer_glm": Path(glm.__file__),
