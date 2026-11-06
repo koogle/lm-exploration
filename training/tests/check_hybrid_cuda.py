@@ -442,10 +442,10 @@ def decode_timing(rows=64, prompt=512, new_tokens=256):
 
 
 def checks(only=""):
-    if only == "kda_wy_tiling":
+    if only in ("kda_wy_tiling", "kda_wy_kernel"):
         from model_hybrid.kda_bench import wy_tiling
 
-        return wy_tiling()
+        return wy_tiling(hoisted=only == "kda_wy_kernel")
     if only == "kda_saved":
         from functools import partial
 

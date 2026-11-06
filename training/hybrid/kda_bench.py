@@ -195,7 +195,7 @@ def run(implementations=None):
     }
 
 
-def wy_tiling(data_root="/data"):
+def wy_tiling(data_root="/data", hoisted=False):
     """Measure WY launch layouts on tensors produced from real 4K document packing."""
     import importlib
     import json
@@ -258,11 +258,18 @@ def wy_tiling(data_root="/data"):
             (32, 128, 8, 1),
         )
     ]
+    if hoisted:
+        from .kernels.kda_wy import wy_backward
+
+        configurations = [configurations[0]] + [
+            ("hoisted-" + name, config) for name, config in configurations
+        ]
     measurements = []
     for name, config in configurations:
+        selected_jit = wy_backward if name.startswith("hoisted-") else jit
 
-        def launch(config=config):
-            return jit[grid](
+        def launch(config=config, selected_jit=selected_jit):
+            return selected_jit[grid](
                 **kwargs,
                 IS_VARLEN=True,
                 **config.kwargs,
