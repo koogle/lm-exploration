@@ -194,6 +194,7 @@ def main():
     parser.add_argument(
         "--real-data", action="store_true", help="read the configured prepared mixture"
     )
+    parser.add_argument("--scalar-delta", action="store_true")
     parser.add_argument("--profile-all-ranks", action="store_true")
     parser.add_argument("--profile-stacks", action="store_true")
     parser.add_argument("--data-root", default="/data")
@@ -295,6 +296,17 @@ def main():
             mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
             data = ({"synthetic": True}, lambda: mixture)
         family = family_of(config)(config, run_dir, data=data)
+        if args.scalar_delta:
+            from .gated_delta import configure as configure_scalar
+
+            original_build = family.build
+
+            def scalar_build(device):
+                model = original_build(device)
+                configure_scalar(model)
+                return model
+
+            family.build = scalar_build
         if args.consolidation:
             from .consolidation import configure
 

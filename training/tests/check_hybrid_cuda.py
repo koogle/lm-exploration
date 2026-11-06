@@ -443,6 +443,13 @@ def decode_timing(rows=64, prompt=512, new_tokens=256):
 
 
 def checks(only=""):
+    if only == "scalar_delta":
+        import runpy
+        from pathlib import Path
+
+        return runpy.run_path(str(Path(__file__).with_name("check_gated_delta_cuda.py")))[
+            "checks"
+        ]()
     if only in ("consolidation", "consolidation_model", "consolidation_joint"):
         import runpy
         from pathlib import Path

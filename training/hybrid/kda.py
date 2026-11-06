@@ -109,6 +109,8 @@ def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False):
 
 class KimiDeltaAttention(nn.Module):
     combined_projections = False
+    recurrence_kernel = staticmethod(kda_kernel)
+    recurrence_reference = staticmethod(kda_reference)
 
     def __init__(self, config):
         super().__init__()
@@ -184,13 +186,17 @@ class KimiDeltaAttention(nn.Module):
                 for p, w in zip(projections, weights, strict=True)
             )
         q, k, v = q.view(heads), k.view(heads), v.view(heads)
-        g = self.f_proj(x).view(heads)
+        g = self.f_proj(x).view(batch, length, self.heads, -1)
         beta = self.b_proj(x)
         keep = cache is not None
         if x.is_cuda:
-            out = kda_kernel(q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents, keep)
+            out = self.recurrence_kernel(
+                q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents, keep
+            )
         else:
-            out = kda_reference(q, k, v, g, beta, self.A_log, self.dt_bias, positions, keep)
+            out = self.recurrence_reference(
+                q, k, v, g, beta, self.A_log, self.dt_bias, positions, keep
+            )
         if keep:
             out, state = out
             first = int((mask.documents[0] == 0).sum())

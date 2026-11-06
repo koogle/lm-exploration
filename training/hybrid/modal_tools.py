@@ -89,6 +89,7 @@ def benchmark(
     consolidation_cases="",
     profile_all_ranks=False,
     profile_stacks=False,
+    compare_scalar_delta=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -172,6 +173,8 @@ def benchmark(
             ("adaptive_intra", []),
             ("original_repeat", ["--reference-intra"]),
         ]
+    if compare_scalar_delta:
+        cases = [("kda_first", []), ("scalar_delta", ["--scalar-delta"]), ("kda_repeat", [])]
     if compare_consolidation:
         cases = (
             [("original_first", [])]
@@ -351,6 +354,7 @@ def bench(
     consolidation_cases: str = "",
     profile_all_ranks: bool = False,
     profile_stacks: bool = False,
+    compare_scalar_delta: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -375,6 +379,7 @@ def bench(
                 compare_graphed_muon,
                 compare_intra,
                 compare_consolidation,
+                compare_scalar_delta,
                 bool(larger_microbatch),
                 autotune,
                 kda_save_intermediates,
@@ -399,6 +404,7 @@ def bench(
             or compare_graphed_muon
             or compare_intra
             or compare_consolidation
+            or compare_scalar_delta
             or larger_microbatch
             or autotune
             or kda_save_intermediates
@@ -440,6 +446,7 @@ def bench(
         consolidation_cases,
         profile_all_ranks,
         profile_stacks,
+        compare_scalar_delta,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)
