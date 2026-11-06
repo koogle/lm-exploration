@@ -19,7 +19,7 @@ def errors(actual, expected):
     return result
 
 
-def checks():
+def kernel_check(production=False):
     torch.manual_seed(43)
     b, t, h, d = 2, 257, 12, 128
     tokens = torch.full((b, t), 3, device="cuda")
@@ -33,6 +33,11 @@ def checks():
         torch.zeros(h, device="cuda"),
         torch.full((h,), -3.0, device="cuda"),
     ]
+    if production:
+        leaves[3], leaves[4] = leaves[3].bfloat16(), leaves[4].bfloat16()
+        leaves[5] = torch.linspace(1, 16, h, device="cuda").log()
+        dt = torch.logspace(-3, -1, h, device="cuda")
+        leaves[6] = dt + torch.log(-torch.expm1(-dt))
     leaves = [x.requires_grad_() for x in leaves]
     out = scalar_kernel(*leaves, documents)
     dout = torch.randn_like(out)
@@ -40,7 +45,11 @@ def checks():
     refs = [x.detach().float().requires_grad_() for x in leaves]
     ref = scalar_reference(*refs, positions)
     expected = (ref, *torch.autograd.grad((ref * dout.float()).sum(), refs))
-    result = {"kernel_errors": errors(actual, expected)}
+    return errors(actual, expected)
+
+
+def checks():
+    result = {"kernel_errors": kernel_check(), "production_gate_errors": kernel_check(True)}
     print(json.dumps(result), flush=True)
     config = model.HybridConfig(
         vocab_size=521,
