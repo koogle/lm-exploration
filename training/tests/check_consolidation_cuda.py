@@ -96,7 +96,7 @@ def model_check():
     config = model.HybridConfig(
         vocab_size=521,
         eos_id=2,
-        block_size=128,
+        block_size=512,
         n_layer=2,
         n_embd=256,
         n_head=2,
@@ -108,8 +108,10 @@ def model_check():
         mtp=True,
     )
     original = model.HybridLM(config).cuda()
-    tokens = torch.randint(3, 521, (2, 65), device="cuda")
-    tokens[:, 31] = 2
+    # Exercise the training attention path rather than FlexAttention's short
+    # decode specialization, whose automatic tile choice rejects length 65.
+    tokens = torch.randint(3, 521, (2, 257), device="cuda")
+    tokens[:, 127] = 2
     labels = torch.randint(3, 521, tokens.shape, device="cuda")
     labels[:, -3:] = -100
     future = labels.roll(-1, 1)
@@ -133,14 +135,17 @@ def model_check():
         configure(revised, candidate)
         actual = run(torch.compile(revised), candidate in ("joint-loss", "all"))
         results[candidate] = errors(actual, reference, 0.03)
+        print(json.dumps({"model_candidate": candidate, "errors": results[candidate]}), flush=True)
         del revised, actual
     return results
 
 
-def checks():
+def checks(only=""):
     assert torch.cuda.get_device_capability() == (9, 0)
     results = {"gpu": torch.cuda.get_device_name()}
     for name, function in (("norm", norm_check), ("joint", joint_check), ("model", model_check)):
+        if only and name != only:
+            continue
         results[name] = function()
         print(json.dumps({name: results[name]}), flush=True)
     return results

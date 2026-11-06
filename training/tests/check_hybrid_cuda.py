@@ -443,13 +443,13 @@ def decode_timing(rows=64, prompt=512, new_tokens=256):
 
 
 def checks(only=""):
-    if only == "consolidation":
+    if only in ("consolidation", "consolidation_model"):
         import runpy
         from pathlib import Path
 
         return runpy.run_path(str(Path(__file__).with_name("check_consolidation_cuda.py")))[
             "checks"
-        ]()
+        ]("model" if only == "consolidation_model" else "")
     if only == "graphed_muon":
         from trainer.optimizers import GraphedOrthogonalize, orthogonalize
 
