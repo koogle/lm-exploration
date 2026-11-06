@@ -8,8 +8,10 @@ use unprofiled same-allocation runs for speed comparisons.
 """
 
 import argparse
+import base64
 import bisect
 import collections
+import copy
 import gzip
 import json
 from pathlib import Path
@@ -455,12 +457,31 @@ def timeline_data(trace, rank):
 
 
 def render_timeline(ranks, output):
-    # Embedded JSON is escaped as script text, never interpreted as HTML.
+    compact = copy.deepcopy(ranks)
+    strings, indices = [], {}
+    for rank in compact:
+        for step in rank.get("steps", []):
+            for field in ("spans", "host_spans"):
+                for span in step.get(field, []):
+                    for i in range(2, len(span)):
+                        value = span[i]
+                        if value not in indices:
+                            indices[value] = len(strings)
+                            strings.append(value)
+                        span[i] = indices[value]
+    # Intern repeated names for browser load cost; escape script text, never HTML.
     payload = (
-        json.dumps(ranks).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+        json.dumps({"ranks": compact, "strings": strings})
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
     )
     template = Path(__file__).with_name("profile_timeline.html").read_text()
-    Path(output).write_text(template.replace("__TRACE_DATA__", payload))
+    Path(output).write_text(
+        template.replace(
+            "__TRACE_DATA__", base64.b64encode(gzip.compress(payload.encode())).decode()
+        )
+    )
 
 
 def main():

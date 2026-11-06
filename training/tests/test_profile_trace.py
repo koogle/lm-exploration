@@ -132,7 +132,13 @@ class ExclusiveLedgerTests(unittest.TestCase):
             p = Path(folder) / "trace.html"
             render_timeline([{"rank": "</script><script>alert(1)</script>"}], p)
             self.assertNotIn('"</script>', p.read_text())
-            self.assertIn("\\u003c/script", p.read_text())
+            import base64
+            import gzip
+
+            encoded = (
+                p.read_text().split('type="application/octet-stream">')[1].split("</script>")[0]
+            )
+            self.assertIn("\\u003c/script", gzip.decompress(base64.b64decode(encoded)).decode())
         with self.assertRaises(ValueError):
             timeline_data({"traceEvents": []}, "0")
 
