@@ -206,10 +206,10 @@ def main():
     if args.muon_batch_size < 1:
         parser.error("--muon-batch-size must be positive")
     if args.reference_kda_offsets:
-        from .documents import cu_seqlens
         from .model import DocumentMask
 
-        DocumentMask.kda_offsets = property(lambda mask: cu_seqlens(mask.documents).long())
+        # Reconstruct inside kda_kernel, at the original pre-optimization site.
+        DocumentMask.kda_offsets = property(lambda mask: None)
     if args.kda_save_intermediates:
         from functools import partial
 
