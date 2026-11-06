@@ -25,6 +25,7 @@ def small_model():
     return model.HybridLM(config)
 
 
+@torch.no_grad()
 def check_muon_batching(device="cpu", production_shapes=False):
     """Compare updates, momentum, missing gradients and state resume across batches."""
     import copy

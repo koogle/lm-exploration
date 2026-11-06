@@ -134,6 +134,7 @@ def benchmark(
     for name, extra in cases:
         code, lines = run_torchrun("model_hybrid.benchmark", args + extra, gpus, 1500)
         measurements[name] = {
+            "arguments": extra,
             "exit_code": code,
             **(summarize(lines, skip=10 if profile else 5) if code == 0 else {}),
         }
