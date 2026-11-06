@@ -87,6 +87,8 @@ def benchmark(
     compare_intra=False,
     compare_consolidation=False,
     consolidation_cases="",
+    profile_all_ranks=False,
+    profile_stacks=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -103,6 +105,10 @@ def benchmark(
         args += ["--phase-timings"]
     if profile:
         args += ["--profile", "/tmp/profile.json"]
+    if profile_all_ranks:
+        args += ["--profile-all-ranks"]
+    if profile_stacks:
+        args += ["--profile-stacks"]
     if real_data:
         args += ["--real-data", "--data-root", "/data"]
     hardware = (
@@ -240,6 +246,12 @@ def benchmark(
         trace = Path("/tmp/profile.json.trace.json.gz")
         if profile and trace.exists():
             shutil.copyfile(trace, folder / "trace.json.gz")
+        if profile_all_ranks:
+            for rank in range(1, gpus):
+                for suffix in ("", ".trace.json.gz"):
+                    source = Path(f"/tmp/profile.json.rank{rank}{suffix}")
+                    if source.exists():
+                        shutil.copyfile(source, folder / source.name)
         if hardware_kernel:
             from model_hybrid.hardware_counters import executable, raw_measurements
 
@@ -337,6 +349,8 @@ def bench(
     compare_intra: bool = False,
     compare_consolidation: bool = False,
     consolidation_cases: str = "",
+    profile_all_ranks: bool = False,
+    profile_stacks: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -345,6 +359,8 @@ def bench(
     """
     from workflows.deadline import new_deadline
 
+    if (profile_all_ranks or profile_stacks) and not profile:
+        raise ValueError("Rank and stack profiling require profile")
     if consolidation_cases and not compare_consolidation:
         raise ValueError("consolidation_cases requires compare_consolidation")
     if compare_consolidation:
@@ -422,6 +438,8 @@ def bench(
         compare_intra,
         compare_consolidation,
         consolidation_cases,
+        profile_all_ranks,
+        profile_stacks,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)

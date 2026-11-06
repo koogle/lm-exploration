@@ -194,6 +194,8 @@ def main():
     parser.add_argument(
         "--real-data", action="store_true", help="read the configured prepared mixture"
     )
+    parser.add_argument("--profile-all-ranks", action="store_true")
+    parser.add_argument("--profile-stacks", action="store_true")
     parser.add_argument("--data-root", default="/data")
     parser.add_argument("--reference-output-gradient", action="store_true")
     parser.add_argument(
@@ -207,6 +209,8 @@ def main():
     parser.add_argument("--reference-muon", action="store_true")
     parser.add_argument("--consolidation", choices=["joint-loss", "projections", "norm", "all"])
     args = parser.parse_args()
+    if (args.profile_all_ranks or args.profile_stacks) and not args.profile:
+        parser.error("Rank and stack profiling require --profile")
     if args.hardware_counters and args.profile:
         parser.error("Counter replay and timeline profiling must run separately")
     if args.kda_save_intermediates:
@@ -241,14 +245,19 @@ def main():
     else:
         ids, eos_id = glm.TOKENIZER_SIZE - 64, glm.EOS_ID
     profiler = None
-    if args.profile and int(os.environ.get("RANK", "0")) == 0:
+    rank = int(os.environ.get("RANK", "0"))
+    if args.profile and (rank == 0 or args.profile_all_ranks):
         import torch
+
+        torch.cuda.set_device(int(os.environ.get("LOCAL_RANK", "0")))
+        profile_path = args.profile if rank == 0 else f"{args.profile}.rank{rank}"
 
         def write(finished):
             summary = profile_summary(finished, PROFILE_STEPS)
-            with open(args.profile, "w") as out:
+            summary["rank"] = rank
+            with open(profile_path, "w") as out:
                 json.dump(summary, out, indent=2)
-            trace = args.profile + ".trace.json"
+            trace = profile_path + ".trace.json"
             finished.export_chrome_trace(trace)
             with open(trace, "rb") as source, gzip.open(trace + ".gz", "wb") as target:
                 shutil.copyfileobj(source, target)
@@ -259,7 +268,11 @@ def main():
             wait=PROFILE_SKIP - 1, warmup=1, active=PROFILE_STEPS, repeat=1
         )
         profiler = torch.profiler.profile(
-            activities=activities, schedule=schedule, on_trace_ready=write, record_shapes=True
+            activities=activities,
+            schedule=schedule,
+            on_trace_ready=write,
+            record_shapes=True,
+            with_stack=args.profile_stacks,
         )
         profiler.start()
 
