@@ -18,7 +18,15 @@ from model_hybrid.image import LAUNCH_LIMIT_SECONDS, image
 app = modal.App("lm-exploration-hybrid-checks")
 
 
-@app.function(image=image, gpu="H100", cpu=8, memory=32768, timeout=1800, retries=0)
+@app.function(
+    image=image,
+    gpu="H100",
+    cpu=8,
+    memory=32768,
+    timeout=1800,
+    retries=0,
+    volumes={"/data": modal.Volume.from_name("lm-exploration-hybrid-data")},
+)
 def check(deadline, only=""):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")

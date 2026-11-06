@@ -193,3 +193,126 @@ def run(implementations=None):
         },
         "short_convolutions": {name: time_convolutions(f) for name, f in convolutions.items()},
     }
+
+
+def wy_tiling(data_root="/data"):
+    """Measure WY launch layouts on tensors produced from real 4K document packing."""
+    import importlib
+    import json
+    from pathlib import Path
+
+    import triton
+    import triton.testing
+    from training_data.packed_shards import PreparedMixture
+
+    module = importlib.import_module("fla.ops.kda.chunk_bwd")
+    original = module.chunk_kda_bwd_kernel_wy_dqkg_fused
+    captured = {}
+
+    class Capture:
+        def __getitem__(self, grid):
+            def launch(*args, **kwargs):
+                if args:
+                    raise AssertionError("Expected named WY launch arguments")
+                captured.update(grid=grid, kwargs=kwargs)
+                return original[grid](**kwargs)
+
+            return launch
+
+    recipe = json.loads(
+        (Path(__file__).parent / "recipes/kda-foundation-100b-504010-v1.json").read_text()
+    )
+    mixture = PreparedMixture(recipe, Path(data_root) / recipe["name"])
+    mixture.wait_seconds = 0
+    tokens, _, sources = mixture.next_batch(4)
+    documents = document_ids(torch.as_tensor(tokens, device="cuda"), 154820)
+    generator = torch.Generator().manual_seed(14)
+    tensors, _ = layer_inputs(4, 4096, 12, 128, documents, torch.bfloat16, generator)
+    module.chunk_kda_bwd_kernel_wy_dqkg_fused = Capture()
+    try:
+        out = kda.kda_kernel(*tensors, documents)
+        torch.autograd.grad(out, tensors, torch.ones_like(out))
+    finally:
+        module.chunk_kda_bwd_kernel_wy_dqkg_fused = original
+    grid, kwargs = captured["grid"], captured["kwargs"]
+    output_names = ("dq", "dk", "dv2", "dg", "db", "dA")
+    original[grid](**kwargs)
+    expected = {name: kwargs[name].clone() for name in output_names}
+    tuner = original.fn
+    selected = tuner.best_config
+    jit = tuner.fn
+    configurations = [("upstream", selected)] + [
+        (
+            f"bk{bk}-bv{bv}-w{warps}-s{stages}",
+            triton.Config({"BK": bk, "BV": bv}, num_warps=warps, num_stages=stages),
+        )
+        for bk, bv, warps, stages in (
+            (32, 64, 4, 1),
+            (32, 64, 4, 2),
+            (32, 64, 8, 1),
+            (32, 32, 4, 1),
+            (16, 64, 4, 1),
+            (16, 32, 4, 1),
+            (64, 64, 8, 1),
+            (64, 64, 8, 2),
+            (32, 128, 8, 1),
+        )
+    ]
+    measurements = []
+    for name, config in configurations:
+
+        def launch(config=config):
+            return jit[grid](
+                **kwargs,
+                IS_VARLEN=True,
+                **config.kwargs,
+                num_warps=config.num_warps,
+                num_stages=config.num_stages,
+            )
+
+        try:
+            compiled = launch()
+            torch.cuda.synchronize()
+            errors = {}
+            for output in output_names:
+                actual, reference = kwargs[output].float(), expected[output].float()
+                if not torch.isfinite(actual).all():
+                    raise AssertionError(f"Non-finite {output}")
+                errors[output] = {
+                    "relative_max": (
+                        (actual - reference).abs().max() / reference.abs().max().clamp_min(1e-8)
+                    ).item(),
+                    "relative_rms": (
+                        (actual - reference).square().mean().sqrt()
+                        / reference.square().mean().sqrt().clamp_min(1e-8)
+                    ).item(),
+                }
+            valid = all(
+                e["relative_max"] < 0.02 and e["relative_rms"] < 0.01 for e in errors.values()
+            )
+            samples = [triton.testing.do_bench_cudagraph(launch, rep=100) for _ in range(3)]
+            row = {
+                "name": name,
+                "BK": config.kwargs["BK"],
+                "BV": config.kwargs["BV"],
+                "warps": config.num_warps,
+                "stages": config.num_stages,
+                "ms": samples,
+                "valid": valid,
+                "errors": errors,
+                "registers": compiled.n_regs,
+                "spills": compiled.n_spills,
+                "shared_bytes": compiled.metadata.shared,
+            }
+        except Exception as error:  # noqa: BLE001 - retain failed launch layouts in the audit
+            row = {"name": name, "valid": False, "error": str(error)}
+        measurements.append(row)
+        print(json.dumps(row), flush=True)
+    return {
+        "gpu": torch.cuda.get_device_name(),
+        "torch": torch.__version__,
+        "shape": SHAPE,
+        "grid": grid,
+        "sources": sources,
+        "measurements": measurements,
+    }
