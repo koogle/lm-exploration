@@ -142,4 +142,5 @@ The hybrid adapter supports a smaller final microbatch: for example, 32 rows per
 rank with a maximum microbatch of six becomes `[6, 6, 6, 6, 6, 2]`. Its NTP and MTP
 objectives use global valid-target counts, so the last chunk has the correct
 weight. Other adapters retain their equal-chunk requirement unless they declare
-`allow_partial_microbatch`. Workflow validation retains H-Net's equal-chunk rule.
+`allow_partial_microbatch`. Workflow validation retains the equal-chunk rule for H-Net and looped models,
+whose per-microbatch diagnostic averaging has different requirements.

@@ -562,3 +562,20 @@ synchronized backward. Feeding data is not the dominant steady-state bottleneck.
 Raw logs, all-rank phase medians, numerical checks, the rejected compilation and
 cancelled queued test are in the archive's `phase-graph` folder. The graph gain
 is measured against controls from its own allocation, not the earlier WY run.
+
+The follow-up microbatch-six qualification keeps global rows at 256 and uses
+`[6, 6, 6, 6, 6, 2]` on each rank. The shared loop allows the smaller final chunk
+only for adapters that declare support; workflow validation limits this hybrid
+path to the non-looped model. CPU tests confirm that averaging two ranks' NTP/MTP
+gradients with masked targets matches the unsplit global objective. All 52
+regression tests pass, including the other model families' validation boundaries.
+
+The bounded comparison is queued as
+`kda-phase-microbatch6-h100x8-20261106-01`
+([Modal app](https://modal.com/apps/radiantai/main/ap-bekBaYIESy9BEtSHchpikY)).
+It requests exactly eight H100s, 30 steps each for four/six/four microbatches,
+with server-side execution timeout and independent launch deadline. Its per-arm
+logs and results are persisted under `throughput/<run-id>` on the hybrid runs
+volume. As of November 6, 13:48 UTC it has not received a GPU allocation; no
+throughput, memory or training-loss result is established for microbatch six.
+The production recipe remains at four pending that qualification.
