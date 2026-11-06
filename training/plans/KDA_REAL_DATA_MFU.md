@@ -823,3 +823,29 @@ The bounded run `kda-consolidation-h100x8-20261106-01` compares all six arms at
 mixture, global rows 256 and microbatch six. Whole-training results are required
 before promotion. [Numerical checks and isolated measurements](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/consolidation)
 include failures and source provenance.
+
+The initial eight-H100 comparison measured 357,311 tokens/s (32.84% MFU) for
+the first control, 356,712 for combined projections and 355,447 for grouped
+normalization. Each completed 20 steps, with 15 timed. Neither individual
+candidate demonstrates an improvement. The repeated control is still pending,
+so these small differences do not establish a reliable regression either.
+
+The original joint loss produced no training step after approximately 13 minutes
+of whole-model compilation. Its torchrun process was canceled, and the combined
+arm using that same implementation was skipped. Both failed-arm records are
+preserved. An opaque custom-op boundary now keeps the two chunked loss loops
+out of the compiler's expanded graph. The corrected full-size head check uses
+24,576 positions per head, width 1,536, vocabulary 154,880 and chunks of 2,048.
+Its first compiled forward/backward call completes in 2.51 seconds; maximum
+normalized gradient error is 2.49e-7. Corrected compiled model checks for joint
+loss and the combination also pass, with maximum normalized gradient error
+0.00776. The standalone candidate timing of about 126 ms is not a matched
+whole-training speedup.
+
+The focused follow-up `kda-consolidation-h100x8-20261106-02` (source `e5321bd`)
+runs control, corrected joint loss, all three candidates and repeated control,
+with the same data, batch sizes and 20-step window. It retains the 30-minute
+worker timeout, zero retries and independent launch deadline. The selector
+`--consolidation-cases joint-loss,all` avoids repeating the individual projection
+and normalization arms. No candidate has been promoted, and full pretraining
+remains held while this comparison runs.
