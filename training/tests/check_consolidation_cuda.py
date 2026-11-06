@@ -2,6 +2,7 @@
 
 import copy
 import json
+import time
 from functools import partial
 
 import torch
@@ -61,35 +62,53 @@ def norm_check():
     return results
 
 
-def joint_check():
+def joint_check(training_shape=False):
     torch.manual_seed(41)
-    first = torch.randn(2048, 1536, device="cuda", requires_grad=True)
-    second = torch.randn(513, 1536, device="cuda", requires_grad=True)
+    rows, future_rows, chunk = (24576, 24576, 2048) if training_shape else (2048, 513, 512)
+    first = torch.randn(rows, 1536, device="cuda", requires_grad=True)
+    second = torch.randn(future_rows, 1536, device="cuda", requires_grad=True)
     weight = (torch.randn(154880, 1536, device="cuda") * 0.02).requires_grad_()
-    y = torch.randint(0, 154880, (2048,), device="cuda")
-    future = torch.randint(0, 154880, (513,), device="cuda")
+    y = torch.randint(0, 154880, (rows,), device="cuda")
+    future = torch.randint(0, 154880, (future_rows,), device="cuda")
     y[::7], future[::3] = -100, -100
     scales = (torch.tensor(1 / 1048576, device="cuda"), torch.tensor(0.3 / 524288, device="cuda"))
 
     def separate():
-        a = fused_cross_entropy(first, weight, y, 1e-4, 512)
-        b = fused_cross_entropy(second, weight, future, 1e-4, 512)
+        a = fused_cross_entropy(first, weight, y, 1e-4, chunk)
+        b = fused_cross_entropy(second, weight, future, 1e-4, chunk)
         loss = 8 * (scales[0] * a[0] + scales[1] * b[0])
         return loss, *torch.autograd.grad(loss, (first, second, weight))
 
+    def joint_objective():
+        return 8 * joint_cross_entropy(first, second, weight, y, future, scales, 1e-4, chunk)[0]
+
+    objective = torch.compile(joint_objective) if training_shape else joint_objective
+
     def joint():
-        loss = 8 * joint_cross_entropy(first, second, weight, y, future, scales, 1e-4, 512)[0]
+        loss = objective()
         return loss, *torch.autograd.grad(loss, (first, second, weight))
 
     reference = separate()
+    torch.cuda.synchronize()
+    start = time.perf_counter()
     actual = joint()
-    result = {"errors": errors(actual, reference, 2e-5)}
+    torch.cuda.synchronize()
+    result = {
+        "errors": errors(actual, reference, 2e-5),
+        "rows": [rows, future_rows],
+        "chunk": chunk,
+        "first_candidate_call_seconds": time.perf_counter() - start,
+        "compiled": training_shape,
+    }
     del reference, actual
-    result["original_ms"], result["revised_ms"] = timing(separate), timing(joint)
+    if training_shape:
+        result["compiled_candidate_ms"] = timing(joint)
+    else:
+        result["original_ms"], result["revised_ms"] = timing(separate), timing(joint)
     return result
 
 
-def model_check():
+def model_check(candidates=("joint-loss", "projections", "norm", "all")):
     kda_wy.install()
     kda_intra.install()
     torch.manual_seed(37)
@@ -130,7 +149,7 @@ def model_check():
 
     reference = run(torch.compile(original), False)
     results = {}
-    for candidate in ("joint-loss", "projections", "norm", "all"):
+    for candidate in candidates:
         revised = copy.deepcopy(original)
         configure(revised, candidate)
         actual = run(torch.compile(revised), candidate in ("joint-loss", "all"))
@@ -143,6 +162,11 @@ def model_check():
 def checks(only=""):
     assert torch.cuda.get_device_capability() == (9, 0)
     results = {"gpu": torch.cuda.get_device_name()}
+    if only == "joint-production":
+        results["joint"] = joint_check(training_shape=True)
+        print(json.dumps({"joint": results["joint"]}), flush=True)
+        results["model"] = model_check(("joint-loss", "all"))
+        return results
     for name, function in (("norm", norm_check), ("joint", joint_check), ("model", model_check)):
         if only and name != only:
             continue
