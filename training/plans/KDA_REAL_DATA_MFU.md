@@ -763,3 +763,13 @@ reducing MTP changes the objective. FP8 changes numerical behavior and the
 appropriate hardware peak denominator. None qualifies merely because the BF16
 kernels pass, and a relabeled MFU is not a throughput gain. There is no measured
 path to 60% yet.
+
+An updated three-step instrumented trace is queued as part of the bounded
+16-step diagnostic `kda-current-profile-h100x8-20261106-01` (training source
+`01f57ef`, eight strict H100s). It has a 30-minute execution timeout, zero retries
+and an independent launch deadline. At this review it has not acquired GPUs;
+the operator-level evidence above is explicitly from the earlier trace, while
+the 2.950-second step budget is from the completed unprofiled qualification.
+The new trace must not be used as an unprofiled throughput result. The source
+checks now total 43 passing CPU tests, including delayed-kernel attribution,
+overlapping intervals and host-wait versus device-idle distinctions.
