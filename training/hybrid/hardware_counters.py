@@ -49,6 +49,12 @@ def measured_rows(text):
     return list(csv.DictReader(io.StringIO("\n".join(lines[start:]))))
 
 
+def raw_measurements(text):
+    """Nsight's raw page is wide CSV, with a units row before kernel rows."""
+    rows = list(csv.DictReader(io.StringIO(text)))
+    return [row for row in rows if row.get("ID", "").isdigit() and row.get("Kernel Name")]
+
+
 def probe(folder):
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)

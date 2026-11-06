@@ -196,7 +196,7 @@ def benchmark(
         if profile and trace.exists():
             shutil.copyfile(trace, folder / "trace.json.gz")
         if hardware_kernel:
-            from model_hybrid.hardware_counters import executable, measured_rows
+            from model_hybrid.hardware_counters import executable, raw_measurements
 
             report = Path("/tmp/counters.ncu-rep")
             if report.exists():
@@ -211,7 +211,7 @@ def benchmark(
                 (folder / "counters.csv").write_text(exported.stdout)
                 (folder / "counter-export.log").write_text(exported.stderr)
                 result["counter_collection_valid"] = exported.returncode == 0 and bool(
-                    measured_rows(exported.stdout)
+                    raw_measurements(exported.stdout)
                 )
             else:
                 result["counter_collection_valid"] = False
@@ -313,7 +313,7 @@ def bench(
 
         if gpus != 1:
             raise ValueError(
-                "Kernel replay is qualified only on one GPU; use timeline profiling for DDP"
+                "Kernel replay is restricted to one GPU; use timeline profiling for DDP"
             )
         if hardware_kernel not in KERNELS:
             raise ValueError(f"Select one of {KERNELS}")

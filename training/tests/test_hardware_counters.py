@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from model_hybrid.hardware_counters import measured_rows, probe
+from model_hybrid.hardware_counters import measured_rows, probe, raw_measurements
 
 
 class CounterProbeTests(unittest.TestCase):
@@ -18,6 +18,13 @@ class CounterProbeTests(unittest.TestCase):
             '"0","sm__cycles_elapsed.avg","cycle","123"\n'
         )
         self.assertEqual(rows[0]["Metric Value"], "123")
+
+    def test_raw_page_skips_units_row(self):
+        csv_text = '"ID","Kernel Name","gpu__time_duration.sum"\n"","","ms"\n"0","kernel","1.37"\n'
+        rows = raw_measurements(csv_text)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["gpu__time_duration.sum"], "1.37")
+        self.assertEqual(raw_measurements('"ID","Kernel Name"\n"",""\n'), [])
 
     def test_zero_exit_without_metrics_fails_closed(self):
         with tempfile.TemporaryDirectory() as folder:
