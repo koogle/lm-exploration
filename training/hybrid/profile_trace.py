@@ -89,7 +89,40 @@ def summarize(trace):
             "calls_per_step": len(selected) / n,
             "inclusive_host_ms_per_step": sum(e["dur"] for e in selected) / 1000 / n,
         }
+    grouped = collections.defaultdict(list)
+    for event in kernels:
+        if event.get("cat") == "kernel":
+            grouped[event["name"]].append(event)
+    resources = []
+    for name, calls in sorted(
+        grouped.items(), key=lambda item: sum(e["dur"] for e in item[1]), reverse=True
+    )[:35]:
+        resources.append(
+            {
+                "name": name,
+                "ms_per_step": sum(e["dur"] for e in calls) / 1000 / n,
+                "calls_per_step": len(calls) / n,
+                "registers_per_thread": sorted(
+                    {
+                        e["args"]["registers per thread"]
+                        for e in calls
+                        if "registers per thread" in e.get("args", {})
+                    }
+                ),
+                "shared_bytes": sorted(
+                    {
+                        e["args"]["shared memory"]
+                        for e in calls
+                        if "shared memory" in e.get("args", {})
+                    }
+                ),
+                "example_launch": {
+                    k: calls[0].get("args", {}).get(k) for k in ("grid", "block", "occupancy")
+                },
+            }
+        )
     r = {
+        "kernel_resources": resources,
         "steps": n,
         "window_ms_per_step": (hi - lo) / 1000 / n,
         "cuda_activity_union_ms_per_step": busy(lo, hi) / 1000 / n,
