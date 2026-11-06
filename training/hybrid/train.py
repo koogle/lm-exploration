@@ -461,6 +461,8 @@ class HybridFamily:
     `output/export/`); `data` = (identity, mixture factory) overrides the recipe
     (synthetic benchmarks), and then nothing is held out."""
 
+    allow_partial_microbatch = True
+
     def __init__(self, config, output, data_root=None, data=None):
         self.config, self.output = config, Path(output)
         self.settings = dataclasses.asdict(config)
@@ -717,6 +719,7 @@ class HNetFamily(HybridFamily):
     model folds into its summed loss. Logs add the ratio loss and bytes per chunk.
     """
 
+    allow_partial_microbatch = False
     sample_length = 192
 
     def recipe_data(self, data_root):

@@ -151,6 +151,7 @@ def benchmark(
         ]
     if larger_microbatch:
         cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))
+        cases.append(("original_repeat", []))
     if autotune:
         cases.append(("autotuned", ["--compile-mode", "max-autotune-no-cudagraphs"]))
     if kda_save_intermediates:

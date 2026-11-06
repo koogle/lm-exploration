@@ -159,8 +159,12 @@ def train(
         raise ValueError("stop_tokens must be within the token target")
     rank, world = runtime.rank, runtime.world_size
     rows = family.global_rows // world
-    if rows * world != family.global_rows or rows % family.microbatch:
-        raise ValueError("Global rows must divide into whole per-GPU microbatches")
+    if (
+        family.microbatch < 1
+        or rows * world != family.global_rows
+        or (rows % family.microbatch and not getattr(family, "allow_partial_microbatch", False))
+    ):
+        raise ValueError("Global rows must divide across GPUs, with whole microbatches when required")
     stop_unix = stop_unix if stop_unix is not None else math.inf
     torch.cuda.set_device(runtime.local_rank)
     torch.set_num_threads(4)
