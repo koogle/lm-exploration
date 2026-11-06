@@ -21,8 +21,9 @@ import time
 from pathlib import Path
 
 import modal
-from model_hybrid.image import image
+from model_hybrid.image import build, image
 
+counter_image = build(apt_packages=("cuda-nsight-compute-13-0",))
 app = modal.App("lm-exploration-hybrid-tools")
 data_volume = modal.Volume.from_name("lm-exploration-hybrid-data", create_if_missing=True)
 runs_volume = modal.Volume.from_name("lm-exploration-hybrid-runs", create_if_missing=True)
@@ -65,6 +66,7 @@ def benchmark(
     autotune=False,
     kda_save_intermediates=False,
     required_gpu_model="",
+    hardware_kernel="",
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -112,6 +114,13 @@ def benchmark(
             )
             runs_volume.commit()
         raise RuntimeError(f"Required {required_gpu_model}; delivered hardware: {hardware}")
+    if hardware_kernel:
+        from model_hybrid.hardware_counters import probe
+
+        access = probe(Path("/runs/throughput") / run_id)
+        runs_volume.commit()
+        if not access["accessible"]:
+            raise RuntimeError(f"Hardware counters unavailable: {access}")
     cases = (
         [("reference", ["--reference-output-gradient"]), ("direct", [])]
         if compare_output_gradient
@@ -126,11 +135,19 @@ def benchmark(
     measurements, all_lines = {}, []
     code = 0
     for name, extra in cases:
-        code, lines = run_torchrun("model_hybrid.benchmark", args + extra, gpus, 1500)
+        module, arguments = "model_hybrid.benchmark", args + extra
+        if hardware_kernel:
+            module = "model_hybrid.hardware_counters"
+            arguments = ["--output", "/tmp/counters", "--kernel", hardware_kernel, "--", *arguments]
+        code, lines = run_torchrun(module, arguments, gpus, 1500)
         measurements[name] = {
             "arguments": extra,
             "exit_code": code,
-            **(summarize(lines, skip=10 if profile else 5) if code == 0 else {}),
+            **(
+                summarize(lines, skip=10 if profile else 5)
+                if code == 0 and not hardware_kernel
+                else {}
+            ),
         }
         all_lines.extend([json.dumps({"case": name}) + "\n", *lines])
         if run_id:
@@ -146,6 +163,8 @@ def benchmark(
 
     result = {
         "exit_code": code,
+        "hardware_counter_kernel": hardware_kernel,
+        "throughput_valid": not bool(hardware_kernel),
         "hardware": hardware,
         "measurements": measurements,
         "config": config,
@@ -170,9 +189,32 @@ def benchmark(
         trace = Path("/tmp/profile.json.trace.json.gz")
         if profile and trace.exists():
             shutil.copyfile(trace, folder / "trace.json.gz")
+        if hardware_kernel:
+            from model_hybrid.hardware_counters import executable, measured_rows
+
+            report = Path("/tmp/counters.ncu-rep")
+            if report.exists():
+                shutil.copyfile(report, folder / report.name)
+                exported = subprocess.run(
+                    [executable(), "--import", str(report), "--page", "raw", "--csv"],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    check=False,
+                )
+                (folder / "counters.csv").write_text(exported.stdout)
+                (folder / "counter-export.log").write_text(exported.stderr)
+                result["counter_collection_valid"] = exported.returncode == 0 and bool(
+                    measured_rows(exported.stdout)
+                )
+            else:
+                result["counter_collection_valid"] = False
+            (folder / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         runs_volume.commit()
     if code:
         raise RuntimeError("".join(lines[-60:]))
+    if hardware_kernel and not result.get("counter_collection_valid"):
+        raise RuntimeError("Nsight Compute produced no metric rows; inspect archived logs")
     return result
 
 
@@ -237,6 +279,7 @@ def bench(
     autotune: bool = False,
     kda_save_intermediates: bool = False,
     require_gpu_model: bool = False,
+    hardware_kernel: str = "",
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -259,6 +302,21 @@ def bench(
         > 1
     ):
         raise ValueError("Compare one optimization at a time")
+    if hardware_kernel:
+        from model_hybrid.hardware_counters import KERNELS
+
+        if hardware_kernel not in KERNELS:
+            raise ValueError(f"Select one of {KERNELS}")
+        if (
+            profile
+            or compare_output_gradient
+            or larger_microbatch
+            or autotune
+            or kda_save_intermediates
+        ):
+            raise ValueError("Counter profiling must run separately from timing experiments")
+        if steps < 7 or not run_id:
+            raise ValueError("Counter profiling requires a run ID and at least seven steps")
     settings = load_config(config)
     if mtp_loss_fraction:
         settings["model"]["mtp_loss_fraction"] = mtp_loss_fraction
@@ -268,7 +326,9 @@ def bench(
     deadline = new_deadline()
     run_id = run_id or f"bench-{time.time_ns()}"
     requested_gpu = "H100!" if gpu == "H100" and require_gpu_model else gpu
-    call = benchmark.with_options(gpu=f"{requested_gpu}:{gpus}").spawn(
+    call = benchmark.with_options(
+        gpu=f"{requested_gpu}:{gpus}", image=counter_image if hardware_kernel else image
+    ).spawn(
         settings,
         gpus,
         steps,
@@ -284,6 +344,7 @@ def bench(
         autotune,
         kda_save_intermediates,
         gpu if require_gpu_model else "",
+        hardware_kernel,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)
@@ -384,4 +445,58 @@ def publish(checkpoint: str, repo: str, public: bool = False, card: str = ""):
     result = export_checkpoint.remote(
         checkpoint, repo, not public, text, time.time() + MAX_LAUNCH_SECONDS
     )
+    print(json.dumps(result, indent=2))
+
+
+@app.function(
+    image=counter_image,
+    gpu="H100!",
+    cpu=4,
+    memory=16384,
+    timeout=300,
+    retries=0,
+    volumes=VOLUMES,
+)
+def counter_probe(deadline, run_id):
+    """Check hardware-counter access before allocating eight training GPUs."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed")
+    from model_hybrid.hardware_counters import probe
+
+    folder = Path("/runs/throughput") / run_id
+    try:
+        result = probe(folder)
+        result["hardware"] = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
+            text=True,
+        ).strip()
+        result["profiling_driver_parameters"] = Path("/proc/driver/nvidia/params").read_text()
+        (folder / "probe.json").write_text(json.dumps(result, indent=2))
+        return result
+    finally:
+        runs_volume.commit()
+
+
+@app.local_entrypoint()
+def counters_probe(run_id: str, output: str):
+    """Bounded single-H100 access check; no training or optimization experiment."""
+    deadline = time.time() + 900
+    call = counter_probe.spawn(deadline, run_id)
+    try:
+        supervisor = enforce_deadline.spawn([call.object_id], deadline)
+    except Exception:
+        call.cancel()
+        raise
+    record = {
+        "run_id": run_id,
+        "call": call.object_id,
+        "supervisor": supervisor.object_id,
+        "deadline": deadline,
+    }
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.with_suffix(".launch.json").write_text(json.dumps(record, indent=2))
+    print(json.dumps(record), flush=True)
+    result = call.get()
+    path.write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))

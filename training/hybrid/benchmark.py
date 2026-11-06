@@ -200,7 +200,10 @@ def main():
         "--compile-mode", default="default", choices=["default", "max-autotune-no-cudagraphs"]
     )
     parser.add_argument("--kda-save-intermediates", action="store_true")
+    parser.add_argument("--hardware-counters", action="store_true")
     args = parser.parse_args()
+    if args.hardware_counters and args.profile:
+        parser.error("Counter replay and timeline profiling must run separately")
     if args.kda_save_intermediates:
         from functools import partial
 
@@ -275,6 +278,18 @@ def main():
             family.compile = lambda model: torch.compile(model, mode=args.compile_mode)
         if profiler:
             family.after_step = lambda data, model, progress: profiler.step()
+        if args.hardware_counters:
+            import torch
+
+            def counter_step(data, model, progress):
+                if progress["step"] == PROFILE_SKIP:
+                    torch.cuda.synchronize()
+                    torch.cuda.cudart().cudaProfilerStart()
+                elif progress["step"] == PROFILE_SKIP + 1:
+                    torch.cuda.synchronize()
+                    torch.cuda.cudart().cudaProfilerStop()
+
+            family.after_step = counter_step
         report = loop.train(
             family,
             run_dir,
