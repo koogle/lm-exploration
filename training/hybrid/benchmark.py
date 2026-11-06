@@ -203,7 +203,7 @@ def main():
     parser.add_argument("--hardware-counters", action="store_true")
     parser.add_argument("--reference-kda-wy", action="store_true")
     parser.add_argument("--phase-timings", action="store_true")
-    parser.add_argument("--adaptive-intra", action="store_true")
+    parser.add_argument("--reference-intra", action="store_true")
     parser.add_argument("--reference-muon", action="store_true")
     args = parser.parse_args()
     if args.hardware_counters and args.profile:
@@ -281,17 +281,17 @@ def main():
             mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
             data = ({"synthetic": True}, lambda: mixture)
         family = family_of(config)(config, run_dir, data=data)
-        if args.adaptive_intra:
+        if args.reference_intra:
+            from unittest.mock import patch
+
             build = family.build
 
-            def adaptive_build(device, build=build):
-                model = build(device)
-                from .kda_intra import install
+            def reference_intra_build(device, build=build):
+                # Import/register FLA after the loop binds this rank's device.
+                with patch("model_hybrid.kda_intra.install"):
+                    return build(device)
 
-                install()
-                return model
-
-            family.build = adaptive_build
+            family.build = reference_intra_build
         if args.reference_muon:
             from trainer.optimizers import orthogonalize
 

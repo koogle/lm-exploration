@@ -152,9 +152,9 @@ def benchmark(
         ]
     if compare_intra:
         cases = [
-            ("original_first", []),
-            ("adaptive_intra", ["--adaptive-intra"]),
-            ("original_repeat", []),
+            ("original_first", ["--reference-intra"]),
+            ("adaptive_intra", []),
+            ("original_repeat", ["--reference-intra"]),
         ]
     if larger_microbatch:
         cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))

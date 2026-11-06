@@ -1,6 +1,6 @@
 # Copyright (c) 2023-2026, Songlin Yang, Yu Zhang, Zhiyuan Li
 # Launcher adapted from fla-core 0.6.0; MIT license in kernels/LICENSE.fla.
-"""Experimental H100 range-guarded KDA intra-backward backend."""
+"""H100 range-guarded KDA intra-backward backend."""
 
 import torch
 import triton

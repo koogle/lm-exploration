@@ -1,6 +1,6 @@
 # Copyright (c) 2023-2026, Songlin Yang, Yu Zhang, Zhiyuan Li
 # Adapted from fla-core 0.6.0; MIT license in LICENSE.fla.
-"""Experimental range-guarded tensor-core diagonal KDA backward."""
+"""Range-guarded tensor-core diagonal KDA backward."""
 
 import triton
 import triton.language as tl
