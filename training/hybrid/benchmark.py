@@ -72,7 +72,13 @@ def summarize(lines, skip=5):
     """Median throughput and MFU of the steps after the first `skip` (compile, warmup)."""
     steps = [json.loads(line) for line in lines if line.startswith('{"step"')]
     timed = [s for s in steps if s["step"] > skip]
+    metadata = [
+        json.loads(line)["benchmark_model"]
+        for line in lines
+        if line.startswith('{"benchmark_model"')
+    ]
     return {
+        **({"model": metadata[-1]} if metadata else {}),
         "steps_timed": len(timed),
         "tokens_per_second": float(np.median([s["tokens_per_second"] for s in timed])),
         "mfu": float(np.median([s["mfu"] for s in timed])),
@@ -371,6 +377,29 @@ def main():
                     torch.cuda.cudart().cudaProfilerStop()
 
             family.after_step = counter_step
+        measured_build = family.build
+
+        def describe_build(device):
+            lm = measured_build(device)
+            if rank == 0:
+                print(
+                    json.dumps(
+                        {
+                            "benchmark_model": {
+                                "mixer": "scalar_delta" if args.scalar_delta else "configured",
+                                "parameters": sum(p.numel() for p in lm.parameters()),
+                                "matrix_parameters": sum(
+                                    p.numel() for p in lm.parameters() if p.ndim == 2
+                                ),
+                                "scalar_gate_optimizer": "adamw" if args.scalar_delta else None,
+                            }
+                        }
+                    ),
+                    flush=True,
+                )
+            return lm
+
+        family.build = describe_build
         report = loop.train(
             family,
             run_dir,
