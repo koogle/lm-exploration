@@ -1,9 +1,32 @@
 import unittest
 
-from model_hybrid.profile_trace import activity_union_ms, launch_phase_times, operator_kernel_times
+from model_hybrid.profile_trace import (
+    activity_union_ms,
+    launch_phase_times,
+    operator_kernel_times,
+    summarize,
+)
 
 
 class LaunchAttributionTests(unittest.TestCase):
+    def test_host_wait_is_not_counted_as_device_idle(self):
+        def event(category, name, start, duration):
+            return {"cat": category, "name": name, "ph": "X", "ts": start, "dur": duration}
+
+        trace = {
+            "traceEvents": [
+                event("user_annotation", "ProfilerStep#1", 0, 100000),
+                event("kernel", "matrix_work", 0, 75000),
+                event("cpu_op", "aten::nonzero", 20000, 60000),
+                event("cpu_op", "aten::repeat_interleave", 82000, 8000),
+                event("cpu_op", "aten::repeat_interleave", 83000, 6000),
+            ]
+        }
+        ops = summarize(trace)["operations"]
+        self.assertEqual(ops["aten::nonzero"]["inclusive_host_ms_per_step"], 60)
+        self.assertEqual(ops["aten::nonzero"]["device_idle_during_host_windows_ms_per_step"], 5)
+        self.assertEqual(ops["aten::repeat_interleave"]["host_window_union_ms_per_step"], 8)
+
     def test_matrix_work_counts_once_across_multiple_delayed_kernels(self):
         events = [
             {

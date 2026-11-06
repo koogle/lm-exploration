@@ -171,9 +171,23 @@ def summarize(trace):
             and e.get("ph") == "X"
             and e.get("cat") != "gpu_user_annotation"
         ]
+        windows = []
+        for a, b in sorted(
+            (max(lo, e["ts"]), min(hi, e["ts"] + e["dur"]))
+            for e in selected
+            if e["ts"] < hi and e["ts"] + e["dur"] > lo
+        ):
+            if windows and a <= windows[-1][1]:
+                windows[-1][1] = max(windows[-1][1], b)
+            else:
+                windows.append([a, b])
+        host_union = sum(b - a for a, b in windows) / 1000 / n
         ops[name] = {
             "calls_per_step": len(selected) / n,
             "inclusive_host_ms_per_step": sum(e["dur"] for e in selected) / 1000 / n,
+            "host_window_union_ms_per_step": host_union,
+            "device_idle_during_host_windows_ms_per_step": host_union
+            - sum(busy(a, b) for a, b in windows) / 1000 / n,
         }
     grouped = collections.defaultdict(list)
     for event in kernels:
