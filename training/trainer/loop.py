@@ -65,6 +65,7 @@ def trainer_sources():
 
     return {
         "trainer": Path(__file__),
+        "timing": Path(__file__).with_name("timing.py"),
         "optimizer": Path(trainer.optimizers.__file__),
         "roles": Path(trainer.roles.__file__),
     }
