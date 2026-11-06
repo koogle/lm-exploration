@@ -135,3 +135,67 @@ class ExclusiveLedgerTests(unittest.TestCase):
             self.assertIn("\\u003c/script", p.read_text())
         with self.assertRaises(ValueError):
             timeline_data({"traceEvents": []}, "0")
+
+
+class HostDetailTests(unittest.TestCase):
+    def test_bounded_host_display_preserves_totals_and_stack(self):
+        from model_hybrid.profile_trace import host_details
+
+        events = [
+            {
+                "cat": "cpu_op",
+                "ph": "X",
+                "name": "outer",
+                "ts": -10,
+                "dur": 100,
+                "tid": 1,
+                "args": {"Call stack": "a.py:2"},
+            },
+            {
+                "cat": "cuda_runtime",
+                "ph": "X",
+                "name": "launch",
+                "ts": 10,
+                "dur": 5,
+                "tid": 1,
+                "args": {"correlation": 9},
+            },
+        ]
+        result = host_details(events, 0, 50, limit=1)
+        self.assertEqual(result["omitted_spans"], 1)
+        self.assertEqual(
+            result["totals"], [["cpu_op", "outer", 0.05], ["cuda_runtime", "launch", 0.005]]
+        )
+        self.assertIn("a.py:2", result["spans"][0][4])
+        self.assertEqual(len(result["launches"]), 1)
+
+    def test_kernel_launch_and_idle_neighbors_are_explicit(self):
+        import json
+
+        from model_hybrid.profile_trace import timeline_data
+
+        events = [
+            {"cat": "user_annotation", "ph": "X", "name": "ProfilerStep#1", "ts": 0, "dur": 100},
+            {
+                "cat": "cuda_runtime",
+                "ph": "X",
+                "name": "launch",
+                "ts": 10,
+                "dur": 3,
+                "tid": 4,
+                "args": {"correlation": 9},
+            },
+            {
+                "cat": "kernel",
+                "ph": "X",
+                "name": "gemm",
+                "ts": 20,
+                "dur": 20,
+                "args": {"correlation": 9},
+            },
+        ]
+        result = timeline_data({"traceEvents": events, "baseTimeNanoseconds": 123}, "2")
+        step = result["steps"][0]
+        self.assertEqual(json.loads(step["spans"][0][5])["launch_start_ms"], 0.01)
+        self.assertEqual(step["idle_gap_context"][-1]["preceding_launch"][3], "launch")
+        self.assertEqual(result["clock_metadata"]["baseTimeNanoseconds"], 123)

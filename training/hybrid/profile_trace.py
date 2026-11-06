@@ -294,6 +294,59 @@ def exclusive_ledger(events, lo, hi):
     }
 
 
+def host_details(events, lo, hi, limit=50000):
+    """Bound displayed host spans; totals retain all complete-duration host events."""
+    selected, totals = [], collections.Counter()
+    launches = []
+    for e in events:
+        cat = e.get("cat")
+        if e.get("ph") != "X" or cat not in (
+            "cpu_op",
+            "cuda_runtime",
+            "cuda_driver",
+            "python_function",
+        ):
+            continue
+        a, b = max(lo, e["ts"]), min(hi, e["ts"] + e["dur"])
+        if b <= a:
+            continue
+        totals[(cat, e["name"])] += (b - a) / 1000
+        args = e.get("args", {})
+        stack = args.get(
+            "Call stack", args.get("callstack", args.get("stack", "No recorded stack"))
+        )
+        detail = json.dumps(
+            {
+                "correlation": args.get("correlation"),
+                "external_id": args.get("External id"),
+                "stack": stack,
+            }
+        )
+        span = [
+            (a - lo) / 1000,
+            (b - lo) / 1000,
+            f"Host {cat} thread {e.get('tid', '?')}",
+            e["name"],
+            detail,
+        ]
+        selected.append(span)
+        if (
+            cat in ("cuda_runtime", "cuda_driver")
+            and "correlation" in args
+            and any(token in e["name"].lower() for token in ("launch", "memcpy", "memset"))
+        ):
+            launches.append(span)
+    kept = sorted(
+        sorted(selected, key=lambda x: x[1] - x[0], reverse=True)[:limit], key=lambda x: x[0]
+    )
+    return {
+        "spans": kept,
+        "omitted_spans": max(0, len(selected) - limit),
+        "totals": [[cat, name, ms] for (cat, name), ms in totals.most_common()],
+        "launches": sorted(launches, key=lambda x: x[0]),
+    }
+
+
 def timeline_data(trace, rank):
     events = trace["traceEvents"]
     steps = sorted(
@@ -313,10 +366,36 @@ def timeline_data(trace, rank):
         for e in events
         if e.get("cat") == "cpu_op" and "External id" in e.get("args", {})
     }
+    launches = {
+        e.get("args", {}).get("correlation"): e
+        for e in events
+        if e.get("cat") in ("cuda_runtime", "cuda_driver") and "correlation" in e.get("args", {})
+    }
     result = []
     for step in steps:
         lo, hi = step["ts"], step["ts"] + step["dur"]
         ledger = exclusive_ledger(events, lo, hi)
+        host_info = host_details(events, lo, hi)
+        times = [x[0] for x in host_info["launches"]]
+        gaps = []
+        for segment in ledger["segments"]:
+            if segment[2] == "idle":
+                before = bisect.bisect_right(times, segment[0]) - 1
+                after = bisect.bisect_left(times, segment[1])
+                within = host_info["launches"][before + 1 : after]
+                gaps.append(
+                    {
+                        "start_ms": segment[0],
+                        "end_ms": segment[1],
+                        "submissions_inside_gap": len(within),
+                        "first_submission_inside_gap": within[0] if within else None,
+                        "last_submission_inside_gap": within[-1] if within else None,
+                        "preceding_launch": host_info["launches"][before] if before >= 0 else None,
+                        "following_launch": host_info["launches"][after]
+                        if after < len(times)
+                        else None,
+                    }
+                )
         spans, grouped = [], collections.Counter()
         for e in events:
             cat = e.get("cat")
@@ -337,13 +416,28 @@ def timeline_data(trace, rank):
                 if device
                 else "CPU " + e["name"]
             )
-            spans.append([(a - lo) / 1000, (b - lo) / 1000, lane, e["name"], op])
+            correlation = e.get("args", {}).get("correlation")
+            launch = launches.get(correlation)
+            detail = {
+                "correlation": correlation,
+                "launch": launch.get("name") if launch else None,
+                "launch_start_ms": (launch["ts"] - lo) / 1000 if launch else None,
+                "launch_duration_ms": launch.get("dur", 0) / 1000 if launch else None,
+                "launch_thread": launch.get("tid") if launch else None,
+            }
+            spans.append(
+                [(a - lo) / 1000, (b - lo) / 1000, lane, e["name"], op, json.dumps(detail)]
+            )
             if device:
                 grouped[(op, e["name"])] += (b - a) / 1000
         ledger.update(
             {
                 "name": step["name"],
                 "spans": spans,
+                "host_spans": host_info["spans"],
+                "host_omitted_spans": host_info["omitted_spans"],
+                "host_totals": host_info["totals"],
+                "idle_gap_context": gaps,
                 "kernel_totals": [[op, name, ms] for (op, name), ms in grouped.most_common()],
                 "unattributed_kernel_sum_ms": sum(
                     ms for (op, _), ms in grouped.items() if op == "unattributed"
@@ -351,7 +445,13 @@ def timeline_data(trace, rank):
             }
         )
         result.append(ledger)
-    return {"rank": rank, "steps": result}
+    return {
+        "rank": rank,
+        "steps": result,
+        "clock_metadata": {
+            k: trace.get(k) for k in ("baseTimeNanoseconds", "host_name", "distributedInfo")
+        },
+    }
 
 
 def render_timeline(ranks, output):
