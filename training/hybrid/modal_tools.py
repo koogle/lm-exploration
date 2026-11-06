@@ -197,8 +197,9 @@ def benchmark(
             (folder / f"{name}.log").write_text("".join(lines))
             (folder / f"{name}.json").write_text(json.dumps(measurements[name], indent=2))
             runs_volume.commit()
-        if code:
+        if code and not compare_consolidation:
             break
+    code = next((m["exit_code"] for m in measurements.values() if m["exit_code"]), 0)
     lines = all_lines
     import torch
 
