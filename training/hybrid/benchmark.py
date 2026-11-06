@@ -203,7 +203,7 @@ def main():
     parser.add_argument("--hardware-counters", action="store_true")
     parser.add_argument("--reference-kda-wy", action="store_true")
     parser.add_argument("--phase-timings", action="store_true")
-    parser.add_argument("--graphed-muon", action="store_true")
+    parser.add_argument("--reference-muon", action="store_true")
     args = parser.parse_args()
     if args.hardware_counters and args.profile:
         parser.error("Counter replay and timeline profiling must run separately")
@@ -280,17 +280,17 @@ def main():
             mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
             data = ({"synthetic": True}, lambda: mixture)
         family = family_of(config)(config, run_dir, data=data)
-        if args.graphed_muon:
-            from trainer.optimizers import GraphedOrthogonalize
+        if args.reference_muon:
+            from trainer.optimizers import orthogonalize
 
             make_optimizer = family.make_optimizer
 
-            def graphed_optimizer(model):
+            def reference_optimizer(model):
                 optimizer = make_optimizer(model)
-                optimizer.muon.orthogonalize = GraphedOrthogonalize()
+                optimizer.muon.orthogonalize = orthogonalize
                 return optimizer
 
-            family.make_optimizer = graphed_optimizer
+            family.make_optimizer = reference_optimizer
         if args.reference_kda_wy:
             from unittest.mock import patch
 

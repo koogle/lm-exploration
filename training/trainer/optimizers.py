@@ -71,7 +71,14 @@ class GraphedOrthogonalize:
 class Muon(torch.optim.Optimizer):
     def __init__(self, params, *, lr, momentum, weight_decay):
         super().__init__(params, {"lr": lr, "momentum": momentum, "weight_decay": weight_decay})
-        self.orthogonalize = orthogonalize
+        first = self.param_groups[0]["params"][0]
+        self.orthogonalize = (
+            GraphedOrthogonalize()
+            if first.is_cuda
+            and first.dtype == torch.float32
+            and torch.cuda.get_device_capability(first.device) == (9, 0)
+            else orthogonalize
+        )
 
     @torch.no_grad()
     def step(self):

@@ -145,9 +145,9 @@ def benchmark(
         ]
     if compare_graphed_muon:
         cases = [
-            ("original_first", []),
-            ("graphed_muon", ["--graphed-muon"]),
-            ("original_repeat", []),
+            ("original_first", ["--reference-muon"]),
+            ("graphed_muon", []),
+            ("original_repeat", ["--reference-muon"]),
         ]
     if larger_microbatch:
         cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))
