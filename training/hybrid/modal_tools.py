@@ -73,6 +73,7 @@ def benchmark(
     kda_save_intermediates=False,
     required_gpu_model="",
     hardware_kernel="",
+    compare_kda_wy=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -132,6 +133,8 @@ def benchmark(
         if compare_output_gradient
         else [("direct", [])]
     )
+    if compare_kda_wy:
+        cases = [("original_first", []), ("kda_wy", ["--kda-wy"]), ("original_repeat", [])]
     if larger_microbatch:
         cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))
     if autotune:
@@ -286,6 +289,7 @@ def bench(
     kda_save_intermediates: bool = False,
     require_gpu_model: bool = False,
     hardware_kernel: str = "",
+    compare_kda_wy: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -300,6 +304,7 @@ def bench(
         sum(
             [
                 compare_output_gradient,
+                compare_kda_wy,
                 bool(larger_microbatch),
                 autotune,
                 kda_save_intermediates,
@@ -320,6 +325,7 @@ def bench(
         if (
             profile
             or compare_output_gradient
+            or compare_kda_wy
             or larger_microbatch
             or autotune
             or kda_save_intermediates
@@ -353,6 +359,7 @@ def bench(
         kda_save_intermediates,
         gpu if require_gpu_model else "",
         hardware_kernel,
+        compare_kda_wy,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)
