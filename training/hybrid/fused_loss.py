@@ -92,6 +92,48 @@ def fused_cross_entropy(hidden, weight, labels, z_loss, chunk_size):
     return FusedLinearCrossEntropy.apply(hidden, weight, labels, z_loss, chunk_size)
 
 
+@torch.library.custom_op("hybrid::joint_loss_forward", mutates_args=())
+def _joint_forward(
+    hidden: torch.Tensor,
+    future: torch.Tensor,
+    weight: torch.Tensor,
+    labels: torch.Tensor,
+    mtp_labels: torch.Tensor,
+    ntp_scale: torch.Tensor,
+    mtp_scale: torch.Tensor,
+    z_loss: float,
+    chunk_size: int,
+) -> tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+]:
+    """Opaque compiler boundary: retain the shared buffer without unrolling both heads into FX."""
+    accumulate = torch.float64 if hidden.dtype == torch.float64 else torch.float32
+    grad_weight = torch.zeros_like(weight, dtype=accumulate)
+    first, ce, z = _loss_grad(hidden, weight, labels, z_loss, chunk_size, grad_weight, ntp_scale)
+    second, mtp_ce, mtp_z = _loss_grad(
+        future, weight, mtp_labels, z_loss, chunk_size, grad_weight, mtp_scale
+    )
+    objective = ntp_scale * (ce + z_loss * z) + mtp_scale * (mtp_ce + z_loss * mtp_z)
+    return objective, ce, z, mtp_ce, mtp_z, first, second, grad_weight
+
+
+@_joint_forward.register_fake
+def _(hidden, future, weight, labels, mtp_labels, ntp_scale, mtp_scale, z_loss, chunk_size):
+    accumulate = torch.float64 if hidden.dtype == torch.float64 else torch.float32
+    compute = torch.bfloat16 if hidden.is_cuda else hidden.dtype
+    stats = tuple(hidden.new_empty((), dtype=accumulate) for _ in range(5))
+    first = hidden.new_empty((hidden.numel() // hidden.shape[-1], hidden.shape[-1]), dtype=compute)
+    second = future.new_empty((future.numel() // future.shape[-1], future.shape[-1]), dtype=compute)
+    return *stats, first, second, torch.empty_like(weight, dtype=accumulate)
+
+
 class JointLinearCrossEntropy(torch.autograd.Function):
     """Two weighted objectives sharing one FP32 output-weight gradient buffer."""
 
@@ -99,25 +141,14 @@ class JointLinearCrossEntropy(torch.autograd.Function):
     def forward(
         ctx, hidden, future, weight, labels, mtp_labels, ntp_scale, mtp_scale, z_loss, chunk_size
     ):
-        accumulate = torch.float64 if hidden.dtype == torch.float64 else torch.float32
-        grad_weight = torch.zeros_like(weight, dtype=accumulate)
-        first, ce, z = _loss_grad(
-            hidden, weight, labels, z_loss, chunk_size, grad_weight, ntp_scale
-        )
-        second, mtp_ce, mtp_z = _loss_grad(
-            future, weight, mtp_labels, z_loss, chunk_size, grad_weight, mtp_scale
+        objective, ce, z, mtp_ce, mtp_z, first, second, grad_weight = _joint_forward(
+            hidden, future, weight, labels, mtp_labels, ntp_scale, mtp_scale, z_loss, chunk_size
         )
         ctx.save_for_backward(first, second, grad_weight, ntp_scale, mtp_scale)
         ctx.hidden_meta = ((hidden.shape, hidden.dtype), (future.shape, future.dtype))
         ctx.weight_dtype = weight.dtype
         ctx.mark_non_differentiable(ce, z, mtp_ce, mtp_z)
-        return (
-            ntp_scale * (ce + z_loss * z) + mtp_scale * (mtp_ce + z_loss * mtp_z),
-            ce,
-            z,
-            mtp_ce,
-            mtp_z,
-        )
+        return objective, ce, z, mtp_ce, mtp_z
 
     @staticmethod
     def backward(ctx, upstream, _ce, _z, _mtp_ce, _mtp_z):
