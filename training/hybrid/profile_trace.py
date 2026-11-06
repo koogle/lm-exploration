@@ -456,6 +456,138 @@ def timeline_data(trace, rank):
     }
 
 
+def compact_rank_summary(trace, rank):
+    """Exact per-step accounting without retaining host spans or full trace payloads."""
+    events = trace["traceEvents"]
+    steps = sorted(
+        (
+            e
+            for e in events
+            if e.get("ph") == "X"
+            and e.get("cat") == "user_annotation"
+            and e.get("name", "").startswith("ProfilerStep")
+        ),
+        key=lambda e: e["ts"],
+    )
+    if not steps:
+        raise ValueError("Trace has no complete ProfilerStep windows")
+    device = [
+        e
+        for e in events
+        if e.get("ph") == "X" and e.get("cat") in ("kernel", "gpu_memcpy", "gpu_memset")
+    ]
+    rows = []
+    for step in steps:
+        a, b = step["ts"], step["ts"] + step["dur"]
+        row = exclusive_ledger(device, a, b)
+        row.pop("segments")
+        active = [e for e in device if e["ts"] < b and e["ts"] + e["dur"] > a]
+        row.update(
+            {
+                "name": step["name"],
+                "start_us": a,
+                "end_us": b,
+                "first_device_us": min((max(a, e["ts"]) for e in active), default=None),
+                "last_device_us": max((min(b, e["ts"] + e["dur"]) for e in active), default=None),
+                "device_event_count": len(active),
+            }
+        )
+        rows.append(row)
+    return {
+        "rank": rank,
+        "steps": rows,
+        "clock_metadata": {
+            k: trace.get(k) for k in ("baseTimeNanoseconds", "host_name", "distributedInfo")
+        },
+    }
+
+
+def aligned_step_summary(ranks, provenance):
+    """Conditional alignment: metadata consistency checks are not clock calibration."""
+    if not provenance or not provenance.strip():
+        raise ValueError("Shared-host alignment requires explicit run/worker provenance")
+    if len(ranks) < 2:
+        raise ValueError("Alignment requires at least two rank traces")
+    world_sizes, hosts, identities = set(), set(), []
+    for rank in ranks:
+        metadata = rank["clock_metadata"]
+        base = metadata.get("baseTimeNanoseconds")
+        info = metadata.get("distributedInfo") or {}
+        actual, world = info.get("rank"), info.get("world_size")
+        if not isinstance(base, int) or base <= 0:
+            raise ValueError("Every trace needs an integer baseTimeNanoseconds")
+        if not isinstance(actual, int) or not isinstance(world, int) or not 0 <= actual < world:
+            raise ValueError("Every trace needs valid distributedInfo rank/world_size")
+        if str(actual) != str(rank["rank"]):
+            raise ValueError("Rank label disagrees with distributedInfo")
+        if not metadata.get("host_name"):
+            raise ValueError("Every trace needs host_name metadata")
+        identities.append(actual)
+        world_sizes.add(world)
+        hosts.add(metadata["host_name"])
+    if len(set(identities)) != len(identities) or len(world_sizes) != 1 or len(hosts) != 1:
+        raise ValueError("Rank, world-size or host metadata are inconsistent")
+    names = [{s["name"] for s in r["steps"]} for r in ranks]
+    common = set.intersection(*names)
+    if not common:
+        raise ValueError("No common profiled step labels")
+
+    def absolute(rank, value):
+        return rank["clock_metadata"]["baseTimeNanoseconds"] + round(value * 1000)
+
+    output = []
+    for name in sorted(common):
+        selected = [(r, next(s for s in r["steps"] if s["name"] == name)) for r in ranks]
+        origin = min(absolute(r, s["start_us"]) for r, s in selected)
+        rows = []
+        for rank, step in selected:
+            row = {
+                "rank": rank["rank"],
+                "window_ms": step["window_ms"],
+                "exclusive_ms": step["exclusive_ms"],
+                "residual_ms": step["residual_ms"],
+            }
+            for key in ("start_us", "end_us", "first_device_us", "last_device_us"):
+                row[key.replace("_us", "_offset_ms")] = (
+                    (absolute(rank, step[key]) - origin) / 1e6 if step[key] is not None else None
+                )
+            rows.append(row)
+        completions = [r for r in rows if r["last_device_offset_ms"] is not None]
+        latest = max((r["last_device_offset_ms"] for r in completions), default=None)
+        output.append(
+            {
+                "step": name,
+                "origin_ns": origin,
+                "ranks": rows,
+                "latest_observed_device_ranks": [
+                    r["rank"] for r in completions if r["last_device_offset_ms"] == latest
+                ],
+                "device_finish_spread_ms": latest
+                - min(r["last_device_offset_ms"] for r in completions)
+                if completions
+                else None,
+                "step_end_spread_ms": max(r["end_offset_ms"] for r in rows)
+                - min(r["end_offset_ms"] for r in rows),
+            }
+        )
+    return {
+        "alignment": "assumed shared-host clock; metadata consistency checked, no clock calibration proof",
+        "provenance": provenance,
+        "formula": "baseTimeNanoseconds + round(ts_microseconds * 1000)",
+        "assumptions": [
+            "provenance identifies the same worker and run",
+            "identical step labels refer to the same global steps",
+            "CUPTI host/GPU clock conversion is consistent across supplied processes",
+        ],
+        "limits": "host_name alone (including 'modal') is not a unique host identity. Latest observed device completion includes collective work and waits; it does not identify the causal critical rank.",
+        "missing_ranks": sorted(set(range(next(iter(world_sizes)))) - set(identities)),
+        "unmatched_step_labels": {
+            r["rank"]: sorted(n - common) for r, n in zip(ranks, names, strict=True)
+        },
+        "steps": output,
+    }
+
+
 def render_timeline(ranks, output):
     compact = copy.deepcopy(ranks)
     strings, indices = [], {}
@@ -494,7 +626,20 @@ def main():
     )
     parser.add_argument("--output", required=True)
     parser.add_argument("--html")
+    parser.add_argument(
+        "--compact",
+        action="store_true",
+        help="Only per-rank/per-step ledgers; avoid large timelines",
+    )
+    parser.add_argument(
+        "--align-shared-host-provenance",
+        help="Explicit same-worker/run clock assumption and provenance; compact mode only",
+    )
     args = parser.parse_args()
+    if args.compact and args.html:
+        parser.error("Compact summaries do not include an HTML timeline")
+    if args.align_shared_host_provenance and not args.compact:
+        parser.error("Shared-host alignment requires --compact")
     labels = args.rank or [str(i) for i in range(len(args.trace))]
     if len(labels) != len(args.trace) or len(set(labels)) != len(labels):
         parser.error("Supply one distinct rank label per trace")
@@ -502,13 +647,21 @@ def main():
     for path, rank in zip(args.trace, labels, strict=True):
         with gzip.open(path) as handle:
             trace = json.load(handle)
-        ranks.append(timeline_data(trace, rank))
-        audits.append({"rank": rank, "audit": summarize(trace)})
+        ranks.append(
+            compact_rank_summary(trace, rank) if args.compact else timeline_data(trace, rank)
+        )
+        if not args.compact:
+            audits.append({"rank": rank, "audit": summarize(trace)})
+        del trace
     result = {
         "ranks": ranks,
         "audits": audits,
-        "scope": "Profiler-instrumented traces; each rank has its own clock/window. No cross-rank alignment or causal attribution of CPU waits. Missing ranks are not inferred. Kernel sums overlap and are separate from the exclusive ledger.",
+        "scope": "Profiler-instrumented traces; each rank has its own clock/window. Default views are independent; optional conditional_alignment records explicit shared-clock assumptions, not clock calibration or causal attribution. Missing ranks are not inferred. Kernel sums overlap and are separate from the exclusive ledger.",
     }
+    if args.align_shared_host_provenance:
+        result["conditional_alignment"] = aligned_step_summary(
+            ranks, args.align_shared_host_provenance
+        )
     Path(args.output).write_text(json.dumps(result) + "\n")
     if args.html:
         render_timeline(ranks, args.html)

@@ -205,3 +205,53 @@ class HostDetailTests(unittest.TestCase):
         self.assertEqual(json.loads(step["spans"][0][5])["launch_start_ms"], 0.01)
         self.assertEqual(step["idle_gap_context"][-1]["preceding_launch"][3], "launch")
         self.assertEqual(result["clock_metadata"]["baseTimeNanoseconds"], 123)
+
+
+class RankAlignmentTests(unittest.TestCase):
+    @staticmethod
+    def trace(rank, base=1000000000, start=100):
+        return {
+            "baseTimeNanoseconds": base,
+            "host_name": "modal",
+            "distributedInfo": {"rank": rank, "world_size": 2},
+            "traceEvents": [
+                {"cat": "user_annotation", "ph": "X", "name": "ProfilerStep#6", "ts": start, "dur": 100},
+                {"cat": "kernel", "ph": "X", "name": "work", "ts": start + 10, "dur": 60},
+            ],
+        }
+
+    def test_compact_partition_and_absolute_offsets(self):
+        from model_hybrid.profile_trace import aligned_step_summary, compact_rank_summary
+
+        ranks = [
+            compact_rank_summary(self.trace(0), "0"),
+            compact_rank_summary(self.trace(1, 1000001000, 102), "1"),
+        ]
+        self.assertNotIn("segments", ranks[0]["steps"][0])
+        self.assertAlmostEqual(sum(ranks[0]["steps"][0]["exclusive_ms"].values()), 0.1)
+        result = aligned_step_summary(ranks, "same Modal worker test-id; same torchrun")
+        self.assertEqual(result["steps"][0]["latest_observed_device_ranks"], ["1"])
+        self.assertAlmostEqual(result["steps"][0]["device_finish_spread_ms"], 0.003)
+        self.assertEqual(result["missing_ranks"], [])
+
+    def test_hostname_alone_does_not_authorize_alignment(self):
+        from model_hybrid.profile_trace import aligned_step_summary, compact_rank_summary
+
+        ranks = [compact_rank_summary(self.trace(i), str(i)) for i in range(2)]
+        with self.assertRaises(ValueError):
+            aligned_step_summary(ranks, "")
+        ranks[1]["clock_metadata"]["baseTimeNanoseconds"] = None
+        with self.assertRaises(ValueError):
+            aligned_step_summary(ranks, "worker")
+
+    def test_rank_metadata_and_world_must_agree(self):
+        from model_hybrid.profile_trace import aligned_step_summary, compact_rank_summary
+
+        ranks = [compact_rank_summary(self.trace(i), str(i)) for i in range(2)]
+        ranks[1]["clock_metadata"]["distributedInfo"]["world_size"] = 8
+        with self.assertRaises(ValueError):
+            aligned_step_summary(ranks, "worker")
+        ranks[1]["clock_metadata"]["distributedInfo"]["world_size"] = 2
+        ranks[1]["rank"] = "0"
+        with self.assertRaises(ValueError):
+            aligned_step_summary(ranks, "worker")
