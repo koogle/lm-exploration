@@ -190,3 +190,42 @@ by all KDA layers in each microbatch. A test covers EOS boundaries, row boundari
 and isolation between different batches. The benchmark can restore per-layer
 reconstruction for a matched reference. Its eight-H100 comparison is pending;
 full training remains held and no speedup is claimed for this change yet.
+
+
+## November 6: shared offsets and batched Muon qualification
+
+The completed shared-offset comparison ran on eight verified H100 80GB HBM3s.
+Within that allocation, per-layer offset reconstruction measured 302,081 tokens/s
+and 27.78% MFU; shared offsets measured 313,340 tokens/s and 28.84% MFU: a 3.7%
+throughput gain. Both completed 30 steps with 25 timed, identical first main loss,
+and final main losses differing by 0.000036. This comparison reconstructed offsets
+in the mask property; the follow-up restores reconstruction inside `kda_kernel`,
+at its original call site, to control for compiler-boundary changes. Cross-host
+throughput differences are not used as evidence of a software speedup.
+
+The completed eight-H100 diagnostic confirms the repeated 144 `nonzero` calls per
+step and an eager optimizer host phase around 176 ms, with roughly 96 ms of GPU
+activity during that phase. NCCL kernel times across the three profiled steps were
+40, 562 and 42 ms; the large spike makes the average unreliable as a steady-state
+communication estimate. Communication settings remain unchanged.
+
+Muon now supports bounded batches of equal-shape, equal-dtype, same-device
+matrices within each parameter group. Every matrix keeps its own normalization,
+momentum buffer and aspect-ratio scaling. The default remains one matrix at a
+time. The benchmark candidate uses batches of up to 16, reducing GEMM dispatch
+without changing the optimizer equations. No production recipe enables batching
+yet.
+
+CPU tests cover different shapes and learning rates, zero and absent gradients,
+partial batches, momentum agreement and state restore. H100 CUDA checks cover the
+production matrix dimensions, a full batch of 16 and partial batches over four
+steps. Tested updates and momentum buffers match the individual-matrix reference
+exactly. This is a correctness result, not a speed or long-run training claim.
+
+One bounded eight-H100 comparison is queued for four sequential arms on the same
+allocation: original kernel-local document setup, shared offsets, shared offsets
+plus batched Muon, then the original setup again. All use the frozen real mixture,
+context 4096, global rows 256, microbatch 4 and 30 steps. The final repeated
+baseline checks for clock/warm-up drift. Per-case outputs persist immediately;
+server timeout remains 30 minutes, retries zero, with an independent launch
+supervisor. Full pretraining remains held pending this qualification.
