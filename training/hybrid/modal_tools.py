@@ -418,6 +418,9 @@ def bench(
     rows = global_rows or (
         settings["global_rows"] if gpus == 8 else 8 * (microbatch or settings["microbatch"]) * gpus
     )
+    from model_hybrid.benchmark import validate_window
+
+    validate_window(settings, rows, steps, profile)
     deadline = new_deadline()
     run_id = run_id or f"bench-{time.time_ns()}"
     requested_gpu = "H100!" if gpu == "H100" and require_gpu_model else gpu

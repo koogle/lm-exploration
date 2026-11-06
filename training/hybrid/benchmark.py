@@ -68,6 +68,16 @@ class SyntheticMixture:
         """Synthetic batches have no cursor."""
 
 
+def validate_window(settings, rows, steps, profile=False):
+    """Reject a benchmark that would stop before its requested timing window."""
+    if steps <= 0 or rows <= 0:
+        raise ValueError("Benchmark steps and global rows must be positive")
+    if settings["target_tokens"] < steps * rows * settings["model"]["block_size"]:
+        raise ValueError("Config token budget would end before requested benchmark steps")
+    if profile and steps < PROFILE_SKIP + PROFILE_STEPS + 1:
+        raise ValueError("Profile requires warmup, full capture and a post-capture step")
+
+
 def summarize(lines, skip=5):
     """Median throughput and MFU of the steps after the first `skip` (compile, warmup)."""
     steps = [json.loads(line) for line in lines if line.startswith('{"step"')]
