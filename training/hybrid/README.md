@@ -540,3 +540,46 @@ the byte decoding, mixture weights and held-out windows; with the GLM tokenizer
 downloaded, that GLM tokens decode to the exact UTF-8 text. The CUDA check compares
 a compiled bf16 H-Net's loss with its fp64 CPU reference and checks document
 isolation when compiled.
+
+## Hardware-counter profiling
+
+`hardware_counters.py` uses Nsight Compute to measure individual kernels from the
+existing benchmark. First check counter access on one exact H100:
+
+```sh
+uv run modal run --detach -m model_hybrid.modal_tools::counters_probe \
+  --run-id <access-run> --output artifacts/results/counter-access.json
+```
+
+The probe requires actual metric rows; CUDA execution alone is insufficient. Its
+five-minute function timeout and independent 15-minute launch supervisor bound
+cost. `ERR_NVGPUCTRPERM` means the host driver/container permissions prevent
+collection; it is not a measurement of GPU performance. Host-admin/provider
+configuration is required to enable counters in that case.
+
+After a successful probe, collect one selected kernel invocation on rank zero,
+using the foundation mixture and the eight-H100 run's per-rank batch shapes:
+
+```sh
+uv run modal run --detach -m model_hybrid.modal_tools::bench \
+  --config hybrid/configs/kda-960m-100b.json \
+  --gpus 1 --gpu H100 --require-gpu-model --microbatch 4 --global-rows 32 \
+  --steps 8 --real-data --run-id <counter-run> \
+  --hardware-kernel chunk_kda_bwd_kernel_intra
+```
+
+The wrapper starts collection after six warmup steps and profiles a single matching
+launch in step seven. Kernel choices are in `hardware_counters.KERNELS`; collect
+separate runs for the two expensive KDA backward kernels, softmax, dtype copies,
+and a dense GEMM. Nsight sections cover compute/memory throughput, scheduling,
+warp stalls, launch resources and achieved occupancy. Kernel replay is restricted to one GPU after an eight-GPU profiling attempt
+failed with NVLink/peer-memory errors. Use the eight-GPU timeline for communication
+and overlap; isolated counters cannot measure DDP contention. Clocks and cache-control overrides are disabled.
+This is a sample of one kernel invocation, not a distribution over document shapes.
+The recipe context must match the model context.
+
+The existing benchmark timeout/supervisor bounds the run. Results, raw `.ncu-rep`,
+CSV metrics and logs go under `throughput/<run-id>/` on the hybrid runs volume.
+`throughput_valid` is false during counter replay: use separate uninstrumented
+runs for throughput and MFU. The collector rejects empty reports instead of treating
+successful process exit as successful profiling.

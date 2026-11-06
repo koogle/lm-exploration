@@ -348,3 +348,31 @@ are not treated as measured hardware utilization. Kernel resource metadata and
 arithmetic/traffic budgets are archived with these explicit limitations. Hardware
 counter profiling, rather than another speculative optimization, is the missing
 evidence needed for a firmer kernel-level root cause.
+
+### Hardware-counter access (2026-11-06)
+
+Nsight Compute 2025.3.1 can collect hardware counters on the tested Modal H100
+80GB HBM3 hosts (driver 610.57.04). The initial probe failed because Nsight's
+default clock locking was rejected by the host. Setting `--clock-control none`
+allowed actual `sm__cycles_elapsed.avg` and `dram__bytes_read.sum` measurements;
+this was not a counter-permission denial. Both attempts are preserved in the
+[HF evidence archive](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105),
+under `counter-access-h100` and `counter-access-h100-02`.
+
+The existing benchmark now supports bounded Nsight collection after six warmup
+steps. An attempted eight-H100 kernel replay failed with NVSwitch SXid 12028,
+GPU Xids 137/94 and peer-memory errors when replay began; it produced no valid
+training-kernel counters. That attempt also used an older study recipe with 2K
+windows, caught from its actual token counts; it is setup evidence, not a 4K
+qualification. The benchmark now rejects recipe/model context mismatches.
+
+Kernel replay is restricted to one H100. The isolated diagnostic uses the
+foundation mixture, context 4096, microbatch 4 and global batch 32 (the eight-GPU
+run's per-rank workload). The data cursor differs from rank zero of the full
+eight-GPU job. These counters cannot measure DDP contention or replace the
+eight-GPU timing trace. A selected kernel invocation is replayed for
+compute/memory throughput, occupancy, scheduler and warp-stall sections. Raw
+reports and CSV metrics accompany the run logs. Replayed timings are explicitly
+excluded from throughput/MFU summaries. Provider clocks and caches are unmanaged;
+replay passes may observe different cache states and clocks. These are sampled
+kernel diagnostics, not a whole-run or whole-cluster utilization measurement.
