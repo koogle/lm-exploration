@@ -14,6 +14,7 @@ mismatch.
 """
 
 import time
+from itertools import pairwise
 
 import torch
 from model_hybrid import hnet, kda, model
@@ -472,7 +473,7 @@ def checks(only=""):
         def counted(*args, **kwargs):
             gates = kwargs["g"] if "g" in kwargs else args[2]
             offsets = kwargs["cu_seqlens"].tolist()
-            start = next(a for a, b in zip(offsets, offsets[1:]) if b - a >= 16)
+            start = next(a for a, b in pairwise(offsets) if b - a >= 16)
             block = gates[0, start : start + 16].reshape(16, -1, 32)
             spans = (block.amax(0) - block.amin(0)).amax(-1)
             ranges.append(
