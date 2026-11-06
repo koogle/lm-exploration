@@ -464,6 +464,39 @@ def checks(only=""):
                 torch.testing.assert_close(actual, expected, rtol=0, atol=0)
             results.append({"shape": shape, "replays": 3, "bitwise_equal": True})
         return {"graphed_muon": results}
+    if only == "kda_intra_backend":
+        from model_hybrid import kda_bench, kda_intra
+
+        ranges = []
+
+        def counted(*args, **kwargs):
+            gates = kwargs["g"] if "g" in kwargs else args[2]
+            offsets = kwargs["cu_seqlens"].tolist()
+            start = next(a for a, b in zip(offsets, offsets[1:]) if b - a >= 16)
+            block = gates[0, start : start + 16].reshape(16, -1, 32)
+            spans = (block.amax(0) - block.amin(0)).amax(-1)
+            ranges.append(
+                {"fast_tiles": int((spans <= 32).sum()), "scalar_tiles": int((spans > 32).sum())}
+            )
+            return kda_intra.backward(*args, **kwargs)
+
+        kda_intra.H100Intra.chunk_kda_bwd_intra = staticmethod(counted)
+        kda_intra.install()
+        cases = {
+            str(shift): kda_bench.accuracy(
+                kda.kda_kernel,
+                torch.bfloat16,
+                length=65,
+                width=128,
+                tolerance=2e-2,
+                gate_bias_shift=shift,
+            )
+            for shift in (0, 4)
+        }
+        assert len(ranges) == 2, ranges
+        assert sum(x["fast_tiles"] for x in ranges) > 0, ranges
+        assert sum(x["scalar_tiles"] for x in ranges) > 0, ranges
+        return {"gpu": torch.cuda.get_device_name(), "cases": cases, "guard_ranges": ranges}
     if only == "kda_intra_accuracy":
         import importlib
         from unittest.mock import patch
