@@ -1,0 +1,140 @@
+"""H100 correctness gates and isolated timings for the three consolidation candidates."""
+
+import copy
+from functools import partial
+
+import torch
+import triton.testing
+from model_10m.model import RMSNorm
+from model_hybrid import kda_intra, kda_wy, model
+from model_hybrid.consolidation import configure
+from model_hybrid.fused_loss import fused_cross_entropy, joint_cross_entropy
+from model_hybrid.kernels.rmsnorm import rms_norm
+
+
+def errors(actual, reference, tolerance):
+    values = []
+    for a, b in zip(actual, reference, strict=True):
+        assert torch.isfinite(a).all() and torch.isfinite(b).all()
+        error = ((a.float() - b.float()).abs().max() / b.float().abs().max().clamp_min(1e-8)).item()
+        if error > tolerance:
+            raise AssertionError(f"normalized error {error} exceeds {tolerance}")
+        values.append(error)
+    return values
+
+
+def timing(function):
+    function()
+    torch.cuda.synchronize()
+    return [triton.testing.do_bench_cudagraph(function, rep=100) for _ in range(3)]
+
+
+def norm_check():
+    results = []
+    for rows, width in ((13, 128), (257, 1536), (24576, 1536)):
+        torch.manual_seed(rows)
+        x = torch.randn(rows, width, device="cuda", requires_grad=True)
+        norm = RMSNorm(width).cuda()
+        norm.weight.data.uniform_(0.5, 1.5)
+        dy = torch.randn_like(x)
+        original = torch.compile(norm)
+        revised = torch.compile(lambda value, norm=norm: rms_norm(value, norm.weight, norm.eps))
+
+        def run(function, x=x, norm=norm, dy=dy):
+            y = function(x)
+            return (y, *torch.autograd.grad(y, (x, norm.weight), dy))
+
+        reference = run(original)
+        actual = run(revised)
+        row = {"shape": [rows, width], "errors": errors(actual, reference, 2e-5)}
+        if rows == 24576:
+            row["original_ms"] = timing(partial(run, original))
+            row["revised_ms"] = timing(partial(run, revised))
+        results.append(row)
+    return results
+
+
+def joint_check():
+    torch.manual_seed(41)
+    first = torch.randn(2048, 1536, device="cuda", requires_grad=True)
+    second = torch.randn(513, 1536, device="cuda", requires_grad=True)
+    weight = (torch.randn(154880, 1536, device="cuda") * 0.02).requires_grad_()
+    y = torch.randint(0, 154880, (2048,), device="cuda")
+    future = torch.randint(0, 154880, (513,), device="cuda")
+    y[::7], future[::3] = -100, -100
+    scales = (torch.tensor(1 / 1048576, device="cuda"), torch.tensor(0.3 / 524288, device="cuda"))
+
+    def separate():
+        a = fused_cross_entropy(first, weight, y, 1e-4, 512)
+        b = fused_cross_entropy(second, weight, future, 1e-4, 512)
+        loss = 8 * (scales[0] * a[0] + scales[1] * b[0])
+        return loss, *torch.autograd.grad(loss, (first, second, weight))
+
+    def joint():
+        loss = 8 * joint_cross_entropy(first, second, weight, y, future, scales, 1e-4, 512)[0]
+        return loss, *torch.autograd.grad(loss, (first, second, weight))
+
+    reference = separate()
+    actual = joint()
+    result = {"errors": errors(actual, reference, 2e-5)}
+    del reference, actual
+    result["original_ms"], result["revised_ms"] = timing(separate), timing(joint)
+    return result
+
+
+def model_check():
+    kda_wy.install()
+    kda_intra.install()
+    torch.manual_seed(37)
+    config = model.HybridConfig(
+        vocab_size=521,
+        eos_id=2,
+        block_size=128,
+        n_layer=2,
+        n_embd=256,
+        n_head=2,
+        n_kv_head=1,
+        head_dim=128,
+        n_kda_head=2,
+        mlp_hidden=512,
+        layer_pattern=("kda", "full"),
+        mtp=True,
+    )
+    original = model.HybridLM(config).cuda()
+    tokens = torch.randint(3, 521, (2, 65), device="cuda")
+    tokens[:, 31] = 2
+    labels = torch.randint(3, 521, tokens.shape, device="cuda")
+    labels[:, -3:] = -100
+    future = labels.roll(-1, 1)
+    future[:, -1] = -100
+    scales = (torch.tensor(1 / 256, device="cuda"), torch.tensor(0.3 / 254, device="cuda"))
+
+    def run(lm, joint):
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            result = lm(tokens, labels, future, loss_scales=scales if joint else None)
+            loss = (
+                result["objective"]
+                if joint
+                else scales[0] * result["loss"] + scales[1] * result["mtp_loss"]
+            )
+        return (loss, *torch.autograd.grad(loss, tuple(lm.parameters())))
+
+    reference = run(torch.compile(original), False)
+    results = {}
+    for candidate in ("joint-loss", "projections", "norm", "all"):
+        revised = copy.deepcopy(original)
+        configure(revised, candidate)
+        actual = run(torch.compile(revised), candidate in ("joint-loss", "all"))
+        results[candidate] = errors(actual, reference, 0.03)
+        del revised, actual
+    return results
+
+
+def checks():
+    assert torch.cuda.get_device_capability() == (9, 0)
+    return {
+        "gpu": torch.cuda.get_device_name(),
+        "norm": norm_check(),
+        "joint": joint_check(),
+        "model": model_check(),
+    }

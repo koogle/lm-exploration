@@ -649,6 +649,18 @@ class HybridFamily:
         return int(generator.integers(1, config.n_loops + 1))
 
     def loss(self, model, inputs, labels, extras, counts, progress):
+        if getattr(self, "joint_loss", False):
+            weight = hybrid.mtp_weight(self.model_config, progress["tokens"] / self.target_tokens)
+            scales = (
+                counts["ntp"].reciprocal(),
+                weight / (counts["mtp"].clamp_min(1) * self.model_config.mtp_loss_fraction),
+            )
+            losses = model(inputs, labels, extras["mtp_labels"], loss_scales=scales)
+            return losses["objective"], {
+                "ce": losses["ce"],
+                "z": losses["z"],
+                "mtp_ce": losses["mtp_ce"],
+            }
         if self.model_config.looped:
             loops = self.loop_count(progress)
             self.loop_counts.append(loops)

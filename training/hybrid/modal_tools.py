@@ -77,6 +77,7 @@ def benchmark(
     phase_timings=False,
     compare_graphed_muon=False,
     compare_intra=False,
+    compare_consolidation=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -156,6 +157,15 @@ def benchmark(
             ("adaptive_intra", []),
             ("original_repeat", ["--reference-intra"]),
         ]
+    if compare_consolidation:
+        cases = (
+            [("original_first", [])]
+            + [
+                (candidate, ["--consolidation", candidate])
+                for candidate in ("joint-loss", "projections", "norm", "all")
+            ]
+            + [("original_repeat", [])]
+        )
     if larger_microbatch:
         cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))
         cases.append(("original_repeat", []))
@@ -315,6 +325,7 @@ def bench(
     phase_timings: bool = False,
     compare_graphed_muon: bool = False,
     compare_intra: bool = False,
+    compare_consolidation: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -332,6 +343,7 @@ def bench(
                 compare_kda_wy,
                 compare_graphed_muon,
                 compare_intra,
+                compare_consolidation,
                 bool(larger_microbatch),
                 autotune,
                 kda_save_intermediates,
@@ -355,6 +367,7 @@ def bench(
             or compare_kda_wy
             or compare_graphed_muon
             or compare_intra
+            or compare_consolidation
             or larger_microbatch
             or autotune
             or kda_save_intermediates
@@ -392,6 +405,7 @@ def bench(
         phase_timings,
         compare_graphed_muon,
         compare_intra,
+        compare_consolidation,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)

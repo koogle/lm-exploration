@@ -5,9 +5,11 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <cublas_v2.h>
 #include <climits>
+#include <optional>
 #include <torch/extension.h>
 
-void accumulate(torch::Tensor destination, torch::Tensor grad, torch::Tensor hidden) {
+void accumulate_impl(torch::Tensor destination, torch::Tensor grad, torch::Tensor hidden,
+                     const std::optional<torch::Tensor>& coefficients) {
   TORCH_CHECK(destination.is_cuda() && grad.is_cuda() && hidden.is_cuda(), "CUDA tensors required");
   TORCH_CHECK(destination.device() == grad.device() && grad.device() == hidden.device(), "device mismatch");
   TORCH_CHECK(destination.scalar_type() == torch::kFloat32 &&
@@ -24,14 +26,39 @@ void accumulate(torch::Tensor destination, torch::Tensor grad, torch::Tensor hid
   c10::cuda::CUDAGuard guard(destination.device());
   auto handle = at::cuda::getCurrentCUDABlasHandle();
   const float alpha = 1.0f, beta = 1.0f;
+  cublasPointerMode_t previous;
+  TORCH_CHECK(cublasGetPointerMode(handle, &previous) == CUBLAS_STATUS_SUCCESS, "get pointer mode failed");
+  if (coefficients) {
+    TORCH_CHECK(coefficients->is_cuda() && coefficients->device() == destination.device() &&
+                coefficients->scalar_type() == torch::kFloat32 && coefficients->is_contiguous() &&
+                coefficients->numel() == 2, "device FP32 [alpha, beta] required");
+  }
+  TORCH_CHECK(cublasSetPointerMode(handle, coefficients ? CUBLAS_POINTER_MODE_DEVICE : CUBLAS_POINTER_MODE_HOST)
+              == CUBLAS_STATUS_SUCCESS, "set pointer mode failed");
+  const float* alpha_ptr = coefficients ? coefficients->data_ptr<float>() : &alpha;
+  const float* beta_ptr = coefficients ? coefficients->data_ptr<float>() + 1 : &beta;
   // Row-major C[V,D] is column-major C^T[D,V] = H^T[D,R] @ G[R,V].
   const auto status = cublasGemmEx(
-      handle, CUBLAS_OP_N, CUBLAS_OP_T, width, vocab, rows, &alpha,
+      handle, CUBLAS_OP_N, CUBLAS_OP_T, width, vocab, rows, alpha_ptr,
       hidden.data_ptr(), CUDA_R_16BF, width,
-      grad.data_ptr(), CUDA_R_16BF, vocab, &beta,
+      grad.data_ptr(), CUDA_R_16BF, vocab, beta_ptr,
       destination.data_ptr(), CUDA_R_32F, width,
       CUBLAS_COMPUTE_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+  const auto restore = cublasSetPointerMode(handle, previous);
   TORCH_CHECK(status == CUBLAS_STATUS_SUCCESS, "output-gradient GEMM failed: ", int(status));
+  TORCH_CHECK(restore == CUBLAS_STATUS_SUCCESS, "restore pointer mode failed");
 }
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) { m.def("accumulate", &accumulate); }
+void accumulate(torch::Tensor destination, torch::Tensor grad, torch::Tensor hidden) {
+  accumulate_impl(destination, grad, hidden, std::nullopt);
+}
+
+void accumulate_scaled(torch::Tensor destination, torch::Tensor grad, torch::Tensor hidden,
+                       torch::Tensor coefficients) {
+  accumulate_impl(destination, grad, hidden, coefficients);
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+  m.def("accumulate", &accumulate);
+  m.def("accumulate_scaled", &accumulate_scaled);
+}

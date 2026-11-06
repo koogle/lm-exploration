@@ -205,6 +205,7 @@ def main():
     parser.add_argument("--phase-timings", action="store_true")
     parser.add_argument("--reference-intra", action="store_true")
     parser.add_argument("--reference-muon", action="store_true")
+    parser.add_argument("--consolidation", choices=["joint-loss", "projections", "norm", "all"])
     args = parser.parse_args()
     if args.hardware_counters and args.profile:
         parser.error("Counter replay and timeline profiling must run separately")
@@ -281,6 +282,18 @@ def main():
             mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
             data = ({"synthetic": True}, lambda: mixture)
         family = family_of(config)(config, run_dir, data=data)
+        if args.consolidation:
+            from .consolidation import configure
+
+            family.joint_loss = args.consolidation in ("joint-loss", "all")
+            build = family.build
+
+            def consolidated_build(device, build=build):
+                model = build(device)
+                configure(model, args.consolidation)
+                return model
+
+            family.build = consolidated_build
         if args.reference_intra:
             from unittest.mock import patch
 

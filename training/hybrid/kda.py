@@ -100,6 +100,8 @@ def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False):
 
 
 class KimiDeltaAttention(nn.Module):
+    combined_projections = False
+
     def __init__(self, config):
         super().__init__()
         heads, width = config.n_kda_head, config.head_dim
@@ -154,7 +156,14 @@ class KimiDeltaAttention(nn.Module):
         batch, length, _ = x.shape
         heads = (batch, length, self.heads, self.head_dim)
         positions = mask.positions
-        projections = (self.q_proj(x), self.k_proj(x), self.v_proj(x))
+        if self.combined_projections:
+            from .consolidation import linear_group
+
+            projections = linear_group(
+                x, (self.q_proj.weight, self.k_proj.weight, self.v_proj.weight)
+            )
+        else:
+            projections = (self.q_proj(x), self.k_proj(x), self.v_proj(x))
         weights = (self.q_conv, self.k_conv, self.v_conv)
         if x.is_cuda:
             from .kda_convolution import kda_convolutions
