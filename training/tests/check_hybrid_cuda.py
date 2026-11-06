@@ -442,6 +442,38 @@ def decode_timing(rows=64, prompt=512, new_tokens=256):
 
 
 def checks(only=""):
+    if only == "kda_wy_accuracy":
+        from model_hybrid import kda_bench, kda_wy
+
+        result = {"gpu": torch.cuda.get_device_name(), "reference": {}}
+        for dtype in (torch.bfloat16, torch.float32):
+            result["reference"][str(dtype)] = kda_bench.accuracy(
+                kda.kda_kernel,
+                dtype,
+                length=193,
+                width=128,
+            )
+        calls = []
+        original_backward = kda_wy.backward
+
+        def counted(*args, **kwargs):
+            calls.append(1)
+            return original_backward(*args, **kwargs)
+
+        kda_wy.H100WY.chunk_kda_bwd_wy_dqkg_fused = staticmethod(counted)
+        kda_wy.install()
+        result["candidate"] = {}
+        for length in (127, 193, 257):
+            for dtype in (torch.bfloat16, torch.float32):
+                result["candidate"][f"{dtype}-{length}"] = kda_bench.accuracy(
+                    kda.kda_kernel,
+                    dtype,
+                    length=length,
+                    width=128,
+                )
+        result["custom_backward_calls"] = len(calls)
+        assert len(calls) == 6, f"Expected six custom backward calls, got {len(calls)}"
+        return result
     if only in ("kda_wy_tiling", "kda_wy_kernel"):
         from model_hybrid.kda_bench import wy_tiling
 
