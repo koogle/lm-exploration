@@ -39,9 +39,11 @@ def check_muon_batching(device="cpu", production_shapes=False, batch_size=3):
     reference = [torch.nn.Parameter(torch.randn(s, device=device)) for s in shapes]
     candidate = [torch.nn.Parameter(p.detach().clone()) for p in reference]
 
+    split = 17 if production_shapes else 6
+
     def make(params, batch_size):
         return optim.Muon(
-            [{"params": params[:6], "lr": 0.02}, {"params": params[6:], "lr": 0.01}],
+            [{"params": params[:split], "lr": 0.02}, {"params": params[split:], "lr": 0.01}],
             lr=0.02,
             momentum=0.95,
             weight_decay=0.1,
