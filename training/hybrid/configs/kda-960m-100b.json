@@ -26,7 +26,7 @@
   },
   "target_tokens": 100000000000,
   "global_rows": 256,
-  "microbatch": 4,
+  "microbatch": 6,
   "warmup_tokens": 500000000,
   "decay_fraction": 0.15,
   "optimizer": {
