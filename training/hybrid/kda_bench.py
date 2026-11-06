@@ -195,7 +195,7 @@ def run(implementations=None):
     }
 
 
-def wy_tiling(data_root="/data", hoisted=False):
+def wy_tiling(data_root="/data", hoisted=False, intra=False):
     """Measure WY launch layouts on tensors produced from real 4K document packing."""
     import importlib
     import json
@@ -205,8 +205,11 @@ def wy_tiling(data_root="/data", hoisted=False):
     import triton.testing
     from training_data.packed_shards import PreparedMixture
 
-    module = importlib.import_module("fla.ops.kda.chunk_bwd")
-    original = module.chunk_kda_bwd_kernel_wy_dqkg_fused
+    module = importlib.import_module(
+        "fla.ops.kda.chunk_intra" if intra else "fla.ops.kda.chunk_bwd"
+    )
+    attribute = "chunk_kda_bwd_kernel_intra" if intra else "chunk_kda_bwd_kernel_wy_dqkg_fused"
+    original = getattr(module, attribute)
     captured = {}
 
     class Capture:
@@ -224,18 +227,19 @@ def wy_tiling(data_root="/data", hoisted=False):
     )
     mixture = PreparedMixture(recipe, Path(data_root) / recipe["name"])
     mixture.wait_seconds = 0
-    tokens, _, sources = mixture.next_batch(4)
+    batch = 6 if intra else 4
+    tokens, _, sources = mixture.next_batch(batch)
     documents = document_ids(torch.as_tensor(tokens, device="cuda"), 154820)
     generator = torch.Generator().manual_seed(14)
-    tensors, _ = layer_inputs(4, 4096, 12, 128, documents, torch.bfloat16, generator)
-    module.chunk_kda_bwd_kernel_wy_dqkg_fused = Capture()
+    tensors, _ = layer_inputs(batch, 4096, 12, 128, documents, torch.bfloat16, generator)
+    setattr(module, attribute, Capture())
     try:
         out = kda.kda_kernel(*tensors, documents)
         torch.autograd.grad(out, tensors, torch.ones_like(out))
     finally:
-        module.chunk_kda_bwd_kernel_wy_dqkg_fused = original
+        setattr(module, attribute, original)
     grid, kwargs = captured["grid"], captured["kwargs"]
-    output_names = ("dq", "dk", "dv2", "dg", "db", "dA")
+    output_names = ("dq2", "dk2", "dg2", "db") if intra else ("dq", "dk", "dv2", "dg", "db", "dA")
     original[grid](**kwargs)
     expected = {name: kwargs[name].clone() for name in output_names}
     tuner = original.fn
@@ -264,9 +268,22 @@ def wy_tiling(data_root="/data", hoisted=False):
         configurations = [configurations[0]] + [
             ("hoisted-" + name, config) for name, config in configurations
         ]
+    if intra:
+        from .kernels.kda_intra import intra_backward
+
+        configurations = [("upstream", selected)] + [
+            (f"adaptive-w{w}-s{st}", triton.Config({}, num_warps=w, num_stages=st))
+            for w, st in ((2, 1), (4, 1), (8, 1), (4, 2))
+        ]
     measurements = []
     for name, config in configurations:
-        selected_jit = wy_backward if name.startswith("hoisted-") else jit
+        selected_jit = (
+            intra_backward
+            if name.startswith("adaptive-")
+            else wy_backward
+            if name.startswith("hoisted-")
+            else jit
+        )
 
         def launch(config=config, selected_jit=selected_jit):
             return selected_jit[grid](
@@ -300,8 +317,8 @@ def wy_tiling(data_root="/data", hoisted=False):
             samples = [triton.testing.do_bench_cudagraph(launch, rep=100) for _ in range(3)]
             row = {
                 "name": name,
-                "BK": config.kwargs["BK"],
-                "BV": config.kwargs["BV"],
+                "BK": config.kwargs.get("BK", kwargs.get("BK")),
+                "BV": config.kwargs.get("BV"),
                 "warps": config.num_warps,
                 "stages": config.num_stages,
                 "ms": samples,
@@ -318,7 +335,7 @@ def wy_tiling(data_root="/data", hoisted=False):
     return {
         "gpu": torch.cuda.get_device_name(),
         "torch": torch.__version__,
-        "shape": SHAPE,
+        "shape": SHAPE | {"batch": batch},
         "grid": grid,
         "sources": sources,
         "measurements": measurements,
