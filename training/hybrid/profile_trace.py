@@ -15,6 +15,34 @@ import json
 from pathlib import Path
 
 
+def launch_phase_times(events, kernels, steps):
+    """Attribute kernel duration to its CPU launch phase, not execution-time overlap.
+
+    Backward kernels can execute after their host annotation ends. Correlation
+    IDs link each device operation to its launch; nested phases count only once.
+    Durations still sum across streams and are not exclusive wall-clock time.
+    """
+    phases = [
+        e
+        for e in events
+        if e.get("cat") == "user_annotation"
+        and e.get("name", "").startswith("train/")
+        and e.get("ph") == "X"
+    ]
+    launches = {
+        e.get("args", {}).get("correlation"): e
+        for e in events
+        if e.get("cat") in ("cuda_runtime", "cuda_driver") and "correlation" in e.get("args", {})
+    }
+    totals = collections.Counter()
+    for event in kernels:
+        launch = launches.get(event.get("args", {}).get("correlation"))
+        matches = [p for p in phases if launch and p["ts"] <= launch["ts"] < p["ts"] + p["dur"]]
+        name = min(matches, key=lambda p: p["dur"])["name"] if matches else "unattributed"
+        totals[name] += event["dur"] / 1000 / steps
+    return dict(totals)
+
+
 def summarize(trace):
     events = trace["traceEvents"]
     steps = [
@@ -123,6 +151,7 @@ def summarize(trace):
         )
     r = {
         "kernel_resources": resources,
+        "launch_phase_kernel_ms_per_step": launch_phase_times(events, kernels, n),
         "steps": n,
         "window_ms_per_step": (hi - lo) / 1000 / n,
         "cuda_activity_union_ms_per_step": busy(lo, hi) / 1000 / n,
