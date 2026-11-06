@@ -433,7 +433,7 @@ translates fully to the critical path. Applied to the 3.20-second baseline, that
 would yield roughly 32% MFU, not 40%. The requested 40% still needs about 0.79
 seconds of total step-time recovery. The counters establish specific sources of
 inefficiency; they do not establish that 40–60% is attainable with this workload.
-No optimization or full pretraining run was launched from these findings.
+The resulting WY optimization and its qualification are described below.
 
 ### WY backward implementation change
 
@@ -463,7 +463,32 @@ per-element relative-error guarantees.
 
 Raw layout comparisons and full gradient checks are under `wy-fix` in the
 [HF archive](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/wy-fix).
-The kernel result does not establish a whole-step speedup. The same-allocation
-eight-H100 qualification compares original, revised and original again using
-30 steps per arm, the real foundation recipe, global batch 256, microbatch four
-and 4K windows. Production activation waits for that qualification.
+The same-allocation eight-H100 qualification completed original, revised and
+original-again arms using 30 steps each, the real foundation recipe, global batch
+256, microbatch four and 4K windows. Each median excludes five warmup steps.
+
+| Arm | Tokens/second | MFU |
+| --- | ---: | ---: |
+| Original first | 329,964 | 30.41% |
+| Revised WY | 339,397 | 31.23% |
+| Original repeat | 329,521 | 30.33% |
+
+The revised kernel improves whole-training throughput by 2.86–3.00%; the two
+controls differ by only 0.13%. All 90 steps have finite losses. Across matched
+steps, the maximum main-loss difference is 0.000479 and MTP-loss difference is
+0.000163. Candidate peak allocation is 50.18 GiB per GPU versus 50.07 GiB for
+the first control. These short runs qualify numerical stability and throughput,
+not long-run training quality.
+
+The specialization is now registered by the hybrid family on CUDA; dispatch
+selects it for compute capability 9.0, BF16/FP32, head dimension 128 and chunks
+of 64. H100 is the measured hardware. Checkpoint source provenance includes both
+the launcher and kernel. The benchmark's `--compare-kda-wy` option runs the same
+original/revised/original comparison using separate processes; reference arms
+suppress this registration. All 32 backbone, target-model, workflow and deadline
+CPU tests pass, and full KDA gradient checks pass on GPU.
+
+Whole-training MFU remains about 31.2%, below the requested 40–60%. The isolated
+kernel's 50.6% time reduction must not be presented as a whole-step reduction.
+Full pretraining remains held. Matched results and logs are in the archive's
+`wy-fix/matched-h100x8` folder.

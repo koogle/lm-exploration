@@ -583,3 +583,24 @@ CSV metrics and logs go under `throughput/<run-id>/` on the hybrid runs volume.
 `throughput_valid` is false during counter replay: use separate uninstrumented
 runs for throughput and MFU. The collector rejects empty reports instead of treating
 successful process exit as successful profiling.
+
+
+## Qualified KDA WY backward specialization
+
+The hybrid family registers `kda_wy.py` through FLA's backend dispatch. For
+compute capability 9.0, BF16/FP32, head dimension 128 and 64-token chunks,
+`kernels/kda_wy.py` shortens accumulator live ranges and uses 32/128 key/value
+tiles. H100 measurements show zero compiler-reported spills and 0.676 ms versus
+1.368 ms for the original kernel. Full KDA forward/input-gradient reference
+checks pass. The matched eight-H100 training result is approximately 339k versus
+330k tokens/second, or 31.2% versus 30.4% MFU. See
+[measurement details](../plans/KDA_REAL_DATA_MFU.md).
+
+Reproduce the bounded original/revised/original comparison on one allocation:
+
+```sh
+uv run modal run --detach -m model_hybrid.modal_tools::bench \
+  --config hybrid/configs/kda-960m-100b.json \
+  --gpus 8 --gpu H100 --require-gpu-model --microbatch 4 --global-rows 256 \
+  --steps 30 --real-data --run-id <wy-comparison> --compare-kda-wy
+```
