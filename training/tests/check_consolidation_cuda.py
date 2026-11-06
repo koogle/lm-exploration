@@ -1,6 +1,7 @@
 """H100 correctness gates and isolated timings for the three consolidation candidates."""
 
 import copy
+import json
 from functools import partial
 
 import torch
@@ -26,7 +27,13 @@ def errors(actual, reference, tolerance):
 def timing(function):
     function()
     torch.cuda.synchronize()
-    return [triton.testing.do_bench_cudagraph(function, rep=100) for _ in range(3)]
+    # The isolated benchmark captures on Triton's stream after default-stream
+    # correctness checks. Redirect stale leaf stream references for capture only.
+    torch.autograd.graph.set_override_stale_capture_stream(True)
+    try:
+        return [triton.testing.do_bench_cudagraph(function, rep=100) for _ in range(3)]
+    finally:
+        torch.autograd.graph.set_override_stale_capture_stream(False)
 
 
 def norm_check():
@@ -132,9 +139,8 @@ def model_check():
 
 def checks():
     assert torch.cuda.get_device_capability() == (9, 0)
-    return {
-        "gpu": torch.cuda.get_device_name(),
-        "norm": norm_check(),
-        "joint": joint_check(),
-        "model": model_check(),
-    }
+    results = {"gpu": torch.cuda.get_device_name()}
+    for name, function in (("norm", norm_check), ("joint", joint_check), ("model", model_check)):
+        results[name] = function()
+        print(json.dumps({name: results[name]}), flush=True)
+    return results
