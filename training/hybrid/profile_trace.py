@@ -244,19 +244,153 @@ def summarize(trace):
         "observed_gpu_idle_fraction": 1 - busy(lo, hi) / (hi - lo),
         "phases": dict(phases),
         "operations": ops,
-        "scope": "Profiler-instrumented rank 0. Host phases overlap; GPU overlap is activity during each host phase, not exclusive kernel attribution. Command-buffer overhead can be induced by profiling.",
+        "scope": "Profiler-instrumented supplied trace. Host phases overlap; GPU overlap is activity during each host phase, not exclusive kernel attribution. Command-buffer overhead can be induced by profiling.",
     }
     return r
 
 
+def exclusive_ledger(events, lo, hi):
+    """Partition a device window; concurrency within a class counts only once."""
+    if hi <= lo:
+        raise ValueError("The step window must have positive duration")
+    changes = collections.defaultdict(collections.Counter)
+    changes[lo]
+    changes[hi]
+    for event in events:
+        category = event.get("cat")
+        if event.get("ph") != "X" or category not in ("kernel", "gpu_memcpy", "gpu_memset"):
+            continue
+        a, b = max(lo, event["ts"]), min(hi, event["ts"] + event["dur"])
+        if b <= a:
+            continue
+        kind = (
+            ("communication" if "nccl" in event.get("name", "").lower() else "compute")
+            if category == "kernel"
+            else "memops"
+        )
+        changes[a][kind] += 1
+        changes[b][kind] -= 1
+    totals = dict.fromkeys(
+        ("compute_only", "communication_only", "memops_only", "overlap", "idle"), 0.0
+    )
+    segments, active, previous = [], collections.Counter(), lo
+    for point in sorted(changes):
+        if point > previous:
+            kinds = sorted(k for k, count in active.items() if count > 0)
+            label = "overlap" if len(kinds) > 1 else kinds[0] + "_only" if kinds else "idle"
+            totals[label] += (point - previous) / 1000
+            if segments and segments[-1][2:] == [label, kinds]:
+                segments[-1][1] = (point - lo) / 1000
+            else:
+                segments.append([(previous - lo) / 1000, (point - lo) / 1000, label, kinds])
+        active.update(changes[point])
+        previous = point
+    window = (hi - lo) / 1000
+    return {
+        "window_ms": window,
+        "exclusive_ms": totals,
+        "residual_ms": window - sum(totals.values()),
+        "segments": segments,
+    }
+
+
+def timeline_data(trace, rank):
+    events = trace["traceEvents"]
+    steps = sorted(
+        (
+            e
+            for e in events
+            if e.get("ph") == "X"
+            and e.get("cat") == "user_annotation"
+            and e.get("name", "").startswith("ProfilerStep")
+        ),
+        key=lambda e: e["ts"],
+    )
+    if not steps:
+        raise ValueError("Trace has no complete ProfilerStep windows")
+    operators = {
+        e["args"]["External id"]: e.get("name", "unattributed")
+        for e in events
+        if e.get("cat") == "cpu_op" and "External id" in e.get("args", {})
+    }
+    result = []
+    for step in steps:
+        lo, hi = step["ts"], step["ts"] + step["dur"]
+        ledger = exclusive_ledger(events, lo, hi)
+        spans, grouped = [], collections.Counter()
+        for e in events:
+            cat = e.get("cat")
+            device = cat in ("kernel", "gpu_memcpy", "gpu_memset")
+            host = cat == "user_annotation" and e.get("name", "").startswith("train/")
+            if e.get("ph") != "X" or not (device or host):
+                continue
+            a, b = max(lo, e["ts"]), min(hi, e["ts"] + e["dur"])
+            if b <= a:
+                continue
+            op = (
+                operators.get(e.get("args", {}).get("External id"), "unattributed")
+                if device
+                else "host annotation"
+            )
+            lane = (
+                "GPU stream " + str(e.get("args", {}).get("stream", e.get("tid", "unknown")))
+                if device
+                else "CPU " + e["name"]
+            )
+            spans.append([(a - lo) / 1000, (b - lo) / 1000, lane, e["name"], op])
+            if device:
+                grouped[(op, e["name"])] += (b - a) / 1000
+        ledger.update(
+            {
+                "name": step["name"],
+                "spans": spans,
+                "kernel_totals": [[op, name, ms] for (op, name), ms in grouped.most_common()],
+                "unattributed_kernel_sum_ms": sum(
+                    ms for (op, _), ms in grouped.items() if op == "unattributed"
+                ),
+            }
+        )
+        result.append(ledger)
+    return {"rank": rank, "steps": result}
+
+
+def render_timeline(ranks, output):
+    # Embedded JSON is escaped as script text, never interpreted as HTML.
+    payload = (
+        json.dumps(ranks).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    )
+    template = Path(__file__).with_name("profile_timeline.html").read_text()
+    Path(output).write_text(template.replace("__TRACE_DATA__", payload))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--trace", required=True)
+    parser.add_argument(
+        "--trace", required=True, action="append", help="Repeat for independent per-rank traces"
+    )
+    parser.add_argument(
+        "--rank", action="append", help="Rank labels in trace order; defaults to input indices"
+    )
     parser.add_argument("--output", required=True)
+    parser.add_argument("--html")
     args = parser.parse_args()
-    with gzip.open(args.trace) as handle:
-        result = summarize(json.load(handle))
-    Path(args.output).write_text(json.dumps(result, indent=2) + "\n")
+    labels = args.rank or [str(i) for i in range(len(args.trace))]
+    if len(labels) != len(args.trace) or len(set(labels)) != len(labels):
+        parser.error("Supply one distinct rank label per trace")
+    ranks, audits = [], []
+    for path, rank in zip(args.trace, labels, strict=True):
+        with gzip.open(path) as handle:
+            trace = json.load(handle)
+        ranks.append(timeline_data(trace, rank))
+        audits.append({"rank": rank, "audit": summarize(trace)})
+    result = {
+        "ranks": ranks,
+        "audits": audits,
+        "scope": "Profiler-instrumented traces; each rank has its own clock/window. No cross-rank alignment or causal attribution of CPU waits. Missing ranks are not inferred. Kernel sums overlap and are separate from the exclusive ledger.",
+    }
+    Path(args.output).write_text(json.dumps(result) + "\n")
+    if args.html:
+        render_timeline(ranks, args.html)
 
 
 if __name__ == "__main__":

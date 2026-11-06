@@ -72,3 +72,66 @@ class LaunchAttributionTests(unittest.TestCase):
                 "unattributed": 0.005,
             },
         )
+
+
+class ExclusiveLedgerTests(unittest.TestCase):
+    @staticmethod
+    def event(cat, name, start, duration, **extra):
+        return dict(cat=cat, name=name, ts=start, dur=duration, ph="X", **extra)
+
+    def test_partition_overlaps_clipping_and_empty_gaps(self):
+        from model_hybrid.profile_trace import exclusive_ledger
+
+        events = [
+            self.event("kernel", "gemm", -10, 30),
+            self.event("kernel", "gemm2", 10, 30),
+            self.event("kernel", "ncclAllReduce", 30, 30),
+            self.event("gpu_memcpy", "copy", 50, 20),
+            self.event("gpu_memset", "zero", 65, 10),
+            self.event("cpu_op", "wait", 0, 100),
+            self.event("kernel", "outside", 100, 20),
+        ]
+        result = exclusive_ledger(events, 0, 100)
+        self.assertEqual(
+            result["exclusive_ms"],
+            {
+                "compute_only": 0.03,
+                "communication_only": 0.01,
+                "memops_only": 0.015,
+                "overlap": 0.02,
+                "idle": 0.025,
+            },
+        )
+        self.assertAlmostEqual(result["residual_ms"], 0)
+        self.assertEqual(exclusive_ledger([], 0, 100)["exclusive_ms"]["idle"], 0.1)
+
+    def test_attribution_and_step_clipping(self):
+        from model_hybrid.profile_trace import timeline_data
+
+        events = [
+            self.event("user_annotation", "ProfilerStep#1", 0, 100),
+            self.event("user_annotation", "ProfilerStep#2", 200, 100),
+            self.event("cpu_op", "aten::mm", 0, 10, args={"External id": 5}),
+            self.event("kernel", "gemm", 90, 130, args={"External id": 5}),
+            self.event("kernel", "unknown", 250, 10),
+        ]
+        result = timeline_data({"traceEvents": events}, "7")
+        self.assertEqual(result["rank"], "7")
+        self.assertEqual(result["steps"][0]["kernel_totals"], [["aten::mm", "gemm", 0.01]])
+        self.assertEqual(result["steps"][1]["unattributed_kernel_sum_ms"], 0.01)
+        for step in result["steps"]:
+            self.assertAlmostEqual(sum(step["exclusive_ms"].values()), 0.1)
+
+    def test_html_escapes_embedded_script_and_missing_steps(self):
+        import tempfile
+        from pathlib import Path
+
+        from model_hybrid.profile_trace import render_timeline, timeline_data
+
+        with tempfile.TemporaryDirectory() as folder:
+            p = Path(folder) / "trace.html"
+            render_timeline([{"rank": "</script><script>alert(1)</script>"}], p)
+            self.assertNotIn('"</script>', p.read_text())
+            self.assertIn("\\u003c/script", p.read_text())
+        with self.assertRaises(ValueError):
+            timeline_data({"traceEvents": []}, "0")
