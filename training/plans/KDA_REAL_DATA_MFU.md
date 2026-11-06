@@ -376,3 +376,61 @@ reports and CSV metrics accompany the run logs. Replayed timings are explicitly
 excluded from throughput/MFU summaries. Provider clocks and caches are unmanaged;
 replay passes may observe different cache states and clocks. These are sampled
 kernel diagnostics, not a whole-run or whole-cluster utilization measurement.
+
+### Measured KDA hardware counters
+
+The two isolated-H100 runs completed all eight training steps with finite losses
+and generated valid Nsight reports. Each sampled one warmed-up kernel invocation.
+The raw-page exporter uses metric columns plus a units row; the initial validator
+expected the probe's long-form CSV and falsely flagged the exports as empty. The
+reader is corrected, and `counter-audit.json` validates the existing reports
+without another GPU run. Original result files and raw reports remain preserved
+under `counter-intra-h100` and `counter-wy-h100` in the HF archive above.
+
+| Measured counter | Intra backward | Fused WY/dqkg backward |
+| --- | ---: | ---: |
+| Kernel duration | 1.372 ms | 1.368 ms |
+| Registers per thread | 254 | 255 |
+| Achieved warp occupancy | 12.02% | 12.47% |
+| Tensor-pipe active cycles / elapsed cycles | 1.07% | 2.71% |
+| Scheduler issue-active cycles / active cycles | 39.92% | 7.26% |
+| Eligible warps per scheduler per active cycle | 0.491 | 0.076 |
+| DRAM bandwidth | 0.683 TB/s | 2.002 TB/s |
+| DRAM throughput / peak sustained | 20.37% | 59.74% |
+| L1 load/store wavefront throughput / peak sustained | 79.57% | 19.31% |
+| Nsight-derived local spilling requests | 0 | 13,266,960 |
+
+The fused WY backward kernel has a concrete memory/dependency bottleneck: almost
+no warps are eligible to issue, long-scoreboard stalls dominate the reported stall
+categories, and Nsight reports substantial local/spill requests. Its measured
+DRAM and L2 throughput are both about 60% of peak, while tensor-pipe activity is
+only 2.7%. These counters support investigating live tensor/register pressure and
+spill traffic. They do not provide a byte-accurate attribution of DRAM traffic to
+spilling: the SASS-level spill-byte metric is unavailable in these reports.
+
+The intra backward kernel behaves differently: no derived spill requests, about
+80% L1 load/store wavefront throughput, only 20% DRAM throughput, and substantial
+long- and short-scoreboard stalls. This points toward on-chip load/store work and
+latency hiding, rather than saturated HBM bandwidth. Its 12% achieved occupancy
+confirms the earlier register-capacity concern, but low occupancy alone does not
+identify an implementation fix.
+
+At the sampled launch configurations, registers cap intra at eight blocks per SM
+and fused WY at two. Nsight also reports a two-block shared-memory limit for WY
+at its selected 135.168 KB shared-memory carveout. That carveout can change with
+kernel configuration, so lowering registers must be measured rather than assumed
+to raise occupancy. Stall ratios in the raw CSV are per issue-active units, not
+percentages of whole-step wall time.
+
+The sampled durations are close to the earlier eight-GPU trace's averages
+(approximately 1.43 and 1.37 ms per call), but the invocation/document layout and
+profiling method differ. These are isolated-kernel findings; they do not resolve
+DDP communication stalls or measure all eight devices concurrently.
+
+Together these two kernels cost about 0.404 seconds in the eight-GPU timeline.
+Even halving both would recover only about 0.20 seconds, assuming that saving
+translates fully to the critical path. Applied to the 3.20-second baseline, that
+would yield roughly 32% MFU, not 40%. The requested 40% still needs about 0.79
+seconds of total step-time recovery. The counters establish specific sources of
+inefficiency; they do not establish that 40–60% is attainable with this workload.
+No optimization or full pretraining run was launched from these findings.
