@@ -363,8 +363,6 @@ def main():
             import torch
 
             family.compile = lambda model: torch.compile(model, mode=args.compile_mode)
-        if profiler:
-            family.after_step = lambda data, model, progress: profiler.step()
         if args.hardware_counters:
             import torch
 
@@ -408,6 +406,7 @@ def main():
             max_steps=args.steps,
             save=False,
             phase_timings=args.phase_timings,
+            step_observer=profiler.step if profiler else None,
         )
         if report["steps"] != args.steps or report["stop_reason"] != "step_limit":
             raise RuntimeError(f"Benchmark did not complete its requested steps: {report}")

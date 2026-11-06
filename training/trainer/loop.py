@@ -137,6 +137,7 @@ def train(
     commit=None,
     save=True,
     phase_timings=False,
+    step_observer=None,
 ):
     """Train until `family.target_tokens`; returns the report (every rank).
 
@@ -144,6 +145,8 @@ def train(
     to the target, so a later resume continues the same run); `stop_unix`,
     `max_steps`, SIGTERM/SIGINT and an existing `stop_file` end it with a checkpoint.
     `save=False` writes no checkpoints (throughput benchmarks).
+    `step_observer`, when supplied, runs on every rank after step logging; it is
+    intended for diagnostics such as advancing a per-rank profiler schedule.
     """
     import numpy as np
     import torch
@@ -164,7 +167,9 @@ def train(
         or rows * world != family.global_rows
         or (rows % family.microbatch and not getattr(family, "allow_partial_microbatch", False))
     ):
-        raise ValueError("Global rows must divide across GPUs, with whole microbatches when required")
+        raise ValueError(
+            "Global rows must divide across GPUs, with whole microbatches when required"
+        )
     stop_unix = stop_unix if stop_unix is not None else math.inf
     torch.cuda.set_device(runtime.local_rank)
     torch.set_num_threads(4)
@@ -489,6 +494,8 @@ def train(
 
             with timing.phase("logging"):
                 primary(record)
+            if step_observer is not None:
+                step_observer()
             if step % family.evaluate_every == 0:
                 evaluate()
             due = family.checkpoint_every and step % family.checkpoint_every == 0
