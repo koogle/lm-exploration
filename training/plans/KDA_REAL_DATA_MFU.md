@@ -434,3 +434,36 @@ would yield roughly 32% MFU, not 40%. The requested 40% still needs about 0.79
 seconds of total step-time recovery. The counters establish specific sources of
 inefficiency; they do not establish that 40–60% is attainable with this workload.
 No optimization or full pretraining run was launched from these findings.
+
+### WY backward implementation change
+
+The H100 specialization in `hybrid/kernels/kda_wy.py` moves the value-only
+`dv2`/`dA`/`db` work before the three key-gradient accumulators become live. It
+uses key/value tiles 32/128, eight warps and one pipeline stage. The mathematical
+operation and returned gradients remain the same; the scheduling trades an extra
+input read for shorter live ranges. `hybrid/kda_wy.py` connects it through FLA's
+operation-specific backend registration for H100, head dimension 128 and chunks
+of 64. The source is adapted from the pinned FLA 0.6.0 implementation under MIT.
+
+On one actual H100, using inputs produced from the foundation recipe's packed
+4K windows, the original kernel measured 1.3678 ms and the revised kernel
+0.6755 ms (median of three CUDA-graph timing batches): 50.6% less kernel time.
+Compiler-reported spills fell from 360 to zero. A layout-only change also helped
+(1.3635 to 0.7392 ms with zero spills), so both layout and live ranges matter.
+The six output buffers passed the original-kernel comparison; the largest
+normalized max difference for the selected layout was 0.00455 in the gate
+gradient, reflecting the changed value-tile accumulation order.
+
+Full KDA forward and all seven input gradients passed the FP64 recurrence
+reference on packed lengths 127, 193 and 257 in BF16 and FP32. The test confirmed
+six custom-backward invocations. Maximum normalized errors were 0.00755 in BF16
+and 0.00199 in FP32; at the shared length-193 case the recorded maximum errors
+matched the original implementation's. These are normalized max errors, not
+per-element relative-error guarantees.
+
+Raw layout comparisons and full gradient checks are under `wy-fix` in the
+[HF archive](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/wy-fix).
+The kernel result does not establish a whole-step speedup. The same-allocation
+eight-H100 qualification compares original, revised and original again using
+30 steps per arm, the real foundation recipe, global batch 256, microbatch four
+and 4K windows. Production activation waits for that qualification.
