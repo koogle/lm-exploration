@@ -496,6 +496,10 @@ class HybridFamily:
         return learning_rate_factor(self.config, tokens)
 
     def build(self, device):
+        if torch.device(device).type == "cuda":
+            from .kda_wy import install
+
+            install()
         torch.backends.cuda.matmul.allow_tf32 = True
         self.lm = hybrid.HybridLM(self.model_config).to(device)
         return self.lm
@@ -570,6 +574,8 @@ class HybridFamily:
             "family": Path(__file__),
             **files,
             "output_gradient_cuda": Path(__file__).with_name("kernels") / "output_gradient.cu",
+            "kda_wy_launcher": Path(__file__).with_name("kda_wy.py"),
+            "kda_wy_kernel": Path(__file__).with_name("kernels") / "kda_wy.py",
             "chat": Path(chat.__file__),
             "chat_sft": Path(chat_sft.__file__),
             "tokenizer_glm": Path(glm.__file__),

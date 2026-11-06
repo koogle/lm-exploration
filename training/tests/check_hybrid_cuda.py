@@ -470,6 +470,7 @@ def checks(only=""):
                     dtype,
                     length=length,
                     width=128,
+                    tolerance=5e-3 if dtype == torch.float32 else 2e-2,
                 )
         result["custom_backward_calls"] = len(calls)
         assert len(calls) == 6, f"Expected six custom backward calls, got {len(calls)}"

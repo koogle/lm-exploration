@@ -201,14 +201,10 @@ def main():
     )
     parser.add_argument("--kda-save-intermediates", action="store_true")
     parser.add_argument("--hardware-counters", action="store_true")
-    parser.add_argument("--kda-wy", action="store_true")
+    parser.add_argument("--reference-kda-wy", action="store_true")
     args = parser.parse_args()
     if args.hardware_counters and args.profile:
         parser.error("Counter replay and timeline profiling must run separately")
-    if args.kda_wy:
-        from .kda_wy import install
-
-        install()
     if args.kda_save_intermediates:
         from functools import partial
 
@@ -282,6 +278,18 @@ def main():
             mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
             data = ({"synthetic": True}, lambda: mixture)
         family = family_of(config)(config, run_dir, data=data)
+        if args.reference_kda_wy:
+            from unittest.mock import patch
+
+            build = family.build
+
+            def reference_build(device):
+                # The loop has bound LOCAL_RANK before build: import FLA on the
+                # correct device, and preserve the original backend for this arm.
+                with patch("model_hybrid.kda_wy.install"):
+                    return build(device)
+
+            family.build = reference_build
         if args.compile_mode != "default":
             import torch
 

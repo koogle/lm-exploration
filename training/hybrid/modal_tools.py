@@ -134,7 +134,11 @@ def benchmark(
         else [("direct", [])]
     )
     if compare_kda_wy:
-        cases = [("original_first", []), ("kda_wy", ["--kda-wy"]), ("original_repeat", [])]
+        cases = [
+            ("original_first", ["--reference-kda-wy"]),
+            ("kda_wy", []),
+            ("original_repeat", ["--reference-kda-wy"]),
+        ]
     if larger_microbatch:
         cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))
     if autotune:

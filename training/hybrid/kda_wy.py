@@ -106,6 +106,7 @@ class H100WY(BaseBackend):
         v = kwargs["v"] if "v" in kwargs else args[2]
         supported = (
             q.is_cuda
+            and q.dtype in (torch.bfloat16, torch.float32)
             and torch.cuda.get_device_capability(q.device) == (9, 0)
             and q.shape[-1] == v.shape[-1] == 128
             and kwargs.get("chunk_size", 64) == 64
