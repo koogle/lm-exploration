@@ -783,7 +783,7 @@ the unprofiled 2.950-second qualification. The trace-reader checks cover delayed
 kernel attribution, overlapping intervals and host-wait versus device-idle
 distinctions.
 
-### Three consolidation candidates under qualification
+### Three consolidation candidates: completed throughput comparison
 
 The benchmark can independently select joint NTP/MTP gradient accumulation,
 combined Q/K/V plus MLP gate/up projections, or a grouped RMSNorm backward.
@@ -827,8 +827,9 @@ include failures and source provenance.
 The initial eight-H100 comparison measured 357,311 tokens/s (32.84% MFU) for
 the first control, 356,712 for combined projections and 355,447 for grouped
 normalization. Each completed 20 steps, with 15 timed. Neither individual
-candidate demonstrates an improvement. The repeated control is still pending,
-so these small differences do not establish a reliable regression either.
+candidate demonstrates an improvement. This first comparison has no archived
+completed repeated control or aggregate result, so these small differences do
+not establish a reliable regression either.
 
 The original joint loss produced no training step after approximately 13 minutes
 of whole-model compilation. Its torchrun process was canceled, and the combined
@@ -843,9 +844,37 @@ loss and the combination also pass, with maximum normalized gradient error
 whole-training speedup.
 
 The focused follow-up `kda-consolidation-h100x8-20261106-02` (source `e5321bd`)
-runs control, corrected joint loss, all three candidates and repeated control,
+completed control, corrected joint loss, all three candidates and repeated control,
 with the same data, batch sizes and 20-step window. It retains the 30-minute
 worker timeout, zero retries and independent launch deadline. The selector
 `--consolidation-cases joint-loss,all` avoids repeating the individual projection
-and normalization arms. No candidate has been promoted, and full pretraining
-remains held while this comparison runs.
+and normalization arms. All four arms exited successfully, completing 20 steps
+each with 15 timed; all 80 steps have finite losses and gradient norms. The Modal
+app is stopped with zero active tasks.
+
+| Arm | Tokens/s | Reported MFU | Median step | Peak allocation/GPU |
+| --- | ---: | ---: | ---: | ---: |
+| First control | 360,109 | 33.16% | 2.912 s | 65.50 GiB |
+| Joint loss | 360,813 | 33.16% | 2.906 s | 64.69 GiB |
+| All three | 355,701 | 32.70% | 2.948 s | 64.51 GiB |
+| Repeated control | 359,763 | 33.06% | 2.915 s | 65.50 GiB |
+
+Joint loss gains only 0.20–0.29% against the two controls (control drift 0.096%)
+and saves 0.805 GiB of allocated memory per GPU. Its maximum matched NTP/MTP
+loss differences are 0.000210/0.000135; the repeated control itself differs by
+0.000243/0.000165. This is a short numerical/performance check, not convergence
+evidence. The combination is 1.13–1.22% slower than the controls.
+
+The phase timings explain the limited benefit: joint loss reduces local
+backward from about 1.299–1.301 s to 1.269 s, while forward plus loss grows from
+1.339–1.342 s to 1.370 s. Overall accumulated forward/backward falls by only
+6–7 ms. Data fetching remains about 7 ms and the optimizer about 105 ms.
+Consolidating these operations does not recover the roughly half-second needed
+for 40% MFU. Reported MFU and throughput are separately summarized metrics;
+their small differences should not be interpreted as a changed FLOP definition.
+
+No candidate is promoted on this evidence. Joint loss offers a small memory
+benefit, but this run does not establish that it enables a larger microbatch.
+The existing qualified configuration remains the training default, and full
+pretraining stays held. The complete matched results, phase summaries and logs
+are in the linked HF consolidation archive under `matched-h100x8-fixed`.
