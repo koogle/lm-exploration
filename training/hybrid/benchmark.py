@@ -200,15 +200,7 @@ def main():
         "--compile-mode", default="default", choices=["default", "max-autotune-no-cudagraphs"]
     )
     parser.add_argument("--kda-save-intermediates", action="store_true")
-    parser.add_argument("--shared-kda-offsets", action="store_true")
-    parser.add_argument("--muon-batch-size", type=int, default=1)
     args = parser.parse_args()
-    if args.muon_batch_size < 1:
-        parser.error("--muon-batch-size must be positive")
-    if args.shared_kda_offsets:
-        from .kda import KimiDeltaAttention
-
-        KimiDeltaAttention.share_document_offsets = True
     if args.kda_save_intermediates:
         from functools import partial
 
@@ -277,15 +269,6 @@ def main():
             mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
             data = ({"synthetic": True}, lambda: mixture)
         family = family_of(config)(config, run_dir, data=data)
-        if args.muon_batch_size != 1:
-            make_optimizer = family.make_optimizer
-
-            def batched_optimizer(model):
-                optimizer = make_optimizer(model)
-                optimizer.muon.batch_size = args.muon_batch_size
-                return optimizer
-
-            family.make_optimizer = batched_optimizer
         if args.compile_mode != "default":
             import torch
 

@@ -78,14 +78,13 @@ def kda_reference(q, k, v, g, beta, A_log, dt_bias, positions, final_state=False
     return (out, state) if final_state else out
 
 
-def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False, offsets=None):
+def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False):
     """fla's chunked KDA over the flattened batch, one sequence per document. With
     `final_state`, also returns each document's last state, [documents, H, K, V]."""
     from fla.ops.kda import chunk_kda
 
     batch, length = documents.shape
-    if offsets is None:
-        offsets = cu_seqlens(documents).long()
+    offsets = cu_seqlens(documents).long()
     out, state = chunk_kda(
         *(t.reshape(1, batch * length, *t.shape[2:]) for t in (q, k, v, g, beta)),
         A_log=A_log,
@@ -101,9 +100,6 @@ def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False, o
 
 
 class KimiDeltaAttention(nn.Module):
-    # Experimental sharing is enabled only by the benchmark.
-    share_document_offsets = False
-
     def __init__(self, config):
         super().__init__()
         heads, width = config.n_kda_head, config.head_dim
@@ -174,18 +170,7 @@ class KimiDeltaAttention(nn.Module):
         beta = self.b_proj(x)
         keep = cache is not None
         if x.is_cuda:
-            out = kda_kernel(
-                q,
-                k,
-                v,
-                g,
-                beta,
-                self.A_log,
-                self.dt_bias,
-                mask.documents,
-                keep,
-                offsets=mask.kda_offsets if self.share_document_offsets else None,
-            )
+            out = kda_kernel(q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents, keep)
         else:
             out = kda_reference(q, k, v, g, beta, self.A_log, self.dt_bias, positions, keep)
         if keep:

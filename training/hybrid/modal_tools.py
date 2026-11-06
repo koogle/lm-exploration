@@ -65,9 +65,6 @@ def benchmark(
     autotune=False,
     kda_save_intermediates=False,
     required_gpu_model="",
-    compare_kda_offsets=False,
-    muon_batch_size=0,
-    pipeline_batch_size=0,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -120,27 +117,12 @@ def benchmark(
         if compare_output_gradient
         else [("direct", [])]
     )
-    if compare_kda_offsets:
-        cases = [("original", []), ("shared_offsets", ["--shared-kda-offsets"])]
-    if muon_batch_size:
-        cases.append(("batched_muon", ["--muon-batch-size", str(muon_batch_size)]))
     if larger_microbatch:
         cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))
     if autotune:
         cases.append(("autotuned", ["--compile-mode", "max-autotune-no-cudagraphs"]))
     if kda_save_intermediates:
         cases.append(("kda_saved", ["--kda-save-intermediates"]))
-    if pipeline_batch_size:
-        original = []
-        cases = [
-            ("original_first", original),
-            ("shared_offsets", ["--shared-kda-offsets"]),
-            (
-                "batched_muon",
-                ["--shared-kda-offsets", "--muon-batch-size", str(pipeline_batch_size)],
-            ),
-            ("original_repeat", original),
-        ]
     measurements, all_lines = {}, []
     code = 0
     for name, extra in cases:
@@ -255,9 +237,6 @@ def bench(
     autotune: bool = False,
     kda_save_intermediates: bool = False,
     require_gpu_model: bool = False,
-    compare_kda_offsets: bool = False,
-    muon_batch_size: int = 0,
-    pipeline_batch_size: int = 0,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -275,18 +254,11 @@ def bench(
                 bool(larger_microbatch),
                 autotune,
                 kda_save_intermediates,
-                compare_kda_offsets,
-                bool(muon_batch_size),
-                bool(pipeline_batch_size),
             ]
         )
         > 1
     ):
         raise ValueError("Compare one optimization at a time")
-    if muon_batch_size and muon_batch_size < 2:
-        raise ValueError("Muon comparison batch size must be at least two")
-    if pipeline_batch_size and pipeline_batch_size < 2:
-        raise ValueError("Pipeline comparison batch size must be at least two")
     settings = load_config(config)
     if mtp_loss_fraction:
         settings["model"]["mtp_loss_fraction"] = mtp_loss_fraction
@@ -312,9 +284,6 @@ def bench(
         autotune,
         kda_save_intermediates,
         gpu if require_gpu_model else "",
-        compare_kda_offsets,
-        muon_batch_size,
-        pipeline_batch_size,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)

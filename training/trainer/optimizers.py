@@ -14,7 +14,6 @@ parameter group keeps its `base_lr`; `set_learning_rate(optimizer, factor)` appl
 one schedule factor to all of them.
 """
 
-from collections import defaultdict
 from dataclasses import dataclass
 
 import torch
@@ -25,61 +24,38 @@ from .roles import ROLES
 def orthogonalize(update, steps=5):
     """Approximate the polar factor in BF16, orienting the shorter axis as rows."""
     x = update.to(torch.bfloat16)
-    transposed = x.size(-2) > x.size(-1)
+    transposed = x.size(0) > x.size(1)
     if transposed:
-        x = x.mT
-    norm = x.norm() if x.ndim == 2 else x.norm(dim=(-2, -1), keepdim=True)
-    x = x / (norm + 1e-7)
+        x = x.T
+    x = x / (x.norm() + 1e-7)
     for _ in range(steps):
-        a = x @ x.mT
+        a = x @ x.T
         b = -4.7750 * a + 2.0315 * (a @ a)
         x = 3.4445 * x + b @ x
-    return x.mT if transposed else x
+    return x.T if transposed else x
 
 
 class Muon(torch.optim.Optimizer):
-    def __init__(self, params, *, lr, momentum, weight_decay, batch_size=1):
-        if type(batch_size) is not int or batch_size < 1:
-            raise ValueError("Muon batch_size must be a positive integer")
+    def __init__(self, params, *, lr, momentum, weight_decay):
         super().__init__(params, {"lr": lr, "momentum": momentum, "weight_decay": weight_decay})
-        self.batch_size = batch_size
-
-    def batches(self, params):
-        if self.batch_size == 1:
-            for p in params:
-                if p.grad is not None:
-                    yield [p]
-            return
-        shapes = defaultdict(list)
-        for p in params:
-            if p.grad is not None:
-                shapes[(p.shape, p.dtype, p.device)].append(p)
-        for members in shapes.values():
-            for start in range(0, len(members), self.batch_size):
-                yield members[start : start + self.batch_size]
 
     @torch.no_grad()
     def step(self):
         for group in self.param_groups:
-            for params in self.batches(group["params"]):
-                updates = []
-                for p in params:
-                    state = self.state[p]
-                    if "momentum_buffer" not in state:
-                        state["momentum_buffer"] = torch.zeros_like(p)
-                    buffer = state["momentum_buffer"]
-                    buffer.lerp_(p.grad, 1 - group["momentum"])
-                    updates.append(p.grad.lerp(buffer, group["momentum"]))
-                updates = (
-                    [orthogonalize(updates[0])]
-                    if len(updates) == 1
-                    else orthogonalize(torch.stack(updates)).unbind()
-                )
-                for p, update in zip(params, updates, strict=True):
-                    # Original Muon aspect-ratio scaling, not AdamW RMS matching.
-                    scale = max(1, p.size(0) / p.size(1)) ** 0.5
-                    p.mul_(1 - group["lr"] * group["weight_decay"])
-                    p.add_(update, alpha=-group["lr"] * scale)
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+                state = self.state[p]
+                if "momentum_buffer" not in state:
+                    state["momentum_buffer"] = torch.zeros_like(p)
+                buffer = state["momentum_buffer"]
+                buffer.lerp_(p.grad, 1 - group["momentum"])
+                update = p.grad.lerp(buffer, group["momentum"])
+                update = orthogonalize(update)
+                # Original Muon aspect-ratio scaling, not AdamW RMS matching.
+                scale = max(1, p.size(0) / p.size(1)) ** 0.5
+                p.mul_(1 - group["lr"] * group["weight_decay"])
+                p.add_(update, alpha=-group["lr"] * scale)
 
 
 @dataclass(frozen=True)

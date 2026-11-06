@@ -25,72 +25,6 @@ def small_model():
     return model.HybridLM(config)
 
 
-@torch.no_grad()
-def check_muon_batching(device="cpu", production_shapes=False, batch_size=3):
-    """Compare updates, momentum, missing gradients and state resume across batches."""
-    import copy
-
-    torch.manual_seed(947)
-    shapes = (
-        [(1536, 1536)] * 17 + [(128, 1536)] * 3 + [(1536, 128)] * 3 + [(4096, 1536)] * 2
-        if production_shapes
-        else [(9, 17)] * 5 + [(17, 9)] * 3 + [(8, 8)] * 4
-    )
-    reference = [torch.nn.Parameter(torch.randn(s, device=device)) for s in shapes]
-    candidate = [torch.nn.Parameter(p.detach().clone()) for p in reference]
-
-    split = 17 if production_shapes else 6
-
-    def make(params, batch_size):
-        return optim.Muon(
-            [{"params": params[:split], "lr": 0.02}, {"params": params[split:], "lr": 0.01}],
-            lr=0.02,
-            momentum=0.95,
-            weight_decay=0.1,
-            batch_size=batch_size,
-        )
-
-    ref, batched = make(reference, 1), make(candidate, batch_size)
-    largest = 0.0
-    for step in range(4):
-        for i, (p, q) in enumerate(zip(reference, candidate, strict=True)):
-            grad = torch.randn_like(p) if i != step else None
-            if i == len(reference) - 1:
-                grad = torch.zeros_like(p)
-            p.grad = grad
-            q.grad = grad.clone() if grad is not None else None
-        before = [p.detach().clone() for p in reference]
-        other_before = [p.detach().clone() for p in candidate]
-        ref.step()
-        batched.step()
-        for p, q, old, other_old in zip(reference, candidate, before, other_before, strict=True):
-            if p.grad is None:
-                torch.testing.assert_close(p, old, rtol=0, atol=0)
-                torch.testing.assert_close(q, other_old, rtol=0, atol=0)
-                continue
-            delta, other_delta = p - old, q - other_old
-            relative = float((delta - other_delta).norm() / delta.norm().clamp_min(1e-8))
-            largest = max(largest, relative)
-            if relative > 0.02:
-                raise AssertionError(f"Batched Muon update relative L2 error {relative}")
-            torch.testing.assert_close(
-                ref.state[p]["momentum_buffer"],
-                batched.state[q]["momentum_buffer"],
-                rtol=0,
-                atol=0,
-            )
-        if step == 1:
-            restored = make(candidate, batch_size)
-            restored.load_state_dict(copy.deepcopy(batched.state_dict()))
-            batched = restored
-    return {
-        "max_relative_update_l2_error": largest,
-        "steps": 4,
-        "matrices": len(shapes),
-        "batch_size": batch_size,
-    }
-
-
 class OptimizerGroupingTests(unittest.TestCase):
     def setUp(self):
         torch.set_num_threads(1)
@@ -109,9 +43,6 @@ class OptimizerGroupingTests(unittest.TestCase):
         optimizer = optim.RoleOptimizer(self.lm)
         held = [id(p) for g in optimizer.param_groups for p in g["params"]]
         self.assertEqual(sorted(held), sorted(ids))
-
-    def test_batched_muon_updates_and_resume(self):
-        check_muon_batching()
 
     def test_roles(self):
         roles = {n: r for r, members in optim.parameter_groups(self.lm).items() for n, _ in members}

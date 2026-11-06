@@ -35,16 +35,6 @@ class HybridBackboneTests(unittest.TestCase):
         torch.set_num_threads(1)
         torch.manual_seed(3)
 
-    def test_shared_kda_offsets_preserve_document_and_row_boundaries(self):
-        tokens = torch.tensor([[3, 2, 4, 5], [2, 6, 7, 8]])
-        mask = model.DocumentMask(model.document_ids(tokens, 2))
-        expected = torch.tensor([0, 2, 4, 5, 8])
-        self.assertTrue(torch.equal(mask.kda_offsets, expected))
-        self.assertIs(mask.kda_offsets, mask.kda_offsets)
-        other = model.DocumentMask(model.document_ids(torch.ones_like(tokens), 2))
-        self.assertTrue(torch.equal(other.kda_offsets, torch.tensor([0, 4, 8])))
-        self.assertTrue(torch.equal(mask.kda_offsets, expected))
-
     def test_defaults(self):
         config = model.HybridConfig(154_880, eos_id=154_820)
         self.assertEqual((config.head_dim, config.rope_base, config.z_loss), (128, 1e6, 1e-4))
