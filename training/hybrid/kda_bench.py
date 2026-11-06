@@ -197,8 +197,8 @@ def run(implementations=None):
     }
 
 
-def wy_tiling(data_root="/data", hoisted=False, intra=False):
-    """Measure WY launch layouts on tensors produced from real 4K document packing."""
+def backward_tiling(data_root="/data", hoisted=False, intra=False):
+    """Measure backward layouts on tensors produced from real 4K document packing."""
     import importlib
     import json
     from pathlib import Path

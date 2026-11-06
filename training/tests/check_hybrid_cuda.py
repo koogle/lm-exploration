@@ -576,9 +576,9 @@ def checks(only=""):
         assert len(calls) == 6, f"Expected six custom backward calls, got {len(calls)}"
         return result
     if only in ("kda_wy_tiling", "kda_wy_kernel", "kda_intra_kernel"):
-        from model_hybrid.kda_bench import wy_tiling
+        from model_hybrid.kda_bench import backward_tiling
 
-        return wy_tiling(hoisted=only == "kda_wy_kernel", intra=only == "kda_intra_kernel")
+        return backward_tiling(hoisted=only == "kda_wy_kernel", intra=only == "kda_intra_kernel")
     if only == "kda_saved":
         from functools import partial
 
