@@ -13,13 +13,14 @@ import time
 from pathlib import Path
 
 import modal
-from model_hybrid.image import LAUNCH_LIMIT_SECONDS, image
+from model_hybrid.image import LAUNCH_LIMIT_SECONDS, build, image
 
+precision_image = build(extra_packages=("torchao==0.18.0",))
 app = modal.App("lm-exploration-hybrid-checks")
 
 
 @app.function(
-    image=image,
+    image=precision_image,
     gpu="H100",
     cpu=8,
     memory=32768,
@@ -30,6 +31,10 @@ app = modal.App("lm-exploration-hybrid-checks")
 def check(deadline, only=""):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
+    if only == "fp8_backward":
+        from model_hybrid.float8_diagnostics import run
+
+        return run()
     import runpy
 
     return runpy.run_path("/project/tests/check_hybrid_cuda.py")["checks"](only)

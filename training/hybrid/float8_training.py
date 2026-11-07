@@ -13,13 +13,18 @@ def eligible(module, name):
     )
 
 
-def configure(model):
+RECIPES = ("rowwise", "tensorwise", "rowwise_with_gw_hp")
+
+
+def configure(model, recipe="rowwise"):
+    if recipe not in RECIPES:
+        raise ValueError(f"Choose a supported FP8 recipe: {RECIPES}")
     from torchao.float8 import Float8LinearConfig, convert_to_float8_training
 
     names = [name for name, module in model.named_modules() if eligible(module, name)]
     before = {name: id(p) for name, p in model.named_parameters()}
     convert_to_float8_training(
-        model, module_filter_fn=eligible, config=Float8LinearConfig.from_recipe_name("rowwise")
+        model, module_filter_fn=eligible, config=Float8LinearConfig.from_recipe_name(recipe)
     )
     assert before == {name: id(p) for name, p in model.named_parameters()}
     if not names:
