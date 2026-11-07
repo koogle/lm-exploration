@@ -95,6 +95,8 @@ def benchmark(
     compare_fp8=False,
     fp8_recipe="rowwise",
     fp8_scope="all",
+    fp8_only=False,
+    host_diagnostics=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -109,6 +111,8 @@ def benchmark(
         args += ["--global-rows", str(global_rows)]
     if phase_timings:
         args += ["--phase-timings"]
+    if host_diagnostics:
+        args += ["--host-diagnostics"]
     if profile:
         args += ["--profile", "/tmp/profile.json"]
     if profile_all_ranks:
@@ -160,6 +164,10 @@ def benchmark(
         if compare_output_gradient
         else [("direct", [])]
     )
+    if fp8_only:
+        cases = [
+            ("direct", ["--fp8-linears", "--fp8-recipe", fp8_recipe, "--fp8-scope", fp8_scope])
+        ]
     if compare_kda_wy:
         cases = [
             ("original_first", ["--reference-kda-wy"]),
@@ -390,6 +398,8 @@ def bench(
     compare_fp8: bool = False,
     fp8_recipe: str = "rowwise",
     fp8_scope: str = "all",
+    fp8_only: bool = False,
+    host_diagnostics: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -400,10 +410,14 @@ def bench(
 
     from workflows.deadline import new_deadline
 
-    if fp8_scope not in ("all", "mlp", "both") or (fp8_scope != "all" and not compare_fp8):
+    if fp8_scope not in ("all", "mlp", "both") or (
+        fp8_scope != "all" and not (compare_fp8 or fp8_only)
+    ):
         raise ValueError("Select FP8 scope all/mlp/both with compare_fp8")
-    if fp8_recipe not in RECIPES or (fp8_recipe != "rowwise" and not compare_fp8):
+    if fp8_recipe not in RECIPES or (fp8_recipe != "rowwise" and not (compare_fp8 or fp8_only)):
         raise ValueError("Select a supported FP8 recipe with compare_fp8")
+    if fp8_only and fp8_scope == "both":
+        raise ValueError("Direct FP8 runs require one scope")
     if (profile_all_ranks or profile_stacks) and not profile:
         raise ValueError("Rank and stack profiling require profile")
     if consolidation_cases and not compare_consolidation:
@@ -422,6 +436,7 @@ def bench(
                 compare_consolidation,
                 compare_scalar_delta,
                 compare_fp8,
+                fp8_only,
                 bool(larger_microbatch),
                 autotune,
                 kda_save_intermediates,
@@ -448,6 +463,7 @@ def bench(
             or compare_consolidation
             or compare_scalar_delta
             or compare_fp8
+            or fp8_only
             or larger_microbatch
             or autotune
             or kda_save_intermediates
@@ -497,6 +513,8 @@ def bench(
         compare_fp8,
         fp8_recipe,
         fp8_scope,
+        fp8_only,
+        host_diagnostics,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)

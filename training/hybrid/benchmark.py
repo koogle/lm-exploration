@@ -15,6 +15,7 @@ per kernel category and the slowest kernels.
 import argparse
 import collections
 import dataclasses
+import gc
 import gzip
 import json
 import os
@@ -202,6 +203,7 @@ def main():
     parser.add_argument("--phase-timings", action="store_true")
     parser.add_argument("--reference-intra", action="store_true")
     parser.add_argument("--reference-muon", action="store_true")
+    parser.add_argument("--host-diagnostics", action="store_true")
     parser.add_argument("--fp8-linears", action="store_true")
     parser.add_argument("--fp8-scope", choices=("all", "mlp"), default="all")
     parser.add_argument(
@@ -421,6 +423,48 @@ def main():
             return lm
 
         family.build = describe_build
+        observer = profiler.step if profiler else None
+        host_events, active_gc, active_compile = [], {}, []
+        current_step = [1]
+        if args.host_diagnostics:
+            import torch
+
+            def gc_event(phase, info):
+                generation = info["generation"]
+                if phase == "start":
+                    active_gc[generation] = (time.perf_counter(), current_step[0])
+                else:
+                    started, step = active_gc.pop(generation)
+                    elapsed = (time.perf_counter() - started) * 1000
+                    if elapsed >= 10:
+                        host_events.append(
+                            {
+                                "kind": "gc",
+                                "step": step,
+                                "ms": elapsed,
+                                "generation": generation,
+                                "collected": info["collected"],
+                            }
+                        )
+
+            def compile_start(*args, **kwargs):
+                active_compile.append((time.perf_counter(), current_step[0]))
+
+            def compile_end(*args, **kwargs):
+                started, step = active_compile.pop()
+                host_events.append(
+                    {"kind": "compile", "step": step, "ms": (time.perf_counter() - started) * 1000}
+                )
+
+            gc.callbacks.append(gc_event)
+            torch._dynamo.on_compile_start(compile_start)
+            torch._dynamo.on_compile_end(compile_end)
+
+            def observer():
+                if profiler:
+                    profiler.step()
+                current_step[0] += 1
+
         report = loop.train(
             family,
             run_dir,
@@ -429,8 +473,13 @@ def main():
             max_steps=args.steps,
             save=False,
             phase_timings=args.phase_timings,
-            step_observer=profiler.step if profiler else None,
+            step_observer=observer,
         )
+        if args.host_diagnostics:
+            gc.callbacks.remove(gc_event)
+            print(
+                json.dumps({"host_diagnostics": {"rank": rank, "events": host_events}}), flush=True
+            )
         if report["steps"] != args.steps or report["stop_reason"] != "step_limit":
             raise RuntimeError(f"Benchmark did not complete its requested steps: {report}")
     if profiler:
