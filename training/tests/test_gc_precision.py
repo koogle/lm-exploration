@@ -60,3 +60,29 @@ class PrecisionMetricTests(unittest.TestCase):
     def test_invalid_partition(self):
         with self.assertRaises(ValueError):
             utilization(1, 2, 1, 1)
+
+
+class FP8AccountingTests(unittest.TestCase):
+    def test_real_model_partition_and_high_precision_weight_gradient(self):
+        from pathlib import Path
+
+        import torch
+        from model_hybrid.float8_training import eligible
+        from model_hybrid.model import HybridLM
+        from model_hybrid.precision_metrics import fp8_flops_per_token
+        from model_hybrid.train import RunConfig, flops_per_token, model_config_of
+
+        config = model_config_of(
+            RunConfig.load(Path(__file__).parents[1] / "hybrid/configs/kda-960m-100b.json")
+        )
+        with torch.device("meta"):
+            lm = HybridLM(config)
+        lm._fp8_linear_names = tuple(
+            name for name, module in lm.named_modules() if eligible(module, name)
+        )
+        lm._fp8_recipe = "tensorwise"
+        fp8 = fp8_flops_per_token(lm, config)
+        self.assertEqual(fp8, 6 * 707002368)
+        self.assertLess(fp8, flops_per_token(config, lm, 1000))
+        lm._fp8_recipe = "rowwise_with_gw_hp"
+        self.assertEqual(fp8_flops_per_token(lm, config), 4 * 707002368)
