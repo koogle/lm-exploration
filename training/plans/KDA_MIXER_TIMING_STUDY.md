@@ -597,3 +597,35 @@ Seventeen focused CPU tests pass, including precision partitions on the real
 release of the frozen graph at session exit. Ruff passes. [Full results and
 per-rank audit](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-mfu-shared-gc-h100x8-20261107-01)
 retain startup costs, the fetch pause and source provenance.
+
+### Fresh FP8 forward/loss attribution
+
+Run `kda-fp8-forward-profile-h100-20261107-01` (source `9388142`) captures
+three instrumented steps within a 12-step run on one H100. Global rows 32 and
+microbatch six reproduce one rank's shapes in the eight-H100 run. CPU launch
+correlations attribute the following GPU kernel sums to `forward_and_loss`:
+
+| Kernel category | Summed ms per profiled step |
+| --- | ---: |
+| Matrix multiplies | 654.1 |
+| Compiled elementwise/conversion | 265.5 |
+| KDA recurrence | 143.6 |
+| Loss softmax/gradient | 85.5 |
+| KDA convolution | 27.2 |
+| Full attention | 20.7 |
+| Other and memory operations | 9.4 |
+
+These are kernel sums attributed by launch, not an exclusive wall-time ledger;
+the single-GPU profile does not measure eight-GPU communication or replace the
+uninstrumented MFU result. The vocabulary-head GEMM kernel families contribute
+roughly **501 ms** of this forward/loss attribution (including loss-gradient
+work). The largest individual compiled FP8 cast/layout kernel accounts for
+38.7 ms; one amax-reduction kernel accounts for 24.0 ms. These are concrete
+remaining targets, not claimed optimizations.
+
+The vocabulary-head GEMMs are a larger remaining opportunity than further
+softmax arithmetic tuning. They still use BF16; changing their precision would
+require separate loss/gradient and learning-quality qualification. This study
+establishes no additional forward-kernel speedup. [Raw timeline, per-kernel
+attribution and provenance](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-forward-profile-h100-20261107-01)
+are archived. All three follow-up apps are stopped with zero tasks.
