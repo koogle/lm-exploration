@@ -214,3 +214,93 @@ policy and the appropriate peak denominator, so evaluate actual tokens/s,
 quality and per-precision accounting rather than claiming BF16 MFU improvement
 by relabeling it. No proposed next experiment is automatically a production
 change, and this evidence does not establish a route to 60% MFU.
+
+## Detailed timing diagram and the remaining MFU gap
+
+The [timing diagram](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/timing-diagram/timing.png)
+shows the exclusive ledger for all eight GPUs, the GPU-0 kernel groups, and the
+largest individual kernels outside GEMMs and NCCL. The same HF folder contains
+an SVG and the complete kernel names, durations and call counts as JSON.
+The existing interactive timeline remains the chronological view; the stacked
+bars in this diagram regroup time by activity and are not chronological.
+
+Rebuild from the archived capture with matplotlib installed:
+
+```sh
+python -m model_hybrid.profile_plot \
+  --trace /path/to/trace.json.gz \
+  --headline /path/to/all-rank-headline.json \
+  --output /path/to/timing
+```
+
+The name classifier previously placed `intra_backward` (112.65 ms) and
+`chunk_gla_fwd_kernel_o` (20.07 ms) in `other`. Both belong to the current KDA
+implementation. The corrected offline diagram places them under recurrence;
+future benchmark summaries use the same classifier. Original archived summaries
+retain their historical classification. Clipping kernels to the exact windows
+also introduces tiny boundary differences from the original profiler summary.
+
+| GPU-0 kernel group | ms/step, summed kernel durations |
+| --- | ---: |
+| Dense matrix kernels, including heads and optimizer matrix work | 1,394.1 |
+| KDA recurrence, gates and L2 normalization | 500.1 |
+| Compiled elementwise operations, reductions and casts | 414.1 |
+| Other native kernels | 168.0 |
+| NCCL collectives, including possible waiting | 166.5 |
+| KDA convolutions | 91.1 |
+| Loss softmax gradient | 85.7 |
+| Full attention and fused surrounding operations | 84.0 |
+| Copies, fills and memory operations | 9.9 |
+| Explicit optimizer/multi-tensor kernels | 6.4 |
+
+These rows overlap across streams. They must not be added to the exclusive idle
+ledger or interpreted as removable time. In particular, the full optimizer is
+about 105 ms by phase timing; its matrix and elementwise operations appear in
+other rows. The KDA row excludes projection GEMMs. The largest native kernel in
+`other` is FP32 elementwise addition (87.7 ms); its name alone does not identify
+which functional use of addition is responsible.
+
+The measured GPU activity is approximately 92%, but activity means that at least
+one recorded kernel or memory operation is active. It does not establish tensor
+core saturation, achieved memory bandwidth, occupancy, or useful model FLOPs.
+Only about 1.39 seconds of the approximately 3.04-second profiled window is dense
+matrix-kernel duration. Recurrence and elementwise operations are necessary work,
+but much of their arithmetic is absent from our conventional MFU numerator.
+Neither “all non-GEMM time is wasted” nor “92% activity means efficient training”
+is supported by this trace.
+
+The scalar Gated DeltaNet comparison is related to MFU through the formula:
+
+`MFU = tokens/sec × estimated model FLOPs/token / aggregate GPU peak FLOPs/sec`.
+
+The matched first KDA control achieved 356,534 tokens/sec and 32.82% MFU; scalar
+delta achieved 390,472 tokens/sec and 35.72%. That is **9.52% more throughput**,
+and **2.90 percentage points / 8.85% relative improvement in MFU**. The ratios
+are slightly different because scalar delta has a smaller estimated FLOPs/token
+numerator and the reported metrics are independently summarized medians.
+This is an architecture-and-implementation comparison, not an equivalent-model
+kernel optimization. It provides no long-run quality equivalence evidence.
+
+At fixed KDA work per step, 40% MFU requires reducing the 2.941-second unprofiled
+control to approximately 2.413 seconds: **528 ms saved, or 18% lower latency**.
+60% requires approximately 1.609 seconds: **1,332 ms saved, or 45% lower latency**.
+The approximately 242 ms idle in the instrumented GPU-0 window is far smaller
+than either gap. Even perfect removal of idle time cannot deliver 40% on its
+own. Scalar delta still needs approximately 287 ms saved to reach 40% under its
+own estimator. These are fixed-work arithmetic targets, not measured forecasts.
+
+The largest measured targets are therefore recurrence (especially the 113 ms
+intra backward and 101 ms WY backward kernels), elementwise/reduction/cast work,
+and the dense output/body/optimizer matrix work. Fusion, less materialization,
+and better tiling are hypotheses to evaluate against those costs. CPU offload
+would add transfers and dependencies for activations needed by the next GPU
+operation; this trace supplies no evidence that it would help. Data-fetch and
+scatter phase timings are only approximately 8 ms combined.
+
+The trace establishes where time runs, but does not yet prove why each large
+kernel is slow. A defensible next kernel change needs achieved DRAM bandwidth,
+tensor-core activity, register/shared-memory limits and stall evidence for the
+specific kernel, together with a same-model unprofiled end-to-end comparison.
+No claim that 40–60% is attainable with the present architecture follows from
+these timing measurements alone. This diagram uses the existing captures and
+requires no new GPU run.
