@@ -360,3 +360,52 @@ modal run -m model_hybrid.modal_tools::bench \
   --microbatch 6 --global-rows 256 --real-data --require-gpu-model \
   --phase-timings --compare-fp8 --run-id YOUR_UNIQUE_RUN_ID
 ```
+
+## FP8 backward diagnosis: scaling consumes the GEMM savings
+
+The one-H100 studies (launch sources `51009d6` and `3d8aca7`) compare compiled
+linears with identical FP32 weights, BF16 inputs and upstream gradients. Main
+microbatch shapes use 24,576 token rows; tail shapes use 8,192. Four warmups precede
+20 unprofiled CUDA-event samples. A separate single-backward profile attributes
+kernel duration; profiler times are not substituted for unprofiled latency.
+[Complete results and logs](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/fp8-backward-study)
+retain both studies, including the unsuccessful alternatives.
+
+For the second study's `[24576, 1536] @ [1536, 4096]` MLP expansion:
+
+| Recipe | Backward median ms | Profile: GEMM ms | Profile: compiled scaling/conversion ms |
+| --- | ---: | ---: | ---: |
+| BF16 | 0.791 | 0.768 | 0.011 |
+| Original rowwise FP8 | 1.114 | 0.421 | 0.676 |
+| Tensorwise FP8 | 0.695 | 0.416 | 0.261 |
+| Rowwise FP8, higher-precision dW | 0.856 | 0.587 | 0.267 |
+| Rowwise FP8 without power-of-two scale rounding | 1.018 | 0.426 | 0.577 |
+
+The FP8 GEMMs are already substantially faster than BF16. Rowwise scaling,
+conversion and transposition kernels erase that gain. Removing power-of-two
+rounding recovers some time but leaves most of the overhead. Retaining BF16
+weight-gradient computation improves over original rowwise FP8 but is slower
+than tensorwise on the dominant MLP shapes. Kernel names and durations in the
+archive expose the fused `amax`, scale, cast and transpose operations; this is
+measured device time, not a claim of a particular achieved DRAM bandwidth or
+hardware stall reason.
+
+Tensorwise reduces expansion backward by ~38% versus rowwise. For the MLP
+contraction `[24576, 4096] @ [4096, 1536]`, backward falls **1.131 → 0.573 ms**
+(~49%). Smaller projections and tail microbatches do not uniformly improve over
+BF16. Standalone calls also expose different host-dispatch overhead than a whole
+compiled model, so summing these medians cannot predict a training-step speedup.
+
+All 40 cases in the second study passed the finite/relative-L2 smoke gate.
+Tensorwise uses E5M2 gradient operands and has ~5.9% dX/dW relative-L2 error on
+these Gaussian inputs, versus ~3.8% for rowwise E4M3. Its forward error is ~3.7%.
+This is an intentional numerical-policy change, not an algebraically identical
+kernel rewrite. It needs learning-curve validation before production adoption.
+
+The benchmark now accepts `--fp8-recipe` and `--fp8-scope`. Scope `all` converts
+183 large linears; `mlp` converts 75 MLP linears (471,859,200 weight elements),
+retaining BF16 projections. `both` on the Modal entrypoint compares both scopes
+between two BF16 controls. The recurrence, vocabulary losses, optimizer and
+communication retain their existing precision. The next full-model comparison
+uses tensorwise scaling and both scopes to test whether these kernel savings
+survive in the real training step.
