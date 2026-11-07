@@ -14,6 +14,7 @@ mismatch.
 """
 
 import time
+from itertools import pairwise
 
 import torch
 from model_hybrid import hnet, kda, model
@@ -120,6 +121,27 @@ def fused_loss_against_autograd():
     if max(errors.values()) > 2e-2:
         raise AssertionError(f"Fused loss disagrees with autograd: {errors}")
     return errors
+
+
+def output_gradient_against_reference():
+    from model_hybrid.output_gradient import accumulate_output_gradient_
+
+    torch.manual_seed(121)
+    results = []
+    compiled = torch.compile(accumulate_output_gradient_)
+    for rows, vocab, width in [(7, 31, 17), (2048, 4096, 128), (257, 154880, 1536)]:
+        grad = torch.randn(rows, vocab, device="cuda", dtype=torch.bfloat16) * 0.02
+        hidden = torch.randn(rows, width, device="cuda", dtype=torch.bfloat16) * 0.02
+        destination = torch.randn(vocab, width, device="cuda") * 0.01
+        expected = destination.clone()
+        for operation in (accumulate_output_gradient_, compiled, compiled):
+            expected += torch.mm(grad.T, hidden, out_dtype=torch.float32)
+            operation(destination, grad, hidden)
+            torch.testing.assert_close(destination, expected, rtol=1e-4, atol=2e-5)
+        results.append(
+            {"shape": [rows, vocab, width], "max_absolute_error": max_error(destination, expected)}
+        )
+    return results
 
 
 def compiled_model():
@@ -421,6 +443,179 @@ def decode_timing(rows=64, prompt=512, new_tokens=256):
 
 
 def checks(only=""):
+    if only == "scalar_delta":
+        import runpy
+        from pathlib import Path
+
+        return runpy.run_path(str(Path(__file__).with_name("check_gated_delta_cuda.py")))[
+            "checks"
+        ]()
+    if only in ("consolidation", "consolidation_model", "consolidation_joint"):
+        import runpy
+        from pathlib import Path
+
+        return runpy.run_path(str(Path(__file__).with_name("check_consolidation_cuda.py")))[
+            "checks"
+        ]({"consolidation_model": "model", "consolidation_joint": "joint-production"}.get(only, ""))
+    if only == "graphed_muon":
+        from trainer.optimizers import GraphedOrthogonalize, orthogonalize
+
+        graphed = GraphedOrthogonalize()
+        results = []
+        for shape in (
+            (1536, 1536),
+            (4096, 1536),
+            (128, 1536),
+            (1536, 128),
+            (1536, 4096),
+            (512, 1536),
+            (1536, 3072),
+        ):
+            torch.manual_seed(sum(shape))
+            for iteration in range(3):
+                value = torch.randn(shape, device="cuda")
+                expected = orthogonalize(value)
+                actual = graphed(value)
+                torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+            results.append({"shape": shape, "replays": 3, "bitwise_equal": True})
+        return {"graphed_muon": results}
+    if only == "kda_intra_backend":
+        from model_hybrid import kda_bench, kda_intra
+
+        ranges = []
+
+        def counted(*args, **kwargs):
+            gates = kwargs["g"] if "g" in kwargs else args[2]
+            offsets = kwargs["cu_seqlens"].tolist()
+            start = next(a for a, b in pairwise(offsets) if b - a >= 16)
+            block = gates[0, start : start + 16].reshape(16, -1, 32)
+            spans = (block.amax(0) - block.amin(0)).amax(-1)
+            ranges.append(
+                {"fast_tiles": int((spans <= 32).sum()), "scalar_tiles": int((spans > 32).sum())}
+            )
+            return kda_intra.backward(*args, **kwargs)
+
+        kda_intra.H100Intra.chunk_kda_bwd_intra = staticmethod(counted)
+        kda_intra.install()
+        cases = {
+            str(shift): kda_bench.accuracy(
+                kda.kda_kernel,
+                torch.bfloat16,
+                length=65,
+                width=128,
+                tolerance=2e-2,
+                gate_bias_shift=shift,
+            )
+            for shift in (0, 4)
+        }
+        assert len(ranges) == 2, ranges
+        assert sum(x["fast_tiles"] for x in ranges) > 0, ranges
+        assert sum(x["scalar_tiles"] for x in ranges) > 0, ranges
+        return {"gpu": torch.cuda.get_device_name(), "cases": cases, "guard_ranges": ranges}
+    if only == "kda_intra_accuracy":
+        import importlib
+        from unittest.mock import patch
+
+        from model_hybrid import kda_bench
+        from model_hybrid.kernels.kda_intra import intra_backward
+
+        module = importlib.import_module("fla.ops.kda.chunk_intra")
+        calls = []
+
+        class Candidate:
+            def __getitem__(self, grid):
+                def launch(**kwargs):
+                    calls.append(1)
+                    return intra_backward[grid](
+                        **kwargs,
+                        IS_VARLEN=kwargs["cu_seqlens"] is not None,
+                        num_warps=2,
+                        num_stages=1,
+                    )
+
+                return launch
+
+        results = {}
+        with patch.object(module, "chunk_kda_bwd_kernel_intra", Candidate()):
+            for dtype, length, shift in (
+                (torch.float32, 193, 0),
+                (torch.bfloat16, 17, 0),
+                (torch.bfloat16, 65, 0),
+                (torch.bfloat16, 193, 0),
+                (torch.bfloat16, 257, 0),
+                (torch.bfloat16, 65, 4),
+                (torch.bfloat16, 193, 4),
+            ):
+                results[f"{dtype}-{length}-shift{shift}"] = kda_bench.accuracy(
+                    kda.kda_kernel,
+                    dtype,
+                    length=length,
+                    width=128,
+                    tolerance=5e-3 if dtype == torch.float32 else 2e-2,
+                    gate_bias_shift=shift,
+                )
+        assert len(calls) == 7, calls
+        return {"gpu": torch.cuda.get_device_name(), "cases": results, "calls": len(calls)}
+    if only == "kda_wy_accuracy":
+        from model_hybrid import kda_bench, kda_wy
+
+        result = {"gpu": torch.cuda.get_device_name(), "reference": {}}
+        for dtype in (torch.bfloat16, torch.float32):
+            result["reference"][str(dtype)] = kda_bench.accuracy(
+                kda.kda_kernel,
+                dtype,
+                length=193,
+                width=128,
+            )
+        calls = []
+        original_backward = kda_wy.backward
+
+        def counted(*args, **kwargs):
+            calls.append(1)
+            return original_backward(*args, **kwargs)
+
+        kda_wy.H100WY.chunk_kda_bwd_wy_dqkg_fused = staticmethod(counted)
+        kda_wy.install()
+        result["candidate"] = {}
+        for length in (127, 193, 257):
+            for dtype in (torch.bfloat16, torch.float32):
+                result["candidate"][f"{dtype}-{length}"] = kda_bench.accuracy(
+                    kda.kda_kernel,
+                    dtype,
+                    length=length,
+                    width=128,
+                    tolerance=5e-3 if dtype == torch.float32 else 2e-2,
+                )
+        result["custom_backward_calls"] = len(calls)
+        assert len(calls) == 6, f"Expected six custom backward calls, got {len(calls)}"
+        return result
+    if only in ("kda_wy_tiling", "kda_wy_kernel", "kda_intra_kernel"):
+        from model_hybrid.kda_bench import backward_tiling
+
+        return backward_tiling(hoisted=only == "kda_wy_kernel", intra=only == "kda_intra_kernel")
+    if only == "kda_saved":
+        from functools import partial
+
+        import fla.ops.kda
+
+        original = fla.ops.kda.chunk_kda
+        try:
+            fla.ops.kda.chunk_kda = partial(original, disable_recompute=True)
+            return {
+                "gpu": torch.cuda.get_device_name(),
+                "torch": torch.__version__,
+                "kda_saved_fp32": kda_against_reference(torch.float32, 1e-2),
+                "kda_saved_bf16": kda_against_reference(torch.bfloat16, 5e-2),
+            }
+        finally:
+            fla.ops.kda.chunk_kda = original
+    if only == "loss":
+        return {
+            "gpu": torch.cuda.get_device_name(),
+            "torch": torch.__version__,
+            "output_gradient": output_gradient_against_reference(),
+            "fused_loss_vs_autograd": fused_loss_against_autograd(),
+        }
     if only == "decode":
         return {
             "gpu": torch.cuda.get_device_name(),

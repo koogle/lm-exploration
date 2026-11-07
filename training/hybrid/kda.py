@@ -108,6 +108,10 @@ def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False):
 
 
 class KimiDeltaAttention(nn.Module):
+    combined_projections = False
+    recurrence_kernel = staticmethod(kda_kernel)
+    recurrence_reference = staticmethod(kda_reference)
+
     def __init__(self, config):
         super().__init__()
         heads, width = config.n_kda_head, config.head_dim
@@ -162,9 +166,15 @@ class KimiDeltaAttention(nn.Module):
         batch, length, _ = x.shape
         heads = (batch, length, self.heads, self.head_dim)
         positions = mask.positions
-        # Learned q/k/v projections still supply each token's reads and writes.
-        # After its causal convolution and SiLU, v is the correction target below.
-        projections = (self.q_proj(x), self.k_proj(x), self.v_proj(x))
+        # Learned q/k/v projections supply each token's reads and writes.
+        if self.combined_projections:
+            from .consolidation import linear_group
+
+            projections = linear_group(
+                x, (self.q_proj.weight, self.k_proj.weight, self.v_proj.weight)
+            )
+        else:
+            projections = (self.q_proj(x), self.k_proj(x), self.v_proj(x))
         weights = (self.q_conv, self.k_conv, self.v_conv)
         if x.is_cuda:
             from .kda_convolution import kda_convolutions
@@ -176,13 +186,17 @@ class KimiDeltaAttention(nn.Module):
                 for p, w in zip(projections, weights, strict=True)
             )
         q, k, v = q.view(heads), k.view(heads), v.view(heads)
-        g = self.f_proj(x).view(heads)
+        g = self.f_proj(x).view(batch, length, self.heads, -1)
         beta = self.b_proj(x)
         keep = cache is not None
         if x.is_cuda:
-            out = kda_kernel(q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents, keep)
+            out = self.recurrence_kernel(
+                q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents, keep
+            )
         else:
-            out = kda_reference(q, k, v, g, beta, self.A_log, self.dt_bias, positions, keep)
+            out = self.recurrence_reference(
+                q, k, v, g, beta, self.A_log, self.dt_bias, positions, keep
+            )
         if keep:
             out, state = out
             first = int((mask.documents[0] == 0).sum())

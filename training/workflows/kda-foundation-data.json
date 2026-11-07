@@ -1,0 +1,12 @@
+{
+  "name": "kda-foundation-data",
+  "family": "hybrid",
+  "stages": [
+    {
+      "stage": "data",
+      "name": "corpus",
+      "recipe": "hybrid/recipes/kda-foundation-100b-504010-v1.json",
+      "parallel": 8
+    }
+  ]
+}

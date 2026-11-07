@@ -1,0 +1,20 @@
+{
+  "name": "sub1b-control-smoke",
+  "family": "hybrid",
+  "description": "127.6M GPU workflow check, 8192 tokens (four steps), one H100; two-step checkpoint qualification then two resumed steps.",
+  "stages": [
+    {
+      "stage": "pretrain",
+      "name": "pretrain",
+      "model_config": "hybrid/configs/hybrid-128m-coding-smoke.json",
+      "gpu": "H100",
+      "world_size": 1,
+      "segment_seconds": 900,
+      "worker_timeout_seconds": 1800,
+      "max_segments": 2,
+      "segments_per_call": 2,
+      "qualification_segments": 1,
+      "qualification_steps": 2
+    }
+  ]
+}

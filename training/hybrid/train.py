@@ -35,6 +35,7 @@ from tokenizer import glm
 from . import documents as doc_utils
 from . import hnet
 from . import model as hybrid
+from .precision_metrics import fp8_flops_per_token, utilization
 
 H100_BF16_FLOPS = 989e12
 SAMPLE_PROMPTS = (
@@ -58,6 +59,7 @@ class RunConfig:
     optimizer: dict = dataclasses.field(default_factory=dict)
     gradient_clip: float = 1.0
     compile: bool = True
+    gc_warmup_steps: int = 5
     checkpoint_seconds: int = 5400
     keep_checkpoints: int = 2
     eval_every_steps: int = 500
@@ -88,7 +90,7 @@ class RunConfig:
     def __post_init__(self):
         if self.architecture not in ("hybrid", "hnet"):
             raise ValueError("architecture must be 'hybrid' or 'hnet'")
-        if min(self.one_loop_ranks, self.loop_start_tokens, self.context) < 0:
+        if min(self.one_loop_ranks, self.loop_start_tokens, self.context, self.gc_warmup_steps) < 0:
             raise ValueError("one_loop_ranks and loop_start_tokens must be non-negative")
 
 
@@ -465,9 +467,13 @@ class HybridFamily:
         self.config, self.output = config, Path(output)
         self.settings = dataclasses.asdict(config)
         self.model_config = model_config_of(config)
+        self.allow_partial_microbatch = (
+            config.architecture == "hybrid" and not self.model_config.looped
+        )
         self.global_rows, self.microbatch = config.global_rows, config.microbatch
         self.target_tokens, self.gradient_clip = config.target_tokens, config.gradient_clip
         self.seed, self.log_every = config.seed, config.log_every_steps
+        self.gc_warmup_steps = config.gc_warmup_steps
         self.evaluate_every = config.eval_every_steps
         self.checkpoint_every, self.checkpoint_seconds = 0, config.checkpoint_seconds
         self.keep_checkpoints = config.keep_checkpoints
@@ -496,6 +502,11 @@ class HybridFamily:
         return learning_rate_factor(self.config, tokens)
 
     def build(self, device):
+        if torch.device(device).type == "cuda":
+            from . import kda_intra, kda_wy
+
+            kda_wy.install()
+            kda_intra.install()
         torch.backends.cuda.matmul.allow_tf32 = True
         self.lm = hybrid.HybridLM(self.model_config).to(device)
         return self.lm
@@ -550,6 +561,8 @@ class HybridFamily:
             fused_loss,
             kda,
             kda_convolution,
+            output_gradient,
+            precision_metrics,
             softmax_kernel,
         )
         from . import model as hybrid_model
@@ -561,12 +574,22 @@ class HybridFamily:
             hybrid_model,
             kda,
             kda_convolution,
+            output_gradient,
+            precision_metrics,
             softmax_kernel,
         )
         files = {f"hybrid.{Path(m.__file__).stem}": Path(m.__file__) for m in modules}
         return {
             "family": Path(__file__),
             **files,
+            "output_gradient_cuda": Path(__file__).with_name("kernels") / "output_gradient.cu",
+            "kda_wy_launcher": Path(__file__).with_name("kda_wy.py"),
+            "kda_wy_kernel": Path(__file__).with_name("kernels") / "kda_wy.py",
+            "kda_intra_launcher": Path(__file__).with_name("kda_intra.py"),
+            "kda_intra_kernel": Path(__file__).with_name("kernels") / "kda_intra.py",
+            "consolidation": Path(__file__).with_name("consolidation.py"),
+            "gated_delta": Path(__file__).with_name("gated_delta.py"),
+            "consolidated_rmsnorm": Path(__file__).with_name("kernels") / "rmsnorm.py",
             "chat": Path(chat.__file__),
             "chat_sft": Path(chat_sft.__file__),
             "tokenizer_glm": Path(glm.__file__),
@@ -601,7 +624,9 @@ class HybridFamily:
                 for k in range(1, self.model_config.n_loops)
             }
             result["loop_step"] = loop_step_statistics(model)
-        if final or progress["step"] % self.config.sample_every_steps == 0:
+        if self.config.sample_every_steps > 0 and (
+            final or progress["step"] % self.config.sample_every_steps == 0
+        ):
             prompts, stop_ids, new_tokens = self.sampling
             result["samples"] = samples(
                 model, heldout["tokenizer"], device, prompts, stop_ids, new_tokens
@@ -632,6 +657,18 @@ class HybridFamily:
         return int(generator.integers(1, config.n_loops + 1))
 
     def loss(self, model, inputs, labels, extras, counts, progress):
+        if getattr(self, "joint_loss", False):
+            weight = hybrid.mtp_weight(self.model_config, progress["tokens"] / self.target_tokens)
+            scales = (
+                counts["ntp"].reciprocal(),
+                weight / (counts["mtp"].clamp_min(1) * self.model_config.mtp_loss_fraction),
+            )
+            losses = model(inputs, labels, extras["mtp_labels"], loss_scales=scales)
+            return losses["objective"], {
+                "ce": losses["ce"],
+                "z": losses["z"],
+                "mtp_ce": losses["mtp_ce"],
+            }
         if self.model_config.looped:
             loops = self.loop_count(progress)
             self.loop_counts.append(loops)
@@ -663,12 +700,22 @@ class HybridFamily:
         keys = mean_attended_keys(doc_utils.document_positions(documents))
         if not self.model_config.looped:
             flops = flops_per_token(self.model_config, self.lm, keys)
-            return {"mfu": budget / seconds * flops / (world * H100_BF16_FLOPS)}
+            return utilization(
+                flops, fp8_flops_per_token(self.lm, self.model_config), budget / seconds, world
+            )
         # Rank 0's loop counts this step; other ranks differ by their overrides.
         loops = float(np.mean(self.loop_counts))
         self.loop_counts = []
         flops = flops_per_token(self.model_config, self.lm, keys, loops)
-        return {"mfu": budget / seconds * flops / (world * H100_BF16_FLOPS), "loops": loops}
+        return {
+            **utilization(
+                flops,
+                fp8_flops_per_token(self.lm, self.model_config, loops),
+                budget / seconds,
+                world,
+            ),
+            "loops": loops,
+        }
 
     def after_step(self, data, model, progress):
         """A bf16 export to the HF repo every `hf_every_tokens`."""

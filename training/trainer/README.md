@@ -114,3 +114,50 @@ Locally, with the PyTorch build of the training image:
 uv run python -m trainer.continued_pretraining --parent OLD/step-000123456.pt \
   --output NEW-seed/step-000000000.pt --manifest SNAPSHOT/manifest.json --config phase.json
 ```
+
+## Step-phase diagnostics
+
+`loop.train(..., phase_timings=True)` records host elapsed time and CUDA-event
+elapsed time for data fetch, preparation, forward/loss, backward, clipping/metrics
+and the optimizer on every rank. Results are under each metrics row's
+`ranks[].phases`. The events are read after the loop's existing synchronization;
+measurement adds no per-phase synchronization. CUDA-stream elapsed time includes
+stream waits and host submission gaps, not just active kernels. `accumulate`
+contains the forward/backward phases, so do not sum parent and child timings.
+
+### Python garbage collection
+
+Families can set `gc_warmup_steps` to collect and freeze the live Python object
+graph once after that many completed steps **in the current session**, including
+after resume. Hybrid run configs default to five; zero disables the policy.
+The shared loop logs each rank's collection time and frozen-object count, then
+barriers the ranks. This startup work is outside the steady step timer but
+included in the session's elapsed time. `ranks[].host_rss_bytes` tracks current
+resident CPU memory throughout training.
+
+Automatic cyclic GC remains enabled for new objects. The loop unfreezes the
+permanent generation in its `finally` cleanup, including exceptional exits.
+The training worker owns the process's freeze policy; freezing can retain cycles
+in the warm object graph until session exit. Monitor resident memory during long
+runs and checkpoint/evaluation transitions. This is a host-pause fix, not an
+improvement to GPU arithmetic.
+
+For the hybrid benchmark, pass `--phase-timings` to
+`model_hybrid.modal_tools::bench`. The trace audit also links kernels to their CPU
+launch phases using correlation IDs. This distinguishes delayed backward work
+from the host phase that subsequently waits for it.
+
+
+Muon on Hopper with FP32 parameters replays its Newton–Schulz operations through
+CUDA graphs, using one captured operation sequence per device/shape/dtype. This
+preserves individual-matrix arithmetic and the optimizer state format; captured
+buffers are rebuilt after loading a checkpoint. H100 is the measured platform.
+Graph outputs are borrowed buffers consumed by the current parameter update
+before reuse. See [qualification](../plans/KDA_REAL_DATA_MFU.md).
+
+The hybrid adapter supports a smaller final microbatch: for example, 32 rows per
+rank with a maximum microbatch of six becomes `[6, 6, 6, 6, 6, 2]`. Its NTP and MTP
+objectives use global valid-target counts, so the last chunk has the correct
+weight. Other adapters retain their equal-chunk requirement unless they declare
+`allow_partial_microbatch`. Workflow validation retains the equal-chunk rule for H-Net and looped models,
+whose per-microbatch diagnostic averaging has different requirements.
