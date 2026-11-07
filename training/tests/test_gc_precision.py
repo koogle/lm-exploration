@@ -14,6 +14,7 @@ class GCPolicyTests(unittest.TestCase):
 
         policy = TrainingGC(2)
         enabled = gc.isenabled()
+        initial_frozen = gc.get_freeze_count()
         try:
             self.assertIsNone(policy.after_step(1))
             old = Node()
@@ -35,7 +36,7 @@ class GCPolicyTests(unittest.TestCase):
             policy.close()
         gc.collect()
         self.assertIsNone(old_ref())
-        self.assertEqual(gc.get_freeze_count(), 0)
+        self.assertEqual(gc.get_freeze_count(), initial_frozen)
 
     def test_disabled_and_invalid_policy(self):
         self.assertIsNone(TrainingGC().after_step(5))
