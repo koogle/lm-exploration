@@ -94,6 +94,7 @@ def benchmark(
     compare_scalar_delta=False,
     compare_fp8=False,
     fp8_recipe="rowwise",
+    fp8_scope="all",
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -192,11 +193,18 @@ def benchmark(
         runs_volume.commit()
         if checked.returncode:
             raise RuntimeError(checked.stdout + checked.stderr)
-        cases = [
-            ("bf16_first", []),
-            ("fp8_linears", ["--fp8-linears", "--fp8-recipe", fp8_recipe]),
-            ("bf16_repeat", []),
-        ]
+        scopes = ("all", "mlp") if fp8_scope == "both" else (fp8_scope,)
+        cases = (
+            [("bf16_first", [])]
+            + [
+                (
+                    f"fp8_{scope}",
+                    ["--fp8-linears", "--fp8-recipe", fp8_recipe, "--fp8-scope", scope],
+                )
+                for scope in scopes
+            ]
+            + [("bf16_repeat", [])]
+        )
     if compare_scalar_delta:
         cases = [("kda_first", []), ("scalar_delta", ["--scalar-delta"]), ("kda_repeat", [])]
     if compare_consolidation:
@@ -381,6 +389,7 @@ def bench(
     compare_scalar_delta: bool = False,
     compare_fp8: bool = False,
     fp8_recipe: str = "rowwise",
+    fp8_scope: str = "all",
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -391,6 +400,8 @@ def bench(
 
     from workflows.deadline import new_deadline
 
+    if fp8_scope not in ("all", "mlp", "both") or (fp8_scope != "all" and not compare_fp8):
+        raise ValueError("Select FP8 scope all/mlp/both with compare_fp8")
     if fp8_recipe not in RECIPES or (fp8_recipe != "rowwise" and not compare_fp8):
         raise ValueError("Select a supported FP8 recipe with compare_fp8")
     if (profile_all_ranks or profile_stacks) and not profile:
@@ -485,6 +496,7 @@ def bench(
         compare_scalar_delta,
         compare_fp8,
         fp8_recipe,
+        fp8_scope,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)

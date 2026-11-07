@@ -203,6 +203,7 @@ def main():
     parser.add_argument("--reference-intra", action="store_true")
     parser.add_argument("--reference-muon", action="store_true")
     parser.add_argument("--fp8-linears", action="store_true")
+    parser.add_argument("--fp8-scope", choices=("all", "mlp"), default="all")
     parser.add_argument(
         "--fp8-recipe",
         default="rowwise",
@@ -303,13 +304,14 @@ def main():
 
             def float8_build(device):
                 model = fp8_build(device)
-                names = configure_float8(model, args.fp8_recipe)
+                names = configure_float8(model, args.fp8_recipe, args.fp8_scope)
                 if rank == 0:
                     print(
                         json.dumps(
                             {
                                 "fp8_linear_modules": names,
                                 "recipe": args.fp8_recipe,
+                                "scope": args.fp8_scope,
                                 "library": "torchao==0.18.0",
                             }
                         ),
@@ -403,6 +405,7 @@ def main():
                                 "linear_precision": f"fp8_{args.fp8_recipe}"
                                 if args.fp8_linears
                                 else "bf16",
+                                "fp8_scope": args.fp8_scope if args.fp8_linears else None,
                                 "mfu_peak_basis": "H100_dense_BF16_equivalent",
                                 "mixer": "scalar_delta" if args.scalar_delta else "configured",
                                 "parameters": sum(p.numel() for p in lm.parameters()),
