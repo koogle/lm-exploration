@@ -69,7 +69,7 @@ makes this distinction for its sparse-attention autoresearch demonstration.
 
 | Component | First comparison policy | Why |
 | --- | --- | --- |
-| Large MLP and attention projection linears | torchao FP8 rowwise versus existing BF16 autocast | Largest plausible dense-GEMM opportunity using an established implementation |
+| Large MLP, attention projection and MTP fusion linears | torchao FP8 rowwise versus existing BF16 autocast | Largest plausible dense-GEMM opportunity using an established implementation |
 | Small projection/gating maps | Existing precision | Conversion overhead and sensitivity may outweigh savings |
 | KDA recurrent update/state and convolutions | Existing BF16/FP32 behavior | Long chains of updates need separate numerical evidence |
 | Tied vocabulary output and MTP losses | Existing precision | Functional output path is not converted by replacing `nn.Linear`; report its cost as uncovered |
@@ -130,3 +130,43 @@ it is not evidence that CPU offload will speed up our training-step activations.
 No production precision change or large pretraining launch follows from this
 reading alone. Comparison results should be appended with their run IDs and
 provenance, including negative outcomes.
+
+## Our completed eight-H100 comparison
+
+Run `kda-fp8-linears-h100x8-20261107-02`, source `e1c9a4b`, used the protocol
+above and converted 183 large linear layers (707,002,368 weight elements).
+[Raw results, numerical checks, per-step logs and provenance](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-linears-h100x8-20261107-02)
+are archived together. Each arm completed 30 steps / 31.46M window tokens;
+25 post-warmup steps contribute to these medians.
+
+| Arm | Median step | Tokens/sec | BF16-equivalent MFU | Peak allocation/GPU |
+| --- | ---: | ---: | ---: | ---: |
+| BF16 first | 2.918 s | 359,347 | 33.05% | 65.50 GiB |
+| FP8 rowwise linears | 3.612 s | 290,298 | 26.79% | 59.88 GiB |
+| BF16 repeat | 2.918 s | 359,408 | 33.12% | 65.50 GiB |
+
+FP8 reduced throughput **19.22–19.23%**, while the controls differed by only
+**0.017%**. It saved **5.62 GiB/GPU** but added approximately **694 ms/step**.
+All 90 steps had finite main/MTP losses and gradient norms. Representative
+linear output/input-gradient/weight-gradient errors were 3.57–3.78% relative L2.
+Final main training losses were 11.33825 / 11.35398 / 11.33803 respectively; the
+maximum matched-step FP8-versus-first-control main-loss difference was 0.01573.
+These are early training losses during the 500M-token learning-rate warmup,
+not held-out quality or evidence of equivalent long-run convergence.
+
+The phase medians locate the regression: local backward increased from **1,301
+to 1,900 ms**, synchronizing backward from **153 to 202 ms**, and forward/loss
+from **1,346 to 1,391 ms**. Optimizer time stayed approximately 105 ms. The
+synchronizing-backward phase includes computation and is not pure communication;
+phase medians are independently summarized and not an exact additive ledger.
+
+**Decision: retain BF16.** This measured rowwise FP8 implementation fails the
+speed criterion, despite passing the coarse numerical smoke check and saving
+memory. Do not spend the longer convergence-test budget on this candidate yet.
+The source performs dynamic rescaling/casting for backward operands along
+different axes; that is a plausible investigation target, but phase timings alone
+do not separate its cost from GEMM kernel choice. A targeted backward trace or
+shape benchmark is needed before claiming a cause or implementing a fix.
+A larger microbatch enabled by the saved memory is another untested possibility,
+not a measured gain. This result rejects this configuration, not the general
+possibility of efficient FP8 training or Thinking Machines' different NVFP4 stack.
