@@ -38,3 +38,12 @@ class BenchmarkAggregateTests(unittest.TestCase):
         self.assertEqual(result["timed_seconds"], 5)
         self.assertEqual(result["timed_tokens"], 300)
         self.assertAlmostEqual(result["aggregate_mfu"], 0.18)
+
+    def test_warmup_only_run_has_no_throughput_claim(self):
+        row = json.dumps({"step": 1, "loss": 1.0})
+        result = summarize([row])
+        self.assertFalse(result["timing_valid"])
+        self.assertIsNone(result["aggregate_tokens_per_second"])
+        self.assertIsNone(result["aggregate_mfu"])
+        self.assertIsNone(result["tokens_per_second"])
+        self.assertIsNone(result["mfu"])

@@ -76,14 +76,21 @@ def summarize(lines, skip=5):
     return {
         **({"model": metadata[-1]} if metadata else {}),
         "steps_timed": len(timed),
+        "timing_valid": bool(timed),
         "timed_tokens": sum(s["budget_tokens"] for s in timed),
         "timed_seconds": sum(s["seconds"] for s in timed),
         "aggregate_tokens_per_second": sum(s["budget_tokens"] for s in timed)
-        / sum(s["seconds"] for s in timed),
+        / sum(s["seconds"] for s in timed)
+        if timed
+        else None,
         "aggregate_mfu": sum(s["mfu"] * s["seconds"] for s in timed)
-        / sum(s["seconds"] for s in timed),
-        "tokens_per_second": float(np.median([s["tokens_per_second"] for s in timed])),
-        "mfu": float(np.median([s["mfu"] for s in timed])),
+        / sum(s["seconds"] for s in timed)
+        if timed
+        else None,
+        "tokens_per_second": float(np.median([s["tokens_per_second"] for s in timed]))
+        if timed
+        else None,
+        "mfu": float(np.median([s["mfu"] for s in timed])) if timed else None,
         **(
             {
                 "peak_allocated_bytes": max(

@@ -264,7 +264,8 @@ def benchmark(
     result = {
         "exit_code": code,
         "hardware_counter_kernel": hardware_kernel,
-        "throughput_valid": not (hardware_kernel or profile),
+        "throughput_valid": not (hardware_kernel or profile)
+        and all(m.get("steps_timed", 0) > 0 for m in measurements.values()),
         "hardware": hardware,
         "measurements": measurements,
         "config": config,
