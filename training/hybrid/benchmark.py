@@ -87,6 +87,17 @@ def summarize(lines, skip=5):
         / sum(s["seconds"] for s in timed)
         if timed
         else None,
+        **{
+            "aggregate_" + key: sum(s[key] * s["seconds"] for s in timed)
+            / sum(s["seconds"] for s in timed)
+            for key in (
+                "mfu_fp8_peak",
+                "mfu_mixed_precision",
+                "estimated_model_tflops_per_gpu",
+                "estimated_fp8_flop_fraction",
+            )
+            if timed and key in timed[0]
+        },
         "tokens_per_second": float(np.median([s["tokens_per_second"] for s in timed]))
         if timed
         else None,
@@ -256,6 +267,7 @@ def main():
         overrides["microbatch"] = args.microbatch
     if args.global_rows:
         overrides["global_rows"] = args.global_rows
+    overrides["gc_warmup_steps"] = 5 if args.freeze_gc_after_warmup else 0
     config = dataclasses.replace(config, **overrides)
     context = config.model["block_size"]
     if config.architecture == "hnet":
@@ -473,36 +485,9 @@ def main():
             torch._dynamo.on_compile_start(compile_start)
             torch._dynamo.on_compile_end(compile_end)
 
-        frozen = [False]
-
         def observer():
             if profiler:
                 profiler.step()
-            if args.freeze_gc_after_warmup and current_step[0] == 5:
-                # Initialization/compilation leaves a large long-lived Python graph.
-                # Collect it once outside the measured window, then exempt the
-                # live set from later cyclic-GC scans. New objects still use GC.
-                started = time.perf_counter()
-                collected = gc.collect()
-                gc.freeze()
-                frozen[0] = True
-                print(
-                    json.dumps(
-                        {
-                            "gc_warmup": {
-                                "rank": rank,
-                                "collected": collected,
-                                "frozen_objects": gc.get_freeze_count(),
-                                "ms": (time.perf_counter() - started) * 1000,
-                            }
-                        }
-                    ),
-                    flush=True,
-                )
-                import torch.distributed as dist
-
-                if dist.is_initialized():
-                    dist.barrier()
             current_step[0] += 1
 
         report = loop.train(
@@ -515,8 +500,6 @@ def main():
             phase_timings=args.phase_timings,
             step_observer=observer,
         )
-        if frozen[0]:
-            gc.unfreeze()
         if args.host_diagnostics:
             gc.callbacks.remove(gc_event)
             print(

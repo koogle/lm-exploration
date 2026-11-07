@@ -39,4 +39,6 @@ def configure(model, recipe="rowwise", scope="all"):
     assert before == {name: id(p) for name, p in model.named_parameters()}
     if not names:
         raise ValueError("No eligible FP8 linear layers")
+    model._fp8_linear_names = tuple(names)
+    model._fp8_recipe = recipe
     return names

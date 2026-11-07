@@ -66,6 +66,7 @@ def trainer_sources():
     return {
         "trainer": Path(__file__),
         "timing": Path(__file__).with_name("timing.py"),
+        "gc_policy": Path(__file__).with_name("gc_policy.py"),
         "optimizer": Path(trainer.optimizers.__file__),
         "roles": Path(trainer.roles.__file__),
     }
@@ -153,6 +154,7 @@ def train(
     import torch.distributed as dist
     from torch.nn.parallel import DistributedDataParallel as DDP
 
+    from trainer.gc_policy import TrainingGC, host_rss_bytes
     from trainer.optimizers import set_learning_rate
     from trainer.timing import StepTiming
 
@@ -208,6 +210,7 @@ def train(
         return result[0]["value"]
 
     data = None
+    gc_policy = TrainingGC(getattr(family, "gc_warmup_steps", 0))
     try:
         started = time.monotonic()
         random.seed(family.seed)
@@ -461,6 +464,7 @@ def train(
                 rank_stats,
                 {
                     "compute_seconds": time.monotonic() - compute_tick,
+                    "host_rss_bytes": host_rss_bytes(),
                     "peak_allocated_bytes": torch.cuda.max_memory_allocated(),
                     "peak_reserved_bytes": torch.cuda.max_memory_reserved(),
                     **({"phases": timing.result()} if phase_timings else {}),
@@ -494,6 +498,10 @@ def train(
 
             with timing.phase("logging"):
                 primary(record)
+            gc_record = gc_policy.after_step(step - start_step)
+            if gc_record is not None:
+                print(json.dumps({"gc_warmup": {"rank": rank, **gc_record}}), flush=True)
+                dist.barrier()
             if step_observer is not None:
                 step_observer()
             if step % family.evaluate_every == 0:
@@ -537,6 +545,7 @@ def train(
 
         return primary(finish)
     finally:
+        gc_policy.close()
         faulthandler.cancel_dump_traceback_later()
         if data is not None:
             data.close()
