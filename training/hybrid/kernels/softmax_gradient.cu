@@ -47,7 +47,7 @@ struct alignas(sizeof(T) * VEC) Vector {
   T values[VEC];
 };
 
-template <typename T, int VEC, bool GROUPED>
+template <typename T, int VEC>
 __global__ void __launch_bounds__(THREADS)
     softmax_gradient_kernel(T* logits, const int64_t* targets, float* lse_out, float* target_out,
                             float z_loss, int vocab, int64_t stride) {
@@ -60,20 +60,8 @@ __global__ void __launch_bounds__(THREADS)
   float m = -INFINITY, s = 0.0f;
   for (int i = threadIdx.x; i < count; i += THREADS) {
     const Vector<T, VEC> chunk = vectors[i];
-    if constexpr (GROUPED) {
-      float group_max = -INFINITY;
 #pragma unroll
-      for (int j = 0; j < VEC; ++j)
-        group_max = fmaxf(group_max, to_float(chunk.values[j]));
-      float group_sum = 0.0f;
-#pragma unroll
-      for (int j = 0; j < VEC; ++j)
-        group_sum += expf(to_float(chunk.values[j]) - group_max);
-      merge(m, s, group_max, group_sum);
-    } else {
-#pragma unroll
-      for (int j = 0; j < VEC; ++j) add(m, s, to_float(chunk.values[j]));
-    }
+    for (int j = 0; j < VEC; ++j) add(m, s, to_float(chunk.values[j]));
   }
   for (int offset = 16; offset > 0; offset >>= 1)
     merge(m, s, __shfl_xor_sync(0xffffffff, m, offset), __shfl_xor_sync(0xffffffff, s, offset));
@@ -115,7 +103,7 @@ __global__ void __launch_bounds__(THREADS)
   }
 }
 
-template <typename T, bool GROUPED>
+template <typename T>
 void launch(torch::Tensor& logits, const torch::Tensor& targets, torch::Tensor& lse,
             torch::Tensor& target_logit, float z_loss) {
   const int rows = logits.size(0), vocab = logits.size(1);
@@ -127,10 +115,10 @@ void launch(torch::Tensor& logits, const torch::Tensor& targets, torch::Tensor& 
   auto stream = at::cuda::getCurrentCUDAStream();
   auto* t = targets.data_ptr<int64_t>();
   if (aligned) {
-    softmax_gradient_kernel<T, WIDE, GROUPED><<<rows, THREADS, 0, stream>>>(
+    softmax_gradient_kernel<T, WIDE><<<rows, THREADS, 0, stream>>>(
         data, t, lse.data_ptr<float>(), target_logit.data_ptr<float>(), z_loss, vocab, stride);
   } else {
-    softmax_gradient_kernel<T, 1, GROUPED><<<rows, THREADS, 0, stream>>>(
+    softmax_gradient_kernel<T, 1><<<rows, THREADS, 0, stream>>>(
         data, t, lse.data_ptr<float>(), target_logit.data_ptr<float>(), z_loss, vocab, stride);
   }
   C10_CUDA_KERNEL_LAUNCH_CHECK();
@@ -139,7 +127,7 @@ void launch(torch::Tensor& logits, const torch::Tensor& targets, torch::Tensor& 
 }  // namespace
 
 std::vector<torch::Tensor> softmax_gradient(torch::Tensor logits, torch::Tensor targets,
-                                            double z_loss, bool grouped) {
+                                            double z_loss) {
   TORCH_CHECK(logits.is_cuda() && logits.dim() == 2 && logits.stride(1) == 1,
               "logits must be a CUDA [rows, vocab] tensor contiguous along the vocabulary");
   TORCH_CHECK(targets.scalar_type() == torch::kInt64 && targets.is_contiguous() &&
@@ -151,18 +139,14 @@ std::vector<torch::Tensor> softmax_gradient(torch::Tensor logits, torch::Tensor 
   auto target_logit = torch::empty_like(lse);
   if (logits.size(0) == 0) return {lse, target_logit};
   if (logits.scalar_type() == torch::kBFloat16) {
-    if (grouped) launch<__nv_bfloat16, true>(logits, targets, lse, target_logit, static_cast<float>(z_loss));
-    else launch<__nv_bfloat16, false>(logits, targets, lse, target_logit, static_cast<float>(z_loss));
+    launch<__nv_bfloat16>(logits, targets, lse, target_logit, static_cast<float>(z_loss));
   } else {
     TORCH_CHECK(logits.scalar_type() == torch::kFloat32, "logits must be bfloat16 or float32");
-    if (grouped) launch<float, true>(logits, targets, lse, target_logit, static_cast<float>(z_loss));
-    else launch<float, false>(logits, targets, lse, target_logit, static_cast<float>(z_loss));
+    launch<float>(logits, targets, lse, target_logit, static_cast<float>(z_loss));
   }
   return {lse, target_logit};
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, module) {
-  module.def("softmax_gradient", &softmax_gradient, "In-place cross-entropy logit gradient",
-             pybind11::arg("logits"), pybind11::arg("targets"), pybind11::arg("z_loss"),
-             pybind11::arg("grouped") = false);
+  module.def("softmax_gradient", &softmax_gradient, "In-place cross-entropy logit gradient");
 }

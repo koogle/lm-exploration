@@ -31,10 +31,6 @@ app = modal.App("lm-exploration-hybrid-checks")
 def check(deadline, only=""):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
-    if only == "softmax_grouped":
-        from model_hybrid.softmax_diagnostics import run
-
-        return run()
     if only == "fp8_backward":
         from model_hybrid.float8_diagnostics import run
 
