@@ -4,6 +4,8 @@ Source-backed reading notes and proposed experiments for our from-scratch models
 External results are attributed to their authors; proposals are not measured
 results or changes to the agreed training plan.
 
+- [Thinking Machines Inkling 2 Small — 2026-11-07](thinking-machines-inkling2-2026-11-07.md):
+  native NVFP4 on Blackwell, what transfers to H100 FP8, and a matched KDA precision comparison.
 - [SFT task vectors after RL — 2026-11-05](sft-task-vectors-2026-11-05.md):
   task arithmetic, limits of dataset attribution, and checkpoint/grader evaluation lessons.
 - [Ricursive Ripple — 2026-11-05](ricursive-ripple-2026-11-05.md):
