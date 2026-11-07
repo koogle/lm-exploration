@@ -406,7 +406,7 @@ The benchmark now accepts `--fp8-recipe` and `--fp8-scope`. Scope `all` converts
 183 large linears; `mlp` converts 75 MLP linears (471,859,200 weight elements),
 retaining BF16 projections. `both` on the Modal entrypoint compares both scopes
 between two BF16 controls. The recurrence, vocabulary losses, optimizer and
-communication retain their existing precision. The next full-model comparison
+communication retain their existing precision. The full-model comparison below
 uses tensorwise scaling and both scopes to test whether these kernel savings
 survive in the real training step.
 
@@ -466,3 +466,58 @@ fresh comparison; this is a collect-plus-freeze policy, not an isolated proof
 that freezing alone is necessary. Its cost is outside the steady timing window,
 not claimed to disappear. Long-run host-memory behavior and checkpoint/evaluation
 lifecycle behavior still need qualification before use in production training.
+
+### Matched eight-H100 comparison with explicit warmup cleanup
+
+Run `kda-fp8-gc-h100x8-20261107-01`, source `0d3ab12`, applies that same cleanup
+policy to BF16 / tensorwise FP8 (all eligible linears) / BF16 on one strict
+eight-H100 allocation. Each arm completes 40 steps; the first five are excluded
+by the predetermined timing window. All 120 steps have finite main/MTP losses
+and gradient norms. The real 50/40/10 corpus, seed, model, global batch 256,
+microbatch six and 4K context are unchanged.
+[Raw results, numerical checks, per-rank host events and timing audit](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-gc-h100x8-20261107-01).
+
+| Arm | Aggregate tokens/sec | Aggregate BF16-equivalent MFU | Median / maximum timed step | Peak allocation/GPU |
+| --- | ---: | ---: | ---: | ---: |
+| BF16 first | 358,215 | 33.00% | 2.928 / 2.944 s | 65.50 GiB |
+| Tensorwise FP8, all eligible linears | 377,293 | 34.76% | 2.778 / 2.806 s | 59.88 GiB |
+| BF16 repeat | 358,170 | 33.00% | 2.927 / 2.951 s | 65.50 GiB |
+
+FP8 improves aggregate throughput **5.33–5.34%** over both controls and saves
+**5.62 GiB/GPU**. Control drift is **0.012%**. All 35 timed steps per arm count
+toward aggregate throughput, with no post-hoc outlier removal. No timed GC event
+of at least 10 ms or Dynamo compile callback is recorded on any rank. These
+hooks do not rule out every possible host pause or backend compilation event.
+
+| Rank-zero phase median | BF16 first | FP8 | BF16 repeat |
+| --- | ---: | ---: | ---: |
+| Forward and loss | 1,355 ms | 1,353 ms | 1,358 ms |
+| Local backward | 1,317 ms | 1,180 ms | 1,318 ms |
+| Synchronizing backward | 128 ms | 122 ms | 127 ms |
+| Optimizer | 105 ms | 105 ms | 105 ms |
+
+Local backward is **10.4–10.5% faster**, saving approximately **137–139 ms**.
+The unchanged forward/loss and optimizer work limits the full-step benefit.
+These are independent phase medians, not an additive exclusive ledger;
+synchronizing backward includes computation, communication and waiting.
+
+The explicit post-step-five collection/freeze costs **0.750–0.800 s/rank** for
+the first BF16 arm, **0.885–1.136 s/rank** for FP8 and **0.603–0.693 s/rank** for
+the repeated BF16 arm, followed by an all-rank barrier. This one-time startup
+cost is outside the measured steady window and is not eliminated work. The
+earlier short-run stall penalty should not be extrapolated as a recurring
+long-run tax; this experiment qualifies the combined cleanup policy over 35
+timed steps, not the necessity of freezing over a collect-only alternative.
+
+Last main losses are **10.65804 / 10.66881 / 10.65812**. The LR is still in
+early warmup. Tensorwise E5M2 gradient conversion had approximately 5.9%
+relative L2 errors on the isolated Gaussian checks, versus approximately
+3.7% for rowwise E4M3. Finite short runs do not establish learning-quality
+equivalence, robustness to trained activation outliers, or long-run host-memory
+behavior. FP8 and the GC policy remain benchmark-only; production BF16 and
+KDA defaults are unchanged. All comparison apps are stopped.
+
+This is a measured FP8 backward improvement, but **34.76% BF16-equivalent MFU
+is still below 40–60%**. It uses the existing 989 TF/s/GPU BF16 peak denominator,
+not native FP8 peak utilization. Reaching 40% at the same estimated work still
+requires roughly another 0.36 seconds removed from each 2.78-second step.
