@@ -447,6 +447,22 @@ uv run --all-extras python -m model_hybrid.playground.publish \
 
 ## Benchmarks
 
+Training throughput metrics use explicit dense H100 SXM ceilings. `mfu` retains
+the BF16-equivalent estimate (989 TF/s/GPU); `mfu_fp8_peak` divides the same
+estimated model FLOPs by the 1,978 TF/s/GPU FP8 ceiling. The latter assumes an
+all-FP8 device ceiling even though this model uses mixed precision.
+`mfu_mixed_precision` instead sums ideal time for FP8 and remaining BF16 work:
+`tokens/sec/GPU * (FP8 FLOPs/token / FP8 peak + BF16 FLOPs/token / BF16 peak)`.
+The logs include estimated TFLOP/s/GPU and the FP8 share of model FLOPs.
+
+The FP8 partition follows the converted linear modules and their actual recipe
+(including BF16 weight gradients in `rowwise_with_gw_hp`). Vocabulary heads and
+attention remain in the BF16 partition. These estimates retain the existing
+matrix/attention accounting and sampled document lengths; recurrence,
+elementwise, optimizer and conversion work is omitted. They are not measurements
+of hardware tensor-core activity. Compare aggregate tokens/sec as well as MFU;
+changing the peak denominator alone does not change performance.
+
 [`benchmarks.py`](benchmarks.py) wraps an export as an lm-evaluation-harness
 model. Multiple-choice and perplexity requests are scored with the model's
 document-masked forward pass on CUDA (each request is `[EOS] + context +

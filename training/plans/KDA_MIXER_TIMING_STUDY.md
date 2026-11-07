@@ -521,3 +521,79 @@ This is a measured FP8 backward improvement, but **34.76% BF16-equivalent MFU
 is still below 40–60%**. It uses the existing 989 TF/s/GPU BF16 peak denominator,
 not native FP8 peak utilization. Reaching 40% at the same estimated work still
 requires roughly another 0.36 seconds removed from each 2.78-second step.
+
+### Forward/loss kernel experiment: vector-grouped reduction
+
+The vocabulary loss performs its hidden and weight gradients inside its forward
+call. Its contribution to `forward_and_loss` is therefore more than inference
+forward work. A candidate groups the vector-load elements before merging their
+online softmax statistics, reducing serial per-element updates without changing
+the loss objective or logits traffic. Source `ac702d9` retains this experiment;
+it was discarded from active code after measurement.
+
+On H100 at the production BF16 shape `[2048, 154880]`, reference / grouped /
+reference-repeat median kernel times are **0.67136 / 0.66909 / 0.67133 ms**.
+The approximately **0.34%** difference is not a useful optimization. At input
+scale 20 the difference is similarly small. BF16/FP32, aligned production
+vocabulary and an unaligned 8,193-token vocabulary, ignored labels, and two
+input scales all pass finite/numerical checks. Maximum production BF16 gradient
+relative L2 difference is below 9e-8. These are isolated kernel measurements;
+there is no claimed full-model throughput gain.
+
+The production BF16 kernel's logical two reads plus one write move about 1.90 GB
+in 0.671 ms, approximately **2.84 TB/s**. This is logical traffic, not a DRAM
+counter measurement, and explains why changing the reduction arithmetic gives
+little benefit. The previously measured ~86 ms/step kernel total is itself
+under 3% of step time. No full-model comparison was launched for this negligible
+candidate. [Checks, timings and provenance](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/grouped-softmax-forward-20261107)
+preserve the negative result.
+
+### Shared-loop GC fix and explicit FP8 MFU measurement
+
+Run `kda-fp8-mfu-shared-gc-h100x8-20261107-01` (source `665627e`) completes
+100 real-data FP8 steps on eight exact H100s, with 95 predetermined timed steps.
+The collect/freeze policy now lives in `trainer.loop`, rather than the benchmark
+observer. Hybrid configs use `gc_warmup_steps=5`; zero disables it. The session
+warmup restarts after resume, automatic collection remains enabled for new
+objects, and the loop unfreezes the permanent generation during `finally`
+cleanup. Current resident CPU memory is logged on every rank.
+
+| Measurement | Result |
+| --- | ---: |
+| Aggregate throughput, including every timed pause | 371,739 tokens/sec |
+| BF16-equivalent MFU, 989 TF/s/GPU denominator | 34.27% |
+| All-FP8 peak denominator, 1,978 TF/s/GPU | 17.14% |
+| Mixed-precision ideal-time estimate | 24.31% |
+| Estimated model arithmetic per GPU | 338.98 TFLOP/s |
+| Estimated FP8 share of model FLOPs | 58.15% |
+| Median / maximum timed step | 2.810 / 3.635 seconds |
+| Peak allocated GPU memory | 59.88 GiB |
+
+The mixed estimate weights FP8 FLOPs by 1,978 TF/s and the remaining modeled
+BF16 FLOPs by 989 TF/s. This avoids treating the BF16 vocabulary heads as FP8.
+The code reports all three denominators explicitly; a denominator change is not
+a speed improvement. These are model-FLOP estimates, not hardware-counter tensor
+utilization. They retain the existing omissions of recurrence, conversions,
+elementwise and optimizer FLOPs and the sampled attention-length estimate.
+
+All 100 main/MTP losses and gradient norms are finite; final main loss is
+7.25422. No timed GC event of at least 10 ms or Dynamo compile callback is
+recorded on any of the eight ranks. The one slow timed step, **step 90**, spends
+**840 ms in data fetch**; its forward/backward phases remain normal. It remains
+in the throughput/MFU totals. This is not evidence that every type of pause is
+eliminated.
+
+Host RSS at step six is 8.30 GiB on rank zero and 7.13–7.17 GiB on other ranks.
+No rank exceeds its step-six RSS during the remaining measured window; end RSS
+is flat or slightly lower. Startup collection costs **0.836–0.958 seconds/rank**,
+plus a barrier, and the first compilation/startup step takes **390.4 seconds**.
+Those costs are outside steady-state MFU, not claimed as saved work. This short
+window does not establish multi-day memory stability or long-run FP8 learning
+quality. There is no same-allocation BF16 control in this follow-up; use the
+earlier matched comparison for the speedup claim.
+
+Seventeen focused CPU tests pass, including precision partitions on the real
+960M model, the high-precision weight-gradient recipe, new-cycle collection and
+release of the frozen graph at session exit. Ruff passes. [Full results and
+per-rank audit](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-mfu-shared-gc-h100x8-20261107-01)
+retain startup costs, the fetch pause and source provenance.

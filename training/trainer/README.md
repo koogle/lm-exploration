@@ -125,6 +125,23 @@ measurement adds no per-phase synchronization. CUDA-stream elapsed time includes
 stream waits and host submission gaps, not just active kernels. `accumulate`
 contains the forward/backward phases, so do not sum parent and child timings.
 
+### Python garbage collection
+
+Families can set `gc_warmup_steps` to collect and freeze the live Python object
+graph once after that many completed steps **in the current session**, including
+after resume. Hybrid run configs default to five; zero disables the policy.
+The shared loop logs each rank's collection time and frozen-object count, then
+barriers the ranks. This startup work is outside the steady step timer but
+included in the session's elapsed time. `ranks[].host_rss_bytes` tracks current
+resident CPU memory throughout training.
+
+Automatic cyclic GC remains enabled for new objects. The loop unfreezes the
+permanent generation in its `finally` cleanup, including exceptional exits.
+The training worker owns the process's freeze policy; freezing can retain cycles
+in the warm object graph until session exit. Monitor resident memory during long
+runs and checkpoint/evaluation transitions. This is a host-pause fix, not an
+improvement to GPU arithmetic.
+
 For the hybrid benchmark, pass `--phase-timings` to
 `model_hybrid.modal_tools::bench`. The trace audit also links kernels to their CPU
 launch phases using correlation IDs. This distinguishes delayed backward work
