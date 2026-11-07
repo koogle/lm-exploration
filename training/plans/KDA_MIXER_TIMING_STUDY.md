@@ -304,3 +304,59 @@ specific kernel, together with a same-model unprofiled end-to-end comparison.
 No claim that 40–60% is attainable with the present architecture follows from
 these timing measurements alone. This diagram uses the existing captures and
 requires no new GPU run.
+
+## BF16 versus FP8 linears on eight H100s
+
+The Inkling 2 Small review and lower-precision rationale are in
+[reference PR #151](https://github.com/koogle/lm-exploration/pull/151). Its reported
+native NVFP4/GB300 training motivates investigation, but the detailed recipe is
+not yet disclosed and H100 lacks Blackwell's native FP4 matrix hardware.
+
+Our run `kda-fp8-linears-h100x8-20261107-02` (source `e1c9a4b`) compared
+BF16 / torchao 0.18.0 rowwise FP8 / BF16 in one strict eight-H100 allocation.
+The 960M KDA, real 50/40/10 data, seed, context 4096, global batch 256, microbatch
+six, optimizer and full MTP loss stayed fixed. Only 183 eligible large linear
+layers changed computation precision; recurrent state, functional vocabulary
+heads, optimizer and gradient communication retained their existing precision.
+Both controls use the same dependency image as FP8. Parameter identities and
+counts were checked; FP8 did not reduce the model size.
+
+[Evidence and provenance](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-linears-h100x8-20261107-02)
+include every arm's log, numerical checks and an earlier launch error. Attempt 01
+failed before GPU-worker submission because Modal's `with_options` does not
+accept an image override. The corrected image pins torchao before registration.
+The successful worker retained its 1,800-second timeout, zero retries and an
+independent overall deadline supervisor.
+
+| Arm | Median step ms | Tokens/sec | BF16-equivalent MFU | Peak allocation/GPU |
+| --- | ---: | ---: | ---: | ---: |
+| BF16 first | 2,918.0 | 359,347 | 33.05% | 65.50 GiB |
+| FP8 rowwise linears | 3,612.1 | 290,298 | 26.79% | 59.88 GiB |
+| BF16 repeat | 2,917.5 | 359,408 | 33.12% | 65.50 GiB |
+
+Each arm completed 30 steps, with five excluded from timing; all 90 steps had
+finite losses and gradient norms. The FP8 linears' representative output/dX/dW
+relative-L2 errors were 3.57–3.78%. Last main losses were 11.33825, 11.35398 and
+11.33803. The short run is still within LR warmup and does not establish quality
+equivalence or stability over the proposed pretraining budget.
+
+FP8 throughput regressed 19.22–19.23%; control drift was only 0.017%. Memory fell
+5.62 GiB/GPU. Local-backward phase median grew 1,301 → 1,900 ms, synchronizing
+backward 153 → 202 ms, forward/loss 1,346 → 1,391 ms, and optimizer stayed ~105 ms.
+These phase medians are non-additive; synchronizing backward includes computation.
+The run measures the regression, not a kernel-level causal explanation.
+
+Keep BF16 as the qualified default. The FP8 implementation remains benchmark-only.
+A subsequent investigation can isolate backward quantization/layout and GEMM costs,
+or test whether the saved memory enables a sufficiently faster larger microbatch.
+Neither benefit is established here. Do not reinterpret the reported MFU as native
+FP8 hardware utilization: the existing estimator retains its BF16 peak denominator.
+
+Reproduce the bounded comparison from `training/`:
+
+```sh
+modal run -m model_hybrid.modal_tools::bench \
+  --config hybrid/configs/kda-960m-100b.json --gpus 8 --steps 30 \
+  --microbatch 6 --global-rows 256 --real-data --require-gpu-model \
+  --phase-timings --compare-fp8 --run-id YOUR_UNIQUE_RUN_ID
+```
