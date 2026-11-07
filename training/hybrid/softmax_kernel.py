@@ -29,3 +29,18 @@ def softmax_gradient_(
 def _(logits, targets, z_loss):
     stats = logits.new_empty(logits.shape[0], dtype=torch.float32)
     return stats, torch.empty_like(stats)
+
+
+@torch.library.custom_op("hybrid::grouped_softmax_gradient_", mutates_args=("logits",))
+def grouped_softmax_gradient_(
+    logits: torch.Tensor, targets: torch.Tensor, z_loss: float
+) -> tuple[torch.Tensor, torch.Tensor]:
+    return tuple(
+        load("softmax_gradient").softmax_gradient(logits, targets.contiguous(), z_loss, True)
+    )
+
+
+@grouped_softmax_gradient_.register_fake
+def _(logits, targets, z_loss):
+    stats = logits.new_empty(logits.shape[0], dtype=torch.float32)
+    return stats, torch.empty_like(stats)
