@@ -93,6 +93,7 @@ def benchmark(
     profile_stacks=False,
     compare_scalar_delta=False,
     compare_fp8=False,
+    fp8_recipe="rowwise",
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -178,7 +179,7 @@ def benchmark(
         ]
     if compare_fp8:
         checked = subprocess.run(
-            ["python", "/project/tests/check_float8_cuda.py"],
+            ["python", "/project/tests/check_float8_cuda.py", "--recipe", fp8_recipe],
             cwd="/project",
             capture_output=True,
             text=True,
@@ -191,7 +192,11 @@ def benchmark(
         runs_volume.commit()
         if checked.returncode:
             raise RuntimeError(checked.stdout + checked.stderr)
-        cases = [("bf16_first", []), ("fp8_linears", ["--fp8-linears"]), ("bf16_repeat", [])]
+        cases = [
+            ("bf16_first", []),
+            ("fp8_linears", ["--fp8-linears", "--fp8-recipe", fp8_recipe]),
+            ("bf16_repeat", []),
+        ]
     if compare_scalar_delta:
         cases = [("kda_first", []), ("scalar_delta", ["--scalar-delta"]), ("kda_repeat", [])]
     if compare_consolidation:
@@ -375,14 +380,19 @@ def bench(
     profile_stacks: bool = False,
     compare_scalar_delta: bool = False,
     compare_fp8: bool = False,
+    fp8_recipe: str = "rowwise",
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
     `--profile` adds GPU kernel time per category for a few steps (see benchmark.py);
     `--mtp-loss-fraction` overrides the model's MTP loss fraction.
     """
+    from model_hybrid.float8_training import RECIPES
+
     from workflows.deadline import new_deadline
 
+    if fp8_recipe not in RECIPES or (fp8_recipe != "rowwise" and not compare_fp8):
+        raise ValueError("Select a supported FP8 recipe with compare_fp8")
     if (profile_all_ranks or profile_stacks) and not profile:
         raise ValueError("Rank and stack profiling require profile")
     if consolidation_cases and not compare_consolidation:
@@ -474,6 +484,7 @@ def bench(
         profile_stacks,
         compare_scalar_delta,
         compare_fp8,
+        fp8_recipe,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)

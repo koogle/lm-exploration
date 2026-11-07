@@ -1,5 +1,7 @@
 """Benchmark-only Hopper FP8 linears; recurrence and vocabulary loss stay unchanged."""
 
+import dataclasses
+
 from torch import nn
 
 
@@ -13,7 +15,7 @@ def eligible(module, name):
     )
 
 
-RECIPES = ("rowwise", "tensorwise", "rowwise_with_gw_hp")
+RECIPES = ("rowwise", "tensorwise", "rowwise_with_gw_hp", "rowwise_no_pow2")
 
 
 def configure(model, recipe="rowwise"):
@@ -23,9 +25,12 @@ def configure(model, recipe="rowwise"):
 
     names = [name for name, module in model.named_modules() if eligible(module, name)]
     before = {name: id(p) for name, p in model.named_parameters()}
-    convert_to_float8_training(
-        model, module_filter_fn=eligible, config=Float8LinearConfig.from_recipe_name(recipe)
+    config = Float8LinearConfig.from_recipe_name(
+        "rowwise" if recipe == "rowwise_no_pow2" else recipe
     )
+    if recipe == "rowwise_no_pow2":
+        config = dataclasses.replace(config, round_scales_to_power_of_2=False)
+    convert_to_float8_training(model, module_filter_fn=eligible, config=config)
     assert before == {name: id(p) for name, p in model.named_parameters()}
     if not names:
         raise ValueError("No eligible FP8 linear layers")

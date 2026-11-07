@@ -203,6 +203,11 @@ def main():
     parser.add_argument("--reference-intra", action="store_true")
     parser.add_argument("--reference-muon", action="store_true")
     parser.add_argument("--fp8-linears", action="store_true")
+    parser.add_argument(
+        "--fp8-recipe",
+        default="rowwise",
+        choices=("rowwise", "tensorwise", "rowwise_with_gw_hp", "rowwise_no_pow2"),
+    )
     parser.add_argument("--consolidation", choices=["joint-loss", "projections", "norm", "all"])
     args = parser.parse_args()
     if (args.profile_all_ranks or args.profile_stacks) and not args.profile:
@@ -298,13 +303,13 @@ def main():
 
             def float8_build(device):
                 model = fp8_build(device)
-                names = configure_float8(model)
+                names = configure_float8(model, args.fp8_recipe)
                 if rank == 0:
                     print(
                         json.dumps(
                             {
                                 "fp8_linear_modules": names,
-                                "recipe": "rowwise",
+                                "recipe": args.fp8_recipe,
                                 "library": "torchao==0.18.0",
                             }
                         ),
@@ -395,7 +400,9 @@ def main():
                     json.dumps(
                         {
                             "benchmark_model": {
-                                "linear_precision": "fp8_rowwise" if args.fp8_linears else "bf16",
+                                "linear_precision": f"fp8_{args.fp8_recipe}"
+                                if args.fp8_linears
+                                else "bf16",
                                 "mfu_peak_basis": "H100_dense_BF16_equivalent",
                                 "mixer": "scalar_delta" if args.scalar_delta else "configured",
                                 "parameters": sum(p.numel() for p in lm.parameters()),
