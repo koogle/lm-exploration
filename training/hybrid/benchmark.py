@@ -217,6 +217,7 @@ def main():
     parser.add_argument("--reference-intra", action="store_true")
     parser.add_argument("--reference-muon", action="store_true")
     parser.add_argument("--host-diagnostics", action="store_true")
+    parser.add_argument("--freeze-gc-after-warmup", action="store_true")
     parser.add_argument("--fp8-linears", action="store_true")
     parser.add_argument("--fp8-scope", choices=("all", "mlp"), default="all")
     parser.add_argument(
@@ -436,7 +437,6 @@ def main():
             return lm
 
         family.build = describe_build
-        observer = profiler.step if profiler else None
         host_events, active_gc, active_compile = [], {}, []
         current_step = [1]
         if args.host_diagnostics:
@@ -473,10 +473,37 @@ def main():
             torch._dynamo.on_compile_start(compile_start)
             torch._dynamo.on_compile_end(compile_end)
 
-            def observer():
-                if profiler:
-                    profiler.step()
-                current_step[0] += 1
+        frozen = [False]
+
+        def observer():
+            if profiler:
+                profiler.step()
+            if args.freeze_gc_after_warmup and current_step[0] == 5:
+                # Initialization/compilation leaves a large long-lived Python graph.
+                # Collect it once outside the measured window, then exempt the
+                # live set from later cyclic-GC scans. New objects still use GC.
+                started = time.perf_counter()
+                collected = gc.collect()
+                gc.freeze()
+                frozen[0] = True
+                print(
+                    json.dumps(
+                        {
+                            "gc_warmup": {
+                                "rank": rank,
+                                "collected": collected,
+                                "frozen_objects": gc.get_freeze_count(),
+                                "ms": (time.perf_counter() - started) * 1000,
+                            }
+                        }
+                    ),
+                    flush=True,
+                )
+                import torch.distributed as dist
+
+                if dist.is_initialized():
+                    dist.barrier()
+            current_step[0] += 1
 
         report = loop.train(
             family,
@@ -488,6 +515,8 @@ def main():
             phase_timings=args.phase_timings,
             step_observer=observer,
         )
+        if frozen[0]:
+            gc.unfreeze()
         if args.host_diagnostics:
             gc.callbacks.remove(gc_event)
             print(

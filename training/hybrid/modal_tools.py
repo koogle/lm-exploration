@@ -97,6 +97,7 @@ def benchmark(
     fp8_scope="all",
     fp8_only=False,
     host_diagnostics=False,
+    freeze_gc_after_warmup=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -113,6 +114,8 @@ def benchmark(
         args += ["--phase-timings"]
     if host_diagnostics:
         args += ["--host-diagnostics"]
+    if freeze_gc_after_warmup:
+        args += ["--freeze-gc-after-warmup"]
     if profile:
         args += ["--profile", "/tmp/profile.json"]
     if profile_all_ranks:
@@ -401,6 +404,7 @@ def bench(
     fp8_scope: str = "all",
     fp8_only: bool = False,
     host_diagnostics: bool = False,
+    freeze_gc_after_warmup: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -516,6 +520,7 @@ def bench(
         fp8_scope,
         fp8_only,
         host_diagnostics,
+        freeze_gc_after_warmup,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)
