@@ -23,8 +23,9 @@ from pathlib import Path
 import modal
 from model_hybrid.image import build, image
 
-fp8_image = build(extra_packages=("torchao==0.18.0",))
-counter_image = build(apt_packages=("cuda-nsight-compute-13-0",))
+counter_image = build(
+    extra_packages=("torchao==0.18.0",), apt_packages=("cuda-nsight-compute-13-0",)
+)
 app = modal.App("lm-exploration-hybrid-tools")
 data_volume = modal.Volume.from_name("lm-exploration-hybrid-data", create_if_missing=True)
 runs_volume = modal.Volume.from_name("lm-exploration-hybrid-runs", create_if_missing=True)
@@ -446,8 +447,6 @@ def bench(
     run_id = run_id or f"bench-{time.time_ns()}"
     requested_gpu = "H100!" if gpu == "H100" and require_gpu_model else gpu
     options = {"gpu": f"{requested_gpu}:{gpus}"}
-    if compare_fp8:
-        options["image"] = fp8_image
     call = benchmark.with_options(**options).spawn(
         settings,
         gpus,
