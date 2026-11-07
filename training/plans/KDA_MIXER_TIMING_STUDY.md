@@ -409,3 +409,60 @@ between two BF16 controls. The recurrence, vocabulary losses, optimizer and
 communication retain their existing precision. The next full-model comparison
 uses tensorwise scaling and both scopes to test whether these kernel savings
 survive in the real training step.
+
+### Eight-H100 tensorwise comparison and the median trap
+
+Run `kda-fp8-tensorwise-h100x8-20261107-01`, source `eeac8de`, completed 20
+steps per arm on one strict eight-H100 allocation. All 80 steps had finite main
+and MTP losses and gradient norms. The configuration, real data, seed and batch
+sizes match the earlier FP8 comparison. Five steps per arm are excluded below.
+[Raw logs and aggregate audit](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-tensorwise-h100x8-20261107-01)
+retain every measured step, including stalls.
+
+| Arm | Median step ms | Aggregate tokens/sec | Aggregate BF16-equivalent MFU | Peak allocation/GPU |
+| --- | ---: | ---: | ---: | ---: |
+| BF16 first | 2,921.3 | 359,048 | 33.04% | 65.50 GiB |
+| Tensorwise FP8, all eligible linears | 2,777.6 | 344,153 | 31.67% | 59.88 GiB |
+| Tensorwise FP8, MLP only | 2,816.0 | 372,160 | 34.25% | 62.18 GiB |
+| BF16 repeat | 2,919.0 | 359,223 | 33.06% | 65.50 GiB |
+
+MLP-only FP8 improves aggregate throughput **3.60–3.65%** and saves **3.32 GiB/GPU**.
+Its local-backward median is **1,220 ms**, versus **1,315–1,317 ms** for BF16.
+Last main losses are 11.97560 / 11.97971 / 11.97671 / 11.97569 in table order.
+These remain short, early-warmup training comparisons, not held-out quality tests.
+
+All-linear tensorwise FP8 has a genuinely faster local-backward median (**1,176
+ms**) and normal steps around 2.77 seconds, but five of its 15 measured steps
+stall in forward. The delayed rank's forward takes approximately 0.8 seconds
+longer; other ranks wait in synchronizing backward. Every rank is delayed once
+across steps 6, 7, 10, 11 and 12. The faster median therefore does **not** imply
+higher aggregate throughput over this window. Do not omit these steps after
+seeing the data.
+
+The shared benchmark now reports timed tokens, timed seconds, aggregate
+throughput and time-weighted MFU alongside its median metrics. A warmup-only
+run has unavailable timing metrics and is not throughput-valid. A regression
+test ensures that stalls lower the aggregate result even when the median stays
+fast. This fixes reporting; it does not change the underlying training speed.
+
+### Host-pause diagnosis
+
+A separate one-H100 run, `kda-fp8-host-h100-20261107-01` (source `b5d7e39`),
+uses 32 global rows / microbatch six to match one rank's work and records Python
+GC and Dynamo compilation callbacks. It completes 40 steps. At step 30,
+**generation-2 GC takes 739.6 ms**, matching the increase from approximately
+2.80 to 3.55 seconds. No post-warmup Dynamo compile callback is recorded. This
+identifies that run's stall; these hooks do not inventory every backend compiler
+and are not a direct trace of the earlier eight-H100 pauses.
+[The diagnostic evidence](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-host-h100-20261107-01)
+includes the callback events and per-step timings.
+
+The benchmark-only candidate `--freeze-gc-after-warmup` collects once after step
+five, freezes the remaining live objects out of future cyclic-GC scans, and
+barriers all ranks before step six. Automatic GC stays enabled for newly
+allocated objects. The policy records its startup collection cost and unfreezes
+objects when the benchmark finishes. It is applied to BF16 and FP8 alike in a
+fresh comparison; this is a collect-plus-freeze policy, not an isolated proof
+that freezing alone is necessary. Its cost is outside the steady timing window,
+not claimed to disappear. Long-run host-memory behavior and checkpoint/evaluation
+lifecycle behavior still need qualification before use in production training.
