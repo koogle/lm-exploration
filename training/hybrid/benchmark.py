@@ -202,6 +202,7 @@ def main():
     parser.add_argument("--phase-timings", action="store_true")
     parser.add_argument("--reference-intra", action="store_true")
     parser.add_argument("--reference-muon", action="store_true")
+    parser.add_argument("--fp8-linears", action="store_true")
     parser.add_argument("--consolidation", choices=["joint-loss", "projections", "norm", "all"])
     args = parser.parse_args()
     if (args.profile_all_ranks or args.profile_stacks) and not args.profile:
@@ -290,6 +291,28 @@ def main():
             mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
             data = ({"synthetic": True}, lambda: mixture)
         family = family_of(config)(config, run_dir, data=data)
+        if args.fp8_linears:
+            from .float8_training import configure as configure_float8
+
+            fp8_build = family.build
+
+            def float8_build(device):
+                model = fp8_build(device)
+                names = configure_float8(model)
+                if rank == 0:
+                    print(
+                        json.dumps(
+                            {
+                                "fp8_linear_modules": names,
+                                "recipe": "rowwise",
+                                "library": "torchao==0.18.0",
+                            }
+                        ),
+                        flush=True,
+                    )
+                return model
+
+            family.build = float8_build
         if args.scalar_delta:
             from .gated_delta import configure as configure_scalar
 
@@ -372,6 +395,8 @@ def main():
                     json.dumps(
                         {
                             "benchmark_model": {
+                                "linear_precision": "fp8_rowwise" if args.fp8_linears else "bf16",
+                                "mfu_peak_basis": "H100_dense_BF16_equivalent",
                                 "mixer": "scalar_delta" if args.scalar_delta else "configured",
                                 "parameters": sum(p.numel() for p in lm.parameters()),
                                 "matrix_parameters": sum(

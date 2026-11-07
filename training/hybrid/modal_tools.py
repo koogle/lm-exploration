@@ -23,6 +23,7 @@ from pathlib import Path
 import modal
 from model_hybrid.image import build, image
 
+fp8_image = build(extra_packages=("torchao==0.18.0",))
 counter_image = build(apt_packages=("cuda-nsight-compute-13-0",))
 app = modal.App("lm-exploration-hybrid-tools")
 data_volume = modal.Volume.from_name("lm-exploration-hybrid-data", create_if_missing=True)
@@ -90,6 +91,7 @@ def benchmark(
     profile_all_ranks=False,
     profile_stacks=False,
     compare_scalar_delta=False,
+    compare_fp8=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -173,6 +175,22 @@ def benchmark(
             ("adaptive_intra", []),
             ("original_repeat", ["--reference-intra"]),
         ]
+    if compare_fp8:
+        checked = subprocess.run(
+            ["python", "/project/tests/check_float8_cuda.py"],
+            cwd="/project",
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        folder = Path("/runs/throughput") / run_id
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "fp8-check.log").write_text(checked.stdout + checked.stderr)
+        runs_volume.commit()
+        if checked.returncode:
+            raise RuntimeError(checked.stdout + checked.stderr)
+        cases = [("bf16_first", []), ("fp8_linears", ["--fp8-linears"]), ("bf16_repeat", [])]
     if compare_scalar_delta:
         cases = [("kda_first", []), ("scalar_delta", ["--scalar-delta"]), ("kda_repeat", [])]
     if compare_consolidation:
@@ -355,6 +373,7 @@ def bench(
     profile_all_ranks: bool = False,
     profile_stacks: bool = False,
     compare_scalar_delta: bool = False,
+    compare_fp8: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -380,6 +399,7 @@ def bench(
                 compare_intra,
                 compare_consolidation,
                 compare_scalar_delta,
+                compare_fp8,
                 bool(larger_microbatch),
                 autotune,
                 kda_save_intermediates,
@@ -405,6 +425,7 @@ def bench(
             or compare_intra
             or compare_consolidation
             or compare_scalar_delta
+            or compare_fp8
             or larger_microbatch
             or autotune
             or kda_save_intermediates
@@ -424,7 +445,10 @@ def bench(
     deadline = new_deadline()
     run_id = run_id or f"bench-{time.time_ns()}"
     requested_gpu = "H100!" if gpu == "H100" and require_gpu_model else gpu
-    call = benchmark.with_options(gpu=f"{requested_gpu}:{gpus}").spawn(
+    options = {"gpu": f"{requested_gpu}:{gpus}"}
+    if compare_fp8:
+        options["image"] = fp8_image
+    call = benchmark.with_options(**options).spawn(
         settings,
         gpus,
         steps,
@@ -450,6 +474,7 @@ def bench(
         profile_all_ranks,
         profile_stacks,
         compare_scalar_delta,
+        compare_fp8,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)
