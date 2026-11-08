@@ -629,3 +629,47 @@ require separate loss/gradient and learning-quality qualification. This study
 establishes no additional forward-kernel speedup. [Raw timeline, per-kernel
 attribution and provenance](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-forward-profile-h100-20261107-01)
 are archived. All three follow-up apps are stopped with zero tasks.
+
+### Mixed-precision vocabulary kernels
+
+The next experiment changes the vocabulary GEMMs themselves. Custom Triton
+kernels compute partial amax, a scale, and a fused scale/clamp/FP8 cast, avoiding
+full-size FP32 conversion intermediates. The production chunked loss loop is
+shared. E4M3 operands feed the logit GEMM; the optional hidden-gradient GEMM uses
+E5M2 logit gradients and E4M3 weights. FP32 softmax statistics and FP32
+weight-gradient accumulation from BF16 operands are retained. Converted weights
+and layouts are reused within one loss invocation, never across optimizer steps.
+
+Two isolated H100 studies measure all loss and gradient work, including these
+conversions. At 24,576 tokens, width 1,536 and vocabulary 154,880, the second
+study's normal-input BF16 controls take **61.58 / 61.98 ms**, FP8 logits only
+**54.95 ms**, and FP8 logits plus hidden gradients **53.56 ms**. That is about
+**13–14% less complete head time** for the latter, not a full-model speedup.
+The first study measures 63.56 / 64.06 ms versus 54.13 ms, a similar direction.
+The smaller 8,192-token tail benefits less because conversion/layout overhead
+is less amortized.
+
+Normal-input gradient errors for the aggressive variant are approximately
+2.9% relative L2 for hidden gradients and 0.03% for weight gradients. Peaked
+inputs increase weight-gradient error to about 7.9%. A severe synthetic outlier
+case in the first study reaches **66% weight-gradient error** despite only a
+small relative change in average loss. These are stress inputs, not captured
+production activations, but they prevent claiming numerical or learning-quality
+equivalence. Results vary across random inputs; the less severe second outlier
+result does not supersede the failure.
+
+The conservative `dx` variant preserves BF16 logits, loss and weight gradients
+exactly for fixed inputs/weights in these tests. Hidden-gradient errors range
+from 2.9% to 5.0%. It saves only about 1–2% on the large-head operation and is
+slower on the tail, so it is not the candidate for the full performance test.
+
+Compiled forward/backward smoke checks pass for all three variants, including
+zero hidden gradients at ignored positions. An initial compile check failed
+because a custom-op argument named `mode` collided with PyTorch's internal
+functionalization dispatch; renaming it to `precision` fixes the failure.
+The failed log and source remain archived with the successful checks.
+[Isolated results and provenance](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/fp8-vocabulary-kernels-20261108).
+
+All head variants remain opt-in benchmark experiments. The full-model comparison
+uses the aggressive variant to measure the available speed benefit, not to
+approve it for the long pretraining run.

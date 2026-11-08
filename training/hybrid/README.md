@@ -463,6 +463,32 @@ elementwise, optimizer and conversion work is omitted. They are not measurements
 of hardware tensor-core activity. Compare aggregate tokens/sec as well as MFU;
 changing the peak denominator alone does not change performance.
 
+The experimental vocabulary-head path uses custom Triton amax/scale/cast kernels
+and Hopper FP8 GEMMs, while retaining FP32 softmax statistics and FP32
+weight-gradient accumulation from BF16 operands. FP8 weights/layouts are prepared
+once per loss call and reused across its chunks; they are rebuilt after each
+optimizer update because nothing is cached across calls. `logits` quantizes only
+the logit projection, `logits_dx` also quantizes the hidden-gradient matmul, and
+`dx` retains BF16 logits and quantizes only that hidden gradient. These options
+are experimental: synthetic outlier tests expose large gradient errors when
+logits are quantized. Production vocabulary-head precision remains BF16.
+
+The shared benchmark compares BF16-head / experimental-head / BF16-head with
+the same FP8 trunk and independently reports the additional FP8 FLOP share:
+
+```sh
+uv run modal run --detach -m model_hybrid.modal_tools::bench \
+  --config hybrid/configs/kda-960m-100b.json --gpus 8 --steps 40 \
+  --microbatch 6 --global-rows 256 --real-data --require-gpu-model \
+  --fp8-only --fp8-recipe tensorwise --compare-fp8-loss logits_dx \
+  --phase-timings --host-diagnostics --freeze-gc-after-warmup --run-id UNIQUE_RUN
+```
+
+`model_hybrid.modal_checks::main --only fp8_loss` runs compiled-autograd smoke
+checks and complete loss/gradient timings at the production vocabulary shapes,
+including normal, peaked and outlier inputs. This is performance/numerical
+qualification, not a learning-quality evaluation.
+
 [`benchmarks.py`](benchmarks.py) wraps an export as an lm-evaluation-harness
 model. Multiple-choice and perplexity requests are scored with the model's
 document-masked forward pass on CUDA (each request is `[EOS] + context +
