@@ -175,6 +175,19 @@ def train(
     stop_unix = stop_unix if stop_unix is not None else math.inf
     torch.cuda.set_device(runtime.local_rank)
     torch.set_num_threads(4)
+    # Forked compiler children can inherit ProcessPoolExecutor shutdown locks;
+    # a GC weakref callback then stalls one rank and all peers in backward.
+    # Fresh interpreters avoid inherited locks; bound CPU/RAM use across ranks.
+    import torch._inductor.config as inductor_config
+
+    inductor_config.worker_start_method = "spawn"
+    inductor_config.compile_threads = 2
+    compiler_runtime = {
+        "worker_start_method": inductor_config.worker_start_method,
+        "compile_threads": inductor_config.compile_threads,
+    }
+    if rank == 0:
+        print(json.dumps({"compiler_runtime": compiler_runtime}), flush=True)
     dist.init_process_group(
         "nccl",
         init_method=runtime.init_method,
@@ -243,6 +256,7 @@ def train(
             "data_identity": identity,
             "source_sha256": sources,
             "torch_version": str(torch.__version__),
+            "compiler_runtime": compiler_runtime,
             "gpu": torch.cuda.get_device_name(),
             "parameters": sum(p.numel() for p in model.parameters()),
             "resume_from": str(resume) if resume else None,
