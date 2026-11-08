@@ -227,7 +227,7 @@ def main():
     parser.add_argument("--phase-timings", action="store_true")
     parser.add_argument("--reference-intra", action="store_true")
     parser.add_argument("--reference-muon", action="store_true")
-    parser.add_argument("--fp8-loss", choices=("logits", "logits_dx"), default="")
+    parser.add_argument("--fp8-loss", choices=("logits", "logits_dx", "dx"), default="")
     parser.add_argument("--host-diagnostics", action="store_true")
     parser.add_argument("--freeze-gc-after-warmup", action="store_true")
     parser.add_argument("--fp8-linears", action="store_true")

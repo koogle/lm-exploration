@@ -10,6 +10,7 @@ from .kernels.fp8_cast import quantize
 
 def run():
     torch.manual_seed(1234)
+    compiled = compiled_check()
     results = []
     # Include an exact-zero cast to cover scale protection and FP8 finite zeros.
     for dtype in (torch.float8_e4m3fn, torch.float8_e5m2):
@@ -28,7 +29,7 @@ def run():
             labels[::11] = -100
             buffer = torch.zeros_like(w)
             expected = None
-            for mode in ("bf16", "logits", "logits_dx", "bf16_repeat"):
+            for mode in ("bf16", "logits", "logits_dx", "dx", "bf16_repeat"):
                 fused_loss.FP8_PROJECTION = "" if mode.startswith("bf16") else mode
                 timings = []
                 for i in range(10):
@@ -65,6 +66,7 @@ def run():
         "gpu": torch.cuda.get_device_name(),
         "torch": torch.__version__,
         "rows": results,
+        "compiled": compiled,
         "scope": "Same production loss loop; includes FP8 weight quantization/layout once per head, activation/gradient casts per chunk, all loss gradients. Eager isolated operation, not compiled full-model throughput or learning-quality proof.",
     }
 
@@ -77,7 +79,7 @@ def compiled_check():
     labels[::5] = -100
     results = []
     expected = None
-    for mode in ("", "logits", "logits_dx"):
+    for mode in ("", "logits", "logits_dx", "dx"):
         torch._dynamo.reset()
         fused_loss.FP8_PROJECTION = mode
         fn = torch.compile(fused_loss.fused_cross_entropy, fullgraph=True)

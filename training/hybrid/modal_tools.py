@@ -424,7 +424,9 @@ def bench(
 
     from workflows.deadline import new_deadline
 
-    if compare_fp8_loss not in ("", "logits", "logits_dx") or (compare_fp8_loss and not fp8_only):
+    if compare_fp8_loss not in ("", "logits", "logits_dx", "dx") or (
+        compare_fp8_loss and not fp8_only
+    ):
         raise ValueError("FP8 head comparison requires fp8_only and logits/logits_dx")
     if fp8_scope not in ("all", "mlp", "both") or (
         fp8_scope != "all" and not (compare_fp8 or fp8_only)
