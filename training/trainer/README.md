@@ -142,6 +142,15 @@ in the warm object graph until session exit. Monitor resident memory during long
 runs and checkpoint/evaluation transitions. This is a host-pause fix, not an
 improvement to GPU arithmetic.
 
+Compiler workers use fresh `spawn` interpreters, with two workers per rank.
+An eight-H100 experiment captured a forked Inductor compiler child blocked in
+the Python process-pool executor's GC weakref callback while acquiring its
+shutdown lock. Its parent waited for the compile future and the other ranks
+waited in backward. Spawning avoids inheriting the parent's lock state; the
+worker bound also avoids eight independent 32-worker pools. The loop logs and
+checkpoints `compiler_runtime` separately from training settings. This startup
+policy is distinct from the post-warmup GC policy above.
+
 For the hybrid benchmark, pass `--phase-timings` to
 `model_hybrid.modal_tools::bench`. The trace audit also links kernels to their CPU
 launch phases using correlation IDs. This distinguishes delayed backward work

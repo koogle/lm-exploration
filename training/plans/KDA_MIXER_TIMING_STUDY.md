@@ -673,3 +673,16 @@ The failed log and source remain archived with the successful checks.
 All head variants remain opt-in benchmark experiments. The full-model comparison
 uses the aggressive variant to measure the available speed benefit, not to
 approve it for the long pretraining run.
+
+The first eight-H100 attempt, `kda-fp8-head-h100x8-20261108-01`, completes its
+40-step BF16-head control at 373,966 tokens/sec but stalls during the candidate's
+first step. A live stack capture shows rank four waiting for an Inductor compile
+future. Its forked compiler child is blocked in
+`ProcessPoolExecutor`'s `weakref_cb`, acquiring `shutdown_lock` during
+`ast.parse`; another rank is waiting in backward. The compiler pool has 32
+workers per rank. This is evidence of a compiler-process/GC deadlock, not a
+kernel throughput result. The attempt is canceled before its server timeout.
+[Partial control, launch log and captured stacks](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-head-h100x8-20261108-01)
+are preserved. Source `0398c89` changes the shared loop to fresh spawned
+compiler interpreters and two workers per rank; both controls and the candidate
+use that same startup policy in the retry.
