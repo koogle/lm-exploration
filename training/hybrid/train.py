@@ -588,6 +588,8 @@ class HybridFamily:
             "kda_intra_launcher": Path(__file__).with_name("kda_intra.py"),
             "kda_intra_kernel": Path(__file__).with_name("kernels") / "kda_intra.py",
             "consolidation": Path(__file__).with_name("consolidation.py"),
+            "fp8_loss": Path(__file__).with_name("fp8_loss.py"),
+            "fp8_cast": Path(__file__).with_name("kernels") / "fp8_cast.py",
             "gated_delta": Path(__file__).with_name("gated_delta.py"),
             "consolidated_rmsnorm": Path(__file__).with_name("kernels") / "rmsnorm.py",
             "chat": Path(chat.__file__),

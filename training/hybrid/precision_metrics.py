@@ -34,4 +34,9 @@ def fp8_flops_per_token(lm, config, loops=None):
         weights += count * lm.get_submodule(name).weight.numel()
     # Each matrix has forward, input-gradient and weight-gradient GEMMs.
     factor = 4 if getattr(lm, "_fp8_recipe", None) == "rowwise_with_gw_hp" else 6
-    return factor * weights
+    mode = getattr(lm, "_fp8_loss_mode", "")
+    head = 0
+    if mode:
+        uses = 1 + (config.mtp_loss_fraction if config.mtp else 0)
+        head = (4 if mode == "logits_dx" else 2) * uses * lm.output_weight.numel()
+    return factor * weights + head

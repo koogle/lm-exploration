@@ -98,6 +98,7 @@ def benchmark(
     fp8_only=False,
     host_diagnostics=False,
     freeze_gc_after_warmup=False,
+    compare_fp8_loss="",
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -170,6 +171,13 @@ def benchmark(
     if fp8_only:
         cases = [
             ("direct", ["--fp8-linears", "--fp8-recipe", fp8_recipe, "--fp8-scope", fp8_scope])
+        ]
+    if compare_fp8_loss:
+        base = cases[0][1]
+        cases = [
+            ("head_bf16_first", base),
+            ("head_fp8", [*base, "--fp8-loss", compare_fp8_loss]),
+            ("head_bf16_repeat", base),
         ]
     if compare_kda_wy:
         cases = [
@@ -405,6 +413,7 @@ def bench(
     fp8_only: bool = False,
     host_diagnostics: bool = False,
     freeze_gc_after_warmup: bool = False,
+    compare_fp8_loss: str = "",
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -415,6 +424,8 @@ def bench(
 
     from workflows.deadline import new_deadline
 
+    if compare_fp8_loss not in ("", "logits", "logits_dx") or (compare_fp8_loss and not fp8_only):
+        raise ValueError("FP8 head comparison requires fp8_only and logits/logits_dx")
     if fp8_scope not in ("all", "mlp", "both") or (
         fp8_scope != "all" and not (compare_fp8 or fp8_only)
     ):
@@ -521,6 +532,7 @@ def bench(
         fp8_only,
         host_diagnostics,
         freeze_gc_after_warmup,
+        compare_fp8_loss,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)

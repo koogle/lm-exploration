@@ -227,6 +227,7 @@ def main():
     parser.add_argument("--phase-timings", action="store_true")
     parser.add_argument("--reference-intra", action="store_true")
     parser.add_argument("--reference-muon", action="store_true")
+    parser.add_argument("--fp8-loss", choices=("logits", "logits_dx"), default="")
     parser.add_argument("--host-diagnostics", action="store_true")
     parser.add_argument("--freeze-gc-after-warmup", action="store_true")
     parser.add_argument("--fp8-linears", action="store_true")
@@ -259,6 +260,10 @@ def main():
             destination.add_(torch.mm(grad.T, hidden, out_dtype=torch.float32))
 
         output_gradient.accumulate_output_gradient_ = reference
+    if args.fp8_loss:
+        from . import fused_loss
+
+        fused_loss.FP8_PROJECTION = args.fp8_loss
     config = RunConfig.load(args.config)
     overrides = {"hf_repo": "", "log_every_steps": 1, "checkpoint_seconds": 10**9}
     if not args.real_data:
@@ -425,6 +430,7 @@ def main():
 
         def describe_build(device):
             lm = measured_build(device)
+            lm._fp8_loss_mode = args.fp8_loss
             if rank == 0:
                 print(
                     json.dumps(
@@ -434,6 +440,7 @@ def main():
                                 if args.fp8_linears
                                 else "bf16",
                                 "fp8_scope": args.fp8_scope if args.fp8_linears else None,
+                                "fp8_loss": args.fp8_loss,
                                 "mfu_peak_basis": "H100_dense_BF16_equivalent",
                                 "mixer": "scalar_delta" if args.scalar_delta else "configured",
                                 "parameters": sum(p.numel() for p in lm.parameters()),

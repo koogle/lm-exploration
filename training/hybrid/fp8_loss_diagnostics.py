@@ -67,3 +67,31 @@ def run():
         "rows": results,
         "scope": "Same production loss loop; includes FP8 weight quantization/layout once per head, activation/gradient casts per chunk, all loss gradients. Eager isolated operation, not compiled full-model throughput or learning-quality proof.",
     }
+
+
+def compiled_check():
+    torch.manual_seed(9)
+    h = torch.randn(32, 512, device="cuda", dtype=torch.bfloat16, requires_grad=True)
+    w = (torch.randn(4096, 512, device="cuda") / 512**0.5).requires_grad_()
+    labels = torch.randint(4096, (32,), device="cuda")
+    labels[::5] = -100
+    results = []
+    expected = None
+    for mode in ("", "logits", "logits_dx"):
+        torch._dynamo.reset()
+        fused_loss.FP8_PROJECTION = mode
+        fn = torch.compile(fused_loss.fused_cross_entropy, fullgraph=True)
+        loss, _ce, _z = fn(h, w, labels, 1e-4, 32)
+        grads = torch.autograd.grad(loss, (h, w))
+        actual = (loss, *grads)
+        if expected is None:
+            expected = tuple(x.detach().clone() for x in actual)
+        errors = [
+            float((a.detach().float() - b.float()).norm() / b.float().norm().clamp_min(1e-12))
+            for a, b in zip(actual, expected, strict=True)
+        ]
+        assert all(bool(torch.isfinite(x).all()) for x in actual) and max(errors) < 0.1, errors
+        assert bool((grads[0][labels == -100] == 0).all())
+        results.append({"mode": mode or "bf16", "relative_l2_loss_dh_dw": errors})
+    fused_loss.FP8_PROJECTION = ""
+    return {"gpu": torch.cuda.get_device_name(), "compiled_autograd": results}

@@ -86,3 +86,6 @@ class FP8AccountingTests(unittest.TestCase):
         self.assertLess(fp8, flops_per_token(config, lm, 1000))
         lm._fp8_recipe = "rowwise_with_gw_hp"
         self.assertEqual(fp8_flops_per_token(lm, config), 4 * 707002368)
+        lm._fp8_loss_mode = "logits_dx"
+        head = 4 * (1 + config.mtp_loss_fraction) * lm.output_weight.numel()
+        self.assertEqual(fp8_flops_per_token(lm, config), 4 * 707002368 + head)
