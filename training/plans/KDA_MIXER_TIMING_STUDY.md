@@ -686,3 +686,46 @@ kernel throughput result. The attempt is canceled before its server timeout.
 are preserved. Source `0398c89` changes the shared loop to fresh spawned
 compiler interpreters and two workers per rank; both controls and the candidate
 use that same startup policy in the retry.
+
+The retry, `kda-fp8-head-h100x8-20261108-02`, completes all three 30-step arms on
+eight H100s. Modal preempts the first container during startup and automatically
+restarts it; the launch log preserves that interruption. All completed arms use
+the replacement allocation, real 50/40/10 data, context 4096, global rows 256,
+microbatch six and the same tensorwise-FP8 trunk. Only the vocabulary-head
+precision changes. Each aggregate includes all 25 predetermined post-warmup
+steps, including any stalls.
+
+| Head precision | Aggregate tokens/sec | BF16-equivalent MFU | Median step | Peak allocated/GPU |
+| --- | ---: | ---: | ---: | ---: |
+| BF16 first | 374,058 | 34.45% | 2.801 s | 59.88 GiB |
+| FP8 logits and hidden gradients | 385,579 | 35.51% | 2.718 s | 60.32 GiB |
+| BF16 repeat | 373,242 | 34.37% | 2.809 s | 59.88 GiB |
+
+The head change improves full-model throughput **3.08–3.31%**, with 0.22% control
+drift. Rank-zero forward/loss medians fall from 1366 / 1361 ms to 1310 ms;
+local backward medians are 1186 / 1185 ms versus 1153 ms. These phase observations
+are not a new per-kernel causal profile, and independent medians do not add to a
+complete step. Optimizer medians remain about 105 ms. Additional quantized weight
+layouts increase peak allocation by **0.44 GiB/GPU**.
+
+All 90 steps have finite loss, MTP loss and gradient norm. All eight ranks report
+host diagnostics for each arm, with no timed GC event at the diagnostic threshold
+or compile callback. First-step startup costs are 367.45 / 147.22 / 52.87 seconds,
+respectively; cache reuse makes these unsuitable as matched startup comparisons.
+The spawn-worker change completes this previously failing comparison, without
+establishing that every possible compiler hang is eliminated. The app is stopped.
+
+FP8's share of modeled FLOPs rises from 58.22% to 84.35%. Consequently,
+precision-weighted ideal-time MFU falls from 24.42% to 20.53%, despite higher
+throughput and BF16-equivalent MFU. The candidate is 17.75% against the dense FP8
+peak. These denominators describe different ceilings; none is a hardware-counter
+measurement. The result still falls short of 40–60% on the fixed BF16 basis.
+
+Final losses are 11.34875 / 11.35714 / 11.34962. Thirty early-warmup steps do not
+establish learning-quality parity, and they do not supersede the synthetic
+outlier-gradient failure above. Keep this head precision experimental. A useful
+next numerical investigation is scaling granularity on captured training
+activations; simply enabling the faster path is not justified by this test.
+
+Ten focused CPU tests and Ruff pass, alongside the archived compiled GPU checks.
+[Complete matched results, host audit and provenance](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-head-h100x8-20261108-02).
