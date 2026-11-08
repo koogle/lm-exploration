@@ -15,9 +15,18 @@ overwrites the bf16 logits in place; elsewhere PyTorch computes them in fp32.
 import torch
 
 IGNORE_INDEX = -100
+FP8_PROJECTION = ""  # Benchmark-only; set before compilation.
 
 
-def _loss_grad(hidden, weight, labels, z_loss, chunk_size, grad_weight, scale=None):
+def _loss_grad(
+    hidden, weight, labels, z_loss, chunk_size, grad_weight, scale=None, projection=None
+):
+    if FP8_PROJECTION and projection is None:
+        from .fp8_loss import loss_grad
+
+        return loss_grad(
+            hidden, weight, labels, z_loss, chunk_size, grad_weight, scale, FP8_PROJECTION
+        )
     compute = torch.bfloat16 if hidden.is_cuda else hidden.dtype
     accumulate = torch.float64 if hidden.dtype == torch.float64 else torch.float32
     rows = hidden.reshape(-1, hidden.size(-1))
@@ -39,7 +48,7 @@ def _loss_grad(hidden, weight, labels, z_loss, chunk_size, grad_weight, scale=No
         if h.is_cuda:
             from .softmax_kernel import softmax_gradient_
 
-            grad = h @ w.T
+            grad = h @ w.T if projection is None else projection.logits(h)
             lse, target_logit = softmax_gradient_(grad, y, z_loss)
         else:
             logits = (h @ w.T).to(accumulate)
@@ -50,7 +59,9 @@ def _loss_grad(hidden, weight, labels, z_loss, chunk_size, grad_weight, scale=No
             grad = grad.mul_(valid[:, None]).to(compute)
         ce = ce + torch.where(valid, lse - target_logit, 0.0).sum()
         z = z + torch.where(valid, lse.square(), 0.0).sum()
-        grad_hidden[start : start + chunk_size] = grad @ w
+        grad_hidden[start : start + chunk_size] = (
+            grad @ w if projection is None else projection.hidden_gradient(grad, w)
+        )
         if compute == torch.bfloat16 and grad.is_cuda:
             from .output_gradient import accumulate_output_gradient_
 

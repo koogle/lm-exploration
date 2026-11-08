@@ -31,6 +31,10 @@ app = modal.App("lm-exploration-hybrid-checks")
 def check(deadline, only=""):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
+    if only == "fp8_loss":
+        from model_hybrid.fp8_loss_diagnostics import run
+
+        return run()
     if only == "fp8_backward":
         from model_hybrid.float8_diagnostics import run
 
