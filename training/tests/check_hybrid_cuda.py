@@ -469,6 +469,7 @@ def shared_metadata_check():
         batches.append((tokens, labels))
     reference = []
     result = []
+    previous = model.DocumentMask.share_kda_metadata
     try:
         for shared in (False, True):
             torch._dynamo.reset()
@@ -493,7 +494,7 @@ def shared_metadata_check():
                                    "max_absolute_difference": max(max_error(a, b) for a, b in
                                                                   zip(values, reference[index], strict=True))})
     finally:
-        model.DocumentMask.share_kda_metadata = True
+        model.DocumentMask.share_kda_metadata = previous
     return {"gpu": torch.cuda.get_device_name(), "comparisons": result}
 
 

@@ -110,13 +110,16 @@ reduces exactly to plain document-causal attention.
 
 ## Kimi Delta Attention and the hybrid layout
 
-`DocumentMask.kda_offsets` lazily builds one int64 document-offset tensor per
+The experimental `--shared-kda-metadata` benchmark mode enables
+`DocumentMask.kda_offsets`, which lazily builds one int64 document-offset tensor per
 forward pass and shares it across recurrent layers. Each forward owns its mask,
 so changing EOS positions or batch rows cannot reuse a previous batch's layout.
 The standalone recurrence helpers also accept explicit offsets. The benchmark's
 `--reference-kda-metadata` rebuilds offsets per layer for matched comparisons;
 the Modal launcher exposes `--compare-kda-metadata`, including with `--fp8-only`.
 `--larger-microbatch 8` preserves the baseline precision in all comparison arms.
+Shared metadata is opt-in: the corrected control comparison found a throughput
+regression, so normal training retains per-layer offset construction.
 
 [`kda.py`](kda.py) implements KDA layers following flash-linear-attention's
 `KimiDeltaAttention` ([Kimi Linear](https://arxiv.org/abs/2510.26692)), without

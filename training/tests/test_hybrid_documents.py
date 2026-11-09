@@ -26,6 +26,7 @@ class DocumentTests(unittest.TestCase):
     def test_shared_offsets_are_scoped_to_each_forward_layout(self):
         first = model.DocumentMask(torch.tensor([[0, 0, 1, 1], [0, 1, 1, 2]]))
         second = model.DocumentMask(torch.zeros((2, 4), dtype=torch.long))
+        first.share_kda_metadata = second.share_kda_metadata = True
         self.assertEqual(first.kda_offsets.tolist(), [0, 2, 4, 5, 7, 8])
         self.assertIs(first.kda_offsets, first.kda_offsets)
         self.assertEqual(second.kda_offsets.tolist(), [0, 4, 8])

@@ -227,6 +227,7 @@ def main():
     parser.add_argument("--phase-timings", action="store_true")
     parser.add_argument("--reference-intra", action="store_true")
     parser.add_argument("--reference-kda-metadata", action="store_true")
+    parser.add_argument("--shared-kda-metadata", action="store_true")
     parser.add_argument("--reference-muon", action="store_true")
     parser.add_argument("--fp8-loss", choices=("logits", "logits_dx", "dx"), default="")
     parser.add_argument("--host-diagnostics", action="store_true")
@@ -242,7 +243,9 @@ def main():
     args = parser.parse_args()
     from .model import DocumentMask
 
-    DocumentMask.share_kda_metadata = not args.reference_kda_metadata
+    if args.reference_kda_metadata and args.shared_kda_metadata:
+        parser.error("Choose either shared or reference KDA metadata")
+    DocumentMask.share_kda_metadata = args.shared_kda_metadata
     if (args.profile_all_ranks or args.profile_stacks) and not args.profile:
         parser.error("Rank and stack profiling require --profile")
     if args.hardware_counters and args.profile:
@@ -445,7 +448,7 @@ def main():
                                 else "bf16",
                                 "fp8_scope": args.fp8_scope if args.fp8_linears else None,
                                 "fp8_loss": args.fp8_loss,
-                                "shared_kda_metadata": not args.reference_kda_metadata,
+                                "shared_kda_metadata": args.shared_kda_metadata,
                                 "mfu_peak_basis": "H100_dense_BF16_equivalent",
                                 "mixer": "scalar_delta" if args.scalar_delta else "configured",
                                 "parameters": sum(p.numel() for p in lm.parameters()),

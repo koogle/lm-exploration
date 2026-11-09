@@ -184,7 +184,7 @@ def benchmark(
         base = cases[0][1]
         cases = [
             ("metadata_reference_first", [*base, "--reference-kda-metadata"]),
-            ("metadata_shared", base),
+            ("metadata_shared", [*base, "--shared-kda-metadata"]),
             ("metadata_reference_repeat", [*base, "--reference-kda-metadata"]),
         ]
     if compare_kda_wy:

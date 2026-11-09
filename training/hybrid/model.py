@@ -43,7 +43,7 @@ compiled_flex_attention = torch.compile(flex_attention, dynamic=False)
 class DocumentMask:
     """Document-aware causal mask: position q sees k <= q within its own document."""
 
-    share_kda_metadata = True
+    share_kda_metadata = False
 
     def __init__(self, documents):
         self.documents = documents
