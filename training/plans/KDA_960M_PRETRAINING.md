@@ -85,7 +85,35 @@ Assessment for launch:
 - A minimum character length for screen n-grams would restore most dropped math
   documents; math capacity does not depend on it.
 
-[Capacity report, sample statistics, screen hits and the scripts that produced them](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/corpus-audit-20261109).
+## Filtered code sources (recipe v2)
+
+`kda-foundation-100b-504010-v2` keeps the 50/40/10 shares and the prepared
+ClimbMix and math shards, and prepares the 40% code share as two sources from
+all 880 upstream files. `python` (4%) keeps Python only. `code` (36%) keeps every
+language except Python, HTML, CSS and Markdown. Both drop files over 100 KB and
+paths under vendor, dependency or build directories or named after bundled
+libraries, then apply the license allowlist, the content and repository split
+and the contamination screen. Measured capacity after preparation
+(`kda-foundation-data-v2-20261109-01`):
+
+| Source | Share | Train tokens | Needed | Margin | Held-out tokens |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| ClimbMix | 50% | 61.26B | 50B | 22.5% | 5.34M |
+| Python | 4% | 4.93B | 4B | 23.2% | 0.06M |
+| Other code | 36% | 45.29B | 36B | 25.8% | 0.67M |
+| CC-Math score 3 | 10% | 15.44B | 10B | 54.4% | 23.3M |
+
+A 100B run reads 4.0B Python tokens, against about 2.7B under recipe v1, and no
+HTML, CSS or Markdown. Of the other-code rows that pass the license allowlist,
+the path filter drops 3.1M and the size filter 0.37M.
+
+The Python held-out set is one shard's 1% content-and-repository partition:
+55,643 tokens, about 50 documents. Held-out Python loss from it is noisy; use
+it for trend only. The matched 128M mixture study measured the v1 code source,
+so this recipe's effect on held-out code, general and math loss is unmeasured.
+The 960M configuration reads recipe v2 and samples the MTP loss at fraction 0.25.
+
+[Capacity reports, sample statistics, screen hits and the scripts that produced them](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/corpus-audit-20261109).
 
 ## Training and budget
 

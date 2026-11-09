@@ -264,6 +264,13 @@ Finished shards are skipped, so another launch continues. The
 coordinator writes `capacity.json` (train/held-out tokens, documents and drops
 per source) and the screen writes `screen.json`.
 
+A code source can select upstream rows before tokenizing: `languages` or
+`exclude_languages`, `exclude_path` (a regular expression searched in `path`) and
+`max_bytes`. [`recipes/kda-foundation-100b-504010-v2.json`](recipes/kda-foundation-100b-504010-v2.json)
+uses them for its `python` and `code` sources and reuses the ClimbMix and math
+shards prepared under v1 (`prepared_in`); see the
+[corpus audit](../plans/KDA_960M_PRETRAINING.md#filtered-code-sources-recipe-v2).
+
 Measured on the held-out shards (2026-10-25): ClimbMix 52.6M tokens per shard
 (103 of 84,992 documents screened out), code 139M (43,776 of 126,925 files outside
 the license allowlist, 740 screened out), FineMath-4+ 125M (8,281 of 104,680
