@@ -773,3 +773,38 @@ construction. The subsequent microbatch comparison uses that restored path.
 The launcher carries the same FP8 settings into the larger-batch and repeated
 control arms, avoiding an accidental precision change. Global batch and data
 stay fixed; dynamic FP8 scaling can still change rounding with microbatch size.
+
+The completed `kda-batch-h100x8-20261109-03` comparison uses the restored original
+path on the same eight H100s. All arms retain the FP8 tensorwise trunk and BF16
+head. Global rows remain 256: each rank's accumulation changes from
+`[6, 6, 6, 6, 6, 2]` to `[8, 8, 8, 8]`.
+
+| Microbatch | Aggregate tokens/sec | BF16-equivalent MFU | Median step | Peak allocated/GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Six, first | 376,114 | 34.61% | 2.787 s | 59.88 GiB |
+| Eight | 395,245 | 36.37% | 2.653 s | 73.43 GiB |
+| Six, repeat | 376,090 | 34.61% | 2.789 s | 59.88 GiB |
+
+Eight improves aggregate throughput **5.09%** over both controls; control drift
+is 0.0064%. All 75 steps have finite loss, MTP loss and gradient norm, and every
+arm includes all 20 predetermined timed steps. All eight ranks report host
+diagnostics with no timed GC event at the diagnostic threshold or compile
+callback. Final losses are 11.77822 / 11.77732 / 11.77715; this short test is not
+long-run FP8 quality qualification.
+
+Rank-zero forward/loss medians decrease from 1347 / 1348 ms to 1276 ms. Local
+backward decreases from about 1180 to 911 ms, while the synchronized backward
+phase increases from 136 / 137 to 347 ms: the final microbatch now contains eight
+rows rather than two. The local-backward decrease alone therefore overstates
+the gain. Accumulation phase medians decrease from 2666 / 2668 to 2533 ms, and
+optimizer time stays near 105 ms. Independent phase medians are not additive.
+
+Use microbatch eight for subsequent benchmarks with this FP8-trunk/BF16-head
+configuration and the original per-layer metadata path. It fits this bounded
+test with 13.55 GiB more peak allocation; this does not qualify eight for the
+all-BF16 production configuration or prove long-run memory stability. The
+36.37% BF16-equivalent MFU remains below 40%; precision-weighted ideal-time MFU
+is 25.78% and dense-FP8-peak MFU is 18.19%. All test apps are stopped with zero
+tasks. Production data, architecture and precision settings remain unchanged.
+
+[Complete microbatch comparison, host audit and provenance](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-batch-h100x8-20261109-03).
