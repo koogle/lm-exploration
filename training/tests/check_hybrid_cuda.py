@@ -442,7 +442,64 @@ def decode_timing(rows=64, prompt=512, new_tokens=256):
     return {"rows": rows, "prompt": prompt, "new_tokens": new_tokens, **results}
 
 
+def shared_metadata_check():
+    """Compiled packed layouts and all parameter gradients versus per-layer offsets."""
+    import copy
+
+    import torch._inductor.config as inductor_config
+
+    inductor_config.worker_start_method = "spawn"
+    inductor_config.compile_threads = 2
+    from model_hybrid import kda_wy
+    kda_wy.install()
+    torch.manual_seed(123)
+    config = model.HybridConfig(
+        vocab_size=512, eos_id=EOS, block_size=256, n_layer=3,
+        n_embd=256, n_head=2, n_kv_head=1, head_dim=128,
+        layer_pattern=("kda", "kda", "full"), mtp=True,
+    )
+    initial = model.HybridLM(config).cuda()
+    batches = []
+    for ends in (([0, 63, 191], [127, 254]), ([31, 32], [0, 1, 192])):
+        tokens = torch.randint(3, 512, (2, 256), device="cuda")
+        for row, offsets in enumerate(ends):
+            tokens[row, offsets] = EOS
+        labels = tokens.roll(-1, 1)
+        labels[:, -8:] = -100
+        batches.append((tokens, labels))
+    reference = []
+    result = []
+    try:
+        for shared in (False, True):
+            torch._dynamo.reset()
+            model.DocumentMask.share_kda_metadata = shared
+            lm = copy.deepcopy(initial)
+            compiled = torch.compile(lm)
+            for index, (tokens, labels) in enumerate(batches):
+                from model_hybrid.documents import mtp_labels
+                lm.zero_grad(set_to_none=True)
+                with torch.autocast("cuda", dtype=torch.bfloat16):
+                    losses = compiled(tokens, labels, mtp_labels(tokens, labels, EOS))
+                    loss = losses["loss"] + losses["mtp_loss"]
+                loss.backward()
+                values = [loss.detach(), *[p.grad.detach().clone() for p in lm.parameters()]]
+                assert all(torch.isfinite(x).all() for x in values)
+                if not shared:
+                    reference.append(values)
+                else:
+                    for actual, expected in zip(values, reference[index], strict=True):
+                        torch.testing.assert_close(actual, expected, rtol=1e-3, atol=1e-4)
+                    result.append({"layout": index, "loss": loss.item(),
+                                   "max_absolute_difference": max(max_error(a, b) for a, b in
+                                                                  zip(values, reference[index], strict=True))})
+    finally:
+        model.DocumentMask.share_kda_metadata = True
+    return {"gpu": torch.cuda.get_device_name(), "comparisons": result}
+
+
 def checks(only=""):
+    if only == "metadata":
+        return shared_metadata_check()
     if only == "scalar_delta":
         import runpy
         from pathlib import Path

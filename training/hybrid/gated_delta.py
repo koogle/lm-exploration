@@ -30,7 +30,7 @@ def scalar_reference(q, k, v, g, beta, A_log, dt_bias, positions, final_state=Fa
     )
 
 
-def scalar_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False):
+def scalar_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False, offsets=None):
     from fla.ops.gated_delta_rule import chunk_gated_delta_rule
 
     batch, length = documents.shape
@@ -43,7 +43,7 @@ def scalar_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False
         use_qk_l2norm_in_kernel=True,
         use_gate_in_kernel=True,
         use_beta_sigmoid_in_kernel=True,
-        cu_seqlens=cu_seqlens(documents).long(),
+        cu_seqlens=cu_seqlens(documents).long() if offsets is None else offsets,
         output_final_state=final_state,
     )
     out = out.view(batch, length, *out.shape[2:])

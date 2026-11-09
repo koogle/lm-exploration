@@ -86,13 +86,13 @@ def kda_reference(q, k, v, g, beta, A_log, dt_bias, positions, final_state=False
     return (out, state) if final_state else out
 
 
-def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False):
+def kda_kernel(q, k, v, g, beta, A_log, dt_bias, documents, final_state=False, offsets=None):
     """fla's chunked KDA over the flattened batch, one sequence per document. With
     `final_state`, also returns each document's last state, [documents, H, K, V]."""
     from fla.ops.kda import chunk_kda
 
     batch, length = documents.shape
-    offsets = cu_seqlens(documents).long()
+    offsets = cu_seqlens(documents).long() if offsets is None else offsets
     out, state = chunk_kda(
         *(t.reshape(1, batch * length, *t.shape[2:]) for t in (q, k, v, g, beta)),
         A_log=A_log,
@@ -191,7 +191,7 @@ class KimiDeltaAttention(nn.Module):
         keep = cache is not None
         if x.is_cuda:
             out = self.recurrence_kernel(
-                q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents, keep
+                q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents, keep, mask.kda_offsets
             )
         else:
             out = self.recurrence_reference(

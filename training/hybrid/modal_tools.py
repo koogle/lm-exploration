@@ -99,6 +99,7 @@ def benchmark(
     host_diagnostics=False,
     freeze_gc_after_warmup=False,
     compare_fp8_loss="",
+    compare_kda_metadata=False,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -179,6 +180,13 @@ def benchmark(
             ("head_fp8", [*base, "--fp8-loss", compare_fp8_loss]),
             ("head_bf16_repeat", base),
         ]
+    if compare_kda_metadata:
+        base = cases[0][1]
+        cases = [
+            ("metadata_reference_first", [*base, "--reference-kda-metadata"]),
+            ("metadata_shared", base),
+            ("metadata_reference_repeat", [*base, "--reference-kda-metadata"]),
+        ]
     if compare_kda_wy:
         cases = [
             ("original_first", ["--reference-kda-wy"]),
@@ -236,8 +244,9 @@ def benchmark(
             + [("original_repeat", [])]
         )
     if larger_microbatch:
-        cases.append(("larger_microbatch", ["--microbatch", str(larger_microbatch)]))
-        cases.append(("original_repeat", []))
+        base = cases[0][1]
+        cases.append(("larger_microbatch", [*base, "--microbatch", str(larger_microbatch)]))
+        cases.append(("original_repeat", base))
     if autotune:
         cases.append(("autotuned", ["--compile-mode", "max-autotune-no-cudagraphs"]))
     if kda_save_intermediates:
@@ -414,6 +423,7 @@ def bench(
     host_diagnostics: bool = False,
     freeze_gc_after_warmup: bool = False,
     compare_fp8_loss: str = "",
+    compare_kda_metadata: bool = False,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
@@ -424,6 +434,8 @@ def bench(
 
     from workflows.deadline import new_deadline
 
+    if compare_fp8_loss and (compare_kda_metadata or larger_microbatch):
+        raise ValueError("Compare head precision separately from metadata or microbatch")
     if compare_fp8_loss not in ("", "logits", "logits_dx", "dx") or (
         compare_fp8_loss and not fp8_only
     ):
@@ -454,7 +466,8 @@ def bench(
                 compare_consolidation,
                 compare_scalar_delta,
                 compare_fp8,
-                fp8_only,
+                fp8_only and not (compare_kda_metadata or larger_microbatch),
+                compare_kda_metadata,
                 bool(larger_microbatch),
                 autotune,
                 kda_save_intermediates,
@@ -476,6 +489,7 @@ def bench(
             profile
             or compare_output_gradient
             or compare_kda_wy
+            or compare_kda_metadata
             or compare_graphed_muon
             or compare_intra
             or compare_consolidation
@@ -535,6 +549,7 @@ def bench(
         host_diagnostics,
         freeze_gc_after_warmup,
         compare_fp8_loss,
+        compare_kda_metadata,
     )
     try:
         supervisor = enforce_deadline.spawn([call.object_id], deadline)

@@ -22,7 +22,7 @@ from torch.utils.checkpoint import checkpoint
 
 from trainer.roles import declare
 
-from .documents import document_ids, document_positions
+from .documents import cu_seqlens, document_ids, document_positions
 from .fused_loss import fused_cross_entropy
 from .kda import KimiDeltaAttention
 
@@ -43,10 +43,22 @@ compiled_flex_attention = torch.compile(flex_attention, dynamic=False)
 class DocumentMask:
     """Document-aware causal mask: position q sees k <= q within its own document."""
 
+    share_kda_metadata = True
+
     def __init__(self, documents):
         self.documents = documents
         self.positions = document_positions(documents)
         self._block = None
+        self._kda_offsets = None
+
+    @property
+    def kda_offsets(self):
+        """Int64 packed-document offsets shared by recurrent layers in this forward."""
+        if not self.share_kda_metadata:
+            return cu_seqlens(self.documents).long()
+        if self._kda_offsets is None:
+            self._kda_offsets = cu_seqlens(self.documents).long()
+        return self._kda_offsets
 
     @property
     def block(self):
