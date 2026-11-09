@@ -118,6 +118,8 @@ The standalone recurrence helpers also accept explicit offsets. The benchmark's
 `--reference-kda-metadata` rebuilds offsets per layer for matched comparisons;
 the Modal launcher exposes `--compare-kda-metadata`, including with `--fp8-only`.
 `--larger-microbatch 8` preserves the baseline precision in all comparison arms.
+`--compare-mtp-fraction 0.25` runs configured / sampled / configured MTP loss
+fractions with the precision and microbatch of the other arguments.
 Shared metadata is opt-in: the corrected control comparison found a throughput
 regression, so normal training retains per-layer offset construction.
 

@@ -808,3 +808,38 @@ is 25.78% and dense-FP8-peak MFU is 18.19%. All test apps are stopped with zero
 tasks. Production data, architecture and precision settings remain unchanged.
 
 [Complete microbatch comparison, host audit and provenance](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-batch-h100x8-20261109-03).
+
+## MTP loss fraction (November 9)
+
+The tied 154,880-row output table is evaluated for the next-token loss and again
+for the MTP loss; together they are 39.7% of counted model FLOPs. The existing
+`mtp_loss_fraction` passes a random fixed-size subset of positions through the
+output layer for the MTP loss while the MTP block still runs on every position.
+`kda-mtp-fraction-h100x8-20261109-01` compares fraction 1.0 / 0.25 / 1.0 on the
+same eight H100s with the tensorwise-FP8 trunk, BF16 head, microbatch eight,
+global rows 256 and the real 50/40/10 data. Each arm has 25 steps and includes
+all 20 predetermined timed steps.
+
+| MTP loss fraction | Aggregate tokens/sec | BF16-equivalent MFU | Median step | Peak allocated/GPU |
+| --- | ---: | ---: | ---: | ---: |
+| 1.0, first | 395,205 | 36.37% | 2.653 s | 73.43 GiB |
+| 0.25 | 437,086 | 34.31% | 2.399 s | 73.49 GiB |
+| 1.0, repeat | 394,616 | 36.32% | 2.657 s | 73.63 GiB |
+
+Fraction 0.25 improves aggregate throughput **10.6–10.8%** and saves about 255 ms
+per step; control drift is 0.15%. All 75 steps have finite loss, MTP loss and
+gradient norm. Reported MFU falls by two points while throughput rises, because
+the removed work is dense GEMM arithmetic that already runs near 75% of peak.
+MFU therefore ranks these two configurations in the wrong order; compare them by
+tokens per second and cost per token. At 437k tokens/sec, 100B tokens take about
+508 GPU-hours, the figure the earlier budget attached to 40% MFU.
+
+This is a throughput measurement. It changes the auxiliary objective: the MTP
+loss sees a quarter of the positions per step, with unchanged expected weight.
+No experiment in this repository measures what the MTP loss contributes to
+held-out or executable quality at any fraction, so neither 1.0 nor 0.25 is
+quality-qualified. A matched-token 128M comparison of MTP at 1.0, at 0.25 and
+without MTP on the study harness would settle the setting; production
+configuration is unchanged until then.
+
+[Results, logs and provenance](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-mtp-fraction-h100x8-20261109-01).
