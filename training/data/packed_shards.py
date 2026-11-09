@@ -15,7 +15,10 @@ shards another recipe prepared under the same source name (`source_root`).
 
 Preparation drops documents that share any token n-gram (n = 13) with the
 recipe's benchmark test sets, and code outside `PERMISSIVE_LICENSES` when a source sets
-`permissive_licenses_only`.
+`permissive_licenses_only`. A code source can also select rows by upstream columns:
+`languages` (keep only these) or `exclude_languages` on `language`, `exclude_path`
+(a regular expression searched in `path`, for vendored and built files) and
+`max_bytes` (UTF-8 size of the document, for generated and data files).
 
 `PreparedMixture` packs each source's shards, in a seeded order, into windows of
 `context + 1` tokens; the next window starts at the previous window's last
@@ -25,6 +28,7 @@ while shards are still being prepared: it waits for the next shard's `.json`.
 
 import hashlib
 import json
+import re
 import time
 from pathlib import Path
 
@@ -154,6 +158,32 @@ def shard_paths(root, name, index):
     )
 
 
+def row_filter(source):
+    """Why a source drops an upstream row ("language", "path" or "size"), or None to keep it.
+
+    Returns None when the source sets none of `languages`, `exclude_languages`,
+    `exclude_path` and `max_bytes`. `columns` lists the upstream columns it reads.
+    """
+    keep = frozenset(source.get("languages", ()))
+    skip = frozenset(source.get("exclude_languages", ()))
+    path = re.compile(source["exclude_path"]) if source.get("exclude_path") else None
+    max_bytes = source.get("max_bytes")
+    if not (keep or skip or path or max_bytes):
+        return None
+
+    def reason(row):
+        if row.get("language") in skip or keep and row.get("language") not in keep:
+            return "language"
+        if path and path.search(row["path"]):
+            return "path"
+        if max_bytes and len((row[source["column"]] or "").encode()) > max_bytes:
+            return "size"
+        return None
+
+    reason.columns = (["language"] if keep or skip else []) + (["path"] if path else [])
+    return reason
+
+
 def _text_batches(source, parquet, dropped, render=None, heldout=None, row_groups=None):
     """Document texts of one upstream file, one list per row group.
 
@@ -164,6 +194,8 @@ def _text_batches(source, parquet, dropped, render=None, heldout=None, row_group
     licenses = source.get("permissive_licenses_only", False)
     group_by, order_by = source.get("group_by"), source.get("order_by")
     columns = [source["column"], *(["license"] if licenses else [])]
+    select = row_filter(source)
+    columns += [c for c in ("language", "path") if select and c in select.columns]
     columns += [c for c in (group_by, order_by) if c]
     if source.get("split_column") and source["split_column"] not in columns:
         columns.append(source["split_column"])
@@ -175,6 +207,11 @@ def _text_batches(source, parquet, dropped, render=None, heldout=None, row_group
             allowed = [row["license"].lower() in PERMISSIVE_LICENSES for row in rows]
             dropped["license"] += allowed.count(False)
             rows = [row for row, keep in zip(rows, allowed, strict=True) if keep]
+        if select:
+            reasons = [select(row) for row in rows]
+            for reason in filter(None, reasons):
+                dropped[reason] = dropped.get(reason, 0) + 1
+            rows = [row for row, reason in zip(rows, reasons, strict=True) if not reason]
         if render:
             rows = [{**row, source["column"]: render(row[source["column"]])} for row in rows]
         empty = [not row[source["column"]] or not row[source["column"]].strip() for row in rows]

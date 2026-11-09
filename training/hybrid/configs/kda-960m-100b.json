@@ -1,5 +1,5 @@
 {
-  "recipe": "/project/model_hybrid/recipes/kda-foundation-100b-504010-v1.json",
+  "recipe": "/project/model_hybrid/recipes/kda-foundation-100b-504010-v2.json",
   "model": {
     "vocab_size": 154880,
     "eos_id": 154820,
@@ -21,6 +21,7 @@
     "z_loss": 0.0001,
     "loss_chunk_size": 2048,
     "mtp": true,
+    "mtp_loss_fraction": 0.25,
     "mtp_weight_start": 0.3,
     "mtp_weight_end": 0.1
   },
@@ -47,6 +48,7 @@
   "eval_documents": {
     "climbmix": 128,
     "code": 128,
+    "python": 128,
     "math": 128
   },
   "sample_every_steps": 0,

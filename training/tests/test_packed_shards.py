@@ -83,6 +83,45 @@ class HybridDataTests(unittest.TestCase):
             for i in range(3)
         ]
 
+    def test_language_path_and_size_filters(self):
+        rows = {
+            "code": ["x = 1", "<p>page</p>", "y = 2", "z = " + "3" * 40, "w = 4"],
+            "license": ["mit"] * 5,
+            "language": ["Python", "HTML", "Python", "Python", "Java"],
+            "path": ["a.py", "index.html", "vendor/lib/b.py", "c.py", "D.java"],
+        }
+        pq.write_table(pa.table(rows), self.root / "filtered-0.parquet")
+        base = {
+            "weight": 1.0,
+            "repo": "c",
+            "revision": "r",
+            "pattern": "filtered-{index}.parquet",
+            "shards": 2,
+            "column": "code",
+            "permissive_licenses_only": True,
+            "exclude_path": "(^|/)vendor/",
+            "max_bytes": 20,
+            "max_passes": 1,
+        }
+        expected = {
+            "python": ({"languages": ["Python"]}, 1, {"language": 2, "path": 1, "size": 1}),
+            "other": ({"exclude_languages": ["HTML", "Python"]}, 1, {"language": 4}),
+        }
+        for name, (selection, documents, dropped) in expected.items():
+            self.recipe["sources"] = {name: {**base, **selection}}
+            meta = data.prepare_shard(
+                self.recipe,
+                name,
+                0,
+                self.root / "out",
+                self.tokenizer,
+                np.empty(0, np.uint64),
+                EOS,
+                self.download,
+            )
+            self.assertEqual(meta["documents"], documents)
+            self.assertEqual({k: meta["dropped"].get(k, 0) for k in dropped}, dropped)
+
     def test_repository_documents(self):
         rows = {
             "code": ["b = 2", "a = 1", "z = 26", "solo"],

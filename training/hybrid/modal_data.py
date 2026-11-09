@@ -219,7 +219,7 @@ def coordinate(launch, recipe, deadline, parallel):
             "documents": sum(m["documents"] for m in metas),
             "dropped": {
                 k: sum(m["dropped"].get(k, 0) for m in metas)
-                for k in ("license", "empty", "short", "contaminated")
+                for k in sorted({k for m in metas for k in m["dropped"]})
             },
             "needed_tokens": round(
                 recipe["target_tokens"]

@@ -5,8 +5,8 @@
     {
       "stage": "data",
       "name": "corpus",
-      "recipe": "hybrid/recipes/kda-foundation-100b-504010-v1.json",
-      "parallel": 8
+      "recipe": "hybrid/recipes/kda-foundation-100b-504010-v2.json",
+      "parallel": 32
     }
   ]
 }
