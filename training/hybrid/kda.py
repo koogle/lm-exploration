@@ -191,7 +191,8 @@ class KimiDeltaAttention(nn.Module):
         keep = cache is not None
         if x.is_cuda:
             out = self.recurrence_kernel(
-                q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents, keep, mask.kda_offsets
+                q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents, keep,
+                mask.kda_offsets if mask.share_kda_metadata else None
             )
         else:
             out = self.recurrence_reference(

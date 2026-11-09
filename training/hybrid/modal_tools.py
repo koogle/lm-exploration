@@ -244,7 +244,7 @@ def benchmark(
             + [("original_repeat", [])]
         )
     if larger_microbatch:
-        base = cases[0][1]
+        base = cases[1 if compare_kda_metadata else 0][1]
         cases.append(("larger_microbatch", [*base, "--microbatch", str(larger_microbatch)]))
         cases.append(("original_repeat", base))
     if autotune:
@@ -468,7 +468,7 @@ def bench(
                 compare_fp8,
                 fp8_only and not (compare_kda_metadata or larger_microbatch),
                 compare_kda_metadata,
-                bool(larger_microbatch),
+                bool(larger_microbatch) and not compare_kda_metadata,
                 autotune,
                 kda_save_intermediates,
             ]
