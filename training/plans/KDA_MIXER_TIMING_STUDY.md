@@ -729,3 +729,47 @@ activations; simply enabling the faster path is not justified by this test.
 
 Ten focused CPU tests and Ruff pass, alongside the archived compiled GPU checks.
 [Complete matched results, host audit and provenance](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-fp8-head-h100x8-20261108-02).
+
+## Shared document metadata and microbatch study (November 9)
+
+The metadata experiment lazily computes packed-document offsets once in each
+forward's `DocumentMask` and supplies that tensor to every recurrent layer.
+The optional offsets argument also serves the scalar-delta benchmark. A compiled
+H100 correctness check compares two different packed layouts, MTP losses and all
+parameter gradients with per-layer construction: all values are finite and the
+largest absolute difference is 1.91e-6. Eighteen focused CPU tests and Ruff pass.
+[Correctness check](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-metadata-check-20261109).
+
+The first three-arm run appears to improve throughput from 341,451 / 341,659 to
+351,084 tokens/sec. However, its reference rebuilds metadata at the caller rather
+than inside the original recurrence helper. That changes the compiler boundary;
+this is not a valid speedup over the original implementation. Preserve this
+result as a control-design failure, not a qualified optimization.
+[Initial comparison](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-metadata-h100x8-20261109-01).
+
+Source `21ee6b8` restores the reference calculation boundary. The follow-up uses
+the same eight physical H100s, FP8 tensorwise trunk, BF16 head, real 50/40/10
+data, context 4096, global rows 256 and microbatch six. Each completed arm has
+25 steps, with all 20 predetermined post-warmup steps included:
+
+| Arm | Aggregate tokens/sec | BF16-equivalent MFU | Peak allocated/GPU |
+| --- | ---: | ---: | ---: |
+| Corrected original reference | 376,437 | 34.64% | 59.88 GiB |
+| Shared metadata | 351,481 | 32.35% | 67.47 GiB |
+
+Shared metadata is **6.63% slower**, with about 7.59 GiB more peak allocation.
+Rank-zero forward/loss medians are nearly unchanged (1349 versus 1347 ms), while
+local backward rises from 1179 to 1362 ms. No timed host GC or compile event is
+recorded; all 50 completed steps are finite. These observations suggest a
+compiled-graph/saved-activation interaction, but do not identify its exact cause.
+The remaining repeat/larger-batch arms are canceled before timeout after this
+regression; the archive explicitly marks the comparison incomplete. This is
+evidence to reject the change, not a completed three-control qualification.
+[Corrected partial comparison and launch log](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/real-data-mfu-20261105/deep-dive/kda-metadata-batch-h100x8-20261109-02).
+
+Source `2caf164` retains shared metadata only behind the benchmark's explicit
+`--shared-kda-metadata` flag. Normal training and direct benchmarks use per-layer
+construction. The subsequent microbatch comparison uses that restored path.
+The launcher carries the same FP8 settings into the larger-batch and repeated
+control arms, avoiding an accidental precision change. Global batch and data
+stay fixed; dynamic FP8 scaling can still change rounding with microbatch size.
