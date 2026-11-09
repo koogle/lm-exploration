@@ -240,6 +240,7 @@ def main():
         choices=("rowwise", "tensorwise", "rowwise_with_gw_hp", "rowwise_no_pow2"),
     )
     parser.add_argument("--consolidation", choices=["joint-loss", "projections", "norm", "all"])
+    parser.add_argument("--mtp-loss-fraction", type=float)
     args = parser.parse_args()
     from .model import DocumentMask
 
@@ -280,6 +281,8 @@ def main():
     if args.global_rows:
         overrides["global_rows"] = args.global_rows
     overrides["gc_warmup_steps"] = 5 if args.freeze_gc_after_warmup else 0
+    if args.mtp_loss_fraction:
+        overrides["model"] = {**config.model, "mtp_loss_fraction": args.mtp_loss_fraction}
     config = dataclasses.replace(config, **overrides)
     context = config.model["block_size"]
     if config.architecture == "hnet":
