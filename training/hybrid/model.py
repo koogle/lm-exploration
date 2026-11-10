@@ -22,7 +22,7 @@ from torch.utils.checkpoint import checkpoint
 
 from trainer.roles import declare
 
-from .documents import document_ids, document_positions
+from .documents import cu_seqlens, document_ids, document_positions
 from .fused_loss import fused_cross_entropy
 from .kda import KimiDeltaAttention
 
@@ -43,10 +43,22 @@ compiled_flex_attention = torch.compile(flex_attention, dynamic=False)
 class DocumentMask:
     """Document-aware causal mask: position q sees k <= q within its own document."""
 
+    share_kda_metadata = False
+
     def __init__(self, documents):
         self.documents = documents
         self.positions = document_positions(documents)
         self._block = None
+        self._kda_offsets = None
+
+    @property
+    def kda_offsets(self):
+        """Int64 packed-document offsets shared by recurrent layers in this forward."""
+        if not self.share_kda_metadata:
+            return cu_seqlens(self.documents).long()
+        if self._kda_offsets is None:
+            self._kda_offsets = cu_seqlens(self.documents).long()
+        return self._kda_offsets
 
     @property
     def block(self):
@@ -528,7 +540,7 @@ class HybridLM(nn.Module):
             f"{prefix}count": (labels != IGNORE_INDEX).sum(),
         }
 
-    def forward(self, tokens, labels=None, mtp_labels=None, loops=None):
+    def forward(self, tokens, labels=None, mtp_labels=None, loops=None, loss_scales=None):
         """Logits, or summed losses when `labels` are given.
 
         `loops` sets a looped model's recurrent loop count for this call (default
@@ -548,7 +560,7 @@ class HybridLM(nn.Module):
         hidden = self.final_norm(x)
         if labels is None:
             return F.linear(hidden, self.output_weight)
-        losses = self.loss_sums(hidden, labels)
+        losses = self.loss_sums(hidden, labels) if loss_scales is None else {}
         if mtp_labels is not None:
             if self.mtp is None:
                 raise ValueError("this model was built without an MTP module")
@@ -563,5 +575,28 @@ class HybridLM(nn.Module):
                 # randperm (which torch.compile cannot trace).
                 rows = torch.rand(future.size(0), device=future.device).topk(keep).indices
                 future, mtp_labels = future[rows], mtp_labels[rows]
-            losses |= self.loss_sums(future, mtp_labels, "mtp_")
+            if loss_scales is None:
+                losses |= self.loss_sums(future, mtp_labels, "mtp_")
+            else:
+                from .fused_loss import joint_cross_entropy
+
+                objective, ce, z, mtp_ce, mtp_z = joint_cross_entropy(
+                    hidden,
+                    future,
+                    self.output_weight,
+                    labels,
+                    mtp_labels,
+                    loss_scales,
+                    self.config.z_loss,
+                    self.config.loss_chunk_size,
+                )
+                losses = {
+                    "objective": objective,
+                    "ce": ce,
+                    "z": z,
+                    "mtp_ce": mtp_ce,
+                    "mtp_z": mtp_z,
+                }
+        elif loss_scales is not None:
+            raise ValueError("Joint objective requires MTP targets")
         return losses
