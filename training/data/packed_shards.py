@@ -140,13 +140,20 @@ def _text_batches(source, parquet, dropped, render=None):
     columns = [source["column"], *(["license"] if licenses else [])]
     columns += [c for c in (group_by, order_by) if c]
     groups = {}
+    import pyarrow as pa
+
     for index in range(parquet.num_row_groups):
         table = parquet.read_row_group(index, columns=columns)
-        rows = table.to_pylist()
+        # Filter on the small columns first; only the kept rows' texts become Python strings.
+        others = [c for c in columns if c != source["column"]]
+        fields = table.select(others).to_pylist() if others else [{}] * table.num_rows
+        kept = list(range(table.num_rows))
         if licenses:
-            allowed = [row["license"].lower() in PERMISSIVE_LICENSES for row in rows]
-            dropped["license"] += allowed.count(False)
-            rows = [row for row, keep in zip(rows, allowed, strict=True) if keep]
+            allowed = [i for i in kept if fields[i]["license"].lower() in PERMISSIVE_LICENSES]
+            dropped["license"] += len(kept) - len(allowed)
+            kept = allowed
+        texts = table.column(source["column"]).take(pa.array(kept, pa.int64())).to_pylist()
+        rows = [{**fields[i], source["column"]: t} for i, t in zip(kept, texts, strict=True)]
         if render:
             rows = [{**row, source["column"]: render(row[source["column"]])} for row in rows]
         empty = [not row[source["column"]] or not row[source["column"]].strip() for row in rows]
