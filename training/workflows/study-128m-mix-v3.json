@@ -4,8 +4,15 @@
   "description": "Code-mixture quality check, 200M tokens: recipe v3 shards at context 2048, KDA 128M.",
   "stages": [
     {
+      "stage": "data",
+      "name": "corpus",
+      "recipe": "hybrid/recipes/kda-mix-study-v3.json",
+      "parallel": 8
+    },
+    {
       "stage": "pretrain",
       "name": "pretrain",
+      "data": "corpus",
       "model_config": "hybrid/configs/study-128m-mix-v3.json",
       "gpu": "H100",
       "world_size": 1,

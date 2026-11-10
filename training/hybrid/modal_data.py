@@ -273,6 +273,8 @@ def coordinate(launch, recipe, deadline, parallel):
                 * recipe["sources"][name]["weight"]
             ),
         }
+    # A recipe whose sources are all prepared under other recipes has no shards of its own.
+    folder.mkdir(parents=True, exist_ok=True)
     (folder / "capacity.json").write_text(json.dumps(capacity, indent=2) + "\n")
     volume.commit()
     if failed:
