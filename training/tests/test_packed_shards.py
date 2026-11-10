@@ -83,6 +83,121 @@ class HybridDataTests(unittest.TestCase):
             for i in range(3)
         ]
 
+    def test_language_path_and_size_filters(self):
+        rows = {
+            "code": ["x = 1", "<p>page</p>", "y = 2", "z = " + "3" * 40, "w = 4"],
+            "license": ["mit"] * 5,
+            "language": ["Python", "HTML", "Python", "Python", "Java"],
+            "path": ["a.py", "index.html", "vendor/lib/b.py", "c.py", "D.java"],
+        }
+        pq.write_table(pa.table(rows), self.root / "filtered-0.parquet")
+        base = {
+            "weight": 1.0,
+            "repo": "c",
+            "revision": "r",
+            "pattern": "filtered-{index}.parquet",
+            "shards": 2,
+            "column": "code",
+            "permissive_licenses_only": True,
+            "exclude_path": "(^|/)vendor/",
+            "max_bytes": 20,
+            "max_passes": 1,
+        }
+        expected = {
+            "python": ({"languages": ["Python"]}, 1, {"language": 2, "path": 1, "size": 1}),
+            "other": ({"exclude_languages": ["HTML", "Python"]}, 1, {"language": 4}),
+        }
+        for name, (selection, documents, dropped) in expected.items():
+            self.recipe["sources"] = {name: {**base, **selection}}
+            meta = data.prepare_shard(
+                self.recipe,
+                name,
+                0,
+                self.root / "out",
+                self.tokenizer,
+                np.empty(0, np.uint64),
+                EOS,
+                self.download,
+            )
+            self.assertEqual(meta["documents"], documents)
+            self.assertEqual({k: meta["dropped"].get(k, 0) for k in dropped}, dropped)
+
+    def test_starred_sources_and_json_lines(self):
+        import gzip
+        import json
+
+        rows = [
+            {"text": f"value_{i} = {i}", "repository": repo, "path": f"f{i}.py"}
+            for i, repo in enumerate(["Org/Good", "org/other", "org/good", "x/y"])
+        ]
+        with gzip.open(self.root / "projects-0.jsonl.gz", "wt") as out:
+            out.writelines(json.dumps(row) + "\n" for row in rows)
+        pq.write_table(
+            pa.table({"repo_name": ["org/good", "a/b", "c/d"], "stars": [12.0, 3.0, None]}),
+            self.root / "stars.parquet",
+        )
+        self.recipe["stars"] = {
+            "repo": "s",
+            "revision": "r",
+            "files": ["stars.parquet"],
+            "name_column": "repo_name",
+            "count_column": "stars",
+            "minimum": 10,
+        }
+        hashes, report = data.build_stars(self.recipe, self.download)
+        self.assertEqual(report, {"minimum": 10, "rows": 3, "repositories": 1})
+        base = {
+            "weight": 1.0,
+            "repo": "c",
+            "revision": "r",
+            "files": ["projects-0.jsonl.gz", "projects-0.jsonl.gz"],
+            "shards": 2,
+            "column": "text",
+            "split_column": "repository",
+            "max_passes": 1,
+        }
+        self.recipe["sources"] = {"projects": {**base, "exclude_repositories": ["ORG/good"]}}
+        meta = data.prepare_shard(
+            self.recipe,
+            "projects",
+            0,
+            self.root / "out-excluded",
+            self.tokenizer,
+            np.empty(0, np.uint64),
+            EOS,
+            self.download,
+        )
+        self.assertEqual((meta["documents"], meta["dropped"]["repository"]), (2, 2))
+        for wanted, documents in ((True, 2), (False, 2)):
+            self.recipe["sources"] = {"projects": {**base, "starred": wanted}}
+            meta = data.prepare_shard(
+                self.recipe,
+                "projects",
+                0,
+                self.root / f"out-{wanted}",
+                self.tokenizer,
+                np.empty(0, np.uint64),
+                EOS,
+                self.download,
+                starred=frozenset(hashes.tolist()),
+            )
+            self.assertEqual((meta["documents"], meta["dropped"]["stars"]), (documents, 2))
+
+    def test_sources_repeat_up_to_max_passes(self):
+        self.prepare()
+        self.recipe["sources"]["code"]["max_passes"] = 2
+        mixture = data.PreparedMixture(self.recipe, self.root / "out")
+        tokens = sum(
+            len(np.fromfile(data.shard_paths(self.root / "out", "code", i)[0], dtype=np.uint32))
+            for i in data.training_order(self.recipe, "code")
+        )
+        first = mixture._take("code", tokens)
+        mixture.state["code"]["shard"] = len(mixture.orders["code"])
+        np.testing.assert_array_equal(mixture._take("code", tokens), first)
+        mixture.state["code"]["shard"] = 2 * len(mixture.orders["code"])
+        with self.assertRaises(StopIteration):
+            mixture._take("code", 1)
+
     def test_repository_documents(self):
         rows = {
             "code": ["b = 2", "a = 1", "z = 26", "solo"],
@@ -122,6 +237,75 @@ class HybridDataTests(unittest.TestCase):
         expected = "### a.py\na = 1\n\n### b.py\nb = 2\n\n"
         self.assertEqual(meta["tokens"], len(expected) + 1)
         self.assertEqual(meta["bytes"], len(expected.encode()))
+
+    def test_content_and_repository_splits_across_files(self):
+        texts = [f"unique text {i}" for i in range(200)]
+        repos = [f"repo-{i}" for i in range(200)]
+        table = pa.table({"text": texts + texts, "repo": repos + repos})
+        pq.write_table(table, self.root / "split.parquet")
+        source = {"column": "text", "hash_split": True, "split_column": "repo"}
+        partitions = []
+        for heldout in (False, True):
+            dropped = {"empty": 0}
+            found = [
+                text
+                for batch in data._text_batches(
+                    source, pq.ParquetFile(self.root / "split.parquet"), dropped, heldout=heldout
+                )
+                for text in batch
+            ]
+            self.assertEqual(len(found), len(set(found)))
+            self.assertGreater(len(found), 0)
+            self.assertGreater(dropped["duplicate"], 0)
+            for text in found:
+                i = texts.index(text)
+                self.assertEqual(data.partition(data.document_key(text)), heldout)
+                self.assertEqual(data.partition(data.document_key(repos[i])), heldout)
+            partitions.append(set(found))
+        self.assertFalse(partitions[0] & partitions[1])
+
+    def test_capacity_rejects_incomplete_and_insufficient_shards(self):
+        from workflows.checks import check_hybrid_capacity
+
+        self.prepare()
+        root = self.root / "out"
+        check_hybrid_capacity(self.recipe, root, 16, 8)
+        with self.assertRaisesRegex(ValueError, "needs"):
+            check_hybrid_capacity(self.recipe, root, 10**9, 8)
+        binary = data.shard_paths(root, "code", 0)[0]
+        binary.write_bytes(binary.read_bytes()[:-4])
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            check_hybrid_capacity(self.recipe, root, 16, 8)
+
+    def test_row_group_parts_cover_upstream_once(self):
+        pq.write_table(
+            pa.table({"text": [f"row-{i}" for i in range(24)]}),
+            self.root / "parts-0.parquet",
+            row_group_size=4,
+        )
+        self.recipe["sources"] = {
+            "web": {
+                **self.recipe["sources"]["web"],
+                "pattern": "parts-{index}.parquet",
+                "shards": 3,
+                "parts_per_file": 3,
+            }
+        }
+        metas = [
+            data.prepare_shard(
+                self.recipe,
+                "web",
+                i,
+                self.root / "out",
+                self.tokenizer,
+                np.empty(0, np.uint64),
+                EOS,
+                self.download,
+            )
+            for i in range(3)
+        ]
+        self.assertEqual(sum(m["documents"] for m in metas), 24)
+        self.assertEqual([m["upstream"]["row_groups"] for m in metas], [[0, 1], [2, 3], [4, 5]])
 
     def test_sources_prepared_under_another_recipe(self):
         self.prepare()

@@ -9,6 +9,7 @@ from workflows.deadline import (
     bounded_timeout,
     cancel_at_deadline,
     new_deadline,
+    recorded_call,
     segment_seconds,
     track,
     tracked_calls,
@@ -31,6 +32,32 @@ class DeadlineTests(unittest.TestCase):
         self.assertEqual(segment_seconds(5000, 21600), 5000 - 480)
         with self.assertRaises(RuntimeError):
             segment_seconds(400, 21600)
+
+    def test_restarted_controller_reattaches_recorded_session(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+
+        with tempfile.TemporaryDirectory() as folder:
+            child = SimpleNamespace(object_id="fc-child")
+            spawn, reconnect, commit = Mock(return_value=child), Mock(return_value=child), Mock()
+            first = recorded_call(folder, "train_segment:run-s00", spawn, reconnect, commit)
+            second = recorded_call(folder, "train_segment:run-s00", spawn, reconnect, commit)
+            self.assertIs(first, second)
+            spawn.assert_called_once()
+            reconnect.assert_called_once_with("fc-child")
+            commit.assert_called_once()
+            self.assertEqual(tracked_calls(folder), ["fc-child"])
+
+    def test_duplicate_child_records_fail_without_spawning(self):
+        from unittest.mock import Mock
+
+        with tempfile.TemporaryDirectory() as folder:
+            track(folder, "fc-a", "train_segment:run-s00")
+            track(folder, "fc-b", "train_segment:run-s00")
+            spawn = Mock()
+            with self.assertRaisesRegex(RuntimeError, "Multiple recorded calls"):
+                recorded_call(folder, "train_segment:run-s00", spawn, Mock(), Mock())
+            spawn.assert_not_called()
 
     def test_calls_are_recorded_for_cancellation(self):
         with tempfile.TemporaryDirectory() as folder:

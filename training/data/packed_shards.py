@@ -15,7 +15,23 @@ shards another recipe prepared under the same source name (`source_root`).
 
 Preparation drops documents that share any token n-gram (n = 13) with the
 recipe's benchmark test sets, and code outside `PERMISSIVE_LICENSES` when a source sets
-`permissive_licenses_only`.
+`permissive_licenses_only`. A code source can also select rows by upstream columns:
+`languages` (keep only these) or `exclude_languages` on `language`, `exclude_path`
+(a regular expression searched in `path`, for vendored and built files) and
+`max_bytes` (UTF-8 size of the document, for generated and data files). With a
+recipe-level `stars` table (repository names with at least `minimum` stars,
+`build_stars`), `starred: true` keeps only rows whose `split_column` repository is
+in the table and `starred: false` only the others. `exclude_repositories` drops
+rows of the listed repositories. Upstream files are parquet or gzipped JSON lines.
+
+With `hash_split`, a training shard keeps a document only when its content and its
+`split_column` group are both outside the held-out partition, and the held-out
+shard only when both are inside it. `heldout_split: "group"` makes the held-out
+shard keep every document of a held-out group: a larger evaluation set that no
+training shard of any source with the same split contains.
+
+A source with `max_passes` above 1 is read again, in the same shard order, once its
+shards are used up, so a small curated source can carry a larger weight.
 
 `PreparedMixture` packs each source's shards, in a seeded order, into windows of
 `context + 1` tokens; the next window starts at the previous window's last
@@ -23,7 +39,9 @@ token. Each window comes from the source furthest below its weight. It can run
 while shards are still being prepared: it waits for the next shard's `.json`.
 """
 
+import hashlib
 import json
+import re
 import time
 from pathlib import Path
 
@@ -36,14 +54,26 @@ from .mixture import deficit_source
 HASH_BASE = np.uint64(0x9E3779B97F4A7C15)
 
 
+def document_key(text):
+    text = "\n".join(line.rstrip() for line in text.replace("\r\n", "\n").splitlines()).strip()
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def partition(key):
+    """Content-stable 10% holdout, shared by sampled and production corpora."""
+    return int(key[:16], 16) % 10 == 0
+
+
 def load_recipe(path):
     recipe = json.loads(Path(path).read_text())
     total = sum(source["weight"] for source in recipe["sources"].values())
     if abs(total - 1) > 1e-9:
         raise ValueError("Source weights must sum to 1")
     for name, source in recipe["sources"].items():
-        if source["max_passes"] != 1:
-            raise ValueError(f"{name}: only single-pass sources are supported")
+        if type(source["max_passes"]) is not int or source["max_passes"] < 1:
+            raise ValueError(f"{name}: max_passes must be a positive integer")
+        if "starred" in source and not ("stars" in recipe and source.get("split_column")):
+            raise ValueError(f"{name}: starred needs a recipe stars table and a split_column")
     return recipe
 
 
@@ -89,7 +119,22 @@ def build_screen(recipe, tokenizer, download=hub_download):
         texts = []
         for file in benchmark["files"]:
             path = download(benchmark["repo"], benchmark["revision"], file)
-            texts.extend(benchmark_texts(benchmark, pq.read_table(path)))
+            if Path(path).suffix == ".jsonl":
+                # LiveCodeBench releases are JSONL; only inspect declared fields.
+                # Test payloads can be large and are not training inputs.
+                import pyarrow as pa
+
+                with Path(path).open() as handle:
+                    rows = [
+                        {key: row[key] for key in benchmark["columns"]}
+                        for line in handle
+                        if line.strip()
+                        for row in [json.loads(line)]
+                    ]
+                table = pa.Table.from_pylist(rows)
+            else:
+                table = pq.read_table(path, columns=benchmark["columns"])
+            texts.extend(benchmark_texts(benchmark, table))
         encodings = tokenizer.encode_batch(texts, add_special_tokens=False)
         found = [ngram_hashes(e.ids, n) for e in encodings]
         hashes.extend(found)
@@ -102,6 +147,56 @@ def build_screen(recipe, tokenizer, download=hub_download):
             }
         )
     return np.unique(np.concatenate(hashes)), report
+
+
+def repository_hash(name):
+    return int(document_key(str(name).lower())[:16], 16)
+
+
+def build_stars(recipe, download=hub_download):
+    """Sorted uint64 hashes of repositories with at least `minimum` stars, and a report."""
+    import pyarrow.compute as pc
+    import pyarrow.parquet as pq
+
+    spec = recipe["stars"]
+    names = set()
+    rows = 0
+    for file in spec["files"]:
+        table = pq.read_table(
+            download(spec["repo"], spec["revision"], file),
+            columns=[spec["name_column"], spec["count_column"]],
+        )
+        rows += table.num_rows
+        counts = pc.fill_null(table.column(spec["count_column"]), 0)
+        kept = table.filter(pc.greater_equal(counts, spec["minimum"]))
+        names.update(str(n).lower() for n in kept.column(spec["name_column"]).to_pylist())
+    hashes = np.unique(np.array([repository_hash(n) for n in names], dtype=np.uint64))
+    return hashes, {"minimum": spec["minimum"], "rows": rows, "repositories": len(names)}
+
+
+class JsonLines:
+    """A gzipped JSON-lines upstream file read like a one-row-group parquet file."""
+
+    num_row_groups = 1
+
+    def __init__(self, path):
+        self.path = path
+
+    def iter_batches(self, batch_size, columns, row_groups=None):
+        import gzip
+
+        import pyarrow as pa
+
+        rows = []
+        with gzip.open(self.path, "rt", encoding="utf-8") as lines:
+            for line in lines:
+                row = json.loads(line)
+                rows.append({column: row.get(column) for column in columns})
+                if len(rows) == batch_size:
+                    yield pa.Table.from_pylist(rows)
+                    rows = []
+        if rows:
+            yield pa.Table.from_pylist(rows)
 
 
 def contaminated(ids, screen, n):
@@ -128,7 +223,47 @@ def shard_paths(root, name, index):
     )
 
 
-def _text_batches(source, parquet, dropped, render=None):
+def row_filter(source, starred=None):
+    """Why a source drops an upstream row ("language", "path", "size" or "stars"), or
+    None to keep it.
+
+    Returns None when the source sets none of `languages`, `exclude_languages`,
+    `exclude_path`, `max_bytes`, `exclude_repositories` and `starred`. `columns` lists the upstream columns it
+    reads. `starred` is the set of `repository_hash` values of the recipe's stars table.
+    """
+    keep = frozenset(source.get("languages", ()))
+    skip = frozenset(source.get("exclude_languages", ()))
+    path = re.compile(source["exclude_path"]) if source.get("exclude_path") else None
+    max_bytes = source.get("max_bytes")
+    wanted = source.get("starred")
+    excluded = frozenset(name.lower() for name in source.get("exclude_repositories", ()))
+    if wanted is not None and starred is None:
+        raise ValueError("A starred source needs the recipe's stars table")
+    if not (keep or skip or path or max_bytes or excluded or wanted is not None):
+        return None
+
+    def reason(row, size):
+        if row.get("language") in skip or keep and row.get("language") not in keep:
+            return "language"
+        if path and path.search(row["path"]):
+            return "path"
+        if max_bytes and size > max_bytes:
+            return "size"
+        if excluded and str(row[source["split_column"]]).lower() in excluded:
+            return "repository"
+        if wanted is not None and (
+            (repository_hash(row[source["split_column"]]) in starred) != wanted
+        ):
+            return "stars"
+        return None
+
+    reason.columns = (["language"] if keep or skip else []) + (["path"] if path else [])
+    return reason
+
+
+def _text_batches(
+    source, parquet, dropped, render=None, heldout=None, row_groups=None, starred=None
+):
     """Document texts of one upstream file, one list per row group.
 
     With `group_by` (e.g. `repo_name`), the file's rows are grouped first and each
@@ -138,27 +273,68 @@ def _text_batches(source, parquet, dropped, render=None):
     licenses = source.get("permissive_licenses_only", False)
     group_by, order_by = source.get("group_by"), source.get("order_by")
     columns = [source["column"], *(["license"] if licenses else [])]
+    select = row_filter(source, starred)
+    columns += [c for c in ("language", "path") if select and c in select.columns]
     columns += [c for c in (group_by, order_by) if c]
+    if source.get("split_column") and source["split_column"] not in columns:
+        columns.append(source["split_column"])
     groups = {}
+    seen = set()
     import pyarrow as pa
+    import pyarrow.compute as pc
 
-    for index in range(parquet.num_row_groups):
-        table = parquet.read_row_group(index, columns=columns)
-        # Filter on the small columns first; only the kept rows' texts become Python strings.
-        others = [c for c in columns if c != source["column"]]
-        fields = table.select(others).to_pylist() if others else [{}] * table.num_rows
-        kept = list(range(table.num_rows))
+    others = [c for c in columns if c != source["column"]]
+    for batch in parquet.iter_batches(batch_size=1024, columns=columns, row_groups=row_groups):
+        # Filter on the small columns and the text's byte length first; only the kept
+        # rows' texts become Python strings.
+        text = batch.column(source["column"])
+        fields = batch.select(others).to_pylist() if others else [{}] * batch.num_rows
+        kept = list(range(batch.num_rows))
         if licenses:
             allowed = [i for i in kept if fields[i]["license"].lower() in PERMISSIVE_LICENSES]
             dropped["license"] += len(kept) - len(allowed)
             kept = allowed
-        texts = table.column(source["column"]).take(pa.array(kept, pa.int64())).to_pylist()
+        if select:
+            sizes = [0] * batch.num_rows
+            if not pa.types.is_null(text.type):
+                sizes = pc.binary_length(text).fill_null(0).to_pylist()
+            reasons = [select(fields[i], sizes[i]) for i in kept]
+            for reason in filter(None, reasons):
+                dropped[reason] = dropped.get(reason, 0) + 1
+            kept = [i for i, reason in zip(kept, reasons, strict=True) if not reason]
+        texts = text.take(pa.array(kept, pa.int64())).to_pylist()
         rows = [{**fields[i], source["column"]: t} for i, t in zip(kept, texts, strict=True)]
         if render:
             rows = [{**row, source["column"]: render(row[source["column"]])} for row in rows]
         empty = [not row[source["column"]] or not row[source["column"]].strip() for row in rows]
         dropped["empty"] += sum(empty)
         rows = [row for row, e in zip(rows, empty, strict=True) if not e]
+        if source.get("hash_split"):
+            if heldout is None or group_by:
+                raise ValueError("Hash splitting requires a split and ungrouped documents")
+            selected = []
+            for row in rows:
+                key = document_key(row[source["column"]])
+                keys = [key]
+                if source.get("split_column"):
+                    group = row.get(source["split_column"])
+                    if not group:
+                        dropped["missing_split_group"] = dropped.get("missing_split_group", 0) + 1
+                        continue
+                    keys.append(document_key(str(group).lower()))
+                    if heldout and source.get("heldout_split") == "group":
+                        keys = keys[1:]
+                # Both content and repository must belong to this partition.
+                # This excludes exact cross-source train/validation overlap too.
+                if any(partition(k) != heldout for k in keys):
+                    dropped["split"] = dropped.get("split", 0) + 1
+                    continue
+                if key in seen:
+                    dropped["duplicate"] = dropped.get("duplicate", 0) + 1
+                    continue
+                seen.add(key)
+                selected.append(row)
+            rows = selected
         if not group_by:
             yield [row[source["column"]] for row in rows]
             continue
@@ -177,7 +353,16 @@ def _text_batches(source, parquet, dropped, render=None):
 
 
 def prepare_shard(
-    recipe, name, index, root, tokenizer, screen, eos_id, download=hub_download, render=None
+    recipe,
+    name,
+    index,
+    root,
+    tokenizer,
+    screen,
+    eos_id,
+    download=hub_download,
+    render=None,
+    starred=None,
 ):
     """Tokenize one upstream file into a prepared shard; returns its metadata.
 
@@ -187,18 +372,28 @@ def prepare_shard(
     import pyarrow.parquet as pq
 
     source = recipe["sources"][name]
+    parts = source.get("parts_per_file", 1)
+    file_index = index // parts
     if "files" in source:
-        file = source["files"][index]
+        file = source["files"][file_index]
     else:
-        file = source["pattern"].format(index=index + source.get("file_offset", 0))
+        file = source["pattern"].format(index=file_index + source.get("file_offset", 0))
     path = download(source["repo"], source["revision"], file)
+    parquet = JsonLines(path) if str(file).endswith(".jsonl.gz") else pq.ParquetFile(path)
+    if parts > parquet.num_row_groups:
+        raise ValueError("parts_per_file exceeds the number of Parquet row groups")
+    row_groups = [
+        int(g) for g in np.array_split(np.arange(parquet.num_row_groups), parts)[index % parts]
+    ]
     n = recipe["contamination"]["ngram"]
     min_tokens = source.get("min_tokens", 1)
     documents = []
     dropped = {"license": 0, "empty": 0, "short": 0, "contaminated": 0}
     if source.get("render") and render is None:
         raise ValueError(f"{name} needs its {source['render']} renderer")
-    for texts in _text_batches(source, pq.ParquetFile(path), dropped, render):
+    for texts in _text_batches(
+        source, parquet, dropped, render, index == heldout_index(source), row_groups, starred
+    ):
         for text, encoding in zip(
             texts, tokenizer.encode_batch(texts, add_special_tokens=False), strict=True
         ):
@@ -230,7 +425,12 @@ def prepare_shard(
     meta = {
         "source": name,
         "index": index,
-        "upstream": {"repo": source["repo"], "revision": source["revision"], "file": file},
+        "upstream": {
+            "repo": source["repo"],
+            "revision": source["revision"],
+            "file": file,
+            "row_groups": row_groups,
+        },
         "documents": len(lengths),
         "tokens": len(tokens),
         "bytes": int(lengths[:, 1].sum()),
@@ -263,9 +463,10 @@ class PreparedMixture:
         return np.fromfile(path, dtype=np.uint32)
 
     def _tokens(self, name, position):
-        if position >= len(self.orders[name]):
+        order = self.orders[name]
+        if position >= len(order) * self.recipe["sources"][name]["max_passes"]:
             raise StopIteration(f"{name} has no shards left")
-        index = self.orders[name][position]
+        index = order[position % len(order)]
         key = (name, index)
         if key not in self.loaded:
             bin_path, _, meta_path = shard_paths(
@@ -280,9 +481,7 @@ class PreparedMixture:
                     self.refresh()
             # Read fully so no volume file stays open (volume reloads need that).
             current = self.state[name]["shard"]
-            keep = {
-                self.orders[name][p] for p in (current, current + 1) if p < len(self.orders[name])
-            }
+            keep = {order[p % len(order)] for p in (current, current + 1)}
             self.loaded = {k: v for k, v in self.loaded.items() if k[0] != name or k[1] in keep}
             self.loaded[key] = self._load(bin_path)
         return self.loaded[key]

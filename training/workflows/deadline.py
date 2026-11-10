@@ -54,6 +54,23 @@ def tracked_calls(run_folder, kind=None):
     return sorted(r["call_id"] for r in records if kind is None or r["kind"] == kind)
 
 
+def recorded_call(run_folder, kind, spawn, reconnect, commit):
+    """Reattach a recorded child when its controller resumes after interruption.
+
+    The caller reloads the volume first. This reuses a durable child identity;
+    it does not claim atomicity across the remote spawn and local recording.
+    """
+    existing = tracked_calls(run_folder, kind=kind)
+    if len(existing) > 1:
+        raise RuntimeError(f"Multiple recorded calls for {kind}; refusing duplicate work")
+    if existing:
+        return reconnect(existing[0])
+    call = spawn()
+    track(run_folder, call.object_id, kind)
+    commit()
+    return call
+
+
 def calls_finished(call_ids):
     """True once every call has returned or failed (none still queued or running)."""
     import modal
