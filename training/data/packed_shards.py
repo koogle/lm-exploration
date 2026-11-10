@@ -242,12 +242,12 @@ def row_filter(source, starred=None):
     if not (keep or skip or path or max_bytes or excluded or wanted is not None):
         return None
 
-    def reason(row):
+    def reason(row, size):
         if row.get("language") in skip or keep and row.get("language") not in keep:
             return "language"
         if path and path.search(row["path"]):
             return "path"
-        if max_bytes and len((row[source["column"]] or "").encode()) > max_bytes:
+        if max_bytes and size > max_bytes:
             return "size"
         if excluded and str(row[source["split_column"]]).lower() in excluded:
             return "repository"
@@ -280,17 +280,30 @@ def _text_batches(
         columns.append(source["split_column"])
     groups = {}
     seen = set()
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    others = [c for c in columns if c != source["column"]]
     for batch in parquet.iter_batches(batch_size=1024, columns=columns, row_groups=row_groups):
-        rows = batch.to_pylist()
+        # Filter on the small columns and the text's byte length first; only the kept
+        # rows' texts become Python strings.
+        text = batch.column(source["column"])
+        fields = batch.select(others).to_pylist() if others else [{}] * batch.num_rows
+        kept = list(range(batch.num_rows))
         if licenses:
-            allowed = [row["license"].lower() in PERMISSIVE_LICENSES for row in rows]
-            dropped["license"] += allowed.count(False)
-            rows = [row for row, keep in zip(rows, allowed, strict=True) if keep]
+            allowed = [i for i in kept if fields[i]["license"].lower() in PERMISSIVE_LICENSES]
+            dropped["license"] += len(kept) - len(allowed)
+            kept = allowed
         if select:
-            reasons = [select(row) for row in rows]
+            sizes = [0] * batch.num_rows
+            if not pa.types.is_null(text.type):
+                sizes = pc.binary_length(text).fill_null(0).to_pylist()
+            reasons = [select(fields[i], sizes[i]) for i in kept]
             for reason in filter(None, reasons):
                 dropped[reason] = dropped.get(reason, 0) + 1
-            rows = [row for row, reason in zip(rows, reasons, strict=True) if not reason]
+            kept = [i for i, reason in zip(kept, reasons, strict=True) if not reason]
+        texts = text.take(pa.array(kept, pa.int64())).to_pylist()
+        rows = [{**fields[i], source["column"]: t} for i, t in zip(kept, texts, strict=True)]
         if render:
             rows = [{**row, source["column"]: render(row[source["column"]])} for row in rows]
         empty = [not row[source["column"]] or not row[source["column"]].strip() for row in rows]
