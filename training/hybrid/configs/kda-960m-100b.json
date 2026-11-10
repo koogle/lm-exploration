@@ -1,5 +1,5 @@
 {
-  "recipe": "/project/model_hybrid/recipes/kda-foundation-100b-504010-v2.json",
+  "recipe": "/project/model_hybrid/recipes/kda-foundation-100b-504010-v3.json",
   "model": {
     "vocab_size": 154880,
     "eos_id": 154820,
@@ -47,8 +47,12 @@
   "eval_every_steps": 500,
   "eval_documents": {
     "climbmix": 128,
-    "code": 128,
+    "curated": 128,
+    "mit": 128,
+    "python_starred": 128,
     "python": 128,
+    "code_starred": 128,
+    "code": 128,
     "math": 128
   },
   "sample_every_steps": 0,

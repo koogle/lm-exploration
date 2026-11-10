@@ -163,8 +163,47 @@ Python documents (0.13M tokens), 385 other Python (0.50M), 899 starred other
 code (0.95M) and 4,564 other code (5.39M), and evaluates the v1 ClimbMix and math
 held-out shards alongside.
 
-The 960M configuration keeps recipe v2 until the matched comparison below
-supports v3.
+### Matched 128M comparison of recipe v2 and v3
+
+Two 127.6M-parameter KDA models trained for 200,015,872 tokens each on one H100,
+identical except for the recipe (context 2,048, one seed, MTP loss fraction
+0.25; workflows `study-128m-mix-v2` and `study-128m-mix-v3`). Both are scored on
+the common evaluation set, in bits per byte:
+
+| Evaluation set | Documents | Recipe v2 | Recipe v3 | Change |
+| --- | ---: | ---: | ---: | ---: |
+| Starred Python | 88 | 1.0125 | 0.9564 | -5.5% |
+| Other Python | 385 | 0.9513 | 0.9081 | -4.5% |
+| Starred other code | 899 | 0.8146 | 0.8153 | +0.1% |
+| Other code | 4,564 | 0.8282 | 0.8494 | +2.6% |
+| ClimbMix | | 1.1936 | 1.1916 | -0.2% |
+| Math | | 1.1276 | 1.1201 | -0.7% |
+
+Recipe v3 predicts held-out Python 4.5–5.5% better and leaves general text and
+math unchanged. It predicts unstarred non-Python code 2.6% worse, and starred
+non-Python code the same.
+
+What this does and does not show:
+
+- The Python gain follows the Python share: v3 trains on about twice as many
+  Python tokens (about 8% of the stream against 4%). The test does not separate
+  that from any effect of repository quality.
+- It gives no evidence that starred code is better training data for held-out
+  prediction. Starred non-Python code rose from about 6% to 20% of the stream,
+  with curated projects on top, and held-out starred code did not improve; the
+  loss on unstarred code follows its share falling from about 30% to 8%.
+- Bits per byte measures prediction of held-out code, including code one may not
+  want the model to imitate. It is not executable correctness.
+- A 200M-token run reads the start of each source once. It says nothing about
+  reading curated projects and starred Python four to five times in a 100B run.
+- One seed per arm; the size of seed noise at this scale is unmeasured, and the
+  starred-Python set has 88 documents.
+
+The 960M configuration reads recipe v3: the comparison supports it for the Python
+target and shows no cost outside unstarred non-Python code. The weighting toward
+starred repositories is a stated preference, not a measured gain.
+
+[Run reports, common evaluation and capacity reports](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/code-mix-study-20261110).
 
 ## Training and budget
 
