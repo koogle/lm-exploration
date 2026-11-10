@@ -22,7 +22,7 @@
   },
   "sources": {
     "python_starred": {
-      "weight": 0.25,
+      "weight": 0.2,
       "repo": "codeparrot/github-code-clean",
       "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
       "pattern": "data/train-{index:05d}-of-00880.parquet",
@@ -148,7 +148,7 @@
       ]
     },
     "python": {
-      "weight": 0.25,
+      "weight": 0.2,
       "repo": "codeparrot/github-code-clean",
       "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
       "pattern": "data/train-{index:05d}-of-00880.parquet",
@@ -274,7 +274,7 @@
       ]
     },
     "code_starred": {
-      "weight": 0.25,
+      "weight": 0.2,
       "repo": "codeparrot/github-code-clean",
       "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
       "pattern": "data/train-{index:05d}-of-00880.parquet",
@@ -403,7 +403,7 @@
       ]
     },
     "code": {
-      "weight": 0.25,
+      "weight": 0.2,
       "repo": "codeparrot/github-code-clean",
       "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
       "pattern": "data/train-{index:05d}-of-00880.parquet",
@@ -530,6 +530,31 @@
         "ziglang/zig",
         "zjj1280637679-ship-it/jiuzhou-chronicles"
       ]
+    },
+    "climbmix": {
+      "weight": 0.1,
+      "repo": "karpathy/climbmix-400b-shuffle",
+      "revision": "915333b4f8b8684f39aeaafea600fea6f43fb703",
+      "pattern": "shard_{index:05d}.parquet",
+      "shards": 1300,
+      "column": "text",
+      "max_passes": 1,
+      "estimated_tokens_per_shard": 52600000,
+      "hash_split": true,
+      "prepared_in": "kda-foundation-100b-504010-v1"
+    },
+    "math": {
+      "weight": 0.1,
+      "repo": "nvidia/Nemotron-CC-Math-v1",
+      "revision": "397a2502f2028c659ba411a6c4935b464a7f03aa",
+      "pattern": "3/part_{index:06d}.parquet",
+      "shards": 64,
+      "column": "text",
+      "max_passes": 1,
+      "estimated_tokens_per_shard": 250000000,
+      "hash_split": true,
+      "parts_per_file": 4,
+      "prepared_in": "kda-foundation-100b-504010-v1"
     }
   },
   "heldout": {

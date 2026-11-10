@@ -613,14 +613,16 @@ def heldout_loss(export, recipe, counts, deadline):
 
 
 @app.local_entrypoint()
-def heldout(export: str, recipe: str = "hybrid/recipes/hybrid-40b-v1.json"):
-    """Pretraining held-out loss of `<run id>/export/<export>` (the 40B run's document counts)."""
+def heldout(export: str, recipe: str = "hybrid/recipes/hybrid-40b-v1.json", documents: int = 0):
+    """Pretraining held-out loss of `<run id>/export/<export>`: the 40B run's document
+    counts, or `--documents` held-out documents of every source of `--recipe`."""
     from workflows.deadline import MAX_LAUNCH_SECONDS
 
+    resolved = load_config(recipe)
     counts = {"climbmix": 1000, "code": 300, "math": 300}
-    result = heldout_loss.remote(
-        export, load_config(recipe), counts, time.time() + MAX_LAUNCH_SECONDS
-    )
+    if documents:
+        counts = dict.fromkeys(resolved["sources"], documents)
+    result = heldout_loss.remote(export, resolved, counts, time.time() + MAX_LAUNCH_SECONDS)
     print(json.dumps({"export": export, "heldout": result}, indent=1))
 
 
