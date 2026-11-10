@@ -1,0 +1,20 @@
+{
+  "name": "study-128m-full-codeheavy",
+  "family": "hybrid",
+  "description": "200M-token 2K-context matched small-model study, one H100, independent deadline; 8-step qualification then bounded continuation.",
+  "stages": [
+    {
+      "stage": "pretrain",
+      "name": "pretrain",
+      "model_config": "hybrid/configs/study-128m-full-codeheavy.json",
+      "gpu": "H100",
+      "world_size": 1,
+      "segment_seconds": 7200,
+      "worker_timeout_seconds": 8100,
+      "max_segments": 3,
+      "segments_per_call": 3,
+      "qualification_segments": 1,
+      "qualification_steps": 8
+    }
+  ]
+}

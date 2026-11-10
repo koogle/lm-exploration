@@ -1,0 +1,24 @@
+{
+  "vocab_size": 154880,
+  "eos_id": 154820,
+  "block_size": 4096,
+  "n_layer": 24,
+  "n_embd": 1536,
+  "n_head": 12,
+  "n_kv_head": 4,
+  "head_dim": 128,
+  "mlp_hidden": 4096,
+  "layer_pattern": [
+    "kda",
+    "kda",
+    "kda",
+    "full"
+  ],
+  "n_kda_head": 12,
+  "rope_base": 1000000.0,
+  "z_loss": 0.0001,
+  "loss_chunk_size": 2048,
+  "mtp": true,
+  "mtp_weight_start": 0.3,
+  "mtp_weight_end": 0.1
+}
