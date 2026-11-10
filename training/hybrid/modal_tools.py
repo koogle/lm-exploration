@@ -15,18 +15,30 @@ no retries.
 """
 
 import json
+import shutil
 import subprocess
 import time
 from pathlib import Path
 
 import modal
-from model_hybrid.image import image
+from model_hybrid.image import build, image
 
+counter_image = build(
+    extra_packages=("torchao==0.18.0",), apt_packages=("cuda-nsight-compute-13-0",)
+)
 app = modal.App("lm-exploration-hybrid-tools")
 data_volume = modal.Volume.from_name("lm-exploration-hybrid-data", create_if_missing=True)
 runs_volume = modal.Volume.from_name("lm-exploration-hybrid-runs", create_if_missing=True)
 DEFAULT_CONFIG = "hybrid/configs/hybrid-720m-40b.json"
 VOLUMES = {"/data": data_volume, "/runs": runs_volume}
+
+
+def consolidation_variants(selection):
+    allowed = ("joint-loss", "projections", "norm", "all")
+    cases = tuple(selection.split(",")) if selection else allowed
+    if len(set(cases)) != len(cases) or any(case not in allowed for case in cases):
+        raise ValueError(f"Select distinct consolidation variants from {allowed}")
+    return cases
 
 
 def run_torchrun(module, args, gpus, timeout):
@@ -46,10 +58,49 @@ def run_torchrun(module, args, gpus, timeout):
 
 
 @app.function(
-    image=image, gpu="H100:8", cpu=32, memory=262144, timeout=1800, retries=0, volumes=VOLUMES
+    image=counter_image,
+    gpu="H100:8",
+    cpu=32,
+    memory=262144,
+    timeout=1800,
+    retries=0,
+    volumes=VOLUMES,
 )
 def benchmark(
-    config, gpus, steps, microbatch, global_rows, document_tokens, deadline, profile=False
+    config,
+    gpus,
+    steps,
+    microbatch,
+    global_rows,
+    document_tokens,
+    deadline,
+    profile=False,
+    run_id="",
+    real_data=False,
+    compare_output_gradient=False,
+    larger_microbatch=0,
+    autotune=False,
+    kda_save_intermediates=False,
+    required_gpu_model="",
+    hardware_kernel="",
+    compare_kda_wy=False,
+    phase_timings=False,
+    compare_graphed_muon=False,
+    compare_intra=False,
+    compare_consolidation=False,
+    consolidation_cases="",
+    profile_all_ranks=False,
+    profile_stacks=False,
+    compare_scalar_delta=False,
+    compare_fp8=False,
+    fp8_recipe="rowwise",
+    fp8_scope="all",
+    fp8_only=False,
+    host_diagnostics=False,
+    freeze_gc_after_warmup=False,
+    compare_fp8_loss="",
+    compare_kda_metadata=False,
+    compare_mtp_fraction=0.0,
 ):
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
@@ -62,20 +113,252 @@ def benchmark(
         args += ["--microbatch", str(microbatch)]
     if global_rows:
         args += ["--global-rows", str(global_rows)]
+    if phase_timings:
+        args += ["--phase-timings"]
+    if host_diagnostics:
+        args += ["--host-diagnostics"]
+    if freeze_gc_after_warmup:
+        args += ["--freeze-gc-after-warmup"]
     if profile:
         args += ["--profile", "/tmp/profile.json"]
-    code, lines = run_torchrun("model_hybrid.benchmark", args, gpus, 1500)
-    if code:
-        raise RuntimeError("".join(lines[-60:]))
+    if profile_all_ranks:
+        args += ["--profile-all-ranks"]
+    if profile_stacks:
+        args += ["--profile-stacks"]
+    if real_data:
+        args += ["--real-data", "--data-root", "/data"]
+    hardware = (
+        subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,uuid,memory.total,power.limit",
+                "--format=csv,noheader,nounits",
+            ],
+            text=True,
+        )
+        .strip()
+        .splitlines()
+    )
+    print(json.dumps({"hardware": hardware}), flush=True)
+    if required_gpu_model and any(
+        required_gpu_model not in row.split(",", 1)[0] for row in hardware
+    ):
+        if run_id:
+            folder = Path("/runs/throughput") / run_id
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "hardware-rejected.json").write_text(
+                json.dumps(
+                    {
+                        "required_gpu_model": required_gpu_model,
+                        "hardware": hardware,
+                        "reason": "Delivered hardware does not match qualification target",
+                    },
+                    indent=2,
+                )
+            )
+            runs_volume.commit()
+        raise RuntimeError(f"Required {required_gpu_model}; delivered hardware: {hardware}")
+    if hardware_kernel:
+        from model_hybrid.hardware_counters import probe
+
+        access = probe(Path("/runs/throughput") / run_id)
+        runs_volume.commit()
+        if not access["accessible"]:
+            raise RuntimeError(f"Hardware counters unavailable: {access}")
+    cases = (
+        [("reference", ["--reference-output-gradient"]), ("direct", [])]
+        if compare_output_gradient
+        else [("direct", [])]
+    )
+    if fp8_only:
+        cases = [
+            ("direct", ["--fp8-linears", "--fp8-recipe", fp8_recipe, "--fp8-scope", fp8_scope])
+        ]
+    if compare_fp8_loss:
+        base = cases[0][1]
+        cases = [
+            ("head_bf16_first", base),
+            ("head_fp8", [*base, "--fp8-loss", compare_fp8_loss]),
+            ("head_bf16_repeat", base),
+        ]
+    if compare_kda_metadata:
+        base = cases[0][1]
+        cases = [
+            ("metadata_reference_first", [*base, "--reference-kda-metadata"]),
+            ("metadata_shared", [*base, "--shared-kda-metadata"]),
+            ("metadata_reference_repeat", [*base, "--reference-kda-metadata"]),
+        ]
+    if compare_mtp_fraction:
+        base = cases[0][1]
+        cases = [
+            ("mtp_configured_first", base),
+            ("mtp_sampled", [*base, "--mtp-loss-fraction", str(compare_mtp_fraction)]),
+            ("mtp_configured_repeat", base),
+        ]
+    if compare_kda_wy:
+        cases = [
+            ("original_first", ["--reference-kda-wy"]),
+            ("kda_wy", []),
+            ("original_repeat", ["--reference-kda-wy"]),
+        ]
+    if compare_graphed_muon:
+        cases = [
+            ("original_first", ["--reference-muon"]),
+            ("graphed_muon", []),
+            ("original_repeat", ["--reference-muon"]),
+        ]
+    if compare_intra:
+        cases = [
+            ("original_first", ["--reference-intra"]),
+            ("adaptive_intra", []),
+            ("original_repeat", ["--reference-intra"]),
+        ]
+    if compare_fp8:
+        checked = subprocess.run(
+            ["python", "/project/tests/check_float8_cuda.py", "--recipe", fp8_recipe],
+            cwd="/project",
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        folder = Path("/runs/throughput") / run_id
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "fp8-check.log").write_text(checked.stdout + checked.stderr)
+        runs_volume.commit()
+        if checked.returncode:
+            raise RuntimeError(checked.stdout + checked.stderr)
+        scopes = ("all", "mlp") if fp8_scope == "both" else (fp8_scope,)
+        cases = (
+            [("bf16_first", [])]
+            + [
+                (
+                    f"fp8_{scope}",
+                    ["--fp8-linears", "--fp8-recipe", fp8_recipe, "--fp8-scope", scope],
+                )
+                for scope in scopes
+            ]
+            + [("bf16_repeat", [])]
+        )
+    if compare_scalar_delta:
+        cases = [("kda_first", []), ("scalar_delta", ["--scalar-delta"]), ("kda_repeat", [])]
+    if compare_consolidation:
+        cases = (
+            [("original_first", [])]
+            + [
+                (candidate, ["--consolidation", candidate])
+                for candidate in consolidation_variants(consolidation_cases)
+            ]
+            + [("original_repeat", [])]
+        )
+    if larger_microbatch:
+        base = cases[1 if compare_kda_metadata else 0][1]
+        cases.append(("larger_microbatch", [*base, "--microbatch", str(larger_microbatch)]))
+        cases.append(("original_repeat", base))
+    if autotune:
+        cases.append(("autotuned", ["--compile-mode", "max-autotune-no-cudagraphs"]))
+    if kda_save_intermediates:
+        cases.append(("kda_saved", ["--kda-save-intermediates"]))
+    measurements, all_lines = {}, []
+    code = 0
+    for name, extra in cases:
+        module, arguments = "model_hybrid.benchmark", args + extra
+        if hardware_kernel:
+            module = "model_hybrid.hardware_counters"
+            arguments = ["--output", "/tmp/counters", "--kernel", hardware_kernel, "--", *arguments]
+        code, lines = run_torchrun(module, arguments, gpus, 1500)
+        measurements[name] = {
+            "arguments": extra,
+            "exit_code": code,
+            **(
+                summarize(lines, skip=10 if profile else 5)
+                if code == 0 and not hardware_kernel
+                else {}
+            ),
+        }
+        all_lines.extend([json.dumps({"case": name}) + "\n", *lines])
+        if run_id:
+            folder = Path("/runs/throughput") / run_id
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / f"{name}.log").write_text("".join(lines))
+            (folder / f"{name}.json").write_text(json.dumps(measurements[name], indent=2))
+            runs_volume.commit()
+        if code and not compare_consolidation:
+            break
+    code = next((m["exit_code"] for m in measurements.values() if m["exit_code"]), 0)
+    lines = all_lines
     import torch
 
-    return {
+    result = {
+        "exit_code": code,
+        "hardware_counter_kernel": hardware_kernel,
+        "throughput_valid": not (hardware_kernel or profile)
+        and all(m.get("steps_timed", 0) > 0 for m in measurements.values()),
+        "hardware": hardware,
+        "measurements": measurements,
+        "config": config,
+        "real_data": real_data,
+        "recipe": json.loads(Path(config["recipe"]).read_text()) if real_data else None,
+        "global_rows": global_rows or config["global_rows"],
         "gpus": gpus,
         "microbatch": microbatch or config["microbatch"],
         "torch": torch.__version__,
-        **summarize(lines),
-        **({"profile": json.loads(Path("/tmp/profile.json").read_text())} if profile else {}),
+        **(measurements["direct"] if len(cases) == 1 and code == 0 else {}),
+        **(
+            {"profile": json.loads(Path("/tmp/profile.json").read_text())}
+            if profile and Path("/tmp/profile.json").exists()
+            else {}
+        ),
     }
+    if run_id:
+        folder = Path("/runs/throughput") / run_id
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "torchrun.log").write_text("".join(lines))
+        (folder / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+        trace = Path("/tmp/profile.json.trace.json.gz")
+        if profile and trace.exists():
+            shutil.copyfile(trace, folder / "trace.json.gz")
+        if profile_all_ranks:
+            for rank in range(1, gpus):
+                for suffix in ("", ".trace.json.gz"):
+                    source = Path(f"/tmp/profile.json.rank{rank}{suffix}")
+                    if source.exists():
+                        shutil.copyfile(source, folder / source.name)
+        if hardware_kernel:
+            from model_hybrid.hardware_counters import executable, raw_measurements
+
+            report = Path("/tmp/counters.ncu-rep")
+            if report.exists():
+                shutil.copyfile(report, folder / report.name)
+                exported = subprocess.run(
+                    [executable(), "--import", str(report), "--page", "raw", "--csv"],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    check=False,
+                )
+                (folder / "counters.csv").write_text(exported.stdout)
+                (folder / "counter-export.log").write_text(exported.stderr)
+                result["counter_collection_valid"] = exported.returncode == 0 and bool(
+                    raw_measurements(exported.stdout)
+                )
+            else:
+                result["counter_collection_valid"] = False
+            (folder / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+        runs_volume.commit()
+    if code:
+        raise RuntimeError("".join(lines[-60:]))
+    if hardware_kernel and not result.get("counter_collection_valid"):
+        raise RuntimeError("Nsight Compute produced no metric rows; inspect archived logs")
+    return result
+
+
+@app.function(image=image, cpu=0.25, memory=512, timeout=86400, retries=0)
+def enforce_deadline(call_ids, deadline):
+    """Use the shared supervisor for bounded throughput calls, including queue time."""
+    from workflows.deadline import calls_finished, cancel_at_deadline
+
+    return cancel_at_deadline(deadline, lambda: call_ids, lambda: calls_finished(call_ids))
 
 
 @app.function(
@@ -123,31 +406,185 @@ def bench(
     document_tokens: int = 1000,
     profile: bool = False,
     mtp_loss_fraction: float = 0.0,
+    run_id: str = "",
+    real_data: bool = False,
+    compare_output_gradient: bool = False,
+    larger_microbatch: int = 0,
+    gpu: str = "H100",
+    autotune: bool = False,
+    kda_save_intermediates: bool = False,
+    require_gpu_model: bool = False,
+    hardware_kernel: str = "",
+    compare_kda_wy: bool = False,
+    phase_timings: bool = False,
+    compare_graphed_muon: bool = False,
+    compare_intra: bool = False,
+    compare_consolidation: bool = False,
+    consolidation_cases: str = "",
+    profile_all_ranks: bool = False,
+    profile_stacks: bool = False,
+    compare_scalar_delta: bool = False,
+    compare_fp8: bool = False,
+    fp8_recipe: str = "rowwise",
+    fp8_scope: str = "all",
+    fp8_only: bool = False,
+    host_diagnostics: bool = False,
+    freeze_gc_after_warmup: bool = False,
+    compare_fp8_loss: str = "",
+    compare_kda_metadata: bool = False,
+    compare_mtp_fraction: float = 0.0,
 ):
     """One bounded throughput benchmark; with one GPU the global batch shrinks to fit.
 
     `--profile` adds GPU kernel time per category for a few steps (see benchmark.py);
-    `--mtp-loss-fraction` overrides the model's MTP loss fraction.
+    `--mtp-loss-fraction` overrides the model's MTP loss fraction in every arm;
+    `--compare-mtp-fraction` runs configured / sampled / configured arms, keeping the
+    precision and microbatch of the other arguments.
     """
-    from workflows.deadline import MAX_LAUNCH_SECONDS
+    from model_hybrid.float8_training import RECIPES
 
+    from workflows.deadline import new_deadline
+
+    if compare_fp8_loss and (compare_kda_metadata or larger_microbatch):
+        raise ValueError("Compare head precision separately from metadata or microbatch")
+    if not 0 <= compare_mtp_fraction <= 1:
+        raise ValueError("compare_mtp_fraction must be at most 1")
+    if compare_fp8_loss not in ("", "logits", "logits_dx", "dx") or (
+        compare_fp8_loss and not fp8_only
+    ):
+        raise ValueError("FP8 head comparison requires fp8_only and logits/logits_dx")
+    if fp8_scope not in ("all", "mlp", "both") or (
+        fp8_scope != "all" and not (compare_fp8 or fp8_only)
+    ):
+        raise ValueError("Select FP8 scope all/mlp/both with compare_fp8")
+    if fp8_recipe not in RECIPES or (fp8_recipe != "rowwise" and not (compare_fp8 or fp8_only)):
+        raise ValueError("Select a supported FP8 recipe with compare_fp8")
+    if fp8_only and fp8_scope == "both":
+        raise ValueError("Direct FP8 runs require one scope")
+    if (profile_all_ranks or profile_stacks) and not profile:
+        raise ValueError("Rank and stack profiling require profile")
+    if consolidation_cases and not compare_consolidation:
+        raise ValueError("consolidation_cases requires compare_consolidation")
+    if compare_consolidation:
+        consolidation_variants(consolidation_cases)
+    if gpu not in ("H100", "H200"):
+        raise ValueError("Throughput qualification supports H100 and H200")
+    if (
+        sum(
+            [
+                compare_output_gradient,
+                compare_kda_wy,
+                compare_graphed_muon,
+                compare_intra,
+                compare_consolidation,
+                compare_scalar_delta,
+                compare_fp8,
+                fp8_only
+                and not (compare_kda_metadata or larger_microbatch or compare_mtp_fraction),
+                bool(compare_mtp_fraction),
+                compare_kda_metadata,
+                bool(larger_microbatch) and not compare_kda_metadata,
+                autotune,
+                kda_save_intermediates,
+            ]
+        )
+        > 1
+    ):
+        raise ValueError("Compare one optimization at a time")
+    if hardware_kernel:
+        from model_hybrid.hardware_counters import KERNELS
+
+        if gpus != 1:
+            raise ValueError(
+                "Kernel replay is restricted to one GPU; use timeline profiling for DDP"
+            )
+        if hardware_kernel not in KERNELS:
+            raise ValueError(f"Select one of {KERNELS}")
+        if (
+            profile
+            or compare_output_gradient
+            or compare_kda_wy
+            or compare_kda_metadata
+            or compare_mtp_fraction
+            or compare_graphed_muon
+            or compare_intra
+            or compare_consolidation
+            or compare_scalar_delta
+            or compare_fp8
+            or fp8_only
+            or larger_microbatch
+            or autotune
+            or kda_save_intermediates
+        ):
+            raise ValueError("Counter profiling must run separately from timing experiments")
+        if steps < 7 or not run_id:
+            raise ValueError("Counter profiling requires a run ID and at least seven steps")
     settings = load_config(config)
     if mtp_loss_fraction:
         settings["model"]["mtp_loss_fraction"] = mtp_loss_fraction
     rows = global_rows or (
         settings["global_rows"] if gpus == 8 else 8 * (microbatch or settings["microbatch"]) * gpus
     )
-    result = benchmark.with_options(gpu=f"H100:{gpus}").remote(
+    from model_hybrid.benchmark import validate_window
+
+    validate_window(settings, rows, steps, profile)
+    deadline = new_deadline()
+    run_id = run_id or f"bench-{time.time_ns()}"
+    requested_gpu = "H100!" if gpu == "H100" and require_gpu_model else gpu
+    options = {"gpu": f"{requested_gpu}:{gpus}"}
+    call = benchmark.with_options(**options).spawn(
         settings,
         gpus,
         steps,
         microbatch,
         rows,
         document_tokens,
-        time.time() + MAX_LAUNCH_SECONDS,
+        deadline,
         profile,
+        run_id,
+        real_data,
+        compare_output_gradient,
+        larger_microbatch,
+        autotune,
+        kda_save_intermediates,
+        gpu if require_gpu_model else "",
+        hardware_kernel,
+        compare_kda_wy,
+        phase_timings,
+        compare_graphed_muon,
+        compare_intra,
+        compare_consolidation,
+        consolidation_cases,
+        profile_all_ranks,
+        profile_stacks,
+        compare_scalar_delta,
+        compare_fp8,
+        fp8_recipe,
+        fp8_scope,
+        fp8_only,
+        host_diagnostics,
+        freeze_gc_after_warmup,
+        compare_fp8_loss,
+        compare_kda_metadata,
+        compare_mtp_fraction,
     )
-    print(json.dumps(result, indent=2))
+    try:
+        supervisor = enforce_deadline.spawn([call.object_id], deadline)
+    except Exception:
+        call.cancel()
+        raise
+    print(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "call": call.object_id,
+                "supervisor": supervisor.object_id,
+                "deadline": deadline,
+            }
+        ),
+        flush=True,
+    )
+    print(json.dumps(call.get(), indent=2))
 
 
 @app.function(
@@ -176,14 +613,16 @@ def heldout_loss(export, recipe, counts, deadline):
 
 
 @app.local_entrypoint()
-def heldout(export: str, recipe: str = "hybrid/recipes/hybrid-40b-v1.json"):
-    """Pretraining held-out loss of `<run id>/export/<export>` (the 40B run's document counts)."""
+def heldout(export: str, recipe: str = "hybrid/recipes/hybrid-40b-v1.json", documents: int = 0):
+    """Pretraining held-out loss of `<run id>/export/<export>`: the 40B run's document
+    counts, or `--documents` held-out documents of every source of `--recipe`."""
     from workflows.deadline import MAX_LAUNCH_SECONDS
 
+    resolved = load_config(recipe)
     counts = {"climbmix": 1000, "code": 300, "math": 300}
-    result = heldout_loss.remote(
-        export, load_config(recipe), counts, time.time() + MAX_LAUNCH_SECONDS
-    )
+    if documents:
+        counts = dict.fromkeys(resolved["sources"], documents)
+    result = heldout_loss.remote(export, resolved, counts, time.time() + MAX_LAUNCH_SECONDS)
     print(json.dumps({"export": export, "heldout": result}, indent=1))
 
 
@@ -230,4 +669,58 @@ def publish(checkpoint: str, repo: str, public: bool = False, card: str = ""):
     result = export_checkpoint.remote(
         checkpoint, repo, not public, text, time.time() + MAX_LAUNCH_SECONDS
     )
+    print(json.dumps(result, indent=2))
+
+
+@app.function(
+    image=counter_image,
+    gpu="H100!",
+    cpu=4,
+    memory=16384,
+    timeout=300,
+    retries=0,
+    volumes=VOLUMES,
+)
+def counter_probe(deadline, run_id):
+    """Check hardware-counter access before allocating eight training GPUs."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed")
+    from model_hybrid.hardware_counters import probe
+
+    folder = Path("/runs/throughput") / run_id
+    try:
+        result = probe(folder)
+        result["hardware"] = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
+            text=True,
+        ).strip()
+        result["profiling_driver_parameters"] = Path("/proc/driver/nvidia/params").read_text()
+        (folder / "probe.json").write_text(json.dumps(result, indent=2))
+        return result
+    finally:
+        runs_volume.commit()
+
+
+@app.local_entrypoint()
+def counters_probe(run_id: str, output: str):
+    """Bounded single-H100 access check; no training or optimization experiment."""
+    deadline = time.time() + 900
+    call = counter_probe.spawn(deadline, run_id)
+    try:
+        supervisor = enforce_deadline.spawn([call.object_id], deadline)
+    except Exception:
+        call.cancel()
+        raise
+    record = {
+        "run_id": run_id,
+        "call": call.object_id,
+        "supervisor": supervisor.object_id,
+        "deadline": deadline,
+    }
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.with_suffix(".launch.json").write_text(json.dumps(record, indent=2))
+    print(json.dumps(record), flush=True)
+    result = call.get()
+    path.write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))
