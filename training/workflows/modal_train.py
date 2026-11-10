@@ -205,7 +205,7 @@ def continue_training(
 ):
     from workflows.checks import check_progress, check_resume, validate_paths
     from workflows.config import resolve_payload, step_tokens
-    from workflows.deadline import bounded_timeout, segment_seconds
+    from workflows.deadline import bounded_timeout, recorded_call, segment_seconds
 
     policy, dataset, config = resolve_payload(bundle)
     settings = config if policy.family == "hybrid" else config.as_dict()
@@ -239,20 +239,33 @@ def continue_training(
                 pending_data_audits=provenance.get("pending_data_audits", []),
             )
             timeout = bounded_timeout(deadline, policy.worker_timeout_seconds)
-            call = session.with_options(
-                gpu=f"{policy.gpu}:{policy.world_size}",
-                cpu=4 * policy.world_size,
-                timeout=timeout,
-            ).spawn(
-                segment_id,
-                snapshot,
-                bundle,
-                provenance,
-                resume,
-                policy.qualification_steps if segment < policy.qualification_segments else None,
-                segment_seconds(timeout, policy.segment_seconds),
+
+            def spawn_session(
+                timeout=timeout, segment_id=segment_id, resume=resume, segment=segment
+            ):
+                return session.with_options(
+                    gpu=f"{policy.gpu}:{policy.world_size}",
+                    cpu=4 * policy.world_size,
+                    memory=32768 * policy.world_size,
+                    timeout=timeout,
+                ).spawn(
+                    segment_id,
+                    snapshot,
+                    bundle,
+                    provenance,
+                    resume,
+                    policy.qualification_steps if segment < policy.qualification_segments else None,
+                    segment_seconds(timeout, policy.segment_seconds),
+                )
+
+            run_volume.reload()
+            call = recorded_call(
+                Path("/runs/.calls") / launch,
+                f"train_segment:{segment_id}",
+                spawn_session,
+                modal.FunctionCall.from_id,
+                run_volume.commit,
             )
-            track_call(launch, call.object_id, "train_segment")
             report = call.get()
             if report["stop_reason"] == "stop_requested":
                 record(
@@ -656,6 +669,14 @@ def launch_hybrid(run_id, bundle, provenance, resume="", init_from=""):
     recipe = json.loads(Path(settings["recipe"]).read_text())
     if not (Path("/hybrid-data") / recipe["name"]).is_dir():
         raise ValueError(f"Prepare the {recipe['name']} recipe on the hybrid data volume first")
+    from workflows.checks import check_hybrid_capacity
+
+    capacity = check_hybrid_capacity(
+        recipe,
+        Path("/hybrid-data") / recipe["name"],
+        settings["target_tokens"],
+        settings.get("context") or settings["model"]["block_size"],
+    )
     if resume and not (Path("/hybrid-runs") / resume).exists():
         raise ValueError(f"No checkpoint {resume} on the hybrid runs volume")
     if init_from and not (Path("/hybrid-runs") / init_from / "model.safetensors").exists():
@@ -663,7 +684,14 @@ def launch_hybrid(run_id, bundle, provenance, resume="", init_from=""):
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=False)
     provenance = {**provenance, "resolved_workflow": bundle}
-    record(run_id, "launched", recipe=recipe["name"], resume=resume, provenance=provenance)
+    record(
+        run_id,
+        "launched",
+        recipe=recipe["name"],
+        resume=resume,
+        provenance=provenance,
+        capacity=capacity,
+    )
     call_id = spawn_training(run_id, None, bundle, provenance, initial_resume=resume)
     return {"training_call_id": call_id, "recipe": recipe["name"]}
 
@@ -779,7 +807,7 @@ def run_data_stage(stage, plan, consumer, provenance, resume=False):
     if plan["family"] == "hybrid":
         from training_data.packed_shards import load_recipe
 
-        recipe = load_recipe(stage["spec"]["recipe"])
+        recipe = load_recipe(stage["spec"]["container_recipe"])
         call = modal_data.coordinate.with_options(timeout=bounded_timeout(deadline, 86400)).spawn(
             plan["run_id"], recipe, deadline, stage["spec"]["parallel"]
         )

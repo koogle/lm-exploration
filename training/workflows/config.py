@@ -92,7 +92,7 @@ class PretrainConfig:
         ):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"Workflow {name} must be a positive integer")
-        if self.gpu not in ("H100", "L40S", "A10G") or self.world_size not in (1, 2, 3, 8):
+        if self.gpu not in ("H100", "H100!", "L40S", "A10G") or self.world_size not in (1, 2, 3, 8):
             raise ValueError("Unsupported workflow GPU allocation")
         if not self.segment_seconds <= 82800 or not (
             self.segment_seconds + 480 < self.worker_timeout_seconds <= 86400
@@ -143,8 +143,13 @@ def resolve_hybrid(workflow, run):
     rows, microbatch = run["global_rows"], run["microbatch"]
     if any(type(v) is not int or v < 1 for v in (rows, microbatch, run["target_tokens"])):
         raise ValueError("Hybrid rows, microbatch and target must be positive integers")
-    if rows % (workflow.world_size * microbatch):
-        raise ValueError("Global rows must divide into whole per-GPU microbatches")
+    if rows % workflow.world_size or (
+        (run.get("architecture", "hybrid") == "hnet" or run["model"].get("n_loops", 1) > 1)
+        and rows % (workflow.world_size * microbatch)
+    ):
+        raise ValueError(
+            "Global rows must divide across GPUs, with whole microbatches when required"
+        )
     return run
 
 

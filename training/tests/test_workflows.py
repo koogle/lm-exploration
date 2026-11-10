@@ -88,6 +88,16 @@ class WorkflowResolutionTests(unittest.TestCase):
             broken["stage"].update(change)
             with self.subTest(change=change), self.assertRaisesRegex(ValueError, "owns"):
                 resolve_payload(broken)
+        partial = copy.deepcopy(bundle)
+        partial["model"]["microbatch"] = 6
+        self.assertEqual(resolve_payload(partial)[2]["microbatch"], 6)
+        partial["model"]["model"]["n_loops"] = 2
+        with self.assertRaisesRegex(ValueError, "microbatches"):
+            resolve_payload(partial)
+        partial["model"]["model"]["n_loops"] = 1
+        partial["model"]["architecture"] = "hnet"
+        with self.assertRaisesRegex(ValueError, "microbatches"):
+            resolve_payload(partial)
         broken = copy.deepcopy(bundle)
         broken["model"]["global_rows"] = 12
         with self.assertRaisesRegex(ValueError, "microbatches"):

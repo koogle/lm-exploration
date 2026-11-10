@@ -41,11 +41,18 @@ image = (
     )
     .add_local_dir("workflows", "/project/workflows", ignore=["__pycache__"])
     .add_local_dir("data", "/project/training_data", ignore=["__pycache__"])
+    .add_local_dir("tokenizer", "/project/tokenizer", ignore=["__pycache__"])
     .add_local_dir("hybrid", "/project/model_hybrid", ignore=["__pycache__", "kernels"])
 )
 ROOT = Path("/data")
 DEFAULT_RECIPE = "hybrid/recipes/hybrid-40b-v1.json"
 BATCH = 8
+
+
+def stars_path(recipe):
+    """The recipe's starred-repository table: its own, or another recipe's named by
+    `stars.prepared_in`."""
+    return ROOT / recipe["stars"].get("prepared_in", recipe["name"]) / "stars.npy"
 
 
 def screen_path(recipe):
@@ -92,6 +99,37 @@ def build_screen(recipe, deadline):
 
 @app.function(
     image=image,
+    cpu=4,
+    memory=32768,
+    timeout=3600,
+    retries=0,
+    secrets=[secret],
+    volumes={"/data": volume},
+)
+def build_stars(recipe, deadline):
+    import numpy as np
+    from training_data import packed_shards as data
+
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    hashes, report = data.build_stars(recipe)
+    path = stars_path(recipe)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(path, hashes)
+    path.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n")
+    clear_upstream()
+    volume.commit()
+    return report
+
+
+def clear_upstream():
+    import shutil
+
+    shutil.rmtree("/tmp/upstream", ignore_errors=True)
+
+
+@app.function(
+    image=image,
     cpu=8,
     memory=32768,
     timeout=3600,
@@ -101,9 +139,8 @@ def build_screen(recipe, deadline):
 )
 def prepare(recipe, jobs, deadline):
     """Prepare the (source, index) shards of `jobs` in one container: the tokenizer,
-    screen and upstream downloads are loaded once for all of them."""
+    screen, stars table and upstream downloads are loaded once for all of them."""
     import os
-    import shutil
 
     import numpy as np
     from training_data import packed_shards as data
@@ -112,7 +149,7 @@ def prepare(recipe, jobs, deadline):
 
     folder = ROOT / recipe["name"]
     os.environ["RAYON_NUM_THREADS"] = "8"
-    glm = screen = None
+    glm = screen = starred = None
     metas = []
     for name, index in jobs:
         if time.time() >= deadline:
@@ -129,13 +166,23 @@ def prepare(recipe, jobs, deadline):
             from training_data import chat
 
             renderer = chat.RENDERERS[renderer]
+        if "starred" in recipe["sources"][name] and starred is None:
+            starred = frozenset(np.load(stars_path(recipe)).tolist())
         metas.append(
             data.prepare_shard(
-                recipe, name, index, folder, glm, screen, tokenizer.EOS_ID, render=renderer
+                recipe,
+                name,
+                index,
+                folder,
+                glm,
+                screen,
+                tokenizer.EOS_ID,
+                render=renderer,
+                starred=starred,
             )
         )
         volume.commit()
-    shutil.rmtree("/tmp/upstream", ignore_errors=True)
+    clear_upstream()
     return metas
 
 
@@ -176,6 +223,12 @@ def coordinate(launch, recipe, deadline, parallel):
         )
         track_call(launch, call.object_id, "build_screen")
         call.get()
+    if "stars" in recipe and not stars_path(recipe).exists():
+        call = build_stars.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
+            recipe, deadline
+        )
+        track_call(launch, call.object_id, "build_stars")
+        call.get()
     volume.reload()
     from training_data.packed_shards import shard_paths
 
@@ -198,9 +251,19 @@ def coordinate(launch, recipe, deadline, parallel):
                 metas = call.get(timeout=0)
             except (TimeoutError, modal.exception.TimeoutError):
                 continue
-            except Exception as error:  # noqa: BLE001 - recorded; other shards continue.
+            except Exception as error:
                 failed.append({"shards": batch, "error": str(error)[:500]})
-                metas = []
+                # A systematic auth/schema/worker failure must not consume the
+                # entire corpus budget. Completed shards remain resumable.
+                for other_id, (_, other) in running.items():
+                    if other_id != call_id:
+                        other.cancel()
+                folder.mkdir(parents=True, exist_ok=True)
+                (folder / f"failure-{launch}.json").write_text(json.dumps(failed, indent=2))
+                volume.commit()
+                raise RuntimeError(
+                    f"Preparation stopped after a shard failure: {failed[-1]}"
+                ) from error
             del running[call_id]
             for meta in metas:
                 done[f"{meta['source']}/{meta['index']}"] = meta
@@ -224,14 +287,17 @@ def coordinate(launch, recipe, deadline, parallel):
             "documents": sum(m["documents"] for m in metas),
             "dropped": {
                 k: sum(m["dropped"].get(k, 0) for m in metas)
-                for k in ("license", "empty", "short", "contaminated")
+                for k in sorted({k for m in metas for k in m["dropped"]})
             },
+            "max_passes": recipe["sources"][name]["max_passes"],
             "needed_tokens": round(
                 recipe["target_tokens"]
                 * (1 - recipe.get("replay", {}).get("fraction", 0))
                 * recipe["sources"][name]["weight"]
             ),
         }
+    # A recipe whose sources are all prepared under other recipes has no shards of its own.
+    folder.mkdir(parents=True, exist_ok=True)
     (folder / "capacity.json").write_text(json.dumps(capacity, indent=2) + "\n")
     volume.commit()
     if failed:
