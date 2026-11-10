@@ -45,6 +45,7 @@ image = (
 )
 ROOT = Path("/data")
 DEFAULT_RECIPE = "hybrid/recipes/hybrid-40b-v1.json"
+BATCH = 8
 
 
 def screen_path(recipe):
@@ -98,7 +99,9 @@ def build_screen(recipe, deadline):
     secrets=[secret],
     volumes={"/data": volume},
 )
-def prepare(recipe, name, index, deadline):
+def prepare(recipe, jobs, deadline):
+    """Prepare the (source, index) shards of `jobs` in one container: the tokenizer,
+    screen and upstream downloads are loaded once for all of them."""
     import os
     import shutil
 
@@ -107,26 +110,33 @@ def prepare(recipe, name, index, deadline):
 
     from tokenizer import glm as tokenizer
 
-    if time.time() >= deadline:
-        raise TimeoutError("Launch deadline passed; refusing work")
     folder = ROOT / recipe["name"]
-    meta_path = data.shard_paths(folder, name, index)[2]
-    if meta_path.exists():
-        return json.loads(meta_path.read_text())
     os.environ["RAYON_NUM_THREADS"] = "8"
-    glm = tokenizer.load(tokenizer.tokenizer_file("/tmp/tokenizer"))
-    screen = np.load(screen_path(recipe))
-    renderer = recipe["sources"][name].get("render")
-    if renderer:
-        from training_data import chat
+    glm = screen = None
+    metas = []
+    for name, index in jobs:
+        if time.time() >= deadline:
+            raise TimeoutError("Launch deadline passed; refusing work")
+        meta_path = data.shard_paths(folder, name, index)[2]
+        if meta_path.exists():
+            metas.append(json.loads(meta_path.read_text()))
+            continue
+        if glm is None:
+            glm = tokenizer.load(tokenizer.tokenizer_file("/tmp/tokenizer"))
+            screen = np.load(screen_path(recipe))
+        renderer = recipe["sources"][name].get("render")
+        if renderer:
+            from training_data import chat
 
-        renderer = chat.RENDERERS[renderer]
-    meta = data.prepare_shard(
-        recipe, name, index, folder, glm, screen, tokenizer.EOS_ID, render=renderer
-    )
+            renderer = chat.RENDERERS[renderer]
+        metas.append(
+            data.prepare_shard(
+                recipe, name, index, folder, glm, screen, tokenizer.EOS_ID, render=renderer
+            )
+        )
+        volume.commit()
     shutil.rmtree("/tmp/upstream", ignore_errors=True)
-    volume.commit()
-    return meta
+    return metas
 
 
 def schedule(recipe):
@@ -167,32 +177,38 @@ def coordinate(launch, recipe, deadline, parallel):
         track_call(launch, call.object_id, "build_screen")
         call.get()
     volume.reload()
-    pending, running, done, failed = schedule(recipe), {}, {}, []
+    from training_data.packed_shards import shard_paths
+
+    # Finished shards need no call. Each call prepares BATCH shards, so the coordinator's
+    # per-call spawning and polling does not bound the preparation rate.
+    jobs = [j for j in schedule(recipe) if not shard_paths(folder, *j)[2].exists()]
+    pending = [jobs[i : i + BATCH] for i in range(0, len(jobs), BATCH)]
+    running, done, failed = {}, {}, []
     while pending or running:
         while pending and len(running) < parallel:
-            name, index = pending.pop(0)
+            batch = pending.pop(0)
             call = prepare.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
-                recipe, name, index, deadline
+                recipe, batch, deadline
             )
             track_call(launch, call.object_id, "prepare_shard")
-            running[call.object_id] = (name, index, call)
+            running[call.object_id] = (batch, call)
         volume.commit()
-        for call_id, (name, index, call) in list(running.items()):
+        for call_id, (batch, call) in list(running.items()):
             try:
-                meta = call.get(timeout=0)
+                metas = call.get(timeout=0)
             except (TimeoutError, modal.exception.TimeoutError):
                 continue
             except Exception as error:  # noqa: BLE001 - recorded; other shards continue.
-                failed.append({"source": name, "index": index, "error": str(error)[:500]})
-                meta = None
+                failed.append({"shards": batch, "error": str(error)[:500]})
+                metas = []
             del running[call_id]
-            if meta:
-                done[f"{name}/{index}"] = meta
+            for meta in metas:
+                done[f"{meta['source']}/{meta['index']}"] = meta
         print(
             json.dumps({"done": len(done), "running": len(running), "pending": len(pending)}),
             flush=True,
         )
-        time.sleep(10)
+        time.sleep(5)
     from training_data.packed_shards import source_root
 
     volume.reload()  # shard workers created the recipe folder after this call started
@@ -234,8 +250,8 @@ def smoke(recipe: str = DEFAULT_RECIPE):
     deadline = new_deadline()
     print("screen n-grams", build_screen.remote(resolved, deadline))
     calls = [
-        prepare.spawn(resolved, name, heldout_index(source), deadline)
+        prepare.spawn(resolved, [(name, heldout_index(source))], deadline)
         for name, source in resolved["sources"].items()
     ]
     for call in calls:
-        print(json.dumps(call.get(timeout=3600)))
+        print(json.dumps(call.get(timeout=3600)[0]))
