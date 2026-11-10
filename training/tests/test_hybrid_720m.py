@@ -63,7 +63,8 @@ class HybridRunConfigTests(unittest.TestCase):
         np.testing.assert_array_equal(inputs[:, 1:], labels[:, :-1])
         self.assertGreater((inputs == tokenizer.EOS_ID).sum(), 0)
         lines = [
-            f'{{"step": {i}, "tokens_per_second": {i}, "mfu": 0.3, "loss": 1}}' for i in range(1, 9)
+            f'{{"step": {i}, "budget_tokens": {i}, "seconds": 1, "tokens_per_second": {i}, "mfu": 0.3, "loss": 1}}'
+            for i in range(1, 9)
         ]
         self.assertEqual(summarize(lines, skip=5)["tokens_per_second"], 7)
 
