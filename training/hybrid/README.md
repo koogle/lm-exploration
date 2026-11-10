@@ -248,7 +248,7 @@ from the source furthest below its weight (`data.mixture.deficit_source`, the ru
 that are still being prepared, so training can start while preparation runs.
 
 [`modal_data.py`](modal_data.py) is the family's data stage: it prepares shards on
-Modal CPUs (8 cores, eight shards per call, up to the stage's `parallel`, 48 by
+Modal CPUs (8 cores, one call per shard, up to the stage's `parallel`, 48 by
 default), held-out shards first and then in the order training reads them, onto the
 `lm-exploration-hybrid-data` volume. A workflow runs it as a `data` stage, alone or
 before pretraining (`workflows/hybrid-h100x8.json`):
