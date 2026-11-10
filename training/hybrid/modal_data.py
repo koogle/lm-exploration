@@ -46,6 +46,7 @@ image = (
 )
 ROOT = Path("/data")
 DEFAULT_RECIPE = "hybrid/recipes/hybrid-40b-v1.json"
+BATCH = 8
 
 
 def stars_path(recipe):
@@ -136,7 +137,9 @@ def clear_upstream():
     secrets=[secret],
     volumes={"/data": volume},
 )
-def prepare(recipe, name, index, deadline):
+def prepare(recipe, jobs, deadline):
+    """Prepare the (source, index) shards of `jobs` in one container: the tokenizer,
+    screen, stars table and upstream downloads are loaded once for all of them."""
     import os
 
     import numpy as np
@@ -144,29 +147,43 @@ def prepare(recipe, name, index, deadline):
 
     from tokenizer import glm as tokenizer
 
-    if time.time() >= deadline:
-        raise TimeoutError("Launch deadline passed; refusing work")
     folder = ROOT / recipe["name"]
-    meta_path = data.shard_paths(folder, name, index)[2]
-    if meta_path.exists():
-        return json.loads(meta_path.read_text())
     os.environ["RAYON_NUM_THREADS"] = "8"
-    glm = tokenizer.load(tokenizer.tokenizer_file("/tmp/tokenizer"))
-    screen = np.load(screen_path(recipe))
-    renderer = recipe["sources"][name].get("render")
-    if renderer:
-        from training_data import chat
+    glm = screen = starred = None
+    metas = []
+    for name, index in jobs:
+        if time.time() >= deadline:
+            raise TimeoutError("Launch deadline passed; refusing work")
+        meta_path = data.shard_paths(folder, name, index)[2]
+        if meta_path.exists():
+            metas.append(json.loads(meta_path.read_text()))
+            continue
+        if glm is None:
+            glm = tokenizer.load(tokenizer.tokenizer_file("/tmp/tokenizer"))
+            screen = np.load(screen_path(recipe))
+        renderer = recipe["sources"][name].get("render")
+        if renderer:
+            from training_data import chat
 
-        renderer = chat.RENDERERS[renderer]
-    starred = None
-    if "starred" in recipe["sources"][name]:
-        starred = frozenset(np.load(stars_path(recipe)).tolist())
-    meta = data.prepare_shard(
-        recipe, name, index, folder, glm, screen, tokenizer.EOS_ID, render=renderer, starred=starred
-    )
+            renderer = chat.RENDERERS[renderer]
+        if "starred" in recipe["sources"][name] and starred is None:
+            starred = frozenset(np.load(stars_path(recipe)).tolist())
+        metas.append(
+            data.prepare_shard(
+                recipe,
+                name,
+                index,
+                folder,
+                glm,
+                screen,
+                tokenizer.EOS_ID,
+                render=renderer,
+                starred=starred,
+            )
+        )
+        volume.commit()
     clear_upstream()
-    volume.commit()
-    return meta
+    return metas
 
 
 def schedule(recipe):
@@ -213,26 +230,32 @@ def coordinate(launch, recipe, deadline, parallel):
         track_call(launch, call.object_id, "build_stars")
         call.get()
     volume.reload()
-    pending, running, done, failed = schedule(recipe), {}, {}, []
+    from training_data.packed_shards import shard_paths
+
+    # Finished shards need no call. Each call prepares BATCH shards, so the coordinator's
+    # per-call spawning and polling does not bound the preparation rate.
+    jobs = [j for j in schedule(recipe) if not shard_paths(folder, *j)[2].exists()]
+    pending = [jobs[i : i + BATCH] for i in range(0, len(jobs), BATCH)]
+    running, done, failed = {}, {}, []
     while pending or running:
         while pending and len(running) < parallel:
-            name, index = pending.pop(0)
+            batch = pending.pop(0)
             call = prepare.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
-                recipe, name, index, deadline
+                recipe, batch, deadline
             )
             track_call(launch, call.object_id, "prepare_shard")
-            running[call.object_id] = (name, index, call)
+            running[call.object_id] = (batch, call)
         volume.commit()
-        for call_id, (name, index, call) in list(running.items()):
+        for call_id, (batch, call) in list(running.items()):
             try:
-                meta = call.get(timeout=0)
+                metas = call.get(timeout=0)
             except (TimeoutError, modal.exception.TimeoutError):
                 continue
             except Exception as error:
-                failed.append({"source": name, "index": index, "error": str(error)[:500]})
+                failed.append({"shards": batch, "error": str(error)[:500]})
                 # A systematic auth/schema/worker failure must not consume the
                 # entire corpus budget. Completed shards remain resumable.
-                for other_id, (_, _, other) in running.items():
+                for other_id, (_, other) in running.items():
                     if other_id != call_id:
                         other.cancel()
                 folder.mkdir(parents=True, exist_ok=True)
@@ -242,13 +265,13 @@ def coordinate(launch, recipe, deadline, parallel):
                     f"Preparation stopped after a shard failure: {failed[-1]}"
                 ) from error
             del running[call_id]
-            if meta:
-                done[f"{name}/{index}"] = meta
+            for meta in metas:
+                done[f"{meta['source']}/{meta['index']}"] = meta
         print(
             json.dumps({"done": len(done), "running": len(running), "pending": len(pending)}),
             flush=True,
         )
-        time.sleep(10)
+        time.sleep(5)
     from training_data.packed_shards import source_root
 
     volume.reload()  # shard workers created the recipe folder after this call started
@@ -293,8 +316,8 @@ def smoke(recipe: str = DEFAULT_RECIPE):
     deadline = new_deadline()
     print("screen n-grams", build_screen.remote(resolved, deadline))
     calls = [
-        prepare.spawn(resolved, name, heldout_index(source), deadline)
+        prepare.spawn(resolved, [(name, heldout_index(source))], deadline)
         for name, source in resolved["sources"].items()
     ]
     for call in calls:
-        print(json.dumps(call.get(timeout=3600)))
+        print(json.dumps(call.get(timeout=3600)[0]))
