@@ -110,6 +110,19 @@ reduces exactly to plain document-causal attention.
 
 ## Kimi Delta Attention and the hybrid layout
 
+The experimental `--shared-kda-metadata` benchmark mode enables
+`DocumentMask.kda_offsets`, which lazily builds one int64 document-offset tensor per
+forward pass and shares it across recurrent layers. Each forward owns its mask,
+so changing EOS positions or batch rows cannot reuse a previous batch's layout.
+The standalone recurrence helpers also accept explicit offsets. The benchmark's
+`--reference-kda-metadata` rebuilds offsets per layer for matched comparisons;
+the Modal launcher exposes `--compare-kda-metadata`, including with `--fp8-only`.
+`--larger-microbatch 8` preserves the baseline precision in all comparison arms.
+`--compare-mtp-fraction 0.25` runs configured / sampled / configured MTP loss
+fractions with the precision and microbatch of the other arguments.
+Shared metadata is opt-in: the corrected control comparison found a throughput
+regression, so normal training retains per-layer offset construction.
+
 [`kda.py`](kda.py) implements KDA layers following flash-linear-attention's
 `KimiDeltaAttention` ([Kimi Linear](https://arxiv.org/abs/2510.26692)), without
 biases:
@@ -250,6 +263,13 @@ deadline, and each call has `retries=0` and a timeout bounded by the deadline.
 Finished shards are skipped, so another launch continues. The
 coordinator writes `capacity.json` (train/held-out tokens, documents and drops
 per source) and the screen writes `screen.json`.
+
+A code source can select upstream rows before tokenizing: `languages` or
+`exclude_languages`, `exclude_path` (a regular expression searched in `path`) and
+`max_bytes`. [`recipes/kda-foundation-100b-504010-v2.json`](recipes/kda-foundation-100b-504010-v2.json)
+uses them for its `python` and `code` sources and reuses the ClimbMix and math
+shards prepared under v1 (`prepared_in`); see the
+[corpus audit](../plans/KDA_960M_PRETRAINING.md#filtered-code-sources-recipe-v2).
 
 Measured on the held-out shards (2026-10-25): ClimbMix 52.6M tokens per shard
 (103 of 84,992 documents screened out), code 139M (43,776 of 126,925 files outside
@@ -447,6 +467,48 @@ uv run --all-extras python -m model_hybrid.playground.publish \
 
 ## Benchmarks
 
+Training throughput metrics use explicit dense H100 SXM ceilings. `mfu` retains
+the BF16-equivalent estimate (989 TF/s/GPU); `mfu_fp8_peak` divides the same
+estimated model FLOPs by the 1,978 TF/s/GPU FP8 ceiling. The latter assumes an
+all-FP8 device ceiling even though this model uses mixed precision.
+`mfu_mixed_precision` instead sums ideal time for FP8 and remaining BF16 work:
+`tokens/sec/GPU * (FP8 FLOPs/token / FP8 peak + BF16 FLOPs/token / BF16 peak)`.
+The logs include estimated TFLOP/s/GPU and the FP8 share of model FLOPs.
+
+The FP8 partition follows the converted linear modules and their actual recipe
+(including BF16 weight gradients in `rowwise_with_gw_hp`). Vocabulary heads and
+attention remain in the BF16 partition. These estimates retain the existing
+matrix/attention accounting and sampled document lengths; recurrence,
+elementwise, optimizer and conversion work is omitted. They are not measurements
+of hardware tensor-core activity. Compare aggregate tokens/sec as well as MFU;
+changing the peak denominator alone does not change performance.
+
+The experimental vocabulary-head path uses custom Triton amax/scale/cast kernels
+and Hopper FP8 GEMMs, while retaining FP32 softmax statistics and FP32
+weight-gradient accumulation from BF16 operands. FP8 weights/layouts are prepared
+once per loss call and reused across its chunks; they are rebuilt after each
+optimizer update because nothing is cached across calls. `logits` quantizes only
+the logit projection, `logits_dx` also quantizes the hidden-gradient matmul, and
+`dx` retains BF16 logits and quantizes only that hidden gradient. These options
+are experimental: synthetic outlier tests expose large gradient errors when
+logits are quantized. Production vocabulary-head precision remains BF16.
+
+The shared benchmark compares BF16-head / experimental-head / BF16-head with
+the same FP8 trunk and independently reports the additional FP8 FLOP share:
+
+```sh
+uv run modal run --detach -m model_hybrid.modal_tools::bench \
+  --config hybrid/configs/kda-960m-100b.json --gpus 8 --steps 40 \
+  --microbatch 6 --global-rows 256 --real-data --require-gpu-model \
+  --fp8-only --fp8-recipe tensorwise --compare-fp8-loss logits_dx \
+  --phase-timings --host-diagnostics --freeze-gc-after-warmup --run-id UNIQUE_RUN
+```
+
+`model_hybrid.modal_checks::main --only fp8_loss` runs compiled-autograd smoke
+checks and complete loss/gradient timings at the production vocabulary shapes,
+including normal, peaked and outlier inputs. This is performance/numerical
+qualification, not a learning-quality evaluation.
+
 [`benchmarks.py`](benchmarks.py) wraps an export as an lm-evaluation-harness
 model. Multiple-choice and perplexity requests are scored with the model's
 document-masked forward pass on CUDA (each request is `[EOS] + context +
@@ -540,3 +602,76 @@ the byte decoding, mixture weights and held-out windows; with the GLM tokenizer
 downloaded, that GLM tokens decode to the exact UTF-8 text. The CUDA check compares
 a compiled bf16 H-Net's loss with its fp64 CPU reference and checks document
 isolation when compiled.
+
+## Hardware-counter profiling
+
+`hardware_counters.py` uses Nsight Compute to measure individual kernels from the
+existing benchmark. First check counter access on one exact H100:
+
+```sh
+uv run modal run --detach -m model_hybrid.modal_tools::counters_probe \
+  --run-id <access-run> --output artifacts/results/counter-access.json
+```
+
+The probe requires actual metric rows; CUDA execution alone is insufficient. Its
+five-minute function timeout and independent 15-minute launch supervisor bound
+cost. `ERR_NVGPUCTRPERM` means the host driver/container permissions prevent
+collection; it is not a measurement of GPU performance. Host-admin/provider
+configuration is required to enable counters in that case.
+
+After a successful probe, collect one selected kernel invocation on rank zero,
+using the foundation mixture and the eight-H100 run's per-rank batch shapes:
+
+```sh
+uv run modal run --detach -m model_hybrid.modal_tools::bench \
+  --config hybrid/configs/kda-960m-100b.json \
+  --gpus 1 --gpu H100 --require-gpu-model --microbatch 4 --global-rows 32 \
+  --steps 8 --real-data --run-id <counter-run> \
+  --hardware-kernel chunk_kda_bwd_kernel_intra
+```
+
+The wrapper starts collection after six warmup steps and profiles a single matching
+launch in step seven. Kernel choices are in `hardware_counters.KERNELS`; collect
+separate runs for the two expensive KDA backward kernels, softmax, dtype copies,
+and a dense GEMM. Nsight sections cover compute/memory throughput, scheduling,
+warp stalls, launch resources and achieved occupancy. Kernel replay is restricted to one GPU after an eight-GPU profiling attempt
+failed with NVLink/peer-memory errors. Use the eight-GPU timeline for communication
+and overlap; isolated counters cannot measure DDP contention. Clocks and cache-control overrides are disabled.
+This is a sample of one kernel invocation, not a distribution over document shapes.
+The recipe context must match the model context.
+
+The existing benchmark timeout/supervisor bounds the run. Results, raw `.ncu-rep`,
+CSV metrics and logs go under `throughput/<run-id>/` on the hybrid runs volume.
+`throughput_valid` is false during counter replay: use separate uninstrumented
+runs for throughput and MFU. The collector rejects empty reports instead of treating
+successful process exit as successful profiling.
+
+
+## Qualified KDA WY backward specialization
+
+The hybrid family registers `kda_wy.py` through FLA's backend dispatch. For
+compute capability 9.0, BF16/FP32, head dimension 128 and 64-token chunks,
+`kernels/kda_wy.py` shortens accumulator live ranges and uses 32/128 key/value
+tiles. H100 measurements show zero compiler-reported spills and 0.676 ms versus
+1.368 ms for the original kernel. Full KDA forward/input-gradient reference
+checks pass. The matched eight-H100 training result is approximately 339k versus
+330k tokens/second, or 31.2% versus 30.4% MFU. See
+[measurement details](../plans/KDA_REAL_DATA_MFU.md).
+
+Reproduce the bounded original/revised/original comparison on one allocation:
+
+```sh
+uv run modal run --detach -m model_hybrid.modal_tools::bench \
+  --config hybrid/configs/kda-960m-100b.json \
+  --gpus 8 --gpu H100 --require-gpu-model --microbatch 4 --global-rows 256 \
+  --steps 30 --real-data --run-id <wy-comparison> --compare-kda-wy
+```
+
+The family also registers `kda_intra.py`. Its diagonal backward uses centered
+gate factors and tensor-core matrix products for tiles with a bounded observed
+gate range, retaining the scalar calculation for wider ranges. This preserves
+the model's unbounded gate function. On H100 the isolated kernel takes 1.181 ms
+versus 1.992 ms. The matched eight-H100 microbatch-six comparison measures
+355,471 tokens/s versus 345,615/346,043 for its controls (32.72% versus 31.85% MFU).
+Full gradient and fallback-path checks pass. Use `--compare-intra` with
+`--microbatch 6 --phase-timings` for the corresponding comparison.
