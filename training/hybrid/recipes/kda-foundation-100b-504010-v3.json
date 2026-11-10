@@ -145,7 +145,7 @@
       "prepared_in": "kda-foundation-100b-504010-v1"
     },
     "curated": {
-      "weight": 0.02,
+      "weight": 0.04,
       "repo": "jfrick/curated-oss-code-20261019",
       "revision": "7b6c6a9cce6c146ca869102925a694500502c06f",
       "files": [
@@ -366,14 +366,14 @@
       ],
       "shards": 214,
       "column": "text",
-      "max_passes": 3,
+      "max_passes": 5,
       "estimated_tokens_per_shard": 4000000,
       "hash_split": true,
       "max_bytes": 100000,
       "exclude_path": "(?i)(^|/)(node_modules|vendor|vendors|third_party|thirdparty|3rdparty|bower_components|external|externals|deps|Pods|dist|build|site-packages)/|\\.min\\.(js|css)$|(^|/)(jquery|bootstrap|angular|lodash|d3|three)[^/]*\\.js$|\\.(html?|css|md|markdown)$"
     },
     "mit": {
-      "weight": 0.001,
+      "weight": 0.002,
       "repo": "jfrick/mit-claude-codex-code-20261019",
       "revision": "f9996020bb190a069ba5b67c774b75c9aa6b62ec",
       "files": [
@@ -454,21 +454,21 @@
       ],
       "shards": 74,
       "column": "text",
-      "max_passes": 3,
+      "max_passes": 5,
       "estimated_tokens_per_shard": 1000000,
       "hash_split": true,
       "max_bytes": 100000,
       "exclude_path": "(?i)(^|/)(node_modules|vendor|vendors|third_party|thirdparty|3rdparty|bower_components|external|externals|deps|Pods|dist|build|site-packages)/|\\.min\\.(js|css)$|(^|/)(jquery|bootstrap|angular|lodash|d3|three)[^/]*\\.js$|\\.(html?|css|md|markdown)$"
     },
     "python_starred": {
-      "weight": 0.02,
+      "weight": 0.04,
       "repo": "codeparrot/github-code-clean",
       "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
       "pattern": "data/train-{index:05d}-of-00880.parquet",
       "shards": 880,
       "column": "code",
       "permissive_licenses_only": true,
-      "max_passes": 2,
+      "max_passes": 5,
       "estimated_tokens_per_shard": 1200000,
       "hash_split": true,
       "split_column": "repo_name",
@@ -499,14 +499,14 @@
       "starred": false
     },
     "code_starred": {
-      "weight": 0.1,
+      "weight": 0.2,
       "repo": "codeparrot/github-code-clean",
       "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
       "pattern": "data/train-{index:05d}-of-00880.parquet",
       "shards": 880,
       "column": "code",
       "permissive_licenses_only": true,
-      "max_passes": 2,
+      "max_passes": 3,
       "estimated_tokens_per_shard": 8500000,
       "hash_split": true,
       "split_column": "repo_name",
@@ -521,7 +521,7 @@
       "starred": true
     },
     "code": {
-      "weight": 0.224,
+      "weight": 0.083,
       "repo": "codeparrot/github-code-clean",
       "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
       "pattern": "data/train-{index:05d}-of-00880.parquet",
