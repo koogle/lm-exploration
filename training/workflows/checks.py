@@ -65,7 +65,8 @@ def check_capacity(report, target):
 
 
 def check_hybrid_capacity(recipe, root, target, context):
-    """Verify every required shard before allocating training GPUs; single pass only."""
+    """Verify every required shard before allocating training GPUs; a source's train
+    tokens count once per allowed pass."""
     import json
     from pathlib import Path
 
@@ -75,8 +76,6 @@ def check_hybrid_capacity(recipe, root, target, context):
         return None  # ChatMixture owns conversation packing and its capacity.
     capacity = {}
     for name, source in recipe["sources"].items():
-        if source["max_passes"] != 1:
-            raise ValueError(f"{name}: only single-pass capacity is supported")
         train, validation = 0, 0
         for index in range(source["shards"]):
             binary, docs, metadata = shard_paths(source_root(recipe, Path(root), name), name, index)
@@ -90,6 +89,7 @@ def check_hybrid_capacity(recipe, root, target, context):
             else:
                 train += meta["tokens"]
         needed = math.ceil(target * source["weight"]) + context + 1
+        train *= source["max_passes"]
         if train < needed or validation <= 0:
             raise ValueError(
                 f"{name}: {train} train tokens, needs {needed}; validation={validation}"

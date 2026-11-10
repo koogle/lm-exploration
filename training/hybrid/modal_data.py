@@ -48,6 +48,12 @@ ROOT = Path("/data")
 DEFAULT_RECIPE = "hybrid/recipes/hybrid-40b-v1.json"
 
 
+def stars_path(recipe):
+    """The recipe's starred-repository table: its own, or another recipe's named by
+    `stars.prepared_in`."""
+    return ROOT / recipe["stars"].get("prepared_in", recipe["name"]) / "stars.npy"
+
+
 def screen_path(recipe):
     """The recipe's contamination screen: its own, or another recipe's named by `screen`."""
     return ROOT / recipe.get("screen", f"{recipe['name']}/screen.npy")
@@ -92,6 +98,37 @@ def build_screen(recipe, deadline):
 
 @app.function(
     image=image,
+    cpu=4,
+    memory=32768,
+    timeout=3600,
+    retries=0,
+    secrets=[secret],
+    volumes={"/data": volume},
+)
+def build_stars(recipe, deadline):
+    import numpy as np
+    from training_data import packed_shards as data
+
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    hashes, report = data.build_stars(recipe)
+    path = stars_path(recipe)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(path, hashes)
+    path.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n")
+    clear_upstream()
+    volume.commit()
+    return report
+
+
+def clear_upstream():
+    import shutil
+
+    shutil.rmtree("/tmp/upstream", ignore_errors=True)
+
+
+@app.function(
+    image=image,
     cpu=8,
     memory=32768,
     timeout=3600,
@@ -101,7 +138,6 @@ def build_screen(recipe, deadline):
 )
 def prepare(recipe, name, index, deadline):
     import os
-    import shutil
 
     import numpy as np
     from training_data import packed_shards as data
@@ -122,10 +158,13 @@ def prepare(recipe, name, index, deadline):
         from training_data import chat
 
         renderer = chat.RENDERERS[renderer]
+    starred = None
+    if "starred" in recipe["sources"][name]:
+        starred = frozenset(np.load(stars_path(recipe)).tolist())
     meta = data.prepare_shard(
-        recipe, name, index, folder, glm, screen, tokenizer.EOS_ID, render=renderer
+        recipe, name, index, folder, glm, screen, tokenizer.EOS_ID, render=renderer, starred=starred
     )
-    shutil.rmtree("/tmp/upstream", ignore_errors=True)
+    clear_upstream()
     volume.commit()
     return meta
 
@@ -166,6 +205,12 @@ def coordinate(launch, recipe, deadline, parallel):
             recipe, deadline
         )
         track_call(launch, call.object_id, "build_screen")
+        call.get()
+    if "stars" in recipe and not stars_path(recipe).exists():
+        call = build_stars.with_options(timeout=bounded_timeout(deadline, 3600)).spawn(
+            recipe, deadline
+        )
+        track_call(launch, call.object_id, "build_stars")
         call.get()
     volume.reload()
     pending, running, done, failed = schedule(recipe), {}, {}, []
@@ -221,6 +266,7 @@ def coordinate(launch, recipe, deadline, parallel):
                 k: sum(m["dropped"].get(k, 0) for m in metas)
                 for k in sorted({k for m in metas for k in m["dropped"]})
             },
+            "max_passes": recipe["sources"][name]["max_passes"],
             "needed_tokens": round(
                 recipe["target_tokens"]
                 * (1 - recipe.get("replay", {}).get("fraction", 0))

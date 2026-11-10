@@ -122,6 +122,82 @@ class HybridDataTests(unittest.TestCase):
             self.assertEqual(meta["documents"], documents)
             self.assertEqual({k: meta["dropped"].get(k, 0) for k in dropped}, dropped)
 
+    def test_starred_sources_and_json_lines(self):
+        import gzip
+        import json
+
+        rows = [
+            {"text": f"value_{i} = {i}", "repository": repo, "path": f"f{i}.py"}
+            for i, repo in enumerate(["Org/Good", "org/other", "org/good", "x/y"])
+        ]
+        with gzip.open(self.root / "projects-0.jsonl.gz", "wt") as out:
+            out.writelines(json.dumps(row) + "\n" for row in rows)
+        pq.write_table(
+            pa.table({"repo_name": ["org/good", "a/b", "c/d"], "stars": [12.0, 3.0, None]}),
+            self.root / "stars.parquet",
+        )
+        self.recipe["stars"] = {
+            "repo": "s",
+            "revision": "r",
+            "files": ["stars.parquet"],
+            "name_column": "repo_name",
+            "count_column": "stars",
+            "minimum": 10,
+        }
+        hashes, report = data.build_stars(self.recipe, self.download)
+        self.assertEqual(report, {"minimum": 10, "rows": 3, "repositories": 1})
+        base = {
+            "weight": 1.0,
+            "repo": "c",
+            "revision": "r",
+            "files": ["projects-0.jsonl.gz", "projects-0.jsonl.gz"],
+            "shards": 2,
+            "column": "text",
+            "split_column": "repository",
+            "max_passes": 1,
+        }
+        self.recipe["sources"] = {"projects": {**base, "exclude_repositories": ["ORG/good"]}}
+        meta = data.prepare_shard(
+            self.recipe,
+            "projects",
+            0,
+            self.root / "out-excluded",
+            self.tokenizer,
+            np.empty(0, np.uint64),
+            EOS,
+            self.download,
+        )
+        self.assertEqual((meta["documents"], meta["dropped"]["repository"]), (2, 2))
+        for wanted, documents in ((True, 2), (False, 2)):
+            self.recipe["sources"] = {"projects": {**base, "starred": wanted}}
+            meta = data.prepare_shard(
+                self.recipe,
+                "projects",
+                0,
+                self.root / f"out-{wanted}",
+                self.tokenizer,
+                np.empty(0, np.uint64),
+                EOS,
+                self.download,
+                starred=frozenset(hashes.tolist()),
+            )
+            self.assertEqual((meta["documents"], meta["dropped"]["stars"]), (documents, 2))
+
+    def test_sources_repeat_up_to_max_passes(self):
+        self.prepare()
+        self.recipe["sources"]["code"]["max_passes"] = 2
+        mixture = data.PreparedMixture(self.recipe, self.root / "out")
+        tokens = sum(
+            len(np.fromfile(data.shard_paths(self.root / "out", "code", i)[0], dtype=np.uint32))
+            for i in data.training_order(self.recipe, "code")
+        )
+        first = mixture._take("code", tokens)
+        mixture.state["code"]["shard"] = len(mixture.orders["code"])
+        np.testing.assert_array_equal(mixture._take("code", tokens), first)
+        mixture.state["code"]["shard"] = 2 * len(mixture.orders["code"])
+        with self.assertRaises(StopIteration):
+            mixture._take("code", 1)
+
     def test_repository_documents(self):
         rows = {
             "code": ["b = 2", "a = 1", "z = 26", "solo"],
