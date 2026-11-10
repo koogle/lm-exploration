@@ -52,7 +52,7 @@ playground = "analysis/playground"
 
 [tool.setuptools.package-data]
 trainer = ["kernels/*.cu"]
-model_hybrid = ["kernels/*.cu", "recipes/*.json", "configs/*.json"]
+model_hybrid = ["kernels/*.cu", "recipes/*.json", "configs/*.json", "profile_timeline.html"]
 workflows = ["*.json", "model_configs/*.json", "model_configs/historical/*.json", "datasets/*.json"]
 training_data = ["mini_swe_instructions.txt", "open_swe_instructions.txt"]
 

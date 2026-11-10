@@ -65,6 +65,8 @@ def trainer_sources():
 
     return {
         "trainer": Path(__file__),
+        "timing": Path(__file__).with_name("timing.py"),
+        "gc_policy": Path(__file__).with_name("gc_policy.py"),
         "optimizer": Path(trainer.optimizers.__file__),
         "roles": Path(trainer.roles.__file__),
     }
@@ -78,7 +80,7 @@ def latest_checkpoint(output):
     return Path(output) / json.loads(latest.read_text())["checkpoint"]
 
 
-def accumulate(ddp, parts, objective, world):
+def accumulate(ddp, parts, objective, world, timing=None):
     """Backward each microbatch's objective; returns the summed detached sums.
 
     `parts` are microbatch argument tuples; `objective(*part)` returns (objective,
@@ -88,14 +90,21 @@ def accumulate(ddp, parts, objective, world):
     """
     import torch
 
+    from trainer.timing import StepTiming
+
+    timing = timing or StepTiming()
     totals = {}
     for index, part in enumerate(parts):
         last = index == len(parts) - 1
         # no_sync must cover forward and backward for earlier microbatches.
         with contextlib.nullcontext() if last else ddp.no_sync():
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with (
+                timing.phase("forward_and_loss"),
+                torch.autocast("cuda", dtype=torch.bfloat16),
+            ):
                 value, sums = objective(*part)
-            (value * world).backward()
+            with timing.phase("backward_sync" if last else "backward_local"):
+                (value * world).backward()
         for key, sum_ in sums.items():
             totals[key] = totals.get(key, 0) + sum_.detach()
     return totals
@@ -128,6 +137,8 @@ def train(
     stop_file=None,
     commit=None,
     save=True,
+    phase_timings=False,
+    step_observer=None,
 ):
     """Train until `family.target_tokens`; returns the report (every rank).
 
@@ -135,13 +146,17 @@ def train(
     to the target, so a later resume continues the same run); `stop_unix`,
     `max_steps`, SIGTERM/SIGINT and an existing `stop_file` end it with a checkpoint.
     `save=False` writes no checkpoints (throughput benchmarks).
+    `step_observer`, when supplied, runs on every rank after step logging; it is
+    intended for diagnostics such as advancing a per-rank profiler schedule.
     """
     import numpy as np
     import torch
     import torch.distributed as dist
     from torch.nn.parallel import DistributedDataParallel as DDP
 
+    from trainer.gc_policy import TrainingGC, host_rss_bytes
     from trainer.optimizers import set_learning_rate
+    from trainer.timing import StepTiming
 
     if max_steps is not None and max_steps < 1:
         raise ValueError("max_steps must be positive")
@@ -149,11 +164,30 @@ def train(
         raise ValueError("stop_tokens must be within the token target")
     rank, world = runtime.rank, runtime.world_size
     rows = family.global_rows // world
-    if rows * world != family.global_rows or rows % family.microbatch:
-        raise ValueError("Global rows must divide into whole per-GPU microbatches")
+    if (
+        family.microbatch < 1
+        or rows * world != family.global_rows
+        or (rows % family.microbatch and not getattr(family, "allow_partial_microbatch", False))
+    ):
+        raise ValueError(
+            "Global rows must divide across GPUs, with whole microbatches when required"
+        )
     stop_unix = stop_unix if stop_unix is not None else math.inf
     torch.cuda.set_device(runtime.local_rank)
     torch.set_num_threads(4)
+    # Forked compiler children can inherit ProcessPoolExecutor shutdown locks;
+    # a GC weakref callback then stalls one rank and all peers in backward.
+    # Fresh interpreters avoid inherited locks; bound CPU/RAM use across ranks.
+    import torch._inductor.config as inductor_config
+
+    inductor_config.worker_start_method = "spawn"
+    inductor_config.compile_threads = 2
+    compiler_runtime = {
+        "worker_start_method": inductor_config.worker_start_method,
+        "compile_threads": inductor_config.compile_threads,
+    }
+    if rank == 0:
+        print(json.dumps({"compiler_runtime": compiler_runtime}), flush=True)
     dist.init_process_group(
         "nccl",
         init_method=runtime.init_method,
@@ -189,6 +223,7 @@ def train(
         return result[0]["value"]
 
     data = None
+    gc_policy = TrainingGC(getattr(family, "gc_warmup_steps", 0))
     try:
         started = time.monotonic()
         random.seed(family.seed)
@@ -221,6 +256,7 @@ def train(
             "data_identity": identity,
             "source_sha256": sources,
             "torch_version": str(torch.__version__),
+            "compiler_runtime": compiler_runtime,
             "gpu": torch.cuda.get_device_name(),
             "parameters": sum(p.numel() for p in model.parameters()),
             "resume_from": str(resume) if resume else None,
@@ -354,6 +390,7 @@ def train(
             if limit:
                 reason = limit
                 break
+            timing = StepTiming(phase_timings)
             full = {}
 
             def fetch(tokens=tokens, full=full):
@@ -376,7 +413,8 @@ def train(
             torch.cuda.synchronize()
             tick = time.monotonic()
             try:
-                batch = primary(fetch)
+                with timing.phase("data_fetch"):
+                    batch = primary(fetch)
             except RuntimeError as exc:
                 # All ranks received the same producer failure. Save the last
                 # completed optimizer boundary, without acknowledging bad data.
@@ -386,14 +424,19 @@ def train(
             if "stop" in batch:
                 reason = batch["stop"]
                 break
-            inputs = torch.empty((rows, batch["context"]), dtype=torch.long, device=device)
-            labels = torch.empty_like(inputs)
-            dist.scatter(inputs, list(full["inputs"].chunk(world)) if rank == 0 else None, src=0)
-            dist.scatter(labels, list(full["labels"].chunk(world)) if rank == 0 else None, src=0)
-            full.clear()
-            extras, counts = family.prepare(inputs, labels)
-            for value in counts.values():
-                dist.all_reduce(value)
+            with timing.phase("scatter_prepare"):
+                inputs = torch.empty((rows, batch["context"]), dtype=torch.long, device=device)
+                labels = torch.empty_like(inputs)
+                dist.scatter(
+                    inputs, list(full["inputs"].chunk(world)) if rank == 0 else None, src=0
+                )
+                dist.scatter(
+                    labels, list(full["labels"].chunk(world)) if rank == 0 else None, src=0
+                )
+                full.clear()
+                extras, counts = family.prepare(inputs, labels)
+                for value in counts.values():
+                    dist.all_reduce(value)
             progress = {"step": step, "tokens": tokens}
             factor = family.learning_rate_factor(tokens + batch["budget"])
             set_learning_rate(optimizer, factor)
@@ -413,26 +456,32 @@ def train(
             def objective(x, y, *rest, keys=keys, counts=counts, progress=progress):
                 return family.loss(ddp, x, y, dict(zip(keys, rest, strict=True)), counts, progress)
 
-            sums = accumulate(ddp, parts, objective, world)
-            norm = torch.nn.utils.clip_grad_norm_(
-                model.parameters(), family.gradient_clip, foreach=True
-            )
-            for value in sums.values():
-                dist.all_reduce(value)
-            logged = family.log(sums, counts)
-            values = [float(norm), *(v for v in logged.values() if isinstance(v, float))]
-            if not all(math.isfinite(v) for v in values):
-                reason = "non_finite"
-                break
-            optimizer.step()
-            torch.cuda.synchronize()
+            with timing.phase("accumulate"):
+                sums = accumulate(ddp, parts, objective, world, timing)
+            with timing.phase("clip_reduce_metrics"):
+                norm = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), family.gradient_clip, foreach=True
+                )
+                for value in sums.values():
+                    dist.all_reduce(value)
+                logged = family.log(sums, counts)
+                values = [float(norm), *(v for v in logged.values() if isinstance(v, float))]
+                if not all(math.isfinite(v) for v in values):
+                    reason = "non_finite"
+                    break
+            with timing.phase("optimizer"):
+                optimizer.step()
+            with torch.profiler.record_function("train/device_wait"):
+                torch.cuda.synchronize()
             rank_stats = [None] * world
             dist.all_gather_object(
                 rank_stats,
                 {
                     "compute_seconds": time.monotonic() - compute_tick,
+                    "host_rss_bytes": host_rss_bytes(),
                     "peak_allocated_bytes": torch.cuda.max_memory_allocated(),
                     "peak_reserved_bytes": torch.cuda.max_memory_reserved(),
+                    **({"phases": timing.result()} if phase_timings else {}),
                 },
             )
             step += 1
@@ -461,7 +510,14 @@ def train(
                 if row["step"] == start_step + 1 or row["step"] % family.log_every == 0:
                     print(json.dumps(row), flush=True)
 
-            primary(record)
+            with timing.phase("logging"):
+                primary(record)
+            gc_record = gc_policy.after_step(step - start_step)
+            if gc_record is not None:
+                print(json.dumps({"gc_warmup": {"rank": rank, **gc_record}}), flush=True)
+                dist.barrier()
+            if step_observer is not None:
+                step_observer()
             if step % family.evaluate_every == 0:
                 evaluate()
             due = family.checkpoint_every and step % family.checkpoint_every == 0
@@ -503,6 +559,7 @@ def train(
 
         return primary(finish)
     finally:
+        gc_policy.close()
         faulthandler.cancel_dump_traceback_later()
         if data is not None:
             data.close()
