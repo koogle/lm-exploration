@@ -50,6 +50,18 @@ with previews disabled. The completed study uses the corrected runs. One control
 controller recorded a directory-exists error even though its trainer completed;
 checkpoint and resumed numerical evaluations are retained with the raw status.
 
+## Composition of the code share
+
+The study's code source was all permissive GitHub Code Clean files. A later
+[audit](KDA_960M_PRETRAINING.md#corpus-audit-november-9) found that source to be
+6.8% Python and about a third markup, oversized or vendored files by bytes. The
+foundation recipe keeps the 40% share and changes what fills it: filtered
+languages, sizes and paths, then curated projects and starred repositories
+weighted above the rest
+([recipe v3](KDA_960M_PRETRAINING.md#quality-weighted-code-sources-recipe-v3)).
+The table above therefore measures the three-way split, not the current code
+source.
+
 ## Why these sources and what remains unqualified
 
 ClimbMix preserves broad language coverage, real code supplies implementations,

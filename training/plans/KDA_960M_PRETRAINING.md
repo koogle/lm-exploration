@@ -6,12 +6,15 @@ accepted retention cost. This document defines the scale-up requirements.
 
 ## Corpus
 
-Plan a conditional single-pass 100B-token schedule: 50B ClimbMix, 40B permissive
-GitHub and 10B Nemotron CC-Math score-3 tokens. Freeze source revisions,
-tokenizer identity, filtering and train/held-out partitions in the preparation
-manifest. Require measured usable capacity of at least target tokens times
-source weight; estimates size preparation but cannot authorize training. Do not
-fill a short source with silent repetition or substitute a new source.
+Plan a conditional 100B-token schedule: 50B ClimbMix, 40B code and 10B Nemotron
+CC-Math score-3 tokens. The 40B code tokens weight curated projects and starred
+repositories above the rest of GitHub ([recipe v3](#quality-weighted-code-sources-recipe-v3)).
+Freeze source revisions, tokenizer identity, filtering and train/held-out
+partitions in the preparation manifest. Require measured usable capacity of at
+least target tokens times source weight, counting each source once per pass its
+recipe allows; estimates size preparation but cannot authorize training. A source
+repeats only up to its recipe's `max_passes`, and the run stops when a source is
+used up. Do not substitute a new source.
 
 Require content-hash train/validation separation across sources and repository
 separation for GitHub. Screen conservative 13-token overlaps against the frozen
@@ -115,11 +118,61 @@ The 960M configuration reads recipe v2 and samples the MTP loss at fraction 0.25
 
 [Capacity reports, sample statistics, screen hits and the scripts that produced them](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/corpus-audit-20261109).
 
+## Quality-weighted code sources (recipe v3)
+
+Decision of November 10: within the unchanged 50/40/10 shares, read more Python
+and more high-quality code, and prefer repeating high-quality code to reading
+low-quality code once. `kda-foundation-100b-504010-v3` splits the 40% code share
+into six sources. All use the recipe v2 language, size and path filters.
+
+| Source | Share | Train tokens | Passes at 100B | Passes allowed |
+| --- | ---: | ---: | ---: | ---: |
+| Curated projects | 4.0% | 0.854B | 4.68 | 5 |
+| MIT collection | 0.2% | 0.053B | 3.80 | 5 |
+| Starred Python | 4.0% | 0.984B | 4.07 | 5 |
+| Other Python | 3.5% | 3.946B | 0.89 | 1 |
+| Starred other code | 20.0% | 7.434B | 2.69 | 3 |
+| Other code | 8.3% | 37.855B | 0.22 | 1 |
+
+- **Curated projects** are `jfrick/curated-oss-code-20261019`: the latest snapshot of
+  53 established projects (Linux, LLVM, Elasticsearch, ClickHouse, VS Code,
+  Kubernetes, PyTorch, Rust, CPython, Django and others). The source keeps each
+  project's own license, which includes GPL projects such as Linux and Git.
+- **MIT collection** is `jfrick/mit-claude-codex-code-20261019`: the latest snapshot
+  of 50 recently active MIT repositories.
+- **Starred** sources are GitHub Code Clean rows whose repository has at least ten
+  stars in `ibragim-bad/github-repos-metadata-40M` (`watchers_count`; 1,246,491
+  repositories qualify). **Other** sources are the remaining rows. A repository
+  absent from that table counts as unstarred.
+
+A 100B run reads 28.2B tokens from curated and starred sources, against about
+6.7B of such code under recipe v2, and about 8B Python tokens against 4.0B.
+Curated projects, the MIT collection and starred Python are read four to five
+times and starred other code 2.7 times; the passes repeat the same shard order.
+The smallest margins are starred other code (2.69 of 3 passes) and curated
+projects (4.68 of 5).
+
+Train/held-out separation is by content hash for the two project collections
+and by content hash and repository for GitHub sources, as before. Each source's
+held-out shard is small (curated 0.84M tokens of one Linux file's partition,
+starred Python 9K tokens), so per-source held-out loss during training is a
+trend only. `kda-code-quality-eval-v1` is the common evaluation set: one upstream
+GitHub file that no recipe trains on, restricted to repositories in the held-out
+partition and excluding the 103 curated and MIT repositories. It holds 88 starred
+Python documents (0.13M tokens), 385 other Python (0.50M), 899 starred other
+code (0.95M) and 4,564 other code (5.39M), and evaluates the v1 ClimbMix and math
+held-out shards alongside.
+
+The 960M configuration keeps recipe v2 until the matched comparison below
+supports v3.
+
 ## Training and budget
 
 Use exactly eight 80GB H100s, the shared trainer, frozen model/tokenizer and MTP
-objective. Select execution details from matched real-data correctness and
-performance checks. Full pretraining remains held during performance
+objective with its loss sampled at fraction 0.25 (10.6–10.8% more throughput in the
+[matched benchmark](KDA_MIXER_TIMING_STUDY.md#mtp-loss-fraction-november-9); its effect
+on quality is unmeasured). Select execution details from matched real-data
+correctness and performance checks. Full pretraining remains held during performance
 qualification; hardware and MFU experiments belong to the stacked implementation
 PR and do not alter this mixture decision.
 

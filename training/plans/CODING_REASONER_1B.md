@@ -1,6 +1,6 @@
 # Sub-1B coding reasoner: training plan
 
-Updated November 6, 2026. Train a model from scratch through foundation
+Updated November 10, 2026. Train a model from scratch through foundation
 pretraining, midtraining, reasoning SFT and outcome-based RL. The working model
 has 959,843,116 training parameters and a 927,589,920-parameter deployed trunk
 once auxiliary multi-token prediction (MTP) is removed. Retain KDA, interleaved
@@ -17,8 +17,13 @@ references before choosing SFT or RL curricula.
 ## Stages and advancement
 
 1. **Foundation pretraining:** conditional 100B-token target using 50% ClimbMix,
-   40% permissive GitHub code and 10% Nemotron CC-Math score-3 data. The
-   [mixture decision](KDA_DATA_STUDY.md) records the measured tradeoff.
+   40% code and 10% Nemotron CC-Math score-3 data. The
+   [mixture decision](KDA_DATA_STUDY.md) records the measured tradeoff between
+   the three shares. Within the code share, markup, oversized and vendored files
+   are filtered out, and curated projects and starred repositories are weighted
+   above the rest of GitHub and repeated
+   ([code sources](KDA_960M_PRETRAINING.md#quality-weighted-code-sources-recipe-v3)).
+   The MTP loss is sampled at fraction 0.25.
 2. **Midtraining:** introduce higher-quality coding explanations, verified
    solutions and longer-context tasks in bounded continuation comparisons.
    Code Concepts and STEM instructional data are candidates, not committed
@@ -49,8 +54,11 @@ $4,000 for subsequent stages and contingency. Reconcile actual experiments and
 billing before committing the remaining budget; these are allocations, not a
 statement of the current account balance.
 
-Use exactly eight 80GB H100s for target-scale qualification. Full pretraining is
-held pending the requested performance investigation, corpus capacity checks and
-spending reconciliation. Runtime implementation, hardware-counter work, kernels
+Use exactly eight 80GB H100s for target-scale qualification. Corpus capacity is
+measured for every source of the selected recipe. Full pretraining is held
+pending the code-mixture comparison, the precision choice and spending
+reconciliation. MFU is not a launch gate: at the measured 437k tokens/sec a
+100B-token run takes about 508 GPU-hours, and the configurations compared so far
+rank differently by MFU and by tokens per second. Runtime implementation, hardware-counter work, kernels
 and MFU findings are reviewed in the stacked implementation PR, separately from
 this planning decision. See [foundation constraints](KDA_960M_PRETRAINING.md).
