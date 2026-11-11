@@ -125,7 +125,9 @@ def check_progress(report, previous_tokens, target, global_positions):
         if target - tokens >= global_positions:
             raise ValueError("Token stop occurred too far below target")
         return True
-    if reason not in ("time_limit", "step_limit", "data_late"):
+    # "signal": the container was told to stop (a preemption with time to save); the
+    # session ended early at a checkpoint and the next one continues from it.
+    if reason not in ("time_limit", "step_limit", "data_late", "signal"):
         raise ValueError(f"Training stopped unexpectedly: {reason}")
     return False
 
