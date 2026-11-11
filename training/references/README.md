@@ -4,6 +4,9 @@ Source-backed reading notes and proposed experiments for our from-scratch models
 External results are attributed to their authors; proposals are not measured
 results or changes to the agreed training plan.
 
+- [Marin 535B-A23B architecture — 2026-11-11](marin-535b-architecture-2026-11-11.md):
+  Open Athena's reported ablations (short convolutions, embedding norm, QK multiplier,
+  linear decay, z-loss) mapped onto our hybrid model, with a proposed four-arm ablation.
 - [Thinking Machines Inkling 2 Small — 2026-11-07](thinking-machines-inkling2-2026-11-07.md):
   native NVFP4 on Blackwell, what transfers to H100 FP8, and a matched KDA precision comparison.
 - [SFT task vectors after RL — 2026-11-05](sft-task-vectors-2026-11-05.md):
