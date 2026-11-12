@@ -1,0 +1,27 @@
+{
+  "seed": 20261112,
+  "max_side": 1024,
+  "sources": {
+    "openimages": {
+      "images": 30000,
+      "repo": "vikhyatk/openimages-bbox",
+      "revision": "9c9a38be0f64b5f6caf2fcac4a00e2b155f1b7ad",
+      "total_shards": 1103,
+      "shards": 30,
+      "per_shard": 1000
+    },
+    "objects365": {
+      "images": 20000,
+      "repo": "guozonghao96/objects365",
+      "revision": "ae34a8ecaed566c69b637bd69b91daf0a95157af",
+      "patches": [
+        "patch0.tar.gz",
+        "patch12.tar.gz",
+        "patch25.tar.gz",
+        "patch38.tar.gz",
+        "patch49.tar.gz"
+      ],
+      "stride": 10
+    }
+  }
+}
