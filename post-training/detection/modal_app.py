@@ -1,14 +1,15 @@
 """Detection baseline on one Modal GPU, stopped within an hour of launch.
 
-Run from exploration/parallel-detection/:
+Run from post-training/detection/:
 
-    modal run modal_app.py --run-id baseline-001
+    modal run --detach modal_app.py --run-id moondream2-001
 
-One L4 call with `retries=0` evaluates `configs/baseline.json`, writing predictions
+One L4 call with `retries=0` evaluates `configs/moondream2.json`, writing predictions
 image by image and the summary to the `lm-exploration-parallel-detection` volume under
-`evaluations/<run id>/`. An independent CPU supervisor cancels the call if it is still
-queued or running at the launch deadline. The local command waits for the summary and
-saves it under `artifacts/<run id>/`.
+`evaluations/<run id>/`. If Modal preempts the container, the rescheduled call
+continues from the recorded images inside the same deadline. An independent CPU
+supervisor cancels the call if it is still queued or running at the launch deadline.
+The local command waits for the summary and saves it under `artifacts/<run id>/`.
 """
 
 import json
@@ -70,7 +71,7 @@ def evaluate(run_id, config, provenance, deadline):
     if time.time() >= deadline:
         raise RuntimeError("Launch deadline reached; refusing new work")
     out = Path("/runs/evaluations") / run_id
-    if out.exists():
+    if (out / "summary.json").exists():
         raise ValueError(f"Run {run_id} already has results")
 
     def saved(images):
@@ -97,7 +98,7 @@ def enforce_deadline(call_ids, deadline):
 
 
 @app.local_entrypoint()
-def main(run_id: str, config: str = "configs/baseline.json"):
+def main(run_id: str, config: str = "configs/moondream2.json"):
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     git = ["git", "-C", str(HERE)]
     provenance = {

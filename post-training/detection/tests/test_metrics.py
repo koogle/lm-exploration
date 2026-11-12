@@ -1,7 +1,7 @@
 import pytest
 
 from parallel_detection.boxes import iou_matrix, match
-from parallel_detection.metrics import summarize
+from parallel_detection.metrics import summarize, unit_confidence_ap
 
 
 def record(kind, truth, predicted, exhaustive=True, image_id=1, seconds=0.1):
@@ -48,7 +48,18 @@ def test_detection_counts():
     assert half["recall_by_size"]["large"] == {"recall": 1.0, "truth_boxes": 2}
     assert half["recall_by_size"]["small"] == {"recall": 0.0, "truth_boxes": 1}
     assert half["recall_by_instances_in_query"]["2-5"]["recall"] == 0.5
+    assert half["phrase_hit_rate"] == 1.0
     assert detection["absent"] == {"queries": 2, "false_alarm_rate": 0.5, "boxes_per_query": 0.5}
+
+
+def test_unit_confidence_ap_follows_emitted_order():
+    box, far, miss = [0, 0, 100, 100], [500, 500, 520, 520], [300, 300, 310, 310]
+    assert unit_confidence_ap([box, far], [box, far], 0.5) == 1.0
+    assert unit_confidence_ap([], [box], 0.5) == 0.0
+    # One of two truths found by the first box: precision 1 up to recall 0.5, then 0.
+    assert unit_confidence_ap([box, miss], [box, far], 0.5) == pytest.approx(6 / 11)
+    # The same boxes with the miss first: precision 0.5 up to recall 0.5.
+    assert unit_confidence_ap([miss, box], [box, far], 0.5) == pytest.approx(3 / 11)
 
 
 def test_referring_scores_the_first_box():
@@ -58,7 +69,9 @@ def test_referring_scores_the_first_box():
         record("referring", [box], [other, box]),
         record("referring", [box], []),
     ]
-    referring = summarize(records)["d"]["referring"]
+    summary = summarize(records)["d"]
+    assert summary["detection"]["iou_0.5"]["tp"] == 2  # F1 counts any box, not only the first
+    referring = summary["referring"]
     assert referring["accuracy_iou_0.5"] == pytest.approx(1 / 3)
     assert referring["one_box_rate"] == pytest.approx(1 / 3)
     assert referring["no_box_rate"] == pytest.approx(1 / 3)

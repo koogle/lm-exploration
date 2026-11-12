@@ -1,7 +1,5 @@
-import json
-
 from parallel_detection.run import predict
-from parallel_detection.tasks import lvis_samples, refcoco_samples
+from parallel_detection.tasks import COCO_NAMES, coco_samples, lvis_samples, refcoco_m_samples
 
 LVIS = {
     "categories": [
@@ -47,26 +45,51 @@ def test_lvis_prompts_present_and_verified_absent_categories():
     )
     assert (len(cup["boxes"]), cup["exhaustive"], cup["group"]) == (2, False, "f")
     assert absent["kind"] == "absent" and absent["phrase"] in {"zebra", "kite"}
+    assert len(lvis_samples(LVIS, 5, 0, seed=0)[0]["queries"]) == 2
     assert lvis_samples(LVIS, 5, 1, seed=0) == lvis_samples(LVIS, 5, 1, seed=0)
 
 
-def test_refcoco_groups_referred_objects_by_image():
+def test_coco_prompts_the_categories_in_the_image():
     rows = [
         {
-            "ref_id": ref,
-            "image_id": 99,
-            "sentences": [{"raw": f"object {ref} "}],
-            "raw_anns": json.dumps({"bbox": [ref, 2, 3, 4]}),
-            "raw_image_info": json.dumps(
-                {"file_name": "COCO_train2014_000000000099.jpg", "width": 640, "height": 428}
-            ),
-        }
-        for ref in (1, 2)
+            "image_id": 139,
+            "width": 640,
+            "height": 426,
+            "objects": {"category": [1, 0, 1], "bbox": [[0, 0, 5, 5], [1, 1, 9, 9], [2, 2, 4, 4]]},
+        },
+        {"image_id": 140, "width": 1, "height": 1, "objects": {"category": [], "bbox": []}},
     ]
-    (sample,) = refcoco_samples(rows, refs=10, seed=0)
-    assert sample["image_url"].endswith("/train2014/COCO_train2014_000000000099.jpg")
-    assert sorted(q["phrase"] for q in sample["queries"]) == ["object 1", "object 2"]
-    assert all(q["kind"] == "referring" and len(q["boxes"]) == 1 for q in sample["queries"])
+    (sample,) = coco_samples(rows, images=5, seed=0)
+    assert len(COCO_NAMES) == 80
+    assert sample["image"] == "coco/139.jpg"
+    person, bicycle = sample["queries"]
+    assert (person["phrase"], person["boxes"]) == ("person", [[1, 1, 9, 9]])
+    assert (bicycle["phrase"], len(bicycle["boxes"])) == ("bicycle", 2)
+
+
+def test_refcoco_m_asks_every_expression_of_every_referred_object():
+    rows = [
+        {
+            "image_id": 99,
+            "samples": [
+                {
+                    "sentences": ["left guy ", "person on left"],
+                    "bbox": [10, 20, 30, 40],
+                    "mask": {"size": [294, 500]},
+                },
+                {
+                    "sentences": ["right guy"],
+                    "bbox": [300, 0, 100, 200],
+                    "mask": {"size": [294, 500]},
+                },
+            ],
+        }
+    ]
+    (sample,) = refcoco_m_samples(rows, images=10, seed=0)
+    assert (sample["width"], sample["height"], sample["image"]) == (500, 294, "refcoco-m/99.jpg")
+    assert [q["phrase"] for q in sample["queries"]] == ["left guy", "person on left", "right guy"]
+    assert sample["queries"][0]["boxes"] == [[10, 20, 40, 60]]
+    assert all(q["kind"] == "referring" for q in sample["queries"])
 
 
 def test_predict_joins_detections_to_queries(tmp_path):

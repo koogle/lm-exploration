@@ -2,8 +2,8 @@
 
 A record is a query (see `tasks`) plus "predicted" boxes in pixels, "seconds" for
 that phrase, and the sample's "shared_seconds" (work done once per image).
-Detections carry no confidence, so the detection score is precision, recall and F1
-at fixed IoU thresholds, not average precision.
+Detections carry no confidence, so the scores are precision, recall and F1 at fixed
+IoU thresholds, plus the unit-confidence average precision Moondream reports.
 """
 
 from collections import defaultdict
@@ -37,13 +37,37 @@ def prf(tp, fp, fn):
     return {"precision": precision, "recall": recall, "f1": f1, "tp": tp, "fp": fp, "fn": fn}
 
 
+def unit_confidence_ap(predicted, truth, threshold):
+    """Average precision as Moondream's COCO script computes it for one phrase.
+
+    Every box has confidence 1, so boxes are taken in emitted order; each takes the
+    unmatched truth box it overlaps most. Precision is interpolated at 11 recall points.
+    """
+    iou = iou_matrix(predicted, truth)
+    taken = np.zeros(len(truth), dtype=bool)
+    hits = np.zeros(len(predicted))
+    for index in range(len(predicted)):
+        overlaps = np.where(taken, -1.0, iou[index])
+        best = int(overlaps.argmax())
+        if overlaps[best] >= threshold and overlaps[best] > 0:
+            hits[index], taken[best] = 1, True
+    found = np.cumsum(hits)
+    recalls = found / len(truth)
+    precisions = found / np.arange(1, len(predicted) + 1)
+    points = [precisions[recalls >= t].max(initial=0.0) for t in np.arange(0, 1.1, 0.1)]
+    return float(np.mean(points))
+
+
 def detection_summary(records):
-    """Micro-averaged scores over "present" and "absent" queries."""
-    present = [r for r in records if r["kind"] == "present"]
+    """Micro-averaged scores over phrases that name something in the image.
+
+    Boxes for an "absent" phrase count as false positives.
+    """
+    present = [r for r in records if r["kind"] != "absent"]
     absent = [r for r in records if r["kind"] == "absent"]
     out = {"queries": len(present), "truth_boxes": sum(len(r["boxes"]) for r in present)}
     for threshold in IOU_THRESHOLDS:
-        tp = fp = fn = 0
+        tp = fp = fn = phrases_hit = 0
         hit = defaultdict(
             lambda: defaultdict(lambda: [0, 0])
         )  # breakdown -> bucket -> [found, total]
@@ -51,6 +75,7 @@ def detection_summary(records):
             found = {t for _, t in match(r["predicted"], r["boxes"], threshold)}
             tp += len(found)
             fn += len(r["boxes"]) - len(found)
+            phrases_hit += bool(found)
             if r["exhaustive"]:
                 fp += len(r["predicted"]) - len(found)
             for index, area in enumerate(areas(r["boxes"])):
@@ -61,20 +86,29 @@ def detection_summary(records):
                 ):
                     hit[breakdown][key][0] += index in found
                     hit[breakdown][key][1] += 1
-        # Boxes for a category that is not in the image are all false positives.
         fp += sum(len(r["predicted"]) for r in absent)
-        out[f"iou_{threshold}"] = prf(tp, fp, fn) | {
-            f"recall_by_{breakdown}": {
-                key: {"recall": ratio(found, total), "truth_boxes": total}
-                for key, (found, total) in sorted(buckets.items())
+        aps = [unit_confidence_ap(r["predicted"], r["boxes"], threshold) for r in present]
+        out[f"iou_{threshold}"] = (
+            prf(tp, fp, fn)
+            | {
+                # Share of phrases with at least one correct box.
+                "phrase_hit_rate": ratio(phrases_hit, len(present)),
+                "unit_confidence_map": float(np.mean(aps)) if aps else None,
             }
-            for breakdown, buckets in hit.items()
+            | {
+                f"recall_by_{breakdown}": {
+                    key: {"recall": ratio(found, total), "truth_boxes": total}
+                    for key, (found, total) in sorted(buckets.items())
+                }
+                for breakdown, buckets in hit.items()
+            }
+        )
+    if absent:
+        out["absent"] = {
+            "queries": len(absent),
+            "false_alarm_rate": ratio(sum(bool(r["predicted"]) for r in absent), len(absent)),
+            "boxes_per_query": ratio(sum(len(r["predicted"]) for r in absent), len(absent)),
         }
-    out["absent"] = {
-        "queries": len(absent),
-        "false_alarm_rate": ratio(sum(bool(r["predicted"]) for r in absent), len(absent)),
-        "boxes_per_query": ratio(sum(len(r["predicted"]) for r in absent), len(absent)),
-    }
     return out
 
 
@@ -146,9 +180,7 @@ def summarize(records):
         by_dataset[r["dataset"]].append(r)
     out = {}
     for name, group in sorted(by_dataset.items()):
-        out[name] = {"latency": latency_summary(group)}
-        if any(r["kind"] != "referring" for r in group):
-            out[name]["detection"] = detection_summary(group)
+        out[name] = {"latency": latency_summary(group), "detection": detection_summary(group)}
         if any(r["kind"] == "referring" for r in group):
             out[name]["referring"] = referring_summary(group)
     return out
