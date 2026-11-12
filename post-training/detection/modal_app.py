@@ -4,12 +4,15 @@ Run from post-training/detection/:
 
     modal run --detach modal_app.py::main --run-id moondream2-001
     modal run --detach modal_app.py::decoders --run-id decoders-001
+    modal run --detach modal_app.py::photon --run-id moondream31-001 \\
+        --config configs/moondream3.1-photon.json
 
-`main` evaluates `configs/moondream2.json`. `decoders` runs `configs/decoders.json`
+`main` evaluates `configs/moondream2.json` through Transformers on an L4. `photon`
+evaluates a config through Moondream's Photon engine on an L40S. `decoders` runs `configs/decoders.json`
 once per decoder (PyTorch eager, this folder's loop, the custom CUDA kernels,
 torch.compile) on the same images and reports how each agrees with eager.
 
-Each launch is one L4 call with `retries=0`, writing predictions image by image and
+Each launch is one GPU call with `retries=0`, writing predictions image by image and
 summaries to the `lm-exploration-parallel-detection` volume under
 `evaluations/<run id>/`. If Modal preempts the container, the rescheduled call
 continues from the recorded images inside the same deadline. An independent CPU
@@ -68,7 +71,30 @@ def with_source(base):
 
 
 image = with_source(modal.Image.debian_slim(python_version="3.12"))
+# Photon (the `moondream` package) brings its own PyTorch and precompiled kernels.
+photon_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install(
+        "moondream==2.6.1",
+        *[p for p in PACKAGES if p.startswith(("numpy", "scipy", "pillow", "pyarrow"))],
+    )
+    .env({"HF_HOME": "/runs/hf-cache"})
+    .add_local_file(DEADLINE, "/root/workflows/deadline.py")
+    .add_local_dir(PACKAGE, "/root/parallel_detection")
+)
 kernel_image = with_source(modal.Image.from_registry(CUDA_IMAGE, add_python="3.12"))
+
+
+def run_evaluation(run_id, config, provenance, deadline):
+    from parallel_detection.run import evaluate as run
+
+    out, saved = start(run_id, deadline)
+    if (out / "summary.json").exists():
+        raise ValueError(f"Run {run_id} already has results")
+    try:
+        return run(config, out, "cuda", provenance, saved)
+    finally:
+        volume.commit()
 
 
 def start(run_id, deadline):
@@ -93,15 +119,19 @@ def start(run_id, deadline):
     volumes={"/runs": volume},
 )
 def evaluate(run_id, config, provenance, deadline):
-    from parallel_detection.run import evaluate as run
+    return run_evaluation(run_id, config, provenance, deadline)
 
-    out, saved = start(run_id, deadline)
-    if (out / "summary.json").exists():
-        raise ValueError(f"Run {run_id} already has results")
-    try:
-        return run(config, out, "cuda", provenance, saved)
-    finally:
-        volume.commit()
+
+@app.function(
+    image=photon_image,
+    gpu="L40S",
+    timeout=LAUNCH_LIMIT_SECONDS,
+    retries=0,
+    max_containers=2,
+    volumes={"/runs": volume},
+)
+def evaluate_photon(run_id, config, provenance, deadline):
+    return run_evaluation(run_id, config, provenance, deadline)
 
 
 @app.function(
@@ -174,14 +204,14 @@ def enforce_deadline(call_ids, deadline):
     return {"stage": "completed"} if cancelled is None else {"cancelled": cancelled}
 
 
-def launch(function, run_id, config, result_name):
+def launch(function, run_id, config, result_name, gpu="L4"):
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     git = ["git", "-C", str(HERE)]
     provenance = {
         "run_id": run_id,
         "git_commit": subprocess.check_output([*git, "rev-parse", "HEAD"], text=True).strip(),
         "git_dirty": bool(subprocess.check_output([*git, "status", "--porcelain", "."], text=True)),
-        "gpu": "L4",
+        "gpu": gpu,
     }
     remaining = int(deadline - time.time())
     call = function.with_options(timeout=remaining).spawn(
@@ -210,3 +240,8 @@ def main(run_id: str, config: str = "configs/moondream2.json"):
 @app.local_entrypoint()
 def decoders(run_id: str, config: str = "configs/decoders.json"):
     launch(compare_decoders, run_id, config, "comparison.json")
+
+
+@app.local_entrypoint()
+def photon(run_id: str, config: str = "configs/moondream3.1-photon.json"):
+    launch(evaluate_photon, run_id, config, "summary.json", gpu="L40S")

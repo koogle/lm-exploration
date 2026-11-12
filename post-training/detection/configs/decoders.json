@@ -1,7 +1,13 @@
 {
   "seed": 20261112,
-  "decoders": ["eager", "loop", "kernel", "compiled"],
+  "decoders": [
+    "eager",
+    "loop",
+    "kernel",
+    "compiled"
+  ],
   "model": {
+    "adapter": "transformers",
     "repo": "vikhyatk/moondream2",
     "revision": "2025-06-21",
     "max_objects": 150

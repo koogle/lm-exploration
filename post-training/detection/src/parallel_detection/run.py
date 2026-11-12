@@ -129,15 +129,36 @@ def predict(detector, samples, image_folder, warmup=2):
 
 
 def environment(device):
-    import torch
-    import transformers
+    from importlib import metadata
 
+    import torch
+
+    versions = {}
+    for package in ("torch", "transformers", "moondream", "kestrel", "kestrel-kernels"):
+        try:
+            versions[package] = metadata.version(package)
+        except metadata.PackageNotFoundError:
+            continue
     return {
         "device": torch.cuda.get_device_name(0) if device == "cuda" else platform.processor(),
-        "torch": torch.__version__,
-        "transformers": transformers.__version__,
         "python": platform.python_version(),
+        "packages": versions,
     }
+
+
+def make_detector(model, device, **extra):
+    """Build the detector a config's "model" names; its "adapter" picks the runtime."""
+    model = dict(model)
+    adapter = model.pop("adapter")
+    if adapter == "transformers":
+        from parallel_detection.moondream import MoondreamDetector
+
+        return MoondreamDetector(**model, device=device, **extra)
+    if adapter == "photon":
+        from parallel_detection.photon import PhotonDetector
+
+        return PhotonDetector(**model, device=device)
+    raise ValueError(f"Unknown adapter {adapter!r}")
 
 
 def read_records(path):
@@ -149,10 +170,8 @@ def evaluate(config, out, device, provenance=None, saved=lambda images: None, **
 
     Predictions are appended image by image and `saved(images)` is called after each.
     A run interrupted before its summary continues from the images already recorded.
-    `detector` holds extra `MoondreamDetector` arguments.
+    `detector` holds extra arguments for the Transformers adapter.
     """
-    from parallel_detection.moondream import MoondreamDetector
-
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     predictions = out / "predictions.jsonl"
@@ -160,7 +179,7 @@ def evaluate(config, out, device, provenance=None, saved=lambda images: None, **
     finished = {(r["dataset"], r["image_id"]) for r in records}
     samples = build_samples(config, out.parent / "images")
     remaining = [s for s in samples if (s["dataset"], s["image_id"]) not in finished]
-    detector = MoondreamDetector(**config["model"], device=device, **detector)
+    detector = make_detector(config["model"], device, **detector)
     with predictions.open("a") as handle:
         for done, batch in enumerate(predict(detector, remaining, out.parent / "images"), 1):
             records += batch

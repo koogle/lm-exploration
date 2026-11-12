@@ -1,6 +1,7 @@
 {
   "seed": 20261112,
   "model": {
+    "adapter": "transformers",
     "repo": "vikhyatk/moondream2",
     "revision": "2025-06-21",
     "max_objects": 150
@@ -36,7 +37,9 @@
       "repo": "GLIPModel/GLIP",
       "repo_type": "model",
       "revision": "66ee3ae9a3b8cee0cf78f10ef5fc9a3725db02a1",
-      "files": ["lvis_v1_minival_inserted_image_name.json"],
+      "files": [
+        "lvis_v1_minival_inserted_image_name.json"
+      ],
       "images": 300,
       "max_absent": 0
     }
