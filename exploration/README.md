@@ -28,3 +28,8 @@ Implementation lives here alongside the reports: [model and decoding code](laten
 Modal generation benchmark for future distillation. It includes a continuous-batching harness
 and an experimental 9B CUDA megakernel with a passing H100 correctness smoke test.
 It does not launch student training.
+
+[Parallel detection](parallel-detection/) post-trains a small vision-language model
+for one-pass object detection. It holds the evaluation harness and the Moondream 2
+baseline run; the detection head is planned. Run its commands from
+`exploration/parallel-detection/`.

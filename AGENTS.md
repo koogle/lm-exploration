@@ -12,6 +12,8 @@ relevant folder's README and instructions before making changes.
 - `exploration/latent-workspace/`: existing frozen-Qwen and speculative-decoding
   research. Its AGENTS.md, uv environment, results and Modal resources are scoped
   to that folder, not the entire repository.
+- `exploration/parallel-detection/`: post-training a small vision-language model for
+  one-pass object detection, with its own uv environment and Modal app.
 
 Keep the root README short. Put plans and run instructions in their owning folder.
 Distinguish mockups, implemented behavior and measured results. Describe what code,
