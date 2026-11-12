@@ -42,6 +42,8 @@ from parallel_detection.slots import (
 from parallel_detection.tasks import COCO_NAMES
 
 IMAGE_TOKENS = PREFIX - 1
+# Objects covering less than this share of the image are reported as small.
+SMALL_AREA = 0.01
 
 
 def load_backbone(repo, revision, device):
@@ -164,7 +166,9 @@ def decode_names(tokens, vocabulary):
 
 
 @torch.no_grad()
-def heldout_scores(head, inner, functions, data, indices, batch_size, device, thresholds):
+def heldout_scores(
+    head, inner, functions, data, indices, batch_size, device, thresholds, size_groups=None
+):
     """Loss terms, box and label quality by sampler passes, and one-pass F1 at IoU 0.5 per
     objectness threshold.
 
@@ -176,6 +180,7 @@ def heldout_scores(head, inner, functions, data, indices, batch_size, device, th
     head.eval()
     sums, counts = {}, 0
     tallies = {t: [0, 0, 0] for t in thresholds}  # tp, fp, fn
+    by_size = {t: {"small": [0, 0], "large": [0, 0]} for t in thresholds}  # found, total
     undecodable = decoded = 0
     for start in range(0, len(indices), batch_size):
         chunk = indices[start : start + batch_size]
@@ -184,7 +189,7 @@ def heldout_scores(head, inner, functions, data, indices, batch_size, device, th
         rotate = functions.apply_rotary_emb
         objectness, box_logits, logits = head(inner.text, inner.region, cache, rotate)
         terms, (b_index, s_index, truth_tokens, truth_bins), stats = set_loss(
-            objectness, box_logits, logits, targets
+            objectness, box_logits, logits, targets, size_groups
         )
         values = {k: v.item() for k, v in terms.items()} | stats
         truth = to_corners(boxes_of(truth_bins))
@@ -211,18 +216,33 @@ def heldout_scores(head, inner, functions, data, indices, batch_size, device, th
                 )
                 for name in {n for n, _ in truth} | {names[b * head.slots + k] for k in keep}:
                     predicted = [corners[b][k] for k in keep if names[b * head.slots + k] == name]
-                    wanted = [
-                        to_corners(torch.tensor(box)).numpy() for n, box in truth if n == name
-                    ]
-                    found = len(match_boxes(predicted, wanted, 0.5)) if predicted and wanted else 0
-                    tallies[threshold][0] += found
-                    tallies[threshold][1] += len(predicted) - found
-                    tallies[threshold][2] += len(wanted) - found
+                    wanted = [box for n, box in truth if n == name]
+                    pairs = (
+                        match_boxes(
+                            predicted,
+                            [to_corners(torch.tensor(box)).numpy() for box in wanted],
+                            0.5,
+                        )
+                        if predicted and wanted
+                        else []
+                    )
+                    tallies[threshold][0] += len(pairs)
+                    tallies[threshold][1] += len(predicted) - len(pairs)
+                    tallies[threshold][2] += len(wanted) - len(pairs)
+                    found = {t for _, t in pairs}
+                    for index, box in enumerate(wanted):
+                        size = "small" if box[2] * box[3] < SMALL_AREA else "large"
+                        by_size[threshold][size][0] += index in found
+                        by_size[threshold][size][1] += 1
     head.train()
     out = {key: value / counts for key, value in sums.items()}
     out["undecodable_label_rate"] = undecodable / max(decoded, 1)
     out["f1_iou_0.5"] = {
         str(t): 2 * tp / max(2 * tp + fp + fn, 1) for t, (tp, fp, fn) in tallies.items()
+    }
+    out["recall_by_size_iou_0.5"] = {
+        str(t): {size: found / max(count, 1) for size, (found, count) in sizes.items()}
+        for t, sizes in by_size.items()
     }
     return out
 
@@ -256,14 +276,49 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
             return (step + 1) / warmup
         return 0.5 * (1 + math.cos(math.pi * (step - warmup) / max(steps - warmup, 1)))
 
+    groups_setting = config.get("size_groups")
+    size_groups = groups_setting and (groups_setting["boundary"], groups_setting["small_slots"])
     thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
-    started = time.time()
+    first_step, elapsed = 0, 0.0
+    state_path = out / "state.pt"
+    if state_path.exists():
+        # A preempted run continues from its last evaluation boundary.
+        state = torch.load(state_path, map_location=device, weights_only=False)
+        head.load_state_dict(state["head"])
+        optimizer.load_state_dict(state["optimizer"])
+        sampler.setstate(state["sampler"])
+        generator.set_state(state["generator"])
+        first_step, elapsed = state["step"], state["seconds"]
+        for name in ("metrics.jsonl", "heldout.jsonl"):
+            kept = [r for r in map(json.loads, (out / name).read_text().splitlines())]
+            kept = [r for r in kept if r["step"] < first_step]
+            (out / name).write_text("".join(json.dumps(r) + "\n" for r in kept))
+    started = time.time() - elapsed
     stop_reason = "completed"
-    with (out / "metrics.jsonl").open("w") as metrics, (out / "heldout.jsonl").open("w") as scores:
-        for step in range(steps + 1):
+    with (out / "metrics.jsonl").open("a") as metrics, (out / "heldout.jsonl").open("a") as scores:
+        for step in range(first_step, steps + 1):
             if step % config["evaluate_every"] == 0 or step == steps:
+                torch.save(
+                    {
+                        "head": head.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "sampler": sampler.getstate(),
+                        "generator": generator.get_state(),
+                        "step": step,
+                        "seconds": time.time() - started,
+                    },
+                    state_path,
+                )
                 row = heldout_scores(
-                    head, inner, functions, data, heldout, config["batch_size"], device, thresholds
+                    head,
+                    inner,
+                    functions,
+                    data,
+                    heldout,
+                    config["batch_size"],
+                    device,
+                    thresholds,
+                    size_groups,
                 )
                 scores.write(
                     json.dumps({"step": step, "seconds": time.time() - started} | row) + "\n"
@@ -282,7 +337,7 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
             cache = image_cache(inner, functions, embeddings)
             rotate = functions.apply_rotary_emb
             objectness, box_logits, logits = head(inner.text, inner.region, cache, rotate)
-            terms, matching, stats = set_loss(objectness, box_logits, logits, targets)
+            terms, matching, stats = set_loss(objectness, box_logits, logits, targets, size_groups)
             denoise = diffusion_loss(
                 head, inner.text, inner.region, cache, rotate, matching, generator
             )
@@ -319,6 +374,7 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
         "final_heldout": final,
     }
     (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    state_path.unlink()
     saved()
     return report
 

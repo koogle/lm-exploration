@@ -39,5 +39,6 @@
   "head_learning_rate": 0.001,
   "heldout_images": 300,
   "evaluate_every": 1000,
-  "log_every": 20
+  "log_every": 20,
+  "size_groups": null
 }

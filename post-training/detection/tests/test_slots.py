@@ -7,6 +7,7 @@ from parallel_detection.slots import (
     bins_of,
     boxes_of,
     diffusion_loss,
+    match,
     prefix_cache,
     sample,
     set_loss,
@@ -123,3 +124,14 @@ def test_label_filter_and_decoding():
     vocabulary = {"person": [5, 0, 0], "fire hydrant": [6, 7, 8]}
     tokens = torch.tensor([[[5, 0, 0], [6, 7, 0], [6, 7, 8]]])
     assert decode_names(tokens, vocabulary) == ["person", None, "fire hydrant"]
+
+
+def test_size_groups_send_small_objects_to_the_small_slots():
+    torch.manual_seed(0)
+    boxes = torch.rand(6, 4)
+    truth = torch.tensor([[0.5, 0.5, 0.05, 0.05], [0.5, 0.5, 0.6, 0.6], [0.2, 0.2, 0.02, 0.1]])
+    tokens = torch.zeros(3, 2, dtype=torch.long)
+    log_probs = torch.zeros(6, 2, 4).log_softmax(-1)
+    slots, objects = match(torch.zeros(6), boxes, log_probs, truth, tokens, size_groups=(0.01, 2))
+    assignment = dict(zip(objects.tolist(), slots.tolist(), strict=True))
+    assert {assignment[0], assignment[2]} == {0, 1} and assignment[1] >= 2

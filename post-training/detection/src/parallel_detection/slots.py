@@ -200,11 +200,14 @@ def generalized_iou(a, b):
 WEIGHTS = {"l1": 5.0, "giou": 2.0, "bins": 1.0, "objectness": 1.0, "label": 1.0, "empty": 0.1}
 
 
-def match(objectness, boxes, log_probs, truth_boxes, truth_tokens):
+def match(objectness, boxes, log_probs, truth_boxes, truth_tokens, size_groups=None):
     """Hungarian matching of one image's slots to its truth objects.
 
     Returns slot indices and truth indices. The cost combines box distance, overlap,
-    objectness and the label's negative log-likelihood.
+    objectness and the label's negative log-likelihood. `size_groups` is (area boundary,
+    small slots): the first `small slots` slots take objects covering less than the
+    boundary share of the image and the other slots take the rest, unless a group has
+    more objects than slots.
     """
     giou, _ = generalized_iou(to_corners(boxes), to_corners(truth_boxes))
     label = -log_probs[:, None, :, :].expand(-1, truth_tokens.size(0), -1, -1)
@@ -215,11 +218,16 @@ def match(objectness, boxes, log_probs, truth_boxes, truth_tokens):
         - WEIGHTS["objectness"] * objectness.sigmoid()[:, None]
         + WEIGHTS["label"] * label.squeeze(-1).mean(-1)
     )
+    if size_groups is not None:
+        boundary, small_slots = size_groups
+        small_truth = truth_boxes[:, 2] * truth_boxes[:, 3] < boundary
+        small_slot = torch.arange(boxes.size(0), device=boxes.device) < small_slots
+        cost = cost + 1e6 * (small_slot[:, None] != small_truth[None, :])
     rows, cols = linear_sum_assignment(cost.detach().float().cpu().numpy())
     return torch.as_tensor(rows, device=boxes.device), torch.as_tensor(cols, device=boxes.device)
 
 
-def set_loss(objectness, box_logits, logits, targets):
+def set_loss(objectness, box_logits, logits, targets, size_groups=None):
     """Losses for a batch; `targets` is a list of (boxes [n, 4] cxcywh, tokens [n, T]).
 
     Boxes are matched and regressed through their expected bins, and each bin
@@ -232,7 +240,7 @@ def set_loss(objectness, box_logits, logits, targets):
     log_probs = logits.log_softmax(-1)
     batch_index, slot_index, truth_boxes, truth_tokens = [], [], [], []
     for b, (t_boxes, t_tokens) in enumerate(targets):
-        rows, cols = match(objectness[b], boxes[b], log_probs[b], t_boxes, t_tokens)
+        rows, cols = match(objectness[b], boxes[b], log_probs[b], t_boxes, t_tokens, size_groups)
         batch_index.append(torch.full_like(rows, b))
         slot_index.append(rows)
         truth_boxes.append(t_boxes[cols])
