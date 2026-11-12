@@ -138,20 +138,31 @@ def label(config, out, budget_usd, workers=8):
         image_bytes = source.read_bytes() if source.exists() else _jpeg(image)
         started = time.time()
         record = {"model": model, "image_id": sample["image_id"], "width": width, "height": height}
-        try:
-            reply = request(model, image_bytes, settings, key)
-            message = reply["choices"][0]["message"]
-            usage = reply.get("usage", {})
-            record |= {
-                "text": message.get("content"),
-                "objects": parse(message.get("content"), width, height),
-                "usage": usage,
-                "cost": float(usage.get("cost") or 0.0),
-                "provider": reply.get("provider"),
-            }
-        except (urllib.error.URLError, KeyError, IndexError, TimeoutError, ValueError) as error:
-            detail = error.read().decode()[:500] if hasattr(error, "read") else ""
-            record |= {"error": f"{type(error).__name__}: {error} {detail}".strip(), "cost": 0.0}
+        for attempt in range(3):
+            try:
+                reply = request(model, image_bytes, settings, key)
+                message = reply["choices"][0]["message"]
+                usage = reply.get("usage", {})
+                record |= {
+                    "text": message.get("content"),
+                    "objects": parse(message.get("content"), width, height),
+                    "usage": usage,
+                    "cost": float(usage.get("cost") or 0.0),
+                    "provider": reply.get("provider"),
+                }
+                record.pop("error", None)
+                break
+            except Exception as error:  # noqa: BLE001 - every failure is recorded, not raised
+                detail = error.read().decode()[:500] if hasattr(error, "read") else ""
+                record |= {
+                    "error": f"{type(error).__name__}: {error} {detail}".strip(),
+                    "cost": 0.0,
+                }
+                # Retry server errors, rate limits and dropped connections; not bad requests.
+                code = getattr(error, "code", None)
+                if code is not None and code < 500 and code != 429:
+                    break
+                time.sleep(5 * (attempt + 1))
         record["seconds"] = time.time() - started
         with lock:
             state["spent"] += record["cost"]
