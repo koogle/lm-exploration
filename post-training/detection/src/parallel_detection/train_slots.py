@@ -447,6 +447,7 @@ class SlotDetector:
         return {
             "boxes": found,
             "scores": kept,
+            "shared_seconds": shared,
             "phrase_seconds": [0.0] * len(phrases),
             "components": {
                 "vision_encoder": encoded - start,
