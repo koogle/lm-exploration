@@ -1,3 +1,5 @@
+import json
+
 import torch
 from torch import nn
 
@@ -14,7 +16,7 @@ from parallel_detection.slots import (
     set_loss,
     total,
 )
-from parallel_detection.train_slots import decode_names, kept_objects
+from parallel_detection.train_slots import decode_names, kept_objects, teacher_items
 
 DIM, VOCABULARY = 64, 50
 
@@ -154,3 +156,27 @@ def test_near_label_negatives_and_iou_targets():
     # With IoU targets the matched slot is pushed toward its box quality, not to 1.
     assert torch.isfinite(terms["objectness"])
     assert loss_options({})["negatives"] == "all"
+
+
+def test_teacher_items_filter_and_convert_labels(tmp_path):
+    (tmp_path / "openimages").mkdir()
+    (tmp_path / "openimages" / "1-2.jpg").write_bytes(b"jpeg")
+    replies = [
+        {
+            "image_id": "openimages/1-2",
+            "width": 200,
+            "height": 100,
+            "objects": [
+                {"label": "dog", "box": [0, 0, 100, 50]},
+                {"label": "cup", "box": [0, 0, 1, 1]},  # below the area floor
+            ],
+        },
+        {"image_id": "openimages/3-4", "error": "HTTPError"},
+        {"image_id": "openimages/5-6", "width": 10, "height": 10, "objects": []},
+    ]
+    labels = tmp_path / "labels.jsonl"
+    labels.write_text("".join(json.dumps(r) + "\n" for r in replies))
+    config = {"min_area": 0.001, "max_objects": 30}
+    ((read, record),) = list(teacher_items(labels, tmp_path, config))
+    assert read() == b"jpeg"
+    assert record == {"image_id": "openimages/1-2", "objects": [("dog", [0.25, 0.25, 0.5, 0.5])]}

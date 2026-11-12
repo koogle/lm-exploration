@@ -207,28 +207,54 @@ def compare_decoders(run_id, config, provenance, deadline):
     volumes={"/runs": volume},
 )
 def train_slots(run_id, config, provenance, deadline):
-    """Encode the configured COCO shards once, then train the slot head on them."""
+    """Encode the configured data sources once, then train the slot head on them.
+
+    `config["data"]` lists sources: {"kind": "coco", Hub repo, revision and Parquet
+    files} or {"kind": "teacher", "name", "labels", "images", "shard_size"} with paths on
+    the runs volume. Encoded shards are cached by source and label filter.
+    """
+    from itertools import islice
+
     from huggingface_hub import hf_hub_download
 
-    from parallel_detection.train_slots import encode_shard, train
+    from parallel_detection.train_slots import coco_items, encode, teacher_items, train
 
     if time.time() >= deadline:
         raise RuntimeError("Launch deadline reached; refusing new work")
     out = Path("/runs/slots") / run_id
     if (out / "report.json").exists():
         raise ValueError(f"Run {run_id} already has results")
-    data = config["data"]
-    folder = Path("/runs/slots") / f"features-{config['min_area']}-{config['max_objects']}"
     stems = []
-    for name in data["files"]:
-        stem = folder / Path(name).stem
-        if not stem.with_suffix(".json").exists():
-            parquet = hf_hub_download(
-                data["repo"], name, repo_type=data["repo_type"], revision=data["revision"]
-            )
-            encode_shard(parquet, stem, config)
-            volume.commit()
-        stems.append(stem)
+    for source in config["data"]:
+        folder = Path("/runs/slots") / f"features-{config['min_area']}-{config['max_objects']}"
+        if source["kind"] == "coco":
+            for name in source["files"]:
+                stem = folder / Path(name).stem
+                if not stem.with_suffix(".json").exists():
+                    parquet = hf_hub_download(
+                        source["repo"],
+                        name,
+                        repo_type=source["repo_type"],
+                        revision=source["revision"],
+                    )
+                    encode(coco_items(parquet, config), stem, config)
+                    volume.commit()
+                stems.append(stem)
+        elif source["kind"] == "teacher":
+            items = teacher_items(source["labels"], source["images"], config)
+            index = 0
+            while True:
+                stem = folder / f"{source['name']}-{index:03d}"
+                chunk = list(islice(items, source["shard_size"]))
+                if not chunk:
+                    break
+                if not stem.with_suffix(".json").exists():
+                    encode(chunk, stem, config)
+                    volume.commit()
+                stems.append(stem)
+                index += 1
+        else:
+            raise ValueError(f"Unknown data source {source['kind']!r}")
     # Training reads random images, so the shards are memory-mapped from local disk.
     local = Path("/tmp/features")
     local.mkdir(parents=True, exist_ok=True)

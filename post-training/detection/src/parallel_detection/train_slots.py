@@ -2,8 +2,10 @@
 
 Two stages, both writing under one run folder:
 
-- `encode_shard` runs the frozen vision encoder over one COCO Parquet shard and saves
-  the 729 image embeddings per image (raw BF16 bits) with the image's kept objects.
+- `encode` runs the frozen vision encoder over one shard of images, from a COCO Parquet
+  shard (`coco_items`) or from images labelled by `parallel_detection.teacher`
+  (`teacher_items`), and saves the 729 image embeddings per image (raw BF16 bits) with the
+  image's kept objects.
 - `train` loads those shards, trains the slot head and writes `metrics.jsonl`,
   `heldout.jsonl`, `head.pt` and `report.json`.
 
@@ -79,45 +81,74 @@ def kept_objects(objects, width, height, min_area, names=COCO_NAMES):
     return kept
 
 
-def encode_shard(parquet, out, config, device="cuda"):
-    """Write `<out>.npy` ([N, 729, D] BF16 bits as int16) and `<out>.json` (objects)."""
+def encode(items, out, config, device="cuda"):
+    """Write `<out>.npy` ([N, 729, D] BF16 bits as int16) and `<out>.json` (objects).
+
+    `items` yields (image bytes, record) with records already filtered to usable images.
+    """
     import io
 
-    import pyarrow.parquet as pq
     from PIL import Image
 
+    items = list(items)
     _, inner, _ = load_backbone(**config["model"], device=device)
-    table = pq.ParquetFile(parquet)
-    columns = ["image_id", "width", "height", "objects"]
-    rows = [
-        r
-        for g in range(table.metadata.num_row_groups)
-        for r in table.read_row_group(g, columns=columns).to_pylist()
-    ]
-    records = {}
-    for row in rows:
-        objects = kept_objects(row["objects"], row["width"], row["height"], config["min_area"])
-        if 1 <= len(objects) <= config["max_objects"]:
-            records[row["image_id"]] = {"image_id": row["image_id"], "objects": objects}
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     features = np.lib.format.open_memmap(
-        out.with_suffix(".npy"), mode="w+", dtype=np.int16, shape=(len(records), IMAGE_TOKENS, 2048)
+        out.with_suffix(".npy"), mode="w+", dtype=np.int16, shape=(len(items), IMAGE_TOKENS, 2048)
     )
     order = []
-    for group in range(table.metadata.num_row_groups):
-        batch = table.read_row_group(group, columns=["image_id", "image"]).to_pylist()
-        for row in batch:
-            if row["image_id"] not in records:
-                continue
-            image = Image.open(io.BytesIO(row["image"]["bytes"])).convert("RGB")
-            with torch.inference_mode():
-                embedding = inner._run_vision_encoder(image)
-            features[len(order)] = embedding.to(torch.bfloat16).view(torch.int16).cpu().numpy()
-            order.append(records[row["image_id"]])
+    for index, (data, record) in enumerate(items):
+        image = Image.open(io.BytesIO(data() if callable(data) else data)).convert("RGB")
+        with torch.inference_mode():
+            embedding = inner._run_vision_encoder(image)
+        features[index] = embedding.to(torch.bfloat16).view(torch.int16).cpu().numpy()
+        order.append(record)
     features.flush()
     out.with_suffix(".json").write_text(json.dumps(order))
     return len(order)
+
+
+def usable(objects, config):
+    return 1 <= len(objects) <= config["max_objects"]
+
+
+def coco_items(parquet, config):
+    """(image bytes, record) for the usable images of a detection-datasets/coco shard."""
+    import pyarrow.parquet as pq
+
+    table = pq.ParquetFile(parquet)
+    records = {}
+    for group in range(table.metadata.num_row_groups):
+        columns = ["image_id", "width", "height", "objects"]
+        for row in table.read_row_group(group, columns=columns).to_pylist():
+            objects = kept_objects(row["objects"], row["width"], row["height"], config["min_area"])
+            if usable(objects, config):
+                records[row["image_id"]] = {"image_id": row["image_id"], "objects": objects}
+    for group in range(table.metadata.num_row_groups):
+        for row in table.read_row_group(group, columns=["image_id", "image"]).to_pylist():
+            if row["image_id"] in records:
+                yield row["image"]["bytes"], records[row["image_id"]]
+
+
+def teacher_items(labels, images, config):
+    """(image reader, record) for usable images labelled by `parallel_detection.teacher`.
+
+    `labels` is the teacher's JSONL file and `images` the folder its manifest paths are
+    relative to. Boxes are in pixels of the stored image.
+    """
+    for line in Path(labels).read_text().splitlines():
+        reply = json.loads(line)
+        if "error" in reply:
+            continue
+        objects = {
+            "category": [COCO_NAMES.index(o["label"]) for o in reply["objects"]],
+            "bbox": [o["box"] for o in reply["objects"]],
+        }
+        kept = kept_objects(objects, reply["width"], reply["height"], config["min_area"])
+        if usable(kept, config):
+            path = Path(images) / f"{reply['image_id']}.jpg"
+            yield path.read_bytes, {"image_id": reply["image_id"], "objects": kept}
 
 
 class Features:

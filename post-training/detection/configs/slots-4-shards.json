@@ -4,17 +4,20 @@
     "repo": "vikhyatk/moondream2",
     "revision": "2025-06-21"
   },
-  "data": {
-    "repo": "detection-datasets/coco",
-    "repo_type": "dataset",
-    "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
-    "files": [
-      "data/train-00000-of-00040-67e35002d152155c.parquet",
-      "data/train-00001-of-00040-2c2b33b9504aa843.parquet",
-      "data/train-00002-of-00040-58e30306870b1de7.parquet",
-      "data/train-00003-of-00040-a77e00648e423963.parquet"
-    ]
-  },
+  "data": [
+    {
+      "kind": "coco",
+      "repo": "detection-datasets/coco",
+      "repo_type": "dataset",
+      "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+      "files": [
+        "data/train-00000-of-00040-67e35002d152155c.parquet",
+        "data/train-00001-of-00040-2c2b33b9504aa843.parquet",
+        "data/train-00002-of-00040-58e30306870b1de7.parquet",
+        "data/train-00003-of-00040-a77e00648e423963.parquet"
+      ]
+    }
+  ],
   "min_area": 0.002,
   "max_objects": 20,
   "slots": 32,
