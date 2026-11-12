@@ -184,3 +184,24 @@ def summarize(records):
         if any(r["kind"] == "referring" for r in group):
             out[name]["referring"] = referring_summary(group)
     return out
+
+
+def agreement(reference, records):
+    """How closely two runs over the same queries agree, box by box in emitted order."""
+    same_count = identical = 0
+    overlaps = []
+    for a, b in zip(reference, records, strict=True):
+        if (a["dataset"], a["image_id"], a["phrase"]) != (b["dataset"], b["image_id"], b["phrase"]):
+            raise ValueError("Runs cover different queries")
+        if len(a["predicted"]) != len(b["predicted"]):
+            continue
+        same_count += 1
+        paired = iou_matrix(a["predicted"], b["predicted"]).diagonal()
+        overlaps += paired.tolist()
+        identical += a["predicted"] == b["predicted"]
+    return {
+        "queries": len(reference),
+        "same_box_count_rate": ratio(same_count, len(reference)),
+        "identical_boxes_rate": ratio(identical, len(reference)),
+        "paired_iou": spread(overlaps),
+    }

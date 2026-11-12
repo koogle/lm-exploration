@@ -144,11 +144,12 @@ def read_records(path):
     return [json.loads(line) for line in Path(path).read_text().splitlines()]
 
 
-def evaluate(config, out, device, provenance=None, saved=lambda images: None):
+def evaluate(config, out, device, provenance=None, saved=lambda images: None, **detector):
     """Write `predictions.jsonl` and `summary.json` under `out`; return the summary.
 
     Predictions are appended image by image and `saved(images)` is called after each.
     A run interrupted before its summary continues from the images already recorded.
+    `detector` holds extra `MoondreamDetector` arguments.
     """
     from parallel_detection.moondream import MoondreamDetector
 
@@ -159,7 +160,7 @@ def evaluate(config, out, device, provenance=None, saved=lambda images: None):
     finished = {(r["dataset"], r["image_id"]) for r in records}
     samples = build_samples(config, out.parent / "images")
     remaining = [s for s in samples if (s["dataset"], s["image_id"]) not in finished]
-    detector = MoondreamDetector(**config["model"], device=device)
+    detector = MoondreamDetector(**config["model"], device=device, **detector)
     with predictions.open("a") as handle:
         for done, batch in enumerate(predict(detector, remaining, out.parent / "images"), 1):
             records += batch

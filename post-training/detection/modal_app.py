@@ -1,15 +1,20 @@
-"""Detection baseline on one Modal GPU, stopped within an hour of launch.
+"""Detection runs on one Modal GPU, each stopped within an hour of launch.
 
 Run from post-training/detection/:
 
-    modal run --detach modal_app.py --run-id moondream2-001
+    modal run --detach modal_app.py::main --run-id moondream2-001
+    modal run --detach modal_app.py::decoders --run-id decoders-001
 
-One L4 call with `retries=0` evaluates `configs/moondream2.json`, writing predictions
-image by image and the summary to the `lm-exploration-parallel-detection` volume under
+`main` evaluates `configs/moondream2.json`. `decoders` runs `configs/decoders.json`
+once per decoder (PyTorch eager, this folder's loop, the custom CUDA kernels,
+torch.compile) on the same images and reports how each agrees with eager.
+
+Each launch is one L4 call with `retries=0`, writing predictions image by image and
+summaries to the `lm-exploration-parallel-detection` volume under
 `evaluations/<run id>/`. If Modal preempts the container, the rescheduled call
 continues from the recorded images inside the same deadline. An independent CPU
 supervisor cancels the call if it is still queued or running at the launch deadline.
-The local command waits for the summary and saves it under `artifacts/<run id>/`.
+The local command waits for the result and saves it under `artifacts/<run id>/`.
 """
 
 import json
@@ -36,25 +41,47 @@ volume = modal.Volume.from_name("lm-exploration-parallel-detection", create_if_m
 control_image = modal.Image.debian_slim(python_version="3.12").add_local_file(
     DEADLINE, "/root/workflows/deadline.py"
 )
-image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .pip_install(
-        "torch==2.6.0",
-        "transformers==4.52.4",
-        "accelerate==1.7.0",
-        "einops==0.8.1",
-        "pyvips-binary==8.16.0",
-        "pyvips==2.2.3",
-        "numpy==2.2.6",
-        "scipy==1.15.3",
-        "pillow==11.2.1",
-        "pyarrow==20.0.0",
-        "huggingface-hub==0.32.4",
-    )
-    .env({"HF_HOME": "/runs/hf-cache"})
-    .add_local_file(DEADLINE, "/root/workflows/deadline.py")
-    .add_local_dir(PACKAGE, "/root/parallel_detection")
+PACKAGES = (
+    "torch==2.6.0",
+    "transformers==4.52.4",
+    "accelerate==1.7.0",
+    "einops==0.8.1",
+    "pyvips-binary==8.16.0",
+    "pyvips==2.2.3",
+    "numpy==2.2.6",
+    "scipy==1.15.3",
+    "pillow==11.2.1",
+    "pyarrow==20.0.0",
+    "huggingface-hub==0.32.4",
 )
+# The CUDA development image exploration/teacher-rollouts builds its kernels with.
+CUDA_IMAGE = "nvidia/cuda@sha256:6617a625f4090c76c545a0e7d63f2e441718ef9af7f4efe7dd1242a29e289fd7"
+
+
+def with_source(base):
+    return (
+        base.pip_install(*PACKAGES)
+        .env({"HF_HOME": "/runs/hf-cache"})
+        .add_local_file(DEADLINE, "/root/workflows/deadline.py")
+        .add_local_dir(PACKAGE, "/root/parallel_detection")
+    )
+
+
+image = with_source(modal.Image.debian_slim(python_version="3.12"))
+kernel_image = with_source(modal.Image.from_registry(CUDA_IMAGE, add_python="3.12"))
+
+
+def start(run_id, deadline):
+    """Refuse late work and return the run folder and the per-image volume commit."""
+    if time.time() >= deadline:
+        raise RuntimeError("Launch deadline reached; refusing new work")
+    out = Path("/runs/evaluations") / run_id
+
+    def saved(images):
+        if images % COMMIT_EVERY_IMAGES == 0:
+            volume.commit()
+
+    return out, saved
 
 
 @app.function(
@@ -68,18 +95,68 @@ image = (
 def evaluate(run_id, config, provenance, deadline):
     from parallel_detection.run import evaluate as run
 
-    if time.time() >= deadline:
-        raise RuntimeError("Launch deadline reached; refusing new work")
-    out = Path("/runs/evaluations") / run_id
+    out, saved = start(run_id, deadline)
     if (out / "summary.json").exists():
         raise ValueError(f"Run {run_id} already has results")
-
-    def saved(images):
-        if images % COMMIT_EVERY_IMAGES == 0:
-            volume.commit()
-
     try:
         return run(config, out, "cuda", provenance, saved)
+    finally:
+        volume.commit()
+
+
+@app.function(
+    image=kernel_image,
+    gpu="L4",
+    timeout=LAUNCH_LIMIT_SECONDS,
+    retries=0,
+    max_containers=1,
+    volumes={"/runs": volume},
+)
+def compare_decoders(run_id, config, provenance, deadline):
+    """Evaluate the same tasks with each decoder; a decoder that fails records its error."""
+    import gc
+    import traceback
+
+    import torch
+
+    from parallel_detection.metrics import agreement
+    from parallel_detection.run import evaluate as run
+    from parallel_detection.run import read_records
+
+    out, saved = start(run_id, deadline)
+    if (out / "comparison.json").exists():
+        raise ValueError(f"Run {run_id} already has results")
+    comparison = {"provenance": provenance, "decoders": {}}
+    try:
+        for decoder in config["decoders"]:
+            folder = out / decoder
+            try:
+                if (folder / "summary.json").exists():
+                    summary = json.loads((folder / "summary.json").read_text())
+                else:
+                    summary = run(
+                        config,
+                        folder,
+                        "cuda",
+                        provenance,
+                        saved,
+                        decoder=decoder,
+                        kernel_library="/tmp/decode_step.so",
+                    )
+                reference = read_records(out / config["decoders"][0] / "predictions.jsonl")
+                comparison["decoders"][decoder] = {
+                    "datasets": summary["datasets"],
+                    "environment": summary["environment"],
+                    "agreement_with_first": agreement(
+                        reference, read_records(folder / "predictions.jsonl")
+                    ),
+                }
+            except Exception:  # noqa: BLE001 - the failure is the recorded result
+                comparison["decoders"][decoder] = {"error": traceback.format_exc()[-4000:]}
+            gc.collect()
+            torch.cuda.empty_cache()
+        (out / "comparison.json").write_text(json.dumps(comparison, indent=2) + "\n")
+        return comparison
     finally:
         volume.commit()
 
@@ -97,8 +174,7 @@ def enforce_deadline(call_ids, deadline):
     return {"stage": "completed"} if cancelled is None else {"cancelled": cancelled}
 
 
-@app.local_entrypoint()
-def main(run_id: str, config: str = "configs/moondream2.json"):
+def launch(function, run_id, config, result_name):
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     git = ["git", "-C", str(HERE)]
     provenance = {
@@ -108,20 +184,29 @@ def main(run_id: str, config: str = "configs/moondream2.json"):
         "gpu": "L4",
     }
     remaining = int(deadline - time.time())
-    call = evaluate.with_options(timeout=remaining).spawn(
+    call = function.with_options(timeout=remaining).spawn(
         run_id, json.loads(Path(config).read_text()), provenance, deadline
     )
     supervisor = enforce_deadline.spawn([call.object_id], deadline)
     out = HERE / "artifacts" / run_id
     out.mkdir(parents=True, exist_ok=True)
-    launch = {
+    record = {
         "call": call.object_id,
         "supervisor": supervisor.object_id,
         "deadline_unix": deadline,
         "results": f"lm-exploration-parallel-detection/evaluations/{run_id}/",
     }
-    (out / "launch.json").write_text(json.dumps(launch, indent=2) + "\n")
-    print(json.dumps(launch, indent=2))
-    summary = call.get(timeout=LAUNCH_LIMIT_SECONDS)
-    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    print(json.dumps(summary["datasets"], indent=2))
+    (out / "launch.json").write_text(json.dumps(record, indent=2) + "\n")
+    print(json.dumps(record, indent=2))
+    result = call.get(timeout=LAUNCH_LIMIT_SECONDS)
+    (out / result_name).write_text(json.dumps(result, indent=2) + "\n")
+
+
+@app.local_entrypoint()
+def main(run_id: str, config: str = "configs/moondream2.json"):
+    launch(evaluate, run_id, config, "summary.json")
+
+
+@app.local_entrypoint()
+def decoders(run_id: str, config: str = "configs/decoders.json"):
+    launch(compare_decoders, run_id, config, "comparison.json")

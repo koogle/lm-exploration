@@ -1,7 +1,7 @@
 import pytest
 
 from parallel_detection.boxes import iou_matrix, match
-from parallel_detection.metrics import summarize, unit_confidence_ap
+from parallel_detection.metrics import agreement, summarize, unit_confidence_ap
 
 
 def record(kind, truth, predicted, exhaustive=True, image_id=1, seconds=0.1):
@@ -88,3 +88,13 @@ def test_latency_counts_shared_work_once_per_image():
     assert latency["image_seconds"]["mean"] == pytest.approx((0.9 + 0.7) / 2)
     assert latency["phrase_seconds_linear_fit"]["seconds_per_box"] == pytest.approx(0.1)
     assert latency["phrase_seconds_by_boxes_emitted"]["0"]["n"] == 1
+
+
+def test_agreement_pairs_boxes_in_emitted_order():
+    box, shifted = [0, 0, 10, 10], [0, 0, 10, 5]
+    reference = [record("present", [box], [box]), record("present", [box], [box, box])]
+    other = [record("present", [box], [shifted]), record("present", [box], [box])]
+    result = agreement(reference, other)
+    assert result["same_box_count_rate"] == 0.5
+    assert result["identical_boxes_rate"] == 0.0
+    assert result["paired_iou"]["mean"] == pytest.approx(0.5)
