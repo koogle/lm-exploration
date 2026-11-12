@@ -260,6 +260,40 @@ costs 1.5 points of F1 with a head trained on full-crop features.
 recall by object size and side-by-side example images from downloaded run outputs; the rendered figures are in
 the archive under `figures/`.
 
+## Teacher labels from other models
+
+COCO's human labels miss objects, and a slot that finds an unlabelled one is trained as
+wrong. `src/parallel_detection/teacher.py` asks vision-language models on OpenRouter for
+every instance of the 80 COCO categories (Gemini-style `box_2d`, 0 to 1000), records each
+reply with its cost, stops at a dollar budget, and scores each model and multi-model
+consensus against COCO's labels with the evaluation harness.
+
+Candidates came from the independent
+[Roboflow object-detection leaderboard](https://playground.roboflow.com/evals/object-detection)
+(updated 2026-11-10), none of which had been measured on COCO with an exhaustive 80-class
+prompt. Pilot `teacher-pilot`: 200 of the same COCO val images as the baselines, low
+reasoning effort, $2.37 in total. Scores are on the 198 images every model answered,
+against COCO's labels, so a correct box on an unlabelled object counts as a false
+positive:
+
+| Labeller | Precision | Recall | F1, IoU 0.5 | F1, IoU 0.75 | Recall small / medium / large | Cost per image |
+|---|---|---|---|---|---|---|
+| `google/gemini-4-carbon` | 0.775 | 0.739 | 0.756 | 0.646 | 0.43 / 0.82 / 0.90 | $0.0051 |
+| `qwen/qwen3.8-max-0902`, read x-first | 0.680 | 0.589 | 0.631 | 0.504 | 0.24 / 0.67 / 0.78 | $0.0047 |
+| `openai/gpt-6.1-terra` | 0.519 | 0.388 | 0.444 | 0.298 | 0.18 / 0.40 / 0.53 | $0.0015 |
+| `google/gemini-3.8-flash` | 0.876 | 0.307 | 0.454 | 0.409 | 0.13 / 0.27 / 0.48 | $0.0002 |
+| `qwen/qwen3.8-flash` | 0.372 | 0.349 | 0.360 | 0.242 | 0.15 / 0.35 / 0.50 | $0.0005 |
+| Two of the first three agree | 0.803 | 0.628 | 0.705 | 0.600 | 0.27 / 0.71 / 0.82 | |
+| Any of the first three | 0.534 | 0.761 | 0.628 | 0.514 | 0.46 / 0.85 / 0.91 | |
+| Moondream 3.1, same images | 0.715 | 0.739 | 0.727 | | | |
+| Slot head `slots-small-16`, same images | 0.720 | 0.586 | 0.646 | | | |
+
+- Gemini 4 Carbon alone is the best labeller: as complete as Moondream 3.1 and more
+  precise, at about $0.005 per image.
+- Qwen 3.8 Max answers `[x, y, x, y]` although the prompt asks for y first; read
+  y-first it scores F1 0.118. Qwen 3.8 Flash scores better read y-first.
+- Consensus does not beat Gemini alone, because the other models are weaker.
+
 ## Run
 
 From `post-training/detection/`:
@@ -297,8 +331,8 @@ training from its last held-out evaluation.
 
 ## Open work
 
-- Recall on medium and large objects: teacher labels from Moondream 3.1 in place of
-  COCO's human boxes, more data, and unfreezing more of the backbone.
+- Recall on medium and large objects: train on Gemini 4 Carbon labels of COCO train
+  (about $235 for 46k images at the pilot's cost), and adapt more of the backbone.
 - Speed: train the head on single-crop features; fold a slot's box and label into fewer
   positions; time the vision encoder under the custom kernels.
 - Prompted detection (a slot points at a phrase in the prompt), verified-absent
