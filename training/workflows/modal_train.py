@@ -191,6 +191,7 @@ def hybrid_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_
     memory=2048,
     timeout=86400,
     retries=0,
+    nonpreemptible=True,
     max_containers=1,
     volumes={"/runs": run_volume},
 )
@@ -728,42 +729,82 @@ def relative(path):
     return str(Path(path).relative_to("/runs"))
 
 
-def run_training_stage(stage, plan, state, parent, provenance, launch_data):
+def run_training_stage(stage, plan, state, parent, provenance, launch_data, save):
     """Run (or continue) a pretraining or mid-training stage; its output, or None if
-    the launch ends first. `launch_data` is the data stage to prepare first, if any."""
-    from workflows.config import resolve_payload
+    the launch ends first. `launch_data` is the data stage to prepare first, if any.
 
+    The stage's run is recorded (`save`) before its chain starts, with this launch's
+    deadline. When Modal reruns this launch's controller, the stage keeps that run and
+    reattaches to the call that starts its chain, rather than starting a second lineage
+    beside it."""
     deadline = provenance["deadline_unix"]
-    bundle, family = stage["spec"], plan["family"]
     record_ = state["stages"].setdefault(stage["name"], {"attempt": 0})
-    previous_run = record_.get("run_id")
-    # A stage interrupted by an earlier launch resumes its last checkpoint in a new run.
-    resume = stage.get("resume", "")
-    if previous_run:
-        resume = last_checkpoint(previous_run) or resume
-        resume = relative(resume) if resume.startswith("/runs") else resume
-    record_["attempt"] += 1
-    run = stage["run_id"] if record_["attempt"] == 1 else f"{stage['run_id']}-a{record_['attempt']}"
-    record_.update(run_id=run, status="running")
+    if record_.get("status") == "running" and record_.get("launch_deadline") == deadline:
+        run, resume = record_["run_id"], record_.get("resume", "")
+        previous_run = record_.get("previous_run")
+    else:
+        previous_run = record_.get("run_id")
+        # A stage interrupted by an earlier launch resumes its last checkpoint in a new run.
+        resume = stage.get("resume", "")
+        if previous_run:
+            resume = last_checkpoint(previous_run) or resume
+            resume = relative(resume) if resume.startswith("/runs") else resume
+        record_["attempt"] += 1
+        run = (
+            stage["run_id"]
+            if record_["attempt"] == 1
+            else f"{stage['run_id']}-a{record_['attempt']}"
+        )
+        # Preparation that an earlier launch started continues in that run.
+        if plan["family"] != "hybrid" and launch_data is not None and previous_run:
+            run = previous_run
+            record_["attempt"] -= 1
+    record_.update(
+        run_id=run,
+        status="running",
+        resume=resume,
+        previous_run=previous_run,
+        launch_deadline=deadline,
+    )
+    save()
+    start_stage(stage, plan, state, parent, provenance, launch_data, run, resume, previous_run)
+    return await_stage(stage, plan, run, deadline)
+
+
+def start_stage(stage, plan, state, parent, provenance, launch_data, run, resume, previous_run):
+    """Start the session chain of a training stage's run `run`, through one call per run
+    and launch that a rerun of this launch's controller reattaches to."""
+    from workflows.config import resolve_payload
+    from workflows.deadline import recorded_call
+
+    bundle, family = stage["spec"], plan["family"]
     stage_provenance = {**provenance, "stage": stage["name"]}
+
+    def started(spawn):
+        run_volume.reload()
+        return recorded_call(
+            Path("/runs/.calls") / plan["run_id"],
+            f"start_stage:{run}:{int(provenance['deadline_unix'])}",
+            spawn,
+            modal.FunctionCall.from_id,
+            run_volume.commit,
+        ).get()
+
     if family == "hybrid":
         init_from = ""
         if stage["stage"] == "midtrain" and not resume:
             init_from = parent["export"]
-        launch_hybrid.spawn(run, bundle, stage_provenance, resume, init_from).get()
+        started(lambda: launch_hybrid.spawn(run, bundle, stage_provenance, resume, init_from))
     elif launch_data is not None:
-        # Preparation that an earlier launch started continues in that run.
-        if previous_run:
-            run = previous_run
-            record_["attempt"] -= 1
-            record_["run_id"] = run
-        prepared = prepare_and_launch.spawn(
-            run,
-            launch_data["spec"]["version"],
-            bundle,
-            stage_provenance,
-            resume_preparation=bool(previous_run),
-        ).get()
+        prepared = started(
+            lambda: prepare_and_launch.spawn(
+                run,
+                launch_data["spec"]["version"],
+                bundle,
+                stage_provenance,
+                resume_preparation=bool(previous_run),
+            )
+        )
         state["stages"][launch_data["name"]] = {"status": "completed", "output": prepared}
     else:
         snapshot = (
@@ -781,7 +822,13 @@ def run_training_stage(stage, plan, state, parent, provenance, launch_data):
                 },
             }
         phase_from = parent["checkpoint"] if stage["stage"] == "midtrain" and not resume else ""
-        launch_snapshot.spawn(run, bundle, stage_provenance, resume, phase_from).get()
+        started(lambda: launch_snapshot.spawn(run, bundle, stage_provenance, resume, phase_from))
+
+
+def await_stage(stage, plan, run, deadline):
+    """The output of a training stage's run once its chain completes, or None if the
+    launch ends first."""
+    family = plan["family"]
     status = await_training(run, deadline)
     # A stage stopped on request continues, like one the deadline ended, at the next launch.
     if status is None or status["stage"] == "stopped":
@@ -831,6 +878,7 @@ def run_data_stage(stage, plan, consumer, provenance, resume=False):
     memory=2048,
     timeout=86400,
     retries=0,
+    nonpreemptible=True,
     volumes={"/runs": run_volume},
     secrets=[hf_secret],
 )
@@ -946,7 +994,9 @@ def run_workflow(plan, selected, provenance, checkpoint="", examples=None, quali
                         raise RuntimeError(f"Data stage {data_stage} has not run in this workflow")
                     launch_data = stages[data_stage]
                 save()
-                output = run_training_stage(stage, plan, state, parent, provenance, launch_data)
+                output = run_training_stage(
+                    stage, plan, state, parent, provenance, launch_data, save
+                )
                 save()
                 if output is None:
                     record(launch, "paused", stages=state["stages"], provenance=provenance)
@@ -976,10 +1026,13 @@ def run_workflow(plan, selected, provenance, checkpoint="", examples=None, quali
             record(launch, "paused", stages=state["stages"], provenance=provenance)
             return state["stages"]
     except BaseException as error:
-        for done in state["stages"].values():
-            if done.get("status") == "running":
-                done["status"] = "failed"
-        save()
+        # An interruption (a preemption or a stop) leaves running stages to a rerun of this
+        # controller or the next launch; only a failure ends them.
+        if isinstance(error, Exception):
+            for done in state["stages"].values():
+                if done.get("status") == "running":
+                    done["status"] = "failed"
+            save()
         record(launch, "failed", error=repr(error), stages=state["stages"], provenance=provenance)
         raise
     record(launch, "completed", stages=state["stages"], provenance=provenance)
