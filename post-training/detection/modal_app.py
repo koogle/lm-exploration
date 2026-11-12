@@ -267,9 +267,8 @@ def launch(function, run_id, config, result_name, gpu="L4", limit=LAUNCH_LIMIT_S
         "gpu": gpu,
     }
     remaining = int(deadline - time.time())
-    call = function.with_options(timeout=remaining).spawn(
-        run_id, json.loads(Path(config).read_text()), provenance, deadline
-    )
+    settings = config if isinstance(config, dict) else json.loads(Path(config).read_text())
+    call = function.with_options(timeout=remaining).spawn(run_id, settings, provenance, deadline)
     supervisor = enforce_deadline.spawn([call.object_id], deadline)
     out = HERE / "artifacts" / run_id
     out.mkdir(parents=True, exist_ok=True)
@@ -286,8 +285,12 @@ def launch(function, run_id, config, result_name, gpu="L4", limit=LAUNCH_LIMIT_S
 
 
 @app.local_entrypoint()
-def main(run_id: str, config: str = "configs/moondream2.json"):
-    launch(evaluate, run_id, config, "summary.json")
+def main(run_id: str, config: str = "configs/moondream2.json", slots_run: str = ""):
+    """`--slots-run` evaluates that training run's head with a slots config."""
+    settings = json.loads(Path(config).read_text())
+    if slots_run:
+        settings["model"]["checkpoint"] = f"/runs/slots/{slots_run}/head.pt"
+    launch(evaluate, run_id, settings, "summary.json")
 
 
 @app.local_entrypoint()

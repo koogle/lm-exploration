@@ -2,7 +2,7 @@
   "seed": 20261112,
   "model": {
     "adapter": "slots",
-    "checkpoint": "/runs/slots/slots-001/head.pt",
+    "checkpoint": "",
     "steps": 1
   },
   "datasets": [
