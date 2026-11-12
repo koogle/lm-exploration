@@ -41,6 +41,7 @@ def save(data, out, source, name, max_side, existing):
     (out / path).parent.mkdir(parents=True, exist_ok=True)
     image.save(out / path, format="JPEG", quality=90)
     width, height = image.size
+    existing.add(f"{source}/{name}")
     return {
         "image_id": f"{source}/{name}",
         "image": str(path),
@@ -90,26 +91,37 @@ def open_images(settings, out, quota, max_side, rng, existing):
 
 def objects365(settings, out, quota, max_side, existing):
     for patch in settings["patches"]:
-        if quota <= 0:
-            return
         url = f"{HUB}/{settings['repo']}/resolve/{settings['revision']}/{patch}"
-        with urllib.request.urlopen(url, timeout=600) as response:
-            seen = 0
-            with tarfile.open(fileobj=response, mode="r|gz") as archive:
-                for member in archive:
-                    if not member.isfile() or not member.name.endswith(".jpg"):
-                        continue
-                    seen += 1
-                    if seen % settings["stride"]:
-                        continue
-                    stem = Path(member.name).stem
-                    data = archive.extractfile(member).read()
-                    line = save(data, out, "objects365", stem, max_side, existing)
-                    if line:
-                        quota -= 1
-                        yield line
+        # A dropped connection restarts the patch; images already saved are skipped.
+        for _attempt in range(4):
+            if quota <= 0:
+                return
+            try:
+                for line in patch_images(url, settings["stride"], out, max_side, existing):
+                    quota -= 1
+                    yield line
                     if quota <= 0:
                         return
+                break
+            except (tarfile.ReadError, OSError, EOFError):
+                continue
+
+
+def patch_images(url, stride, out, max_side, existing):
+    """Every `stride`-th image of one streamed tar.gz patch, saved and resized."""
+    with urllib.request.urlopen(url, timeout=600) as response:
+        seen = 0
+        with tarfile.open(fileobj=response, mode="r|gz") as archive:
+            for member in archive:
+                if not member.isfile() or not member.name.endswith(".jpg"):
+                    continue
+                seen += 1
+                if seen % stride:
+                    continue
+                data = archive.extractfile(member).read()
+                line = save(data, out, "objects365", Path(member.name).stem, max_side, existing)
+                if line:
+                    yield line
 
 
 def prepare(config, out):
