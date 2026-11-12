@@ -3,9 +3,10 @@
 Post-training a small vision-language model so that it detects requested objects in
 one forward pass, with a box and a short label per detection.
 
-**Status:** the evaluation harness, three baselines, custom decode kernels and a first
-training run of the slot head are implemented and measured. The slot head is a
-validation experiment, not a finished model.
+**Status:** the evaluation harness, three baselines, custom decode kernels and five
+training runs of the slot head are implemented and measured. The best slot head beats
+Moondream 2's own detector on COCO F1 at a quarter of the latency and trails
+Moondream 3.1 on recall.
 
 Measured outputs (predictions, summaries, training curves, the trained head) are in the
 Hugging Face dataset [`jfrick/lm-exploration-results`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-167/post-training/detection)
@@ -151,72 +152,106 @@ against an FP32 PyTorch reference step by step, and the F1 difference on 100 ima
 within noise. Photon's own kernels reach 0.014 s per box on an L40S; these have not
 been timed on that GPU. Image encoding and prompt prefill stay in PyTorch.
 
-## Slot head: boxes by regression, labels by one-pass diffusion
+## Slot head: one pass, masked diffusion over boxes and labels
 
 `src/parallel_detection/slots.py`. After the 730-position image prefix, the decoder
-reads 32 slots of four positions each in a single forward pass. Slot positions see the
-image and each other.
+reads a block of six positions per slot in a single forward pass. Slot positions see
+the image and each other. Every position starts as a mask and is read through the
+model's own frozen heads:
 
-- The first position of a slot is a learned query. Its final hidden state gives an
-  objectness logit (the slot may be "nothing") and a box as four regressed coordinates.
-- The other three positions are the slot's label. They start as a mask embedding and
-  the model's own vocabulary head predicts their tokens: one step of masked discrete
-  diffusion, the mechanism of the
-  [DFlash-style drafter](../../exploration/latent-workspace/docs/implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md).
-  More passes keep the most confident tokens and predict the rest again.
+- positions 0 to 2 are the box: x centre and y centre through the region head's
+  coordinate decoder, width and height through its size decoder, each a distribution
+  over the 1,024 bins Moondream's sequential detector uses;
+- positions 3 to 5 are the label, through the vocabulary head;
+- the first position also gives an objectness logit (the slot may be "nothing").
+
+One pass with everything masked is the one-step sampler, the mechanism of the
+[DFlash-style drafter](../../exploration/latent-workspace/docs/implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md).
+Further passes reveal the most confident positions and predict the rest again.
 
 The backbone is frozen. Rank-16 adapters act only at slot positions, so the image
-prefix and the model's existing skills are unchanged; 16.9M parameters train. The loss
-is Hungarian matching (box L1, generalized IoU, objectness, label likelihood) plus a
-denoising pass that reveals a random share of each matched label. Unmatched slots are
-pushed toward "nothing" with weight 0.1.
+prefix and the model's existing skills are unchanged; 12.7M parameters train with 32
+slots.
 
-### Training run `slots-001`
+### Ground truth and loss
 
-- Data: four COCO train2017 shards, keeping objects that cover at least 0.2% of the
-  image in images with 1 to 20 such objects: 11,105 training and 300 held-out images.
-  Image features are cached once.
-- 6,000 steps of batch 16 on one H100, 28 minutes (0.28 s per step).
+- Data: COCO train2017 boxes and category names (`detection-datasets/coco`). An object
+  is kept if it covers at least `min_area` of the image; an image is used if it has 1
+  to `max_objects` kept objects. 300 images of the same pool are held out.
+- Targets: the category name as three tokens (padded with end-of-sequence), and the
+  box as Moondream's four bins.
+- Hungarian matching per image on box distance, overlap, objectness and label
+  likelihood. Matched slots get a cross-entropy on the four bins, L1 and generalized
+  IoU on the expected-bin box and a cross-entropy on the label. Unmatched slots are
+  pushed toward "nothing" with weight 0.1, so an unlabelled object is penalised mildly.
+- A second pass per step reveals a random share of each matched slot's true
+  coordinates and tokens and trains the rest.
+- Image features are encoded once and cached; there is no augmentation.
 
-Held-out images (labels must match exactly, detections above the objectness threshold):
+### Training runs
 
-| Step | Matched-box IoU | Label exact, 1 pass | Label exact, 2 passes | Best F1@0.5 |
-|---|---|---|---|---|
-| 500 | 0.31 | 0.772 | 0.733 | 0.10 |
-| 2,000 | 0.50 | 0.893 | 0.882 | 0.34 |
-| 4,000 | 0.56 | 0.911 | 0.911 | 0.41 |
-| 6,000 | 0.59 | 0.919 | 0.916 | 0.45 |
+All on one H100, batch 16.
 
-COCO val2017, the same 500 images and L4 as the Moondream 2 baseline (run
-`slots-001-coco`). The slot head answers every phrase from one pass.
+| Run | Boxes | Images | Slots | `min_area` | Steps | Minutes |
+|---|---|---|---|---|---|---|
+| `slots-001` | Four regressed numbers | 11k | 32 | 0.2% | 6,000 | 28 |
+| `slots-bins-4` | Coordinate bins | 11k | 32 | 0.2% | 6,000 | 34 |
+| `slots-bins-16` | Coordinate bins | 45k | 32 | 0.2% | 20,000 | 132 |
+| `slots-sizes-none` | Coordinate bins | 23k | 48 | 0.03% | 10,000 | 78 |
+| `slots-sizes-grouped` | Coordinate bins, size groups | 23k | 48 | 0.03% | 10,000 | 74 |
 
-| | Moondream 2 `detect` | Slot head |
-|---|---|---|
-| Seconds per image | 1.083 | 0.263 |
-| of which image encoding | 0.225 | 0.225 |
-| Precision / recall / F1, IoU 0.5 | 0.500 / 0.709 / 0.587 | 0.436 / 0.421 / 0.429 |
-| Precision / recall / F1, IoU 0.75 | 0.380 / 0.538 / 0.445 | 0.240 / 0.231 / 0.235 |
-| Phrase hit rate, IoU 0.5 | 0.890 | 0.598 |
-| Recall large / medium / small, IoU 0.5 | 0.889 / 0.753 / 0.454 | 0.774 / 0.423 / 0.020 |
+In `slots-sizes-grouped` the first 24 slots are matched only to objects under 1% of the
+image and the other 24 to larger ones.
 
-What this shows:
+COCO val2017, the same 500 images as the baseline, on an L4:
 
-- **One-pass diffusion labels work for this label set.** 92% of matched slots get all
-  three label tokens right in one pass, 28 of the 80 names being two or three tokens. A
-  second pass does not help. About 5% of confident slots decode to a token block that
-  is not a category name. COCO names have one wording each, so this run does not test
-  labels with several valid wordings.
-- **Speed.** Detection for the whole image costs about 0.04 s after image encoding,
-  against 0.86 s of sequential decoding for the same images. Image encoding, at the
-  baseline run's 0.225 s, is now about 85% of the time.
-- **Boxes are the weak part.** The regressed boxes are loose (matched IoU 0.59; F1 at
-  IoU 0.75 is half the baseline's). Held-out F1 was still rising when the schedule
-  ended, and the best objectness threshold sat at the top of the searched grid (0.8).
-- **Small objects are absent by construction.** The label filter removed them from
-  training, and recall on small COCO objects is 0.02.
+| | F1, IoU 0.5 | F1, IoU 0.75 | Precision | Recall | Recall on small objects | Seconds per image |
+|---|---|---|---|---|---|---|
+| Moondream 2 `detect` | 0.587 | 0.445 | 0.500 | 0.709 | 0.454 | 1.083 |
+| `slots-001` | 0.429 | 0.235 | 0.436 | 0.421 | 0.020 | 0.263 |
+| `slots-bins-4` | 0.563 | 0.457 | 0.639 | 0.503 | 0.107 | 0.259 |
+| `slots-bins-16` | 0.622 | 0.518 | 0.757 | 0.528 | 0.104 | 0.255 |
+| `slots-sizes-none` | 0.590 | 0.469 | 0.692 | 0.514 | 0.239 | 0.233 |
+| `slots-sizes-grouped` | 0.549 | 0.431 | 0.634 | 0.484 | 0.207 | 0.217 |
 
-The run validates the mechanism and the latency; it does not yet match the model's own
-sequential detector in accuracy.
+Findings:
+
+- **Coordinate bins replace regression.** On the same data and schedule, reading boxes
+  through Moondream's own bins raised held-out matched-box IoU from 0.59 to 0.73 and
+  COCO F1 from 0.43 to 0.56; the bin head passed the regression head's final held-out
+  score within six minutes.
+- **More data and steps keep helping.** `slots-bins-16` beats Moondream 2's own
+  detector on F1 at both thresholds at a quarter of the latency. Its precision (0.757)
+  is above Moondream 3.1's (0.682); its recall is well below.
+- **One-pass diffusion suffices for this label set.** Labels are exact for 92 to 95% of
+  matched held-out slots in one pass, and two or three passes change neither labels nor
+  boxes. COCO names have one wording each, so labels with several valid wordings are
+  untested.
+- **Keeping small objects in training more than doubles small-object recall** (0.10 to
+  0.24) but is not yet matched for data and steps against `slots-bins-16`.
+- **Size-specialised slot groups did not help.** With everything else equal, the
+  grouped run is behind the single group on F1 (0.549 against 0.590) and on small
+  objects (0.207 against 0.239).
+
+### Where the time goes
+
+`slots-bins-16` on the same 500 images:
+
+| GPU, setting | F1, IoU 0.5 | Seconds per image | Vision encoder | Image prefix | Slot pass |
+|---|---|---|---|---|---|
+| L4 | 0.623 | 0.227 | 0.138 | 0.046 | 0.042 |
+| L40S | 0.622 | 0.078 | 0.046 | 0.016 | 0.016 |
+| L40S, one image crop | 0.607 | 0.046 | 0.016 | 0.014 | 0.016 |
+| Moondream 3.1, Photon, L40S | 0.700 | 0.208 | | | |
+
+On the GPU Moondream 3.1 was measured on, the slot head takes 0.078 s per image
+against 0.208 s. The slot pass is a fifth of that time, so fewer positions per slot
+would save little; the vision encoder is the largest stage, and limiting it to one crop
+costs 1.5 points of F1 with a head trained on full-crop features.
+
+`scripts/figures.py` draws the training curves, the accuracy-against-latency chart and
+side-by-side example images from downloaded run outputs; the rendered figures are in
+the archive under `figures/`.
 
 ## Run
 
@@ -232,9 +267,11 @@ uv pip install -e ".[dev,modal]"
 .venv/bin/modal run --detach modal_app.py::photon --run-id moondream31-001 \
   --config configs/moondream3.1-photon.json
 .venv/bin/modal run --detach modal_app.py::decoders --run-id decoders-001
-.venv/bin/modal run --detach modal_app.py::slots --run-id slots-001
-.venv/bin/modal run --detach modal_app.py::main --run-id slots-001-coco \
-  --config configs/slots-coco.json
+.venv/bin/modal run --detach modal_app.py::slots --run-id slots-bins-16 \
+  --config configs/slots-16-shards.json
+.venv/bin/modal run --detach modal_app.py::main --run-id slots-bins-16-coco \
+  --config configs/slots-coco.json --slots-run slots-bins-16
+.venv/bin/python scripts/figures.py --artifacts artifacts --out artifacts/figures
 
 # Recompute scores from saved predictions.
 .venv/bin/python -m parallel_detection.run score \
@@ -246,18 +283,21 @@ id>/`, `slots/<run id>/`) and the launching command saves the summary under
 `artifacts/<run id>/`. A local run needs the `model` extra and a GPU.
 
 Every Modal call has `retries=0`. Evaluations stop within one hour of launch and
-training within three; a separate CPU supervisor, built on
+training within five; a separate CPU supervisor, built on
 `training/workflows/deadline.py`, cancels a call still queued or running at its
-deadline. A preempted evaluation continues from the images it recorded.
+deadline. A preempted evaluation continues from the images it recorded, and preempted
+training from its last held-out evaluation.
 
 ## Open work
 
-- Box quality: longer training, more images, a wider threshold grid, and box
-  prediction as the model's own coordinate bins instead of four regressed numbers.
-- Small objects and the label filter; Objects365 and LVIS as training data.
-  `jxu124/objects365` holds annotations only, so its images need a prepared subset.
-- Prompted detection (a slot points at a phrase in the prompt), and labels with
-  several valid wordings as the real test of one-pass diffusion.
-- Fine-tuning the slot head toward Moondream 3.1's precision on RefCOCO-M and COCO.
-- Kernels: an FP32 PyTorch reference check, the image encoder, and timing on the GPU
-  Photon was measured on.
+- Recall: train with small objects on the 45k-image schedule, and try teacher labels
+  from Moondream 3.1 in place of COCO's human boxes.
+- Speed: train the head on single-crop features; fold a slot's box and label into fewer
+  positions; time the vision encoder under the custom kernels.
+- Prompted detection (a slot points at a phrase in the prompt), verified-absent
+  categories in training, and labels with several valid wordings as the real test of
+  one-pass diffusion.
+- RefCOCO-M and LVIS for the slot head; it is evaluated on COCO only.
+- Kernels: an FP32 PyTorch reference check and timing on the GPU Photon was measured on.
+- Objects365 as training data: `jxu124/objects365` holds annotations only, so its images
+  need a prepared subset.
