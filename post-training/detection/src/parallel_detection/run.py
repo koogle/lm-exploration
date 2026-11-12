@@ -158,6 +158,10 @@ def make_detector(model, device, **extra):
         from parallel_detection.photon import PhotonDetector
 
         return PhotonDetector(**model, device=device)
+    if adapter == "slots":
+        from parallel_detection.train_slots import SlotDetector
+
+        return SlotDetector(**model, device=device)
     raise ValueError(f"Unknown adapter {adapter!r}")
 
 

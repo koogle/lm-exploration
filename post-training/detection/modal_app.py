@@ -7,7 +7,10 @@ Run from post-training/detection/:
     modal run --detach modal_app.py::photon --run-id moondream31-001 \\
         --config configs/moondream3.1-photon.json
 
-`main` evaluates `configs/moondream2.json` through Transformers on an L4. `photon`
+    modal run --detach modal_app.py::slots --run-id slots-001
+
+`main` evaluates a config (default `configs/moondream2.json`) on an L4. `slots` trains
+the slot head of `configs/slots.json` on an H100 within three hours of launch. `photon`
 evaluates a config through Moondream's Photon engine on an L40S. `decoders` runs `configs/decoders.json`
 once per decoder (PyTorch eager, this folder's loop, the custom CUDA kernels,
 torch.compile) on the same images and reports how each agrees with eager.
@@ -28,6 +31,7 @@ from pathlib import Path
 import modal
 
 LAUNCH_LIMIT_SECONDS = 60 * 60
+TRAIN_LIMIT_SECONDS = 3 * 60 * 60
 COMMIT_EVERY_IMAGES = 50
 
 HERE = Path(__file__).parent
@@ -192,7 +196,47 @@ def compare_decoders(run_id, config, provenance, deadline):
 
 
 @app.function(
-    image=control_image, cpu=0.25, memory=512, timeout=LAUNCH_LIMIT_SECONDS + 600, retries=0
+    image=image,
+    gpu="H100",
+    memory=(81920, 81920),
+    timeout=TRAIN_LIMIT_SECONDS,
+    retries=0,
+    max_containers=1,
+    volumes={"/runs": volume},
+)
+def train_slots(run_id, config, provenance, deadline):
+    """Encode the configured COCO shards once, then train the slot head on them."""
+    from huggingface_hub import hf_hub_download
+
+    from parallel_detection.train_slots import encode_shard, train
+
+    if time.time() >= deadline:
+        raise RuntimeError("Launch deadline reached; refusing new work")
+    out = Path("/runs/slots") / run_id
+    if (out / "report.json").exists():
+        raise ValueError(f"Run {run_id} already has results")
+    data = config["data"]
+    folder = Path("/runs/slots") / f"features-{config['min_area']}-{config['max_objects']}"
+    stems = []
+    for name in data["files"]:
+        stem = folder / Path(name).stem
+        if not stem.with_suffix(".json").exists():
+            parquet = hf_hub_download(
+                data["repo"], name, repo_type=data["repo_type"], revision=data["revision"]
+            )
+            encode_shard(parquet, stem, config)
+            volume.commit()
+        stems.append(stem)
+    # Stop training early enough to write the checkpoint and report.
+    report = train(config, stems, out, saved=volume.commit, deadline=deadline - 900)
+    report["provenance"] = provenance
+    (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    volume.commit()
+    return report
+
+
+@app.function(
+    image=control_image, cpu=0.25, memory=512, timeout=TRAIN_LIMIT_SECONDS + 600, retries=0
 )
 def enforce_deadline(call_ids, deadline):
     """Independent supervisor: cancel every call of this launch still running at its deadline."""
@@ -204,8 +248,8 @@ def enforce_deadline(call_ids, deadline):
     return {"stage": "completed"} if cancelled is None else {"cancelled": cancelled}
 
 
-def launch(function, run_id, config, result_name, gpu="L4"):
-    deadline = time.time() + LAUNCH_LIMIT_SECONDS
+def launch(function, run_id, config, result_name, gpu="L4", limit=LAUNCH_LIMIT_SECONDS):
+    deadline = time.time() + limit
     git = ["git", "-C", str(HERE)]
     provenance = {
         "run_id": run_id,
@@ -228,7 +272,7 @@ def launch(function, run_id, config, result_name, gpu="L4"):
     }
     (out / "launch.json").write_text(json.dumps(record, indent=2) + "\n")
     print(json.dumps(record, indent=2))
-    result = call.get(timeout=LAUNCH_LIMIT_SECONDS)
+    result = call.get(timeout=limit)
     (out / result_name).write_text(json.dumps(result, indent=2) + "\n")
 
 
@@ -245,3 +289,8 @@ def decoders(run_id: str, config: str = "configs/decoders.json"):
 @app.local_entrypoint()
 def photon(run_id: str, config: str = "configs/moondream3.1-photon.json"):
     launch(evaluate_photon, run_id, config, "summary.json", gpu="L40S")
+
+
+@app.local_entrypoint()
+def slots(run_id: str, config: str = "configs/slots.json"):
+    launch(train_slots, run_id, config, "report.json", gpu="H100", limit=TRAIN_LIMIT_SECONDS)

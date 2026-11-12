@@ -1,0 +1,31 @@
+{
+  "seed": 20261112,
+  "model": {
+    "repo": "vikhyatk/moondream2",
+    "revision": "2025-06-21"
+  },
+  "data": {
+    "repo": "detection-datasets/coco",
+    "repo_type": "dataset",
+    "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+    "files": [
+      "data/train-00000-of-00040-67e35002d152155c.parquet",
+      "data/train-00001-of-00040-2c2b33b9504aa843.parquet",
+      "data/train-00002-of-00040-58e30306870b1de7.parquet",
+      "data/train-00003-of-00040-a77e00648e423963.parquet"
+    ]
+  },
+  "min_area": 0.002,
+  "max_objects": 20,
+  "slots": 32,
+  "label_tokens": 3,
+  "rank": 16,
+  "batch_size": 16,
+  "steps": 6000,
+  "warmup_steps": 300,
+  "learning_rate": 0.0002,
+  "head_learning_rate": 0.001,
+  "heldout_images": 300,
+  "evaluate_every": 500,
+  "log_every": 20
+}
