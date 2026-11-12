@@ -167,6 +167,21 @@ def make_detector(model, device, **extra):
     raise ValueError(f"Unknown adapter {adapter!r}")
 
 
+def above(records, threshold):
+    """Records keeping only the boxes whose recorded confidence reaches `threshold`."""
+    return [
+        r
+        | {
+            "predicted": [
+                box
+                for box, score in zip(r["predicted"], r["scores"], strict=True)
+                if score >= threshold
+            ]
+        }
+        for r in records
+    ]
+
+
 def read_records(path):
     return [json.loads(line) for line in Path(path).read_text().splitlines()]
 
@@ -212,12 +227,23 @@ def main():
     run.add_argument("--device", default="cuda")
     score = commands.add_parser("score")
     score.add_argument("--predictions", type=Path, required=True)
+    score.add_argument(
+        "--min-score",
+        type=float,
+        nargs="*",
+        help="Score only boxes whose recorded confidence reaches each of these thresholds",
+    )
     args = parser.parse_args()
     if args.command == "evaluate":
         summary = evaluate(json.loads(args.config.read_text()), args.out, args.device)
         print(json.dumps(summary["datasets"], indent=2))
     else:
-        print(json.dumps(summarize(read_records(args.predictions)), indent=2))
+        records = read_records(args.predictions)
+        if not args.min_score:
+            print(json.dumps(summarize(records), indent=2))
+        else:
+            sweep = {str(t): summarize(above(records, t)) for t in args.min_score}
+            print(json.dumps(sweep, indent=2))
 
 
 if __name__ == "__main__":

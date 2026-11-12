@@ -117,3 +117,11 @@ def test_predict_joins_detections_to_queries(tmp_path):
     assert detector.calls == 2  # the warm-up pass is not recorded
     assert [r["phrase"] for r in records] == ["bow (weapon)", "cup"]
     assert all(r["predicted"] == [[0, 0, 1, 1]] and r["dataset"] == "lvis_minival" for r in records)
+
+
+def test_above_keeps_boxes_at_or_over_the_threshold():
+    from parallel_detection.run import above
+
+    record = {"predicted": [[0, 0, 1, 1], [1, 1, 2, 2]], "scores": [0.4, 0.9]}
+    assert above([record], 0.5)[0]["predicted"] == [[1, 1, 2, 2]]
+    assert above([record], 0.4)[0]["predicted"] == record["predicted"]
