@@ -116,7 +116,8 @@
   "consensus_votes": [
     1,
     2,
-    3
+    3,
+    4
   ],
   "score_both_orders": [
     "anthropic/claude-fable-5.2",
@@ -134,7 +135,8 @@
   ],
   "consensus_models": [
     "google/gemini-4-carbon",
-    "qwen/qwen3.8-max-0902 (x first)",
-    "openai/gpt-6.1-terra"
+    "google/gemini-4-argon",
+    "anthropic/claude-opus-5.5",
+    "anthropic/claude-fable-5.2"
   ]
 }

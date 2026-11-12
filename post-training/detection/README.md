@@ -268,31 +268,42 @@ every instance of the 80 COCO categories (Gemini-style `box_2d`, 0 to 1000), rec
 reply with its cost, stops at a dollar budget, and scores each model and multi-model
 consensus against COCO's labels with the evaluation harness.
 
-Candidates came from the independent
-[Roboflow object-detection leaderboard](https://playground.roboflow.com/evals/object-detection)
-(updated 2026-11-10), none of which had been measured on COCO with an exhaustive 80-class
-prompt. Pilot `teacher-pilot`: 200 of the same COCO val images as the baselines, low
-reasoning effort, $2.37 in total. Scores are on the 198 images every model answered,
-against COCO's labels, so a correct box on an unlabelled object counts as a false
-positive:
+Pilot `teacher-pilot`: twelve models on 200 of the same COCO val images as the
+baselines, at low reasoning effort, all with the same Gemini-style prompt; $14.19 in
+total. Each model is read in whichever coordinate order scores better, since some answer
+x-first regardless of the prompt. Scores are against COCO's labels, so a correct box on
+an unlabelled object counts as a false positive:
 
 | Labeller | Precision | Recall | F1, IoU 0.5 | F1, IoU 0.75 | Recall small / medium / large | Cost per image |
 |---|---|---|---|---|---|---|
-| `google/gemini-4-carbon` | 0.775 | 0.739 | 0.756 | 0.646 | 0.43 / 0.82 / 0.90 | $0.0051 |
-| `qwen/qwen3.8-max-0902`, read x-first | 0.680 | 0.589 | 0.631 | 0.504 | 0.24 / 0.67 / 0.78 | $0.0047 |
-| `openai/gpt-6.1-terra` | 0.519 | 0.388 | 0.444 | 0.298 | 0.18 / 0.40 / 0.53 | $0.0015 |
-| `google/gemini-3.8-flash` | 0.876 | 0.307 | 0.454 | 0.409 | 0.13 / 0.27 / 0.48 | $0.0002 |
-| `qwen/qwen3.8-flash` | 0.372 | 0.349 | 0.360 | 0.242 | 0.15 / 0.35 / 0.50 | $0.0005 |
-| Two of the first three agree | 0.803 | 0.628 | 0.705 | 0.600 | 0.27 / 0.71 / 0.82 | |
-| Any of the first three | 0.534 | 0.761 | 0.628 | 0.514 | 0.46 / 0.85 / 0.91 | |
+| `google/gemini-4-carbon` | 0.775 | 0.738 | 0.756 | 0.646 | 0.43 / 0.82 / 0.90 | $0.0051 |
+| `google/gemini-4-argon` | 0.788 | 0.679 | 0.730 | 0.636 | 0.34 / 0.75 / 0.87 | $0.0049 |
+| `anthropic/claude-opus-5.5` | 0.727 | 0.651 | 0.687 | 0.509 | 0.33 / 0.69 / 0.86 | $0.0073 |
+| `anthropic/claude-fable-5.2` | 0.704 | 0.670 | 0.687 | 0.554 | 0.34 / 0.73 / 0.87 | $0.0147 |
+| `qwen/qwen3.8-max-0902`, read x-first | 0.681 | 0.589 | 0.632 | 0.505 | 0.24 / 0.67 / 0.78 | $0.0047 |
+| `google/gemini-4-hydrogen` | 0.806 | 0.431 | 0.562 | 0.491 | 0.19 / 0.41 / 0.64 | $0.0077 |
+| `anthropic/claude-sonnet-5.5` | 0.565 | 0.409 | 0.475 | 0.279 | 0.10 / 0.38 / 0.67 | $0.0033 |
+| `google/gemini-3.8-flash` | 0.877 | 0.308 | 0.456 | 0.411 | 0.13 / 0.27 / 0.48 | $0.0018 |
+| `openai/gpt-6.1-sol` | 0.425 | 0.492 | 0.456 | 0.322 | 0.24 / 0.49 / 0.68 | $0.0033 |
+| `openai/gpt-6-astra` | 0.417 | 0.494 | 0.452 | 0.326 | 0.26 / 0.48 / 0.68 | $0.0162 |
+| `openai/gpt-6.1-terra` | 0.519 | 0.387 | 0.444 | 0.296 | 0.17 / 0.40 / 0.53 | $0.0015 |
+| `qwen/qwen3.8-flash` | 0.372 | 0.348 | 0.360 | 0.242 | 0.15 / 0.35 / 0.50 | $0.0005 |
+| Two of Carbon, Argon, Opus 5.5, Fable 5.2 agree | 0.792 | 0.737 | 0.764 | 0.652 | 0.40 / 0.82 / 0.92 | $0.0320 |
 | Moondream 3.1, same images | 0.715 | 0.739 | 0.727 | | | |
 | Slot head `slots-small-16`, same images | 0.720 | 0.586 | 0.646 | | | |
 
 - Gemini 4 Carbon alone is the best labeller: as complete as Moondream 3.1 and more
-  precise, at about $0.005 per image.
+  precise. Agreement among the top four adds 0.8 points of F1 for six times the cost.
 - Qwen 3.8 Max answers `[x, y, x, y]` although the prompt asks for y first; read
-  y-first it scores F1 0.118. Qwen 3.8 Flash scores better read y-first.
-- Consensus does not beat Gemini alone, because the other models are weaker.
+  y-first it scores F1 0.118.
+- The prompt and box convention are Gemini's own, and every model ran at low reasoning
+  effort, so the GPT and Claude rows are not their best possible results.
+- On 100 of the prepared Open Images training images, Carbon cost $0.0052 per image and
+  found 6.8 objects per image.
+
+The training images are 30,000 from Open Images (`vikhyatk/openimages-bbox`, 30 seeded
+shards) and 20,000 from Objects365 (`guozonghao96/objects365`, every tenth image of five
+patches), prepared by `src/parallel_detection/images.py` with `configs/teacher-images.json`.
 
 ## Run
 

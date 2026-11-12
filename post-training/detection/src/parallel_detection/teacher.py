@@ -7,6 +7,9 @@
 The config names the images (`datasets`, `seed` and an optional `limit` on the first
 samples) and maps each OpenRouter model id to extra request fields.
 
+A config with `manifest` labels the unlabelled images listed there instead (optionally
+only those of `sources`); `score` needs `datasets`.
+
 `label` asks every configured model for every instance of the 80 COCO categories in
 each image and appends one JSON line per (model, image) to `<out>/<model>.jsonl`, with
 the raw reply, parsed pixel boxes, token usage and cost. It stops before a request
@@ -113,12 +116,24 @@ def request(model, image_bytes, settings, key):
         return json.loads(response.read())
 
 
+def images_of(config, out):
+    """(samples, image folder): the evaluation tasks of `datasets`, or the unlabelled
+    images of a `manifest` written by `parallel_detection.images`."""
+    if "manifest" in config:
+        manifest = Path(config["manifest"])
+        lines = [json.loads(line) for line in manifest.read_text().splitlines()]
+        sources = config.get("sources")
+        lines = [line for line in lines if sources is None or line["source"] in sources]
+        return lines[: config.get("limit")], manifest.parent
+    return build_samples(config, out / "images")[: config.get("limit")], out / "images"
+
+
 def label(config, out, budget_usd, workers=8):
     """Label the configured images with each configured model, within the budget."""
     key = os.environ["OPENROUNTER_TOKEN"]
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    samples = build_samples(config, out / "images")[: config.get("limit")]
+    samples, folder = images_of(config, out)
     lock = threading.Lock()
     spent = sum(
         json.loads(line).get("cost", 0.0)
@@ -132,9 +147,9 @@ def label(config, out, budget_usd, workers=8):
         with lock:
             if state["spent"] >= budget_usd:
                 return
-        image = fetch_image(sample["image"], out / "images")
+        image = fetch_image(sample["image"], folder)
         width, height = image.size
-        source = out / "images" / sample["image"]
+        source = folder / sample["image"]
         image_bytes = source.read_bytes() if source.exists() else _jpeg(image)
         started = time.time()
         record = {"model": model, "image_id": sample["image_id"], "width": width, "height": height}
@@ -170,6 +185,7 @@ def label(config, out, budget_usd, workers=8):
                 handle.write(json.dumps(record) + "\n")
 
     jobs = []
+    workers = config.get("workers", workers)
     for model, settings in config["models"].items():
         path = out / (model.replace("/", "--") + ".jsonl")
         done = set()

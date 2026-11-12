@@ -1,0 +1,14 @@
+{
+  "manifest": "artifacts/teacher-images/manifest.jsonl",
+  "workers": 24,
+  "models": {
+    "google/gemini-4-carbon": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    }
+  }
+}
