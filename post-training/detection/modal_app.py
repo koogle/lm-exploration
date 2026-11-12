@@ -201,7 +201,6 @@ def compare_decoders(run_id, config, provenance, deadline):
     image=image,
     gpu="H100",
     memory=(65536, 65536),
-    ephemeral_disk=400 * 1024,
     timeout=TRAIN_LIMIT_SECONDS,
     retries=0,
     max_containers=2,
