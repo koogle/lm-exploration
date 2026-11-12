@@ -4,7 +4,7 @@
 
 Reads `<artifacts>/<run>/heldout.jsonl` for the training runs and
 `<artifacts>/<run>/summary.json` and `predictions.jsonl` for the COCO evaluations, and
-writes `training.png`, `coco.png` and three `examples*.png` grids.
+writes `training.png`, `training-sizes.png`, `coco.png` and three `examples*.png` grids.
 """
 
 import argparse
@@ -23,16 +23,26 @@ from parallel_detection.run import fetch_image
 
 SURFACE, INK, MUTED, GRID = "#fcfcfb", "#1f1f1e", "#6b6a63", "#e4e3dd"
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
+MAGENTA, GREEN, VIOLET = "#e87ba4", "#008300", "#6250d6"
 TRAINING = [
     ("slots-001", "Regressed boxes, 11k images", BLUE),
     ("slots-bins-4", "Coordinate bins, 11k images", ORANGE),
     ("slots-bins-16", "Coordinate bins, 44k images", AQUA),
 ]
+# 48 slots, 22k images with objects down to 0.03% of the image.
+SIZE_RUNS = [
+    ("slots-sizes-none", "48 slots, one group", BLUE),
+    ("slots-sizes-grouped", "24 small-object + 24 large-object slots", ORANGE),
+]
+# (run, label, colour, label offset in points)
 EVALUATIONS = [
-    ("moondream2-001", "Moondream 2 detect (L4)", BLUE),
-    ("slots-001-coco", "Slot head, regressed boxes (L4)", ORANGE),
-    ("slots-bins-4-coco", "Slot head, coordinate bins (L4)", AQUA),
-    ("moondream31-001", "Moondream 3.1, Photon (L40S)", YELLOW),
+    ("moondream2-001", "Moondream 2 detect (L4)", BLUE, (10, -4)),
+    ("slots-001-coco", "Slots, regressed boxes, 11k", ORANGE, (10, -4)),
+    ("slots-bins-4-coco", "Slots, bins, 11k", AQUA, (10, -12)),
+    ("moondream31-001", "Moondream 3.1, Photon (L40S)", YELLOW, (10, 2)),
+    ("slots-bins-16-coco", "Slots, bins, 44k", MAGENTA, (10, 2)),
+    ("slots-sizes-none-coco", "48 slots, small objects kept, one group", GREEN, (150, 6)),
+    ("slots-sizes-grouped-coco", "48 slots, small objects kept, size groups", VIOLET, (150, -18)),
 ]
 EXAMPLES = [
     ("Annotated", None),
@@ -95,11 +105,57 @@ def training_figure(artifacts, out):
     plt.close(figure)
 
 
+def best(row):
+    """The row's best objectness threshold and its F1."""
+    return max(row["f1_iou_0.5"].items(), key=lambda item: item[1])
+
+
+def size_figure(artifacts, out):
+    """Held-out curves of the size-group pair; their held-out set keeps small objects."""
+    figure, axes = plt.subplots(1, 3, figsize=(14, 4.2), facecolor=SURFACE)
+    panels = [
+        ("Held-out F1 at IoU 0.5", lambda r: best(r)[1]),
+        (
+            "Recall, objects under 1% of the image",
+            lambda r: r["recall_by_size_iou_0.5"][best(r)[0]]["small"],
+        ),
+        ("Recall, larger objects", lambda r: r["recall_by_size_iou_0.5"][best(r)[0]]["large"]),
+    ]
+    for axis, (title, value) in zip(axes, panels, strict=True):
+        style(axis, title)
+        for run, label, color in SIZE_RUNS:
+            path = artifacts / run / "heldout.jsonl"
+            if not path.exists():
+                continue
+            points = rows(path)
+            minutes = [r["seconds"] / 60 for r in points]
+            values = [value(r) for r in points]
+            axis.plot(
+                minutes, values, color=color, linewidth=2, marker="o", markersize=4, label=label
+            )
+            axis.annotate(
+                f"{values[-1]:.2f}",
+                (minutes[-1], values[-1]),
+                textcoords="offset points",
+                xytext=(6, 0),
+                va="center",
+                fontsize=9,
+                color=INK,
+            )
+        axis.set_xlabel("Training minutes on one H100", fontsize=9, color=MUTED)
+        axis.set_ylim(0, 0.9)
+        axis.margins(x=0.08)
+    axes[0].legend(frameon=False, fontsize=9, labelcolor=INK, loc="lower right")
+    figure.tight_layout()
+    figure.savefig(out / "training-sizes.png", dpi=200, facecolor=SURFACE)
+    plt.close(figure)
+
+
 def coco_figure(artifacts, out):
-    figure, axis = plt.subplots(figsize=(7.5, 4.6), facecolor=SURFACE)
+    figure, axis = plt.subplots(figsize=(9.5, 5.2), facecolor=SURFACE)
     style(axis, "COCO val2017, 500 images: F1 at IoU 0.5 against seconds per image")
     axis.grid(axis="x", color=GRID, linewidth=0.8)
-    for run, label, color in EVALUATIONS:
+    for run, label, color, offset in EVALUATIONS:
         path = artifacts / run / "summary.json"
         if not path.exists():
             continue
@@ -111,9 +167,12 @@ def coco_figure(artifacts, out):
             f"{label}\n{f1:.2f} F1, {seconds:.2f} s",
             (seconds, f1),
             textcoords="offset points",
-            xytext=(10, -4),
+            xytext=offset,
             fontsize=9,
             color=INK,
+            arrowprops={"arrowstyle": "-", "color": MUTED, "linewidth": 0.8}
+            if abs(offset[0]) > 20
+            else None,
         )
     axis.set_xlabel("Seconds per image (all prompted categories)", fontsize=9, color=MUTED)
     axis.set_xlim(0, 1.6)
@@ -189,6 +248,7 @@ def main():
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     training_figure(args.artifacts, args.out)
+    size_figure(args.artifacts, args.out)
     coco_figure(args.artifacts, args.out)
     examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))
     examples_figure(args.artifacts, args.out, "examples-2.png", objects=(4, 9), skip=4)

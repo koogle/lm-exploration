@@ -164,6 +164,12 @@ def latency_summary(records):
             name: spread(by_emitted[name]) for name, _, _ in EMITTED_BUCKETS if by_emitted[name]
         },
     }
+    parts = {r["image_id"]: r["components"] for r in records if r.get("components")}
+    if parts:
+        # Detectors that time their stages report where the shared seconds go.
+        out["shared_components"] = {
+            name: spread([p[name] for p in parts.values()]) for name in next(iter(parts.values()))
+        }
     if len(set(emitted.tolist())) > 1:
         slope, intercept = np.polyfit(emitted, seconds, 1)
         out["phrase_seconds_linear_fit"] = {

@@ -21,6 +21,7 @@ import math
 import random
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -386,10 +387,14 @@ class SlotDetector:
     threshold whose decoded label equals it. All time is reported as shared.
     """
 
-    def __init__(self, checkpoint, device, steps=1):
+    def __init__(self, checkpoint, device, steps=1, max_crops=None):
+        """`max_crops` overrides how many high-resolution crops the vision encoder reads."""
         state = torch.load(checkpoint, map_location=device)
         config = state["config"]
         self.model, self.inner, self.functions = load_backbone(**config["model"], device=device)
+        if max_crops is not None:
+            vision = replace(self.inner.config.vision, max_crops=max_crops)
+            self.inner.config = replace(self.inner.config, vision=vision)
         self.head = SlotHead(
             self.inner.text, config["slots"], config["label_tokens"], config["rank"]
         )
@@ -403,15 +408,19 @@ class SlotDetector:
             torch.cuda.synchronize(self.device)
         return time.perf_counter()
 
+    @torch.inference_mode()
     def detect(self, image, phrases):
         width, height = image.size
         start = self._clock()
-        encoded = self.model.encode_image(image)
+        embedding = self.inner._run_vision_encoder(image)
+        encoded = self._clock()
+        cache = image_cache(self.inner, self.functions, embedding[None])
+        prefilled = self._clock()
         objectness, boxes, tokens = sample(
             self.head,
             self.inner.text,
             self.inner.region,
-            encoded.caches,
+            cache,
             self.functions.apply_rotary_emb,
             self.steps,
         )
@@ -428,4 +437,13 @@ class SlotDetector:
             ]
             for phrase in phrases
         ]
-        return {"boxes": found, "shared_seconds": shared, "phrase_seconds": [0.0] * len(phrases)}
+        return {
+            "boxes": found,
+            "shared_seconds": shared,
+            "phrase_seconds": [0.0] * len(phrases),
+            "components": {
+                "vision_encoder": encoded - start,
+                "image_prefix": prefilled - encoded,
+                "slots": shared - (prefilled - start),
+            },
+        }

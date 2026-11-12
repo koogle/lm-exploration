@@ -268,7 +268,9 @@ def launch(function, run_id, config, result_name, gpu="L4", limit=LAUNCH_LIMIT_S
     }
     remaining = int(deadline - time.time())
     settings = config if isinstance(config, dict) else json.loads(Path(config).read_text())
-    call = function.with_options(timeout=remaining).spawn(run_id, settings, provenance, deadline)
+    call = function.with_options(timeout=remaining, gpu=gpu).spawn(
+        run_id, settings, provenance, deadline
+    )
     supervisor = enforce_deadline.spawn([call.object_id], deadline)
     out = HERE / "artifacts" / run_id
     out.mkdir(parents=True, exist_ok=True)
@@ -285,12 +287,21 @@ def launch(function, run_id, config, result_name, gpu="L4", limit=LAUNCH_LIMIT_S
 
 
 @app.local_entrypoint()
-def main(run_id: str, config: str = "configs/moondream2.json", slots_run: str = ""):
-    """`--slots-run` evaluates that training run's head with a slots config."""
+def main(
+    run_id: str,
+    config: str = "configs/moondream2.json",
+    slots_run: str = "",
+    max_crops: int = 0,
+    gpu: str = "L4",
+):
+    """`--slots-run` evaluates that training run's head with a slots config; `--max-crops`
+    limits its vision encoder's crops."""
     settings = json.loads(Path(config).read_text())
     if slots_run:
         settings["model"]["checkpoint"] = f"/runs/slots/{slots_run}/head.pt"
-    launch(evaluate, run_id, settings, "summary.json")
+    if max_crops:
+        settings["model"]["max_crops"] = max_crops
+    launch(evaluate, run_id, settings, "summary.json", gpu=gpu)
 
 
 @app.local_entrypoint()

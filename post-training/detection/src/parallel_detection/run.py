@@ -121,6 +121,7 @@ def predict(detector, samples, image_folder, warmup=2):
                 "predicted": boxes,
                 "seconds": seconds,
                 "shared_seconds": result["shared_seconds"],
+                "components": result.get("components"),
             }
             for query, boxes, seconds in zip(
                 sample["queries"], result["boxes"], result["phrase_seconds"], strict=True
