@@ -203,7 +203,7 @@ def compare_decoders(run_id, config, provenance, deadline):
     memory=(65536, 65536),
     timeout=TRAIN_LIMIT_SECONDS,
     retries=0,
-    max_containers=2,
+    max_containers=4,
     volumes={"/runs": volume},
 )
 def train_slots(run_id, config, provenance, deadline):
@@ -292,15 +292,18 @@ def main(
     config: str = "configs/moondream2.json",
     slots_run: str = "",
     max_crops: int = 0,
+    threshold: float = -1.0,
     gpu: str = "L4",
 ):
     """`--slots-run` evaluates that training run's head with a slots config; `--max-crops`
-    limits its vision encoder's crops."""
+    limits its vision encoder's crops and `--threshold` sets its objectness threshold."""
     settings = json.loads(Path(config).read_text())
     if slots_run:
         settings["model"]["checkpoint"] = f"/runs/slots/{slots_run}/head.pt"
     if max_crops:
         settings["model"]["max_crops"] = max_crops
+    if threshold >= 0:
+        settings["model"]["threshold"] = threshold
     launch(evaluate, run_id, settings, "summary.json", gpu=gpu)
 
 

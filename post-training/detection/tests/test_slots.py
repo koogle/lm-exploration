@@ -7,6 +7,7 @@ from parallel_detection.slots import (
     bins_of,
     boxes_of,
     diffusion_loss,
+    loss_options,
     match,
     prefix_cache,
     sample,
@@ -135,3 +136,21 @@ def test_size_groups_send_small_objects_to_the_small_slots():
     slots, objects = match(torch.zeros(6), boxes, log_probs, truth, tokens, size_groups=(0.01, 2))
     assignment = dict(zip(objects.tolist(), slots.tolist(), strict=True))
     assert {assignment[0], assignment[2]} == {0, 1} and assignment[1] >= 2
+
+
+def test_near_label_negatives_and_iou_targets():
+    torch.manual_seed(0)
+    text, region = tiny_text(), tiny_region()
+    head = SlotHead(text, slots=6, label_tokens=3, rank=2)
+    cache = prefix_cache(text, torch.randn(1, 7, DIM), no_rotation)
+    objectness, box_logits, logits = head(text, region, cache, no_rotation)
+    targets = [(torch.tensor([[0.5, 0.5, 0.3, 0.3]]), torch.tensor([[3, 4, 0]]))]
+    options = loss_options({"objectness_target": "iou", "negatives": "near_labels"})
+    terms, _, stats = set_loss(objectness, box_logits, logits, targets, **options)
+    # Only unmatched slots near the labelled object are supervised as empty.
+    assert 0.0 <= stats["supervised_empty_share"] <= 1.0
+    everything = set_loss(objectness, box_logits, logits, targets)[2]
+    assert everything["supervised_empty_share"] == 1.0
+    # With IoU targets the matched slot is pushed toward its box quality, not to 1.
+    assert torch.isfinite(terms["objectness"])
+    assert loss_options({})["negatives"] == "all"

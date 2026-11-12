@@ -227,14 +227,45 @@ def match(objectness, boxes, log_probs, truth_boxes, truth_tokens, size_groups=N
     return torch.as_tensor(rows, device=boxes.device), torch.as_tensor(cols, device=boxes.device)
 
 
-def set_loss(objectness, box_logits, logits, targets, size_groups=None):
+# An unmatched slot whose box overlaps a labelled object at least this much is a
+# duplicate or a loose box on that object, not a find of an unlabelled one.
+NEAR_LABEL_IOU = 0.3
+
+
+def loss_options(config):
+    """The `set_loss` keyword arguments a training config selects."""
+    groups = config.get("size_groups")
+    return {
+        "size_groups": groups and (groups["boundary"], groups["small_slots"]),
+        "objectness_target": config.get("objectness_target", "binary"),
+        "negatives": config.get("negatives", "all"),
+    }
+
+
+def set_loss(
+    objectness,
+    box_logits,
+    logits,
+    targets,
+    size_groups=None,
+    objectness_target="binary",
+    negatives="all",
+):
     """Losses for a batch; `targets` is a list of (boxes [n, 4] cxcywh, tokens [n, T]).
 
     Boxes are matched and regressed through their expected bins, and each bin
-    distribution is also trained on the truth bin. Unmatched slots are pushed toward
-    "nothing" with a small weight: the labels name some objects in the image, not every
-    object. Returns the loss terms, the matching as (batch, slot, truth tokens, truth
-    bins) and detached statistics.
+    distribution is also trained on the truth bin. Box and label losses apply to matched
+    slots only.
+
+    Objectness: with `objectness_target` "binary" a matched slot's target is 1; with
+    "iou" it is the IoU of the slot's decoded box with its object, so confidence ranks
+    box quality. Unmatched slots have target 0 with a small weight. With `negatives`
+    "all" every unmatched slot gets it; with "near_labels" only unmatched slots whose box
+    overlaps a labelled object (duplicates and loose boxes) do, and slots elsewhere get
+    no gradient, because they may have found an object the labels omit.
+
+    Returns the loss terms, the matching as (batch, slot, truth tokens, truth bins) and
+    detached statistics.
     """
     boxes = soft_boxes(box_logits)
     log_probs = logits.log_softmax(-1)
@@ -248,14 +279,29 @@ def set_loss(objectness, box_logits, logits, targets, size_groups=None):
     batch_index, slot_index = torch.cat(batch_index), torch.cat(slot_index)
     truth_boxes, truth_tokens = torch.cat(truth_boxes), torch.cat(truth_tokens)
     truth_bins = bins_of(truth_boxes)
-    matched = torch.zeros_like(objectness)
-    matched[batch_index, slot_index] = 1.0
-    weight = torch.where(matched.bool(), 1.0, WEIGHTS["empty"])
     predicted = boxes[batch_index, slot_index]
     matched_logits = box_logits[batch_index, slot_index]
     giou, _ = generalized_iou(to_corners(predicted), to_corners(truth_boxes))
+    decoded = boxes_of(matched_logits.argmax(-1))
+    _, iou = generalized_iou(to_corners(decoded), to_corners(truth_boxes))
+    iou = iou.diagonal()
+    matched = torch.zeros_like(objectness, dtype=torch.bool)
+    matched[batch_index, slot_index] = True
+    target = torch.zeros_like(objectness)
+    target[batch_index, slot_index] = 1.0 if objectness_target == "binary" else iou.detach()
+    weight = torch.where(matched, 1.0, WEIGHTS["empty"])
+    if negatives == "near_labels":
+        all_boxes = to_corners(boxes_of(box_logits.argmax(-1))).detach()
+        for b, (t_boxes, _) in enumerate(targets):
+            _, overlap = generalized_iou(all_boxes[b], to_corners(t_boxes))
+            near = overlap.max(-1).values >= NEAR_LABEL_IOU
+            weight[b] = torch.where(matched[b] | near, weight[b], 0.0)
+    elif negatives != "all":
+        raise ValueError(f"Unknown negatives setting {negatives!r}")
+    if objectness_target not in ("binary", "iou"):
+        raise ValueError(f"Unknown objectness target {objectness_target!r}")
     terms = {
-        "objectness": F.binary_cross_entropy_with_logits(objectness, matched, weight),
+        "objectness": F.binary_cross_entropy_with_logits(objectness, target, weight),
         "l1": F.l1_loss(predicted, truth_boxes),
         "giou": 1 - giou.diagonal().mean(),
         "bins": F.cross_entropy(matched_logits.flatten(0, 1), truth_bins.flatten()),
@@ -263,10 +309,10 @@ def set_loss(objectness, box_logits, logits, targets, size_groups=None):
             log_probs[batch_index, slot_index].flatten(0, 1), truth_tokens.flatten()
         ),
     }
-    decoded = boxes_of(matched_logits.argmax(-1))
-    _, iou = generalized_iou(to_corners(decoded), to_corners(truth_boxes))
     stats = {
-        "matched_iou": iou.diagonal().mean().item(),
+        "matched_iou": iou.mean().item(),
+        "supervised_empty_share": ((weight > 0) & ~matched).sum().item()
+        / max((~matched).sum().item(), 1),
         "label_exact": (logits[batch_index, slot_index].argmax(-1) == truth_tokens)
         .all(-1)
         .float()

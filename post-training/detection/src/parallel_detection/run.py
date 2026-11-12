@@ -123,8 +123,9 @@ def predict(detector, samples, image_folder, warmup=2):
                 "shared_seconds": result["shared_seconds"],
                 "components": result.get("components"),
             }
-            for query, boxes, seconds in zip(
-                sample["queries"], result["boxes"], result["phrase_seconds"], strict=True
+            | ({"scores": result["scores"][position]} if "scores" in result else {})
+            for position, (query, boxes, seconds) in enumerate(
+                zip(sample["queries"], result["boxes"], result["phrase_seconds"], strict=True)
             )
         ]
 

@@ -34,6 +34,7 @@ from parallel_detection.slots import (
     boxes_of,
     diffusion_loss,
     generalized_iou,
+    loss_options,
     prefix_cache,
     sample,
     set_loss,
@@ -167,9 +168,7 @@ def decode_names(tokens, vocabulary):
 
 
 @torch.no_grad()
-def heldout_scores(
-    head, inner, functions, data, indices, batch_size, device, thresholds, size_groups=None
-):
+def heldout_scores(head, inner, functions, data, indices, batch_size, device, thresholds, options):
     """Loss terms, box and label quality by sampler passes, and one-pass F1 at IoU 0.5 per
     objectness threshold.
 
@@ -190,7 +189,7 @@ def heldout_scores(
         rotate = functions.apply_rotary_emb
         objectness, box_logits, logits = head(inner.text, inner.region, cache, rotate)
         terms, (b_index, s_index, truth_tokens, truth_bins), stats = set_loss(
-            objectness, box_logits, logits, targets, size_groups
+            objectness, box_logits, logits, targets, **options
         )
         values = {k: v.item() for k, v in terms.items()} | stats
         truth = to_corners(boxes_of(truth_bins))
@@ -241,6 +240,8 @@ def heldout_scores(
     out["f1_iou_0.5"] = {
         str(t): 2 * tp / max(2 * tp + fp + fn, 1) for t, (tp, fp, fn) in tallies.items()
     }
+    out["precision_iou_0.5"] = {str(t): tp / max(tp + fp, 1) for t, (tp, fp, _) in tallies.items()}
+    out["recall_iou_0.5"] = {str(t): tp / max(tp + fn, 1) for t, (tp, _, fn) in tallies.items()}
     out["recall_by_size_iou_0.5"] = {
         str(t): {size: found / max(count, 1) for size, (found, count) in sizes.items()}
         for t, sizes in by_size.items()
@@ -277,8 +278,7 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
             return (step + 1) / warmup
         return 0.5 * (1 + math.cos(math.pi * (step - warmup) / max(steps - warmup, 1)))
 
-    groups_setting = config.get("size_groups")
-    size_groups = groups_setting and (groups_setting["boundary"], groups_setting["small_slots"])
+    options = loss_options(config)
     thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
     first_step, elapsed = 0, 0.0
     state_path = out / "state.pt"
@@ -319,7 +319,7 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
                     config["batch_size"],
                     device,
                     thresholds,
-                    size_groups,
+                    options,
                 )
                 scores.write(
                     json.dumps({"step": step, "seconds": time.time() - started} | row) + "\n"
@@ -338,7 +338,7 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
             cache = image_cache(inner, functions, embeddings)
             rotate = functions.apply_rotary_emb
             objectness, box_logits, logits = head(inner.text, inner.region, cache, rotate)
-            terms, matching, stats = set_loss(objectness, box_logits, logits, targets, size_groups)
+            terms, matching, stats = set_loss(objectness, box_logits, logits, targets, **options)
             denoise = diffusion_loss(
                 head, inner.text, inner.region, cache, rotate, matching, generator
             )
@@ -387,8 +387,9 @@ class SlotDetector:
     threshold whose decoded label equals it. All time is reported as shared.
     """
 
-    def __init__(self, checkpoint, device, steps=1, max_crops=None):
-        """`max_crops` overrides how many high-resolution crops the vision encoder reads."""
+    def __init__(self, checkpoint, device, steps=1, max_crops=None, threshold=None):
+        """`max_crops` overrides how many high-resolution crops the vision encoder reads;
+        `threshold` overrides the objectness threshold chosen on held-out images."""
         state = torch.load(checkpoint, map_location=device)
         config = state["config"]
         self.model, self.inner, self.functions = load_backbone(**config["model"], device=device)
@@ -400,7 +401,8 @@ class SlotDetector:
         )
         self.head.load_state_dict(state["head"])
         self.head.to(device).eval()
-        self.vocabulary, self.threshold = state["vocabulary"], state["threshold"]
+        self.vocabulary = state["vocabulary"]
+        self.threshold = state["threshold"] if threshold is None else threshold
         self.device, self.steps = torch.device(device), steps
 
     def _clock(self):
@@ -424,7 +426,8 @@ class SlotDetector:
             self.functions.apply_rotary_emb,
             self.steps,
         )
-        keep = (objectness[0].sigmoid() >= self.threshold).tolist()
+        scores = objectness[0].sigmoid().tolist()
+        keep = [score >= self.threshold for score in scores]
         names = decode_names(tokens[0], self.vocabulary)
         corners = to_corners(boxes[0]).clamp(0, 1).tolist()
         shared = self._clock() - start
@@ -437,9 +440,13 @@ class SlotDetector:
             ]
             for phrase in phrases
         ]
+        kept = [
+            [scores[k] for k in range(len(keep)) if keep[k] and names[k] == phrase]
+            for phrase in phrases
+        ]
         return {
             "boxes": found,
-            "shared_seconds": shared,
+            "scores": kept,
             "phrase_seconds": [0.0] * len(phrases),
             "components": {
                 "vision_encoder": encoded - start,
