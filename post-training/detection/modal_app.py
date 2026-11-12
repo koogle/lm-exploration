@@ -10,7 +10,7 @@ Run from post-training/detection/:
     modal run --detach modal_app.py::slots --run-id slots-001
 
 `main` evaluates a config (default `configs/moondream2.json`) on an L4. `slots` trains
-the slot head of `configs/slots.json` on an H100 within three hours of launch. `photon`
+the slot head of a slots config on an H100 within five hours of launch. `photon`
 evaluates a config through Moondream's Photon engine on an L40S. `decoders` runs `configs/decoders.json`
 once per decoder (PyTorch eager, this folder's loop, the custom CUDA kernels,
 torch.compile) on the same images and reports how each agrees with eager.
@@ -24,14 +24,16 @@ The local command waits for the result and saves it under `artifacts/<run id>/`.
 """
 
 import json
+import shutil
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import modal
 
 LAUNCH_LIMIT_SECONDS = 60 * 60
-TRAIN_LIMIT_SECONDS = 3 * 60 * 60
+TRAIN_LIMIT_SECONDS = 5 * 60 * 60
 COMMIT_EVERY_IMAGES = 50
 
 HERE = Path(__file__).parent
@@ -198,10 +200,11 @@ def compare_decoders(run_id, config, provenance, deadline):
 @app.function(
     image=image,
     gpu="H100",
-    memory=(81920, 81920),
+    memory=(65536, 65536),
+    ephemeral_disk=400 * 1024,
     timeout=TRAIN_LIMIT_SECONDS,
     retries=0,
-    max_containers=1,
+    max_containers=2,
     volumes={"/runs": volume},
 )
 def train_slots(run_id, config, provenance, deadline):
@@ -227,6 +230,13 @@ def train_slots(run_id, config, provenance, deadline):
             encode_shard(parquet, stem, config)
             volume.commit()
         stems.append(stem)
+    # Training reads random images, so the shards are memory-mapped from local disk.
+    local = Path("/tmp/features")
+    local.mkdir(parents=True, exist_ok=True)
+    with ThreadPoolExecutor(8) as pool:
+        files = [stem.with_suffix(suffix) for stem in stems for suffix in (".npy", ".json")]
+        list(pool.map(lambda path: shutil.copy(path, local / path.name), files))
+    stems = [local / stem.name for stem in stems]
     # Stop training early enough to write the checkpoint and report.
     report = train(config, stems, out, saved=volume.commit, deadline=deadline - 900)
     report["provenance"] = provenance
@@ -292,5 +302,5 @@ def photon(run_id: str, config: str = "configs/moondream3.1-photon.json"):
 
 
 @app.local_entrypoint()
-def slots(run_id: str, config: str = "configs/slots.json"):
+def slots(run_id: str, config: str = "configs/slots-4-shards.json"):
     launch(train_slots, run_id, config, "report.json", gpu="H100", limit=TRAIN_LIMIT_SECONDS)

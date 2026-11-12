@@ -18,6 +18,7 @@ not host this experiment.
 
 import json
 import math
+import random
 import sys
 import time
 from pathlib import Path
@@ -29,9 +30,11 @@ import torch
 from parallel_detection.slots import (
     PREFIX,
     SlotHead,
+    boxes_of,
     diffusion_loss,
+    generalized_iou,
     prefix_cache,
-    sample_labels,
+    sample,
     set_loss,
     to_corners,
     total,
@@ -114,10 +117,10 @@ def encode_shard(parquet, out, config, device="cuda"):
 
 
 class Features:
-    """Encoded shards in memory, with labels tokenized into fixed-length blocks."""
+    """Memory-mapped encoded shards, with labels tokenized into fixed-length blocks."""
 
     def __init__(self, stems, tokenizer, label_tokens, pad):
-        self.arrays = [np.load(Path(stem).with_suffix(".npy")) for stem in stems]
+        self.arrays = [np.load(Path(stem).with_suffix(".npy"), mmap_mode="r") for stem in stems]
         self.records = [
             r for stem in stems for r in json.loads(Path(stem).with_suffix(".json").read_text())
         ]
@@ -162,7 +165,8 @@ def decode_names(tokens, vocabulary):
 
 @torch.no_grad()
 def heldout_scores(head, inner, functions, data, indices, batch_size, device, thresholds):
-    """Loss terms, label accuracy by sampler steps and F1 at IoU 0.5 per objectness threshold.
+    """Loss terms, box and label quality by sampler passes, and one-pass F1 at IoU 0.5 per
+    objectness threshold.
 
     A detection counts when its box overlaps an unmatched truth box of the same decoded
     label by at least 0.5.
@@ -177,21 +181,26 @@ def heldout_scores(head, inner, functions, data, indices, batch_size, device, th
         chunk = indices[start : start + batch_size]
         embeddings, targets = data.batch(chunk, device)
         cache = image_cache(inner, functions, embeddings)
-        objectness, boxes, logits = head(inner.text, cache, functions.apply_rotary_emb)
-        terms, (b_index, s_index, truth_tokens), stats = set_loss(
-            objectness, boxes, logits, targets
+        rotate = functions.apply_rotary_emb
+        objectness, box_logits, logits = head(inner.text, inner.region, cache, rotate)
+        terms, (b_index, s_index, truth_tokens, truth_bins), stats = set_loss(
+            objectness, box_logits, logits, targets
         )
         values = {k: v.item() for k, v in terms.items()} | stats
-        _, _, two_step, _ = sample_labels(head, inner.text, cache, functions.apply_rotary_emb, 2)
-        values["label_exact_2_steps"] = (
-            (two_step[b_index, s_index] == truth_tokens).all(-1).float().mean().item()
-        )
+        truth = to_corners(boxes_of(truth_bins))
+        for steps in (2, 3):
+            _, sampled, tokens = sample(head, inner.text, inner.region, cache, rotate, steps)
+            _, iou = generalized_iou(to_corners(sampled[b_index, s_index]), truth)
+            values[f"matched_iou_{steps}_steps"] = iou.diagonal().mean().item()
+            values[f"label_exact_{steps}_steps"] = (
+                (tokens[b_index, s_index] == truth_tokens).all(-1).float().mean().item()
+            )
         for key, value in values.items():
             sums[key] = sums.get(key, 0.0) + value * len(chunk)
         counts += len(chunk)
         names = decode_names(logits.argmax(-1), data.vocabulary)
         scores = objectness.sigmoid()
-        corners = to_corners(boxes).cpu().numpy()
+        corners = to_corners(boxes_of(box_logits.argmax(-1))).cpu().numpy()
         for b, i in enumerate(chunk):
             truth = data.records[i]["objects"]
             for threshold in thresholds:
@@ -239,6 +248,7 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
         {"params": others, "base": config["head_learning_rate"]},
     ]
     optimizer = torch.optim.AdamW(groups, lr=config["learning_rate"], weight_decay=0.01)
+    sampler = random.Random(config["seed"])
     steps, warmup = config["steps"], config["warmup_steps"]
 
     def rate(step):
@@ -246,7 +256,7 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
             return (step + 1) / warmup
         return 0.5 * (1 + math.cos(math.pi * (step - warmup) / max(steps - warmup, 1)))
 
-    thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+    thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
     started = time.time()
     stop_reason = "completed"
     with (out / "metrics.jsonl").open("w") as metrics, (out / "heldout.jsonl").open("w") as scores:
@@ -267,16 +277,14 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
                 break
             for group in optimizer.param_groups:
                 group["lr"] = group["base"] * rate(step)
-            picks = [
-                training[(step * config["batch_size"] + j) % len(training)]
-                for j in range(config["batch_size"])
-            ]
+            picks = sampler.sample(training, config["batch_size"])
             embeddings, targets = data.batch(picks, device)
             cache = image_cache(inner, functions, embeddings)
-            objectness, boxes, logits = head(inner.text, cache, functions.apply_rotary_emb)
-            terms, matching, stats = set_loss(objectness, boxes, logits, targets)
+            rotate = functions.apply_rotary_emb
+            objectness, box_logits, logits = head(inner.text, inner.region, cache, rotate)
+            terms, matching, stats = set_loss(objectness, box_logits, logits, targets)
             denoise = diffusion_loss(
-                head, inner.text, cache, functions.apply_rotary_emb, matching, generator
+                head, inner.text, inner.region, cache, rotate, matching, generator
             )
             loss = total(terms) + denoise
             optimizer.zero_grad(set_to_none=True)
@@ -343,8 +351,13 @@ class SlotDetector:
         width, height = image.size
         start = self._clock()
         encoded = self.model.encode_image(image)
-        objectness, boxes, tokens, _ = sample_labels(
-            self.head, self.inner.text, encoded.caches, self.functions.apply_rotary_emb, self.steps
+        objectness, boxes, tokens = sample(
+            self.head,
+            self.inner.text,
+            self.inner.region,
+            encoded.caches,
+            self.functions.apply_rotary_emb,
+            self.steps,
         )
         keep = (objectness[0].sigmoid() >= self.threshold).tolist()
         names = decode_names(tokens[0], self.vocabulary)
