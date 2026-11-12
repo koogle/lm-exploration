@@ -1,0 +1,30 @@
+{
+  "seed": 20261112,
+  "model": {
+    "repo": "vikhyatk/moondream2",
+    "revision": "2025-06-21"
+  },
+  "data": [
+    {
+      "kind": "teacher",
+      "name": "teacher-carbon",
+      "labels": "/runs/teacher/google--gemini-4-carbon.jsonl",
+      "images": "/runs/teacher/images",
+      "shard_size": 3000
+    }
+  ],
+  "min_area": 0.0003,
+  "max_objects": 30,
+  "slots": 48,
+  "label_tokens": 3,
+  "rank": 16,
+  "batch_size": 16,
+  "steps": 10000,
+  "warmup_steps": 500,
+  "learning_rate": 0.0002,
+  "head_learning_rate": 0.001,
+  "heldout_images": 300,
+  "evaluate_every": 1000,
+  "log_every": 20,
+  "size_groups": null
+}
