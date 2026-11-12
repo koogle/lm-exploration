@@ -4,11 +4,12 @@
 
 Reads `<artifacts>/<run>/heldout.jsonl` for the training runs and
 `<artifacts>/<run>/summary.json` and `predictions.jsonl` for the COCO evaluations, and
-writes `training.png`, `coco.png` and `examples.png`.
+writes `training.png`, `coco.png` and three `examples*.png` grids.
 """
 
 import argparse
 import json
+import textwrap
 from collections import defaultdict
 from pathlib import Path
 
@@ -130,15 +131,16 @@ def by_image(path):
     return grouped
 
 
-def examples_figure(artifacts, out, count=4):
+def examples_figure(artifacts, out, name, objects, skip=0, count=4):
+    """Side-by-side boxes on `count` images whose annotated object count is in `objects`."""
     runs = {run: by_image(artifacts / run / "predictions.jsonl") for _, run in EXAMPLES if run}
     reference = runs["moondream2-001"]
-    # The first images, by id, with a handful of annotated objects.
+    low, high = objects
     chosen = [
         image_id
         for image_id, records in sorted(reference.items())
-        if 4 <= sum(len(r["boxes"]) for r in records) <= 9 and len(records) >= 2
-    ][:count]
+        if low <= sum(len(r["boxes"]) for r in records) <= high and len(records) >= 2
+    ][skip : skip + count]
     figure, axes = plt.subplots(count, len(EXAMPLES), figsize=(13, 3.1 * count), facecolor=SURFACE)
     for row, image_id in enumerate(chosen):
         image = fetch_image(
@@ -169,13 +171,14 @@ def examples_figure(artifacts, out, count=4):
                 seconds = records[0]["shared_seconds"] + sum(r["seconds"] for r in records)
                 caption += f", {seconds:.2f} s"
             else:
-                caption += ": " + ", ".join(r["phrase"] for r in records)
+                phrases = ", ".join(r["phrase"] for r in records)
+                caption += ": " + textwrap.shorten(phrases, 44, placeholder=" …")
             axis.set_title(
                 f"{title}\n{caption}" if row == 0 else caption, fontsize=9, color=INK, loc="left"
             )
             axis.axis("off")
     figure.tight_layout()
-    figure.savefig(out / "examples.png", dpi=150, facecolor=SURFACE)
+    figure.savefig(out / name, dpi=150, facecolor=SURFACE)
     plt.close(figure)
 
 
@@ -187,7 +190,9 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
     training_figure(args.artifacts, args.out)
     coco_figure(args.artifacts, args.out)
-    examples_figure(args.artifacts, args.out)
+    examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))
+    examples_figure(args.artifacts, args.out, "examples-2.png", objects=(4, 9), skip=4)
+    examples_figure(args.artifacts, args.out, "examples-crowded.png", objects=(12, 25))
 
 
 if __name__ == "__main__":
