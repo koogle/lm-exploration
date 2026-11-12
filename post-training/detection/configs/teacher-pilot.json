@@ -58,11 +58,17 @@
     }
   },
   "consensus_votes": [
+    1,
     2,
     3
   ],
   "score_both_orders": [
     "qwen/qwen3.8-max-0902",
     "qwen/qwen3.8-flash"
+  ],
+  "consensus_models": [
+    "google/gemini-4-carbon",
+    "qwen/qwen3.8-max-0902 (x first)",
+    "openai/gpt-6.1-terra"
   ]
 }
