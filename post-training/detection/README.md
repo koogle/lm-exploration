@@ -3,10 +3,10 @@
 Post-training a small vision-language model so that it detects requested objects in
 one forward pass, with a box and a short label per detection.
 
-**Status:** the evaluation harness, three baselines, custom decode kernels and five
+**Status:** the evaluation harness, three baselines, custom decode kernels and six
 training runs of the slot head are implemented and measured. The best slot head beats
-Moondream 2's own detector on COCO F1 at a quarter of the latency and trails
-Moondream 3.1 on recall.
+Moondream 2's own detector on COCO F1 at a quarter of the latency, runs 2.8 times faster
+than Moondream 3.1 on the same GPU, and trails 3.1 by 6 points of F1, all in recall.
 
 Measured outputs (predictions, summaries, training curves, the trained head) are in the
 Hugging Face dataset [`jfrick/lm-exploration-results`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-167/post-training/detection)
@@ -199,6 +199,7 @@ All on one H100, batch 16.
 | `slots-bins-16` | Coordinate bins | 45k | 32 | 0.2% | 20,000 | 132 |
 | `slots-sizes-none` | Coordinate bins | 23k | 48 | 0.03% | 10,000 | 78 |
 | `slots-sizes-grouped` | Coordinate bins, size groups | 23k | 48 | 0.03% | 10,000 | 74 |
+| `slots-small-16` | Coordinate bins | 46k | 48 | 0.03% | 20,000 | 184 |
 
 In `slots-sizes-grouped` the first 24 slots are matched only to objects under 1% of the
 image and the other 24 to larger ones.
@@ -213,6 +214,7 @@ COCO val2017, the same 500 images as the baseline, on an L4:
 | `slots-bins-16` | 0.622 | 0.518 | 0.757 | 0.528 | 0.104 | 0.255 |
 | `slots-sizes-none` | 0.590 | 0.469 | 0.692 | 0.514 | 0.239 | 0.233 |
 | `slots-sizes-grouped` | 0.549 | 0.431 | 0.634 | 0.484 | 0.207 | 0.217 |
+| `slots-small-16` | 0.636 | 0.507 | 0.722 | 0.569 | 0.257 | 0.240 |
 
 Findings:
 
@@ -227,8 +229,12 @@ Findings:
   matched held-out slots in one pass, and two or three passes change neither labels nor
   boxes. COCO names have one wording each, so labels with several valid wordings are
   untested.
-- **Keeping small objects in training more than doubles small-object recall** (0.10 to
-  0.24) but is not yet matched for data and steps against `slots-bins-16`.
+- **Keeping small objects in training more than doubles small-object recall.** On the
+  same 45k-image, 20,000-step schedule, `slots-small-16` against `slots-bins-16` raises
+  small-object recall from 0.10 to 0.26 and overall recall from 0.528 to 0.569, for 3.5
+  points of precision; F1 rises from 0.622 to 0.636, the best slot head so far. Medium
+  and large recall are unchanged (0.61 and 0.80), and that is most of the remaining gap
+  to Moondream 3.1 (0.77 and 0.89).
 - **Size-specialised slot groups did not help.** With everything else equal, the
   grouped run is behind the single group on F1 (0.549 against 0.590) and on small
   objects (0.207 against 0.239).
@@ -242,15 +248,16 @@ Findings:
 | L4 | 0.623 | 0.227 | 0.138 | 0.046 | 0.042 |
 | L40S | 0.622 | 0.078 | 0.046 | 0.016 | 0.016 |
 | L40S, one image crop | 0.607 | 0.046 | 0.016 | 0.014 | 0.016 |
+| L40S, `slots-small-16` | 0.636 | 0.074 | 0.044 | 0.016 | 0.014 |
 | Moondream 3.1, Photon, L40S | 0.700 | 0.208 | | | |
 
-On the GPU Moondream 3.1 was measured on, the slot head takes 0.078 s per image
-against 0.208 s. The slot pass is a fifth of that time, so fewer positions per slot
+On the GPU Moondream 3.1 was measured on, the slot heads take 0.074 to 0.078 s per
+image against 0.208 s. The slot pass is a fifth of that time, so fewer positions per slot
 would save little; the vision encoder is the largest stage, and limiting it to one crop
 costs 1.5 points of F1 with a head trained on full-crop features.
 
-`scripts/figures.py` draws the training curves, the accuracy-against-latency chart and
-side-by-side example images from downloaded run outputs; the rendered figures are in
+`scripts/figures.py` draws the training curves, accuracy against latency per GPU,
+recall by object size and side-by-side example images from downloaded run outputs; the rendered figures are in
 the archive under `figures/`.
 
 ## Run
@@ -290,8 +297,8 @@ training from its last held-out evaluation.
 
 ## Open work
 
-- Recall: train with small objects on the 45k-image schedule, and try teacher labels
-  from Moondream 3.1 in place of COCO's human boxes.
+- Recall on medium and large objects: teacher labels from Moondream 3.1 in place of
+  COCO's human boxes, more data, and unfreezing more of the backbone.
 - Speed: train the head on single-crop features; fold a slot's box and label into fewer
   positions; time the vision encoder under the custom kernels.
 - Prompted detection (a slot points at a phrase in the prompt), verified-absent

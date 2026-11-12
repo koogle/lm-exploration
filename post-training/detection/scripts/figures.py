@@ -4,7 +4,8 @@
 
 Reads `<artifacts>/<run>/heldout.jsonl` for the training runs and
 `<artifacts>/<run>/summary.json` and `predictions.jsonl` for the COCO evaluations, and
-writes `training.png`, `training-sizes.png`, `coco.png` and three `examples*.png` grids.
+writes `training.png`, `training-small-objects.png`, `coco.png`, `recall-by-size.png`
+and three `examples*.png` grids.
 """
 
 import argparse
@@ -23,32 +24,72 @@ from parallel_detection.run import fetch_image
 
 SURFACE, INK, MUTED, GRID = "#fcfcfb", "#1f1f1e", "#6b6a63", "#e4e3dd"
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
-MAGENTA, GREEN, VIOLET = "#e87ba4", "#008300", "#6250d6"
+MAGENTA, GREEN, VIOLET, GREY = "#e87ba4", "#008300", "#6250d6", "#9a998f"
+# One colour per model or run, the same in every chart. The superseded regression head
+# is grey.
+COLOURS = {
+    "moondream2": BLUE,
+    "moondream31": YELLOW,
+    "slots-001": GREY,
+    "slots-bins-4": ORANGE,
+    "slots-bins-16": AQUA,
+    "slots-sizes-none": GREEN,
+    "slots-sizes-grouped": MAGENTA,
+    "slots-small-16": VIOLET,
+}
+# Runs whose training labels drop objects under 0.2% of the image.
 TRAINING = [
-    ("slots-001", "Regressed boxes, 11k images", BLUE),
-    ("slots-bins-4", "Coordinate bins, 11k images", ORANGE),
-    ("slots-bins-16", "Coordinate bins, 44k images", AQUA),
+    ("slots-001", "Regressed boxes, 11k images"),
+    ("slots-bins-4", "Coordinate bins, 11k images"),
+    ("slots-bins-16", "Coordinate bins, 45k images"),
 ]
-# 48 slots, 22k images with objects down to 0.03% of the image.
-SIZE_RUNS = [
-    ("slots-sizes-none", "48 slots, one group", BLUE),
-    ("slots-sizes-grouped", "24 small-object + 24 large-object slots", ORANGE),
+# Runs that keep objects down to 0.03% of the image; their held-out set keeps them too.
+SMALL_RUNS = [
+    ("slots-sizes-none", "48 slots, 23k images"),
+    ("slots-sizes-grouped", "48 slots in two size groups, 23k images"),
+    ("slots-small-16", "48 slots, 46k images"),
 ]
-# (run, label, colour, label offset in points)
-EVALUATIONS = [
-    ("moondream2-001", "Moondream 2 detect (L4)", BLUE, (10, -4)),
-    ("slots-001-coco", "Slots, regressed boxes, 11k", ORANGE, (10, -4)),
-    ("slots-bins-4-coco", "Slots, bins, 11k", AQUA, (10, -12)),
-    ("moondream31-001", "Moondream 3.1, Photon (L40S)", YELLOW, (10, 2)),
-    ("slots-bins-16-coco", "Slots, bins, 44k", MAGENTA, (10, 2)),
-    ("slots-sizes-none-coco", "48 slots, small objects kept, one group", GREEN, (150, 6)),
-    ("slots-sizes-grouped-coco", "48 slots, small objects kept, size groups", VIOLET, (150, -18)),
+# (evaluation run, colour key, label, label offset in points, hollow marker)
+L4_POINTS = [
+    ("moondream2-001", "moondream2", "Moondream 2 detect", (10, -4), False),
+    ("slots-001-coco", "slots-001", "Slots, regressed boxes, 11k", (10, -4), False),
+    ("slots-bins-4-coco", "slots-bins-4", "Slots, bins, 11k", (60, -30), False),
+    ("slots-bins-16-coco", "slots-bins-16", "Slots, bins, 45k", (60, 10), False),
+    ("slots-sizes-none-coco", "slots-sizes-none", "Slots, small kept, 23k", (60, -8), False),
+    (
+        "slots-sizes-grouped-coco",
+        "slots-sizes-grouped",
+        "Slots, size groups, 23k",
+        (60, -52),
+        False,
+    ),
+    ("slots-small-16-coco", "slots-small-16", "Slots, small kept, 46k", (60, 32), False),
+]
+L40S_POINTS = [
+    ("moondream31-001", "moondream31", "Moondream 3.1 (Photon)", (10, -4), False),
+    ("moondream2-photon-001", "moondream2", "Moondream 2 (Photon)", (10, -4), False),
+    ("slots-bins-16-coco-l40s", "slots-bins-16", "Slots, bins, 45k", (40, -26), False),
+    (
+        "slots-bins-16-coco-l40s-1crop",
+        "slots-bins-16",
+        "Slots, bins, 45k, one crop",
+        (0, -62),
+        True,
+    ),
+    ("slots-small-16-coco-l40s", "slots-small-16", "Slots, small kept, 46k", (40, 14), False),
+]
+# (evaluation run, colour key, label) for the recall-by-size comparison.
+SIZE_COMPARISON = [
+    ("moondream2-001", "moondream2", "Moondream 2 detect"),
+    ("moondream31-001", "moondream31", "Moondream 3.1"),
+    ("slots-bins-16-coco", "slots-bins-16", "Slots, bins, 45k"),
+    ("slots-small-16-coco", "slots-small-16", "Slots, small kept, 46k"),
 ]
 EXAMPLES = [
     ("Annotated", None),
     ("Moondream 2", "moondream2-001"),
     ("Moondream 3.1", "moondream31-001"),
-    ("Slot head, bins", "slots-bins-4-coco"),
+    ("Slot head, 46k, small kept", "slots-small-16-coco"),
 ]
 
 
@@ -66,40 +107,57 @@ def rows(path):
     return [json.loads(line) for line in Path(path).read_text().splitlines()]
 
 
+def curves(axis, artifacts, runs, value):
+    placed = []  # end-label heights already used, in data units
+    for run, label in runs:
+        path = artifacts / run / "heldout.jsonl"
+        if not path.exists():
+            continue
+        points = rows(path)
+        minutes = [r["seconds"] / 60 for r in points]
+        values = [value(r) for r in points]
+        axis.plot(
+            minutes,
+            values,
+            color=COLOURS[run],
+            linewidth=2,
+            marker="o",
+            markersize=4,
+            label=label,
+        )
+        # An end label close to an earlier one is shifted down below it.
+        axis.annotate(
+            f"{values[-1]:.2f}",
+            (minutes[-1], values[-1]),
+            textcoords="offset points",
+            xytext=(6, -11 * sum(abs(values[-1] - y) < 0.03 for y in placed)),
+            va="center",
+            fontsize=9,
+            color=INK,
+        )
+        placed.append(values[-1])
+    axis.set_xlabel("Training minutes on one H100", fontsize=9, color=MUTED)
+    axis.margins(x=0.08)
+
+
 def training_figure(artifacts, out):
     figure, axes = plt.subplots(1, 2, figsize=(11, 4.2), facecolor=SURFACE)
     panels = [
-        (
-            "Held-out F1 at IoU 0.5 (best objectness threshold)",
-            lambda r: max(r["f1_iou_0.5"].values()),
-        ),
+        ("Held-out F1 at IoU 0.5 (best objectness threshold)", lambda r: best(r)[1]),
         ("Held-out IoU of matched boxes", lambda r: r["matched_iou"]),
     ]
     for axis, (title, value) in zip(axes, panels, strict=True):
         style(axis, title)
-        for run, label, color in TRAINING:
-            path = artifacts / run / "heldout.jsonl"
-            if not path.exists():
-                continue
-            points = rows(path)
-            minutes = [r["seconds"] / 60 for r in points]
-            values = [value(r) for r in points]
-            axis.plot(
-                minutes, values, color=color, linewidth=2, marker="o", markersize=4, label=label
-            )
-            axis.annotate(
-                f"{values[-1]:.2f}",
-                (minutes[-1], values[-1]),
-                textcoords="offset points",
-                xytext=(6, 0),
-                va="center",
-                fontsize=9,
-                color=INK,
-            )
-        axis.set_xlabel("Training minutes on one H100", fontsize=9, color=MUTED)
+        curves(axis, artifacts, TRAINING, value)
         axis.set_ylim(0, 0.85)
-        axis.margins(x=0.08)
     axes[0].legend(frameon=False, fontsize=9, labelcolor=INK, loc="lower right")
+    figure.suptitle(
+        "Training labels without objects under 0.2% of the image",
+        x=0.01,
+        ha="left",
+        fontsize=12,
+        color=INK,
+    )
     figure.tight_layout()
     figure.savefig(out / "training.png", dpi=200, facecolor=SURFACE)
     plt.close(figure)
@@ -110,8 +168,8 @@ def best(row):
     return max(row["f1_iou_0.5"].items(), key=lambda item: item[1])
 
 
-def size_figure(artifacts, out):
-    """Held-out curves of the size-group pair; their held-out set keeps small objects."""
+def small_objects_figure(artifacts, out):
+    """Held-out curves of the runs that keep small objects in training and held-out labels."""
     figure, axes = plt.subplots(1, 3, figsize=(14, 4.2), facecolor=SURFACE)
     panels = [
         ("Held-out F1 at IoU 0.5", lambda r: best(r)[1]),
@@ -123,62 +181,127 @@ def size_figure(artifacts, out):
     ]
     for axis, (title, value) in zip(axes, panels, strict=True):
         style(axis, title)
-        for run, label, color in SIZE_RUNS:
-            path = artifacts / run / "heldout.jsonl"
-            if not path.exists():
-                continue
-            points = rows(path)
-            minutes = [r["seconds"] / 60 for r in points]
-            values = [value(r) for r in points]
-            axis.plot(
-                minutes, values, color=color, linewidth=2, marker="o", markersize=4, label=label
-            )
-            axis.annotate(
-                f"{values[-1]:.2f}",
-                (minutes[-1], values[-1]),
-                textcoords="offset points",
-                xytext=(6, 0),
-                va="center",
-                fontsize=9,
-                color=INK,
-            )
-        axis.set_xlabel("Training minutes on one H100", fontsize=9, color=MUTED)
+        curves(axis, artifacts, SMALL_RUNS, value)
         axis.set_ylim(0, 0.9)
-        axis.margins(x=0.08)
     axes[0].legend(frameon=False, fontsize=9, labelcolor=INK, loc="lower right")
+    figure.suptitle(
+        "Training and held-out labels keep objects down to 0.03% of the image",
+        x=0.01,
+        ha="left",
+        fontsize=12,
+        color=INK,
+    )
     figure.tight_layout()
-    figure.savefig(out / "training-sizes.png", dpi=200, facecolor=SURFACE)
+    figure.savefig(out / "training-small-objects.png", dpi=200, facecolor=SURFACE)
     plt.close(figure)
 
 
-def coco_figure(artifacts, out):
-    figure, axis = plt.subplots(figsize=(9.5, 5.2), facecolor=SURFACE)
-    style(axis, "COCO val2017, 500 images: F1 at IoU 0.5 against seconds per image")
+def coco(artifacts, run):
+    path = artifacts / run / "summary.json"
+    return json.loads(path.read_text())["datasets"]["coco_val2017"] if path.exists() else None
+
+
+def scatter(axis, artifacts, points, title):
+    style(axis, title)
     axis.grid(axis="x", color=GRID, linewidth=0.8)
-    for run, label, color, offset in EVALUATIONS:
-        path = artifacts / run / "summary.json"
-        if not path.exists():
+    for run, key, label, offset, hollow in points:
+        result = coco(artifacts, run)
+        if result is None:
             continue
-        coco = json.loads(path.read_text())["datasets"]["coco_val2017"]
-        seconds = coco["latency"]["image_seconds"]["mean"]
-        f1 = coco["detection"]["iou_0.5"]["f1"]
-        axis.scatter([seconds], [f1], s=90, color=color, edgecolor=SURFACE, linewidth=2, zorder=3)
+        seconds = result["latency"]["image_seconds"]["mean"]
+        f1 = result["detection"]["iou_0.5"]["f1"]
+        colour = COLOURS[key]
+        axis.scatter(
+            [seconds],
+            [f1],
+            s=90,
+            color=SURFACE if hollow else colour,
+            edgecolor=colour if hollow else SURFACE,
+            linewidth=2,
+            zorder=3,
+        )
+        far = abs(offset[0]) > 20 or abs(offset[1]) > 20
         axis.annotate(
-            f"{label}\n{f1:.2f} F1, {seconds:.2f} s",
+            f"{label}\n{f1:.2f} F1, {seconds:.3f} s",
             (seconds, f1),
             textcoords="offset points",
             xytext=offset,
+            va="center",
             fontsize=9,
             color=INK,
-            arrowprops={"arrowstyle": "-", "color": MUTED, "linewidth": 0.8}
-            if abs(offset[0]) > 20
-            else None,
+            arrowprops={"arrowstyle": "-", "color": MUTED, "linewidth": 0.8} if far else None,
         )
-    axis.set_xlabel("Seconds per image (all prompted categories)", fontsize=9, color=MUTED)
-    axis.set_xlim(0, 1.6)
-    axis.set_ylim(0.35, 0.78)
+    axis.set_xlabel("Seconds per image, all prompted categories", fontsize=9, color=MUTED)
+    axis.set_ylim(0.4, 0.75)
+
+
+def coco_figure(artifacts, out):
+    figure, axes = plt.subplots(1, 2, figsize=(15, 5.4), facecolor=SURFACE)
+    scatter(axes[0], artifacts, L4_POINTS, "On an L4")
+    axes[0].set_xlim(0, 1.4)
+    scatter(axes[1], artifacts, L40S_POINTS, "On an L40S")
+    axes[1].set_xlim(0, 0.3)
+    axes[0].set_ylabel("F1 at IoU 0.5", fontsize=9, color=MUTED)
+    figure.suptitle(
+        "COCO val2017, 500 images: accuracy against latency, compared on the same GPU",
+        x=0.01,
+        ha="left",
+        fontsize=12,
+        color=INK,
+    )
     figure.tight_layout()
     figure.savefig(out / "coco.png", dpi=200, facecolor=SURFACE)
+    plt.close(figure)
+
+
+def recall_figure(artifacts, out):
+    """Recall by COCO object size, and precision, for the strongest runs and baselines."""
+    sizes = ["small", "medium", "large"]
+    figure, (left, right) = plt.subplots(
+        1, 2, figsize=(13, 4.6), facecolor=SURFACE, gridspec_kw={"width_ratios": [3, 1.4]}
+    )
+    style(left, "Recall at IoU 0.5 by COCO object size")
+    style(right, "Precision at IoU 0.5")
+    width = 0.8 / len(SIZE_COMPARISON)
+    for index, (run, key, label) in enumerate(SIZE_COMPARISON):
+        result = coco(artifacts, run)
+        if result is None:
+            continue
+        detection = result["detection"]["iou_0.5"]
+        values = [detection["recall_by_size"][size]["recall"] for size in sizes]
+        places = [s + (index - (len(SIZE_COMPARISON) - 1) / 2) * width for s in range(3)]
+        bars = left.bar(
+            places,
+            values,
+            width - 0.02,
+            color=COLOURS[key],
+            edgecolor=SURFACE,
+            linewidth=2,
+            label=label,
+        )
+        left.bar_label(bars, labels=[f"{v:.2f}" for v in values], fontsize=8, color=INK, padding=2)
+        precision = right.bar(
+            [index],
+            [detection["precision"]],
+            0.7,
+            color=COLOURS[key],
+            edgecolor=SURFACE,
+            linewidth=2,
+        )
+        right.bar_label(precision, labels=[f"{detection['precision']:.2f}"], fontsize=8, color=INK)
+    counts = coco(artifacts, SIZE_COMPARISON[0][0])["detection"]["iou_0.5"]["recall_by_size"]
+    left.set_xticks(
+        range(3),
+        [f"{size}\n({counts[size]['truth_boxes']} boxes)" for size in sizes],
+        fontsize=9,
+        color=MUTED,
+    )
+    right.set_xticks(range(len(SIZE_COMPARISON)), ["" for _ in SIZE_COMPARISON])
+    for axis in (left, right):
+        axis.set_ylim(0, 1)
+    left.legend(frameon=False, fontsize=9, labelcolor=INK, loc="upper left", ncols=2)
+    figure.tight_layout()
+    figure.savefig(out / "recall-by-size.png", dpi=200, facecolor=SURFACE)
     plt.close(figure)
 
 
@@ -248,8 +371,9 @@ def main():
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     training_figure(args.artifacts, args.out)
-    size_figure(args.artifacts, args.out)
+    small_objects_figure(args.artifacts, args.out)
     coco_figure(args.artifacts, args.out)
+    recall_figure(args.artifacts, args.out)
     examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))
     examples_figure(args.artifacts, args.out, "examples-2.png", objects=(4, 9), skip=4)
     examples_figure(args.artifacts, args.out, "examples-crowded.png", objects=(12, 25))
