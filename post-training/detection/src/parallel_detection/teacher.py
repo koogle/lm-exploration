@@ -7,8 +7,8 @@
 The config names the images (`datasets`, `seed` and an optional `limit` on the first
 samples) and maps each OpenRouter model id to extra request fields.
 
-A config with `manifest` labels the unlabelled images listed there instead (optionally
-only those of `sources`); `score` needs `datasets`.
+A config with `manifest` labels the unlabelled images listed there instead, at most
+`per_source[source]` of each source; `score` needs `datasets`.
 
 `label` asks every configured model for every instance of the 80 COCO categories in
 each image and appends one JSON line per (model, image) to `<out>/<model>.jsonl`, with
@@ -122,9 +122,16 @@ def images_of(config, out):
     if "manifest" in config:
         manifest = Path(config["manifest"])
         lines = [json.loads(line) for line in manifest.read_text().splitlines()]
-        sources = config.get("sources")
-        lines = [line for line in lines if sources is None or line["source"] in sources]
-        return lines[: config.get("limit")], manifest.parent
+        # `per_source` caps how many images of each source are labelled, in manifest order.
+        quotas, kept = config.get("per_source"), []
+        taken = {}
+        for line in lines:
+            if quotas is not None:
+                if taken.get(line["source"], 0) >= quotas.get(line["source"], 0):
+                    continue
+                taken[line["source"]] = taken.get(line["source"], 0) + 1
+            kept.append(line)
+        return kept[: config.get("limit")], manifest.parent
     return build_samples(config, out / "images")[: config.get("limit")], out / "images"
 
 

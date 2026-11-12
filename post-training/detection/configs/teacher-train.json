@@ -10,5 +10,9 @@
         "type": "json_object"
       }
     }
+  },
+  "per_source": {
+    "openimages": 13800,
+    "objects365": 9200
   }
 }
