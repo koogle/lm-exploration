@@ -239,6 +239,31 @@ Findings:
   grouped run is behind the single group on F1 (0.549 against 0.590) and on small
   objects (0.207 against 0.239).
 
+### Loss and capacity ablations
+
+Each run changes one thing against `slots-small-16` (46k images, 48 slots, 20,000 steps),
+plus one run with all three changes. COCO val, the same 500 images, each head at the
+objectness threshold chosen on its held-out images; L40S:
+
+| Run | Change | F1, IoU 0.5 | F1, IoU 0.75 | Precision | Recall | Recall small / medium / large | Seconds per image |
+|---|---|---|---|---|---|---|---|
+| `slots-small-16` | none | 0.636 | 0.506 | 0.720 | 0.570 | 0.26 / 0.61 / 0.80 | 0.089 |
+| `slots-rank64` | adapter rank 64 (50M parameters) | **0.657** | 0.518 | 0.735 | **0.595** | 0.29 / 0.64 / 0.81 | 0.087 |
+| `slots-iou` | objectness trained toward the matched box's IoU | 0.631 | | 0.739 | 0.550 | 0.19 / | |
+| `slots-near` | "nothing here" only for unmatched slots overlapping a labelled object | 0.568 | | 0.539 | 0.600 | 0.34 / | |
+| `slots-combined` | all three | 0.631 | **0.556** | 0.789 | 0.526 | 0.16 / 0.53 / 0.84 | 0.089 |
+
+- A larger adapter rank raises precision and recall together and costs no measurable
+  time, since the adapters act only at slot positions.
+- Training objectness toward box quality tightens boxes (F1 at IoU 0.75 is highest with
+  it) but loses small objects.
+- Without a "nothing here" signal away from labelled objects, recall rises and precision
+  falls by 18 points: on COCO's incomplete labels the signal suppresses junk boxes as well
+  as real unlabelled objects.
+
+These evaluations ran at threshold 0.3 with each box's confidence recorded, and are
+rescored at other thresholds with `python -m parallel_detection.run score --min-score`.
+
 ### Where the time goes
 
 `slots-bins-16` on the same 500 images:
