@@ -38,6 +38,7 @@ class MoondreamDetector:
             torch_dtype=torch.bfloat16 if self.device.type == "cuda" else torch.float32,
             device_map={"": device},
         ).eval()
+        self.model._setup_caches()  # the wrapper creates the key/value caches lazily
         self.inner = self.model.model
         # The Hub module that defines the model also holds its region and text functions.
         self.functions = sys.modules[type(self.inner).__module__]
