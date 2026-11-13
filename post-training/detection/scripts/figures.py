@@ -4,7 +4,8 @@
 
 Reads `<artifacts>/<run>/heldout.jsonl` for the training runs and
 `<artifacts>/<run>/summary.json` and `predictions.jsonl` for the COCO evaluations, and
-writes `training.png`, `training-small-objects.png`, `coco.png`, `recall-by-size.png`
+writes `training.png`, `training-small-objects.png`, `coco.png`, `recall-by-size.png`,
+`precision-recall.png`
 and three `examples*.png` grids.
 """
 
@@ -20,7 +21,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from parallel_detection.metrics import summarize
+from parallel_detection.metrics import ranked_ap, ranked_curve, summarize
 from parallel_detection.run import above, fetch_image, read_records
 
 SURFACE, INK, MUTED, GRID = "#fcfcfb", "#1f1f1e", "#6b6a63", "#e4e3dd"
@@ -319,6 +320,79 @@ def recall_figure(artifacts, out):
     plt.close(figure)
 
 
+# Precision-recall comparison: (evaluation run, colour key, label), legend order chosen
+# so neighbouring colours pass the palette check. Runs with recorded confidences become
+# curves; Moondream gives no confidence, so each model is one point.
+PR_SERIES = [
+    ("moondream2-001", "moondream2", "Moondream 2 detect"),
+    ("slots-rank64-coco", "slots-rank64", "Slots, rank 64, 46k COCO"),
+    ("moondream31-001", "moondream31", "Moondream 3.1"),
+    ("slots-teacher-coco-rank64-coco", "slots-teacher-coco-rank64", "Slots, + 18k Gemini-labelled"),
+    ("slots-small-16-coco-sweep-l40s", "slots-small-16", "Slots, rank 16, 46k COCO"),
+]
+
+
+def pr_figure(artifacts, out):
+    """Precision against recall at IoU 0.5 on COCO val, with the area under each curve."""
+    figure, axis = plt.subplots(figsize=(9, 6), facecolor=SURFACE)
+    style(axis, "COCO val2017, 500 images: precision against recall at IoU 0.5")
+    axis.grid(axis="x", color=GRID, linewidth=0.8)
+    for run, key, label in PR_SERIES:
+        path = artifacts / run / "predictions.jsonl"
+        if not path.exists():
+            continue
+        records = [r for r in read_records(path) if r["dataset"] == "coco_val2017"]
+        colour = COLOURS[key]
+        if "scores" in records[0]:
+            precision, recall, _ = ranked_curve(records)
+            ap = ranked_ap(records)["pooled_ap"]
+            axis.plot(recall, precision, color=colour, linewidth=2, label=f"{label}, area {ap:.3f}")
+            report = artifacts / key / "report.json"
+            if report.exists():
+                tuned = json.loads(report.read_text())["threshold"]
+                point = summarize(above(records, tuned))["coco_val2017"]["detection"]["iou_0.5"]
+                axis.scatter(
+                    [point["recall"]],
+                    [point["precision"]],
+                    s=60,
+                    color=colour,
+                    edgecolor=SURFACE,
+                    linewidth=2,
+                    zorder=3,
+                )
+        else:
+            point = summarize(records)["coco_val2017"]["detection"]["iou_0.5"]
+            axis.scatter(
+                [point["recall"]],
+                [point["precision"]],
+                s=110,
+                marker="D",
+                color=colour,
+                edgecolor=SURFACE,
+                linewidth=2,
+                zorder=4,
+                label=f"{label} (no confidence: one point)",
+            )
+    axis.set_xlabel("Recall", fontsize=9, color=MUTED)
+    axis.set_ylabel("Precision", fontsize=9, color=MUTED)
+    axis.set_xlim(0.3, 0.8)
+    axis.set_ylim(0.4, 1.0)
+    axis.legend(frameon=False, fontsize=9, labelcolor=INK, loc="lower left")
+    axis.annotate(
+        "Dots: each head at the threshold chosen on held-out images.\n"
+        "Curves stop at confidence 0.3, the lowest recorded.",
+        (0.99, 0.99),
+        xycoords="axes fraction",
+        ha="right",
+        va="top",
+        fontsize=8,
+        color=MUTED,
+    )
+    figure.tight_layout()
+    figure.savefig(out / "precision-recall.png", dpi=200, facecolor=SURFACE)
+    plt.close(figure)
+
+
 def by_image(path):
     grouped = defaultdict(list)
     for record in rows(path):
@@ -388,6 +462,7 @@ def main():
     small_objects_figure(args.artifacts, args.out)
     coco_figure(args.artifacts, args.out)
     recall_figure(args.artifacts, args.out)
+    pr_figure(args.artifacts, args.out)
     examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))
     examples_figure(args.artifacts, args.out, "examples-2.png", objects=(4, 9), skip=4)
     examples_figure(args.artifacts, args.out, "examples-crowded.png", objects=(12, 25))

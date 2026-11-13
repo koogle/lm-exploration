@@ -99,3 +99,18 @@ def test_agreement_pairs_boxes_in_emitted_order():
     assert result["same_box_count_rate"] == 0.5
     assert result["identical_boxes_rate"] == 0.0
     assert result["paired_iou"]["mean"] == pytest.approx(0.5)
+
+
+def test_ranked_ap_orders_boxes_by_confidence():
+    from parallel_detection.metrics import ranked_ap
+
+    box, far, miss = [0, 0, 100, 100], [500, 500, 520, 520], [300, 300, 310, 310]
+    good = record("present", [box, far], [miss, box, far]) | {"scores": [0.2, 0.9, 0.8]}
+    result = ranked_ap([good])
+    # The two hits rank first, so precision is 1 up to full recall.
+    assert result["pooled_ap"] == pytest.approx(1.0)
+    assert result["category_mean_ap"] == pytest.approx(1.0)
+    flipped = good | {"scores": [0.95, 0.9, 0.8]}
+    # A miss ranked first: precision 1/2 at recall 0.5 and 2/3 at recall 1.
+    assert ranked_ap([flipped])["pooled_ap"] == pytest.approx(0.5 * 2 / 3 + 0.5 * 2 / 3)
+    assert ranked_ap([flipped])["max_recall"] == 1.0

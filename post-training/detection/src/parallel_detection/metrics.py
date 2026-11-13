@@ -214,3 +214,63 @@ def agreement(reference, records):
         "identical_boxes_rate": ratio(identical, len(reference)),
         "paired_iou": spread(overlaps),
     }
+
+
+def ranked_curve(records, threshold=0.5):
+    """Precision-recall curve over boxes ranked by recorded confidence.
+
+    Uses phrases that name something in the image. Within each phrase, boxes are taken
+    in descending confidence and each takes the unmatched truth box it overlaps most, as
+    in COCO's evaluation. Returns (precision, recall) arrays over the pooled ranking,
+    and the per-phrase pieces as {phrase: (scores, hits, truth count)}.
+    """
+    present = [r for r in records if r["kind"] != "absent"]
+    by_phrase = defaultdict(lambda: [[], [], 0])
+    for r in present:
+        order = np.argsort(-np.asarray(r["scores"], dtype=np.float64), kind="stable")
+        boxes = [r["predicted"][i] for i in order]
+        iou = iou_matrix(boxes, r["boxes"])
+        taken = np.zeros(len(r["boxes"]), dtype=bool)
+        entry = by_phrase[r["phrase"]]
+        for rank, index in enumerate(order):
+            overlaps = np.where(taken, -1.0, iou[rank]) if len(r["boxes"]) else np.array([-1.0])
+            best = int(overlaps.argmax())
+            hit = bool(overlaps[best] >= threshold)
+            taken[best] |= hit
+            entry[0].append(r["scores"][index])
+            entry[1].append(hit)
+        entry[2] += len(r["boxes"])
+    scores = np.concatenate([np.asarray(e[0], dtype=np.float64) for e in by_phrase.values()])
+    hits = np.concatenate([np.asarray(e[1], dtype=bool) for e in by_phrase.values()])
+    total = sum(e[2] for e in by_phrase.values())
+    order = np.argsort(-scores, kind="stable")
+    found = np.cumsum(hits[order])
+    return found / np.arange(1, len(found) + 1), found / max(total, 1), dict(by_phrase)
+
+
+def area(precision, recall):
+    """Area under a precision-recall curve with precision made non-increasing (all-point
+    interpolation, as in COCO and VOC since 2010). The curve stops at the last recorded
+    box, so a truncated ranking gives a lower bound."""
+    if not len(recall):
+        return 0.0
+    envelope = np.maximum.accumulate(precision[::-1])[::-1]
+    steps = np.diff(np.concatenate([[0.0], recall]))
+    return float((steps * envelope).sum())
+
+
+def ranked_ap(records, threshold=0.5):
+    """Pooled area under the precision-recall curve, and its mean over categories."""
+    precision, recall, phrases = ranked_curve(records, threshold)
+    per_category = []
+    for scores, hits, total in phrases.values():
+        if not total:
+            continue
+        order = np.argsort(-np.asarray(scores, dtype=np.float64), kind="stable")
+        found = np.cumsum(np.asarray(hits, dtype=bool)[order])
+        per_category.append(area(found / np.arange(1, len(found) + 1), found / total))
+    return {
+        "pooled_ap": area(precision, recall),
+        "category_mean_ap": float(np.mean(per_category)) if per_category else None,
+        "max_recall": float(recall[-1]) if len(recall) else 0.0,
+    }

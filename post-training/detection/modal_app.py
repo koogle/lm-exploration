@@ -10,7 +10,7 @@ Run from post-training/detection/:
     modal run --detach modal_app.py::slots --run-id slots-001
 
 `main` evaluates a config (default `configs/moondream2.json`) on an L4. `slots` trains
-the slot head of a slots config on an H100 within five hours of launch. `photon`
+the slot head of a slots config on an H100 within eight hours of launch. `photon`
 evaluates a config through Moondream's Photon engine on an L40S. `decoders` runs `configs/decoders.json`
 once per decoder (PyTorch eager, this folder's loop, the custom CUDA kernels,
 torch.compile) on the same images and reports how each agrees with eager.
@@ -33,7 +33,7 @@ from pathlib import Path
 import modal
 
 LAUNCH_LIMIT_SECONDS = 60 * 60
-TRAIN_LIMIT_SECONDS = 5 * 60 * 60
+TRAIN_LIMIT_SECONDS = 8 * 60 * 60
 COMMIT_EVERY_IMAGES = 50
 
 HERE = Path(__file__).parent

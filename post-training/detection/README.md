@@ -387,7 +387,7 @@ id>/`, `slots/<run id>/`) and the launching command saves the summary under
 `artifacts/<run id>/`. A local run needs the `model` extra and a GPU.
 
 Every Modal call has `retries=0`. Evaluations stop within one hour of launch and
-training within five; a separate CPU supervisor, built on
+training within eight; a separate CPU supervisor, built on
 `training/workflows/deadline.py`, cancels a call still queued or running at its
 deadline. A preempted evaluation continues from the images it recorded, and preempted
 training from its last held-out evaluation.

@@ -1,0 +1,59 @@
+{
+  "seed": 20261112,
+  "model": {
+    "repo": "vikhyatk/moondream2",
+    "revision": "2025-06-21"
+  },
+  "data": [
+    {
+      "kind": "teacher",
+      "name": "teacher-carbon",
+      "labels": "/runs/teacher/google--gemini-4-carbon.jsonl",
+      "images": "/runs/teacher/images",
+      "shard_size": 3000
+    },
+    {
+      "kind": "coco",
+      "repo": "detection-datasets/coco",
+      "repo_type": "dataset",
+      "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+      "files": [
+        "data/train-00000-of-00040-67e35002d152155c.parquet",
+        "data/train-00001-of-00040-2c2b33b9504aa843.parquet",
+        "data/train-00002-of-00040-58e30306870b1de7.parquet",
+        "data/train-00003-of-00040-a77e00648e423963.parquet",
+        "data/train-00004-of-00040-1df1755d6f7c9b17.parquet",
+        "data/train-00005-of-00040-29ccfc8f52cfc9cb.parquet",
+        "data/train-00006-of-00040-76f2d663d51dca0a.parquet",
+        "data/train-00007-of-00040-797508421c59b99d.parquet",
+        "data/train-00008-of-00040-7ad10a6d6b442ef9.parquet",
+        "data/train-00009-of-00040-edc6018bb7abeee3.parquet",
+        "data/train-00010-of-00040-068d922af9742c1a.parquet",
+        "data/train-00011-of-00040-2cf010e9592da434.parquet",
+        "data/train-00012-of-00040-e26d7a054b1f8c7f.parquet",
+        "data/train-00013-of-00040-00a967ab3e2568fd.parquet",
+        "data/train-00014-of-00040-4f6a348405f3725f.parquet",
+        "data/train-00015-of-00040-ae8972f628750cea.parquet"
+      ]
+    }
+  ],
+  "min_area": 0.0003,
+  "max_objects": 30,
+  "slots": 48,
+  "label_tokens": 3,
+  "rank": 64,
+  "batch_size": 16,
+  "steps": 20000,
+  "warmup_steps": 500,
+  "learning_rate": 0.0002,
+  "head_learning_rate": 0.001,
+  "heldout_images": 300,
+  "evaluate_every": 1000,
+  "log_every": 20,
+  "size_groups": null,
+  "self_ignore": {
+    "decay": 0.999,
+    "threshold": 0.8,
+    "start_step": 3000
+  }
+}

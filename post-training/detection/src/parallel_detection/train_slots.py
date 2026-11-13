@@ -18,6 +18,7 @@ built around token-weighted language-model objectives and packed token data, so 
 not host this experiment.
 """
 
+import copy
 import json
 import math
 import random
@@ -302,6 +303,11 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
     ]
     optimizer = torch.optim.AdamW(groups, lr=config["learning_rate"], weight_decay=0.01)
     sampler = random.Random(config["seed"])
+    # Self-training: a slowly averaged copy of the head marks unmatched slots where it
+    # confidently sees a COCO category; those slots get no "nothing here" gradient.
+    self_ignore = config.get("self_ignore")
+    teacher = copy.deepcopy(head).requires_grad_(False) if self_ignore else None
+    names = torch.tensor(list(data.vocabulary.values()), device=device)
     steps, warmup = config["steps"], config["warmup_steps"]
 
     def rate(step):
@@ -319,6 +325,8 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
         # load_state_dict moves the weights and optimizer state to the parameters' device.
         state = torch.load(state_path, map_location="cpu", weights_only=False)
         head.load_state_dict(state["head"])
+        if teacher is not None:
+            teacher.load_state_dict(state["teacher"])
         optimizer.load_state_dict(state["optimizer"])
         sampler.setstate(state["sampler"])
         generator.set_state(state["generator"])
@@ -335,6 +343,7 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
                 torch.save(
                     {
                         "head": head.state_dict(),
+                        "teacher": teacher.state_dict() if teacher is not None else None,
                         "optimizer": optimizer.state_dict(),
                         "sampler": sampler.getstate(),
                         "generator": generator.get_state(),
@@ -371,7 +380,16 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
             cache = image_cache(inner, functions, embeddings)
             rotate = functions.apply_rotary_emb
             objectness, box_logits, logits = head(inner.text, inner.region, cache, rotate)
-            terms, matching, stats = set_loss(objectness, box_logits, logits, targets, **options)
+            ignore = None
+            if teacher is not None and step >= self_ignore["start_step"]:
+                with torch.no_grad():
+                    seen, _, labels = teacher(inner.text, inner.region, cache, rotate)
+                tokens = labels.argmax(-1)
+                category = (tokens[:, :, None, :] == names[None, None]).all(-1).any(-1)
+                ignore = (seen.sigmoid() >= self_ignore["threshold"]) & category
+            terms, matching, stats = set_loss(
+                objectness, box_logits, logits, targets, **options, ignore=ignore
+            )
             denoise = diffusion_loss(
                 head, inner.text, inner.region, cache, rotate, matching, generator
             )
@@ -380,6 +398,12 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
             loss.backward()
             torch.nn.utils.clip_grad_norm_(head.parameters(), 1.0)
             optimizer.step()
+            if teacher is not None:
+                with torch.no_grad():
+                    for averaged, current in zip(
+                        teacher.parameters(), head.parameters(), strict=True
+                    ):
+                        averaged.lerp_(current, 1 - self_ignore["decay"])
             if step % config["log_every"] == 0:
                 row = {"step": step, "seconds": time.time() - started, "loss": loss.item()}
                 row |= {k: v.item() for k, v in terms.items()} | {"denoise": denoise.item()} | stats

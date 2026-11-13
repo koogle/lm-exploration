@@ -180,3 +180,30 @@ def test_teacher_items_filter_and_convert_labels(tmp_path):
     ((read, record),) = list(teacher_items(labels, tmp_path, config))
     assert read() == b"jpeg"
     assert record == {"image_id": "openimages/1-2", "objects": [("dog", [0.25, 0.25, 0.5, 0.5])]}
+
+
+def test_ignored_slots_get_no_empty_gradient():
+    torch.manual_seed(0)
+    text, region = tiny_text(), tiny_region()
+    head = SlotHead(text, slots=6, label_tokens=3, rank=2)
+    cache = prefix_cache(text, torch.randn(1, 7, DIM), no_rotation)
+    objectness, box_logits, logits = head(text, region, cache, no_rotation)
+    targets = [(torch.tensor([[0.5, 0.5, 0.3, 0.3]]), torch.tensor([[3, 4, 0]]))]
+    ignore = torch.ones(1, 6, dtype=torch.bool)
+    terms, (_, slot, _, _), stats = set_loss(objectness, box_logits, logits, targets, ignore=ignore)
+    assert stats["ignored_empty_share"] == 1.0
+    terms["objectness"].backward()
+    gradient = head.objectness.weight.grad
+    # Only the matched slot contributes, so the gradient equals that slot's alone.
+    assert gradient is not None and torch.isfinite(gradient).all()
+    head.zero_grad()
+    objectness, box_logits, logits = head(text, region, cache, no_rotation)
+    only = objectness[:, slot]
+    expected = (
+        torch.nn.functional.binary_cross_entropy_with_logits(
+            only, torch.ones_like(only), reduction="sum"
+        )
+        / objectness.numel()
+    )
+    expected.backward()
+    assert torch.allclose(gradient, head.objectness.weight.grad, atol=1e-6)

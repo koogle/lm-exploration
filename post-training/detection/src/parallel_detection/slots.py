@@ -250,6 +250,7 @@ def set_loss(
     size_groups=None,
     objectness_target="binary",
     negatives="all",
+    ignore=None,
 ):
     """Losses for a batch; `targets` is a list of (boxes [n, 4] cxcywh, tokens [n, T]).
 
@@ -262,7 +263,9 @@ def set_loss(
     box quality. Unmatched slots have target 0 with a small weight. With `negatives`
     "all" every unmatched slot gets it; with "near_labels" only unmatched slots whose box
     overlaps a labelled object (duplicates and loose boxes) do, and slots elsewhere get
-    no gradient, because they may have found an object the labels omit.
+    no gradient, because they may have found an object the labels omit. `ignore` [B, K]
+    marks further unmatched slots to leave without gradient, for example where a
+    slowly averaged copy of the head confidently sees an object the labels lack.
 
     Returns the loss terms, the matching as (batch, slot, truth tokens, truth bins) and
     detached statistics.
@@ -298,6 +301,8 @@ def set_loss(
             weight[b] = torch.where(matched[b] | near, weight[b], 0.0)
     elif negatives != "all":
         raise ValueError(f"Unknown negatives setting {negatives!r}")
+    if ignore is not None:
+        weight = torch.where(~matched & ignore, 0.0, weight)
     if objectness_target not in ("binary", "iou"):
         raise ValueError(f"Unknown objectness target {objectness_target!r}")
     terms = {
@@ -311,6 +316,11 @@ def set_loss(
     }
     stats = {
         "matched_iou": iou.mean().item(),
+        "ignored_empty_share": (
+            (ignore & ~matched).sum().item() / max((~matched).sum().item(), 1)
+            if ignore is not None
+            else 0.0
+        ),
         "supervised_empty_share": ((weight > 0) & ~matched).sum().item()
         / max((~matched).sum().item(), 1),
         "label_exact": (logits[batch_index, slot_index].argmax(-1) == truth_tokens)
