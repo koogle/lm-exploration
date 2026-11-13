@@ -56,6 +56,7 @@ def test_unit_confidence_ap_follows_emitted_order():
     box, far, miss = [0, 0, 100, 100], [500, 500, 520, 520], [300, 300, 310, 310]
     assert unit_confidence_ap([box, far], [box, far], 0.5) == 1.0
     assert unit_confidence_ap([], [box], 0.5) == 0.0
+    assert unit_confidence_ap([box], [], 0.5) == 0.0
     # One of two truths found by the first box: precision 1 up to recall 0.5, then 0.
     assert unit_confidence_ap([box, miss], [box, far], 0.5) == pytest.approx(6 / 11)
     # The same boxes with the miss first: precision 0.5 up to recall 0.5.

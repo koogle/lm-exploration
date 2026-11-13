@@ -42,7 +42,10 @@ def unit_confidence_ap(predicted, truth, threshold):
 
     Every box has confidence 1, so boxes are taken in emitted order; each takes the
     unmatched truth box it overlaps most. Precision is interpolated at 11 recall points.
+    A phrase with no truth boxes has no recall to reach, so it scores 0.
     """
+    if not len(truth):
+        return 0.0
     iou = iou_matrix(predicted, truth)
     taken = np.zeros(len(truth), dtype=bool)
     hits = np.zeros(len(predicted))
