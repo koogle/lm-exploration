@@ -264,6 +264,33 @@ objectness threshold chosen on its held-out images; L40S:
 These evaluations ran at threshold 0.3 with each box's confidence recorded, and are
 rescored at other thresholds with `python -m parallel_detection.run score --min-score`.
 
+### Training on Gemini 4 Carbon labels
+
+`configs/teacher-train.json` labelled 21,187 of the prepared images (13,800 Open Images,
+7,387 Objects365) with Gemini 4 Carbon for $119.54, 8.2 objects per image; the budget
+ended before the planned 9,200 Objects365 images. After the label filter, 17,700 images
+have usable labels. COCO val, the same 500 images, L40S, each head at its held-out
+threshold:
+
+| Run | Training images | F1, IoU 0.5 | F1, IoU 0.75 | Precision | Recall | Recall small / medium / large |
+|---|---|---|---|---|---|---|
+| `slots-sizes-none`: COCO labels, rank 16, 10,000 steps | 23k COCO | 0.590 | 0.469 | 0.692 | 0.514 | 0.24 / 0.52 / 0.75 |
+| `slots-teacher-23k`: same settings | 18k Gemini-labelled | 0.559 | 0.445 | 0.639 | 0.496 | 0.22 / 0.52 / 0.71 |
+| `slots-teacher-23k-near`: same, near-label negatives | 18k Gemini-labelled | 0.520 | 0.402 | 0.556 | 0.488 | 0.25 / 0.53 / 0.66 |
+| `slots-rank64`: COCO labels, rank 64, 20,000 steps | 46k COCO | 0.657 | 0.518 | 0.735 | 0.595 | 0.29 / 0.64 / 0.81 |
+| `slots-teacher-coco-rank64`: same settings | 46k COCO + 18k Gemini-labelled | **0.673** | **0.533** | **0.743** | **0.614** | 0.31 / 0.65 / 0.85 |
+| Moondream 3.1 | | 0.700 | 0.560 | 0.682 | 0.719 | 0.47 / 0.77 / 0.89 |
+
+- Adding the Gemini-labelled images to COCO's raises precision and recall together and
+  halves the gap to Moondream 3.1, at the same 0.088 s per image on an L40S.
+- On their own they score below COCO's labels on COCO val. Scored against Gemini 4
+  Carbon's own labels of 200 COCO val images instead, the two heads tie (F1 0.662 each),
+  so the gap is not COCO's labelling style. These runs change the images as well as the
+  labels, and have fewer of them, so they do not isolate label quality.
+- Near-label negatives lower precision on the more complete labels too.
+
+`slots-teacher-23k` was preempted at step 7,000 and resumed from its checkpoint.
+
 ### Where the time goes
 
 `slots-bins-16` on the same 500 images:
@@ -367,8 +394,9 @@ training from its last held-out evaluation.
 
 ## Open work
 
-- Recall on medium and large objects: train on Gemini 4 Carbon labels of COCO train
-  (about $235 for 46k images at the pilot's cost), and adapt more of the backbone.
+- Recall on medium and large objects: Gemini 4 Carbon labels of COCO's own training
+  images (isolating label quality), more labelled images, and adapting more of the
+  backbone.
 - Speed: train the head on single-crop features; fold a slot's box and label into fewer
   positions; time the vision encoder under the custom kernels.
 - Prompted detection (a slot points at a phrase in the prompt), verified-absent

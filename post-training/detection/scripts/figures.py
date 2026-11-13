@@ -20,13 +20,15 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from parallel_detection.run import fetch_image
+from parallel_detection.metrics import summarize
+from parallel_detection.run import above, fetch_image, read_records
 
 SURFACE, INK, MUTED, GRID = "#fcfcfb", "#1f1f1e", "#6b6a63", "#e4e3dd"
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
 MAGENTA, GREEN, VIOLET, GREY = "#e87ba4", "#008300", "#6250d6", "#9a998f"
-# One colour per model or run, the same in every chart. The superseded regression head
-# is grey.
+RED = "#e34948"
+# One colour per model or run, the same in every chart. Superseded and negative variants
+# are grey.
 COLOURS = {
     "moondream2": BLUE,
     "moondream31": YELLOW,
@@ -34,8 +36,10 @@ COLOURS = {
     "slots-bins-4": ORANGE,
     "slots-bins-16": AQUA,
     "slots-sizes-none": GREEN,
-    "slots-sizes-grouped": MAGENTA,
+    "slots-sizes-grouped": GREY,
     "slots-small-16": VIOLET,
+    "slots-rank64": MAGENTA,
+    "slots-teacher-coco-rank64": RED,
 }
 # Runs whose training labels drop objects under 0.2% of the image.
 TRAINING = [
@@ -49,41 +53,37 @@ SMALL_RUNS = [
     ("slots-sizes-grouped", "48 slots in two size groups, 23k images"),
     ("slots-small-16", "48 slots, 46k images"),
 ]
-# (evaluation run, colour key, label, label offset in points, hollow marker)
+# (evaluation run, colour key, label, label offset in points, hollow marker). An
+# evaluation that recorded every box's confidence is rescored at the threshold its
+# training run chose on held-out images; the colour key names that training run.
 L4_POINTS = [
     ("moondream2-001", "moondream2", "Moondream 2 detect", (10, -4), False),
     ("slots-001-coco", "slots-001", "Slots, regressed boxes, 11k", (10, -4), False),
     ("slots-bins-4-coco", "slots-bins-4", "Slots, bins, 11k", (60, -30), False),
     ("slots-bins-16-coco", "slots-bins-16", "Slots, bins, 45k", (60, 10), False),
     ("slots-sizes-none-coco", "slots-sizes-none", "Slots, small kept, 23k", (60, -8), False),
-    (
-        "slots-sizes-grouped-coco",
-        "slots-sizes-grouped",
-        "Slots, size groups, 23k",
-        (60, -52),
-        False,
-    ),
     ("slots-small-16-coco", "slots-small-16", "Slots, small kept, 46k", (60, 32), False),
 ]
 L40S_POINTS = [
     ("moondream31-001", "moondream31", "Moondream 3.1 (Photon)", (10, -4), False),
     ("moondream2-photon-001", "moondream2", "Moondream 2 (Photon)", (10, -4), False),
-    ("slots-bins-16-coco-l40s", "slots-bins-16", "Slots, bins, 45k", (40, -26), False),
+    ("slots-small-16-coco-l40s", "slots-small-16", "Slots, small kept, 46k", (40, -30), False),
+    ("slots-rank64-coco", "slots-rank64", "Slots, rank 64, 46k", (-150, -10), False),
     (
-        "slots-bins-16-coco-l40s-1crop",
-        "slots-bins-16",
-        "Slots, bins, 45k, one crop",
-        (0, -62),
-        True,
+        "slots-teacher-coco-rank64-coco",
+        "slots-teacher-coco-rank64",
+        "Slots, rank 64, 46k COCO + 18k Gemini-labelled",
+        (40, 22),
+        False,
     ),
-    ("slots-small-16-coco-l40s", "slots-small-16", "Slots, small kept, 46k", (40, 14), False),
 ]
-# (evaluation run, colour key, label) for the recall-by-size comparison.
+# (evaluation run, colour key, label) for the recall-by-size comparison, in an order
+# whose neighbouring colours pass the palette check.
 SIZE_COMPARISON = [
     ("moondream2-001", "moondream2", "Moondream 2 detect"),
+    ("slots-rank64-coco", "slots-rank64", "Slots, rank 64, 46k COCO"),
     ("moondream31-001", "moondream31", "Moondream 3.1"),
-    ("slots-bins-16-coco", "slots-bins-16", "Slots, bins, 45k"),
-    ("slots-small-16-coco", "slots-small-16", "Slots, small kept, 46k"),
+    ("slots-teacher-coco-rank64-coco", "slots-teacher-coco-rank64", "Slots, + 18k Gemini-labelled"),
 ]
 EXAMPLES = [
     ("Annotated", None),
@@ -196,16 +196,29 @@ def small_objects_figure(artifacts, out):
     plt.close(figure)
 
 
-def coco(artifacts, run):
+def coco(artifacts, run, training=None):
+    """An evaluation's COCO summary; rescored at the training run's threshold when the
+    predictions recorded every box's confidence."""
     path = artifacts / run / "summary.json"
-    return json.loads(path.read_text())["datasets"]["coco_val2017"] if path.exists() else None
+    if not path.exists():
+        return None
+    result = json.loads(path.read_text())["datasets"]["coco_val2017"]
+    report = artifacts / str(training) / "report.json"
+    predictions = artifacts / run / "predictions.jsonl"
+    records = read_records(predictions) if predictions.exists() else []
+    if records and "scores" in records[0] and report.exists():
+        threshold = json.loads(report.read_text())["threshold"]
+        result = summarize(above(records, threshold))["coco_val2017"] | {
+            "latency": result["latency"]
+        }
+    return result
 
 
 def scatter(axis, artifacts, points, title):
     style(axis, title)
     axis.grid(axis="x", color=GRID, linewidth=0.8)
     for run, key, label, offset, hollow in points:
-        result = coco(artifacts, run)
+        result = coco(artifacts, run, training=key)
         if result is None:
             continue
         seconds = result["latency"]["image_seconds"]["mean"]
@@ -241,6 +254,7 @@ def coco_figure(artifacts, out):
     axes[0].set_xlim(0, 1.4)
     scatter(axes[1], artifacts, L40S_POINTS, "On an L40S")
     axes[1].set_xlim(0, 0.3)
+    axes[1].set_ylim(0.55, 0.72)
     axes[0].set_ylabel("F1 at IoU 0.5", fontsize=9, color=MUTED)
     figure.suptitle(
         "COCO val2017, 500 images: accuracy against latency, compared on the same GPU",
@@ -264,7 +278,7 @@ def recall_figure(artifacts, out):
     style(right, "Precision at IoU 0.5")
     width = 0.8 / len(SIZE_COMPARISON)
     for index, (run, key, label) in enumerate(SIZE_COMPARISON):
-        result = coco(artifacts, run)
+        result = coco(artifacts, run, training=key)
         if result is None:
             continue
         detection = result["detection"]["iou_0.5"]
