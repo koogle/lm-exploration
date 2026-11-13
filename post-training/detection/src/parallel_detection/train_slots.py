@@ -24,6 +24,7 @@ import math
 import random
 import sys
 import time
+from collections import defaultdict
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -438,6 +439,30 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
     return report
 
 
+# How a slot is ranked, from its objectness and the sampler's label and box confidence.
+SLOT_SCORES = {
+    "objectness": lambda objectness, label, box: objectness,
+    "objectness_label_box": lambda objectness, label, box: objectness * label * box,
+}
+
+
+def keep_slots(scores, names, boxes, threshold, duplicate_iou):
+    """Slot indices to report for each label: scoring at least `threshold`, in descending
+    score, without boxes overlapping a kept box of the same label by `duplicate_iou`."""
+    from parallel_detection.boxes import iou_matrix
+
+    kept = defaultdict(list)
+    for k in sorted(range(len(scores)), key=lambda k: -scores[k]):
+        if scores[k] < threshold or names[k] is None:
+            continue
+        same = kept[names[k]]
+        overlap = iou_matrix([boxes[k]], [boxes[j] for j in same]).max() if same else 0.0
+        if duplicate_iou is not None and overlap >= duplicate_iou:
+            continue
+        same.append(k)
+    return kept
+
+
 class SlotDetector:
     """The trained slot head behind the evaluation harness's detector interface.
 
@@ -446,11 +471,28 @@ class SlotDetector:
     """
 
     def __init__(
-        self, checkpoint, device, steps=1, max_crops=None, threshold=None, all_slots=False
+        self,
+        checkpoint,
+        device,
+        steps=1,
+        max_crops=None,
+        threshold=None,
+        all_slots=False,
+        score="objectness_label_box",
+        duplicate_iou=0.7,
     ):
-        """`max_crops` overrides how many high-resolution crops the vision encoder reads;
-        `threshold` overrides the objectness threshold chosen on held-out images;
-        `all_slots` also returns every slot's box, objectness, label and confidences."""
+        """`score` ranks a slot by "objectness" alone or by "objectness_label_box", the
+        product of objectness and the sampler's confidence in its label and box; a slot is
+        kept when that reaches `threshold`. The checkpoint's threshold was chosen for
+        objectness, so another score needs an explicit threshold. Kept boxes of the same
+        label overlapping a higher-scoring one by at least `duplicate_iou` are dropped
+        (None keeps them). `max_crops` overrides how many high-resolution crops the
+        vision encoder reads; `all_slots` also returns every slot's box, objectness,
+        label and confidences."""
+        if score not in SLOT_SCORES:
+            raise ValueError(f"Unknown slot score {score!r}")
+        if threshold is None and score != "objectness":
+            raise ValueError("A score other than objectness needs an explicit threshold")
         state = torch.load(checkpoint, map_location=device)
         config = state["config"]
         self.model, self.inner, self.functions = load_backbone(**config["model"], device=device)
@@ -465,7 +507,7 @@ class SlotDetector:
         self.vocabulary = state["vocabulary"]
         self.threshold = state["threshold"] if threshold is None else threshold
         self.device, self.steps = torch.device(device), steps
-        self.all_slots = all_slots
+        self.all_slots, self.score, self.duplicate_iou = all_slots, score, duplicate_iou
 
     def _clock(self):
         if self.device.type == "cuda":
@@ -488,39 +530,35 @@ class SlotDetector:
             self.functions.apply_rotary_emb,
             self.steps,
         )
-        scores = objectness[0].sigmoid().tolist()
-        keep = [score >= self.threshold for score in scores]
+        objectness = objectness[0].sigmoid()
+        box_confidence = confidence[0, :, :COORDINATES].min(-1).values
+        label_confidence = confidence[0, :, COORDINATES:].prod(-1)
+        rank = SLOT_SCORES[self.score](objectness, label_confidence, box_confidence).tolist()
         names = decode_names(tokens[0], self.vocabulary)
         corners = to_corners(boxes[0]).clamp(0, 1).tolist()
+        kept = keep_slots(rank, names, corners, self.threshold, self.duplicate_iou)
         shared = self._clock() - start
         scale = [width, height, width, height]
         found = [
-            [
-                [c * s for c, s in zip(corners[k], scale, strict=True)]
-                for k in range(len(keep))
-                if keep[k] and names[k] == phrase
-            ]
+            [[c * s for c, s in zip(corners[k], scale, strict=True)] for k in kept[phrase]]
             for phrase in phrases
         ]
-        kept = [
-            [scores[k] for k in range(len(keep)) if keep[k] and names[k] == phrase]
-            for phrase in phrases
-        ]
+        scores = [[rank[k] for k in kept[phrase]] for phrase in phrases]
         slots = {}
         if self.all_slots:
             slots["slots"] = [
                 {
                     "box": [c * s for c, s in zip(corners[k], scale, strict=True)],
-                    "objectness": scores[k],
+                    "objectness": objectness[k].item(),
                     "label": names[k],
-                    "box_confidence": confidence[0, k, :COORDINATES].min().item(),
-                    "label_confidence": confidence[0, k, COORDINATES:].prod().item(),
+                    "box_confidence": box_confidence[k].item(),
+                    "label_confidence": label_confidence[k].item(),
                 }
-                for k in range(len(scores))
+                for k in range(len(names))
             ]
         return slots | {
             "boxes": found,
-            "scores": kept,
+            "scores": scores,
             "shared_seconds": shared,
             "phrase_seconds": [0.0] * len(phrases),
             "components": {

@@ -69,7 +69,12 @@ def build_samples(config, image_folder, files=hub_files):
             )
         elif dataset["kind"] == "coco":
             rows = parquet_rows(paths, ["image_id", "width", "height", "objects"])
-            built = coco_samples(rows, dataset["images"], config["seed"])
+            built = coco_samples(
+                rows,
+                dataset["images"],
+                config["seed"],
+                exclude_images=dataset.get("exclude_images", 0),
+            )
             extract_images(paths, built, image_folder)
         elif dataset["kind"] == "refcoco_m":
             rows = parquet_rows(paths, ["image_id", "samples"])

@@ -125,3 +125,20 @@ def test_above_keeps_boxes_at_or_over_the_threshold():
     record = {"predicted": [[0, 0, 1, 1], [1, 1, 2, 2]], "scores": [0.4, 0.9]}
     assert above([record], 0.5)[0]["predicted"] == [[1, 1, 2, 2]]
     assert above([record], 0.4)[0]["predicted"] == record["predicted"]
+
+
+def test_coco_tuning_split_does_not_overlap_the_evaluation_split():
+    rows = [
+        {
+            "image_id": i,
+            "width": 10,
+            "height": 10,
+            "objects": {"category": [0], "bbox": [[0, 0, 5, 5]]},
+        }
+        for i in range(40)
+    ]
+    evaluation = {s["image_id"] for s in coco_samples(rows, images=10, seed=3)}
+    tuning = {s["image_id"] for s in coco_samples(rows, images=10, seed=3, exclude_images=10)}
+    assert len(evaluation) == len(tuning) == 10 and not evaluation & tuning
+    # The evaluation split itself is unchanged by the option's existence.
+    assert evaluation == {s["image_id"] for s in coco_samples(rows, 10, 3)}

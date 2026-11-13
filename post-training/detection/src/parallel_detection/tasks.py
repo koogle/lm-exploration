@@ -156,14 +156,19 @@ def lvis_samples(annotations, images, max_absent, seed):
     return samples
 
 
-def coco_samples(rows, images, seed, names=COCO_NAMES):
+def coco_samples(rows, images, seed, names=COCO_NAMES, exclude_images=0):
     """Prompt each COCO image with the categories annotated in it.
 
     `rows` follow detection-datasets/coco: `objects` holds parallel `category`
-    indices into `names` and `bbox` as [x0, y0, x1, y1].
+    indices into `names` and `bbox` as [x0, y0, x1, y1]. `exclude_images` leaves out
+    the images that a sample of that size with the same seed would take, so a tuning
+    split never overlaps the evaluation split.
     """
-    rng = random.Random(seed)
     rows = [row for row in sorted(rows, key=lambda row: row["image_id"]) if row["objects"]["bbox"]]
+    if exclude_images:
+        taken = {s["image_id"] for s in coco_samples(rows, exclude_images, seed, names)}
+        rows = [row for row in rows if row["image_id"] not in taken]
+    rng = random.Random(seed)
     samples = []
     for row in rng.sample(rows, min(images, len(rows))):
         by_category = defaultdict(list)
