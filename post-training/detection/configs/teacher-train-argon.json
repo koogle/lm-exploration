@@ -1,0 +1,21 @@
+{
+  "manifest": "artifacts/teacher-images/manifest.jsonl",
+  "workers": 24,
+  "exclude_labels": [
+    "artifacts/teacher-train/google--gemini-4-carbon.jsonl"
+  ],
+  "per_source": {
+    "openimages": 16200,
+    "objects365": 4643
+  },
+  "models": {
+    "google/gemini-4-argon": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    }
+  }
+}
