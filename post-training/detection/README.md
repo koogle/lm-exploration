@@ -289,6 +289,26 @@ threshold:
   labels, and have fewer of them, so they do not isolate label quality.
 - Near-label negatives lower precision on the more complete labels too.
 
+Precision against recall on the same images, with boxes ranked by recorded confidence
+(`metrics.ranked_curve` and `ranked_ap`; all-point interpolation, pooled over phrases
+and averaged per category). The evaluations recorded boxes with confidence at least 0.3,
+so the curves stop there and the areas are lower bounds. Moondream 2 and 3.1 give no
+confidence, so they have one operating point each and no area:
+
+| Run | Area, IoU 0.5, pooled | Per-category mean, IoU 0.5 | IoU 0.75 | IoU 0.5 to 0.95 | Recall at precision 0.743 | Recall at precision 0.682 |
+|---|---|---|---|---|---|---|
+| `slots-small-16` (rank 16, 46k COCO) | 0.596 | 0.607 | 0.455 | 0.434 | | |
+| `slots-rank64` (46k COCO) | 0.626 | 0.634 | 0.475 | 0.449 | 0.589 | 0.625 |
+| `slots-teacher-coco-rank64` (+ 18k Gemini-labelled) | **0.639** | **0.647** | **0.482** | **0.458** | **0.614** | **0.647** |
+| `slots-teacher-23k` (18k Gemini-labelled only) | 0.521 | 0.534 | 0.404 | 0.377 | | |
+
+At Moondream 3.1's own precision (0.682), the best slot head reaches recall 0.647
+against 3.1's 0.719.
+
+The 21,187 labelled images are in the private Hugging Face dataset
+[`jfrick/coco80-teacher-labels-gemini-4-carbon`](https://huggingface.co/datasets/jfrick/coco80-teacher-labels-gemini-4-carbon),
+written by `scripts/export_teacher_dataset.py`.
+
 `slots-teacher-23k` was preempted at step 7,000 and resumed from its checkpoint.
 
 ### Where the time goes
