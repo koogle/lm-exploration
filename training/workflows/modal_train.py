@@ -101,8 +101,10 @@ def train_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_s
 
     from distributed.modal_train import worker
     from workflows.config import resolve_payload
+    from workflows.deadline import session_seconds
 
     _, dataset, config = resolve_payload(bundle)
+    max_seconds = session_seconds(provenance["deadline_unix"], max_seconds)
     watching = watch(provenance["workflow_run_id"], 30)
     try:
         # While preparation still appends, copy each persisted database to local disk.
@@ -145,6 +147,7 @@ def hybrid_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_
     """
     from workflows.checks import validate_paths
     from workflows.config import resolve_payload
+    from workflows.deadline import session_seconds
     from workflows.sessions import session_state
 
     policy, _, settings = resolve_payload(bundle)
@@ -159,7 +162,8 @@ def hybrid_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_
         output.mkdir(parents=True)
         (output / "run-config.json").write_text(json.dumps(settings, indent=2) + "\n")
         (output / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
-        session = {"stop_unix": time.time() + max_seconds, "restarts": 0}
+        seconds = session_seconds(provenance["deadline_unix"], max_seconds)
+        session = {"stop_unix": time.time() + seconds, "restarts": 0}
     else:
         if json.loads((output / "run-config.json").read_text()) != settings:
             raise ValueError(f"{output} holds a session with other settings")

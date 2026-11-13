@@ -30,6 +30,17 @@ def bounded_timeout(deadline_unix, requested, now=None):
     return min(requested, remaining)
 
 
+def session_seconds(deadline_unix, requested, now=None):
+    """Training time for a session whose container starts now: the requested time, cut
+    so it stops with room to checkpoint before the launch deadline. A session can wait
+    in Modal's queue after it is spawned, so its time is fixed when it starts."""
+    now = time.time() if now is None else now
+    seconds = min(requested, deadline_unix - SHUTDOWN_SECONDS - now)
+    if seconds < 1:
+        raise RuntimeError("Launch deadline reached; refusing new work")
+    return seconds
+
+
 def segment_seconds(timeout, requested):
     """Training time inside a bounded segment timeout, leaving room to checkpoint."""
     seconds = min(requested, timeout - SHUTDOWN_SECONDS)
