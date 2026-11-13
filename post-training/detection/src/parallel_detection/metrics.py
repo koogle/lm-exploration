@@ -274,3 +274,18 @@ def ranked_ap(records, threshold=0.5):
         "category_mean_ap": float(np.mean(per_category)) if per_category else None,
         "max_recall": float(recall[-1]) if len(recall) else 0.0,
     }
+
+
+def best_threshold(records, dataset, grid=None):
+    """The confidence threshold with the highest F1 at IoU 0.5 over records with scores.
+
+    The default grid covers products of several confidences, which can be small.
+    """
+    from parallel_detection.run import above
+
+    if grid is None:
+        grid = np.unique(
+            np.concatenate([np.geomspace(1e-4, 0.02, 40), np.arange(0.02, 0.99, 0.01)])
+        )
+    f1 = [summarize(above(records, t))[dataset]["detection"]["iou_0.5"]["f1"] for t in grid]
+    return float(grid[int(np.argmax(f1))])

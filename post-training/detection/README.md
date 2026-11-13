@@ -305,6 +305,35 @@ confidence, so they have one operating point each and no area:
 At Moondream 3.1's own precision (0.682), the best slot head reaches recall 0.647
 against 3.1's 0.719.
 
+### Scoring slots: duplicates and confidence
+
+`scripts/diagnose_slots.py` reads an evaluation that recorded every slot (`--all-slots`)
+and follows each COCO object. For `slots-teacher-coco-rank64` at its objectness
+threshold of 0.9, of 3,603 objects on the 500 images: 62% found; 14% only loosely boxed
+(IoU 0.1 to 0.5, 294 of them small); 13% boxed and labelled correctly but below the
+threshold; 8% with no box near them (249 small); 3% boxed with a wrong label, mostly
+close categories (cup and bowl, truck and car). No image has more objects than slots.
+
+The slot detector now drops boxes overlapping a higher-scoring box of the same label by
+IoU 0.7, and ranks slots by objectness times the sampler's confidence in the label and
+box. Its threshold is chosen on 500 further COCO val images that do not overlap the 500
+reported (`configs/slots-coco-tune.json`). Same heads, every box recorded, L40S:
+
+| Head and scoring | F1, IoU 0.5 | F1, IoU 0.75 | Precision | Recall | Area, pooled | Per-category mean, IoU 0.5 / 0.75 / 0.5 to 0.95 | Recall at precision 0.682 |
+|---|---|---|---|---|---|---|---|
+| `slots-rank64`, objectness, duplicates kept | 0.657 | 0.521 | 0.753 | 0.583 | 0.633 | 0.640 / 0.483 / 0.455 | 0.625 |
+| `slots-rank64`, combined score, duplicates removed | 0.691 | 0.558 | 0.759 | 0.635 | 0.637 | 0.659 / 0.510 / 0.480 | 0.675 |
+| `slots-teacher-coco-rank64`, objectness, duplicates kept | 0.674 | 0.535 | 0.761 | 0.604 | 0.646 | 0.654 / 0.488 / 0.463 | 0.647 |
+| `slots-teacher-coco-rank64`, combined score, duplicates removed | **0.694** | **0.562** | 0.757 | **0.640** | 0.645 | **0.666 / 0.514 / 0.486** | **0.684** |
+| Moondream 3.1 | 0.700 | 0.560 | 0.682 | 0.719 | | | |
+
+- Re-scoring moves the curve's middle and lower end outward and lowers precision at low
+  recall, so the pooled area is unchanged while the per-category areas, recall at a fixed
+  precision and F1 at the tuned threshold all rise.
+- At IoU 0.75 the best slot head now matches Moondream 3.1 (0.562 against 0.560), and its
+  recall on large objects equals 3.1's (0.89). The remaining gap is small and medium
+  objects.
+
 The 21,187 labelled images are in the private Hugging Face dataset
 [`jfrick/coco80-teacher-labels-gemini-4-carbon`](https://huggingface.co/datasets/jfrick/coco80-teacher-labels-gemini-4-carbon),
 written by `scripts/export_teacher_dataset.py`.

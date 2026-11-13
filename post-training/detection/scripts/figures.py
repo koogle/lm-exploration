@@ -21,7 +21,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from parallel_detection.metrics import ranked_ap, ranked_curve, summarize
+from parallel_detection.metrics import best_threshold, ranked_ap, ranked_curve, summarize
 from parallel_detection.run import above, fetch_image, read_records
 
 SURFACE, INK, MUTED, GRID = "#fcfcfb", "#1f1f1e", "#6b6a63", "#e4e3dd"
@@ -41,6 +41,7 @@ COLOURS = {
     "slots-small-16": VIOLET,
     "slots-rank64": MAGENTA,
     "slots-teacher-coco-rank64": RED,
+    "before": GREY,
 }
 # Runs whose training labels drop objects under 0.2% of the image.
 TRAINING = [
@@ -69,9 +70,9 @@ L40S_POINTS = [
     ("moondream31-001", "moondream31", "Moondream 3.1 (Photon)", (10, -4), False),
     ("moondream2-photon-001", "moondream2", "Moondream 2 (Photon)", (10, -4), False),
     ("slots-small-16-coco-l40s", "slots-small-16", "Slots, small kept, 46k", (40, -30), False),
-    ("slots-rank64-coco", "slots-rank64", "Slots, rank 64, 46k", (-150, -10), False),
+    ("slots-rank64-coco-v2", "slots-rank64", "Slots, rank 64, 46k", (-150, -10), False),
     (
-        "slots-teacher-coco-rank64-coco",
+        "slots-teacher-coco-rank64-coco-v2",
         "slots-teacher-coco-rank64",
         "Slots, rank 64, 46k COCO + 18k Gemini-labelled",
         (40, 22),
@@ -82,9 +83,13 @@ L40S_POINTS = [
 # whose neighbouring colours pass the palette check.
 SIZE_COMPARISON = [
     ("moondream2-001", "moondream2", "Moondream 2 detect"),
-    ("slots-rank64-coco", "slots-rank64", "Slots, rank 64, 46k COCO"),
+    ("slots-rank64-coco-v2", "slots-rank64", "Slots, rank 64, 46k COCO"),
     ("moondream31-001", "moondream31", "Moondream 3.1"),
-    ("slots-teacher-coco-rank64-coco", "slots-teacher-coco-rank64", "Slots, + 18k Gemini-labelled"),
+    (
+        "slots-teacher-coco-rank64-coco-v2",
+        "slots-teacher-coco-rank64",
+        "Slots, + 18k Gemini-labelled",
+    ),
 ]
 EXAMPLES = [
     ("Annotated", None),
@@ -198,8 +203,10 @@ def small_objects_figure(artifacts, out):
 
 
 def coco(artifacts, run, training=None):
-    """An evaluation's COCO summary; rescored at the training run's threshold when the
-    predictions recorded every box's confidence."""
+    """An evaluation's COCO summary, rescored when its predictions recorded every box's
+    confidence: at the threshold chosen on the matching tuning-split evaluation (`<run>`
+    with its last "-coco-" replaced by "-coco-tune-") if there is one, otherwise at the
+    training run's held-out threshold."""
     path = artifacts / run / "summary.json"
     if not path.exists():
         return None
@@ -207,8 +214,13 @@ def coco(artifacts, run, training=None):
     report = artifacts / str(training) / "report.json"
     predictions = artifacts / run / "predictions.jsonl"
     records = read_records(predictions) if predictions.exists() else []
-    if records and "scores" in records[0] and report.exists():
-        threshold = json.loads(report.read_text())["threshold"]
+    head, _, suffix = run.rpartition("-coco-")
+    tune = artifacts / f"{head}-coco-tune-{suffix}" / "predictions.jsonl"
+    if records and "scores" in records[0] and (tune.exists() or report.exists()):
+        if tune.exists() and tune.parent.name != run:
+            threshold = best_threshold(read_records(tune), "coco_val2017_tune")
+        else:
+            threshold = json.loads(report.read_text())["threshold"]
         result = summarize(above(records, threshold))["coco_val2017"] | {
             "latency": result["latency"]
         }
@@ -325,10 +337,14 @@ def recall_figure(artifacts, out):
 # curves; Moondream gives no confidence, so each model is one point.
 PR_SERIES = [
     ("moondream2-001", "moondream2", "Moondream 2 detect"),
-    ("slots-rank64-coco", "slots-rank64", "Slots, rank 64, 46k COCO"),
+    ("slots-rank64-coco-v2", "slots-rank64", "Slots, rank 64, 46k COCO"),
     ("moondream31-001", "moondream31", "Moondream 3.1"),
-    ("slots-teacher-coco-rank64-coco", "slots-teacher-coco-rank64", "Slots, + 18k Gemini-labelled"),
-    ("slots-small-16-coco-sweep-l40s", "slots-small-16", "Slots, rank 16, 46k COCO"),
+    (
+        "slots-teacher-coco-rank64-coco-v2",
+        "slots-teacher-coco-rank64",
+        "Slots, + 18k Gemini-labelled",
+    ),
+    ("slots-teacher-coco-rank64-coco", "before", "Same head before re-scoring (objectness only)"),
 ]
 
 
@@ -346,11 +362,16 @@ def pr_figure(artifacts, out):
         if "scores" in records[0]:
             precision, recall, _ = ranked_curve(records)
             ap = ranked_ap(records)["pooled_ap"]
-            axis.plot(recall, precision, color=colour, linewidth=2, label=f"{label}, area {ap:.3f}")
-            report = artifacts / key / "report.json"
-            if report.exists():
-                tuned = json.loads(report.read_text())["threshold"]
-                point = summarize(above(records, tuned))["coco_val2017"]["detection"]["iou_0.5"]
+            axis.plot(
+                recall,
+                precision,
+                color=colour,
+                linewidth=2,
+                linestyle="--" if key == "before" else "-",
+                label=f"{label}, area {ap:.3f}",
+            )
+            if key != "before":
+                point = coco(artifacts, run, training=key)["detection"]["iou_0.5"]
                 axis.scatter(
                     [point["recall"]],
                     [point["precision"]],
@@ -379,8 +400,8 @@ def pr_figure(artifacts, out):
     axis.set_ylim(0.4, 1.0)
     axis.legend(frameon=False, fontsize=9, labelcolor=INK, loc="lower left")
     axis.annotate(
-        "Dots: each head at the threshold chosen on held-out images.\n"
-        "Curves stop at confidence 0.3, the lowest recorded.",
+        "Dots: each head at the threshold chosen on a separate tuning split.\n"
+        "The grey curve stops at confidence 0.3, the lowest it recorded.",
         (0.99, 0.99),
         xycoords="axes fraction",
         ha="right",

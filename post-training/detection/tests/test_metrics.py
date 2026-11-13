@@ -114,3 +114,12 @@ def test_ranked_ap_orders_boxes_by_confidence():
     # A miss ranked first: precision 1/2 at recall 0.5 and 2/3 at recall 1.
     assert ranked_ap([flipped])["pooled_ap"] == pytest.approx(0.5 * 2 / 3 + 0.5 * 2 / 3)
     assert ranked_ap([flipped])["max_recall"] == 1.0
+
+
+def test_best_threshold_picks_the_cut_with_the_highest_f1():
+    from parallel_detection.metrics import best_threshold
+
+    box, far, miss = [0, 0, 100, 100], [500, 500, 520, 520], [300, 300, 310, 310]
+    good = record("present", [box, far], [box, far, miss]) | {"scores": [0.9, 0.6, 0.3]}
+    # Keeping the two hits and dropping the miss gives F1 1.
+    assert 0.3 < best_threshold([good], "d", grid=[0.1, 0.5, 0.7]) <= 0.6
