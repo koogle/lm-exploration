@@ -5,7 +5,7 @@
 Reads `<artifacts>/<run>/heldout.jsonl` for the training runs and
 `<artifacts>/<run>/summary.json` and `predictions.jsonl` for the COCO evaluations, and
 writes `training.png`, `training-small-objects.png`, `coco.png`, `recall-by-size.png`,
-`precision-recall.png`
+`precision-recall.png`, `areas.png`
 and three `examples*.png` grids.
 """
 
@@ -16,6 +16,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -414,6 +415,75 @@ def pr_figure(artifacts, out):
     plt.close(figure)
 
 
+# Area comparison: evaluations that recorded every box (no confidence floor), each with
+# its tuning-split twin. (evaluation run, colour key, label, hatched)
+AREA_SERIES = [
+    ("slots-rank64-coco-v2", "slots-rank64", "Rank 64, 46k COCO", False),
+    ("slots-rank64-self-coco-v2", "slots-rank64", "Same, self-training", True),
+    (
+        "slots-teacher-coco-rank64-coco-v2",
+        "slots-teacher-coco-rank64",
+        "+ 18k Gemini-labelled",
+        False,
+    ),
+    (
+        "slots-teacher-coco-rank64-self-coco-v2",
+        "slots-teacher-coco-rank64",
+        "Same, self-training",
+        True,
+    ),
+]
+
+
+def area_figure(artifacts, out):
+    """Areas under the precision-recall curve for slot heads scored the same way."""
+    measures = [
+        ("Pooled, IoU 0.5", lambda r: ranked_ap(r)["pooled_ap"]),
+        ("Per category, IoU 0.5", lambda r: ranked_ap(r)["category_mean_ap"]),
+        ("Per category, IoU 0.75", lambda r: ranked_ap(r, 0.75)["category_mean_ap"]),
+        (
+            "Per category, IoU 0.5 to 0.95",
+            lambda r: float(
+                np.mean([ranked_ap(r, t)["category_mean_ap"] for t in np.arange(0.5, 0.96, 0.05)])
+            ),
+        ),
+    ]
+    figure, axis = plt.subplots(figsize=(12, 4.8), facecolor=SURFACE)
+    style(axis, "COCO val2017, 500 images: area under the precision-recall curve")
+    width = 0.8 / len(AREA_SERIES)
+    for index, (run, key, label, hatched) in enumerate(AREA_SERIES):
+        path = artifacts / run / "predictions.jsonl"
+        if not path.exists():
+            continue
+        records = [r for r in read_records(path) if r["dataset"] == "coco_val2017"]
+        values = [measure(records) for _, measure in measures]
+        places = [m + (index - (len(AREA_SERIES) - 1) / 2) * width for m in range(len(measures))]
+        bars = axis.bar(
+            places,
+            values,
+            width - 0.02,
+            color=SURFACE if hatched else COLOURS[key],
+            edgecolor=COLOURS[key],
+            hatch="////" if hatched else None,
+            linewidth=1.5,
+            label=label,
+        )
+        axis.bar_label(bars, labels=[f"{v:.3f}" for v in values], fontsize=8, color=INK, padding=2)
+    axis.set_xticks(range(len(measures)), [name for name, _ in measures], fontsize=9, color=MUTED)
+    axis.set_ylim(0, 0.8)
+    axis.legend(frameon=False, fontsize=9, labelcolor=INK, loc="upper right", ncols=2)
+    axis.annotate(
+        "Moondream 2 and 3.1 give no confidence scores, so they have no curve or area.",
+        (0.0, -0.13),
+        xycoords="axes fraction",
+        fontsize=8,
+        color=MUTED,
+    )
+    figure.tight_layout()
+    figure.savefig(out / "areas.png", dpi=200, facecolor=SURFACE)
+    plt.close(figure)
+
+
 def by_image(path):
     grouped = defaultdict(list)
     for record in rows(path):
@@ -484,6 +554,7 @@ def main():
     coco_figure(args.artifacts, args.out)
     recall_figure(args.artifacts, args.out)
     pr_figure(args.artifacts, args.out)
+    area_figure(args.artifacts, args.out)
     examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))
     examples_figure(args.artifacts, args.out, "examples-2.png", objects=(4, 9), skip=4)
     examples_figure(args.artifacts, args.out, "examples-crowded.png", objects=(12, 25))
