@@ -43,6 +43,9 @@ COLOURS = {
     "slots-rank64": MAGENTA,
     "slots-teacher-coco-rank64": RED,
     "before": GREY,
+    # The rank-128 head shares the rank-64 head's data, so its colour; a dotted line or
+    # hollow marker tells them apart.
+    "rank128": RED,
 }
 # Runs whose training labels drop objects under 0.2% of the image.
 TRAINING = [
@@ -345,6 +348,7 @@ PR_SERIES = [
         "slots-teacher-coco-rank64",
         "Slots, + 18k Gemini-labelled",
     ),
+    ("slots-teacher-coco-rank128-coco-v2", "rank128", "Same data, rank 128"),
     ("slots-teacher-coco-rank64-coco", "before", "Same head before re-scoring (objectness only)"),
 ]
 
@@ -368,17 +372,18 @@ def pr_figure(artifacts, out):
                 precision,
                 color=colour,
                 linewidth=2,
-                linestyle="--" if key == "before" else "-",
+                linestyle={"before": "--", "rank128": ":"}.get(key, "-"),
                 label=f"{label}, area {ap:.3f}",
             )
             if key != "before":
                 point = coco(artifacts, run, training=key)["detection"]["iou_0.5"]
+                hollow = key == "rank128"
                 axis.scatter(
                     [point["recall"]],
                     [point["precision"]],
                     s=60,
-                    color=colour,
-                    edgecolor=SURFACE,
+                    color=SURFACE if hollow else colour,
+                    edgecolor=colour if hollow else SURFACE,
                     linewidth=2,
                     zorder=3,
                 )
@@ -416,21 +421,28 @@ def pr_figure(artifacts, out):
 
 
 # Area comparison: evaluations that recorded every box (no confidence floor), each with
-# its tuning-split twin. (evaluation run, colour key, label, hatched)
+# its tuning-split twin. Variants of a head share its colour and differ by texture:
+# (evaluation run, colour key, label, hatch or None)
 AREA_SERIES = [
-    ("slots-rank64-coco-v2", "slots-rank64", "Rank 64, 46k COCO", False),
-    ("slots-rank64-self-coco-v2", "slots-rank64", "Same, self-training", True),
+    ("slots-rank64-coco-v2", "slots-rank64", "Rank 64, 46k COCO", None),
+    ("slots-rank64-self-coco-v2", "slots-rank64", "Same, self-training", "////"),
     (
         "slots-teacher-coco-rank64-coco-v2",
         "slots-teacher-coco-rank64",
         "+ 18k Gemini-labelled",
-        False,
+        None,
     ),
     (
         "slots-teacher-coco-rank64-self-coco-v2",
         "slots-teacher-coco-rank64",
         "Same, self-training",
-        True,
+        "////",
+    ),
+    (
+        "slots-teacher-coco-rank128-coco-v2",
+        "slots-teacher-coco-rank64",
+        "Same data, rank 128",
+        "..",
     ),
 ]
 
@@ -448,10 +460,10 @@ def area_figure(artifacts, out):
             ),
         ),
     ]
-    figure, axis = plt.subplots(figsize=(12, 4.8), facecolor=SURFACE)
+    figure, axis = plt.subplots(figsize=(14, 4.8), facecolor=SURFACE)
     style(axis, "COCO val2017, 500 images: area under the precision-recall curve")
     width = 0.8 / len(AREA_SERIES)
-    for index, (run, key, label, hatched) in enumerate(AREA_SERIES):
+    for index, (run, key, label, hatch) in enumerate(AREA_SERIES):
         path = artifacts / run / "predictions.jsonl"
         if not path.exists():
             continue
@@ -462,16 +474,16 @@ def area_figure(artifacts, out):
             places,
             values,
             width - 0.02,
-            color=SURFACE if hatched else COLOURS[key],
+            color=SURFACE if hatch else COLOURS[key],
             edgecolor=COLOURS[key],
-            hatch="////" if hatched else None,
+            hatch=hatch,
             linewidth=1.5,
             label=label,
         )
-        axis.bar_label(bars, labels=[f"{v:.3f}" for v in values], fontsize=8, color=INK, padding=2)
+        axis.bar_label(bars, labels=[f"{v:.3f}" for v in values], fontsize=7, color=INK, padding=2)
     axis.set_xticks(range(len(measures)), [name for name, _ in measures], fontsize=9, color=MUTED)
     axis.set_ylim(0, 0.8)
-    axis.legend(frameon=False, fontsize=9, labelcolor=INK, loc="upper right", ncols=2)
+    axis.legend(frameon=False, fontsize=9, labelcolor=INK, loc="upper right", ncols=3)
     axis.annotate(
         "Moondream 2 and 3.1 give no confidence scores, so they have no curve or area.",
         (0.0, -0.13),

@@ -334,6 +334,21 @@ reported (`configs/slots-coco-tune.json`). Same heads, every box recorded, L40S:
   recall on large objects equals 3.1's (0.89). The remaining gap is small and medium
   objects.
 
+### Adapter rank 128
+
+`slots-teacher-coco-rank128`: the data and settings of `slots-teacher-coco-rank64` with
+rank-128 adapters (101M trainable parameters), 3.6 hours on one H100. Scored as above:
+
+| Run | F1, IoU 0.5 | F1, IoU 0.75 | Precision | Recall | Area, pooled | Per-category mean, IoU 0.5 / 0.75 / 0.5 to 0.95 | Recall at precision 0.682 | Seconds per image, L40S |
+|---|---|---|---|---|---|---|---|---|
+| `slots-teacher-coco-rank64` | 0.694 | 0.562 | 0.757 | 0.640 | **0.645** | **0.666 / 0.514 / 0.486** | 0.684 | 0.091 |
+| `slots-teacher-coco-rank128` | **0.700** | **0.566** | **0.763** | **0.647** | 0.641 | 0.665 / 0.508 / 0.482 | **0.686** | 0.091 |
+| Moondream 3.1 | 0.700 | 0.560 | 0.682 | 0.719 | | | | 0.208 |
+
+Rank 128 reaches Moondream 3.1's F1 at its tuned threshold and its IoU 0.75 F1 is higher,
+but the areas are slightly lower than at rank 64: going from rank 64 to 128 does not move
+the curve, unlike going from 16 to 64.
+
 ### Self-training
 
 `self_ignore` keeps a slowly averaged copy of the head (decay 0.999). From step 3,000, an
