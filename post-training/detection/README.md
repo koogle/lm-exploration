@@ -334,6 +334,24 @@ reported (`configs/slots-coco-tune.json`). Same heads, every box recorded, L40S:
   recall on large objects equals 3.1's (0.89). The remaining gap is small and medium
   objects.
 
+### Self-training
+
+`self_ignore` keeps a slowly averaged copy of the head (decay 0.999). From step 3,000, an
+unmatched slot where that copy sees a COCO category with objectness at least 0.8 gets no
+"nothing here" gradient; 10 to 13% of unmatched slots were ignored by the end. Same
+settings as the run each is paired with, scored as above:
+
+| Run | F1, IoU 0.5 | F1, IoU 0.75 | Precision | Recall | Area, pooled | Per-category mean, IoU 0.5 to 0.95 | Recall at precision 0.682 |
+|---|---|---|---|---|---|---|---|
+| `slots-rank64` | 0.691 | 0.558 | 0.759 | 0.635 | 0.637 | 0.480 | 0.675 |
+| `slots-rank64-self` | 0.683 | 0.545 | 0.714 | 0.654 | 0.633 | 0.477 | 0.675 |
+| `slots-teacher-coco-rank64` | 0.694 | 0.562 | 0.757 | 0.640 | 0.645 | 0.486 | 0.684 |
+| `slots-teacher-coco-rank64-self` | 0.685 | 0.558 | 0.749 | 0.631 | 0.630 | 0.485 | 0.673 |
+
+Self-training does not move the curve outward on COCO val: on COCO labels alone it trades
+precision for recall at the tuned threshold, and with the Gemini-labelled images it
+loses slightly on every measure.
+
 The 21,187 labelled images are in the private Hugging Face dataset
 [`jfrick/coco80-teacher-labels-gemini-4-carbon`](https://huggingface.co/datasets/jfrick/coco80-teacher-labels-gemini-4-carbon),
 written by `scripts/export_teacher_dataset.py`.
