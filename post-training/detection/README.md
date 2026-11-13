@@ -443,7 +443,11 @@ patches), prepared by `src/parallel_detection/images.py` with `configs/teacher-i
 
 `demo_app.py` deploys a web page on Modal for comparing detectors on images (uploaded,
 or 16 examples: COCO val images and Objects365 images no labeller saw) and for running
-one model on every n-th frame of a video. The models and thresholds are in
+one model on every n-th frame of a video. The annotated video streams back to the page
+in two-second H.264 chunks while the GPU works through it. Slot-head boxes are labelled
+with their score, objectness × label confidence × box confidence: a ranking score, not
+a probability (kept from 0.013; half of the kept boxes on COCO val score under 0.04).
+Moondream gives no confidence, so its boxes carry only the label. The models and thresholds are in
 `configs/demo.json`: Moondream 2's `detect`, three slot heads and Moondream 3.1 through
 Photon. Deploying with `.venv/bin/python demo_app.py` also spawns `shutdown_at`, which
 stops the app just under 24 hours later; the URL is public until then.
@@ -454,6 +458,11 @@ Measured through the page on one warm L40S per model family:
 |---|---|---|---|
 | One image, 6 categories | 0.343 s | 0.081 s | 0.246 s |
 | 60-frame clip, all 80 categories, every 3rd frame | | 0.047 s per frame | 2.79 s per frame |
+
+Streaming a 125-frame, 25 fps clip (448 × 576) with the rank-128 head on all 80
+categories and every 3rd frame: 0.106 s per detector call, and the stream ran at 0.86×
+the video's own speed, detection included; the first chunk arrived 20 s after the request,
+most of it GPU start-up.
 
 The video gap is the cost model: Moondream answers one category per pass, the slot head
 all categories in one pass.

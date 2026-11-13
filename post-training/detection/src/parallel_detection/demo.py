@@ -25,25 +25,29 @@ def phrases_of(text):
 
 
 def detections(result, phrases):
-    """(label, box) pairs from a detector result for `phrases`."""
+    """(label, box, score) triples from a detector result for `phrases`; the score is
+    None for detectors that give no confidence."""
+    scores = result.get("scores") or [[None] * len(boxes) for boxes in result["boxes"]]
     return [
-        (phrase, box)
-        for phrase, boxes in zip(phrases, result["boxes"], strict=True)
-        for box in boxes
+        (phrase, box, score)
+        for phrase, boxes, confidences in zip(phrases, result["boxes"], scores, strict=True)
+        for box, score in zip(boxes, confidences, strict=True)
     ]
 
 
 def draw(image, found, caption=None):
-    """A copy of `image` with each detection boxed and labelled, and an optional caption."""
+    """A copy of `image` with each detection boxed and labelled with its score, and an
+    optional caption."""
     image = image.convert("RGB").copy()
     pen = ImageDraw.Draw(image)
     width = max(2, round(max(image.size) / 400))
-    for label, (x0, y0, x1, y1) in found:
+    for label, (x0, y0, x1, y1), score in found:
         hue = colour(label)
+        text = label if score is None else f"{label} {score:.2f}"
         pen.rectangle([x0, y0, x1, y1], outline=hue, width=width)
-        left, top, right, bottom = pen.textbbox((x0, y0), label)
+        left, top, right, bottom = pen.textbbox((x0, y0), text)
         pen.rectangle([left - 2, top - 2, right + 2, bottom + 2], fill=hue)
-        pen.text((x0, y0), label, fill="white")
+        pen.text((x0, y0), text, fill="white")
     if caption:
         left, top, right, bottom = pen.textbbox((6, 6), caption)
         pen.rectangle([0, 0, right + 8, bottom + 6], fill="black")
@@ -51,52 +55,73 @@ def draw(image, found, caption=None):
     return image
 
 
-def run_video(data, detect, every, max_frames):
-    """Run `detect(image) -> [(label, box)]` on every `every`-th frame of a video.
+def _encode(frames, size, fps):
+    """H.264 in an MPEG transport stream: the chunk format streaming video players take."""
+    import tempfile
 
-    Frames in between show the latest detections. Returns the annotated H.264 MP4 and
-    statistics on frames, detector calls and detector seconds.
+    import imageio_ffmpeg
+
+    with tempfile.NamedTemporaryFile(suffix=".ts") as chunk:
+        writer = imageio_ffmpeg.write_frames(
+            chunk.name, size, fps=fps, codec="libx264", pix_fmt_out="yuv420p", quality=7
+        )
+        writer.send(None)
+        for frame in frames:
+            writer.send(frame)
+        writer.close()
+        return chunk.read()
+
+
+def stream_video(data, detect, every, max_frames, chunk_seconds=2.0):
+    """Run `detect(image) -> [(label, box, score)]` on every `every`-th frame of a video.
+
+    Frames in between show the latest detections. Yields (chunk, statistics) about every
+    `chunk_seconds` of video: the annotated chunk as H.264 MPEG-TS bytes, and statistics
+    on frames, detector calls and seconds so far.
     """
     import tempfile
 
     import imageio_ffmpeg
 
-    with (
-        tempfile.NamedTemporaryFile(suffix=".mp4") as clip,
-        tempfile.NamedTemporaryFile(suffix=".mp4") as result,
-    ):
+    with tempfile.NamedTemporaryFile(suffix=".mp4") as clip:
         clip.write(data)
         clip.flush()
         reader = imageio_ffmpeg.read_frames(clip.name)
         meta = next(reader)
         size, fps = meta["size"], meta.get("fps") or 25.0
-        writer = imageio_ffmpeg.write_frames(
-            result.name, size, fps=fps, codec="libx264", pix_fmt_out="yuv420p", quality=7
-        )
-        writer.send(None)
-        found, calls, seconds, frames = [], 0, [], 0
-        for frames, raw in enumerate(reader, 1):
-            if frames > max_frames:
-                break
-            image = Image.frombytes("RGB", size, raw)
-            if (frames - 1) % every == 0:
-                start = time.perf_counter()
-                found = detect(image)
-                seconds.append(time.perf_counter() - start)
-                calls += 1
-            writer.send(draw(image, found).tobytes())
-        writer.close()
-        reader.close()
-        with open(result.name, "rb") as handle:
-            output = handle.read()
+        per_chunk = max(1, round(fps * chunk_seconds))
+        found, seconds, pending, frames = [], [], [], 0
+        began = time.perf_counter()
+        try:
+            for raw in reader:
+                if frames == max_frames:
+                    break
+                frames += 1
+                image = Image.frombytes("RGB", size, raw)
+                if (frames - 1) % every == 0:
+                    start = time.perf_counter()
+                    found = detect(image)
+                    seconds.append(time.perf_counter() - start)
+                pending.append(draw(image, found).tobytes())
+                if len(pending) == per_chunk:
+                    yield _encode(pending, size, fps), _stats(frames, every, fps, seconds, began)
+                    pending = []
+            if pending:
+                yield _encode(pending, size, fps), _stats(frames, every, fps, seconds, began)
+        finally:
+            reader.close()
+
+
+def _stats(frames, every, fps, seconds, began):
     total = sum(seconds)
-    stats = {
-        "frames": min(frames, max_frames),
-        "detector_calls": calls,
+    wall = time.perf_counter() - began
+    return {
+        "frames": frames,
+        "detector_calls": len(seconds),
         "every": every,
         "video_fps": fps,
-        "seconds_per_call": total / calls if calls else None,
+        "seconds_per_call": total / len(seconds) if seconds else None,
         "detector_seconds": total,
-        "frames_per_second_covered": (min(frames, max_frames) / total) if total else None,
+        # Above 1 the stream keeps up with the video's own frame rate.
+        "speed_vs_real_time": (frames / fps) / wall if wall else None,
     }
-    return output, stats

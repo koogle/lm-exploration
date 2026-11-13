@@ -15,6 +15,7 @@ so the demo stops on its own within 24 hours.
 import io
 import json
 import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -64,10 +65,11 @@ photon_image = with_source(
         "imageio-ffmpeg==0.8.0",
     )
 )
+# Gradio's streaming video output probes each chunk with ffmpeg and ffprobe.
 web_image = with_source(
-    modal.Image.debian_slim(python_version="3.12").pip_install(
-        "gradio==6.31.0", "fastapi==0.162.5", "pillow==11.2.1"
-    )
+    modal.Image.debian_slim(python_version="3.12")
+    .apt_install("ffmpeg")
+    .pip_install("gradio==6.31.0", "fastapi==0.162.5", "pillow==11.2.1")
 )
 
 
@@ -131,9 +133,10 @@ class Detectors:
 
     @modal.method()
     def video(self, data, name, phrases, every, max_frames):
-        from parallel_detection.demo import run_video
+        """Annotated video chunks and statistics, as they are produced."""
+        from parallel_detection.demo import stream_video
 
-        return run_video(
+        yield from stream_video(
             data, lambda image: self._detect(name, image, phrases)[0], every, max_frames
         )
 
@@ -170,9 +173,12 @@ class Photon:
 
     @modal.method()
     def video(self, data, phrases, every, max_frames):
-        from parallel_detection.demo import run_video
+        """Annotated video chunks and statistics, as they are produced."""
+        from parallel_detection.demo import stream_video
 
-        return run_video(data, lambda image: self._detect(image, phrases)[0], every, max_frames)
+        yield from stream_video(
+            data, lambda image: self._detect(image, phrases)[0], every, max_frames
+        )
 
 
 MOONDREAM_31 = "Moondream 3.1 (Photon)"
@@ -215,25 +221,32 @@ def web():
         return gallery, table + "\n\n" + note
 
     def video(path, text, name, every, max_frames):
+        """Stream the annotated video chunk by chunk while the GPU works through it."""
         if not path:
-            return None, "Upload a video."
+            yield None, "Upload a video."
+            return
         data = Path(path).read_bytes()
         phrases = phrases_of(text)
         if name == MOONDREAM_31:
-            output, stats = Photon().video.remote(data, phrases, int(every), int(max_frames))
+            chunks = Photon().video.remote_gen(data, phrases, int(every), int(max_frames))
         else:
-            output, stats = Detectors().video.remote(
-                data, name, phrases, int(every), int(max_frames)
-            )
-        target = Path("/tmp") / f"annotated-{time.time_ns()}.mp4"
-        target.write_bytes(output)
-        return str(target), "```json\n" + json.dumps(stats, indent=2) + "\n```"
+            chunks = Detectors().video.remote_gen(data, name, phrases, int(every), int(max_frames))
+        folder = Path(tempfile.mkdtemp(prefix="stream-"))
+        for index, (chunk, stats) in enumerate(chunks):
+            target = folder / f"chunk-{index:05d}.ts"
+            target.write_bytes(chunk)
+            yield str(target), "```json\n" + json.dumps(stats, indent=2) + "\n```"
 
     with gr.Blocks(title="Detection demo") as page:
         gr.Markdown(
             "## Detection demo\nCompare Moondream 2, Moondream 3.1 and our one-pass slot "
             "heads. Categories: comma-separated COCO names; empty means all 80. The GPUs "
-            "start on the first request (about a minute) and stop after five idle minutes."
+            "start on the first request (about a minute) and stop after five idle minutes.\n\n"
+            "Slot-head boxes show their score: objectness × label confidence × box "
+            "confidence. It is a ranking score, not a probability; boxes are kept from "
+            "0.013 up, and half of kept boxes on COCO val score under 0.04. Moondream "
+            "gives no confidence, so its boxes show only the label. Videos stream in "
+            "two-second chunks as they are processed."
         )
         with gr.Tab("Images"):
             with gr.Row():
@@ -257,7 +270,7 @@ def web():
                     every = gr.Slider(1, 30, value=3, step=1, label="Detect every n-th frame")
                     limit = gr.Slider(30, 3000, value=600, step=30, label="Frames to process")
                     vrun = gr.Button("Run", variant="primary")
-            annotated = gr.Video(label="Annotated")
+            annotated = gr.Video(label="Annotated", streaming=True, autoplay=True)
             stats = gr.Markdown()
             vrun.click(video, [clip, vtext, model, every, limit], [annotated, stats])
 
