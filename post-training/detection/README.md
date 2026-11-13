@@ -439,6 +439,25 @@ The training images are 30,000 from Open Images (`vikhyatk/openimages-bbox`, 30 
 shards) and 20,000 from Objects365 (`guozonghao96/objects365`, every tenth image of five
 patches), prepared by `src/parallel_detection/images.py` with `configs/teacher-images.json`.
 
+## Demo
+
+`demo_app.py` deploys a web page on Modal for comparing detectors on images (uploaded,
+or 16 examples: COCO val images and Objects365 images no labeller saw) and for running
+one model on every n-th frame of a video. The models and thresholds are in
+`configs/demo.json`: Moondream 2's `detect`, three slot heads and Moondream 3.1 through
+Photon. Deploying with `.venv/bin/python demo_app.py` also spawns `shutdown_at`, which
+stops the app just under 24 hours later; the URL is public until then.
+
+Measured through the page on one warm L40S per model family:
+
+| Request | Moondream 2 | Slot head, rank 128 | Moondream 3.1 |
+|---|---|---|---|
+| One image, 6 categories | 0.343 s | 0.081 s | 0.246 s |
+| 60-frame clip, all 80 categories, every 3rd frame | | 0.047 s per frame | 2.79 s per frame |
+
+The video gap is the cost model: Moondream answers one category per pass, the slot head
+all categories in one pass.
+
 ## Run
 
 From `post-training/detection/`:
@@ -458,6 +477,7 @@ uv pip install -e ".[dev,modal]"
 .venv/bin/modal run --detach modal_app.py::main --run-id slots-bins-16-coco \
   --config configs/slots-coco.json --slots-run slots-bins-16
 .venv/bin/python scripts/figures.py --artifacts artifacts --out artifacts/figures
+.venv/bin/python demo_app.py
 
 # Recompute scores from saved predictions.
 .venv/bin/python -m parallel_detection.run score \
