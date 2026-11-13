@@ -315,7 +315,9 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
     state_path = out / "state.pt"
     if state_path.exists():
         # A preempted run continues from its last evaluation boundary.
-        state = torch.load(state_path, map_location=device, weights_only=False)
+        # On CPU: generator states must be CPU byte tensors even for a CUDA generator, and
+        # load_state_dict moves the weights and optimizer state to the parameters' device.
+        state = torch.load(state_path, map_location="cpu", weights_only=False)
         head.load_state_dict(state["head"])
         optimizer.load_state_dict(state["optimizer"])
         sampler.setstate(state["sampler"])
