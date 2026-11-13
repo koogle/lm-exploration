@@ -6,11 +6,13 @@ import unittest
 
 from workflows.deadline import (
     MAX_LAUNCH_SECONDS,
+    SHUTDOWN_SECONDS,
     bounded_timeout,
     cancel_at_deadline,
     new_deadline,
     recorded_call,
     segment_seconds,
+    session_seconds,
     track,
     tracked_calls,
 )
@@ -32,6 +34,16 @@ class DeadlineTests(unittest.TestCase):
         self.assertEqual(segment_seconds(5000, 21600), 5000 - 480)
         with self.assertRaises(RuntimeError):
             segment_seconds(400, 21600)
+
+    def test_session_queued_past_its_spawn_stops_before_the_deadline(self):
+        deadline = 100_000.0
+        # Spawned with 6 hours left, but its container starts 31 minutes later.
+        start = deadline - 6 * 3600 + 31 * 60
+        seconds = session_seconds(deadline, 6 * 3600 - SHUTDOWN_SECONDS, now=start)
+        self.assertEqual(start + seconds, deadline - SHUTDOWN_SECONDS)
+        self.assertEqual(session_seconds(deadline, 60, now=start), 60)
+        with self.assertRaisesRegex(RuntimeError, "deadline"):
+            session_seconds(deadline, 3600, now=deadline - SHUTDOWN_SECONDS)
 
     def test_restarted_controller_reattaches_recorded_session(self):
         from types import SimpleNamespace
