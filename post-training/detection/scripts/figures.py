@@ -420,6 +420,99 @@ def pr_figure(artifacts, out):
     plt.close(figure)
 
 
+# Every slot head evaluated on COCO val, in two panels: heads re-scored over all slots,
+# and earlier heads ranked by objectness and recorded down to 0.3.
+# (evaluation run, colour, line style, label)
+ALL_RESCORED = [
+    ("slots-rank64-coco-v2", MAGENTA, "-", "Rank 64, 46k COCO"),
+    ("slots-rank64-self-coco-v2", MAGENTA, "--", "Same, self-training"),
+    ("slots-teacher-coco-rank64-coco-v2", RED, "-", "Rank 64, + 18k Gemini-labelled"),
+    ("slots-teacher-coco-rank64-self-coco-v2", RED, "--", "Same, self-training"),
+    ("slots-teacher-coco-rank128-coco-v2", RED, ":", "Same data, rank 128"),
+]
+ALL_OBJECTNESS = [
+    ("slots-small-16-coco-sweep-l40s", VIOLET, "-", "Rank 16, 46k COCO"),
+    ("slots-iou-coco", AQUA, "-", "Rank 16, IoU objectness target"),
+    ("slots-near-coco", GREEN, "-", "Rank 16, near-label negatives"),
+    ("slots-rank64-coco", MAGENTA, "-", "Rank 64, 46k COCO"),
+    ("slots-combined-coco", ORANGE, "-", "Rank 64, IoU target + near negatives"),
+    ("slots-teacher-coco-rank64-coco", RED, "-", "Rank 64, + 18k Gemini-labelled"),
+    ("slots-teacher-23k-coco", GREY, "-", "Rank 16, 18k Gemini-labelled only"),
+    ("slots-teacher-23k-near-coco", GREY, "--", "Same, near-label negatives"),
+]
+
+
+def baseline_points(axis, artifacts):
+    for run, key, label in (
+        ("moondream2-001", "moondream2", "Moondream 2 detect"),
+        ("moondream31-001", "moondream31", "Moondream 3.1"),
+    ):
+        path = artifacts / run / "predictions.jsonl"
+        if not path.exists():
+            continue
+        records = [r for r in read_records(path) if r["dataset"] == "coco_val2017"]
+        point = summarize(records)["coco_val2017"]["detection"]["iou_0.5"]
+        axis.scatter(
+            [point["recall"]],
+            [point["precision"]],
+            s=110,
+            marker="D",
+            color=COLOURS[key],
+            edgecolor=SURFACE,
+            linewidth=2,
+            zorder=4,
+            label=f"{label} (one point)",
+        )
+
+
+def all_pr_figure(artifacts, out):
+    """Precision against recall at IoU 0.5 for every slot head evaluated on COCO val."""
+    figure, axes = plt.subplots(1, 2, figsize=(16, 6.5), facecolor=SURFACE, sharey=True)
+    panels = (
+        (axes[0], ALL_RESCORED, "Re-scored heads: every slot, objectness × label × box"),
+        (axes[1], ALL_OBJECTNESS, "Earlier heads: objectness only, recorded down to 0.3"),
+    )
+    for axis, series, title in panels:
+        style(axis, title)
+        axis.grid(axis="x", color=GRID, linewidth=0.8)
+        for run, colour, line, label in series:
+            path = artifacts / run / "predictions.jsonl"
+            if not path.exists():
+                continue
+            records = [r for r in read_records(path) if r["dataset"] == "coco_val2017"]
+            precision, recall, _ = ranked_curve(records)
+            ap = ranked_ap(records)["pooled_ap"]
+            axis.plot(
+                recall,
+                precision,
+                color=colour,
+                linewidth=2,
+                linestyle=line,
+                label=f"{label}, area {ap:.3f}",
+            )
+        baseline_points(axis, artifacts)
+        axis.set_xlabel("Recall", fontsize=9, color=MUTED)
+        axis.set_xlim(0.2, 0.8)
+        axis.set_ylim(0.4, 1.0)
+        axis.legend(frameon=False, fontsize=8, labelcolor=INK, loc="lower left")
+    axes[0].set_ylabel("Precision", fontsize=9, color=MUTED)
+    axes[1].annotate(
+        "Areas here are lower bounds: each curve stops at confidence 0.3.",
+        (0.99, 0.99),
+        xycoords="axes fraction",
+        ha="right",
+        va="top",
+        fontsize=8,
+        color=MUTED,
+    )
+    figure.suptitle(
+        "COCO val2017, 500 images: precision against recall at IoU 0.5", color=INK, fontsize=11
+    )
+    figure.tight_layout()
+    figure.savefig(out / "precision-recall-all.png", dpi=200, facecolor=SURFACE)
+    plt.close(figure)
+
+
 # Area comparison: evaluations that recorded every box (no confidence floor), each with
 # its tuning-split twin. Variants of a head share its colour and differ by texture:
 # (evaluation run, colour key, label, hatch or None)
@@ -566,6 +659,7 @@ def main():
     coco_figure(args.artifacts, args.out)
     recall_figure(args.artifacts, args.out)
     pr_figure(args.artifacts, args.out)
+    all_pr_figure(args.artifacts, args.out)
     area_figure(args.artifacts, args.out)
     examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))
     examples_figure(args.artifacts, args.out, "examples-2.png", objects=(4, 9), skip=4)
