@@ -111,11 +111,12 @@ def test_sampler_keeps_revealed_positions_between_passes():
     text, region = tiny_text(), tiny_region()
     head = SlotHead(text, slots=4, label_tokens=3, rank=2)
     cache = prefix_cache(text, torch.randn(1, 7, DIM), no_rotation)
-    _, boxes, tokens = sample(head, text, region, cache, no_rotation, steps=1)
+    _, boxes, tokens, confidence = sample(head, text, region, cache, no_rotation, steps=1)
+    assert confidence.shape == (1, 4, 6)
     assert boxes.shape == (1, 4, 4) and tokens.shape == (1, 4, 3)
     # A position revealed after the first pass keeps its value in every later pass.
-    _, first_boxes, first_tokens = sample(head, text, region, cache, no_rotation, steps=1)
-    _, later_boxes, later_tokens = sample(head, text, region, cache, no_rotation, steps=6)
+    _, first_boxes, first_tokens, _ = sample(head, text, region, cache, no_rotation, steps=1)
+    _, later_boxes, later_tokens, _ = sample(head, text, region, cache, no_rotation, steps=6)
     same = (first_tokens == later_tokens).sum() + (first_boxes == later_boxes).sum()
     assert same >= 4  # at least the first revealed position of each slot
 

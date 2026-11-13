@@ -374,7 +374,8 @@ def diffusion_loss(head, text, region, cache, rotate, matching, generator):
 
 @torch.no_grad()
 def sample(head, text, region, cache, rotate, steps):
-    """Sample every slot in `steps` passes; returns objectness, boxes, label tokens.
+    """Sample every slot in `steps` passes; returns objectness, boxes, label tokens and the
+    confidence of each position (x, y, size, then label tokens; 1 where revealed).
 
     Each pass after the first reveals the most confident positions so far (an equal
     share of a slot's positions per pass) and predicts the remaining positions again.
@@ -397,4 +398,4 @@ def sample(head, text, region, cache, rotate, steps):
             order = confidence.argsort(-1, descending=True)
             reveal = torch.zeros_like(confidence, dtype=torch.bool)
             known = (reveal.scatter(-1, order[..., :keep], True), bins, tokens)
-    return objectness, boxes_of(bins), tokens
+    return objectness, boxes_of(bins), tokens, confidence

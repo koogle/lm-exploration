@@ -32,6 +32,7 @@ import numpy as np
 import torch
 
 from parallel_detection.slots import (
+    COORDINATES,
     PREFIX,
     SlotHead,
     boxes_of,
@@ -226,7 +227,7 @@ def heldout_scores(head, inner, functions, data, indices, batch_size, device, th
         values = {k: v.item() for k, v in terms.items()} | stats
         truth = to_corners(boxes_of(truth_bins))
         for steps in (2, 3):
-            _, sampled, tokens = sample(head, inner.text, inner.region, cache, rotate, steps)
+            _, sampled, tokens, _ = sample(head, inner.text, inner.region, cache, rotate, steps)
             _, iou = generalized_iou(to_corners(sampled[b_index, s_index]), truth)
             values[f"matched_iou_{steps}_steps"] = iou.diagonal().mean().item()
             values[f"label_exact_{steps}_steps"] = (
@@ -444,9 +445,12 @@ class SlotDetector:
     threshold whose decoded label equals it. All time is reported as shared.
     """
 
-    def __init__(self, checkpoint, device, steps=1, max_crops=None, threshold=None):
+    def __init__(
+        self, checkpoint, device, steps=1, max_crops=None, threshold=None, all_slots=False
+    ):
         """`max_crops` overrides how many high-resolution crops the vision encoder reads;
-        `threshold` overrides the objectness threshold chosen on held-out images."""
+        `threshold` overrides the objectness threshold chosen on held-out images;
+        `all_slots` also returns every slot's box, objectness, label and confidences."""
         state = torch.load(checkpoint, map_location=device)
         config = state["config"]
         self.model, self.inner, self.functions = load_backbone(**config["model"], device=device)
@@ -461,6 +465,7 @@ class SlotDetector:
         self.vocabulary = state["vocabulary"]
         self.threshold = state["threshold"] if threshold is None else threshold
         self.device, self.steps = torch.device(device), steps
+        self.all_slots = all_slots
 
     def _clock(self):
         if self.device.type == "cuda":
@@ -475,7 +480,7 @@ class SlotDetector:
         encoded = self._clock()
         cache = image_cache(self.inner, self.functions, embedding[None])
         prefilled = self._clock()
-        objectness, boxes, tokens = sample(
+        objectness, boxes, tokens, confidence = sample(
             self.head,
             self.inner.text,
             self.inner.region,
@@ -501,7 +506,19 @@ class SlotDetector:
             [scores[k] for k in range(len(keep)) if keep[k] and names[k] == phrase]
             for phrase in phrases
         ]
-        return {
+        slots = {}
+        if self.all_slots:
+            slots["slots"] = [
+                {
+                    "box": [c * s for c, s in zip(corners[k], scale, strict=True)],
+                    "objectness": scores[k],
+                    "label": names[k],
+                    "box_confidence": confidence[0, k, :COORDINATES].min().item(),
+                    "label_confidence": confidence[0, k, COORDINATES:].prod().item(),
+                }
+                for k in range(len(scores))
+            ]
+        return slots | {
             "boxes": found,
             "scores": kept,
             "shared_seconds": shared,

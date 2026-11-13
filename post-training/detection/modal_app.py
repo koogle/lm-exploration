@@ -319,6 +319,7 @@ def main(
     slots_run: str = "",
     max_crops: int = 0,
     threshold: float = -1.0,
+    all_slots: bool = False,
     gpu: str = "L4",
 ):
     """`--slots-run` evaluates that training run's head with a slots config; `--max-crops`
@@ -330,6 +331,8 @@ def main(
         settings["model"]["max_crops"] = max_crops
     if threshold >= 0:
         settings["model"]["threshold"] = threshold
+    if all_slots:
+        settings["model"]["all_slots"] = True
     launch(evaluate, run_id, settings, "summary.json", gpu=gpu)
 
 

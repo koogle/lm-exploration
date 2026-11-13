@@ -124,6 +124,8 @@ def predict(detector, samples, image_folder, warmup=2):
                 "components": result.get("components"),
             }
             | ({"scores": result["scores"][position]} if "scores" in result else {})
+            # A detector that reports every slot attaches them to the image's first query.
+            | ({"slots": result["slots"]} if "slots" in result and position == 0 else {})
             for position, (query, boxes, seconds) in enumerate(
                 zip(sample["queries"], result["boxes"], result["phrase_seconds"], strict=True)
             )
