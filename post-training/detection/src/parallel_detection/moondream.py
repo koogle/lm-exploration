@@ -25,19 +25,25 @@ DECODERS = ("eager", "compiled", "loop", "kernel")
 
 
 class MoondreamDetector:
-    def __init__(self, repo, revision, max_objects, device, decoder="eager", kernel_library=None):
+    def __init__(
+        self, repo, revision, max_objects, device, decoder="eager", kernel_library=None, model=None
+    ):
+        """`model` is an already loaded Moondream 2 to use instead of loading `repo`."""
         if decoder not in DECODERS:
             raise ValueError(f"Unknown decoder {decoder!r}")
         self.device = torch.device(device)
         self.max_objects = max_objects
         self.decoder = decoder
-        self.model = AutoModelForCausalLM.from_pretrained(
-            repo,
-            revision=revision,
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16 if self.device.type == "cuda" else torch.float32,
-            device_map={"": device},
-        ).eval()
+        self.model = (
+            model
+            or AutoModelForCausalLM.from_pretrained(
+                repo,
+                revision=revision,
+                trust_remote_code=True,
+                torch_dtype=torch.bfloat16 if self.device.type == "cuda" else torch.float32,
+                device_map={"": device},
+            ).eval()
+        )
         self.model._setup_caches()  # the wrapper creates the key/value caches lazily
         self.inner = self.model.model
         # The Hub module that defines the model also holds its region and text functions.

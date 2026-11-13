@@ -1,0 +1,39 @@
+{
+  "moondream": {
+    "repo": "vikhyatk/moondream2",
+    "revision": "2025-06-21"
+  },
+  "slot_heads": {
+    "Slots, rank 64, COCO": {
+      "run": "slots-rank64",
+      "threshold": 0.0133
+    },
+    "Slots, rank 64, COCO + Gemini": {
+      "run": "slots-teacher-coco-rank64",
+      "threshold": 0.0133
+    },
+    "Slots, rank 128, COCO + Gemini": {
+      "run": "slots-teacher-coco-rank128",
+      "threshold": 0.0133
+    }
+  },
+  "photon_model": "moondream3.1-9B-A2B",
+  "examples": [
+    "demo/examples/000000006763.jpg",
+    "demo/examples/000000006954.jpg",
+    "demo/examples/000000008277.jpg",
+    "demo/examples/000000008629.jpg",
+    "demo/examples/000000009483.jpg",
+    "demo/examples/000000009769.jpg",
+    "demo/examples/000000016010.jpg",
+    "demo/examples/000000018150.jpg",
+    "demo/examples/000000021167.jpg",
+    "demo/examples/000000024610.jpg",
+    "demo/examples/000000036844.jpg",
+    "demo/examples/000000037777.jpg",
+    "demo/examples/objects365_v2_01796392.jpg",
+    "demo/examples/objects365_v2_01797569.jpg",
+    "demo/examples/objects365_v2_01798745.jpg",
+    "demo/examples/objects365_v2_01799919.jpg"
+  ]
+}

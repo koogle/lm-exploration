@@ -480,6 +480,7 @@ class SlotDetector:
         all_slots=False,
         score="objectness_label_box",
         duplicate_iou=0.7,
+        backbone=None,
     ):
         """`score` ranks a slot by "objectness" alone or by "objectness_label_box", the
         product of objectness and the sampler's confidence in its label and box; a slot is
@@ -488,14 +489,17 @@ class SlotDetector:
         label overlapping a higher-scoring one by at least `duplicate_iou` are dropped
         (None keeps them). `max_crops` overrides how many high-resolution crops the
         vision encoder reads; `all_slots` also returns every slot's box, objectness,
-        label and confidences."""
+        label and confidences. `backbone` is the (model, inner, functions) of
+        `load_backbone` to share with other detectors."""
         if score not in SLOT_SCORES:
             raise ValueError(f"Unknown slot score {score!r}")
         if threshold is None and score != "objectness":
             raise ValueError("A score other than objectness needs an explicit threshold")
         state = torch.load(checkpoint, map_location=device)
         config = state["config"]
-        self.model, self.inner, self.functions = load_backbone(**config["model"], device=device)
+        self.model, self.inner, self.functions = backbone or load_backbone(
+            **config["model"], device=device
+        )
         if max_crops is not None:
             vision = replace(self.inner.config.vision, max_crops=max_crops)
             self.inner.config = replace(self.inner.config, vision=vision)
