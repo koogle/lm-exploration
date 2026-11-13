@@ -467,6 +467,13 @@ most of it GPU start-up.
 The video gap is the cost model: Moondream answers one category per pass, the slot head
 all categories in one pass.
 
+## Paper
+
+`paper/main.tex` is a two-page summary of the slot head: method, results against
+Moondream 2 and 3.1, and what did and did not work. It reads its figure from
+`artifacts/figures/`; build it with `latexmk -pdf -outdir=../artifacts/paper main.tex`
+from `paper/`. The built PDF is in the archive as `paper/one-pass-detection.pdf`.
+
 ## Run
 
 From `post-training/detection/`:
