@@ -1,5 +1,13 @@
 # Sub-1B coding reasoner: training plan
 
+> **Two paths.** The 960M foundation model is trained:
+> [Malama Base](https://huggingface.co/jfrick/malama-base), 100B tokens. Two paths
+> build on it. **Autocomplete** ([plan](MALAMA_AUTOCOMPLETE.md)) is active: code
+> infilling and completion, starting with a fill-in-the-middle midtraining branch.
+> **Coding reasoner** (this plan) is deferred. Its midtraining, reasoning SFT and RL
+> stages below start after the autocomplete path's midtraining results, and can reuse
+> its final midtraining checkpoint.
+
 Updated November 10, 2026. Train a model from scratch through foundation
 pretraining, midtraining, reasoning SFT and outcome-based RL. The working model
 has 959,843,116 training parameters and a 927,589,920-parameter deployed trunk
