@@ -4,6 +4,8 @@ Training runs through the workflows like every model family (workflows/README.md
 Run from training/:
     modal run -m model_hybrid.modal_tools::bench --gpus 1 [--microbatch 4]
     modal run -m model_hybrid.modal_tools::heldout --export <run>/export/<name>
+    modal run -m model_hybrid.modal_tools::samples --export <run>/export/<name> \\
+        [--prompts hybrid/sample_prompts.json] [--output samples.json]
     modal run -m model_hybrid.modal_tools::export --run-id <run folder>
     modal run -m model_hybrid.modal_tools::publish --checkpoint <run>/step-NNNNNNNNN.pt \\
         --repo <owner/name> [--public] [--card <README.md>]
@@ -185,6 +187,67 @@ def heldout(export: str, recipe: str = "hybrid/recipes/hybrid-40b-v1.json"):
         export, load_config(recipe), counts, time.time() + MAX_LAUNCH_SECONDS
     )
     print(json.dumps({"export": export, "heldout": result}, indent=1))
+
+
+@app.function(
+    image=image, gpu="H100", cpu=8, memory=65536, timeout=3600, retries=0, volumes=VOLUMES
+)
+def generate_samples(export, spec, deadline):
+    """Continuations of each prompt in `spec` by an export, once per decode setting."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import torch
+    from model_hybrid import generate
+
+    from tokenizer import glm
+
+    lm = generate.load_export(Path("/runs") / export, dtype=torch.bfloat16, device="cuda")
+    tokenizer = glm.load()
+    prompts = [tokenizer.encode(p["text"], add_special_tokens=False).ids for p in spec["prompts"]]
+    samples = []
+    for decode in spec["decodes"]:
+        generator = None
+        if decode["temperature"] > 0:
+            generator = torch.Generator(device="cuda").manual_seed(decode.get("seed", 0))
+        outputs = generate.generate_batch(
+            lm,
+            prompts,
+            spec["max_new_tokens"],
+            (glm.EOS_ID,),
+            temperature=decode["temperature"],
+            top_p=decode["top_p"],
+            generator=generator,
+        )
+        for prompt, ids in zip(spec["prompts"], outputs, strict=True):
+            samples.append(
+                {
+                    "prompt": prompt["name"],
+                    "decode": decode["name"],
+                    "text": prompt["text"],
+                    "completion": tokenizer.decode(ids, skip_special_tokens=False),
+                    "new_tokens": len(ids),
+                    "ended": bool(ids) and ids[-1] == glm.EOS_ID,
+                }
+            )
+    return samples
+
+
+@app.local_entrypoint()
+def samples(export: str, prompts: str = "hybrid/sample_prompts.json", output: str = ""):
+    """Generations of `<run id>/export/<export>` for a prompt file; JSON on stdout or
+    in `--output`."""
+    from workflows.deadline import MAX_LAUNCH_SECONDS
+
+    spec = json.loads(Path(prompts).read_text())
+    result = {
+        "export": export,
+        "prompts": prompts,
+        "samples": generate_samples.remote(export, spec, time.time() + MAX_LAUNCH_SECONDS),
+    }
+    if output:
+        Path(output).write_text(json.dumps(result, indent=1) + "\n")
+    else:
+        print(json.dumps(result, indent=1))
 
 
 @app.function(image=image, cpu=8, memory=65536, timeout=1800, retries=0, volumes=VOLUMES)
