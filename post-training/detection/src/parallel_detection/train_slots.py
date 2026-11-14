@@ -164,7 +164,7 @@ class Features:
             r for stem in stems for r in json.loads(Path(stem).with_suffix(".json").read_text())
         ]
         self.index = [(a, i) for a, array in enumerate(self.arrays) for i in range(len(array))]
-        self.vocabulary = {}
+        self.vocabulary, self.label_tokens = {}, label_tokens
         for name in COCO_NAMES:
             ids = tokenizer.encode(" " + name).ids
             if len(ids) > label_tokens:
@@ -174,25 +174,71 @@ class Features:
     def __len__(self):
         return len(self.index)
 
-    def batch(self, indices, device):
+    def batch(self, indices, device, prompts=None):
+        """Image embeddings, targets as (boxes, tokens) per image, the prompt token ids
+        [B, 3 x categories] (None without prompts) and each image's (name, box) truth.
+
+        `prompts` lists each image's categories to ask for; its targets are then the
+        objects of those categories only."""
         arrays = [self.arrays[self.index[i][0]][self.index[i][1]] for i in indices]
         embeddings = torch.from_numpy(np.stack(arrays)).to(device).view(torch.bfloat16)
-        targets = []
-        for i in indices:
+        targets, truths = [], []
+        for n, i in enumerate(indices):
             objects = self.records[i]["objects"]
+            if prompts is not None:
+                objects = [(name, box) for name, box in objects if name in prompts[n]]
             boxes = torch.tensor([box for _, box in objects], device=device, dtype=torch.float32)
-            tokens = torch.tensor([self.vocabulary[name] for name, _ in objects], device=device)
-            targets.append((boxes, tokens))
-        return embeddings, targets
+            tokens = torch.tensor(
+                [self.vocabulary[name] for name, _ in objects], device=device, dtype=torch.long
+            ).view(len(objects), self.label_tokens)
+            targets.append((boxes.view(-1, 4), tokens))
+            truths.append(objects)
+        ids = None
+        if prompts is not None:
+            ids = torch.tensor(
+                [[t for name in names for t in self.vocabulary[name]] for names in prompts],
+                device=device,
+            )
+        return embeddings, targets, ids, truths
 
 
-def image_cache(inner, functions, embeddings):
-    """Prefix keys and values for a batch of image embeddings [B, 729, D]."""
+def image_cache(inner, functions, embeddings, prompt=None):
+    """Prefix keys and values for a batch of image embeddings [B, 729, D], followed by
+    the prompt token ids [B, L] when given."""
     bos = functions.text_encoder(
         torch.tensor([[inner.config.tokenizer.bos_id]], device=embeddings.device), inner.text
     )
-    inputs = torch.cat([bos.expand(embeddings.size(0), -1, -1), embeddings.to(bos.dtype)], dim=1)
-    return prefix_cache(inner.text, inputs, functions.apply_rotary_emb)
+    parts = [bos.expand(embeddings.size(0), -1, -1), embeddings.to(bos.dtype)]
+    if prompt is not None:
+        parts.append(functions.text_encoder(prompt, inner.text).to(bos.dtype))
+    return prefix_cache(inner.text, torch.cat(parts, dim=1), functions.apply_rotary_emb)
+
+
+def prompt_categories(present, count, keep, rng):
+    """`count` categories to prompt, shuffled: present ones, each kept with probability
+    `keep` (at most `count`), and absent ones for the rest."""
+    kept = [name for name in sorted(present) if rng.random() < keep]
+    rng.shuffle(kept)
+    kept = kept[:count]
+    absent = [name for name in COCO_NAMES if name not in present]
+    chosen = kept + rng.sample(absent, count - len(kept))
+    rng.shuffle(chosen)
+    return chosen
+
+
+def batch_prompts(data, indices, settings, rng, heldout=False):
+    """Each image's prompt. In training, one random count per batch, present categories
+    kept with probability `keep`; held out, every present category (up to the maximum)
+    and two absent ones."""
+    if settings is None:
+        return None
+    presents = [{name for name, _ in data.records[i]["objects"]} for i in indices]
+    most = settings["max_categories"]
+    if heldout:
+        count = min(most, max(len(p) for p in presents) + 2)
+        return [prompt_categories(p, count, 1.0, rng) for p in presents]
+    count = rng.randint(1, most)
+    return [prompt_categories(p, count, settings["keep_present"], rng) for p in presents]
 
 
 def decode_names(tokens, vocabulary):
@@ -203,7 +249,9 @@ def decode_names(tokens, vocabulary):
 
 
 @torch.no_grad()
-def heldout_scores(head, inner, functions, data, indices, batch_size, device, thresholds, options):
+def heldout_scores(
+    head, inner, functions, data, indices, batch_size, device, thresholds, options, prompting=None
+):
     """Loss terms, box and label quality by sampler passes, and one-pass F1 at IoU 0.5 per
     objectness threshold.
 
@@ -219,8 +267,9 @@ def heldout_scores(head, inner, functions, data, indices, batch_size, device, th
     undecodable = decoded = 0
     for start in range(0, len(indices), batch_size):
         chunk = indices[start : start + batch_size]
-        embeddings, targets = data.batch(chunk, device)
-        cache = image_cache(inner, functions, embeddings)
+        prompts = batch_prompts(data, chunk, prompting, random.Random(start), heldout=True)
+        embeddings, targets, prompt, truths = data.batch(chunk, device, prompts)
+        cache = image_cache(inner, functions, embeddings, prompt)
         rotate = functions.apply_rotary_emb
         objectness, box_logits, logits = head(inner.text, inner.region, cache, rotate)
         terms, (b_index, s_index, truth_tokens, truth_bins), stats = set_loss(
@@ -241,8 +290,7 @@ def heldout_scores(head, inner, functions, data, indices, batch_size, device, th
         names = decode_names(logits.argmax(-1), data.vocabulary)
         scores = objectness.sigmoid()
         corners = to_corners(boxes_of(box_logits.argmax(-1))).cpu().numpy()
-        for b, i in enumerate(chunk):
-            truth = data.records[i]["objects"]
+        for b, truth in enumerate(truths):
             for threshold in thresholds:
                 keep = [k for k in range(head.slots) if scores[b, k] >= threshold]
                 decoded += len(keep) * (threshold == thresholds[0])
@@ -382,6 +430,7 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
                     device,
                     thresholds,
                     options,
+                    config.get("prompts"),
                 )
                 scores.write(
                     json.dumps({"step": step, "seconds": time.time() - started} | row) + "\n"
@@ -401,8 +450,11 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
             for group in optimizer.param_groups:
                 group["lr"] = group["base"] * rate(step)
             picks = sampler.sample(training, config["batch_size"])
-            embeddings, targets = data.batch(picks, device)
-            cache = image_cache(inner, functions, embeddings)
+            # Seeded by step, so a resumed run draws the same prompts.
+            prompt_rng = random.Random(config["seed"] * 1_000_003 + step)
+            prompts = batch_prompts(data, picks, config.get("prompts"), prompt_rng)
+            embeddings, targets, prompt, _ = data.batch(picks, device, prompts)
+            cache = image_cache(inner, functions, embeddings, prompt)
             rotate = functions.apply_rotary_emb
             objectness, box_logits, logits = head(inner.text, inner.region, cache, rotate)
             ignore = None
@@ -518,6 +570,7 @@ class SlotDetector:
         self.head.load_state_dict(state["head"])
         self.head.to(device).eval()
         self.vocabulary = state["vocabulary"]
+        self.prompting = config.get("prompts")
         self.threshold = state["threshold"] if threshold is None else threshold
         self.device, self.steps = torch.device(device), steps
         self.all_slots, self.score, self.duplicate_iou = all_slots, score, duplicate_iou
@@ -542,10 +595,29 @@ class SlotDetector:
                     out.append(("tile", [x0, y0, x0 + tile_w, y0 + tile_h]))
         return out
 
-    def _slots(self, image):
-        """Every slot of one view: corners in [0, 1] of that view, label, confidences."""
+    def prompt_groups(self, phrases):
+        """Token ids of each prompt to run: None for a head trained without prompts;
+        otherwise the requested categories the head knows, in groups no larger than it
+        was trained on."""
+        if self.prompting is None:
+            return [None]
+        known = [p for p in dict.fromkeys(phrases) if p in self.vocabulary]
+        size = self.prompting["max_categories"]
+        return [
+            torch.tensor(
+                [[t for p in known[i : i + size] for t in self.vocabulary[p]]], device=self.device
+            )
+            for i in range(0, len(known), size)
+        ]
+
+    def _slots(self, image, prompts):
+        """Every slot of one view under each prompt: corners in [0, 1] of that view, label,
+        confidences."""
         embedding = self.inner._run_vision_encoder(image)
-        cache = image_cache(self.inner, self.functions, embedding[None])
+        return [s for prompt in prompts for s in self._decode(embedding, prompt)]
+
+    def _decode(self, embedding, prompt):
+        cache = image_cache(self.inner, self.functions, embedding[None], prompt)
         objectness, boxes, tokens, confidence = sample(
             self.head,
             self.inner.text,
@@ -579,11 +651,12 @@ class SlotDetector:
         width, height = image.size
         start = self._clock()
         candidates, seconds = [], {}
+        prompts = self.prompt_groups(phrases)
         for view, (x0, y0, x1, y1) in self.views(width, height):
             began = self._clock()
             crop = image if view == "full" else image.crop((x0, y0, x1, y1))
             edges = (x0 > 0, y0 > 0, x1 < width, y1 < height)  # inner edges of this view
-            for slot in self._slots(crop):
+            for slot in self._slots(crop, prompts):
                 c = slot.pop("corners")
                 near = (c[0] < 0.01, c[1] < 0.01, c[2] > 0.99, c[3] > 0.99)
                 slot["box"] = [

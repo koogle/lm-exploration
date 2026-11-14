@@ -164,7 +164,8 @@ class SlotHead(nn.Module):
             x = torch.where(reveal.unsqueeze(-1), given.float() + self.roles, x)
         # Every position carries its slot's query so that the block binds to one object.
         x = (x + self.queries[None, :, None, :]).flatten(1, 2)
-        positions = PREFIX + torch.arange(x.size(1), device=x.device)
+        # Slots follow everything cached: the image prefix and any prompt.
+        positions = cache[0][0].size(2) + torch.arange(x.size(1), device=x.device)
         for block, kv, adapter in zip(text.blocks, cache, self.adapters, strict=True):
             x, _ = block_forward(block, x, positions, text.freqs_cis, rotate, kv, adapter)
         hidden = x.view(batch, self.slots, self.width, -1)
@@ -239,6 +240,7 @@ def loss_options(config):
         "size_groups": groups and (groups["boundary"], groups["small_slots"]),
         "objectness_target": config.get("objectness_target", "binary"),
         "negatives": config.get("negatives", "all"),
+        "size_weight": config.get("size_weight"),
     }
 
 
@@ -251,6 +253,7 @@ def set_loss(
     objectness_target="binary",
     negatives="all",
     ignore=None,
+    size_weight=None,
 ):
     """Losses for a batch; `targets` is a list of (boxes [n, 4] cxcywh, tokens [n, T]).
 
@@ -266,6 +269,10 @@ def set_loss(
     no gradient, because they may have found an object the labels omit. `ignore` [B, K]
     marks further unmatched slots to leave without gradient, for example where a
     slowly averaged copy of the head confidently sees an object the labels lack.
+
+    `size_weight` {"reference_area", "max"} weights each matched object's box, label and
+    objectness terms by sqrt(reference_area / its area), clamped to [1, max], so small
+    objects count more; box and label terms become weighted means.
 
     Returns the loss terms, the matching as (batch, slot, truth tokens, truth bins) and
     detached statistics.
@@ -293,6 +300,11 @@ def set_loss(
     target = torch.zeros_like(objectness)
     target[batch_index, slot_index] = 1.0 if objectness_target == "binary" else iou.detach()
     weight = torch.where(matched, 1.0, WEIGHTS["empty"])
+    emphasis = torch.ones_like(truth_boxes[:, 0])
+    if size_weight is not None:
+        area = (truth_boxes[:, 2] * truth_boxes[:, 3]).clamp(min=1e-6)
+        emphasis = (size_weight["reference_area"] / area).sqrt().clamp(1.0, size_weight["max"])
+        weight = weight.index_put((batch_index, slot_index), emphasis)
     if negatives == "near_labels":
         all_boxes = to_corners(boxes_of(box_logits.argmax(-1))).detach()
         for b, (t_boxes, _) in enumerate(targets):
@@ -305,13 +317,29 @@ def set_loss(
         weight = torch.where(~matched & ignore, 0.0, weight)
     if objectness_target not in ("binary", "iou"):
         raise ValueError(f"Unknown objectness target {objectness_target!r}")
+    share = emphasis / emphasis.sum().clamp(min=1e-9)
+
+    def mean(per_object):
+        # A batch can have no matched object (every prompted category absent): zero.
+        return (per_object * share).sum() if len(share) else per_object.sum() * 0
+
     terms = {
         "objectness": F.binary_cross_entropy_with_logits(objectness, target, weight),
-        "l1": F.l1_loss(predicted, truth_boxes),
-        "giou": 1 - giou.diagonal().mean(),
-        "bins": F.cross_entropy(matched_logits.flatten(0, 1), truth_bins.flatten()),
-        "label": F.nll_loss(
-            log_probs[batch_index, slot_index].flatten(0, 1), truth_tokens.flatten()
+        "l1": mean(F.l1_loss(predicted, truth_boxes, reduction="none").mean(-1)),
+        "giou": mean(1 - giou.diagonal()),
+        "bins": mean(
+            F.cross_entropy(matched_logits.flatten(0, 1), truth_bins.flatten(), reduction="none")
+            .view(-1, 4)
+            .mean(-1)
+        ),
+        "label": mean(
+            F.nll_loss(
+                log_probs[batch_index, slot_index].flatten(0, 1),
+                truth_tokens.flatten(),
+                reduction="none",
+            )
+            .view(truth_tokens.shape)
+            .mean(-1)
         ),
     }
     stats = {

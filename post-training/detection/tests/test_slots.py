@@ -208,3 +208,100 @@ def test_ignored_slots_get_no_empty_gradient():
     )
     expected.backward()
     assert torch.allclose(gradient, head.objectness.weight.grad, atol=1e-6)
+
+
+def test_size_weight_counts_small_objects_more():
+    torch.manual_seed(0)
+    text, region = tiny_text(), tiny_region()
+    head = SlotHead(text, slots=6, label_tokens=3, rank=2)
+    cache = prefix_cache(text, torch.randn(1, 7, DIM), no_rotation)
+    outputs = head(text, region, cache, no_rotation)
+    large = [(torch.tensor([[0.5, 0.5, 0.3, 0.3]]), torch.tensor([[3, 4, 0]]))]
+    weight = {"reference_area": 0.01, "max": 4.0}
+    # Objects above the reference area keep weight 1: the loss is unchanged.
+    plain, weighted = set_loss(*outputs, large)[0], set_loss(*outputs, large, size_weight=weight)[0]
+    assert all(torch.allclose(plain[k], weighted[k]) for k in plain)
+    pair = [
+        (
+            torch.tensor([[0.5, 0.5, 0.3, 0.3], [0.2, 0.2, 0.02, 0.02]]),
+            torch.tensor([[3, 4, 0], [7, 0, 0]]),
+        )
+    ]
+    plain, weighted = set_loss(*outputs, pair)[0], set_loss(*outputs, pair, size_weight=weight)[0]
+    # The small object (0.04% of the image) gets weight 4, the large one 1.
+    assert not torch.allclose(plain["label"], weighted["label"])
+
+
+def test_prompted_batches_cache_and_heldout_scores(tmp_path):
+    import random
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from parallel_detection.tasks import COCO_NAMES
+    from parallel_detection.train_slots import (
+        Features,
+        batch_prompts,
+        heldout_scores,
+        image_cache,
+        prompt_categories,
+    )
+
+    rng = random.Random(0)
+    chosen = prompt_categories({"cup", "dog"}, 4, 1.0, rng)
+    assert {"cup", "dog"} <= set(chosen) and len(set(chosen)) == 4
+    assert prompt_categories({"cup"}, 2, 0.0, rng).count("cup") == 0
+
+    embeddings = torch.randn(3, 729, DIM).to(torch.bfloat16).view(torch.int16).numpy()
+    np.save(tmp_path / "shard.npy", embeddings)
+    records = [
+        {
+            "image_id": "a",
+            "objects": [["cup", [0.5, 0.5, 0.2, 0.2]], ["dog", [0.3, 0.3, 0.1, 0.1]]],
+        },
+        {"image_id": "b", "objects": [["dog", [0.6, 0.6, 0.3, 0.3]]]},
+        {"image_id": "c", "objects": [["person", [0.4, 0.4, 0.5, 0.5]]]},
+    ]
+    (tmp_path / "shard.json").write_text(json.dumps(records))
+    tokenizer = SimpleNamespace(
+        encode=lambda text: SimpleNamespace(ids=[1 + COCO_NAMES.index(text.strip()) % 40])
+    )
+    data = Features([tmp_path / "shard"], tokenizer, label_tokens=3, pad=0)
+    prompts = [["cup", "car"], ["car", "bus"], ["person", "cup"]]
+    _, targets, ids, truths = data.batch([0, 1, 2], "cpu", prompts)
+    # Objects of categories not asked for are not targets; prompts are 3 tokens a category.
+    assert [len(t[1]) for t in targets] == [1, 0, 1] and ids.shape == (3, 6)
+    assert truths[1] == []
+
+    text, region = tiny_text(), tiny_region()
+    inner = SimpleNamespace(
+        text=text, region=region, config=SimpleNamespace(tokenizer=SimpleNamespace(bos_id=0))
+    )
+    functions = SimpleNamespace(
+        text_encoder=lambda ids, text: text.wte[ids], apply_rotary_emb=no_rotation
+    )
+    embedded, _, ids, _ = data.batch([0, 1], "cpu", prompts[:2])
+    cache = image_cache(inner, functions, embedded.float(), ids)
+    assert cache[0][0].size(2) == 730 + 6  # the slots start after the prompt
+    head = SlotHead(text, slots=4, label_tokens=3, rank=2)
+    settings = {"max_categories": 3, "keep_present": 0.8}
+    assert len(batch_prompts(data, [0, 1, 2], settings, random.Random(1))[0]) <= 3
+    row = heldout_scores(
+        head, inner, functions, data, [0, 1, 2], 2, "cpu", [0.5], loss_options({}), settings
+    )
+    assert 0.0 <= row["f1_iou_0.5"]["0.5"] <= 1.0
+
+
+def test_set_loss_without_any_object_is_finite():
+    torch.manual_seed(0)
+    text, region = tiny_text(), tiny_region()
+    head = SlotHead(text, slots=4, label_tokens=3, rank=2)
+    cache = prefix_cache(text, torch.randn(2, 7, DIM), no_rotation)
+    outputs = head(text, region, cache, no_rotation)
+    empty = (torch.zeros(0, 4), torch.zeros(0, 3, dtype=torch.long))
+    terms, matching, _ = set_loss(*outputs, [empty, empty])
+    assert torch.isfinite(total(terms))
+    generator = torch.Generator().manual_seed(0)
+    assert torch.isfinite(
+        diffusion_loss(head, text, region, cache, no_rotation, matching, generator)
+    )
