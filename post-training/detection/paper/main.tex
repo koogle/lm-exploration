@@ -234,6 +234,35 @@ time; on VOC, whose objects are larger, it costs precision.
 categories requested, the head needs 0.047\,s per video frame against 2.79\,s for
 Moondream~3.1, about 59$\times$ less.
 
+\textbf{Streamed video.} Because a frame costs one pass however many categories are
+asked for, the head can run on live video. On two MOT17~\citep{milan2016mot16} street
+sequences (02 and 09, 1080p at 30\,fps; every third frame, 375 frames; every annotated
+pedestrian, person on a vehicle or static person counts as truth) and asked only for
+people, the fast head is ahead of Moondream~3.1 at half its time
+(Table~\ref{tab:video}), and tiling finds the most people (Fig.~\ref{fig:mot} in the
+appendix). At 0.10\,s per detection, detecting every third frame keeps pace with
+30\,fps video; our demo streams the annotated video back in two-second chunks while it
+is processed. MOT17-02's crowds of up to 46 small, overlapping people keep every
+model's recall low.
+
+\begin{table}[t]
+\centering\small\setlength{\tabcolsep}{3.5pt}
+\caption{MOT17-02 and -09, every third frame (375 frames, 1080p), people only. Seconds
+per frame on one L40S.}
+\label{tab:video}
+\begin{tabular}{@{}lcccr@{}}
+\toprule
+Model & P & R & F1$_{.5}$ & s/frame \\
+\midrule
+Moondream 2 \texttt{detect} & .638 & .308 & .415 & .260 \\
+Moondream 3.1 & .816 & .291 & .429 & .206 \\
+Slots r128, fast & .652 & .341 & .447 & .104 \\
+Slots r128, tiled & .559 & \textbf{.446} & \textbf{.496} & .418 \\
+Slots r64, COCO only, fast & \textbf{.851} & .241 & .376 & \textbf{.087} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.9\columnwidth]{precision-recall.png}
@@ -298,5 +327,56 @@ fraction of it when many categories are asked for. Open problems are recall on s
 objects without tiling, open-vocabulary labels, where multi-step decoding may matter,
 and a cheaper vision encoder.
 
+\textbf{Toward streamed detection.} Detection that costs one pass per frame makes
+continuous video practical, and we think it is the most promising direction for this
+work. Each frame is detected independently today, which wastes work and lets boxes
+flicker. Next steps we have not yet tried:
+\begin{itemize}
+\item carry slots across frames: give the previous frame's boxes and labels as revealed
+positions, the conditioning the denoising pass trains, so that slots keep their objects
+and the head tracks as it detects;
+\item reuse the vision encoder's features and the image prefix where the scene has not
+changed, and tile only where small candidates appear;
+\item evaluate with tracking measures (identity switches, HOTA) on full sequences rather
+than per-frame F1.
+\end{itemize}
+
 \bibliographystyle{plainnat}\bibliography{references}
+
+\clearpage
+\onecolumn
+\appendix
+\section{Example detections and areas under the precision-recall curve}
+
+Examples are the first images whose annotation count falls in a set range and that
+every model's evaluation covers; boxes are drawn as each model returned them, with the
+slot head at the threshold tuned on COCO. Captions give boxes and seconds per image.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{examples.jpg}
+\caption{COCO val2017.}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{examples-voc.jpg}
+\caption{Pascal VOC 2007 test.}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{examples-mot.jpg}
+\caption{MOT17-09, frames 1, 4 and 7 (every third frame), people only.}
+\label{fig:mot}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.92\textwidth]{selection-areas.jpg}
+\caption{Pooled area under the precision-recall curve (IoU 0.5) and per-category AP
+(IoU 0.5 to 0.95) of every slot head under the final selection, without tiles (solid)
+and with tiles (hatched), on COCO and VOC.}
+\label{fig:areas}
+\end{figure}
 \end{document}

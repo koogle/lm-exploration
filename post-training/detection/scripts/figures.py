@@ -98,12 +98,39 @@ SIZE_COMPARISON = [
         "Slots, + 18k Gemini-labelled",
     ),
 ]
-EXAMPLES = [
-    ("Annotated", None),
-    ("Moondream 2", "moondream2-001"),
-    ("Moondream 3.1", "moondream31-001"),
-    ("Slot head, 46k, small kept", "slots-small-16-coco"),
-]
+# Side-by-side examples per dataset: the panels, (title, evaluation run or None for the
+# annotation), and where the dataset's images are.
+EXAMPLES = {
+    "coco_val2017": [
+        ("Annotated", None),
+        ("Moondream 2", "moondream2-001"),
+        ("Moondream 3.1", "moondream31-001"),
+        ("Slot head, tiled", "slots-teacher-coco-rank128-coco-final"),
+    ],
+    "voc2007_test": [
+        ("Annotated", None),
+        ("Moondream 2", "moondream2-photon-voc"),
+        ("Moondream 3.1", "moondream31-voc"),
+        ("Slot head, tiled", "slots-teacher-coco-rank128-voc-final"),
+    ],
+    "mot17_train": [
+        ("Annotated", None),
+        ("Moondream 3.1", "moondream31-mot"),
+        ("Slot head, fast", "slots-teacher-coco-rank128-mot-fast"),
+        ("Slot head, tiled", "slots-teacher-coco-rank128-mot-tiled"),
+    ],
+}
+
+
+def example_image(dataset, image_id, images):
+    """The image of an example: COCO's from its server, the others from the folder the
+    evaluation harness wrote them to (`run.build_samples`)."""
+    from PIL import Image
+
+    if dataset == "coco_val2017":
+        return fetch_image(f"http://images.cocodataset.org/val2017/{image_id:012d}.jpg", images)
+    folder = {"voc2007_test": "voc2007", "mot17_train": "mot17"}[dataset]
+    return Image.open(images / folder / f"{image_id}.jpg").convert("RGB")
 
 
 def style(axis, title):
@@ -772,49 +799,54 @@ def selection_area_figure(artifacts, out):
     plt.close(figure)
 
 
-def by_image(path):
+def by_image(path, dataset):
     grouped = defaultdict(list)
     for record in rows(path):
-        if record["dataset"] == "coco_val2017":
+        if record["dataset"] == dataset:
             grouped[record["image_id"]].append(record)
     return grouped
 
 
-def examples_figure(artifacts, out, name, objects, skip=0, count=4):
-    """Side-by-side boxes on `count` images whose annotated object count is in `objects`."""
-    runs = {run: by_image(artifacts / run / "predictions.jsonl") for _, run in EXAMPLES if run}
-    reference = runs["moondream2-001"]
+def examples_figure(artifacts, out, name, objects, skip=0, count=4, dataset="coco_val2017"):
+    """Side-by-side boxes on `count` images whose annotated object count is in `objects`,
+    chosen among the images every panel's evaluation covers."""
+    panels = EXAMPLES[dataset]
+    runs = {}
+    for _, run in panels:
+        if run:
+            path = artifacts / run / "predictions.jsonl"
+            if not path.exists():
+                return
+            runs[run] = by_image(path, dataset)
+    reference = next(iter(runs.values()))
     low, high = objects
     chosen = [
         image_id
         for image_id, records in sorted(reference.items())
-        if low <= sum(len(r["boxes"]) for r in records) <= high and len(records) >= 2
+        if low <= sum(len(r["boxes"]) for r in records) <= high
+        and all(image_id in found for found in runs.values())
     ][skip : skip + count]
-    figure, axes = plt.subplots(count, len(EXAMPLES), figsize=(13, 3.1 * count), facecolor=SURFACE)
+    figure, axes = plt.subplots(
+        count, len(panels), figsize=(13, 3.1 * count), facecolor=SURFACE, squeeze=False
+    )
     for row, image_id in enumerate(chosen):
-        image = fetch_image(
-            f"http://images.cocodataset.org/val2017/{image_id:012d}.jpg", out / "images"
-        )
-        for axis, (title, run) in zip(axes[row], EXAMPLES, strict=True):
+        image = example_image(dataset, image_id, out / "images")
+        for axis, (title, run) in zip(axes[row], panels, strict=True):
             records = runs[run][image_id] if run else reference[image_id]
             boxes = [b for r in records for b in (r["predicted"] if run else r["boxes"])]
             axis.imshow(image)
             for x0, y0, x1, y1 in boxes:
-                axis.add_patch(
-                    Rectangle(
-                        (x0, y0), x1 - x0, y1 - y0, fill=False, edgecolor=SURFACE, linewidth=3.5
+                for colour, width in ((SURFACE, 3.5), (BLUE if run else INK, 1.8)):
+                    axis.add_patch(
+                        Rectangle(
+                            (x0, y0),
+                            x1 - x0,
+                            y1 - y0,
+                            fill=False,
+                            edgecolor=colour,
+                            linewidth=width,
+                        )
                     )
-                )
-                axis.add_patch(
-                    Rectangle(
-                        (x0, y0),
-                        x1 - x0,
-                        y1 - y0,
-                        fill=False,
-                        edgecolor=BLUE if run else INK,
-                        linewidth=1.8,
-                    )
-                )
             caption = f"{len(boxes)} boxes"
             if run:
                 seconds = records[0]["shared_seconds"] + sum(r["seconds"] for r in records)
@@ -849,6 +881,17 @@ def main():
     examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))
     examples_figure(args.artifacts, args.out, "examples-2.png", objects=(4, 9), skip=4)
     examples_figure(args.artifacts, args.out, "examples-crowded.png", objects=(12, 25))
+    examples_figure(
+        args.artifacts, args.out, "examples-voc.png", objects=(3, 8), dataset="voc2007_test"
+    )
+    examples_figure(
+        args.artifacts,
+        args.out,
+        "examples-mot.png",
+        objects=(8, 40),
+        count=3,
+        dataset="mot17_train",
+    )
 
 
 if __name__ == "__main__":

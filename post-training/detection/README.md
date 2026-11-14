@@ -584,6 +584,33 @@ sampling noise (see the VOC bootstrap above).
 The runs, their head snapshots every 5,000 steps, the evaluations and the studies are in
 the archive under each run id.
 
+### Video: MOT17
+
+Two MOT17 training sequences (`Lekim89/MOT17`, `configs/mot-*.json`): 02 (600 frames, a
+crowded street) and 09 (525 frames), 1080p at 30 fps. Every third frame is a sample
+(375 frames), prompted with "person"; MOT's pedestrians, people on vehicles and static
+people are the truth (`tasks.mot_samples`). One L40S per model; slot heads at their COCO
+thresholds:
+
+| Model | Precision | Recall | F1 | F1, IoU 0.75 | Seconds per frame | F1 on 02 / 09 |
+|---|---|---|---|---|---|---|
+| Moondream 2 `detect`, Photon | 0.638 | 0.308 | 0.415 | 0.262 | 0.260 | 0.328 / **0.710** |
+| Moondream 3.1, Photon | 0.816 | 0.291 | 0.429 | **0.286** | 0.206 | 0.338 / 0.708 |
+| `slots-teacher-coco-rank128`, fast | 0.652 | 0.341 | 0.447 | 0.268 | 0.104 | 0.381 / 0.644 |
+| `slots-teacher-coco-rank128`, tiled | 0.559 | **0.446** | **0.496** | 0.279 | 0.418 | **0.475** / 0.559 |
+| `slots-rank64` (COCO only), fast | **0.851** | 0.241 | 0.376 | 0.275 | **0.087** | 0.272 / 0.681 |
+
+- Asked for one category, the fast head is ahead of Moondream 3.1 on F1 at half the time
+  per frame; at 0.10 s per detection, detecting every third frame keeps pace with
+  30 fps. With all 80 categories Moondream 3.1 needs 2.79 s per frame (see Demo).
+- MOT17-02 has up to 46 small, overlapping people per frame, more than most COCO images,
+  and every model's recall there is low. Tiling finds the most of them; on the sparser
+  MOT17-09 the Moondream models are ahead and tiling costs precision.
+
+`scripts/figures.py` draws example sheets for COCO, VOC and MOT17 (`examples*.png`) and
+the area under the precision-recall curve and per-category AP of every studied head,
+fast and tiled (`selection-areas.png`); the paper's appendix shows them.
+
 ### Where the time goes
 
 `slots-bins-16` on the same 500 images:
