@@ -1,4 +1,4 @@
-"""Unlabelled training images from Open Images and Objects365, for teacher labelling.
+"""Training images from Open Images, Objects365 and COCO, for teacher labelling.
 
     python -m parallel_detection.images --config configs/teacher-images.json \
         --out artifacts/teacher-images
@@ -12,6 +12,9 @@ the manifest is skipped, so an interrupted run continues.
   each of `shards` seeded training shards, one shard on disk at a time.
 - Objects365 (`guozonghao96/objects365`, tar.gz patches): every `stride`-th image of
   each listed patch, streamed without saving the archive, until the quota is reached.
+- COCO (`detection-datasets/coco`, Parquet): every image with at least one annotated
+  object in the listed training shards, in shard order, named by its COCO image id, so
+  a teacher's labels can be set against COCO's own on the same images.
 """
 
 import argparse
@@ -124,6 +127,28 @@ def patch_images(url, stride, out, max_side, existing):
                     yield line
 
 
+def coco(settings, out, quota, max_side, existing):
+    import pyarrow.parquet as pq
+    from huggingface_hub import hf_hub_download
+
+    for name in settings["files"]:
+        path = hf_hub_download(
+            settings["repo"], name, repo_type="dataset", revision=settings["revision"]
+        )
+        table = pq.ParquetFile(path)
+        for group in range(table.metadata.num_row_groups):
+            rows = table.read_row_group(group, columns=["image_id", "image", "objects"])
+            for row in rows.to_pylist():
+                if quota <= 0:
+                    return
+                if not row["objects"]["bbox"]:
+                    continue
+                line = save(row["image"]["bytes"], out, "coco", row["image_id"], max_side, existing)
+                if line is not None:
+                    quota -= 1
+                    yield line
+
+
 def prepare(config, out):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -138,6 +163,7 @@ def prepare(config, out):
     makers = {
         "openimages": lambda s, q: open_images(s, out, q, config["max_side"], rng, existing),
         "objects365": lambda s, q: objects365(s, out, q, config["max_side"], existing),
+        "coco": lambda s, q: coco(s, out, q, config["max_side"], existing),
     }
     for source, settings in config["sources"].items():
         quota = settings["images"] - counts.get(source, 0)

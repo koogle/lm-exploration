@@ -27,7 +27,7 @@
 \newcommand{\eq}{$\circ$}
 
 \title{\vspace{-2.2em}\Large\bfseries One-Pass Object Detection from a Frozen Small
-Vision-Language Model\\with Masked-Diffusion Slots}
+Vision-Language Model with Slots}
 \author{Jakob Frick}
 \date{\vspace{-2.4em}}
 
@@ -38,16 +38,18 @@ Vision-Language Model\\with Masked-Diffusion Slots}
 \noindent Small vision-language models (VLMs) such as Moondream detect objects by
 decoding coordinates one token at a time, with one prompt per category, so latency
 grows with both the number of categories and the number of objects. We post-train a
-\emph{frozen} 1.9B-parameter Moondream~2 with a slot head: 48 slots appended after the
-image prefix, each a block of six masked positions read through the model's own
-coordinate, size and vocabulary heads, and decoded in a single forward pass as a
-one-step masked-diffusion sampler trained with a Hungarian set loss. Only low-rank
-adapters at slot positions are trained. On 500 COCO val2017 images our best head reaches
-F1 0.700 at IoU~0.5 and 0.566 at IoU~0.75, level with the 9B Moondream~3.1 (0.700, 0.560)
-and well above Moondream~2 (0.587, 0.445), while taking 0.091\,s per image against
-0.208\,s for Moondream~3.1 on the same GPU, and about 59$\times$ less time when all 80
-categories are requested. It trades recall (0.647 vs.\ 0.719) for precision (0.763 vs.\
-0.682). We report which design choices worked and which did not.
+\emph{frozen} 1.9B-parameter Moondream~2 with a slot head: 48 slots of six blank
+positions appended after the image tokens, filled in all at once in a single forward pass
+and read through the model's own coordinate, size and vocabulary heads, trained with a
+Hungarian set loss. Only low-rank adapters at slot positions and an objectness layer are
+trained. On 500 COCO val2017 images the head reaches F1 0.707 at IoU~0.5 in 0.09\,s per
+image (Moondream~3.1, 9B: 0.700 in 0.21\,s), and 0.718 when it also reads a $2\times2$
+grid of tiles, which brings its recall of objects smaller than one feature-grid cell to
+Moondream's level. On Pascal VOC 2007, which none of the models was tuned on, it scores
+F1 0.858 against Moondream~3.1's 0.857. With all 80 categories requested it needs about
+59$\times$ less time per image. An auxiliary masked-diffusion denoising loss, category
+prompts, size-weighted losses and teacher-only labels do not help; we report what did
+and did not work.
 \end{abstract}
 
 \section{Introduction}
@@ -128,7 +130,7 @@ reliable rather than exhaustive detection.
 \node[anchor=north west,font=\bfseries,text=green!30!black] at (0.1,-0.3) {Training: only the added (red) parts receive gradients};
 \node[train,text width=4.3cm] (data) at (2.45,-1.6) {labelled objects: COCO train\\(46k images) + 18k images\\labelled by Gemini 4 Carbon};
 \node[train,text width=4.4cm] (hung) at (7.6,-1.6) {Hungarian matching: each\\labelled object takes one slot;\\the other slots learn ``nothing''};
-\node[train,text width=5.0cm] (loss) at (13.9,-1.6) {losses: box bins (cross-entropy),\\L1 + GIoU, label tokens, objectness;\\plus a denoising pass with some\\true positions revealed};
+\node[train,text width=5.0cm] (loss) at (13.9,-1.6) {losses: box bins (cross-entropy),\\L1 + GIoU, label tokens, objectness\\(an extra denoising pass with some\\true positions revealed adds nothing)};
 \draw[arr] (data) -- (hung);
 \draw[arr] (hung) -- (loss);
 \draw[arr,dashed] (out.south -| 16.4,0) -- (loss.north -| 16.4,0) node[pos=0.5,right,font=\scriptsize] {predictions};
@@ -152,14 +154,15 @@ slots and the losses update only the added parts.}
 \end{figure*}
 
 \section{Method}
-\textbf{Slots} (Fig.~\ref{fig:architecture}). After Moondream~2's 730-position image prefix we append 48 slots of six
-positions. Positions see the image and each other. Each starts as a mask token and is
-read through a frozen head of the model: positions 0--2 through the region head's
-1{,}024-bin coordinate and size decoders (box centre, width and height), positions 3--5
-through the vocabulary head (a three-token label), and position~0 also gives an
-objectness logit. One pass with everything masked is a one-step sampler of a masked
-discrete diffusion model~\citep{austin2021d3pm,sahoo2024mdlm,nie2025llada}; further
-passes reveal the most confident positions, as in MaskGIT~\citep{chang2022maskgit}.
+\textbf{Slots} (Fig.~\ref{fig:architecture}). After Moondream~2's 730-position image
+prefix we append 48 slots of six positions. Each position starts as a blank: a learned
+mask embedding plus its slot's query and its role (x, y, size, or label token). Positions
+see the image and each other, and one forward pass fills them all: positions 0--2 are
+read through the region head's 1{,}024-bin coordinate and size decoders (box centre,
+width and height), positions 3--5 through the vocabulary head (a three-token label), and
+position~0 also gives an objectness logit. This is parallel masked-token decoding as in
+MaskGIT~\citep{chang2022maskgit} and masked diffusion
+models~\citep{austin2021d3pm,sahoo2024mdlm,nie2025llada}, with one step.
 
 \textbf{Training.} The backbone stays frozen. LoRA adapters~\citep{hu2022lora} of rank
 16--128 act only at slot positions, so the image prefix and the model's existing skills
@@ -167,13 +170,17 @@ are untouched. Each image's truth set is matched to slots by the Hungarian
 algorithm~\citep{kuhn1955hungarian,carion2020detr} on box distance, overlap, objectness
 and label likelihood. Matched slots receive cross-entropy on the four bins, L1 and
 GIoU~\citep{rezatofighi2019giou} on the expected-bin box, and label cross-entropy;
-unmatched slots are pushed to ``nothing'' with weight 0.1. A second, denoising pass per
-step reveals a random share of each matched slot's true positions and trains the rest.
-Runs use one H100, batch~16, 20{,}000 steps (2--4\,h).
+unmatched slots are pushed to ``nothing'' with weight 0.1. The reported heads also train
+a second, denoising pass per step that reveals a random share of each matched slot's
+true positions; training without it gives the same results in three quarters of the time
+(Table~\ref{tab:ablate}). Runs use one H100, batch~16, 20{,}000 steps (2--4\,h).
 
-\textbf{Scoring.} A slot's score is objectness $\times$ label confidence $\times$ box
-confidence; same-label boxes overlapping a higher-scoring one at IoU 0.7 are dropped, and
-the threshold maximises F1 on 500 further COCO val images disjoint from the test set.
+\textbf{Selection.} A slot's score is objectness $\times$ label confidence $\times$
+(box confidence)$^{1/4}$. Same-label boxes overlapping by IoU 0.5 are fused into their
+score-weighted mean~\citep{solovyev2021wbf}. Optionally the head also reads a $2\times2$
+grid of tiles overlapping by a quarter, in one batch with the full image, and keeps tile
+boxes smaller than four grid cells that no tile edge cuts~\citep{akyon2022sahi}. Every
+choice and threshold is tuned on 500 further COCO val images disjoint from the test set.
 
 \textbf{Data.} 46k COCO train2017 images~\citep{lin2014coco} (the 80 categories), plus
 images from Open Images~\citep{kuznetsova2020openimages} and
@@ -185,65 +192,73 @@ images for \$120, of which 17.7k passed the label filter.
 
 \section{Results}
 We evaluate on a seeded sample of 500 COCO val2017 images (1{,}446 phrases: every
-category present is prompted), with micro precision, recall and F1 under
-one-to-one matching. Moondream gives no confidences, so it has one operating point.
+category present is prompted) and of 1{,}000 Pascal VOC 2007 test images (1{,}548
+phrases, the 20 categories under their COCO names), with micro precision, recall and F1
+under one-to-one matching. Moondream is prompted once per present category and gives no
+confidences, so it has one operating point; the slot head receives no prompt.
 
-\begin{table}[t]
-\centering\small\setlength{\tabcolsep}{3.2pt}
-\caption{COCO val2017, 500 images. Seconds per image on one L40S (2.9 categories per
-image on average); last column: per video frame with all 80 categories, detection every
-third frame, measured through our demo.}
+\begin{table*}[t]
+\centering\small\setlength{\tabcolsep}{4pt}
+\caption{COCO val2017 (500 images) and VOC 2007 test (1{,}000 images). Seconds per
+COCO image on one L40S (2.9 categories per image); last column: per video frame with all
+80 categories, detection every third frame. Slot heads use thresholds tuned on COCO.}
 \label{tab:main}
-\begin{tabular}{@{}lccccrr@{}}
+\begin{tabular}{@{}lcccccrr@{}}
 \toprule
-Model & P & R & F1$_{.5}$ & F1$_{.75}$ & s/img & s/frame \\
+Model & COCO P & COCO R & COCO F1$_{.5}$ & COCO F1$_{.75}$ & VOC F1$_{.5}$ & s/img & s/frame \\
 \midrule
-Moondream 2 \texttt{detect} (1.9B) & .500 & .709 & .587 & .445 & .220 & -- \\
-Moondream 3.1 (9.3B MoE) & .682 & \textbf{.719} & \textbf{.700} & .560 & .208 & 2.79 \\
+Moondream 2 \texttt{detect} (1.9B) & .500 & \textbf{.709} & .587 & .445 & .851 & .220 & -- \\
+Moondream 3.1 (9.3B MoE) & .682 & \textbf{.719} & .700 & .560 & .857 & .208 & 2.79 \\
 \midrule
-Slots r64, COCO & .759 & .635 & .691 & .558 & .087 & -- \\
-Slots r64, + teacher & .757 & .640 & .694 & .562 & .091 & -- \\
-Slots r128, + teacher & \textbf{.763} & .647 & \textbf{.700} & \textbf{.566} & .091 & \textbf{.047} \\
+Slots r128, COCO + teacher, fast & \textbf{.811} & .626 & .707 & .566 & .858 & \textbf{.091} & \textbf{.047} \\
+Slots r128, COCO + teacher, tiled & .743 & .695 & \textbf{.718} & \textbf{.586} & .844 & .229 & -- \\
+Slots r64, COCO only, fast & .809 & .608 & .694 & .559 & \textbf{.862} & .087 & -- \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
-\textbf{Similar quality.} The rank-128 head matches Moondream~3.1's F1 at IoU 0.5 and
-exceeds it at 0.75 (Table~\ref{tab:main}); against its own backbone's \texttt{detect}
-it gains 11 points of F1 at both thresholds. The precision-recall curves
-(Fig.~\ref{fig:pr}) sit just inside Moondream~3.1's operating point: at 3.1's precision
-our best head recalls 0.686 against 0.719. Per-category AP over IoU 0.5--0.95 is 0.486.
-On large objects recall equals 3.1's (0.89); the gap is small and medium objects.
+\textbf{Similar quality.} The fast head is level with Moondream~3.1 on COCO and VOC
+(Table~\ref{tab:main}) and gains 12 points of COCO F1 over its own backbone's
+\texttt{detect}; it trades recall for precision. Paired bootstrap intervals put
+differences of about 1.5 points within noise. Moondream~3.1's COCO numbers do not
+reproduce its published ones under an unspecified protocol.
+
+\textbf{Small objects.} All models read the same $27\times27$ feature grid. On objects
+of four cells or more our recall equals Moondream's (0.87); below that it falls behind,
+to 0.22 against 0.36 for objects under one cell, although Moondream finds them in the
+same features. Tiling closes that gap (0.37) and lifts COCO F1 to 0.718, at 2.5 times the
+time; on VOC, whose objects are larger, it costs precision.
 
 \textbf{Much faster.} The slot pass costs 0.016\,s; the vision encoder dominates the
 0.09\,s per image. Cost no longer depends on categories or objects: with all 80 COCO
 categories requested, the head needs 0.047\,s per video frame against 2.79\,s for
-Moondream~3.1, about 59$\times$ less, and streams video at close to real time.
+Moondream~3.1, about 59$\times$ less.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.9\columnwidth]{precision-recall.png}
-\caption{Precision against recall at IoU 0.5 on the 500 test images. Dots: each head at
-the threshold tuned on the disjoint split. Diamonds: Moondream~2 and 3.1, which give no
-confidence. Grey: a head ranked by objectness alone, recorded down to 0.3.}
+\caption{Precision against recall at IoU 0.5 on the 500 COCO test images, before the
+selection changes. Dots: each head at the threshold tuned on the disjoint split.
+Diamonds: Moondream~2 and 3.1, which give no confidence.}
 \label{fig:pr}
 \end{figure}
 
 \textbf{What worked and what did not} (Table~\ref{tab:ablate}). Reading boxes through
 the model's own coordinate bins instead of regressing four numbers was the largest gain.
-Data, steps, keeping small objects and adapter rank 16$\rightarrow$64 each helped, as did
-adding teacher-labelled images and the combined score. Rank 128 matched rank 64 on the
-curve. Slot groups specialised by object size, ``nothing'' targets only near labelled
-objects, objectness trained toward IoU, teacher labels \emph{instead of} COCO's, and
-mean-teacher self-training~\citep{tarvainen2017meanteacher,liu2021unbiasedteacher,xie2020noisystudent}
-that ignores confident unlabelled slots all failed to move the curve outward. More than
-one diffusion pass changed neither labels nor boxes: COCO names have a single wording, so
-one pass suffices. Custom fused CUDA kernels for Moondream~2's sequential decoder cut its
-per-box cost 1.85$\times$, but are not bit-exact with eager PyTorch.
+Data, steps, keeping small objects, adapter rank 16$\rightarrow$64, adding
+teacher-labelled images to COCO, the combined score and tiling each helped. The rest did
+not move COCO beyond noise: rank 128, more decoding passes, training without the
+denoising pass, category prompts in front of the slots, size-weighted losses and
+human Objects365 labels in place of the teacher's (which did lift VOC precision). Slot
+groups by object size, ``nothing'' targets only near labelled objects, objectness
+trained toward IoU, teacher labels \emph{instead of} COCO's, and mean-teacher
+self-training~\citep{tarvainen2017meanteacher,liu2021unbiasedteacher,xie2020noisystudent}
+hurt. Custom fused CUDA kernels for Moondream~2's sequential decoder cut its per-box cost
+1.85$\times$, but are not bit-exact with eager PyTorch.
 
 \begin{table}[t]
 \centering\small\setlength{\tabcolsep}{3pt}
-\caption{One change at a time, COCO val F1 at IoU 0.5 (before $\rightarrow$ after).}
+\caption{One change at a time, COCO val F1 at IoU 0.5 (before $\rightarrow$ after); later rows use the selection of Section 2.}
 \label{tab:ablate}
 \begin{tabular}{@{}clr@{}}
 \toprule
@@ -255,27 +270,33 @@ per-box cost 1.85$\times$, but are not bit-exact with eager PyTorch.
 \ok & LoRA rank 16$\rightarrow$64 & .636$\rightarrow$.657 \\
 \ok & + 18k teacher-labelled images & .657$\rightarrow$.673 \\
 \ok & Combined score, duplicate removal & .674$\rightarrow$.694 \\
-\eq & LoRA rank 64$\rightarrow$128 (PR area .645$\rightarrow$.641) & .694$\rightarrow$.700 \\
-\eq & 2--3 diffusion passes instead of 1 & unchanged \\
+\ok & Fusion at IoU 0.5, box confidence$^{1/4}$ & .700$\rightarrow$.707 \\
+\ok & $2\times2$ tiles (recall $<$1 cell .21$\rightarrow$.37) & .707$\rightarrow$.718 \\
+\eq & LoRA rank 64$\rightarrow$128 & .694$\rightarrow$.700 \\
+\eq & 2--3 decoding passes instead of 1 & unchanged \\
+\eq & No denoising pass in training & .705$\rightarrow$.705 \\
+\eq & Category prompts before the slots & .705$\rightarrow$.702 \\
+\eq & Size-weighted loss (recall $<$1 cell +.03) & .705$\rightarrow$.700 \\
+\eq & Objects365 human labels for teacher's (VOC +.013) & .705$\rightarrow$.698 \\
 \no & Two slot groups by object size (23k img.) & .590$\rightarrow$.549 \\
 \no & Objectness target = matched IoU (small recall $-$.07) & .636$\rightarrow$.631 \\
 \no & ``Nothing'' only near labelled objects & .636$\rightarrow$.568 \\
-\no & Teacher labels instead of COCO's (18k vs.\ 23k) & .590$\rightarrow$.559 \\
+\no & Teacher labels only, no COCO (17.7k vs.\ 46k img.) & .694$\rightarrow$.681 \\
 \no & EMA self-training, ignore confident slots & .694$\rightarrow$.685 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \section{Limitations and conclusion}
-The slot head is trained on COCO train images and evaluated in-distribution on its 80
-categories, whereas Moondream answers free-form phrases zero-shot; we have not evaluated
-it on LVIS~\citep{gupta2019lvis} or referring expressions~\citep{yu2016refcoco}. The test
-sample is 500 images, so differences of about a point are within noise, and our
-Moondream~3.1 numbers do not reproduce its published ones under an unspecified protocol.
-Within that scope, a frozen 1.9B VLM with a 50--100M-parameter slot adapter detects all
-categories in one pass at the quality of a 9B model and a fraction of its time. Open
-problems are recall on small and medium objects, open-vocabulary labels, where
-multi-step diffusion should matter, and a cheaper vision encoder.
+The slot head is trained on COCO train images and knows COCO's 80 categories, whereas
+Moondream answers free-form phrases; Moondream probably saw COCO in training too, so
+VOC, where both are out of domain, is the fairer comparison. We have not evaluated on
+LVIS~\citep{gupta2019lvis} or referring expressions~\citep{yu2016refcoco}. Within that
+scope, a frozen 1.9B VLM with a 50--100M-parameter slot adapter detects all categories
+in one pass at the quality of a 9B model in less than half its time, and in a small
+fraction of it when many categories are asked for. Open problems are recall on small
+objects without tiling, open-vocabulary labels, where multi-step decoding may matter,
+and a cheaper vision encoder.
 
 \bibliographystyle{plainnat}\bibliography{references}
 \end{document}
