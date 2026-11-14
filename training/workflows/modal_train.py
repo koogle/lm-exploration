@@ -669,6 +669,32 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
 
 
 @app.function(
+    image=hybrid_image,
+    cpu=4,
+    memory=65536,
+    timeout=3600,
+    retries=0,
+    max_containers=1,
+    volumes={"/hybrid-data": hybrid_data, "/hybrid-runs": hybrid_runs},
+)
+def seed_hybrid_phase(parent, seed, bundle, note=""):
+    """Write a hybrid continued-pretraining seed (`trainer.continued_pretraining.seed_phase`)
+    from a training checkpoint, in the hybrid image (same PyTorch build as training)."""
+    from model_hybrid.train import HybridFamily, RunConfig
+
+    from trainer.continued_pretraining import seed_phase
+    from workflows.config import resolve_payload
+
+    _, _, settings = resolve_payload(bundle)
+    seed = Path("/hybrid-runs") / seed
+    family = HybridFamily(RunConfig(**settings), seed.parent, data_root="/hybrid-data")
+    try:
+        return seed_phase(family, Path("/hybrid-runs") / parent, seed, note=note)
+    finally:
+        hybrid_runs.commit()
+
+
+@app.function(
     image=cpu_image,
     cpu=1,
     memory=2048,
@@ -677,9 +703,11 @@ def launch_snapshot(run_id, bundle, provenance, resume="", phase_from=""):
     max_containers=1,
     volumes={"/runs": run_volume, "/hybrid-data": hybrid_data, "/hybrid-runs": hybrid_runs},
 )
-def launch_hybrid(run_id, bundle, provenance, resume="", init_from=""):
-    """Preflight a hybrid stage (recipe prepared, resume checkpoint or `init_from` export
-    present), then start its session chain."""
+def launch_hybrid(run_id, bundle, provenance, resume="", init_from="", phase_from=""):
+    """Preflight a hybrid stage (recipe prepared, resume checkpoint, `init_from` export
+    or `phase_from` training checkpoint present), then start its session chain. With
+    `phase_from`, the chain resumes a new phase seeded from that checkpoint's weights,
+    optimizer, RNG and data cursor (`<run>-seed/step-000000000.pt`)."""
     from workflows.checks import validate_paths
     from workflows.config import resolve_payload
     from workflows.deadline import bounded_timeout
@@ -709,9 +737,21 @@ def launch_hybrid(run_id, bundle, provenance, resume="", init_from=""):
         raise ValueError(f"No checkpoint {resume} on the hybrid runs volume")
     if init_from and not (Path("/hybrid-runs") / init_from / "model.safetensors").exists():
         raise ValueError(f"No export {init_from} on the hybrid runs volume")
+    if phase_from and (resume or init_from):
+        raise ValueError("A seeded phase starts from its parent checkpoint alone")
+    if phase_from and not (Path("/hybrid-runs") / phase_from).is_file():
+        raise ValueError(f"No checkpoint {phase_from} on the hybrid runs volume")
     folder = Path("/runs") / run_id
     folder.mkdir(parents=True, exist_ok=False)
     provenance = {**provenance, "resolved_workflow": bundle}
+    if phase_from:
+        resume = f"{run_id}-seed/step-000000000.pt"
+        call = seed_hybrid_phase.with_options(
+            timeout=bounded_timeout(provenance["deadline_unix"], 3600)
+        ).spawn(phase_from, resume, bundle, note=f"workflow run {run_id}")
+        track_call(provenance["workflow_run_id"], call.object_id, "seed_hybrid_phase")
+        lineage = call.get()
+        record(run_id, "phase_seeded", seed=resume, parent=phase_from, lineage=lineage)
     record(
         run_id,
         "launched",
@@ -818,10 +858,17 @@ def start_stage(stage, plan, state, parent, provenance, launch_data, run, resume
         ).get()
 
     if family == "hybrid":
-        init_from = ""
+        init_from = phase_from = ""
         if stage["stage"] == "midtrain" and not resume:
-            init_from = parent["export"]
-        started(lambda: launch_hybrid.spawn(run, bundle, stage_provenance, resume, init_from))
+            if stage.get("continue_state"):
+                phase_from = parent["checkpoint"]
+            else:
+                init_from = parent["export"]
+        started(
+            lambda: launch_hybrid.spawn(
+                run, bundle, stage_provenance, resume, init_from, phase_from
+            )
+        )
     elif launch_data is not None:
         prepared = started(
             lambda: prepare_and_launch.spawn(

@@ -37,6 +37,16 @@ shards are used up, so a small curated source can carry a larger weight.
 `context + 1` tokens; the next window starts at the previous window's last
 token. Each window comes from the source furthest below its weight. It can run
 while shards are still being prepared: it waits for the next shard's `.json`.
+
+With `fim`, the mixture rearranges documents of the named sources for
+fill-in-the-middle training as it loads each shard (`fim_rearrange`): a document is
+cut into segments that fit a window, and each segment, with probability `rate`, is
+split at two uniform token positions into prefix, middle and suffix and written as
+`prefix_id prefix suffix_id suffix middle_id middle` (PSM) or, with probability
+`spm_rate`, `prefix_id suffix_id suffix middle_id prefix middle` (SPM). The choices are
+seeded by `seed`, source, shard and pass, so a resumed run reads the same stream.
+`continue_state` carries a mixture state written without FIM into these coordinates,
+moving each FIM source's cursor to its next document.
 """
 
 import hashlib
@@ -442,14 +452,49 @@ def prepare_shard(
     return meta
 
 
+def fim_rearrange(tokens, lengths, fim, rng, segment):
+    """Shard `tokens` (documents of `lengths` tokens, each ending with EOS) with segments
+    of at most `segment` tokens rearranged for fill-in-the-middle (see the module
+    docstring); (tokens, per-document lengths)."""
+    prefix_id, suffix_id, middle_id = (
+        np.array([fim["tokens"][k]], dtype=tokens.dtype) for k in ("prefix", "suffix", "middle")
+    )
+    parts, new_lengths, start = [], np.empty(len(lengths), dtype=np.int64), 0
+    for document, length in enumerate(lengths):
+        body, eos = tokens[start : start + length - 1], tokens[start + length - 1 : start + length]
+        start += length
+        size = 0
+        for cut in range(0, len(body), segment):
+            piece = body[cut : cut + segment]
+            if len(piece) >= 2 and rng.random() < fim["rate"]:
+                a, b = np.sort(rng.integers(0, len(piece) + 1, size=2))
+                head, middle, tail = piece[:a], piece[a:b], piece[b:]
+                if rng.random() < fim["spm_rate"]:
+                    piece = (prefix_id, suffix_id, tail, middle_id, head, middle)
+                else:
+                    piece = (prefix_id, head, suffix_id, tail, middle_id, middle)
+                piece = np.concatenate(piece)
+            parts.append(piece)
+            size += len(piece)
+        parts.append(eos)
+        new_lengths[document] = size + 1
+    return np.concatenate(parts) if parts else tokens[:0], new_lengths
+
+
+def _source_seed(name):
+    return int(hashlib.sha256(name.encode()).hexdigest()[:8], 16)
+
+
 class PreparedMixture:
     """Weighted, resumable window stream over prepared shards.
 
     `refresh` is called while waiting for a shard (on Modal: the volume's reload);
-    waiting longer than `wait_seconds` raises, since preparation fell behind.
+    waiting longer than `wait_seconds` raises, since preparation fell behind. `fim`
+    ({"rate", "spm_rate", "sources", "seed", "tokens": {"prefix", "suffix", "middle"}})
+    rearranges the named sources' documents for fill-in-the-middle training.
     """
 
-    def __init__(self, recipe, root, *, refresh=None, wait_seconds=1800):
+    def __init__(self, recipe, root, *, refresh=None, wait_seconds=1800, fim=None):
         self.recipe, self.root = recipe, Path(root)
         self.context = recipe["context"]
         self.refresh, self.wait_seconds = refresh, wait_seconds
@@ -457,33 +502,49 @@ class PreparedMixture:
         self.orders = {name: training_order(recipe, name) for name in self.names}
         self.state = {name: {"shard": 0, "offset": 0, "tokens": 0} for name in self.names}
         self.weights = {name: source["weight"] for name, source in recipe["sources"].items()}
+        self.fim = fim or None
+        if self.fim and not set(self.fim["sources"]) <= set(self.names):
+            raise ValueError("FIM sources must be sources of the recipe")
         self.loaded = {}
 
     def _load(self, path):
         return np.fromfile(path, dtype=np.uint32)
 
+    def _shard(self, name, position):
+        """A source's shard at stream `position`: (tokens, document lengths or None)
+        as training reads it, waiting for its preparation."""
+        order = self.orders[name]
+        index = order[position % len(order)]
+        bin_path, docs_path, meta_path = shard_paths(
+            source_root(self.recipe, self.root, name), name, index
+        )
+        start = time.monotonic()
+        while not meta_path.exists():
+            if time.monotonic() - start > self.wait_seconds:
+                raise TimeoutError(f"Shard {name}/{index} was not prepared in time")
+            time.sleep(15)
+            if self.refresh:
+                self.refresh()
+        tokens = self._load(bin_path)
+        if not (self.fim and name in self.fim["sources"]):
+            return tokens, None
+        lengths = np.load(docs_path)[:, 0]
+        seed = [self.fim["seed"], _source_seed(name), index, position // len(order)]
+        return fim_rearrange(
+            tokens, lengths, self.fim, np.random.default_rng(seed), self.context - 3
+        )
+
     def _tokens(self, name, position):
         order = self.orders[name]
         if position >= len(order) * self.recipe["sources"][name]["max_passes"]:
             raise StopIteration(f"{name} has no shards left")
-        index = order[position % len(order)]
-        key = (name, index)
+        key = (name, position)
         if key not in self.loaded:
-            bin_path, _, meta_path = shard_paths(
-                source_root(self.recipe, self.root, name), name, index
-            )
-            start = time.monotonic()
-            while not meta_path.exists():
-                if time.monotonic() - start > self.wait_seconds:
-                    raise TimeoutError(f"Shard {name}/{index} was not prepared in time")
-                time.sleep(15)
-                if self.refresh:
-                    self.refresh()
             # Read fully so no volume file stays open (volume reloads need that).
             current = self.state[name]["shard"]
-            keep = {order[p % len(order)] for p in (current, current + 1)}
+            keep = {current, current + 1}
             self.loaded = {k: v for k, v in self.loaded.items() if k[0] != name or k[1] in keep}
-            self.loaded[key] = self._load(bin_path)
+            self.loaded[key] = self._shard(name, position)[0]
         return self.loaded[key]
 
     def _take(self, name, count):
@@ -536,6 +597,29 @@ class PreparedMixture:
             raise ValueError("Data state belongs to another recipe")
         self.state = {k: dict(v) for k, v in state["sources"].items()}
         self.loaded = {}
+
+    def continue_state(self, state):
+        """A state of this recipe written without FIM, carried into this mixture's
+        stream: each FIM source continues at the document after its cursor's (the
+        rearranged documents' offsets differ); other sources continue exactly."""
+        if state["recipe"] != self.recipe["name"] or set(state["sources"]) != set(self.names):
+            raise ValueError("Data state belongs to another recipe")
+        sources = {k: dict(v) for k, v in state["sources"].items()}
+        for name in (self.fim or {}).get("sources", ()):
+            cursor = sources[name]
+            if cursor["offset"] == 0:
+                continue
+            order = self.orders[name]
+            index = order[cursor["shard"] % len(order)]
+            _, docs_path, _ = shard_paths(source_root(self.recipe, self.root, name), name, index)
+            starts = np.concatenate(([0], np.cumsum(np.load(docs_path)[:, 0])))
+            document = int(np.searchsorted(starts, cursor["offset"]))
+            if document >= len(starts) - 1:
+                cursor["shard"], cursor["offset"] = cursor["shard"] + 1, 0
+            else:
+                lengths = self._shard(name, cursor["shard"])[1]
+                cursor["offset"] = int(lengths[:document].sum())
+        return {"recipe": state["recipe"], "sources": sources}
 
 
 class ReplayMixture:

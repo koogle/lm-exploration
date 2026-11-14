@@ -133,7 +133,17 @@ def resolve_stage(entry, family, previous, data_stages, start, run, project_root
             raise ValueError(f"Stage {name} names an unknown data stage {source}")
         stage["data"] = source
         resolved = data_stages[source]["spec"] if source else None
-        fields = {k: v for k, v in entry.items() if k not in ("stage", "name", "data", "resume")}
+        fields = {
+            k: v
+            for k, v in entry.items()
+            if k not in ("stage", "name", "data", "resume", "continue_state")
+        }
+        # A hybrid midtrain stage that continues its parent's training state (weights,
+        # optimizer, RNG, data cursor) rather than starting from its exported weights.
+        if entry.get("continue_state"):
+            if kind != "midtrain" or family != "hybrid":
+                raise ValueError("continue_state applies to hybrid midtrain stages")
+            stage["continue_state"] = True
         # An exact resume of a pretraining checkpoint, such as a WSD decay branch.
         stage["resume"] = entry.get("resume", "")
         if stage["resume"]:

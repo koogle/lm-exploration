@@ -292,10 +292,13 @@ class TrainingStageRerunTests(unittest.TestCase):
         self.plan = {"run_id": "flow", "family": "hybrid"}
         root = self.root.name
 
-        def spawn(run, bundle, provenance, resume, init_from):
+        self.starts = []
+
+        def spawn(run, bundle, provenance, resume, init_from, phase_from):
             # The run is recorded before its chain starts.
             self.assertEqual(self.saved[-1]["run_id"], run)
             self.spawned.append((run, resume))
+            self.starts.append((init_from, phase_from))
             call = Mock(object_id=f"call-{len(self.spawned)}")
             call.get.return_value = {"training_call_id": "chain"}
             return call
@@ -318,12 +321,22 @@ class TrainingStageRerunTests(unittest.TestCase):
             relative=lambda path: str(Path(path).relative_to("/runs")),
         )
 
-    def launch(self, deadline):
+    def launch(self, deadline, parent=None):
         def save():
             self.saved.append(dict(self.state["stages"]["pretrain"]))
 
         provenance = {"deadline_unix": deadline}
-        return self.run(self.stage, self.plan, self.state, None, provenance, None, save)
+        return self.run(self.stage, self.plan, self.state, parent, provenance, None, save)
+
+    def test_hybrid_midtrain_starts_from_the_export_or_the_training_state(self):
+        parent = {"checkpoint": "base/step-000000100.pt", "export": "base/export/tokens-1"}
+        self.stage["stage"] = "midtrain"
+        self.launch(1000.0, parent)
+        self.assertEqual(self.starts, [("base/export/tokens-1", "")])
+        self.state["stages"].clear()
+        self.stage["continue_state"] = True
+        self.launch(2000.0, parent)
+        self.assertEqual(self.starts[-1], ("", "base/step-000000100.pt"))
 
     def test_rerun_of_the_same_launch_reattaches_to_its_run(self):
         self.assertIsNone(self.launch(1000.0))

@@ -141,6 +141,11 @@ Continuing a checkpoint:
     [continued pretraining](../trainer/README.md#continued-pretraining).
   - `hybrid`: starts from the parent's exported weights (`init_from`) with a fresh
     optimizer, so its run config may change the context length or drop MTP heads.
+    With `continue_state: true`, `seed_hybrid_phase` (CPU, one-hour timeout) writes
+    `<stage run>-seed/step-000000000.pt` from the parent's training checkpoint with its
+    weights, optimizer state, RNG and data cursor, then trains from it; the run config
+    keeps the architecture and may change the schedule, the token target or `fim`
+    (`kda-960m-fim-midtrain.json`).
 
 `h100x1-pilot.json` and `h100x2-pilot.json` share one model config and dataset config.
 `h100x3-20b.json` is a template: replace its dataset's placeholder snapshot with a

@@ -82,6 +82,9 @@ class RunConfig:
     # Training window length when it differs from the recipe's `context` (the
     # prepared shards are token streams, so any window length reads them).
     context: int = 0
+    # Fill-in-the-middle rearrangement of the named sources' documents
+    # (`packed_shards.fim_rearrange`): {"rate", "spm_rate", "sources", "seed"}.
+    fim: dict = dataclasses.field(default_factory=dict)
 
     @classmethod
     def load(cls, path):
@@ -92,6 +95,13 @@ class RunConfig:
             raise ValueError("architecture must be 'hybrid' or 'hnet'")
         if min(self.one_loop_ranks, self.loop_start_tokens, self.context, self.gc_warmup_steps) < 0:
             raise ValueError("one_loop_ranks and loop_start_tokens must be non-negative")
+        if self.fim and (
+            set(self.fim) != {"rate", "spm_rate", "sources", "seed"}
+            or not 0 < self.fim["rate"] <= 1
+            or not 0 <= self.fim["spm_rate"] <= 1
+            or not self.fim["sources"]
+        ):
+            raise ValueError("fim needs rate in (0, 1], spm_rate in [0, 1], sources and seed")
 
 
 def learning_rate_factor(config, tokens):
@@ -421,8 +431,16 @@ def recipe_data(config, data_root):
     else:
         own = pretraining_heldout(config)
 
+        fim = None
+        if config.fim:
+            tokens = {
+                part: glm.SPECIAL_TOKENS[f"<|code_{part}|>"]
+                for part in ("prefix", "suffix", "middle")
+            }
+            fim = {**config.fim, "tokens": tokens}
+
         def mixture():
-            return with_replay(PreparedMixture(recipe, root))
+            return with_replay(PreparedMixture(recipe, root, fim=fim))
 
         def heldout(mixture, context):
             primary = getattr(mixture, "primary", mixture)
@@ -433,6 +451,10 @@ def recipe_data(config, data_root):
         "replay": replay_recipe["name"] if replay else None,
         "tokenizer_sha256": glm.SHA256,
     }
+    if config.fim:
+        if recipe.get("format") == "chat-sft":
+            raise ValueError("fim applies to pretraining recipes")
+        identity["fim"] = config.fim
     return identity, mixture, heldout, recipe.get("format") == "chat-sft"
 
 
@@ -540,6 +562,18 @@ class HybridFamily:
 
     def open_data(self, deadline, state):
         return HybridData(self.identity, self.factory(), state)
+
+    def phase_data(self, saved):
+        """Data identity and cursor for a new phase seeded from `saved`: the parent's
+        cursor carried into this run's stream when both read the same recipe's shards
+        (a decay or fill-in-the-middle branch), else a fresh one."""
+        from training_data.packed_shards import PreparedMixture
+
+        mixture = self.factory()
+        parent = saved["data"]
+        if isinstance(mixture, PreparedMixture) and parent.get("recipe") == mixture.recipe["name"]:
+            return self.identity, mixture.continue_state(parent)
+        return self.identity, mixture.state_dict()
 
     def metadata(self):
         return {
