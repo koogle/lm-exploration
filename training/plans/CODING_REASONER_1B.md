@@ -1,6 +1,14 @@
 # Sub-1B coding reasoner: training plan
 
-Updated November 10, 2026. Train a model from scratch through foundation
+> **Two paths.** The 960M foundation model is trained:
+> [Malama Base](https://huggingface.co/jfrick/malama-base), 100B tokens. Two paths
+> build on it. **Autocomplete** ([plan](MALAMA_AUTOCOMPLETE.md)) is active: code
+> infilling and completion, starting with a fill-in-the-middle midtraining branch.
+> **Coding reasoner** (this plan) is deferred. Its midtraining, reasoning SFT and RL
+> stages below start after the autocomplete path's midtraining results, and can reuse
+> its final midtraining checkpoint.
+
+Updated November 14, 2026. Train a model from scratch through foundation
 pretraining, midtraining, reasoning SFT and outcome-based RL. The working model
 has 959,843,116 training parameters and a 927,589,920-parameter deployed trunk
 once auxiliary multi-token prediction (MTP) is removed. Retain KDA, interleaved
@@ -16,8 +24,9 @@ references before choosing SFT or RL curricula.
 
 ## Stages and advancement
 
-1. **Foundation pretraining:** conditional 100B-token target using 50% ClimbMix,
-   40% code and 10% Nemotron CC-Math score-3 data. The
+1. **Foundation pretraining (complete):** 100B tokens of 50% ClimbMix,
+   40% code and 10% Nemotron CC-Math score-3 data, finished on November 14, 2026 as
+   [Malama Base](https://huggingface.co/jfrick/malama-base). The
    [mixture decision](KDA_DATA_STUDY.md) records the measured tradeoff between
    the three shares. Within the code share, markup, oversized and vendored files
    are filtered out, and curated projects and starred repositories are weighted
@@ -46,19 +55,16 @@ fixed prompts, sampling and generation budgets. Keep held-out repositories and
 problem families separate from training, and reserve the final benchmark window.
 SFT or RL cannot be assumed to repair an undertrained foundation model.
 
-## Budget and launch gate
+## Budget
 
-The original approximately $10,000 remaining-credit envelope provisionally reserves
-$1,000 for preparation/pilots/evaluation, $5,000 for foundation pretraining and
-$4,000 for subsequent stages and contingency. Reconcile actual experiments and
-billing before committing the remaining budget; these are allocations, not a
-statement of the current account balance.
+The original approximately $10,000 remaining-credit envelope reserved $1,000 for
+preparation, pilots and evaluation, $5,000 for foundation pretraining and $4,000 for
+later stages and contingency. Reconcile actual experiments and billing before
+committing the remaining budget; these are allocations, not a statement of the
+current account balance.
 
-Use exactly eight 80GB H100s for target-scale qualification. Corpus capacity is
-measured for every source of the selected recipe. Full pretraining is held
-pending the code-mixture comparison, the precision choice and spending
-reconciliation. MFU is not a launch gate: at the measured 437k tokens/sec a
-100B-token run takes about 508 GPU-hours, and the configurations compared so far
-rank differently by MFU and by tokens per second. Runtime implementation, hardware-counter work, kernels
+Foundation pretraining is complete: 100B tokens on eight 80GB H100s, BF16, after the
+code-mixture comparison (recipe v3). It took 75.3 hours of training (602 H100-hours)
+at a median 380k tokens per second, over seven 24-hour launches. Runtime implementation, hardware-counter work, kernels
 and MFU findings are reviewed in the stacked implementation PR, separately from
 this planning decision. See [foundation constraints](KDA_960M_PRETRAINING.md).
