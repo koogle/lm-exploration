@@ -528,6 +528,62 @@ chosen on the COCO tuning split (`*-selection.json` in the archive):
 
 The demo offers the rank-128 head in both modes.
 
+### Training for small objects, without COCO, and without denoising
+
+Five runs, each changing one thing against `slots-teacher-coco-rank64` (COCO 46k + 18k
+Carbon-labelled images, rank 64, 20,000 steps), plus the COCO-only head for reference.
+Each evaluation recorded every candidate from the full image and 2 x 2 tiles
+(`*-tiles2`); `scripts/study_selection.py` scored two settings, both with fusion at IoU 0.5
+and box confidence^0.25, the threshold chosen on the COCO tuning split
+(`*-selection.json`). Recall is by object size in grid cells.
+
+Without tiles:
+
+| Head | Tuning F1 | COCO F1 | COCO P / R | F1, IoU 0.75 | Recall under 1 / 1 to 4 / 4+ cells | VOC F1 | VOC P / R |
+|---|---|---|---|---|---|---|---|
+| `slots-rank64`: COCO only (46k images) | 0.673 | 0.694 | 0.809 / 0.608 | 0.559 | 0.20 / 0.57 / 0.82 | **0.862** | **0.837** / 0.888 |
+| `slots-teacher-coco-rank64`: COCO + Carbon (64k) | **0.678** | **0.705** | 0.779 / 0.644 | 0.555 | 0.23 / 0.61 / 0.85 | 0.840 | 0.782 / 0.908 |
+| `slots-teacher-only-rank64`: Carbon only (17.7k) | 0.665 | 0.681 | 0.738 / 0.633 | 0.522 | 0.23 / 0.61 / 0.83 | 0.830 | 0.770 / 0.899 |
+| `slots-prompted-teacher-coco-rank64`: category prompts | 0.676 | 0.702 | 0.770 / 0.645 | 0.555 | 0.23 / 0.60 / 0.86 | 0.849 | 0.795 / 0.912 |
+| `slots-sizeweight-teacher-coco-rank64`: small objects weigh up to 4x | 0.665 | 0.700 | 0.796 / 0.624 | 0.553 | **0.26** / 0.57 / 0.83 | 0.836 | 0.790 / 0.888 |
+| `slots-o365human-coco-rank64`: Objects365 human labels instead of Carbon's | 0.673 | 0.698 | 0.789 / 0.626 | **0.557** | 0.22 / 0.60 / 0.83 | 0.853 | 0.815 / 0.894 |
+| `slots-nodenoise-teacher-coco-rank64`: no denoising pass | 0.677 | **0.705** | 0.779 / 0.644 | 0.556 | 0.23 / 0.62 / 0.84 | 0.845 | 0.793 / 0.905 |
+
+With tiles (boxes under 4 cells):
+
+| Head | Tuning F1 | COCO F1 | Recall under 1 / 1 to 4 / 4+ cells | VOC F1 |
+|---|---|---|---|---|
+| COCO only | 0.702 | 0.708 | 0.35 / 0.68 / 0.82 | 0.846 |
+| COCO + Carbon | 0.700 | **0.714** | 0.33 / 0.66 / 0.82 | 0.841 |
+| Carbon only | 0.663 | 0.676 | **0.40** / 0.68 / 0.79 | 0.806 |
+| Category prompts | 0.696 | 0.708 | 0.33 / **0.69** / 0.84 | 0.832 |
+| Size weighting | 0.683 | 0.705 | 0.37 / 0.65 / 0.80 | 0.841 |
+| Objects365 human labels | **0.703** | 0.713 | 0.32 / 0.67 / 0.82 | **0.855** |
+| No denoising pass | 0.699 | 0.713 | 0.32 / 0.65 / 0.82 | **0.855** |
+
+On 500 COCO and 1,000 VOC images, differences of about a point and a half are within
+sampling noise (see the VOC bootstrap above).
+
+- **Denoising adds nothing.** Without the second, partly revealed training pass the head
+  scores the same on every measure, on held-out images (F1 0.721 against 0.709) as on
+  COCO and VOC, and trains in 2.4 instead of 3.2 hours. Several sampling passes no longer
+  work without it (held-out box IoU 0.733 in one pass, 0.665 in three), but one pass is
+  all inference uses. The head is a one-pass set predictor.
+- **None of the three training changes fixes small objects.** Size weighting adds 3
+  points of recall under one cell for a little precision; category prompts and human
+  Objects365 labels leave small-object recall unchanged. Tiling at inference remains the
+  lever (0.23 to 0.33 to 0.40 under one cell).
+- **Category prompts** (the requested names after the image, as Moondream is prompted)
+  match the unprompted head on COCO and are within noise on VOC.
+- **Without COCO**, Carbon labels alone score below COCO alone on COCO (0.681 against
+  0.694) and on VOC (0.830 against 0.862), with 17.7k against 46k images. Adding Carbon
+  to COCO helps on COCO but costs VOC precision, and so do Carbon's Objects365 labels
+  against Objects365's human ones (VOC 0.840 against 0.853). The best head on VOC is the
+  COCO-only one without tiles, at F1 0.862 against Moondream 3.1's 0.857.
+
+The runs, their head snapshots every 5,000 steps, the evaluations and the studies are in
+the archive under each run id.
+
 ### Where the time goes
 
 `slots-bins-16` on the same 500 images:

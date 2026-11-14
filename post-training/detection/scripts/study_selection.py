@@ -121,13 +121,19 @@ def main():
     parser.add_argument("--config", action="append", required=True)
     parser.add_argument("--images", default="artifacts/images", help="sample images folder")
     parser.add_argument("--aliases", default="{}", help='{"dataset": {"phrase": [labels]}}')
+    parser.add_argument(
+        "--setting",
+        action="append",
+        help="a JSON setting to study instead of the full grid; repeatable",
+    )
     args = parser.parse_args()
     aliases = json.loads(args.aliases)
     sizes = image_sizes(args.config, args.images)
     tune, tests = load(args.tune), [load(path) for path in args.test]
     grid = np.unique(np.concatenate([np.geomspace(1e-3, 0.05, 30), np.arange(0.05, 0.95, 0.02)]))
     results = []
-    for setting in settings():
+    chosen = [json.loads(s) for s in args.setting] if args.setting else list(settings())
+    for setting in chosen:
         tuned = apply(tune, setting, aliases, sizes)
         threshold = best_threshold(tuned, tuned[0]["dataset"], grid)
         f1 = summarize(above(tuned, threshold))[tuned[0]["dataset"]]["detection"]["iou_0.5"]["f1"]
