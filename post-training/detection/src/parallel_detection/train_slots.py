@@ -20,6 +20,7 @@ not host this experiment.
 """
 
 import copy
+import importlib
 import json
 import math
 import random
@@ -528,14 +529,14 @@ class SlotDetector:
         threshold=None,
         all_slots=False,
         score="objectness_label_box",
-        duplicate_iou=0.7,
+        duplicate_iou=0.5,
         backbone=None,
-        box_power=1.0,
-        merge="nms",
+        box_power=0.25,
+        merge="fuse",
         aliases=None,
-        tiles=1,
+        tiles=2,
         tile_overlap=0.25,
-        tile_max_cells=None,
+        tile_max_cells=4,
     ):
         """`score` ranks a slot by "objectness" alone or by "objectness_label_box", the
         product of objectness and the sampler's confidence in its label and box; a slot is
@@ -610,14 +611,32 @@ class SlotDetector:
             for i in range(0, len(known), size)
         ]
 
-    def _slots(self, image, prompts):
-        """Every slot of one view under each prompt: corners in [0, 1] of that view, label,
-        confidences."""
-        embedding = self.inner._run_vision_encoder(image)
-        return [s for prompt in prompts for s in self._decode(embedding, prompt)]
+    def _encode(self, images):
+        """Image embeddings [len(images), 729, D]: every image's crops go through the
+        vision encoder in one batch, then each image's are pooled and projected as in
+        Moondream's own `_run_vision_encoder`."""
+        module = type(self.inner).__module__.rsplit(".", 1)[0]
+        vision = importlib.import_module(f"{module}.vision")
+        crops_module = importlib.import_module(f"{module}.image_crops")
+        config = self.inner.config.vision
+        prepared = [vision.prepare_crops(image, config, device=self.device) for image in images]
+        outputs = self.inner._vis_enc(torch.cat([crops for crops, _ in prepared]))
+        embeddings = []
+        counts = [crops.size(0) for crops, _ in prepared]
+        for out, (_, tiling) in zip(outputs.split(counts), prepared, strict=True):
+            local = out[1:].view(-1, config.enc_n_layers, config.enc_n_layers, config.enc_dim)
+            rebuilt = crops_module.reconstruct_from_crops(
+                local, tiling, patch_size=1, overlap_margin=config.overlap_margin
+            )
+            embeddings.append(self.inner._vis_proj(out[0], rebuilt))
+        return torch.stack(embeddings)
 
-    def _decode(self, embedding, prompt):
-        cache = image_cache(self.inner, self.functions, embedding[None], prompt)
+    def _decode(self, embeddings, prompt):
+        """Every slot of each view [B] under one prompt: corners in [0, 1] of that view,
+        label and confidences."""
+        if prompt is not None:
+            prompt = prompt.expand(embeddings.size(0), -1)
+        cache = image_cache(self.inner, self.functions, embeddings, prompt)
         objectness, boxes, tokens, confidence = sample(
             self.head,
             self.inner.text,
@@ -626,37 +645,48 @@ class SlotDetector:
             self.functions.apply_rotary_emb,
             self.steps,
         )
-        objectness = objectness[0].sigmoid()
-        box_confidence = confidence[0, :, :COORDINATES].min(-1).values
-        label_confidence = confidence[0, :, COORDINATES:].prod(-1)
+        objectness = objectness.sigmoid()
+        box_confidence = confidence[..., :COORDINATES].min(-1).values
+        label_confidence = confidence[..., COORDINATES:].prod(-1)
         score = SLOT_SCORES[self.score](
             objectness, label_confidence, box_confidence, self.box_power
         ).tolist()
-        names = decode_names(tokens[0], self.vocabulary)
-        corners = to_corners(boxes[0]).clamp(0, 1).tolist()
-        return [
-            {
-                "corners": corners[k],
-                "label": names[k],
-                "score": score[k],
-                "objectness": objectness[k].item(),
-                "box_confidence": box_confidence[k].item(),
-                "label_confidence": label_confidence[k].item(),
-            }
-            for k in range(len(names))
-        ]
+        corners = to_corners(boxes).clamp(0, 1).tolist()
+        views = []
+        for b in range(embeddings.size(0)):
+            names = decode_names(tokens[b], self.vocabulary)
+            views.append(
+                [
+                    {
+                        "corners": corners[b][k],
+                        "label": names[k],
+                        "score": score[b][k],
+                        "objectness": objectness[b, k].item(),
+                        "box_confidence": box_confidence[b, k].item(),
+                        "label_confidence": label_confidence[b, k].item(),
+                    }
+                    for k in range(len(names))
+                ]
+            )
+        return views
 
     @torch.inference_mode()
     def detect(self, image, phrases):
         width, height = image.size
         start = self._clock()
-        candidates, seconds = [], {}
-        prompts = self.prompt_groups(phrases)
-        for view, (x0, y0, x1, y1) in self.views(width, height):
-            began = self._clock()
-            crop = image if view == "full" else image.crop((x0, y0, x1, y1))
+        views = self.views(width, height)
+        crops = [image if v == "full" else image.crop(tuple(box)) for v, box in views]
+        embeddings = self._encode(crops)
+        encoded = self._clock()
+        per_view = [[] for _ in views]
+        for prompt in self.prompt_groups(phrases):
+            for index, slots in enumerate(self._decode(embeddings, prompt)):
+                per_view[index] += slots
+        decoded = self._clock()
+        candidates = []
+        for (view, (x0, y0, x1, y1)), slots in zip(views, per_view, strict=True):
             edges = (x0 > 0, y0 > 0, x1 < width, y1 < height)  # inner edges of this view
-            for slot in self._slots(crop, prompts):
+            for slot in slots:
                 c = slot.pop("corners")
                 near = (c[0] < 0.01, c[1] < 0.01, c[2] > 0.99, c[3] > 0.99)
                 slot["box"] = [
@@ -668,7 +698,6 @@ class SlotDetector:
                 slot["view"] = view
                 slot["cut"] = any(e and n for e, n in zip(edges, near, strict=True))
                 candidates.append(slot)
-            seconds[view] = seconds.get(view, 0.0) + self._clock() - began
         found, scores = select(
             candidates,
             phrases,
@@ -687,5 +716,9 @@ class SlotDetector:
             "scores": scores,
             "shared_seconds": shared,
             "phrase_seconds": [0.0] * len(phrases),
-            "components": {f"{view}_views": t for view, t in seconds.items()},
+            "components": {
+                "vision_encoder": encoded - start,
+                "slots": decoded - encoded,
+                "selection": shared - (decoded - start),
+            },
         }

@@ -321,11 +321,11 @@ def main(
     threshold: float = -1.0,
     all_slots: bool = False,
     gpu: str = "L4",
-    tiles: int = 1,
+    tiles: int = 0,
 ):
     """`--slots-run` evaluates that training run's head with a slots config; `--max-crops`
     limits its vision encoder's crops, `--threshold` sets its score threshold and `--tiles`
-    also runs it on a tiles x tiles grid of image crops."""
+    sets its grid of image tiles (1 for the full image only; default the detector's)."""
     settings = json.loads(Path(config).read_text())
     if slots_run:
         settings["model"]["checkpoint"] = f"/runs/slots/{slots_run}/head.pt"
@@ -335,7 +335,7 @@ def main(
         settings["model"]["threshold"] = threshold
     if all_slots:
         settings["model"]["all_slots"] = True
-    if tiles > 1:
+    if tiles:
         settings["model"]["tiles"] = tiles
     launch(evaluate, run_id, settings, "summary.json", gpu=gpu)
 

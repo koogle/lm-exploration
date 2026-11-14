@@ -3,7 +3,13 @@
   "model": {
     "adapter": "slots",
     "checkpoint": "",
-    "steps": 1
+    "steps": 1,
+    "aliases": {
+      "car": [
+        "car",
+        "truck"
+      ]
+    }
   },
   "datasets": [
     {
