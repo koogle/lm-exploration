@@ -870,9 +870,6 @@ CURVE_SERIES = [
     ("COCO only, 46k", "slots-rank64", 3),
     ("COCO + Carbon, rank 64", "slots-teacher-coco-rank64", 1),
     ("COCO + Carbon, rank 128", "slots-teacher-coco-rank128", 2),
-    ("Carbon only, 17.7k", "slots-teacher-only-rank64", 5),
-    ("O365 human for Carbon", "slots-o365human-coco-rank64", 4),
-    ("No denoising", "slots-nodenoise-teacher-coco-rank64", 6),
 ]
 CURVE_COLOURS = {1: BLUE, 2: ORANGE, 3: AQUA, 4: YELLOW, 5: GREY, 6: VIOLET}
 
