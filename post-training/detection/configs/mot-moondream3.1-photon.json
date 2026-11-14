@@ -1,0 +1,24 @@
+{
+  "seed": 20261112,
+  "model": {
+    "adapter": "photon",
+    "name": "moondream3.1-9B-A2B",
+    "max_objects": 150
+  },
+  "datasets": [
+    {
+      "name": "mot17_train",
+      "kind": "mot",
+      "repo": "Lekim89/MOT17",
+      "repo_type": "dataset",
+      "revision": "f93908467986c77765667925a526ad07be8ad630",
+      "files": [],
+      "split": "train",
+      "sequences": [
+        "MOT17-02-FRCNN",
+        "MOT17-09-FRCNN"
+      ],
+      "every": 3
+    }
+  ]
+}

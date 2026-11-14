@@ -1,0 +1,22 @@
+{
+  "seed": 20261112,
+  "model": {
+    "adapter": "photon",
+    "name": "moondream2",
+    "max_objects": 150
+  },
+  "datasets": [
+    {
+      "name": "voc2007_test",
+      "kind": "voc",
+      "repo": "davin11/VOC2007",
+      "repo_type": "dataset",
+      "revision": "fa6fc00e5e617859ce9b7aa7abd581c7bd8ffa15",
+      "files": [
+        "VOCtest_06-Nov-2007.tar"
+      ],
+      "image_set": "VOCdevkit/VOC2007/ImageSets/Main/test.txt",
+      "images": 1000
+    }
+  ]
+}

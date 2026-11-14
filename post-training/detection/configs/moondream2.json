@@ -1,0 +1,47 @@
+{
+  "seed": 20261112,
+  "model": {
+    "adapter": "transformers",
+    "repo": "vikhyatk/moondream2",
+    "revision": "2025-06-21",
+    "max_objects": 150
+  },
+  "datasets": [
+    {
+      "name": "coco_val2017",
+      "kind": "coco",
+      "repo": "detection-datasets/coco",
+      "repo_type": "dataset",
+      "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+      "files": [
+        "data/val-00000-of-00002-c4f2e391ee4aba11.parquet",
+        "data/val-00001-of-00002-7af5414a3b178949.parquet"
+      ],
+      "images": 500
+    },
+    {
+      "name": "refcoco_m_val",
+      "kind": "refcoco_m",
+      "repo": "moondream/refcoco-m",
+      "repo_type": "dataset",
+      "revision": "45686f0eb7980ed4b70d3d5480a198775a26b4c1",
+      "files": [
+        "data/validation-00000-of-00002.parquet",
+        "data/validation-00001-of-00002.parquet"
+      ],
+      "images": 300
+    },
+    {
+      "name": "lvis_minival",
+      "kind": "lvis",
+      "repo": "GLIPModel/GLIP",
+      "repo_type": "model",
+      "revision": "66ee3ae9a3b8cee0cf78f10ef5fc9a3725db02a1",
+      "files": [
+        "lvis_v1_minival_inserted_image_name.json"
+      ],
+      "images": 300,
+      "max_absent": 0
+    }
+  ]
+}

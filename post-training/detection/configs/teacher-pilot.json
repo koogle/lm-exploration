@@ -1,0 +1,142 @@
+{
+  "seed": 20261112,
+  "limit": 200,
+  "datasets": [
+    {
+      "name": "coco_val2017",
+      "kind": "coco",
+      "repo": "detection-datasets/coco",
+      "repo_type": "dataset",
+      "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+      "files": [
+        "data/val-00000-of-00002-c4f2e391ee4aba11.parquet",
+        "data/val-00001-of-00002-7af5414a3b178949.parquet"
+      ],
+      "images": 500
+    }
+  ],
+  "models": {
+    "google/gemini-4-carbon": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "openai/gpt-6.1-terra": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "qwen/qwen3.8-max-0902": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "google/gemini-3.8-flash": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "qwen/qwen3.8-flash": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "google/gemini-4-argon": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "google/gemini-4-hydrogen": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "anthropic/claude-opus-5.5": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "anthropic/claude-fable-5.2": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "anthropic/claude-sonnet-5.5": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "openai/gpt-6-astra": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "openai/gpt-6.1-sol": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    }
+  },
+  "consensus_votes": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "score_both_orders": [
+    "anthropic/claude-fable-5.2",
+    "anthropic/claude-opus-5.5",
+    "anthropic/claude-sonnet-5.5",
+    "google/gemini-3.8-flash",
+    "google/gemini-4-argon",
+    "google/gemini-4-carbon",
+    "google/gemini-4-hydrogen",
+    "openai/gpt-6-astra",
+    "openai/gpt-6.1-sol",
+    "openai/gpt-6.1-terra",
+    "qwen/qwen3.8-flash",
+    "qwen/qwen3.8-max-0902"
+  ],
+  "consensus_models": [
+    "google/gemini-4-carbon",
+    "google/gemini-4-argon",
+    "anthropic/claude-opus-5.5",
+    "anthropic/claude-fable-5.2"
+  ]
+}

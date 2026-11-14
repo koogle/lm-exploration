@@ -1,0 +1,29 @@
+{
+  "seed": 20261112,
+  "decoders": [
+    "eager",
+    "loop",
+    "kernel",
+    "compiled"
+  ],
+  "model": {
+    "adapter": "transformers",
+    "repo": "vikhyatk/moondream2",
+    "revision": "2025-06-21",
+    "max_objects": 150
+  },
+  "datasets": [
+    {
+      "name": "coco_val2017",
+      "kind": "coco",
+      "repo": "detection-datasets/coco",
+      "repo_type": "dataset",
+      "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+      "files": [
+        "data/val-00000-of-00002-c4f2e391ee4aba11.parquet",
+        "data/val-00001-of-00002-7af5414a3b178949.parquet"
+      ],
+      "images": 100
+    }
+  ]
+}
