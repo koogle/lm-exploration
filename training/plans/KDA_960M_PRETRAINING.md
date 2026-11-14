@@ -205,6 +205,54 @@ starred repositories is a stated preference, not a measured gain.
 
 [Run reports, common evaluation and capacity reports](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/code-mix-study-20261110).
 
+## Architecture options from the Marin notes (128M study)
+
+Two options from the Marin 535B notes were compared against the recipe v3 control,
+each a 127.6M-parameter KDA model trained for 200,015,872 tokens on one H100 with
+one seed (workflows `study-128m-marin-control`, `-conv` and `-embnorm`):
+
+- **Short convolutions** (`short_conv_size: 4`): causal depthwise convolutions on
+  full-attention keys, values and output and on every MLP output, identity at
+  initialization and reset at document boundaries; 51,200 extra parameters.
+- **Embedding RMSNorm** (`embedding_norm: true`): an RMSNorm on the embedding lookup.
+
+Held-out bits per byte on the common evaluation set:
+
+| Evaluation set | Control | Short convolutions | Embedding RMSNorm |
+| --- | ---: | ---: | ---: |
+| Starred Python | 0.9594 | 0.9441 (-1.6%) | 0.9268 (-3.4%) |
+| Other Python | 0.9093 | 0.8986 (-1.2%) | 0.8810 (-3.1%) |
+| Starred other code | 0.8174 | 0.8058 (-1.4%) | 0.7841 (-4.1%) |
+| Other code | 0.8512 | 0.8399 (-1.3%) | 0.8170 (-4.0%) |
+| ClimbMix | 1.1925 | 1.1857 (-0.6%) | 1.1787 (-1.2%) |
+| Math | 1.1212 | 1.1116 (-0.9%) | 1.1072 (-1.2%) |
+
+The control differs from the earlier run of the same configuration
+(`mix-study-v3-20261110-01`) by 0.07–0.32% per set, an estimate of run-to-run
+noise from one pair. Both options are outside it on every set.
+
+The training-loss lead over the control behaves differently. Over the five
+tenths of the run sampled, the short-convolution lead is roughly constant
+(0.015, 0.032, 0.033, 0.038, 0.029 nats). The embedding-RMSNorm lead shrinks
+steadily (0.232, 0.133, 0.101, 0.087, 0.071 nats). A lead that shrinks like this
+fits faster early optimization rather than a better model at the end; 200M tokens
+cannot tell which.
+
+Decisions:
+
+- The 960M foundation run continues without either option; its source hashes and
+  checkpoint lineage are fixed.
+- Short convolutions go to midtraining as a matched comparison: continue the
+  foundation checkpoint with and without them, with the convolutions added at
+  identity so the starting model is unchanged. Loading a foundation checkpoint
+  into a model with new parameters needs an explicit initialization path that
+  doesn't exist yet.
+- Embedding RMSNorm is not adopted: the measured gain may not survive a longer
+  run, and it can't be added to a trained model without changing its function.
+  It needs a longer matched run before a future pretraining run uses it.
+
+[Run reports, metrics and common evaluation](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/marin-ablation-20261111).
+
 ## Training and budget
 
 Use exactly eight 80GB H100s, the shared trainer, frozen model/tokenizer and MTP
