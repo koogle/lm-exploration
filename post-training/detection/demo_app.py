@@ -133,12 +133,16 @@ class Detectors:
         return out
 
     @modal.method()
-    def video(self, data, name, phrases, every, max_frames):
+    def video(self, data, name, phrases, every, max_frames, track=False):
         """Annotated video chunks and statistics, as they are produced."""
         from parallel_detection.demo import stream_video
 
         yield from stream_video(
-            data, lambda image: self._detect(name, image, phrases)[0], every, max_frames
+            data,
+            lambda image: self._detect(name, image, phrases)[0],
+            every,
+            max_frames,
+            track=track,
         )
 
 
@@ -173,12 +177,12 @@ class Photon:
         return {"found": found, "seconds": seconds}
 
     @modal.method()
-    def video(self, data, phrases, every, max_frames):
+    def video(self, data, phrases, every, max_frames, track=False):
         """Annotated video chunks and statistics, as they are produced."""
         from parallel_detection.demo import stream_video
 
         yield from stream_video(
-            data, lambda image: self._detect(image, phrases)[0], every, max_frames
+            data, lambda image: self._detect(image, phrases)[0], every, max_frames, track=track
         )
 
 
@@ -221,7 +225,7 @@ def web():
         )
         return gallery, table + "\n\n" + note
 
-    def video(path, text, name, every, max_frames):
+    def video(path, text, name, every, max_frames, track):
         """Stream the annotated video chunk by chunk while the GPU works through it."""
         if not path:
             yield None, "Upload a video."
@@ -229,9 +233,11 @@ def web():
         data = Path(path).read_bytes()
         phrases = phrases_of(text)
         if name == MOONDREAM_31:
-            chunks = Photon().video.remote_gen(data, phrases, int(every), int(max_frames))
+            chunks = Photon().video.remote_gen(data, phrases, int(every), int(max_frames), track)
         else:
-            chunks = Detectors().video.remote_gen(data, name, phrases, int(every), int(max_frames))
+            chunks = Detectors().video.remote_gen(
+                data, name, phrases, int(every), int(max_frames), track
+            )
         folder = Path(tempfile.mkdtemp(prefix="stream-"))
         for index, (chunk, stats) in enumerate(chunks):
             target = folder / f"chunk-{index:05d}.ts"
@@ -271,10 +277,14 @@ def web():
                     model = gr.Dropdown(names, value="Slots, rank 128, fast", label="Model")
                     every = gr.Slider(1, 30, value=3, step=1, label="Detect every n-th frame")
                     limit = gr.Slider(30, 3000, value=600, step=30, label="Frames to process")
+                    track = gr.Checkbox(
+                        value=True,
+                        label="Track across frames (smoothed boxes with ids; a missed detection is carried one step)",
+                    )
                     vrun = gr.Button("Run", variant="primary")
             annotated = gr.Video(label="Annotated", streaming=True, autoplay=True)
             stats = gr.Markdown()
-            vrun.click(video, [clip, vtext, model, every, limit], [annotated, stats])
+            vrun.click(video, [clip, vtext, model, every, limit, track], [annotated, stats])
 
     return gr.mount_gradio_app(FastAPI(), page, path="/")
 

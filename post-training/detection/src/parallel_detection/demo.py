@@ -72,16 +72,21 @@ def _encode(frames, size, fps):
         return chunk.read()
 
 
-def stream_video(data, detect, every, max_frames, chunk_seconds=2.0):
+def stream_video(data, detect, every, max_frames, chunk_seconds=2.0, track=False):
     """Run `detect(image) -> [(label, box, score)]` on every `every`-th frame of a video.
 
-    Frames in between show the latest detections. Yields (chunk, statistics) about every
+    Frames in between show the latest detections. With `track`, detections pass through
+    `tracking.Tracker` (smoothed boxes, one missed detection coasted) and are labelled
+    with their track id. Yields (chunk, statistics) about every
     `chunk_seconds` of video: the annotated chunk as H.264 MPEG-TS bytes, and statistics
     on frames, detector calls and seconds so far.
     """
     import tempfile
 
     import imageio_ffmpeg
+
+    # Imported here: the web page uses this module without the tracker's dependencies.
+    from parallel_detection.tracking import Tracker
 
     with tempfile.NamedTemporaryFile(suffix=".mp4") as clip:
         clip.write(data)
@@ -91,6 +96,7 @@ def stream_video(data, detect, every, max_frames, chunk_seconds=2.0):
         size, fps = meta["size"], meta.get("fps") or 25.0
         per_chunk = max(1, round(fps * chunk_seconds))
         found, seconds, pending, frames = [], [], [], 0
+        tracker = Tracker(smoothing=0.5, coast=1) if track else None
         began = time.perf_counter()
         try:
             for raw in reader:
@@ -101,6 +107,11 @@ def stream_video(data, detect, every, max_frames, chunk_seconds=2.0):
                 if (frames - 1) % every == 0:
                     start = time.perf_counter()
                     found = detect(image)
+                    if tracker is not None:
+                        tracks = tracker.update(
+                            [b for _, b, _ in found], [s for *_, s in found], [n for n, *_ in found]
+                        )
+                        found = [(f"{t['label']} #{t['id']}", t["box"], t["score"]) for t in tracks]
                     seconds.append(time.perf_counter() - start)
                 pending.append(draw(image, found).tobytes())
                 if len(pending) == per_chunk:
