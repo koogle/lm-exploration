@@ -122,7 +122,7 @@ def soft_boxes(box_logits):
 class SlotHead(nn.Module):
     """The trainable parts: slot queries, the mask and role inputs, adapters and objectness."""
 
-    def __init__(self, text, slots=32, label_tokens=3, rank=16):
+    def __init__(self, text, slots=32, label_tokens=3, rank=16, hints=False):
         super().__init__()
         dim, ff = text.wte.size(1), text.blocks[0].mlp.fc1.out_features
         self.slots, self.label_tokens = slots, label_tokens
@@ -144,24 +144,40 @@ class SlotHead(nn.Module):
             for _ in text.blocks
         )
         self.objectness = nn.Linear(dim, 1)
+        # Video: how strongly a previous frame's box and label (a hint) enter a slot.
+        # Starts at zero, so a hinted head begins as the unhinted one.
+        self.hint_gate = nn.Parameter(torch.zeros(())) if hints else None
 
-    def forward(self, text, region, cache, rotate, known=None):
+    def embed(self, text, region, boxes, tokens):
+        """Input embeddings [.., width, D] of boxes [.., 4] (cx, cy, w, h) and label tokens
+        [.., T], through Moondream's own coordinate, size and word encoders."""
+        cx = region.coord_encoder(fourier(boxes[..., 0:1], region.coord_features))
+        cy = region.coord_encoder(fourier(boxes[..., 1:2], region.coord_features))
+        size = region.size_encoder(fourier(boxes[..., 2:4], region.size_features))
+        return torch.cat([torch.stack([cx, cy, size], dim=-2), text.wte[tokens]], dim=-2).float()
+
+    def forward(self, text, region, cache, rotate, known=None, hints=None):
         """Return objectness logits [B, K], box bin logits [B, K, 4, BINS] (x, y, w, h)
         and label logits [B, K, T, vocabulary].
 
         `known` is (reveal [B, K, width] bool, bins [B, K, 4], tokens [B, K, T]): revealed
         positions get their value's embedding in place of the mask.
+
+        `hints` is (has [B, K] bool, boxes [B, K, 4] cx, cy, w, h, tokens [B, K, T]): a
+        hinted slot's positions also receive the gated embedding of that box and label,
+        for example the slot's detection in the previous video frame. Unlike `known`, a
+        hint is only an input: every position is still predicted.
         """
         batch = cache[0][0].size(0)
         x = (self.mask + self.roles).expand(batch, self.slots, -1, -1)
         if known is not None:
             reveal, bins, tokens = known
-            boxes = boxes_of(bins)
-            cx = region.coord_encoder(fourier(boxes[..., 0:1], region.coord_features))
-            cy = region.coord_encoder(fourier(boxes[..., 1:2], region.coord_features))
-            size = region.size_encoder(fourier(boxes[..., 2:4], region.size_features))
-            given = torch.cat([torch.stack([cx, cy, size], dim=2), text.wte[tokens]], dim=2)
-            x = torch.where(reveal.unsqueeze(-1), given.float() + self.roles, x)
+            given = self.embed(text, region, boxes_of(bins), tokens)
+            x = torch.where(reveal.unsqueeze(-1), given + self.roles, x)
+        if hints is not None:
+            has, boxes, tokens = hints
+            hinted = self.embed(text, region, boxes, tokens)
+            x = x + self.hint_gate * hinted * has[:, :, None, None].float()
         # Every position carries its slot's query so that the block binds to one object.
         x = (x + self.queries[None, :, None, :]).flatten(1, 2)
         # Slots follow everything cached: the image prefix and any prompt.
@@ -201,14 +217,25 @@ def generalized_iou(a, b):
 WEIGHTS = {"l1": 5.0, "giou": 2.0, "bins": 1.0, "objectness": 1.0, "label": 1.0, "empty": 0.1}
 
 
-def match(objectness, boxes, log_probs, truth_boxes, truth_tokens, size_groups=None):
+def match(
+    objectness,
+    boxes,
+    log_probs,
+    truth_boxes,
+    truth_tokens,
+    size_groups=None,
+    hint_of=None,
+    hint_bonus=0.0,
+):
     """Hungarian matching of one image's slots to its truth objects.
 
     Returns slot indices and truth indices. The cost combines box distance, overlap,
     objectness and the label's negative log-likelihood. `size_groups` is (area boundary,
     small slots): the first `small slots` slots take objects covering less than the
     boundary share of the image and the other slots take the rest, unless a group has
-    more objects than slots.
+    more objects than slots. `hint_of` [K] gives each slot's hinted truth index (-1 for
+    none); matching a slot to its hinted object is `hint_bonus` cheaper, so hinted slots
+    learn to keep their object.
     """
     giou, _ = generalized_iou(to_corners(boxes), to_corners(truth_boxes))
     label = -log_probs[:, None, :, :].expand(-1, truth_tokens.size(0), -1, -1)
@@ -224,6 +251,10 @@ def match(objectness, boxes, log_probs, truth_boxes, truth_tokens, size_groups=N
         small_truth = truth_boxes[:, 2] * truth_boxes[:, 3] < boundary
         small_slot = torch.arange(boxes.size(0), device=boxes.device) < small_slots
         cost = cost + 1e6 * (small_slot[:, None] != small_truth[None, :])
+    if hint_of is not None and truth_boxes.size(0):
+        slots = torch.nonzero(hint_of >= 0).squeeze(-1)
+        cost = cost.clone()
+        cost[slots, hint_of[slots]] -= hint_bonus
     rows, cols = linear_sum_assignment(cost.detach().float().cpu().numpy())
     return torch.as_tensor(rows, device=boxes.device), torch.as_tensor(cols, device=boxes.device)
 
@@ -254,6 +285,8 @@ def set_loss(
     negatives="all",
     ignore=None,
     size_weight=None,
+    hint_of=None,
+    hint_bonus=0.0,
 ):
     """Losses for a batch; `targets` is a list of (boxes [n, 4] cxcywh, tokens [n, T]).
 
@@ -270,6 +303,8 @@ def set_loss(
     marks further unmatched slots to leave without gradient, for example where a
     slowly averaged copy of the head confidently sees an object the labels lack.
 
+    `hint_of` lists each image's [K] hinted truth indices for `match` (see there).
+
     `size_weight` {"reference_area", "max"} weights each matched object's box, label and
     objectness terms by sqrt(reference_area / its area), clamped to [1, max], so small
     objects count more; box and label terms become weighted means.
@@ -281,7 +316,16 @@ def set_loss(
     log_probs = logits.log_softmax(-1)
     batch_index, slot_index, truth_boxes, truth_tokens = [], [], [], []
     for b, (t_boxes, t_tokens) in enumerate(targets):
-        rows, cols = match(objectness[b], boxes[b], log_probs[b], t_boxes, t_tokens, size_groups)
+        rows, cols = match(
+            objectness[b],
+            boxes[b],
+            log_probs[b],
+            t_boxes,
+            t_tokens,
+            size_groups,
+            hint_of[b] if hint_of is not None else None,
+            hint_bonus,
+        )
         batch_index.append(torch.full_like(rows, b))
         slot_index.append(rows)
         truth_boxes.append(t_boxes[cols])
