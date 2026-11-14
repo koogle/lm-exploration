@@ -584,6 +584,61 @@ sampling noise (see the VOC bootstrap above).
 The runs, their head snapshots every 5,000 steps, the evaluations and the studies are in
 the archive under each run id.
 
+### Label source on the same images, human labels, and tile crops
+
+Six more rank-64 runs of 20,000 steps, evaluated and studied as above:
+
+- `slots-coco23k-{human,carbon,merged}-rank64`: the same 21,834 COCO train images with
+  COCO's own labels, with Gemini 4 Carbon's labels of them, and with COCO's labels plus
+  every Carbon box no COCO box of its label covers (31% more boxes). Only the labels
+  differ.
+- `slots-human-only-rank64`: the human Open Images and Objects365 labels of the images
+  Carbon labelled (14.9k); `slots-human-coco-rank64`: the same plus COCO (61k).
+- `slots-tilecrops-teacher-coco-rank64`: COCO + Carbon plus tile crops of COCO images that
+  hold small objects, each crop labelled from COCO (91k).
+
+Without tiles (the last column is the pooled area under the precision-recall curve, COCO /
+VOC):
+
+| Head | Tuning F1 | COCO F1 | COCO P / R | F1, IoU 0.75 | Recall under 1 / 1 to 4 / 4+ cells | VOC F1 | VOC P / R | Area, COCO / VOC |
+|---|---|---|---|---|---|---|---|---|
+| `slots-coco23k-human-rank64` | **0.662** | **0.692** | 0.779 / 0.623 | **0.536** | 0.22 / 0.59 / 0.83 | **0.837** | 0.794 / 0.886 | **0.634 / 0.878** |
+| `slots-coco23k-carbon-rank64` | 0.651 | 0.678 | 0.765 / 0.608 | 0.527 | 0.24 / 0.58 / 0.80 | 0.834 | 0.796 / 0.876 | 0.614 / 0.843 |
+| `slots-coco23k-merged-rank64` | 0.661 | 0.678 | 0.757 / 0.614 | 0.534 | 0.23 / 0.57 / 0.82 | 0.834 | 0.795 / 0.878 | 0.622 / 0.861 |
+| `slots-human-coco-rank64` | 0.671 | 0.698 | 0.795 / 0.622 | 0.557 | 0.20 / 0.59 / 0.84 | 0.852 | 0.813 / 0.895 | 0.648 / 0.893 |
+| `slots-human-only-rank64` | 0.601 | 0.617 | 0.709 / 0.546 | 0.457 | 0.19 / 0.50 / 0.74 | 0.797 | 0.744 / 0.858 | 0.554 / 0.832 |
+| `slots-tilecrops-teacher-coco-rank64` | 0.671 | 0.696 | 0.819 / 0.606 | 0.561 | 0.20 / 0.55 / 0.83 | 0.856 | 0.823 / 0.892 | 0.643 / 0.897 |
+
+With tiles (boxes under 4 cells):
+
+| Head | Tuning F1 | COCO F1 | Recall under 1 / 1 to 4 / 4+ cells | VOC F1 | Area, COCO / VOC |
+|---|---|---|---|---|---|
+| `slots-coco23k-human-rank64` | **0.687** | **0.701** | 0.37 / 0.68 / 0.82 | **0.823** | **0.691 / 0.882** |
+| `slots-coco23k-carbon-rank64` | 0.661 | 0.678 | **0.43** / 0.67 / 0.76 | 0.802 | 0.648 / 0.829 |
+| `slots-coco23k-merged-rank64` | 0.669 | 0.680 | 0.41 / 0.69 / 0.81 | 0.805 | 0.662 / 0.856 |
+| `slots-human-coco-rank64` | 0.693 | 0.713 | 0.32 / 0.66 / 0.82 | 0.845 | 0.701 / 0.902 |
+| `slots-human-only-rank64` | 0.625 | 0.636 | 0.30 / 0.56 / 0.69 | 0.789 | 0.598 / 0.831 |
+| `slots-tilecrops-teacher-coco-rank64` | 0.699 | 0.714 | 0.29 / 0.63 / 0.83 | 0.858 | 0.703 / 0.917 |
+
+Bold marks the best of the three same-image runs.
+
+- **On the same images, COCO's own labels are best.** Carbon's labels of the 21,834
+  images score 1.4 points of COCO F1 and 2 points of area below them, and adding Carbon's
+  extra boxes to COCO's (merged) does not close the gap: 0.678 against 0.692 without
+  tiles, 0.680 against 0.701 with them, and lower on VOC. The extra boxes raise
+  small-object recall with tiles (0.37 to 0.41 under one cell; Carbon's labels alone
+  0.43) but cost more precision than they add. COCO is scored against COCO's annotation
+  conventions, which favours COCO's labels; VOC, out of domain for every head, shows the
+  same order.
+- **Human Open Images and Objects365 labels** of the Carbon images, added to COCO, are
+  within noise of Carbon's on COCO (0.698 against 0.705) and ahead on VOC (0.852 against
+  0.840), as with the Objects365-only run above. Alone they are the weakest training set
+  (0.617 on COCO).
+- **Tile crops in training do not raise small-object recall**: under one cell it is 0.20
+  without tiles and 0.29 with them, against 0.23 and 0.33 for the same mix without
+  crops. They raise precision (0.819 against 0.779) and give the highest VOC numbers of
+  any head with tiles (F1 0.858, area 0.917), with COCO unchanged.
+
 ### Video: MOT17
 
 Two MOT17 training sequences (`Lekim89/MOT17`, `configs/mot-*.json`): 02 (600 frames, a
@@ -625,7 +680,7 @@ them and 3% one with another label. A lower threshold for candidates continuing 
 frame's boxes (hysteresis, `merge.select(previous=..., keep_threshold=...)`) changes
 nothing. `tracking.Tracker` links each frame's boxes to the previous frame's by IoU,
 smooths them and reports a track for a frame after it is missed (coasting);
-`scripts/video_selection.py` scores it frame by frame with the COCO thresholds
+`scripts/video_selection.py` scores it frame by frame with the head's COCO-tuned thresholds
 (`mot-hysteresis.json`):
 
 | Fast head | Precision | Recall | F1 | Lost next frame, 02 / 09 |
@@ -781,9 +836,8 @@ training from its last held-out evaluation.
 
 ## Open work
 
-- Recall on medium and large objects: Gemini 4 Carbon labels of COCO's own training
-  images (isolating label quality), more labelled images, and adapting more of the
-  backbone.
+- Recall on medium and large objects: more human-labelled images and adapting more of
+  the backbone.
 - Speed: train the head on single-crop features; fold a slot's box and label into fewer
   positions; time the vision encoder under the custom kernels.
 - Prompted detection (a slot points at a phrase in the prompt), verified-absent

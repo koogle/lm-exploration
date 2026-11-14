@@ -262,7 +262,9 @@ on COCO (top) and VOC (bottom), from the full image only (left) and with $2\time
 (right). Dots: each head at its threshold tuned on COCO. Diamonds: Moondream~2 and 3.1,
 which give no confidence and so one point each. On COCO the full-image curves pass inside
 Moondream~3.1's point and the tiled ones reach it; on VOC Moondream~3.1 sits just outside
-the full-image curves and on the tiled rank-128 curve.}
+the full-image curves and on the tiled rank-128 curve. On the same 22k COCO images,
+COCO's own labels (violet) are above the teacher's (pink) and above both combined
+(yellow).}
 \label{fig:pr}
 \end{figure*}
 
@@ -271,10 +273,14 @@ the model's own coordinate bins instead of regressing four numbers was the large
 Data, steps, keeping small objects, adapter rank 16$\rightarrow$64, adding
 teacher-labelled images to COCO, the combined score and tiling each helped. The rest did
 not move COCO beyond noise: rank 128, more decoding passes, training without the
-denoising pass, category prompts in front of the slots, size-weighted losses and
-human Objects365 labels in place of the teacher's (which did lift VOC precision). Slot
+denoising pass, category prompts in front of the slots, size-weighted losses,
+human Objects365 and Open Images labels in place of the teacher's (which did lift VOC
+precision), and tile crops of small objects in training, which raised precision but not
+small-object recall. Slot
 groups by object size, ``nothing'' targets only near labelled objects, objectness
-trained toward IoU, teacher labels \emph{instead of} COCO's, and mean-teacher
+trained toward IoU, teacher labels \emph{instead of} COCO's (also on the same 22k
+images, where adding the teacher's extra boxes to COCO's raised tiled small-object
+recall from .37 to .41 but lost precision), and mean-teacher
 self-training~\citep{tarvainen2017meanteacher,liu2021unbiasedteacher,xie2020noisystudent}
 hurt. Custom fused CUDA kernels for Moondream~2's sequential decoder cut its per-box cost
 1.85$\times$, but are not bit-exact with eager PyTorch.
@@ -300,11 +306,14 @@ hurt. Custom fused CUDA kernels for Moondream~2's sequential decoder cut its per
 \eq & No denoising pass in training & .705$\rightarrow$.705 \\
 \eq & Category prompts before the slots & .705$\rightarrow$.702 \\
 \eq & Size-weighted loss (recall $<$1 cell +.03) & .705$\rightarrow$.700 \\
-\eq & Objects365 human labels for teacher's (VOC +.013) & .705$\rightarrow$.698 \\
+\eq & Human O365/OI labels for teacher's (VOC +.013) & .705$\rightarrow$.698 \\
+\eq & Small-object tile crops in training (VOC +.017) & .705$\rightarrow$.696 \\
 \no & Two slot groups by object size (23k img.) & .590$\rightarrow$.549 \\
 \no & Objectness target = matched IoU (small recall $-$.07) & .636$\rightarrow$.631 \\
 \no & ``Nothing'' only near labelled objects & .636$\rightarrow$.568 \\
 \no & Teacher labels only, no COCO (17.7k vs.\ 46k img.) & .694$\rightarrow$.681 \\
+\no & Teacher's labels for COCO's, same 22k img. & .692$\rightarrow$.678 \\
+\no & + teacher boxes COCO lacks, same 22k img. & .692$\rightarrow$.678 \\
 \no & EMA self-training, ignore confident slots & .694$\rightarrow$.685 \\
 \bottomrule
 \end{tabular}

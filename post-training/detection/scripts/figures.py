@@ -870,8 +870,21 @@ CURVE_SERIES = [
     ("COCO only, 46k", "slots-rank64", 3),
     ("COCO + Carbon, rank 64", "slots-teacher-coco-rank64", 1),
     ("COCO + Carbon, rank 128", "slots-teacher-coco-rank128", 2),
+    ("+ tile crops, rank 64", "slots-tilecrops-teacher-coco-rank64", 8),
+    ("COCO 23k, COCO labels", "slots-coco23k-human-rank64", 6),
+    ("COCO 23k, Carbon labels", "slots-coco23k-carbon-rank64", 7),
+    ("COCO 23k, COCO + Carbon boxes", "slots-coco23k-merged-rank64", 4),
 ]
-CURVE_COLOURS = {1: BLUE, 2: ORANGE, 3: AQUA, 4: YELLOW, 5: GREY, 6: VIOLET}
+CURVE_COLOURS = {
+    1: BLUE,
+    2: ORANGE,
+    3: AQUA,
+    4: YELLOW,
+    5: GREY,
+    6: VIOLET,
+    7: MAGENTA,
+    8: GREEN,
+}
 
 
 def selection_pr_figure(artifacts, out, images):

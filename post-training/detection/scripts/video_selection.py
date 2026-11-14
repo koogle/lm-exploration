@@ -2,13 +2,15 @@
 
     python scripts/video_selection.py --config configs/mot-slots.json \
         --predictions artifacts/slots-teacher-coco-rank128-mot-tiles2/predictions.jsonl \
+        --selection artifacts/slots-teacher-coco-rank128-selection.json \
         --images /tmp/claude-0/sample-images > artifacts/mot-hysteresis.json
 
 Reads a MOT17 evaluation that recorded every candidate (`--all-slots --tiles 2`). For
 each sequence it applies `merge.select` frame by frame in order, passing the boxes kept
 in the previous sampled frame as `previous`, so a candidate continuing one of them
-passes from `keep_threshold` (a share of the threshold). Thresholds are the ones tuned
-on COCO (`MODES`); nothing is tuned on the video. Optionally the kept boxes then pass
+passes from `keep_threshold` (a share of the threshold). Thresholds are the head's own,
+tuned on COCO, read from its `study_selection.py` result (`--selection`) for the fuse 0.5,
+box^0.25 setting of each mode; nothing is tuned on the video. Optionally the kept boxes then pass
 through `tracking.Tracker` (`TRACKERS`: smoothing and coasting), whose tracked boxes are
 what is scored. Reports per mode, keep share and tracker: precision, recall and F1 at
 IoU 0.5, and `video_stability.stability`.
@@ -30,8 +32,8 @@ from parallel_detection.merge import select
 from parallel_detection.metrics import summarize
 from parallel_detection.tracking import Tracker
 
-# (name, tile_max_cells, threshold tuned on COCO for slots-teacher-coco-rank128)
-MODES = (("fast", None, 0.31), ("tiled", 4, 0.33))
+# (name, tile_max_cells)
+MODES = (("fast", None), ("tiled", 4))
 KEEP_SHARES = (1.0, 0.5)
 # (name, Tracker arguments or None)
 TRACKERS = (
@@ -90,20 +92,36 @@ def run(images, sizes, tiles, threshold, keep_share, tracker=None):
     return out
 
 
+def tuned_thresholds(selection):
+    """tile_max_cells -> the threshold tuned on COCO for fuse 0.5, box^0.25."""
+    out = {}
+    for r in selection["results"]:
+        s = r["setting"]
+        if (s["merge"], s["duplicate_iou"], s["box_power"]) == ("fuse", 0.5, 0.25):
+            out[s["tile_max_cells"]] = r["threshold"]
+    missing = [tiles for _, tiles in MODES if tiles not in out]
+    if missing:
+        raise ValueError(f"No tuned threshold for tile_max_cells {missing}")
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", required=True)
     parser.add_argument("--predictions", required=True)
+    parser.add_argument("--selection", required=True)
     parser.add_argument("--images", required=True)
     args = parser.parse_args()
     (dataset,) = json.loads(Path(args.config).read_text())["datasets"]
     sizes = image_sizes([args.config], args.images)
     images = load(args.predictions)
     ids = track_ids(dataset)
+    thresholds = tuned_thresholds(json.loads(Path(args.selection).read_text()))
     results = []
-    for (mode, tiles, threshold), share, (tracking, tracker) in itertools.product(
+    for (mode, tiles), share, (tracking, tracker) in itertools.product(
         MODES, KEEP_SHARES, TRACKERS
     ):
+        threshold = thresholds[tiles]
         records = run(images, sizes, tiles, threshold, share, tracker)
         detection = summarize(records)[dataset["name"]]["detection"]["iou_0.5"]
         results.append(
