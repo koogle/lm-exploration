@@ -136,6 +136,72 @@ def coco_items(parquet, config):
                 yield row["image"]["bytes"], records[row["image_id"]]
 
 
+def tile_records(image_id, width, height, objects, settings, config):
+    """(crop box, record) for each usable tile of an image.
+
+    `objects` are (name, [x0, y0, x1, y1]) in pixels, before any size filter. An object
+    belongs to a tile when at least `min_inside` of it lies inside; its box is clipped
+    to the tile. The size filter and object count apply at the tile's scale.
+    """
+    out = []
+    for k, (x0, y0, x1, y1) in enumerate(
+        tile_grid(width, height, settings["tiles"], settings["overlap"])
+    ):
+        tw, th = x1 - x0, y1 - y0
+        kept = []
+        for name, (a0, b0, a1, b1) in objects:
+            c0, d0, c1, d1 = max(a0, x0), max(b0, y0), min(a1, x1), min(b1, y1)
+            area = max(a1 - a0, 0) * max(b1 - b0, 0)
+            inside = max(c1 - c0, 0) * max(d1 - d0, 0)
+            if not area or inside / area < settings["min_inside"]:
+                continue
+            w, h = (c1 - c0) / tw, (d1 - d0) / th
+            if w * h >= config["min_area"]:
+                kept.append((name, [((c0 + c1) / 2 - x0) / tw, ((d0 + d1) / 2 - y0) / th, w, h]))
+        if usable(kept, config):
+            out.append(([x0, y0, x1, y1], {"image_id": f"{image_id}#tile{k}", "objects": kept}))
+    return out
+
+
+def coco_tile_items(parquet, config, settings, limit):
+    """(crop reader, record) for the tiles of up to `limit` images of a COCO shard that
+    hold an object smaller than `small_area` of the image; see `tile_records`."""
+    import io
+
+    import pyarrow.parquet as pq
+    from PIL import Image
+
+    table = pq.ParquetFile(parquet)
+    tiles = {}
+    for group in range(table.metadata.num_row_groups):
+        columns = ["image_id", "width", "height", "objects"]
+        for row in table.read_row_group(group, columns=columns).to_pylist():
+            if len(tiles) >= limit:
+                break
+            o, w, h = row["objects"], row["width"], row["height"]
+            objects = [(COCO_NAMES[c], b) for c, b in zip(o["category"], o["bbox"], strict=True)]
+            small = any(
+                (b[2] - b[0]) * (b[3] - b[1]) < settings["small_area"] * w * h for _, b in objects
+            )
+            if small:
+                found = tile_records(row["image_id"], w, h, objects, settings, config)
+                if found:
+                    tiles[row["image_id"]] = found
+    for group in range(table.metadata.num_row_groups):
+        for row in table.read_row_group(group, columns=["image_id", "image"]).to_pylist():
+            for crop, record in tiles.get(row["image_id"], []):
+                data = row["image"]["bytes"]
+
+                def read(data=data, crop=crop):
+                    buffer = io.BytesIO()
+                    Image.open(io.BytesIO(data)).convert("RGB").crop(crop).save(
+                        buffer, "JPEG", quality=95
+                    )
+                    return buffer.getvalue()
+
+                yield read, record
+
+
 def teacher_items(labels, images, config):
     """(image reader, record) for usable images labelled by `parallel_detection.teacher`.
 

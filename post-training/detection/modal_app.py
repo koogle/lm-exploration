@@ -211,13 +211,21 @@ def train_slots(run_id, config, provenance, deadline):
 
     `config["data"]` lists sources: {"kind": "coco", Hub repo, revision and Parquet
     files} or {"kind": "teacher", "name", "labels", "images", "shard_size"} with paths on
-    the runs volume. Encoded shards are cached by source and label filter.
+    the runs volume, or {"kind": "coco_tiles", "name", COCO files, tile settings,
+    "images", "shard_size"} for tiles of COCO images with small objects. Encoded shards
+    are cached by source and label filter.
     """
     from itertools import islice
 
     from huggingface_hub import hf_hub_download
 
-    from parallel_detection.train_slots import coco_items, encode, teacher_items, train
+    from parallel_detection.train_slots import (
+        coco_items,
+        coco_tile_items,
+        encode,
+        teacher_items,
+        train,
+    )
 
     if time.time() >= deadline:
         raise RuntimeError("Launch deadline reached; refusing new work")
@@ -242,6 +250,35 @@ def train_slots(run_id, config, provenance, deadline):
                 stems.append(stem)
         elif source["kind"] == "teacher":
             items = teacher_items(source["labels"], source["images"], config)
+            index = 0
+            while True:
+                stem = folder / f"{source['name']}-{index:03d}"
+                chunk = list(islice(items, source["shard_size"]))
+                if not chunk:
+                    break
+                if not stem.with_suffix(".json").exists():
+                    encode(chunk, stem, config)
+                    volume.commit()
+                stems.append(stem)
+                index += 1
+        elif source["kind"] == "coco_tiles":
+            # Tiles of COCO images with small objects, so the head also trains at the scale
+            # tiled inference shows it; boxes are cut from COCO's unfiltered objects.
+            def tile_stream(source=source):
+                left = source["images"]
+                for name in source["files"]:
+                    parquet = hf_hub_download(
+                        source["repo"], name, repo_type="dataset", revision=source["revision"]
+                    )
+                    taken = set()
+                    for item in coco_tile_items(parquet, config, source, left):
+                        taken.add(item[1]["image_id"].split("#")[0])
+                        yield item
+                    left -= len(taken)
+                    if left <= 0:
+                        return
+
+            items = tile_stream()
             index = 0
             while True:
                 stem = folder / f"{source['name']}-{index:03d}"

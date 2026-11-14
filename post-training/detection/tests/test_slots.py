@@ -305,3 +305,25 @@ def test_set_loss_without_any_object_is_finite():
     assert torch.isfinite(
         diffusion_loss(head, text, region, cache, no_rotation, matching, generator)
     )
+
+
+def test_tile_records_clip_objects_and_filter_at_tile_scale():
+    from parallel_detection.train_slots import tile_records
+
+    settings = {"tiles": 2, "overlap": 0.0, "min_inside": 0.5}
+    config = {"min_area": 0.001, "max_objects": 30}
+    objects = [
+        ("cup", [10, 10, 20, 20]),  # inside the top-left tile
+        ("dog", [40, 10, 70, 20]),  # two thirds in the top-right tile, a third in top-left
+        ("car", [1, 1, 2, 2]),  # 1 px wide: below min_area even at tile scale
+    ]
+    tiles = {
+        r["image_id"]: (crop, r["objects"])
+        for crop, r in tile_records("7", 100, 100, objects, settings, config)
+    }
+    crop, kept = tiles["7#tile0"]
+    assert crop == [0, 0, 50, 50] and [n for n, _ in kept] == ["cup"]
+    assert kept[0][1] == [0.3, 0.3, 0.2, 0.2]  # [cx, cy, w, h] of the tile
+    crop, kept = tiles["7#tile1"]
+    assert [n for n, _ in kept] == ["dog"] and kept[0][1][2] == 0.4  # clipped to 20 px of 50
+    assert "7#tile2" not in tiles  # no objects there
