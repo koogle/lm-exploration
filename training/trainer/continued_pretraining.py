@@ -1,12 +1,14 @@
 """Seed a new data phase from a trainer checkpoint (continued pretraining).
 
-The seed keeps the parent's weights, the complete optimizer state of whichever optimizer
-the config builds (AdamW moments and step counts, or Muon momentum buffers plus the
-AdamW state of its auxiliary parameters) and every rank's RNG state. It starts fresh data
-cursors and resets the phase counters (step 0, token 0), so the learning-rate schedule
-(warmup and cosine over `target_tokens`) restarts from the new config. Optimizer
-hyperparameters (weight decay, betas, Muon momentum and learning-rate ratio) also come
-from the new config. Lineage records the parent and the lifetime target count.
+`seed_phase` works for any trainer family adapter. The seed keeps the parent's weights,
+the complete optimizer state of whichever optimizer the config builds (AdamW moments and
+step counts, or Muon momentum buffers plus the AdamW state of its auxiliary parameters)
+and every rank's RNG state. Its data cursor comes from the family (`phase_data`): fresh,
+or the parent's carried into the new phase's stream. It resets the phase counters
+(step 0, token 0), so the learning-rate schedule (warmup and decay over
+`target_tokens`) restarts from the new config. Optimizer hyperparameters (weight decay,
+betas, Muon momentum and learning-rate ratio) also come from the new config. Lineage
+records the parent and the lifetime target count.
 
 Run it where the parent checkpoint and the new snapshot are reachable, with the same
 PyTorch build as the training image, then resume the trainer from the seed. A workflow's
@@ -15,7 +17,6 @@ PyTorch build as the training image, then resume the trainer from the seed. A wo
 
 import argparse
 import json
-from dataclasses import asdict
 from pathlib import Path
 
 
@@ -53,22 +54,12 @@ def _check_optimizer_state(optimizer):
         raise ValueError("Parent checkpoint has no optimizer state")
 
 
-def migrate_phase(parent_path, output, manifest_path, config, *, note=""):
-    """Write a seed checkpoint for `config` and the snapshot at `manifest_path`."""
+def seed_phase(family, parent_path, output, *, note=""):
+    """Write a seed checkpoint for the phase `family` describes, from `parent_path`."""
     import torch
-    from model_100m.model import GPT, ModelConfig
-    from training_data.mixture import open_mixture
-    from training_data.subword import (
-        BOS_TOKEN_ID,
-        EOS_TOKEN_ID,
-        TOKENIZER_SHA256,
-        VOCAB_SIZE,
-        digest,
-    )
+    from training_data.subword import digest
 
-    from trainer.loop import CHECKPOINT_FORMAT
-    from trainer.optimizers import make_optimizer
-    from trainer.subword import source_hashes
+    from trainer.loop import CHECKPOINT_FORMAT, source_hashes, trainer_sources
 
     parent_path, output = Path(parent_path), Path(output)
     if output.exists():
@@ -77,46 +68,26 @@ def migrate_phase(parent_path, output, manifest_path, config, *, note=""):
     saved = torch.load(parent_path, map_location="cpu", weights_only=False)
     if saved["format"] != CHECKPOINT_FORMAT:
         raise ValueError("Parent is not a trainer checkpoint")
-    if saved["data_identity"]["tokenizer_sha256"] != TOKENIZER_SHA256:
+    metadata = family.metadata()
+    for key, value in metadata.items():
+        if saved.get(key) != value:
+            raise ValueError(f"Parent {key} differs from the config")
+    identity, data_state = family.phase_data(saved)
+    if saved["data_identity"]["tokenizer_sha256"] != identity["tokenizer_sha256"]:
         raise ValueError("Parent tokenizer differs from the frozen tokenizer")
-    model_config = ModelConfig(
-        vocab_size=VOCAB_SIZE,
-        block_size=config.context,
-        n_layer=config.n_layer,
-        n_head=config.n_head,
-        n_embd=config.n_embd,
-        eos_id=EOS_TOKEN_ID,
-    )
-    architecture = {"module": ModelConfig.__module__, "config": asdict(model_config)}
-    if saved["architecture"] != architecture:
-        raise ValueError("Parent architecture differs from the config")
-    if saved["config"]["world_size"] != config.world_size or len(saved["rng"]) != config.world_size:
-        raise ValueError("Parent world size differs from the config")
-    if saved["config"]["optimizer"] != config.optimizer:
-        raise ValueError("Parent optimizer state belongs to a different optimizer")
 
-    model = GPT(model_config)
+    model = family.build("cpu")
     # Optimizer state is indexed by parameter order, so the order must match exactly.
     if list(model.state_dict()) != list(saved["model"]):
         raise ValueError("Parent parameter order differs from the model")
     model.load_state_dict(saved["model"], strict=True)
     if any(not torch.isfinite(value).all() for value in model.state_dict().values()):
         raise ValueError("Parent weights are not finite")
-    optimizer = make_optimizer(model, config)
+    optimizer = family.make_optimizer(model)
     state = _with_new_hyperparameters(saved["optimizer"], optimizer.state_dict())
     optimizer.load_state_dict(state)
     _check_optimizer_state(optimizer)
 
-    data = open_mixture(
-        manifest_path,
-        loader=config.data_loader,
-        context=config.context,
-        allow_unreviewed=config.allow_unreviewed_data,
-    )
-    try:
-        identity, data_state = data.identity, data.state_dict()
-    finally:
-        data.close()
     lineage = {
         "parent_checkpoint": str(parent_path),
         "parent_sha256": digest(parent_path),
@@ -133,11 +104,10 @@ def migrate_phase(parent_path, output, manifest_path, config, *, note=""):
     }
     payload = {
         "format": CHECKPOINT_FORMAT,
-        "config": config.as_dict(),
-        "architecture": architecture,
-        "special_tokens": {"bos": BOS_TOKEN_ID, "eos": EOS_TOKEN_ID},
+        "config": family.settings,
+        **metadata,
         "data_identity": identity,
-        "source_sha256": source_hashes(),
+        "source_sha256": source_hashes({**trainer_sources(), **family.source_files()}),
         "torch_version": str(torch.__version__),
         "step": 0,
         "tokens": 0,
@@ -152,6 +122,21 @@ def migrate_phase(parent_path, output, manifest_path, config, *, note=""):
     torch.save(payload, temporary)
     temporary.replace(output)
     return lineage
+
+
+def migrate_phase(parent_path, output, manifest_path, config, *, note=""):
+    """Write a subword seed checkpoint for `config` and the snapshot at `manifest_path`."""
+    import torch
+
+    from trainer.subword import SubwordFamily
+
+    saved = torch.load(parent_path, map_location="cpu", weights_only=False)
+    if saved["config"]["world_size"] != config.world_size or len(saved["rng"]) != config.world_size:
+        raise ValueError("Parent world size differs from the config")
+    if saved["config"]["optimizer"] != config.optimizer:
+        raise ValueError("Parent optimizer state belongs to a different optimizer")
+    del saved
+    return seed_phase(SubwordFamily(config, manifest_path), parent_path, output, note=note)
 
 
 if __name__ == "__main__":

@@ -89,18 +89,19 @@ matching losses (details in the reading note).
 ## Continued pretraining
 
 [`continued_pretraining.py`](continued_pretraining.py) starts a new data phase from a
-checkpoint of this trainer. It writes a seed checkpoint that the loop resumes like any
-other. What the seed keeps and resets:
+checkpoint of this trainer: `seed_phase(family, parent, output)` for any family adapter,
+and `migrate_phase` for subword configs. It writes a seed checkpoint that the loop
+resumes like any other. What the seed keeps and resets:
 
 | Kept from the parent | Reset or taken from the new config |
 | --- | --- |
-| Weights | Data cursors and exposures (new snapshot) |
+| Weights | Data cursor from the family's `phase_data`: subword starts its new snapshot fresh; hybrid carries the parent's cursor when both read the same recipe's shards (moving fill-in-the-middle sources to their next document), else starts fresh |
 | Complete optimizer state, as saved: AdamW `exp_avg`, `exp_avg_sq` and `step`; for Muon, momentum buffers plus the auxiliary AdamW state | `step` and `tokens` (0), so warmup and cosine decay restart over the new `target_tokens` |
 | Every rank's Python, NumPy, CPU and CUDA RNG state | Optimizer hyperparameters (weight decay, betas, Muon momentum and LR ratio) |
 | | `config`, `source_sha256`, `torch_version` and `data_identity` |
 
-The parent must use the same architecture, world size and optimizer as the new config,
-the frozen tokenizer, and finite weights and optimizer state. The seed path must not
+The parent must use the same architecture (and, for subword, world size and optimizer)
+as the new config, the frozen tokenizer, and finite weights and optimizer state. The seed path must not
 exist. `lineage` records the parent checkpoint and hash, its step, config, data and
 source identity, and `parent_tokens`, the lifetime targets before this phase. Later
 checkpoints keep the lineage, and `report.json` adds `lifetime_loss_tokens`.

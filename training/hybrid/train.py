@@ -563,6 +563,18 @@ class HybridFamily:
     def open_data(self, deadline, state):
         return HybridData(self.identity, self.factory(), state)
 
+    def phase_data(self, saved):
+        """Data identity and cursor for a new phase seeded from `saved`: the parent's
+        cursor carried into this run's stream when both read the same recipe's shards
+        (a decay or fill-in-the-middle branch), else a fresh one."""
+        from training_data.packed_shards import PreparedMixture
+
+        mixture = self.factory()
+        parent = saved["data"]
+        if isinstance(mixture, PreparedMixture) and parent.get("recipe") == mixture.recipe["name"]:
+            return self.identity, mixture.continue_state(parent)
+        return self.identity, mixture.state_dict()
+
     def metadata(self):
         return {
             "architecture": {
