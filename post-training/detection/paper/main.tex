@@ -9,6 +9,7 @@
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xcolor}
@@ -64,59 +65,89 @@ reliable rather than exhaustive detection.
 
 \begin{figure*}[t]
 \centering
+\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-  font=\scriptsize,
-  frozen/.style={draw=black!55,fill=black!6,rounded corners=1.5pt,align=center},
-  trained/.style={draw=red!70!black,fill=red!10,rounded corners=1.5pt,align=center},
-  arr/.style={-{Latex[length=1.5mm]},black!70},
+  font=\footnotesize,
+  base/.style={draw=black!60,fill=white,rounded corners=2pt,align=center,inner sep=3pt},
+  added/.style={draw=red!70!black,fill=red!12,rounded corners=2pt,align=center,inner sep=3pt},
+  outbox/.style={draw=blue!60!black,fill=blue!6,rounded corners=2pt,align=left,inner sep=5pt},
+  train/.style={draw=green!40!black,fill=green!6,rounded corners=2pt,align=center,inner sep=4pt},
+  arr/.style={-{Latex[length=1.8mm]},black!70,thick},
   x=1cm,y=1cm,
 ]
-\def\w{0.42}
-% image, encoder
-\node[frozen,minimum width=1.3cm,minimum height=0.9cm] (img) at (0.65,0) {image};
-\node[frozen,minimum height=0.9cm] (enc) at (2.9,0) {vision encoder\\crops pooled to 27$\times$27};
-\draw[arr] (img) -- (enc);
-% prefix tokens
-\foreach \i in {0,1,3} \draw[black!55,fill=black!6] (4.9+\i*\w,-0.21) rectangle ++(\w,\w);
-\node at (4.9+2.5*\w,0) {$\cdots$};
-\draw[arr] (enc.east) -- (4.9,0);
-\node at (4.9+2*\w,0.45) {image prefix (730)};
-% slots
-\foreach \b/\x in {1/6.85,48/10.15} {
-  \foreach \i/\t in {0/x,1/y,2/s,3/$\ell_1$,4/$\ell_2$,5/$\ell_3$}
-    \draw[red!70!black,fill=red!10] (\x+\i*\w,-0.21) rectangle ++(\w,\w) node[pos=0.5,black] {\t};
-  \draw[decorate,decoration={brace,amplitude=2.5pt}] (\x,0.27) -- (\x+6*\w,0.27)
-    node[midway,above=1.5pt] {slot \b};
+% ---------------- input
+\node[font=\bfseries] at (1.0,5.85) {Input};
+\draw[black!60,fill=black!4] (0.1,2.0) rectangle (1.9,4.0);
+\draw[orange!80!black,thick] (0.3,2.3) rectangle (0.9,3.4);
+\draw[orange!80!black,thick] (1.1,3.3) rectangle (1.6,3.8);
+\node at (1.0,1.7) {image};
+% ---------------- base model frame
+\draw[black!50,fill=black!7,rounded corners=4pt] (2.5,0.2) rectangle (12.7,5.5);
+\node[anchor=north west,font=\bfseries] at (2.6,5.45) {Base model: Moondream 2 (1.9B parameters), frozen};
+\node[base] (enc) at (3.7,3.0) {vision\\encoder};
+\draw[arr] (1.9,3.0) -- (enc.west);
+% input sequence of the decoder: image tokens, then the added slots
+\node[font=\scriptsize] at (6.0,4.62) {729 image tokens};
+\foreach \i in {0,1,2} \draw[black!60,fill=white] (5.2+\i*0.36,3.95) rectangle ++(0.36,0.36);
+\node at (6.45,4.13) {$\cdots$};
+\draw[black!60,fill=white] (6.75,3.95) rectangle ++(0.36,0.36);
+\draw[arr] (enc.north) |- (5.2,4.13);
+\node[font=\scriptsize,text=red!50!black] at (9.95,4.62) {48 slots $\times$ 6 masked positions (added)};
+\foreach \b in {0,1} {
+  \foreach \i/\t in {0/x,1/y,2/s,3/$\ell$,4/$\ell$,5/$\ell$}
+    \draw[red!70!black,fill=red!12] (7.6+\b*2.6+\i*0.36,3.95) rectangle ++(0.36,0.36) node[pos=0.5,font=\scriptsize] {\t};
 }
-\node at (9.66,0) {$\cdots$};
-\node[trained,text width=5.4cm] (inputs) at (9.66,1.25) {each masked position starts as: query $q_i$ of its slot + role $r_j$ of its position + mask embedding $m$};
-\draw[arr] (inputs.south -| 8.1,0) -- (8.1,0.62);
-\draw[arr] (inputs.south -| 11.4,0) -- (11.4,0.62);
-% decoder with LoRA band
-\draw[black!55,fill=black!6,rounded corners=1.5pt] (4.75,-0.55) rectangle (12.85,-1.95);
-\node[align=center] at (5.75,-1.25) {text decoder\\24 layers\\frozen};
-\draw[red!70!black,fill=red!10,rounded corners=1.5pt] (6.8,-0.75) rectangle (12.7,-1.75);
-\node[align=center,text=red!50!black] at (9.75,-1.25) {LoRA on qkv, proj, fc1 and fc2 in every layer,\\active only at the 288 slot positions; slot positions\\attend to the image prefix and to every slot};
-\foreach \x in {5.1,6.0} \draw[black!40] (\x,-0.21) -- (\x,-0.55);
-\foreach \x in {7.06,9.2,10.36,12.48} \draw[black!40] (\x,-0.21) -- (\x,-0.55);
-% heads
-\node[trained] (obj) at (6.3,-2.75) {objectness\\linear (trained)};
-\node[frozen] (coord) at (8.75,-2.75) {region coordinate and size\\decoders: 1{,}024 bins each};
-\node[frozen] (lm) at (11.6,-2.75) {vocabulary head:\\label tokens};
-\draw[arr] (6.3,-1.95) -- (obj.north);
-\draw[arr] (8.75,-1.95) -- (coord.north);
-\draw[arr] (11.6,-1.95) -- (lm.north);
-\node[align=left,anchor=west] at (12.6,-2.75) {per slot: ``nothing'', or\\box + label + score,\\all slots in one pass};
+\node at (9.98,4.13) {$\cdots$};
+% decoder with the added adapters inside it
+\draw[black!60,fill=white,rounded corners=2pt] (5.1,1.9) rectangle (12.5,3.45);
+\node[align=center] at (6.25,2.67) {text decoder\\24 layers};
+\draw[red!70!black,fill=red!12,rounded corners=2pt] (7.5,2.05) rectangle (12.35,3.3);
+\node[align=center,text=red!50!black,font=\scriptsize] at (9.92,2.67) {LoRA adapters on qkv, proj, fc1, fc2 (added)\\in every layer, applied at slot positions only};
+\draw[arr] (6.0,3.95) -- (6.0,3.45);
+\draw[arr] (9.98,3.95) -- (9.98,3.3);
+% readout heads
+\node[added,font=\scriptsize] (obj) at (6.3,1.0) {objectness\\(added)};
+\node[base,font=\scriptsize] (coord) at (8.55,1.0) {Moondream's coordinate\\and size decoders};
+\node[base,font=\scriptsize] (vocab) at (11.0,1.0) {Moondream's\\vocabulary head};
+\draw[arr] (7.0,1.9) |- (obj.east);
+\draw[arr] (8.55,1.9) -- (coord.north);
+\draw[arr] (11.0,1.9) -- (vocab.north);
+\draw[black!70,thick] (obj.south) -- (6.3,0.35) -- (11.0,0.35);
+\draw[black!70,thick] (coord.south) -- (8.55,0.35);
+\draw[black!70,thick] (vocab.south) -- (11.0,0.35) -- (13.1,0.35);
+% ---------------- output
+\node[font=\bfseries] at (15.2,5.85) {Output, one forward pass};
+\node[outbox,text width=4.1cm] (out) at (15.2,3.05) {per slot: ``nothing'', or a box\\(1,024-bin $x$, $y$, size),\\a label and a score\\[3pt]
+\textcolor{orange!80!black}{$\blacksquare$} person, 0.82\\
+\textcolor{orange!80!black}{$\blacksquare$} cup, 0.41\\
+\phantom{$\blacksquare$} nothing\\
+\phantom{$\blacksquare$} $\cdots$ (48 slots)};
+\draw[arr] (13.1,0.35) -| (out.south -| 13.6,0);
+% ---------------- training band
+\draw[green!40!black,dashed,thick,rounded corners=4pt] (0.0,-2.55) rectangle (17.5,-0.25);
+\node[anchor=north west,font=\bfseries,text=green!30!black] at (0.1,-0.3) {Training: only the added (red) parts receive gradients};
+\node[train,text width=4.3cm] (data) at (2.45,-1.6) {labelled objects: COCO train\\(46k images) + 18k images\\labelled by Gemini 4 Carbon};
+\node[train,text width=4.4cm] (hung) at (7.6,-1.6) {Hungarian matching: each\\labelled object takes one slot;\\the other slots learn ``nothing''};
+\node[train,text width=5.0cm] (loss) at (13.9,-1.6) {losses: box bins (cross-entropy),\\L1 + GIoU, label tokens, objectness;\\plus a denoising pass with some\\true positions revealed};
+\draw[arr] (data) -- (hung);
+\draw[arr] (hung) -- (loss);
+\draw[arr,dashed] (out.south -| 16.4,0) -- (loss.north -| 16.4,0) node[pos=0.5,right,font=\scriptsize] {predictions};
+\draw[-{Latex[length=1.8mm]},red!70!black,dashed,thick] (loss.north -| 12.95,0) -- (12.95,2.67) -- (12.35,2.67);
+\node[font=\scriptsize,text=red!60!black,anchor=west] at (13.0,-0.05) {gradients};
 % legend
-\node[frozen,anchor=west] (lf) at (0,-2.75) {frozen};
-\node[trained,anchor=west] at (1.05,-2.75) {trained (50M parameters at rank 64)};
-\end{tikzpicture}
-\caption{Where the weights go. The vision encoder, the decoder and Moondream's own
-coordinate, size and vocabulary heads are frozen; the image prefix is computed exactly
-as before. Training adds per-slot query embeddings, six role embeddings, a mask
-embedding, an objectness layer, and low-rank adapters that change the decoder's
-computation only at the 288 slot positions. Slot positions attend to the image prefix
-and to all slots.}
+\node[base,font=\scriptsize] at (2.6,-3.0) {frozen base model};
+\node[added,font=\scriptsize] at (5.3,-3.0) {added and trained};
+\node[outbox,font=\scriptsize] at (7.5,-3.0) {output};
+\node[train,font=\scriptsize] at (9.35,-3.0) {training only};
+\end{tikzpicture}}
+\caption{The base model, what we add, what comes out and how it is trained. Moondream~2
+(grey) is unchanged: its vision encoder, text decoder and its own coordinate, size and
+vocabulary heads are frozen. We add (red) 48 slots of six masked positions after the
+image tokens (each position's input is a learned slot query, role and mask embedding),
+low-rank adapters that change the decoder only at those positions, and an objectness
+layer: about 50M trained parameters at rank 64. One forward pass reads every slot as
+``nothing'' or a box, label and score. In training, labelled objects are matched to
+slots and the losses update only the added parts.}
 \label{fig:architecture}
 \end{figure*}
 
