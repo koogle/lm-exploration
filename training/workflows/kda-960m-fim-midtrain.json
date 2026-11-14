@@ -1,0 +1,22 @@
+{
+  "name": "kda-960m-fim-midtrain",
+  "family": "hybrid",
+  "description": "Fill-in-the-middle branch of the 960M foundation run: continues its last constant-learning-rate checkpoint (84.8B tokens) with weights, optimizer, RNG and data cursor, rearranges half of all code documents for fill-in-the-middle, and decays the learning rate at the same token positions as the run's own decay to 100B",
+  "from": "kda-960m-foundation-20261110-01-pretrain-a6-s03/step-000080895.pt",
+  "stages": [
+    {
+      "stage": "midtrain",
+      "name": "fim",
+      "continue_state": true,
+      "model_config": "hybrid/configs/kda-960m-fim-midtrain.json",
+      "gpu": "H100!",
+      "world_size": 8,
+      "segment_seconds": 21600,
+      "worker_timeout_seconds": 22800,
+      "max_segments": 100,
+      "segments_per_call": 1,
+      "qualification_segments": 1,
+      "qualification_steps": 8
+    }
+  ]
+}
