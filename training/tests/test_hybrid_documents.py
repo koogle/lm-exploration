@@ -23,6 +23,18 @@ class DocumentTests(unittest.TestCase):
         self.assertEqual(documents.cu_seqlens(ids).tolist(), [0, 3, 6, 8, 16])
         self.assertEqual(documents.cu_seqlens(ids).dtype, torch.int32)
 
+    def test_shared_offsets_are_scoped_to_each_forward_layout(self):
+        first = model.DocumentMask(torch.tensor([[0, 0, 1, 1], [0, 1, 1, 2]]))
+        second = model.DocumentMask(torch.zeros((2, 4), dtype=torch.long))
+        first.share_kda_metadata = second.share_kda_metadata = True
+        self.assertEqual(first.kda_offsets.tolist(), [0, 2, 4, 5, 7, 8])
+        self.assertIs(first.kda_offsets, first.kda_offsets)
+        self.assertEqual(second.kda_offsets.tolist(), [0, 4, 8])
+        self.assertEqual(first.kda_offsets.dtype, torch.int64)
+        first.share_kda_metadata = False
+        torch.testing.assert_close(first.kda_offsets, first._kda_offsets)
+        self.assertIsNot(first.kda_offsets, first.kda_offsets)
+
     def test_document_b_is_unaffected_by_document_a(self):
         lm = model.HybridLM(tiny_config(n_layer=3)).double()
         b = torch.tensor([11, 12, 13, 14, 15])
