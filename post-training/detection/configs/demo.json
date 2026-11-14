@@ -4,17 +4,26 @@
     "revision": "2025-06-21"
   },
   "slot_heads": {
-    "Slots, rank 64, COCO": {
-      "run": "slots-rank64",
-      "threshold": 0.0133
-    },
-    "Slots, rank 64, COCO + Gemini": {
+    "Slots, rank 64, fast": {
       "run": "slots-teacher-coco-rank64",
-      "threshold": 0.0133
+      "threshold": 0.29,
+      "options": {
+        "tiles": 1
+      }
     },
-    "Slots, rank 128, COCO + Gemini": {
+    "Slots, rank 128, fast": {
       "run": "slots-teacher-coco-rank128",
-      "threshold": 0.0133
+      "threshold": 0.31,
+      "options": {
+        "tiles": 1
+      }
+    },
+    "Slots, rank 128, tiled": {
+      "run": "slots-teacher-coco-rank128",
+      "threshold": 0.33,
+      "options": {
+        "tiles": 2
+      }
     }
   },
   "photon_model": "moondream3.1-9B-A2B",

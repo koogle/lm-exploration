@@ -478,6 +478,56 @@ IoU 0.5, one L40S per model:
 - Moondream 2 scores far better on VOC than on COCO (F1 0.851 against 0.587): VOC
   objects are larger and fewer per image.
 
+### Small objects, tiles and duplicates
+
+Recall by object size measured in cells of the 27 x 27 image grid that every model here
+reads (one cell is about 24 x 18 pixels of a COCO image), on the 500 COCO test images:
+
+| Object size | Objects | Moondream 2 | Moondream 3.1 | `slots-teacher-coco-rank128`, before | Same head, tiled |
+|---|---|---|---|---|---|
+| Under 0.5 cell | 175 | 0.20 | 0.18 | 0.09 | |
+| 0.5 to 1 cell | 445 | 0.42 | 0.43 | 0.26 | |
+| Under 1 cell, together | 620 | 0.36 | 0.36 | 0.22 | 0.37 |
+| 1 to 4 cells | 1,527 | 0.70 | 0.72 | 0.61 | 0.70 |
+| 4 cells and over | 1,456 | 0.87 | 0.87 | 0.88 | 0.84 |
+
+Moondream reads the same pooled grid and finds more small objects, so the features hold
+them; re-weighting the score alone does not recover them. The detector can therefore
+also run the head on a 2 x 2 grid of tiles overlapping by a quarter, in one batch with
+the full image (`SlotDetector(tiles=2)`), as in slicing-aided inference (Akyon et al.,
+ICIP 2022). Every slot of every view becomes a candidate, and `merge.select` keeps tile
+boxes that are not cut by a tile edge and are smaller than `tile_max_cells`, then
+merges same-label boxes. `scripts/study_selection.py` compares the choices from one
+evaluation per head that recorded every candidate (`*-tiles2`), each with its threshold
+chosen on the COCO tuning split (`*-selection.json` in the archive):
+
+| `slots-teacher-coco-rank128` | Tuning F1 | COCO F1 | COCO recall | F1, IoU 0.75 | VOC F1 | Seconds per COCO image, L40S |
+|---|---|---|---|---|---|---|
+| Before: no tiles, suppression at IoU 0.7, box confidence | 0.670 | 0.700 | 0.651 | 0.564 | 0.829 | 0.091 |
+| No tiles, fusion at IoU 0.5, box confidence^0.25 | 0.681 | 0.707 | 0.626 | 0.569 | **0.858** | 0.09 |
+| Tiles under 4 cells, fusion at IoU 0.5, box confidence^0.25 | **0.701** | **0.720** | **0.699** | **0.580** | 0.846 | 0.229 |
+| Moondream 3.1 | | 0.700 | 0.719 | 0.560 | 0.857 | 0.208 |
+
+- Tiles bring small-object recall to Moondream's level and COCO F1 above Moondream
+  3.1's. On VOC, whose objects are larger, they cost precision.
+- Duplicates: merging same-label boxes from IoU 0.5 instead of 0.7 is most of the gain.
+  Weighted box fusion (Solovyev et al., 2021), which averages a group's boxes by score,
+  ties suppression without tiles and is slightly ahead with them (tuning F1 0.701
+  against 0.700), where the same object appears in several views.
+- Box confidence to the power 0.25 lets the threshold move from about 0.013 to about
+  0.3 and transfers better from COCO to VOC.
+- These are now the detector's defaults; `tiles=1` is the fast mode. A full evaluation
+  with the defaults (`slots-teacher-coco-rank128-coco-final`, `-voc-final`) gives COCO
+  F1 0.718 and VOC 0.844, matching the study. All five views share one batch, yet the
+  decoder pass over them takes 0.13 s, so tiling costs 2.5 times the fast mode's time.
+- VOC vocabulary: VOC's car includes vans and pickups, which COCO labels truck, so on
+  VOC a car query also takes the head's truck boxes (`configs/voc-slots.json`). Car
+  recall rises from 0.896 to 0.938 and precision falls from 0.779 to 0.748, because
+  COCO's truck also covers lorries, which VOC excludes; F1 is unchanged (0.847 and
+  0.846 overall). Separating them needs a finer label in training.
+
+The demo offers the rank-128 head in both modes.
+
 ### Where the time goes
 
 `slots-bins-16` on the same 500 images:

@@ -107,6 +107,7 @@ class Detectors:
                 "cuda",
                 threshold=head["threshold"],
                 backbone=backbone,
+                **head.get("options", {}),
             )
 
     def _detect(self, name, image, phrases):
@@ -242,9 +243,10 @@ def web():
             "## Detection demo\nCompare Moondream 2, Moondream 3.1 and our one-pass slot "
             "heads. Categories: comma-separated COCO names; empty means all 80. The GPUs "
             "start on the first request (about a minute) and stop after five idle minutes.\n\n"
-            "Slot-head boxes show their score: objectness × label confidence × box "
-            "confidence. It is a ranking score, not a probability; boxes are kept from "
-            "0.013 up, and half of kept boxes on COCO val score under 0.04. Moondream "
+            "Slot-head boxes show their score: objectness × label confidence × "
+            "(box confidence)^0.25, a ranking score rather than a probability; boxes are "
+            "kept from about 0.3. \"Fast\" heads read the full image once; \"tiled\" also "
+            "reads a 2 × 2 grid of tiles for small objects, at about 2.5 times the time. Moondream "
             "gives no confidence, so its boxes show only the label. Videos stream in "
             "two-second chunks as they are processed."
         )
@@ -266,7 +268,7 @@ def web():
                 clip = gr.Video(label="Video")
                 with gr.Column():
                     vtext = gr.Textbox(label="Categories", value="")
-                    model = gr.Dropdown(names, value=names[-2], label="Model")
+                    model = gr.Dropdown(names, value="Slots, rank 128, fast", label="Model")
                     every = gr.Slider(1, 30, value=3, step=1, label="Detect every n-th frame")
                     limit = gr.Slider(30, 3000, value=600, step=30, label="Frames to process")
                     vrun = gr.Button("Run", variant="primary")
