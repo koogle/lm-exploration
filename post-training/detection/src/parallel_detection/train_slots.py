@@ -468,8 +468,12 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
             terms, matching, stats = set_loss(
                 objectness, box_logits, logits, targets, **options, ignore=ignore
             )
-            denoise = diffusion_loss(
-                head, inner.text, inner.region, cache, rotate, matching, generator
+            # `denoise: false` trains the one-pass set loss alone, without the second,
+            # partly revealed pass.
+            denoise = (
+                diffusion_loss(head, inner.text, inner.region, cache, rotate, matching, generator)
+                if config.get("denoise", True)
+                else torch.zeros((), device=device)
             )
             loss = total(terms) + denoise
             optimizer.zero_grad(set_to_none=True)
