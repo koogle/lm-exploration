@@ -11,7 +11,8 @@ evaluation configs (`--config`, one or more) for image sizes. For each
 setting it rescores every candidate, applies `merge.select` exactly as the detector
 does, chooses the threshold with the best F1 on the tuning evaluation, and reports on
 each test evaluation: precision, recall and F1 at IoU 0.5 and 0.75, recall by object
-size in grid cells, and the pooled area under the precision-recall curve. Aliases from
+size in grid cells, the pooled area under the precision-recall curve and the mean
+per-category AP over IoU 0.5 to 0.95. Aliases from
 `--aliases` (JSON: phrase -> head labels) apply to the evaluations whose dataset they
 name.
 """
@@ -102,6 +103,9 @@ def report(records, threshold):
         "f1_iou_0.75": detection["iou_0.75"]["f1"],
         "recall_by_cells": recall_by_cells(kept),
         "pooled_area": ranked_ap(records)["pooled_ap"],
+        "category_ap_iou_0.5_to_0.95": float(
+            np.mean([ranked_ap(records, t)["category_mean_ap"] for t in np.arange(0.5, 0.96, 0.05)])
+        ),
     }
 
 

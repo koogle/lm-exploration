@@ -684,6 +684,94 @@ def area_figure(artifacts, out):
     plt.close(figure)
 
 
+# Heads compared under the current selection (fusion at IoU 0.5, box confidence^0.25),
+# fast (full image) and tiled, from `scripts/study_selection.py` outputs
+# (`<run>-selection.json`). (label, run)
+SELECTION_SERIES = [
+    ("COCO only, 46k", "slots-rank64"),
+    ("COCO + Carbon, r64", "slots-teacher-coco-rank64"),
+    ("COCO + Carbon, r128", "slots-teacher-coco-rank128"),
+    ("Carbon only, 17.7k", "slots-teacher-only-rank64"),
+    ("+ prompts", "slots-prompted-teacher-coco-rank64"),
+    ("+ size weighting", "slots-sizeweight-teacher-coco-rank64"),
+    ("no denoising", "slots-nodenoise-teacher-coco-rank64"),
+    ("O365 human for Carbon", "slots-o365human-coco-rank64"),
+    ("COCO + human OI, O365", "slots-human-coco-rank64"),
+    ("human OI, O365 only", "slots-human-only-rank64"),
+    ("COCO 23k, human", "slots-coco23k-human-rank64"),
+    ("COCO 23k, Carbon", "slots-coco23k-carbon-rank64"),
+    ("COCO 23k, human + Carbon", "slots-coco23k-merged-rank64"),
+]
+SELECTION_MODES = (("fast", None), ("tiled", 4))
+
+
+def selection_rows(artifacts):
+    rows = []
+    for label, run in SELECTION_SERIES:
+        path = artifacts / f"{run}-selection.json"
+        if not path.exists():
+            continue
+        results = json.loads(path.read_text())["results"]
+        modes = {}
+        for mode, tiles in SELECTION_MODES:
+            for r in results:
+                s = r["setting"]
+                if (s["tile_max_cells"], s["merge"], s["duplicate_iou"], s["box_power"]) == (
+                    tiles,
+                    "fuse",
+                    0.5,
+                    0.25,
+                ):
+                    modes[mode] = r["tests"]
+        if len(modes) == len(SELECTION_MODES):
+            rows.append((label, modes))
+    return rows
+
+
+def selection_area_figure(artifacts, out):
+    """Area under the precision-recall curve and per-category AP for every head under the
+    current selection, fast and tiled, on COCO and VOC."""
+    rows = selection_rows(artifacts)
+    panels = [
+        ("COCO val2017: pooled area under the PR curve, IoU 0.5", 0, "pooled_area"),
+        ("VOC 2007 test: pooled area under the PR curve, IoU 0.5", 1, "pooled_area"),
+        ("COCO val2017: per-category AP, IoU 0.5 to 0.95", 0, "category_ap_iou_0.5_to_0.95"),
+        ("VOC 2007 test: per-category AP, IoU 0.5 to 0.95", 1, "category_ap_iou_0.5_to_0.95"),
+    ]
+    figure, axes = plt.subplots(4, 1, figsize=(14, 15), facecolor=SURFACE)
+    places = np.arange(len(rows))
+    for axis, (title, test, key) in zip(axes, panels, strict=True):
+        style(axis, title)
+        for offset, (mode, _) in zip((-0.2, 0.2), SELECTION_MODES, strict=True):
+            values = [modes[mode][test][key] for _, modes in rows]
+            tiled = mode == "tiled"
+            bars = axis.bar(
+                places + offset,
+                values,
+                0.38,
+                color=SURFACE if tiled else RED,
+                edgecolor=RED,
+                hatch="//" if tiled else None,
+                linewidth=1.3,
+                label=mode,
+            )
+            axis.bar_label(bars, labels=[f"{v:.3f}" for v in values], fontsize=7, padding=2)
+        best = max(m[mode][test][key] for _, m in rows for mode, _ in SELECTION_MODES)
+        axis.set_ylim(0, best * 1.15)
+        axis.set_xticks(places, [label for label, _ in rows], fontsize=8, color=MUTED)
+        axis.legend(frameon=False, fontsize=8, labelcolor=INK, loc="upper right", ncols=2)
+    axes[-1].annotate(
+        "Moondream gives no confidence scores, so it has no curve or area.",
+        (0.0, -0.16),
+        xycoords="axes fraction",
+        fontsize=8,
+        color=MUTED,
+    )
+    figure.tight_layout()
+    figure.savefig(out / "selection-areas.png", dpi=180, facecolor=SURFACE)
+    plt.close(figure)
+
+
 def by_image(path):
     grouped = defaultdict(list)
     for record in rows(path):
@@ -756,6 +844,7 @@ def main():
     pr_figure(args.artifacts, args.out)
     all_pr_figure(args.artifacts, args.out)
     voc_figure(args.artifacts, args.out)
+    selection_area_figure(args.artifacts, args.out)
     area_figure(args.artifacts, args.out)
     examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))
     examples_figure(args.artifacts, args.out, "examples-2.png", objects=(4, 9), skip=4)

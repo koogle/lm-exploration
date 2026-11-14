@@ -163,3 +163,20 @@ def test_voc_annotation_and_samples():
         ("person", "difficult"),
         ("tv", ""),
     ]
+
+
+def test_mot_samples_take_people_on_every_nth_frame():
+    from parallel_detection.tasks import mot_samples
+
+    lines = [
+        "1,1,11,21,10,20,1,1,1.0",  # pedestrian
+        "1,2,51,51,5,5,0,7,1.0",  # static person: a person too
+        "1,3,61,61,5,5,0,12,1.0",  # reflection: not a person
+        "2,1,12,21,10,20,1,1,1.0",
+        "4,1,14,21,10,20,1,1,1.0",
+    ]
+    truth = "\n".join(lines)
+    samples = mot_samples("MOT17-09", truth, 1920, 1080, every=3)
+    assert [s["image_id"] for s in samples] == ["MOT17-09/000001", "MOT17-09/000004"]
+    assert samples[0]["queries"][0]["boxes"] == [[10.0, 20.0, 20.0, 40.0], [50.0, 50.0, 55.0, 55.0]]
+    assert samples[0]["image"] == "mot17/MOT17-09/000001.jpg"

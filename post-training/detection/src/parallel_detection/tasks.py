@@ -285,6 +285,44 @@ def voc_samples(annotations, images, seed):
     return samples
 
 
+# MOT17 ground-truth classes that are people: pedestrian, person on a vehicle and static
+# person. MOT's own scoring ignores the last two; here they are people to find.
+MOT_PERSON_CLASSES = {1, 2, 7}
+
+
+def mot_samples(sequence, ground_truth, width, height, every):
+    """Every `every`-th frame of a MOT17 sequence, prompted with "person".
+
+    `ground_truth` is the sequence's gt.txt (frame, id, x, y, w, h, flag, class,
+    visibility per line); boxes become [x0, y0, x1, y1] in pixels.
+    """
+    boxes = defaultdict(list)
+    for line in ground_truth.splitlines():
+        frame, _, x, y, w, h, _, kind, _ = line.split(",")
+        if int(kind) in MOT_PERSON_CLASSES:
+            x0, y0 = float(x) - 1, float(y) - 1
+            boxes[int(frame)].append([x0, y0, x0 + float(w), y0 + float(h)])
+    return [
+        {
+            "image_id": f"{sequence}/{frame:06d}",
+            "image": f"mot17/{sequence}/{frame:06d}.jpg",
+            "width": width,
+            "height": height,
+            "queries": [
+                {
+                    "phrase": "person",
+                    "kind": "present",
+                    "boxes": boxes[frame],
+                    "exhaustive": True,
+                    "group": sequence,
+                }
+            ],
+        }
+        for frame in sorted(boxes)
+        if (frame - 1) % every == 0
+    ]
+
+
 def refcoco_m_samples(rows, images, seed):
     """Every expression of every referred object in the sampled images.
 

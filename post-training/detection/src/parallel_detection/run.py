@@ -20,6 +20,7 @@ from parallel_detection.metrics import summarize
 from parallel_detection.tasks import (
     coco_samples,
     lvis_samples,
+    mot_samples,
     refcoco_m_samples,
     voc_annotation,
     voc_samples,
@@ -86,12 +87,45 @@ def build_samples(config, image_folder, files=hub_files):
             rows = parquet_rows(paths, ["image_id", "samples"])
             built = refcoco_m_samples(rows, dataset["images"], config["seed"])
             extract_images(paths, built, image_folder)
+        elif dataset["kind"] == "mot":
+            built = mot_dataset_samples(dataset, image_folder)
         elif dataset["kind"] == "voc":
             built = voc_tar_samples(paths[0], dataset, config["seed"], image_folder)
         else:
             raise ValueError(f"Unknown dataset kind {dataset['kind']!r}")
         samples += [sample | {"dataset": dataset["name"]} for sample in built]
     return samples
+
+
+def mot_dataset_samples(dataset, image_folder):
+    """Samples of MOT17 sequences from a Hub copy, with the sampled frames written to the
+    image folder."""
+    import configparser
+    import shutil
+
+    from huggingface_hub import hf_hub_download
+
+    def fetch(name):
+        return hf_hub_download(
+            dataset["repo"], name, repo_type="dataset", revision=dataset["revision"]
+        )
+
+    built = []
+    for sequence in dataset["sequences"]:
+        folder = f"{dataset['split']}/{sequence}"
+        info = configparser.ConfigParser()
+        info.read(fetch(f"{folder}/seqinfo.ini"))
+        width, height = int(info["Sequence"]["imWidth"]), int(info["Sequence"]["imHeight"])
+        truth = Path(fetch(f"{folder}/gt/gt.txt")).read_text()
+        samples = mot_samples(sequence, truth, width, height, dataset["every"])
+        for sample in samples:
+            target = Path(image_folder) / sample["image"]
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                frame = sample["image_id"].split("/")[1]
+                shutil.copyfile(fetch(f"{folder}/img1/{frame}.jpg"), target)
+        built += samples
+    return built
 
 
 def voc_tar_samples(path, dataset, seed, image_folder):
