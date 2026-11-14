@@ -1,4 +1,5 @@
-"""Human boxes for prepared Objects365 or Open Images images, in the teacher-label format.
+"""Human boxes for prepared Objects365, Open Images or COCO images, in the teacher-label
+format.
 
     python scripts/human_labels.py --source objects365 \
         --manifest artifacts/teacher-images/manifest.jsonl \
@@ -18,6 +19,8 @@ same images. The most frequent unmapped categories are printed for checking the 
   `vikhyatk/openimages-bbox`, joined by shard and row. Open Images boxes every instance
   of the classes verified present in an image, so classes never verified can be
   missing.
+- coco: COCO's own boxes from the `detection-datasets/coco` Parquet shards that
+  `parallel_detection.images` prepared the images from (the `--images-config` source).
 """
 
 import argparse
@@ -223,7 +226,11 @@ OPENIMAGES_FROM_COCO = {
     "hair drier": ["Hair dryer"],
     "toothbrush": ["Toothbrush"],
 }
-FROM_COCO = {"objects365": O365_FROM_COCO, "openimages": OPENIMAGES_FROM_COCO}
+FROM_COCO = {
+    "objects365": O365_FROM_COCO,
+    "openimages": OPENIMAGES_FROM_COCO,
+    "coco": {name: [name] for name in COCO_NAMES},
+}
 assert all(sorted(m) == sorted(COCO_NAMES) for m in FROM_COCO.values())
 
 
@@ -306,12 +313,34 @@ def openimages(images, unmapped):
         path.unlink()
 
 
+def coco(images, unmapped, settings):
+    """COCO's boxes (category indices into COCO_NAMES, [x0, y0, x1, y1] pixels), scaled
+    to the stored image."""
+    by_id = {image_id.split("/")[1]: image for image_id, image in images.items()}
+    for name in settings["files"]:
+        path = hf_hub_download(
+            settings["repo"], name, repo_type="dataset", revision=settings["revision"]
+        )
+        table = pq.read_table(path, columns=["image_id", "width", "height", "objects"])
+        for row in table.to_pylist():
+            image = by_id.get(str(row["image_id"]))
+            if image is None:
+                continue
+            sx, sy = image["width"] / row["width"], image["height"] / row["height"]
+            objects = [
+                {"label": COCO_NAMES[c], "box": [b[0] * sx, b[1] * sy, b[2] * sx, b[3] * sy]}
+                for c, b in zip(row["objects"]["category"], row["objects"]["bbox"], strict=True)
+            ]
+            yield reply(image, objects)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--source", choices=FROM_COCO, required=True)
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--same-images", help="a labels file whose images to keep")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--images-config", help="the images config with the coco source")
     args = parser.parse_args()
     keep = None
     if args.same_images:
@@ -319,7 +348,13 @@ def main():
         keep = {r["image_id"] for r in replies if "error" not in r}
     images = stored(args.manifest, args.source, keep)
     unmapped = Counter()
-    rows = list({"objects365": objects365, "openimages": openimages}[args.source](images, unmapped))
+    if args.source == "coco":
+        settings = json.loads(Path(args.images_config).read_text())["sources"]["coco"]
+        rows = list(coco(images, unmapped, settings))
+    else:
+        rows = list(
+            {"objects365": objects365, "openimages": openimages}[args.source](images, unmapped)
+        )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text("".join(json.dumps(r) + "\n" for r in rows))
     print(
