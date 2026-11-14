@@ -1,0 +1,21 @@
+{
+  "max_new_tokens": 256,
+  "decodes": [
+    {"name": "greedy", "temperature": 0.0, "top_p": 1.0},
+    {"name": "sampled", "temperature": 0.8, "top_p": 0.95, "seed": 0}
+  ],
+  "prompts": [
+    {"name": "python_function", "text": "def is_palindrome(s: str) -> bool:\n    \"\"\"Return True if s reads the same forwards and backwards, ignoring case and non-alphanumeric characters.\"\"\"\n"},
+    {"name": "python_class", "text": "import heapq\n\n\nclass LRUCache:\n    \"\"\"A least-recently-used cache with a fixed capacity.\"\"\"\n\n    def __init__(self, capacity: int):\n"},
+    {"name": "python_algorithm", "text": "def dijkstra(graph: dict[str, dict[str, float]], source: str) -> dict[str, float]:\n    \"\"\"Shortest distances from source to every reachable node.\"\"\"\n"},
+    {"name": "python_tests", "text": "import pytest\n\nfrom slugify import slugify\n\n\ndef test_slugify_lowercases_and_joins_words():\n"},
+    {"name": "javascript", "text": "// Debounce: call fn only after `wait` ms have passed without another call.\nfunction debounce(fn, wait) {\n"},
+    {"name": "rust", "text": "/// Parses a `key=value` line, returning None for comments and blank lines.\nfn parse_line(line: &str) -> Option<(&str, &str)> {\n"},
+    {"name": "sql", "text": "-- Top 5 customers by total order value in 2024\nSELECT"},
+    {"name": "readme", "text": "# fastcsv\n\nA small, dependency-free CSV parser for Python.\n\n## Installation\n\n"},
+    {"name": "prose", "text": "The Industrial Revolution began in Britain in the late eighteenth century because"},
+    {"name": "explanation", "text": "A hash table stores key-value pairs. To look up a key, it"},
+    {"name": "math", "text": "Problem: A train travels 120 km in 1.5 hours. What is its average speed in km/h?\nSolution:"},
+    {"name": "math_proof", "text": "Theorem. The sum of the first n odd numbers is n^2.\nProof."}
+  ]
+}
