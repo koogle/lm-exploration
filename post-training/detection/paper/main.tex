@@ -14,6 +14,8 @@
 \usepackage{xcolor}
 \usepackage{enumitem}
 \usepackage{caption}
+\usepackage{tikz}
+\usetikzlibrary{positioning,fit,calc,arrows.meta,decorations.pathreplacing}
 \captionsetup{font=small,labelfont=bf,skip=3pt}
 \setlist{nosep,leftmargin=*}
 \setlength{\bibsep}{0pt plus 0.3pt}
@@ -59,8 +61,67 @@ post-training alone can give a small VLM a set output, \emph{n slots, each ``not
 box with a label}, so that one forward pass answers every category at once. The aim is
 reliable rather than exhaustive detection.
 
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+  font=\scriptsize,
+  frozen/.style={draw=black!55,fill=black!6,rounded corners=1.5pt,align=center},
+  trained/.style={draw=red!70!black,fill=red!10,rounded corners=1.5pt,align=center},
+  arr/.style={-{Latex[length=1.5mm]},black!70},
+  x=1cm,y=1cm,
+]
+\def\w{0.42}
+% image, encoder
+\node[frozen,minimum width=1.3cm,minimum height=0.9cm] (img) at (0.65,0) {image};
+\node[frozen,minimum height=0.9cm] (enc) at (2.9,0) {vision encoder\\crops pooled to 27$\times$27};
+\draw[arr] (img) -- (enc);
+% prefix tokens
+\foreach \i in {0,1,3} \draw[black!55,fill=black!6] (4.9+\i*\w,-0.21) rectangle ++(\w,\w);
+\node at (4.9+2.5*\w,0) {$\cdots$};
+\draw[arr] (enc.east) -- (4.9,0);
+\node at (4.9+2*\w,0.45) {image prefix (730)};
+% slots
+\foreach \b/\x in {1/6.85,48/10.15} {
+  \foreach \i/\t in {0/x,1/y,2/s,3/$\ell_1$,4/$\ell_2$,5/$\ell_3$}
+    \draw[red!70!black,fill=red!10] (\x+\i*\w,-0.21) rectangle ++(\w,\w) node[pos=0.5,black] {\t};
+  \draw[decorate,decoration={brace,amplitude=2.5pt}] (\x,0.27) -- (\x+6*\w,0.27)
+    node[midway,above=1.5pt] {slot \b};
+}
+\node at (9.66,0) {$\cdots$};
+\node[trained,text width=5.4cm] (inputs) at (9.66,1.25) {each masked position starts as: query $q_i$ of its slot + role $r_j$ of its position + mask embedding $m$};
+\draw[arr] (inputs.south -| 8.1,0) -- (8.1,0.62);
+\draw[arr] (inputs.south -| 11.4,0) -- (11.4,0.62);
+% decoder with LoRA band
+\draw[black!55,fill=black!6,rounded corners=1.5pt] (4.75,-0.55) rectangle (12.85,-1.95);
+\node[align=center] at (5.75,-1.25) {text decoder\\24 layers\\frozen};
+\draw[red!70!black,fill=red!10,rounded corners=1.5pt] (6.8,-0.75) rectangle (12.7,-1.75);
+\node[align=center,text=red!50!black] at (9.75,-1.25) {LoRA on qkv, proj, fc1 and fc2 in every layer,\\active only at the 288 slot positions; slot positions\\attend to the image prefix and to every slot};
+\foreach \x in {5.1,6.0} \draw[black!40] (\x,-0.21) -- (\x,-0.55);
+\foreach \x in {7.06,9.2,10.36,12.48} \draw[black!40] (\x,-0.21) -- (\x,-0.55);
+% heads
+\node[trained] (obj) at (6.3,-2.75) {objectness\\linear (trained)};
+\node[frozen] (coord) at (8.75,-2.75) {region coordinate and size\\decoders: 1{,}024 bins each};
+\node[frozen] (lm) at (11.6,-2.75) {vocabulary head:\\label tokens};
+\draw[arr] (6.3,-1.95) -- (obj.north);
+\draw[arr] (8.75,-1.95) -- (coord.north);
+\draw[arr] (11.6,-1.95) -- (lm.north);
+\node[align=left,anchor=west] at (12.6,-2.75) {per slot: ``nothing'', or\\box + label + score,\\all slots in one pass};
+% legend
+\node[frozen,anchor=west] (lf) at (0,-2.75) {frozen};
+\node[trained,anchor=west] at (1.05,-2.75) {trained (50M parameters at rank 64)};
+\end{tikzpicture}
+\caption{Where the weights go. The vision encoder, the decoder and Moondream's own
+coordinate, size and vocabulary heads are frozen; the image prefix is computed exactly
+as before. Training adds per-slot query embeddings, six role embeddings, a mask
+embedding, an objectness layer, and low-rank adapters that change the decoder's
+computation only at the 288 slot positions. Slot positions attend to the image prefix
+and to all slots.}
+\label{fig:architecture}
+\end{figure*}
+
 \section{Method}
-\textbf{Slots.} After Moondream~2's 730-position image prefix we append 48 slots of six
+\textbf{Slots} (Fig.~\ref{fig:architecture}). After Moondream~2's 730-position image prefix we append 48 slots of six
 positions. Positions see the image and each other. Each starts as a mask token and is
 read through a frozen head of the model: positions 0--2 through the region head's
 1{,}024-bin coordinate and size decoders (box centre, width and height), positions 3--5
