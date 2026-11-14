@@ -76,6 +76,30 @@ def fuse(candidates, duplicate_iou):
 MERGES = {"nms": nms, "fuse": fuse}
 
 
+def tile_grid(width, height, tiles, overlap):
+    """[x0, y0, x1, y1] of a `tiles` x `tiles` grid of crops covering the image, each
+    overlapping its neighbours by `overlap` of a tile."""
+    tile_w = width / (1 + (tiles - 1) * (1 - overlap))
+    tile_h = height / (1 + (tiles - 1) * (1 - overlap))
+    return [
+        [x0, y0, x0 + tile_w, y0 + tile_h]
+        for row in range(tiles)
+        for col in range(tiles)
+        for x0, y0 in [(col * tile_w * (1 - overlap), row * tile_h * (1 - overlap))]
+    ]
+
+
+def add_unmatched(objects, extra, iou):
+    """`objects` ({"label", "box"}) plus each of `extra` that no object of its label
+    already overlaps by `iou`; later extras see the ones added before them."""
+    out = list(objects)
+    for o in extra:
+        same = [x["box"] for x in out if x["label"] == o["label"]]
+        if not same or iou_matrix([o["box"]], same).max() < iou:
+            out.append(o)
+    return out
+
+
 def select(
     candidates,
     phrases,

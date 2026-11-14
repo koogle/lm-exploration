@@ -15,7 +15,10 @@ A config with `manifest` labels the unlabelled images listed there instead, at m
 each image and appends one JSON line per (model, image) to `<out>/<model>.jsonl`, with
 the raw reply, parsed pixel boxes, token usage and cost. It stops before a request
 would start once the recorded cost reaches the budget, and skips (model, image) pairs
-already recorded.
+already recorded. With `"tiles": n` it also asks about each tile of an n x n grid
+(overlapping by `tile_overlap`, default a quarter), enlarged to the image's size so small
+objects look larger, and adds the tile boxes that no tile edge cuts and that do not
+repeat a box of the same label (IoU 0.5); the record keeps every tile's reply.
 
 `score` turns each model's boxes, and their consensus, into the evaluation harness's
 records for the categories COCO annotates in each image, and writes
@@ -39,6 +42,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from parallel_detection.boxes import iou_matrix
+from parallel_detection.merge import add_unmatched, tile_grid
 from parallel_detection.metrics import summarize
 from parallel_detection.run import build_samples, fetch_image
 from parallel_detection.tasks import COCO_NAMES
@@ -144,6 +148,31 @@ def images_of(config, out):
     return build_samples(config, out / "images")[: config.get("limit")], out / "images"
 
 
+def ask(model, settings, image_bytes, width, height, key):
+    """One labelling request, retried on server errors, rate limits and dropped
+    connections: {"text", "objects", "usage", "cost", "provider"} or {"error", "cost"}."""
+    for attempt in range(3):
+        try:
+            reply = request(model, image_bytes, settings, key)
+            message = reply["choices"][0]["message"]
+            usage = reply.get("usage", {})
+            return {
+                "text": message.get("content"),
+                "objects": parse(message.get("content"), width, height),
+                "usage": usage,
+                "cost": float(usage.get("cost") or 0.0),
+                "provider": reply.get("provider"),
+            }
+        except Exception as error:  # noqa: BLE001 - every failure is recorded, not raised
+            detail = error.read().decode()[:500] if hasattr(error, "read") else ""
+            failed = {"error": f"{type(error).__name__}: {error} {detail}".strip(), "cost": 0.0}
+            code = getattr(error, "code", None)
+            if code is not None and code < 500 and code != 429:
+                break
+            time.sleep(5 * (attempt + 1))
+    return failed
+
+
 def label(config, out, budget_usd, workers=8):
     """Label the configured images with each configured model, within the budget."""
     key = os.environ["OPENROUNTER_TOKEN"]
@@ -169,31 +198,37 @@ def label(config, out, budget_usd, workers=8):
         image_bytes = source.read_bytes() if source.exists() else _jpeg(image)
         started = time.time()
         record = {"model": model, "image_id": sample["image_id"], "width": width, "height": height}
-        for attempt in range(3):
-            try:
-                reply = request(model, image_bytes, settings, key)
-                message = reply["choices"][0]["message"]
-                usage = reply.get("usage", {})
-                record |= {
-                    "text": message.get("content"),
-                    "objects": parse(message.get("content"), width, height),
-                    "usage": usage,
-                    "cost": float(usage.get("cost") or 0.0),
-                    "provider": reply.get("provider"),
-                }
-                record.pop("error", None)
-                break
-            except Exception as error:  # noqa: BLE001 - every failure is recorded, not raised
-                detail = error.read().decode()[:500] if hasattr(error, "read") else ""
-                record |= {
-                    "error": f"{type(error).__name__}: {error} {detail}".strip(),
-                    "cost": 0.0,
-                }
-                # Retry server errors, rate limits and dropped connections; not bad requests.
-                code = getattr(error, "code", None)
-                if code is not None and code < 500 and code != 429:
-                    break
-                time.sleep(5 * (attempt + 1))
+        record |= ask(model, settings, image_bytes, width, height, key)
+        tiles = config.get("tiles", 1)
+        if tiles > 1 and "error" not in record:
+            # Each tile, enlarged to the image's size, so small objects look larger; boxes
+            # come back in image pixels and those not cut by a tile edge are added.
+            views = []
+            for x0, y0, x1, y1 in tile_grid(width, height, tiles, config.get("tile_overlap", 0.25)):
+                crop = image.crop((x0, y0, x1, y1)).resize((width, height))
+                answer = ask(model, settings, _jpeg(crop), width, height, key)
+                record["cost"] += answer["cost"]
+                if "error" in answer:
+                    views.append({"box": [x0, y0, x1, y1], "error": answer["error"]})
+                    continue
+                sx, sy = (x1 - x0) / width, (y1 - y0) / height
+                inner = (x0 > 0, y0 > 0, x1 < width, y1 < height)
+                found = []
+                for o in answer["objects"]:
+                    b = o["box"]
+                    near = (
+                        b[0] < 0.01 * width,
+                        b[1] < 0.01 * height,
+                        b[2] > 0.99 * width,
+                        b[3] > 0.99 * height,
+                    )
+                    if any(i and n for i, n in zip(inner, near, strict=True)):
+                        continue
+                    box = [x0 + b[0] * sx, y0 + b[1] * sy, x0 + b[2] * sx, y0 + b[3] * sy]
+                    found.append({"label": o["label"], "box": box})
+                views.append({"box": [x0, y0, x1, y1], "objects": found, "text": answer["text"]})
+                record["objects"] = add_unmatched(record["objects"], found, 0.5)
+            record["tiles"] = views
         record["seconds"] = time.time() - started
         with lock:
             state["spent"] += record["cost"]

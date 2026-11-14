@@ -33,7 +33,7 @@ from types import SimpleNamespace
 import numpy as np
 import torch
 
-from parallel_detection.merge import select
+from parallel_detection.merge import select, tile_grid
 from parallel_detection.slots import (
     COORDINATES,
     PREFIX,
@@ -591,13 +591,9 @@ class SlotDetector:
         """(name, [x0, y0, x1, y1]) of the full image and of each tile."""
         out = [("full", [0.0, 0.0, float(width), float(height)])]
         if self.tiles > 1:
-            n, overlap = self.tiles, self.tile_overlap
-            tile_w = width / (1 + (n - 1) * (1 - overlap))
-            tile_h = height / (1 + (n - 1) * (1 - overlap))
-            for row in range(n):
-                for col in range(n):
-                    x0, y0 = col * tile_w * (1 - overlap), row * tile_h * (1 - overlap)
-                    out.append(("tile", [x0, y0, x0 + tile_w, y0 + tile_h]))
+            out += [
+                ("tile", box) for box in tile_grid(width, height, self.tiles, self.tile_overlap)
+            ]
         return out
 
     def prompt_groups(self, phrases):

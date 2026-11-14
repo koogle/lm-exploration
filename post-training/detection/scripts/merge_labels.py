@@ -15,7 +15,7 @@ import argparse
 import json
 from pathlib import Path
 
-from parallel_detection.boxes import iou_matrix
+from parallel_detection.merge import add_unmatched
 
 
 def read(path):
@@ -29,11 +29,7 @@ def merge(first, second, iou):
         b = second.get(image_id)
         if b is None:
             continue
-        objects = list(a["objects"])
-        for o in b["objects"]:
-            same = [x["box"] for x in a["objects"] if x["label"] == o["label"]]
-            if not same or iou_matrix([o["box"]], same).max() < iou:
-                objects.append(o)
+        objects = add_unmatched(a["objects"], b["objects"], iou)
         out.append(a | {"model": f"{a['model']}+{b['model']}", "objects": objects})
     return out
 
