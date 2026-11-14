@@ -51,9 +51,10 @@ def track_ids(dataset):
     return out
 
 
-def stability(path, ids):
+def stability(records, ids):
+    """Per sequence: found, lost next frame, regained next frame, box count change."""
     frames = {}
-    for r in read_records(path):
+    for r in records:
         sequence, frame = r["image_id"].split("/")
         found = {t for _, t in match(r["predicted"], r["boxes"], 0.5)}
         tracks = ids[sequence, int(frame)]
@@ -100,7 +101,8 @@ def main():
     args = parser.parse_args()
     (dataset,) = json.loads(Path(args.config).read_text())["datasets"]
     ids = track_ids(dataset)
-    print(json.dumps({path: stability(path, ids) for path in args.predictions}, indent=2))
+    result = {path: stability(read_records(path), ids) for path in args.predictions}
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":

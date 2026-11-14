@@ -227,6 +227,16 @@ appendix). At 0.10\,s per detection, detecting every third frame keeps pace with
 is processed. MOT17-02's crowds of up to 46 small, overlapping people keep every
 model's recall low.
 
+Detecting frames independently flickers: of the people found in one sampled frame and
+still present in the next, 18\% (MOT17-02) and 10\% (09) are not found again by the fast
+head, and 15\% and 9\% by Moondream~3.1. For the slot head, 42\% of these losses are a
+loose box on the person, 35\% a good box that the selection drops (mostly fused with a
+neighbour in a crowd), and 19\% no candidate at all; a lower threshold for boxes that
+continue the last frame's changes nothing. A light tracker that links boxes across
+frames by IoU, smooths them and keeps a track for one frame after it is missed cuts the
+losses to 12\% and 9\% with per-frame F1 unchanged (0.455 against 0.447), at no cost in
+time.
+
 \begin{table}[t]
 \centering\small\setlength{\tabcolsep}{3.5pt}
 \caption{MOT17-02 and -09, every third frame (375 frames, 1080p), people only. Seconds
@@ -316,7 +326,7 @@ flicker. Next steps we have not yet tried:
 \begin{itemize}
 \item carry slots across frames: give the previous frame's boxes and labels as revealed
 positions, the conditioning the denoising pass trains, so that slots keep their objects
-and the head tracks as it detects;
+and the head tracks as it detects, rather than linking boxes afterwards;
 \item reuse the vision encoder's features and the image prefix where the scene has not
 changed, and tile only where small candidates appear;
 \item evaluate with tracking measures (identity switches, HOTA) on full sequences rather

@@ -11,7 +11,9 @@ touches a tile edge that is not an image edge, so the object may be cut off).
    the same area, in cells of the 27 x 27 image grid of the full image).
 2. Labels: a phrase takes candidates whose label is one of `aliases.get(phrase,
    [phrase])`, so a dataset's category can cover several head labels.
-3. Threshold on score.
+3. Threshold on score. On video, `previous` (the last frame's boxes per phrase) lets a
+   candidate through from `keep_threshold` when it overlaps a previous box of its
+   phrase by IoU 0.5 (hysteresis: objects already found need less evidence to stay).
 4. Duplicates, among the phrase's candidates: "nms" keeps the best-scoring box and drops
    boxes overlapping a kept one by at least `duplicate_iou`; "fuse" (weighted box
    fusion) replaces each such group by its score-weighted mean box with the group's
@@ -110,22 +112,33 @@ def select(
     merge="nms",
     aliases=None,
     tile_max_cells=None,
+    previous=None,
+    keep_threshold=None,
 ):
     """Per phrase, the reported boxes and scores in descending score."""
     if merge not in MERGES:
         raise ValueError(f"Unknown merge {merge!r}")
     aliases = aliases or {}
+    floor = threshold if previous is None or keep_threshold is None else keep_threshold
     pool = [
         c
         for c in candidates
         if c["label"] is not None
-        and c["score"] >= threshold
+        and c["score"] >= floor
         and usable(c, width, height, tile_max_cells)
     ]
     boxes, scores = [], []
     for phrase in phrases:
         labels = set(aliases.get(phrase, [phrase]))
-        mine = [c for c in pool if c["label"] in labels]
+        before = (previous or {}).get(phrase, [])
+        mine = [
+            c
+            for c in pool
+            if c["label"] in labels
+            and (
+                c["score"] >= threshold or (before and iou_matrix([c["box"]], before).max() >= 0.5)
+            )
+        ]
         kept = sorted(MERGES[merge](mine, duplicate_iou), key=lambda c: -c["score"])
         boxes.append([list(c["box"]) for c in kept])
         scores.append([c["score"] for c in kept])

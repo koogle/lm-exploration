@@ -41,3 +41,13 @@ def test_aliases_and_tile_candidates():
     boxes, _ = select(found, ["car"], width, height, 0.5, tile_max_cells=4)
     # The small uncut tile box counts; the cut one and the large one do not.
     assert boxes == [[[0, 0, 50, 50], [1, 1, 3, 3]]]
+
+
+def test_previous_boxes_lower_the_threshold_for_continuing_objects():
+    found = [candidate([0, 0, 10, 10], "car", 0.4), candidate([50, 50, 60, 60], "car", 0.4)]
+    boxes, _ = select(found, ["car"], 100, 100, threshold=0.5)
+    assert boxes == [[]]
+    previous = {"car": [[1, 0, 11, 10]]}
+    boxes, _ = select(found, ["car"], 100, 100, 0.5, previous=previous, keep_threshold=0.3)
+    # Only the candidate continuing last frame's car passes the lower threshold.
+    assert boxes == [[[0, 0, 10, 10]]]

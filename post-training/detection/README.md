@@ -607,6 +607,37 @@ thresholds:
   and every model's recall there is low. Tiling finds the most of them; on the sparser
   MOT17-09 the Moondream models are ahead and tiling costs precision.
 
+**Frame-to-frame stability** (`scripts/video_stability.py`, `artifacts/mot-stability.json`
+in the archive). Of the people a detector finds in one sampled frame and who are still
+annotated in the next, this share is not found again (MOT17-02 / 09):
+
+| Model | Lost next frame |
+|---|---|
+| Moondream 2 | 0.20 / 0.09 |
+| Moondream 3.1 | 0.15 / 0.09 |
+| Slot head, fast | 0.19 / 0.10 |
+| Slot head, tiled | 0.18 / 0.11 |
+
+Of the 541 people the fast head finds and then loses, 42% still have a "person" box near
+them but a loose one (IoU 0.3 to 0.5), 35% have a good one that the selection drops
+(mostly fused with a neighbour in a crowd or scored low), 19% have no candidate near
+them and 3% one with another label. A lower threshold for candidates continuing last
+frame's boxes (hysteresis, `merge.select(previous=..., keep_threshold=...)`) changes
+nothing. `tracking.Tracker` links each frame's boxes to the previous frame's by IoU,
+smooths them and reports a track for a frame after it is missed (coasting);
+`scripts/video_selection.py` scores it frame by frame with the COCO thresholds
+(`mot-hysteresis.json`):
+
+| Fast head | Precision | Recall | F1 | Lost next frame, 02 / 09 |
+|---|---|---|---|---|
+| Per frame | 0.650 | 0.340 | 0.447 | 0.18 / 0.11 |
+| Tracked, smoothing 0.5 | 0.651 | 0.340 | 0.447 | 0.16 / 0.10 |
+| Tracked, smoothing 0.5, coasting 1 frame | 0.603 | 0.365 | 0.455 | 0.12 / 0.09 |
+| Tracked, smoothing 0.5, coasting 2 frames | 0.567 | 0.384 | 0.458 | 0.11 / 0.08 |
+
+The tracker cuts flicker by a third with F1 unchanged; with tiles the same holds (F1
+0.498 to 0.497, lost 0.18 to 0.12 on MOT17-02).
+
 `scripts/figures.py` draws example sheets for COCO, VOC and MOT17 (`examples*.png`) and
 the area under the precision-recall curve and per-category AP of every studied head,
 fast and tiled (`selection-areas.png`); the paper's appendix shows them.
