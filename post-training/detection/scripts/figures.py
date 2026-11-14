@@ -864,6 +864,119 @@ def selection_f1_figure(artifacts, out):
     plt.close(figure)
 
 
+# Precision-recall curves under the current selection: the approaches compared against
+# Moondream's single operating points. (label, run, colour token index)
+CURVE_SERIES = [
+    ("COCO only, 46k", "slots-rank64", 3),
+    ("COCO + Carbon, rank 64", "slots-teacher-coco-rank64", 1),
+    ("COCO + Carbon, rank 128", "slots-teacher-coco-rank128", 2),
+    ("Carbon only, 17.7k", "slots-teacher-only-rank64", 5),
+    ("O365 human for Carbon", "slots-o365human-coco-rank64", 4),
+    ("No denoising", "slots-nodenoise-teacher-coco-rank64", 6),
+]
+CURVE_COLOURS = {1: BLUE, 2: ORANGE, 3: AQUA, 4: YELLOW, 5: GREY, 6: VIOLET}
+
+
+def selection_pr_figure(artifacts, out, images):
+    """Precision against recall at IoU 0.5 of each approach under the current selection,
+    without and with tiles, on COCO and VOC, with Moondream's operating points; each
+    head's dot is its threshold tuned on COCO. `images` holds the evaluation images
+    (for their sizes)."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    from study_selection import apply, image_sizes, load
+
+    configs = [
+        Path(__file__).parent.parent / "configs" / n for n in ("slots-coco.json", "voc-slots.json")
+    ]
+    sizes = image_sizes(configs, images)
+    aliases = {"voc2007_test": {"car": ["car", "truck"]}}
+    figure, axes = plt.subplots(2, 2, figsize=(15, 12.5), facecolor=SURFACE)
+    panels = (
+        ("coco", "coco_val2017", "COCO val2017"),
+        ("voc", "voc2007_test", "Pascal VOC 2007 test"),
+    )
+    for row, (split, dataset, title) in enumerate(panels):
+        for col, (mode, tiles) in enumerate(SELECTION_MODES):
+            axis = axes[row][col]
+            style(axis, f"{title}, {'with 2x2 tiles' if tiles else 'full image only'}")
+            axis.grid(axis="x", color=GRID, linewidth=0.8)
+            for label, run, colour in CURVE_SERIES:
+                path = artifacts / f"{run}-{split}-tiles2" / "predictions.jsonl"
+                study = artifacts / f"{run}-selection.json"
+                if not path.exists() or not study.exists():
+                    continue
+                setting = {
+                    "tile_max_cells": tiles,
+                    "merge": "fuse",
+                    "duplicate_iou": 0.5,
+                    "box_power": 0.25,
+                }
+                tuned = [
+                    r for r in json.loads(study.read_text())["results"] if r["setting"] == setting
+                ]
+                records = apply(load(path), setting, aliases, sizes)
+                precision, recall, _ = ranked_curve(records)
+                ap = ranked_ap(records)["pooled_ap"]
+                axis.plot(
+                    recall,
+                    precision,
+                    color=CURVE_COLOURS[colour],
+                    linewidth=1.8,
+                    label=f"{label}, area {ap:.3f}",
+                )
+                if tuned:
+                    point = summarize(above(records, tuned[0]["threshold"]))[dataset]["detection"][
+                        "iou_0.5"
+                    ]
+                    axis.scatter(
+                        [point["recall"]],
+                        [point["precision"]],
+                        s=45,
+                        color=CURVE_COLOURS[colour],
+                        edgecolor=SURFACE,
+                        linewidth=1.5,
+                        zorder=3,
+                    )
+            for name, run, md_dataset in MOONDREAM_F1[split]:
+                path = artifacts / run / "predictions.jsonl"
+                if not path.exists():
+                    continue
+                records = [r for r in read_records(path) if r["dataset"] == md_dataset]
+                point = summarize(records)[md_dataset]["detection"]["iou_0.5"]
+                axis.scatter(
+                    [point["recall"]],
+                    [point["precision"]],
+                    s=130,
+                    marker="D",
+                    color=INK if name == "Moondream 3.1" else MUTED,
+                    edgecolor=SURFACE,
+                    linewidth=2,
+                    zorder=4,
+                    label=f"{name} (one point, F1 {point['f1']:.3f})",
+                )
+            axis.set_xlabel("Recall", fontsize=9, color=MUTED)
+            axis.set_ylabel("Precision", fontsize=9, color=MUTED)
+            low = 0.4 if split == "coco" else 0.6
+            axis.set_xlim(low, 0.8 if split == "coco" else 1.0)
+            axis.set_ylim(0.4 if split == "coco" else 0.6, 1.0)
+            axis.legend(frameon=False, fontsize=8, labelcolor=INK, loc="lower left")
+    axes[0][1].annotate(
+        "Dots: each head at its threshold tuned on COCO. Diamonds: Moondream, which gives no "
+        "confidence and so one point.",
+        (0.99, 0.99),
+        xycoords="axes fraction",
+        ha="right",
+        va="top",
+        fontsize=8,
+        color=MUTED,
+    )
+    figure.tight_layout()
+    figure.savefig(out / "selection-precision-recall.png", dpi=170, facecolor=SURFACE)
+    plt.close(figure)
+
+
 # The paper's architecture figure shows one VOC image going in and the slot head's
 # detections coming out, each in the colour of its slot (the colours are repeated in
 # paper/main.tex). (evaluation run, image id)
@@ -976,6 +1089,7 @@ def main():
     voc_figure(args.artifacts, args.out)
     selection_area_figure(args.artifacts, args.out)
     selection_f1_figure(args.artifacts, args.out)
+    selection_pr_figure(args.artifacts, args.out, args.out / "images")
     architecture_images(args.artifacts, args.out)
     area_figure(args.artifacts, args.out)
     examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))

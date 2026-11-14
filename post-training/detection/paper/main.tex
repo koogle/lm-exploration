@@ -26,8 +26,7 @@
 \newcommand{\no}{\textcolor{red!70!black}{$-$}}
 \newcommand{\eq}{$\circ$}
 
-\title{\vspace{-2.2em}\Large\bfseries One-Pass Object Detection from a Frozen Small
-Vision-Language Model with Slots}
+\title{\vspace{-2.2em}\Large\bfseries Fast Object Detection from a Small Vision-Language Model via Slots}
 \author{Jakob Frick}
 \date{\vspace{-2.4em}}
 
@@ -255,14 +254,18 @@ Slots r64, COCO only, fast & \textbf{.851} & .241 & .376 & \textbf{.087} \\
 \end{tabular}
 \end{table}
 
-\begin{figure}[t]
+\begin{figure*}[t]
 \centering
-\includegraphics[width=0.9\columnwidth]{precision-recall.png}
-\caption{Precision against recall at IoU 0.5 on the 500 COCO test images, before the
-selection changes. Dots: each head at the threshold tuned on the disjoint split.
-Diamonds: Moondream~2 and 3.1, which give no confidence.}
+\includegraphics[width=0.86\textwidth]{selection-precision-recall.jpg}
+\caption{Precision against recall at IoU 0.5 of each approach under the final selection,
+on COCO (top) and VOC (bottom), from the full image only (left) and with $2\times2$ tiles
+(right). Dots: each head at its threshold tuned on COCO. Diamonds: Moondream~2 and 3.1,
+which give no confidence and so one point each. On COCO the full-image curves pass inside
+Moondream~3.1's point and the tiled ones reach it; on VOC Moondream~3.1 sits just outside
+the full-image curves and on the tiled rank-128 curve. Carbon labels alone are lowest
+throughout.}
 \label{fig:pr}
-\end{figure}
+\end{figure*}
 
 \textbf{What worked and what did not} (Table~\ref{tab:ablate}). Reading boxes through
 the model's own coordinate bins instead of regressing four numbers was the largest gain.
