@@ -33,6 +33,7 @@ __all__ = [
     "HybridConfig",
     "HybridLM",
     "RMSNorm",
+    "ShortConvolution",
     "SwiGLU",
     "chunked_cross_entropy",
 ]
@@ -172,6 +173,12 @@ class HybridConfig:
     # Full-attention blocks keep theirs: recomputed under torch.compile, FlexAttention
     # falls back to dense attention, which needs [T, T] scores.
     activation_checkpointing: bool = False
+    # Study options. `short_conv_size` adds causal depthwise convolutions of that width
+    # (identity at initialization, never reading an earlier document) on full-attention
+    # keys and values, on each full-attention layer's output and on every MLP output.
+    # `embedding_norm` applies an RMSNorm to the embedding lookup.
+    short_conv_size: int = 0
+    embedding_norm: bool = False
 
     def __post_init__(self):
         for name in POSITIVE_FIELDS:
@@ -237,6 +244,30 @@ def apply_rope(x, cos, sin):
     return rotated.to(x.dtype)
 
 
+class ShortConvolution(nn.Module):
+    """Causal depthwise convolution over time, per channel, within each document.
+
+    `y[t] = sum_j w[:, j] * x[t - j]` over the taps whose source position lies in the
+    same document. The weight starts as the identity (`w[:, 0] = 1`), so adding the
+    module to a trained model leaves its function unchanged.
+    """
+
+    def __init__(self, channels, size):
+        super().__init__()
+        weight = torch.zeros(channels, size)
+        weight[:, 0] = 1.0
+        self.weight = nn.Parameter(weight)
+
+    def forward(self, x, positions):
+        """x [B, T, C]; positions [B, T], each token's index within its document."""
+        weight = self.weight.to(x.dtype)
+        out = x * weight[:, 0]
+        for tap in range(1, weight.size(1)):
+            shifted = F.pad(x[:, :-tap], (0, 0, tap, 0))
+            out = out + shifted * weight[:, tap] * (positions >= tap)[..., None].to(x.dtype)
+        return out
+
+
 class Attention(nn.Module):
     """Document-causal GQA with QK-norm, RoPE, an attention sink and an output gate.
 
@@ -268,25 +299,43 @@ class Attention(nn.Module):
         )
         self.o_proj = nn.Linear(config.n_head * config.head_dim, config.n_embd, bias=False)
         self.o_proj.residual_output = True
+        self.convolutions = None
+        if config.short_conv_size:
+            kv = config.n_kv_head * config.head_dim
+            self.convolutions = nn.ModuleDict(
+                {
+                    "key": ShortConvolution(kv, config.short_conv_size),
+                    "value": ShortConvolution(kv, config.short_conv_size),
+                    "output": ShortConvolution(config.n_embd, config.short_conv_size),
+                }
+            )
 
     def optimizer(self):
         yield from declare(
             "muon", self.q_proj, self.k_proj, self.v_proj, self.gate_proj, self.o_proj
         )
         yield from declare("adamw_no_decay", self.q_norm, self.k_norm, self.sink, self.gate_bias)
+        if self.convolutions is not None:
+            yield from declare("adamw_no_decay", self.convolutions)
 
-    def project(self, x, rope):
+    def project(self, x, rope, positions=None):
         batch, length, _ = x.shape
         query = self.q_proj(x).view(batch, length, self.n_head, self.head_dim)
-        key = self.k_proj(x).view(batch, length, self.n_kv_head, self.head_dim)
-        value = self.v_proj(x).view(batch, length, self.n_kv_head, self.head_dim)
+        key, value = self.k_proj(x), self.v_proj(x)
+        if self.convolutions is not None:
+            if positions is None:
+                raise ValueError("Short convolutions need document positions")
+            key = self.convolutions["key"](key, positions)
+            value = self.convolutions["value"](value, positions)
+        key = key.view(batch, length, self.n_kv_head, self.head_dim)
+        value = value.view(batch, length, self.n_kv_head, self.head_dim)
         query, key = self.q_norm(query), self.k_norm(key)
         query, key, value = (tensor.transpose(1, 2) for tensor in (query, key, value))
         cos, sin = rope
         return apply_rope(query, cos, sin), apply_rope(key, cos, sin), value
 
     def forward(self, x, rope, mask):
-        query, key, value = self.project(x, rope)
+        query, key, value = self.project(x, rope, mask.positions)
         attended, lse = attend(query, key, value, mask)
         # lse is fp32 from FlexAttention, and fp32/fp64 from the reference.
         kept = torch.sigmoid(lse - self.sink.to(lse.dtype)[:, None])
@@ -299,7 +348,10 @@ class Attention(nn.Module):
                 "gate_open": gate.float().mean().item(),
                 "sink_weight": (1 - kept).float().mean().item(),
             }
-        return self.o_proj(attended * gate.to(attended.dtype))
+        out = self.o_proj(attended * gate.to(attended.dtype))
+        if self.convolutions is not None:
+            out = self.convolutions["output"](out, mask.positions)
+        return out
 
 
 class Block(nn.Module):
@@ -313,15 +365,23 @@ class Block(nn.Module):
         self.mlp_norm = RMSNorm(config.n_embd, config.norm_eps)
         self.mlp = SwiGLU(config.n_embd, config.mlp_hidden, bias=False)
         self.mlp.down.residual_output = True
+        self.mlp_convolution = None
+        if config.short_conv_size:
+            self.mlp_convolution = ShortConvolution(config.n_embd, config.short_conv_size)
 
     def optimizer(self):
         # The mixer declares its own parameters.
         yield from declare("muon", self.mlp)
         yield from declare("adamw_no_decay", self.mixer_norm, self.mlp_norm)
+        if self.mlp_convolution is not None:
+            yield from declare("adamw_no_decay", self.mlp_convolution)
 
     def forward(self, x, rope, mask):
         x = x + self.mixer(self.mixer_norm(x), rope, mask)
-        return x + self.mlp(self.mlp_norm(x))
+        out = self.mlp(self.mlp_norm(x))
+        if self.mlp_convolution is not None:
+            out = self.mlp_convolution(out, mask.positions)
+        return x + out
 
 
 def _chunk_loss(features, weight, targets):
@@ -427,6 +487,9 @@ class HybridLM(nn.Module):
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embd)
         self.blocks = nn.ModuleList(Block(config, kind) for kind in config.layer_kinds)
         self.final_norm = RMSNorm(config.n_embd, config.norm_eps)
+        self.embedding_norm = (
+            RMSNorm(config.n_embd, config.norm_eps) if config.embedding_norm else None
+        )
         self.loop_update = None
         if config.looped:
             self.loop_update = LoopUpdate(config.n_embd, 1.0 if config.loop_retrofit else None)
@@ -454,6 +517,8 @@ class HybridLM(nn.Module):
         # embedding/output table has per-token rows, so it stays on AdamW.
         yield from declare("adamw_decay", self.token_embedding)
         yield from declare("adamw_no_decay", self.final_norm)
+        if self.embedding_norm is not None:
+            yield from declare("adamw_no_decay", self.embedding_norm)
 
     def initialize(self, module):
         """Normal(0, 0.02); residual output projections scaled by 1/sqrt(2 * n_layer).
@@ -484,6 +549,8 @@ class HybridLM(nn.Module):
         mask = DocumentMask(documents)
         rope = (self.rope_cos[mask.positions][:, None], self.rope_sin[mask.positions][:, None])
         x = self.token_embedding(tokens)
+        if self.embedding_norm is not None:
+            x = self.embedding_norm(x)
         config = self.config
         if not config.looped:
             if loops not in (None, 1):
