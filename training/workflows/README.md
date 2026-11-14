@@ -64,8 +64,9 @@ uv run modal run -m workflows.modal_train::stop --run-id my-run-01
   unfinished adds `-a2`, `-a3`, ...
 - `/runs/<run id>/stages.json` on `lm-exploration-training` records each finished
   stage's output. Launching the same workflow and run ID again skips finished stages
-  and continues the rest. A pretraining stage longer than one launch resumes its last
-  checkpoint. A data stage continues its preparation. The plan's SHA256 must match:
+  and continues the rest. A pretraining stage longer than one launch resumes the
+  newest checkpoint of the previous attempt, including the in-session checkpoint of a
+  session that was interrupted or stopped. A data stage continues its preparation. The plan's SHA256 must match:
   start a changed workflow under a new run ID.
 - `--start` and `--end` select stages by name. `--checkpoint` is the parent of the
   first selected stage when its parent stage hasn't finished in this run, for
@@ -103,7 +104,12 @@ needs compatible global and microbatch sizes.
 
 The controller runs bounded sessions (`torchrun -m <family trainer>` over
 [`trainer.loop`](../trainer/README.md), each in a fresh `<stage run>-sNN` folder that
-resumes the previous session's final checkpoint). It checks progress and validation
+resumes the previous session's final checkpoint). When Modal reruns a preempted
+session call, the session continues in its own folder from its newest checkpoint,
+keeps its original stop time, and counts the rerun in `session.json` and the report's
+`restarts` ([`sessions.py`](sessions.py)). A session whose container receives a
+termination signal saves a checkpoint and ends with stop reason `signal`; the next
+session continues from it. It checks progress and validation
 continuity between sessions, up to `max_segments`. Qualification uses the model's
 final schedule with a short step limit, then continues the same checkpoint lineage.
 `qualification_segments: 0` skips it.

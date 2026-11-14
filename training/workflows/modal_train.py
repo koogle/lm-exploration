@@ -138,16 +138,37 @@ def hybrid_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_
 
     The run config owns the data recipe (prepared on the hybrid data volume) and
     the token target; `resume` names the previous session's final checkpoint.
+
+    Modal runs this call again with the same input when it preempts the container. The
+    second container continues the session from its newest checkpoint, with the stop
+    time the first one set, and reports `restarts`.
     """
     from workflows.checks import validate_paths
     from workflows.config import resolve_payload
+    from workflows.sessions import session_state
 
     policy, _, settings = resolve_payload(bundle)
     validate_paths(run_id, None, resume)
     output = Path("/runs") / run_id
-    output.mkdir(parents=True, exist_ok=False)
-    (output / "run-config.json").write_text(json.dumps(settings, indent=2) + "\n")
-    (output / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
+    hybrid_runs.reload()
+    state, found = session_state(output)
+    if state == "finished":
+        return found
+    session_file = output / "session.json"
+    if state == "fresh":
+        output.mkdir(parents=True)
+        (output / "run-config.json").write_text(json.dumps(settings, indent=2) + "\n")
+        (output / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
+        session = {"stop_unix": time.time() + max_seconds, "restarts": 0}
+    else:
+        if json.loads((output / "run-config.json").read_text()) != settings:
+            raise ValueError(f"{output} holds a session with other settings")
+        session = json.loads(session_file.read_text())
+        session["restarts"] += 1
+        if found is not None:
+            # The trainer resumes its own folder's latest checkpoint.
+            resume = ""
+    session_file.write_text(json.dumps(session) + "\n")
     command = [
         "torchrun",
         "--standalone",
@@ -161,7 +182,7 @@ def hybrid_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_
         "--data-root",
         "/data",
         "--stop-unix",
-        str(time.time() + max_seconds),
+        str(session["stop_unix"]),
         "--stop-file",
         STOP_FILE,
     ]
@@ -172,7 +193,7 @@ def hybrid_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_
     hybrid_runs.commit()
     watching = watch(provenance["workflow_run_id"], 60, (hybrid_data.reload, hybrid_runs.commit))
     try:
-        with (output / "torchrun.log").open("w") as log:
+        with (output / "torchrun.log").open("a") as log:
             code = subprocess.run(
                 command, cwd="/project", stdout=log, stderr=subprocess.STDOUT, check=False
             ).returncode
@@ -182,7 +203,7 @@ def hybrid_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_
     if code:
         tail = (output / "torchrun.log").read_text()[-3000:]
         raise RuntimeError(f"Training failed; inspect {output}/torchrun.log: {tail}")
-    return json.loads((output / "report.json").read_text())
+    return json.loads((output / "report.json").read_text()) | {"restarts": session["restarts"]}
 
 
 @app.function(
@@ -276,7 +297,9 @@ def continue_training(
                     final_checkpoint=report["final_checkpoint"],
                 )
                 return report
-            if previous:
+            # A restarted session's first evaluation is at its own checkpoint, not at
+            # the previous session's end; the trainer checked that resume itself.
+            if previous and not report.get("restarts"):
                 check_resume(previous, report, tolerance)
             previous_tokens = previous["tokens"] if previous else 0
             if initial_resume and previous is None:
@@ -666,6 +689,10 @@ def launch_hybrid(run_id, bundle, provenance, resume="", init_from=""):
     _, _, settings = resolve_payload(bundle)
     bounded_timeout(provenance["deadline_unix"], 3600)
     track_call(provenance["workflow_run_id"], modal.current_function_call_id(), "launch_hybrid")
+    from workflows.sessions import continued_checkpoint
+
+    # An interrupted or stopped session has checkpoints past the last reported one.
+    resume = continued_checkpoint("/hybrid-runs", resume)
     validate_paths(run_id + "-s00", None, resume)
     recipe = json.loads(Path(settings["recipe"]).read_text())
     if not (Path("/hybrid-data") / recipe["name"]).is_dir():
