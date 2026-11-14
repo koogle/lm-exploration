@@ -378,18 +378,29 @@ written by `scripts/export_teacher_dataset.py`.
 `configs/teacher-train-argon.json` labelled further prepared images, none of them seen by
 Carbon, with Gemini 4 Argon (the second-best labeller in the pilot): 20,841 images for
 $103.14. `slots-teachers-14k-coco-rank64` adds the first 14.7k of them to the data of
-`slots-teacher-coco-rank64` (76,204 training images after the label filter), same
-settings, 3.1 hours on one H100. Scored as above, threshold 0.0133 on the tuning split:
+`slots-teacher-coco-rank64` (76,204 training images after the label filter), and
+`slots-teachers-coco-rank64` all of them (81,967); same settings, 3.1 and 3.7 hours on
+one H100. Scored as above, each at the threshold chosen on the tuning split:
 
 | Run | F1, IoU 0.5 | F1, IoU 0.75 | Precision | Recall | Area, pooled | Per-category mean, IoU 0.5 / 0.75 / 0.5 to 0.95 | Recall at precision 0.682 |
 |---|---|---|---|---|---|---|---|
 | `slots-teacher-coco-rank64` | **0.694** | **0.562** | **0.757** | 0.640 | **0.645** | **0.666 / 0.514 / 0.486** | 0.684 |
 | `slots-teachers-14k-coco-rank64` | 0.693 | 0.559 | 0.755 | 0.640 | 0.642 | 0.661 / 0.501 / 0.479 | 0.684 |
+| `slots-teachers-coco-rank64` | 0.684 | **0.574** | **0.788** | 0.604 | 0.637 | 0.652 / 0.512 / 0.475 | 0.671 |
 
-The extra 14.7k teacher-labelled images do not move the curve: every measure is within a
-point, and recall by size is unchanged (0.31 / 0.68 / 0.89). The first 18k
-teacher-labelled images added 1.7 points of F1 (0.657 to 0.673, before re-scoring); these
-add nothing, so more teacher-labelled images of this kind are not what limits recall.
+The first 14.7k Argon-labelled images do not move the curve: every measure is within a
+point, and recall by size is unchanged (0.31 / 0.68 / 0.89). With all 20.8k the head
+becomes more conservative: its tuned threshold rises from 0.0133 to 0.0152, precision
+rises by 3 points and F1 at IoU 0.75 is the highest of any head (0.574), but recall falls
+by 3.6 points, mostly on small objects (0.31 to 0.25), and the curve's area falls.
+Argon labels fewer objects than Carbon (6.1 against 8.2 per image; recall 0.679 against
+0.738 in the pilot), so its images teach the head to call more small objects "nothing".
+The first 18k teacher-labelled images added 1.7 points of F1 (0.657 to 0.673, before
+re-scoring); a less complete labeller adds nothing or less.
+
+The Argon-labelled images are in the private Hugging Face dataset
+[`jfrick/coco80-teacher-labels-gemini-4-argon`](https://huggingface.co/datasets/jfrick/coco80-teacher-labels-gemini-4-argon),
+none of them in the Carbon dataset.
 
 ### Where the time goes
 

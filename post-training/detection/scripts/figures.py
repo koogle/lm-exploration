@@ -48,6 +48,7 @@ COLOURS = {
     "rank128": RED,
     # Same data plus Gemini 4 Argon labels: the same colour, dash-dot or cross-hatched.
     "argon14k": RED,
+    "argon": RED,
 }
 # Runs whose training labels drop objects under 0.2% of the image.
 TRAINING = [
@@ -352,6 +353,7 @@ PR_SERIES = [
     ),
     ("slots-teacher-coco-rank128-coco-v2", "rank128", "Same data, rank 128"),
     ("slots-teachers-14k-coco-rank64-coco-v2", "argon14k", "+ 14.7k Argon-labelled"),
+    ("slots-teachers-coco-rank64-coco-v2", "argon", "+ 20.8k Argon-labelled"),
     ("slots-teacher-coco-rank64-coco", "before", "Same head before re-scoring (objectness only)"),
 ]
 
@@ -375,7 +377,12 @@ def pr_figure(artifacts, out):
                 precision,
                 color=colour,
                 linewidth=2,
-                linestyle={"before": "--", "rank128": ":", "argon14k": "-."}.get(key, "-"),
+                linestyle={
+                    "before": "--",
+                    "rank128": ":",
+                    "argon14k": "-.",
+                    "argon": (0, (6, 1.5, 1, 1.5, 1, 1.5)),
+                }.get(key, "-"),
                 label=f"{label}, area {ap:.3f}",
             )
             if key != "before":
@@ -433,6 +440,12 @@ ALL_RESCORED = [
     ("slots-teacher-coco-rank64-self-coco-v2", RED, "--", "Same, self-training"),
     ("slots-teacher-coco-rank128-coco-v2", RED, ":", "Same data, rank 128"),
     ("slots-teachers-14k-coco-rank64-coco-v2", RED, "-.", "+ 14.7k Argon-labelled, rank 64"),
+    (
+        "slots-teachers-coco-rank64-coco-v2",
+        RED,
+        (0, (6, 1.5, 1, 1.5, 1, 1.5)),
+        "+ 20.8k Argon-labelled, rank 64",
+    ),
 ]
 ALL_OBJECTNESS = [
     ("slots-small-16-coco-sweep-l40s", VIOLET, "-", "Rank 16, 46k COCO"),
@@ -546,6 +559,12 @@ AREA_SERIES = [
         "slots-teacher-coco-rank64",
         "+ 14.7k Argon-labelled",
         "xx",
+    ),
+    (
+        "slots-teachers-coco-rank64-coco-v2",
+        "slots-teacher-coco-rank64",
+        "+ 20.8k Argon-labelled",
+        "--",
     ),
 ]
 
