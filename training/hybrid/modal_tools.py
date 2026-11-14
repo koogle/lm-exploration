@@ -6,12 +6,14 @@ Run from training/:
     modal run -m model_hybrid.modal_tools::heldout --export <run>/export/<name>
     modal run -m model_hybrid.modal_tools::export --run-id <run folder>
     modal run -m model_hybrid.modal_tools::publish --checkpoint <run>/step-NNNNNNNNN.pt \\
-        --repo <owner/name> [--public] [--card <README.md>]
+        --repo <owner/name> [--public] [--card <README.md>] [--full]
 
 Each benchmark is one call with a 30-minute timeout and no retries. `publish` uploads
 one checkpoint from the runs volume as bf16 weights, config, progress and the run's
 logs (private unless --public), with an optional model card; one CPU call, one hour,
-no retries.
+no retries. With `--full` it uploads the training checkpoint file itself (weights,
+optimizer, data and RNG state) and checks the uploaded SHA-256; one CPU call, two
+hours, no retries.
 """
 
 import json
@@ -107,6 +109,48 @@ def export_checkpoint(checkpoint, repo, private, card, deadline):
 
         HfApi().upload_file(path_or_fileobj=card.encode(), path_in_repo="README.md", repo_id=repo)
     return {"repo": repo, "private": private, **progress}
+
+
+@app.function(
+    image=image,
+    cpu=4,
+    memory=8192,
+    timeout=7200,
+    retries=0,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes=VOLUMES,
+)
+def upload_training_checkpoint(checkpoint, repo, private, card, deadline):
+    """One training checkpoint file from our runs volume to HF, byte for byte, with its
+    SHA-256 checked against the uploaded copy."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import hashlib
+
+    from huggingface_hub import HfApi
+
+    path = Path("/runs") / checkpoint
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 24), b""):
+            digest.update(block)
+    api = HfApi()
+    api.create_repo(repo, private=private, exist_ok=True)
+    api.upload_file(
+        path_or_fileobj=str(path),
+        path_in_repo=path.name,
+        repo_id=repo,
+        commit_message=f"Training checkpoint {checkpoint}",
+    )
+    if card:
+        api.upload_file(path_or_fileobj=card.encode(), path_in_repo="README.md", repo_id=repo)
+    files = api.model_info(repo, files_metadata=True).siblings
+    remote = next(f.lfs.sha256 for f in files if f.rfilename == path.name)
+    if remote != digest.hexdigest():
+        raise RuntimeError(
+            f"Uploaded {path.name} has SHA-256 {remote}, expected {digest.hexdigest()}"
+        )
+    return {"repo": repo, "private": private, "file": path.name, "sha256": remote}
 
 
 def load_config(path):
@@ -222,12 +266,12 @@ def export(run_id: str):
 
 
 @app.local_entrypoint()
-def publish(checkpoint: str, repo: str, public: bool = False, card: str = ""):
-    """Upload one checkpoint (RUN/step-NNNNNNNNN.pt on the runs volume) to an HF model repo."""
+def publish(checkpoint: str, repo: str, public: bool = False, card: str = "", full: bool = False):
+    """Upload one checkpoint (RUN/step-NNNNNNNNN.pt on the runs volume) to an HF model repo:
+    bf16 inference weights, or with `--full` the training checkpoint file itself."""
     from workflows.deadline import MAX_LAUNCH_SECONDS
 
     text = Path(card).read_text() if card else ""
-    result = export_checkpoint.remote(
-        checkpoint, repo, not public, text, time.time() + MAX_LAUNCH_SECONDS
-    )
+    upload = upload_training_checkpoint if full else export_checkpoint
+    result = upload.remote(checkpoint, repo, not public, text, time.time() + MAX_LAUNCH_SECONDS)
     print(json.dumps(result, indent=2))
