@@ -728,6 +728,7 @@ SELECTION_SERIES = [
     ("COCO 23k, human", "slots-coco23k-human-rank64"),
     ("COCO 23k, Carbon", "slots-coco23k-carbon-rank64"),
     ("COCO 23k, human + Carbon", "slots-coco23k-merged-rank64"),
+    ("+ tile crops in training", "slots-tilecrops-teacher-coco-rank64"),
 ]
 SELECTION_MODES = (("fast", None), ("tiled", 4))
 
