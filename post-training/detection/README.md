@@ -693,6 +693,19 @@ smooths them and reports a track for a frame after it is missed (coasting);
 The tracker cuts flicker by a third with F1 unchanged; with tiles the same holds (F1
 0.498 to 0.497, lost 0.18 to 0.12 on MOT17-02).
 
+Two newer rank-64 heads on the same frames, each at its own COCO-tuned threshold
+(`slots-*-rank64-mot-selection.json`):
+
+| Head | Fast: P / R / F1 | Tiled: P / R / F1 | Tiled + tracker: F1, lost 02 / 09 |
+|---|---|---|---|
+| `slots-teacher-coco-rank128` (above) | 0.650 / 0.340 / 0.447 | 0.561 / 0.448 / 0.498 | 0.497, 0.12 / 0.09 |
+| `slots-tilecrops-teacher-coco-rank64` | 0.657 / 0.345 / 0.452 | 0.570 / 0.453 / **0.505** | **0.506**, 0.11 / 0.09 |
+| `slots-human-coco-rank64` | **0.752** / 0.289 / 0.417 | **0.737** / 0.342 / 0.467 | 0.474, **0.09 / 0.07** |
+
+Tile crops in training give the best video head so far, at rank 64, within noise of
+rank 128. Human Open Images and Objects365 labels make a more precise, steadier but
+less complete person detector.
+
 `scripts/figures.py` draws example sheets for COCO, VOC and MOT17 (`examples*.png`) and
 the area under the precision-recall curve and per-category AP of every studied head,
 fast and tiled (`selection-areas.png`); the paper's appendix shows them.
