@@ -373,6 +373,24 @@ written by `scripts/export_teacher_dataset.py`.
 
 `slots-teacher-23k` was preempted at step 7,000 and resumed from its checkpoint.
 
+### More teacher-labelled images: Gemini 4 Argon
+
+`configs/teacher-train-argon.json` labelled further prepared images, none of them seen by
+Carbon, with Gemini 4 Argon (the second-best labeller in the pilot): 20,841 images for
+$103.14. `slots-teachers-14k-coco-rank64` adds the first 14.7k of them to the data of
+`slots-teacher-coco-rank64` (76,204 training images after the label filter), same
+settings, 3.1 hours on one H100. Scored as above, threshold 0.0133 on the tuning split:
+
+| Run | F1, IoU 0.5 | F1, IoU 0.75 | Precision | Recall | Area, pooled | Per-category mean, IoU 0.5 / 0.75 / 0.5 to 0.95 | Recall at precision 0.682 |
+|---|---|---|---|---|---|---|---|
+| `slots-teacher-coco-rank64` | **0.694** | **0.562** | **0.757** | 0.640 | **0.645** | **0.666 / 0.514 / 0.486** | 0.684 |
+| `slots-teachers-14k-coco-rank64` | 0.693 | 0.559 | 0.755 | 0.640 | 0.642 | 0.661 / 0.501 / 0.479 | 0.684 |
+
+The extra 14.7k teacher-labelled images do not move the curve: every measure is within a
+point, and recall by size is unchanged (0.31 / 0.68 / 0.89). The first 18k
+teacher-labelled images added 1.7 points of F1 (0.657 to 0.673, before re-scoring); these
+add nothing, so more teacher-labelled images of this kind are not what limits recall.
+
 ### Where the time goes
 
 `slots-bins-16` on the same 500 images:
