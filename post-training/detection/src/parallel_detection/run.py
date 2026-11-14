@@ -17,7 +17,13 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from parallel_detection.metrics import summarize
-from parallel_detection.tasks import coco_samples, lvis_samples, refcoco_m_samples
+from parallel_detection.tasks import (
+    coco_samples,
+    lvis_samples,
+    refcoco_m_samples,
+    voc_annotation,
+    voc_samples,
+)
 
 
 def hub_files(dataset):
@@ -80,10 +86,36 @@ def build_samples(config, image_folder, files=hub_files):
             rows = parquet_rows(paths, ["image_id", "samples"])
             built = refcoco_m_samples(rows, dataset["images"], config["seed"])
             extract_images(paths, built, image_folder)
+        elif dataset["kind"] == "voc":
+            built = voc_tar_samples(paths[0], dataset, config["seed"], image_folder)
         else:
             raise ValueError(f"Unknown dataset kind {dataset['kind']!r}")
         samples += [sample | {"dataset": dataset["name"]} for sample in built]
     return samples
+
+
+def voc_tar_samples(path, dataset, seed, image_folder):
+    """Samples from a Pascal VOC tar: annotations of the images listed in
+    `dataset["image_set"]` (a path inside the tar), and their JPEGs written to the
+    image folder."""
+    import tarfile
+
+    with tarfile.open(path) as tar:
+        members = {m.name: m for m in tar.getmembers() if m.isfile()}
+        listed = tar.extractfile(members[dataset["image_set"]]).read().decode().split()
+        root = dataset["image_set"].split("/ImageSets/")[0]
+        annotations = [
+            voc_annotation(tar.extractfile(members[f"{root}/Annotations/{name}.xml"]).read())
+            for name in listed
+        ]
+        built = voc_samples(annotations, dataset["images"], seed)
+        for sample in built:
+            target = Path(image_folder) / sample["image"]
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                jpeg = members[f"{root}/JPEGImages/{sample['image_id']}.jpg"]
+                target.write_bytes(tar.extractfile(jpeg).read())
+    return built
 
 
 def fetch_image(reference, folder):

@@ -142,3 +142,24 @@ def test_coco_tuning_split_does_not_overlap_the_evaluation_split():
     assert len(evaluation) == len(tuning) == 10 and not evaluation & tuning
     # The evaluation split itself is unchanged by the option's existence.
     assert evaluation == {s["image_id"] for s in coco_samples(rows, 10, 3)}
+
+
+def test_voc_annotation_and_samples():
+    from parallel_detection.tasks import voc_annotation, voc_samples
+
+    xml = b"""<annotation><filename>000001.jpg</filename>
+    <size><width>100</width><height>80</height><depth>3</depth></size>
+    <object><name>tvmonitor</name><difficult>0</difficult>
+      <bndbox><xmin>1</xmin><ymin>11</ymin><xmax>50</xmax><ymax>60</ymax></bndbox></object>
+    <object><name>person</name><difficult>1</difficult>
+      <bndbox><xmin>5</xmin><ymin>5</ymin><xmax>9</xmax><ymax>9</ymax></bndbox></object>
+    </annotation>"""
+    row = voc_annotation(xml)
+    assert row["image_id"] == "000001" and (row["width"], row["height"]) == (100, 80)
+    assert row["objects"][0] == {"name": "tv", "box": [0.0, 10.0, 50.0, 60.0], "difficult": False}
+    (sample,) = voc_samples([row], images=5, seed=0)
+    assert sample["image"] == "voc2007/000001.jpg"
+    assert [(q["phrase"], q["group"]) for q in sample["queries"]] == [
+        ("person", "difficult"),
+        ("tv", ""),
+    ]

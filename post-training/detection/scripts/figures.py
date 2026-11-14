@@ -459,16 +459,23 @@ ALL_OBJECTNESS = [
 ]
 
 
-def baseline_points(axis, artifacts):
+BASELINES = {
+    "coco_val2017": ("moondream2-001", "moondream31-001"),
+    "voc2007_test": ("moondream2-photon-voc", "moondream31-voc"),
+}
+
+
+def baseline_points(axis, artifacts, dataset="coco_val2017"):
+    moondream2, moondream31 = BASELINES[dataset]
     for run, key, label in (
-        ("moondream2-001", "moondream2", "Moondream 2 detect"),
-        ("moondream31-001", "moondream31", "Moondream 3.1"),
+        (moondream2, "moondream2", "Moondream 2 detect"),
+        (moondream31, "moondream31", "Moondream 3.1"),
     ):
         path = artifacts / run / "predictions.jsonl"
         if not path.exists():
             continue
-        records = [r for r in read_records(path) if r["dataset"] == "coco_val2017"]
-        point = summarize(records)["coco_val2017"]["detection"]["iou_0.5"]
+        records = [r for r in read_records(path) if r["dataset"] == dataset]
+        point = summarize(records)[dataset]["detection"]["iou_0.5"]
         axis.scatter(
             [point["recall"]],
             [point["precision"]],
@@ -480,6 +487,65 @@ def baseline_points(axis, artifacts):
             zorder=4,
             label=f"{label} (one point)",
         )
+
+
+# Pascal VOC 2007 test: slot heads at the threshold tuned on COCO (none is tuned on VOC).
+# (evaluation run, colour, line style, label, COCO-tuned threshold)
+VOC_SERIES = [
+    ("slots-rank64-voc", MAGENTA, "-", "Slots, rank 64, 46k COCO", 0.0133),
+    ("slots-teacher-coco-rank64-voc", RED, "-", "Slots, + 18k Gemini-labelled", 0.0133),
+    ("slots-teacher-coco-rank128-voc", RED, ":", "Same data, rank 128", 0.0133),
+    (
+        "slots-teachers-coco-rank64-voc",
+        RED,
+        (0, (6, 1.5, 1, 1.5, 1, 1.5)),
+        "+ 20.8k Argon-labelled, rank 64",
+        0.0152,
+    ),
+]
+
+
+def voc_figure(artifacts, out):
+    """Precision against recall at IoU 0.5 on Pascal VOC 2007 test, a dataset no model
+    here was trained or tuned on."""
+    figure, axis = plt.subplots(figsize=(9, 6), facecolor=SURFACE)
+    style(axis, "Pascal VOC 2007 test, 1,000 images: precision against recall at IoU 0.5")
+    axis.grid(axis="x", color=GRID, linewidth=0.8)
+    for run, colour, line, label, threshold in VOC_SERIES:
+        path = artifacts / run / "predictions.jsonl"
+        if not path.exists():
+            continue
+        records = list(read_records(path))
+        precision, recall, _ = ranked_curve(records)
+        ap = ranked_ap(records)["pooled_ap"]
+        axis.plot(
+            recall,
+            precision,
+            color=colour,
+            linewidth=2,
+            linestyle=line,
+            label=f"{label}, area {ap:.3f}",
+        )
+        point = summarize(above(records, threshold))["voc2007_test"]["detection"]["iou_0.5"]
+        axis.scatter([point["recall"]], [point["precision"]], s=50, color=colour, zorder=3)
+    baseline_points(axis, artifacts, "voc2007_test")
+    axis.set_xlabel("Recall", fontsize=9, color=MUTED)
+    axis.set_ylabel("Precision", fontsize=9, color=MUTED)
+    axis.set_xlim(0.6, 1.0)
+    axis.set_ylim(0.5, 1.0)
+    axis.legend(frameon=False, fontsize=9, labelcolor=INK, loc="lower left")
+    axis.annotate(
+        "Dots: each head at the threshold chosen on COCO.",
+        (0.99, 0.99),
+        xycoords="axes fraction",
+        ha="right",
+        va="top",
+        fontsize=8,
+        color=MUTED,
+    )
+    figure.tight_layout()
+    figure.savefig(out / "voc-precision-recall.png", dpi=200, facecolor=SURFACE)
+    plt.close(figure)
 
 
 def all_pr_figure(artifacts, out):
@@ -689,6 +755,7 @@ def main():
     recall_figure(args.artifacts, args.out)
     pr_figure(args.artifacts, args.out)
     all_pr_figure(args.artifacts, args.out)
+    voc_figure(args.artifacts, args.out)
     area_figure(args.artifacts, args.out)
     examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))
     examples_figure(args.artifacts, args.out, "examples-2.png", objects=(4, 9), skip=4)

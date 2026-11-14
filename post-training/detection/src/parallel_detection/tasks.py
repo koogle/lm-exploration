@@ -14,6 +14,7 @@ category is annotated, so unmatched predictions for that query are not errors.
 
 import random
 from collections import defaultdict
+from pathlib import Path
 
 # COCO's 80 detection categories, in the class-index order of detection-datasets/coco.
 COCO_NAMES = [
@@ -189,6 +190,95 @@ def coco_samples(rows, images, seed, names=COCO_NAMES, exclude_images=0):
                         "group": "",
                     }
                     for category, boxes in sorted(by_category.items())
+                ],
+            }
+        )
+    return samples
+
+
+# Pascal VOC's 20 categories under their COCO names, so every model is prompted the same
+# way on both datasets.
+VOC_TO_COCO = {
+    "aeroplane": "airplane",
+    "bicycle": "bicycle",
+    "bird": "bird",
+    "boat": "boat",
+    "bottle": "bottle",
+    "bus": "bus",
+    "car": "car",
+    "cat": "cat",
+    "chair": "chair",
+    "cow": "cow",
+    "diningtable": "dining table",
+    "dog": "dog",
+    "horse": "horse",
+    "motorbike": "motorcycle",
+    "person": "person",
+    "pottedplant": "potted plant",
+    "sheep": "sheep",
+    "sofa": "couch",
+    "train": "train",
+    "tvmonitor": "tv",
+}
+
+
+def voc_annotation(xml):
+    """One Pascal VOC annotation file as {image_id, width, height, objects}.
+
+    Boxes become [x0, y0, x1, y1] with VOC's 1-based pixel corners moved to 0-based;
+    objects keep VOC's `difficult` flag.
+    """
+    from xml.etree import ElementTree
+
+    root = ElementTree.fromstring(xml)
+    size = root.find("size")
+    objects = []
+    for obj in root.iter("object"):
+        box = obj.find("bndbox")
+        corners = [float(box.find(k).text) for k in ("xmin", "ymin", "xmax", "ymax")]
+        objects.append(
+            {
+                "name": VOC_TO_COCO[obj.find("name").text.strip()],
+                "box": [corners[0] - 1, corners[1] - 1, corners[2], corners[3]],
+                "difficult": obj.findtext("difficult", "0").strip() == "1",
+            }
+        )
+    return {
+        "image_id": Path(root.findtext("filename")).stem,
+        "width": int(size.findtext("width")),
+        "height": int(size.findtext("height")),
+        "objects": objects,
+    }
+
+
+def voc_samples(annotations, images, seed):
+    """Prompt each sampled VOC image with the categories annotated in it.
+
+    VOC labels every instance of its 20 categories, so queries are exhaustive. Objects
+    VOC marks `difficult` count as truth here like any other; the "group" of a query
+    says whether it holds one.
+    """
+    rows = sorted((a for a in annotations if a["objects"]), key=lambda a: a["image_id"])
+    samples = []
+    for row in random.Random(seed).sample(rows, min(images, len(rows))):
+        by_category = defaultdict(list)
+        for obj in row["objects"]:
+            by_category[obj["name"]].append(obj)
+        samples.append(
+            {
+                "image_id": row["image_id"],
+                "image": f"voc2007/{row['image_id']}.jpg",
+                "width": row["width"],
+                "height": row["height"],
+                "queries": [
+                    {
+                        "phrase": name,
+                        "kind": "present",
+                        "boxes": [o["box"] for o in objs],
+                        "exhaustive": True,
+                        "group": "difficult" if any(o["difficult"] for o in objs) else "",
+                    }
+                    for name, objs in sorted(by_category.items())
                 ],
             }
         )
