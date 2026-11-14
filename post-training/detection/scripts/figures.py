@@ -799,6 +799,39 @@ def selection_area_figure(artifacts, out):
     plt.close(figure)
 
 
+# The paper's architecture figure shows one VOC image going in and the slot head's
+# detections coming out, each in the colour of its slot (the colours are repeated in
+# paper/main.tex). (evaluation run, image id)
+ARCHITECTURE_EXAMPLE = ("slots-teacher-coco-rank128-voc-final", "000666")
+SLOT_COLOURS = (BLUE, ORANGE, AQUA, VIOLET)
+
+
+def architecture_images(artifacts, out):
+    """`architecture-input.jpg` and `architecture-output.jpg`: the example image, and the
+    same image with the head's boxes, coloured slot by slot in descending score."""
+    from PIL import ImageDraw
+
+    run, image_id = ARCHITECTURE_EXAMPLE
+    records = by_image(artifacts / run / "predictions.jsonl", "voc2007_test")[image_id]
+    image = example_image("voc2007_test", image_id, out / "images")
+    found = sorted(
+        (
+            (score, r["phrase"], box)
+            for r in records
+            for box, score in zip(r["predicted"], r["scores"], strict=True)
+        ),
+        reverse=True,
+    )
+    image.save(out / "architecture-input.jpg", quality=92)
+    drawn = image.copy()
+    pen = ImageDraw.Draw(drawn)
+    width = max(3, round(max(image.size) / 120))
+    for (_, label, box), colour in zip(found, SLOT_COLOURS, strict=False):
+        pen.rectangle(box, outline=colour, width=width)
+    drawn.save(out / "architecture-output.jpg", quality=92)
+    return [label for _, label, _ in found]
+
+
 def by_image(path, dataset):
     grouped = defaultdict(list)
     for record in rows(path):
@@ -877,6 +910,7 @@ def main():
     all_pr_figure(args.artifacts, args.out)
     voc_figure(args.artifacts, args.out)
     selection_area_figure(args.artifacts, args.out)
+    architecture_images(args.artifacts, args.out)
     area_figure(args.artifacts, args.out)
     examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))
     examples_figure(args.artifacts, args.out, "examples-2.png", objects=(4, 9), skip=4)
