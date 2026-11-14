@@ -800,6 +800,70 @@ def selection_area_figure(artifacts, out):
     plt.close(figure)
 
 
+# Moondream's single operating point per dataset (F1 at IoU 0.5), for reference lines.
+MOONDREAM_F1 = {
+    "coco": (
+        ("Moondream 2", "moondream2-001", "coco_val2017"),
+        ("Moondream 3.1", "moondream31-001", "coco_val2017"),
+    ),
+    "voc": (
+        ("Moondream 2", "moondream2-photon-voc", "voc2007_test"),
+        ("Moondream 3.1", "moondream31-voc", "voc2007_test"),
+    ),
+}
+
+
+def selection_f1_figure(artifacts, out):
+    """F1 at IoU 0.5 of every slot head under the current selection, fast and tiled, on
+    COCO and VOC, each at the threshold tuned on COCO, against Moondream's."""
+    rows = selection_rows(artifacts)
+    figure, axes = plt.subplots(2, 1, figsize=(14, 8.5), facecolor=SURFACE)
+    places = np.arange(len(rows))
+    for axis, (test, name, title) in zip(
+        axes,
+        ((0, "coco", "COCO val2017, 500 images"), (1, "voc", "Pascal VOC 2007 test, 1,000 images")),
+        strict=True,
+    ):
+        style(axis, f"{title}: F1 at IoU 0.5 at the threshold tuned on COCO")
+        for offset, (mode, _) in zip((-0.2, 0.2), SELECTION_MODES, strict=True):
+            values = [modes[mode][test]["iou_0.5"]["f1"] for _, modes in rows]
+            tiled = mode == "tiled"
+            bars = axis.bar(
+                places + offset,
+                values,
+                0.38,
+                color=SURFACE if tiled else RED,
+                edgecolor=RED,
+                hatch="//" if tiled else None,
+                linewidth=1.3,
+                label=mode,
+            )
+            axis.bar_label(bars, labels=[f"{v:.3f}" for v in values], fontsize=7, padding=2)
+        for (label, run, dataset), colour in zip(MOONDREAM_F1[name], (BLUE, YELLOW), strict=True):
+            path = artifacts / run / "predictions.jsonl"
+            if not path.exists():
+                continue
+            records = [r for r in read_records(path) if r["dataset"] == dataset]
+            f1 = summarize(records)[dataset]["detection"]["iou_0.5"]["f1"]
+            axis.axhline(
+                f1, color=colour, linewidth=1.6, linestyle="--", label=f"{label}: {f1:.3f}"
+            )
+        values = [m[mode][test]["iou_0.5"]["f1"] for _, m in rows for mode, _ in SELECTION_MODES]
+        axis.set_ylim(min(values) - 0.03, max(values) + 0.025)
+        axis.set_xticks(places, [label for label, _ in rows], fontsize=8, color=MUTED)
+        axis.legend(
+            frameon=False,
+            fontsize=8,
+            labelcolor=INK,
+            loc="lower right",
+            bbox_to_anchor=(1, 1.0),
+            ncols=4,
+        )
+    figure.tight_layout()
+    figure.savefig(out / "selection-f1.png", dpi=180, facecolor=SURFACE)
+    plt.close(figure)
+
+
 # The paper's architecture figure shows one VOC image going in and the slot head's
 # detections coming out, each in the colour of its slot (the colours are repeated in
 # paper/main.tex). (evaluation run, image id)
@@ -911,6 +975,7 @@ def main():
     all_pr_figure(args.artifacts, args.out)
     voc_figure(args.artifacts, args.out)
     selection_area_figure(args.artifacts, args.out)
+    selection_f1_figure(args.artifacts, args.out)
     architecture_images(args.artifacts, args.out)
     area_figure(args.artifacts, args.out)
     examples_figure(args.artifacts, args.out, "examples.png", objects=(4, 9))
