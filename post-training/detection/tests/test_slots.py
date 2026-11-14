@@ -16,7 +16,7 @@ from parallel_detection.slots import (
     set_loss,
     total,
 )
-from parallel_detection.train_slots import decode_names, keep_slots, kept_objects, teacher_items
+from parallel_detection.train_slots import decode_names, kept_objects, teacher_items
 
 DIM, VOCABULARY = 64, 50
 
@@ -208,14 +208,3 @@ def test_ignored_slots_get_no_empty_gradient():
     )
     expected.backward()
     assert torch.allclose(gradient, head.objectness.weight.grad, atol=1e-6)
-
-
-def test_keep_slots_ranks_and_drops_same_label_duplicates():
-    boxes = [[0, 0, 10, 10], [0, 0, 10, 9], [0, 0, 10, 10], [50, 50, 60, 60], [0, 0, 1, 1]]
-    names = ["cup", "cup", "dog", "cup", None]
-    scores = [0.5, 0.9, 0.8, 0.2, 0.99]
-    kept = keep_slots(scores, names, boxes, threshold=0.3, duplicate_iou=0.7)
-    # Slot 0 overlaps the higher-scoring cup at slot 1; the dog keeps its own box; slot 3
-    # is below the threshold and slot 4 has no category.
-    assert dict(kept) == {"cup": [1], "dog": [2]}
-    assert dict(keep_slots(scores, names, boxes, 0.3, None)) == {"cup": [1, 0], "dog": [2]}

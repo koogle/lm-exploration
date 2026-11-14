@@ -7,7 +7,8 @@ Two stages, both writing under one run folder:
   (`teacher_items`), and saves the 729 image embeddings per image (raw BF16 bits) with the
   image's kept objects.
 - `train` loads those shards, trains the slot head and writes `metrics.jsonl`,
-  `heldout.jsonl`, `head.pt` and `report.json`.
+  `heldout.jsonl`, `head.pt`, `report.json` and a head snapshot every `snapshot_every`
+  steps (default 5,000) under `snapshots/`.
 
 Labels are filtered to the ones worth learning from: objects covering at least
 `min_area` of the image, in images with at most `max_objects` of them. The task is to
@@ -24,7 +25,6 @@ import math
 import random
 import sys
 import time
-from collections import defaultdict
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,6 +32,7 @@ from types import SimpleNamespace
 import numpy as np
 import torch
 
+from parallel_detection.merge import select
 from parallel_detection.slots import (
     COORDINATES,
     PREFIX,
@@ -283,6 +284,23 @@ def heldout_scores(head, inner, functions, data, indices, batch_size, device, th
     return out
 
 
+def save_head(path, head, config, data, heldout_row):
+    """Save the head with the objectness threshold that maximised held-out F1 in
+    `heldout_row`; returns that threshold."""
+    threshold = float(max(heldout_row["f1_iou_0.5"], key=heldout_row["f1_iou_0.5"].get))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "head": head.state_dict(),
+            "config": config,
+            "vocabulary": data.vocabulary,
+            "threshold": threshold,
+        },
+        path,
+    )
+    return threshold
+
+
 def train(config, features, out, device="cuda", saved=lambda: None, deadline=None):
     """Train the slot head; `features` lists encoded shard stems. Returns the report."""
     out = Path(out)
@@ -369,6 +387,11 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
                     json.dumps({"step": step, "seconds": time.time() - started} | row) + "\n"
                 )
                 scores.flush()
+                if step and step % config.get("snapshot_every", 5000) == 0:
+                    # Intermediate heads stay for later study; state.pt is only for resuming.
+                    save_head(
+                        out / "snapshots" / f"head-step{step:05d}.pt", head, config, data, row
+                    )
                 saved()
             if step == steps:
                 break
@@ -412,16 +435,7 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
                 metrics.write(json.dumps(row) + "\n")
                 metrics.flush()
     final = json.loads((out / "heldout.jsonl").read_text().splitlines()[-1])
-    threshold = max(final["f1_iou_0.5"], key=final["f1_iou_0.5"].get)
-    torch.save(
-        {
-            "head": head.state_dict(),
-            "config": config,
-            "vocabulary": data.vocabulary,
-            "threshold": float(threshold),
-        },
-        out / "head.pt",
-    )
+    threshold = save_head(out / "head.pt", head, config, data, final)
     report = {
         "config": config,
         "stop_reason": stop_reason,
@@ -441,33 +455,16 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
 
 # How a slot is ranked, from its objectness and the sampler's label and box confidence.
 SLOT_SCORES = {
-    "objectness": lambda objectness, label, box: objectness,
-    "objectness_label_box": lambda objectness, label, box: objectness * label * box,
+    "objectness": lambda objectness, label, box, power: objectness,
+    "objectness_label_box": lambda objectness, label, box, power: objectness * label * box**power,
 }
-
-
-def keep_slots(scores, names, boxes, threshold, duplicate_iou):
-    """Slot indices to report for each label: scoring at least `threshold`, in descending
-    score, without boxes overlapping a kept box of the same label by `duplicate_iou`."""
-    from parallel_detection.boxes import iou_matrix
-
-    kept = defaultdict(list)
-    for k in sorted(range(len(scores)), key=lambda k: -scores[k]):
-        if scores[k] < threshold or names[k] is None:
-            continue
-        same = kept[names[k]]
-        overlap = iou_matrix([boxes[k]], [boxes[j] for j in same]).max() if same else 0.0
-        if duplicate_iou is not None and overlap >= duplicate_iou:
-            continue
-        same.append(k)
-    return kept
 
 
 class SlotDetector:
     """The trained slot head behind the evaluation harness's detector interface.
 
-    One pass yields every detection; a phrase gets the slots above the objectness
-    threshold whose decoded label equals it. All time is reported as shared.
+    One pass over the full image, plus one per tile when tiling, yields every candidate;
+    `merge.select` chooses each phrase's boxes. All time is reported as shared.
     """
 
     def __init__(
@@ -481,6 +478,12 @@ class SlotDetector:
         score="objectness_label_box",
         duplicate_iou=0.7,
         backbone=None,
+        box_power=1.0,
+        merge="nms",
+        aliases=None,
+        tiles=1,
+        tile_overlap=0.25,
+        tile_max_cells=None,
     ):
         """`score` ranks a slot by "objectness" alone or by "objectness_label_box", the
         product of objectness and the sampler's confidence in its label and box; a slot is
@@ -490,7 +493,13 @@ class SlotDetector:
         (None keeps them). `max_crops` overrides how many high-resolution crops the
         vision encoder reads; `all_slots` also returns every slot's box, objectness,
         label and confidences. `backbone` is the (model, inner, functions) of
-        `load_backbone` to share with other detectors."""
+        `load_backbone` to share with other detectors.
+
+        `box_power` raises the box confidence to that power in the combined score.
+        `merge` ("nms" or "fuse"), `aliases` (phrase -> head labels it covers) and
+        `tile_max_cells` are passed to `merge.select`. `tiles` > 1 also runs the head on
+        a `tiles` x `tiles` grid of crops overlapping by `tile_overlap` of a tile, for
+        objects too small for the full image's grid."""
         if score not in SLOT_SCORES:
             raise ValueError(f"Unknown slot score {score!r}")
         if threshold is None and score != "objectness":
@@ -512,20 +521,31 @@ class SlotDetector:
         self.threshold = state["threshold"] if threshold is None else threshold
         self.device, self.steps = torch.device(device), steps
         self.all_slots, self.score, self.duplicate_iou = all_slots, score, duplicate_iou
+        self.box_power, self.merge, self.aliases = box_power, merge, aliases
+        self.tiles, self.tile_overlap, self.tile_max_cells = tiles, tile_overlap, tile_max_cells
 
     def _clock(self):
         if self.device.type == "cuda":
             torch.cuda.synchronize(self.device)
         return time.perf_counter()
 
-    @torch.inference_mode()
-    def detect(self, image, phrases):
-        width, height = image.size
-        start = self._clock()
+    def views(self, width, height):
+        """(name, [x0, y0, x1, y1]) of the full image and of each tile."""
+        out = [("full", [0.0, 0.0, float(width), float(height)])]
+        if self.tiles > 1:
+            n, overlap = self.tiles, self.tile_overlap
+            tile_w = width / (1 + (n - 1) * (1 - overlap))
+            tile_h = height / (1 + (n - 1) * (1 - overlap))
+            for row in range(n):
+                for col in range(n):
+                    x0, y0 = col * tile_w * (1 - overlap), row * tile_h * (1 - overlap)
+                    out.append(("tile", [x0, y0, x0 + tile_w, y0 + tile_h]))
+        return out
+
+    def _slots(self, image):
+        """Every slot of one view: corners in [0, 1] of that view, label, confidences."""
         embedding = self.inner._run_vision_encoder(image)
-        encoded = self._clock()
         cache = image_cache(self.inner, self.functions, embedding[None])
-        prefilled = self._clock()
         objectness, boxes, tokens, confidence = sample(
             self.head,
             self.inner.text,
@@ -537,37 +557,62 @@ class SlotDetector:
         objectness = objectness[0].sigmoid()
         box_confidence = confidence[0, :, :COORDINATES].min(-1).values
         label_confidence = confidence[0, :, COORDINATES:].prod(-1)
-        rank = SLOT_SCORES[self.score](objectness, label_confidence, box_confidence).tolist()
+        score = SLOT_SCORES[self.score](
+            objectness, label_confidence, box_confidence, self.box_power
+        ).tolist()
         names = decode_names(tokens[0], self.vocabulary)
         corners = to_corners(boxes[0]).clamp(0, 1).tolist()
-        kept = keep_slots(rank, names, corners, self.threshold, self.duplicate_iou)
-        shared = self._clock() - start
-        scale = [width, height, width, height]
-        found = [
-            [[c * s for c, s in zip(corners[k], scale, strict=True)] for k in kept[phrase]]
-            for phrase in phrases
+        return [
+            {
+                "corners": corners[k],
+                "label": names[k],
+                "score": score[k],
+                "objectness": objectness[k].item(),
+                "box_confidence": box_confidence[k].item(),
+                "label_confidence": label_confidence[k].item(),
+            }
+            for k in range(len(names))
         ]
-        scores = [[rank[k] for k in kept[phrase]] for phrase in phrases]
-        slots = {}
-        if self.all_slots:
-            slots["slots"] = [
-                {
-                    "box": [c * s for c, s in zip(corners[k], scale, strict=True)],
-                    "objectness": objectness[k].item(),
-                    "label": names[k],
-                    "box_confidence": box_confidence[k].item(),
-                    "label_confidence": label_confidence[k].item(),
-                }
-                for k in range(len(names))
-            ]
+
+    @torch.inference_mode()
+    def detect(self, image, phrases):
+        width, height = image.size
+        start = self._clock()
+        candidates, seconds = [], {}
+        for view, (x0, y0, x1, y1) in self.views(width, height):
+            began = self._clock()
+            crop = image if view == "full" else image.crop((x0, y0, x1, y1))
+            edges = (x0 > 0, y0 > 0, x1 < width, y1 < height)  # inner edges of this view
+            for slot in self._slots(crop):
+                c = slot.pop("corners")
+                near = (c[0] < 0.01, c[1] < 0.01, c[2] > 0.99, c[3] > 0.99)
+                slot["box"] = [
+                    x0 + c[0] * (x1 - x0),
+                    y0 + c[1] * (y1 - y0),
+                    x0 + c[2] * (x1 - x0),
+                    y0 + c[3] * (y1 - y0),
+                ]
+                slot["view"] = view
+                slot["cut"] = any(e and n for e, n in zip(edges, near, strict=True))
+                candidates.append(slot)
+            seconds[view] = seconds.get(view, 0.0) + self._clock() - began
+        found, scores = select(
+            candidates,
+            phrases,
+            width,
+            height,
+            self.threshold,
+            self.duplicate_iou,
+            self.merge,
+            self.aliases,
+            self.tile_max_cells,
+        )
+        shared = self._clock() - start
+        slots = {"slots": candidates} if self.all_slots else {}
         return slots | {
             "boxes": found,
             "scores": scores,
             "shared_seconds": shared,
             "phrase_seconds": [0.0] * len(phrases),
-            "components": {
-                "vision_encoder": encoded - start,
-                "image_prefix": prefilled - encoded,
-                "slots": shared - (prefilled - start),
-            },
+            "components": {f"{view}_views": t for view, t in seconds.items()},
         }
