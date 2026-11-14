@@ -1,0 +1,27 @@
+{
+  "name": "study-128m-mix-v2",
+  "family": "hybrid",
+  "description": "Code-mixture quality check, 200M tokens: recipe v2 shards at context 2048, KDA 128M.",
+  "stages": [
+    {
+      "stage": "data",
+      "name": "corpus",
+      "recipe": "hybrid/recipes/kda-mix-study-v2.json",
+      "parallel": 8
+    },
+    {
+      "stage": "pretrain",
+      "name": "pretrain",
+      "data": "corpus",
+      "model_config": "hybrid/configs/study-128m-mix-v2.json",
+      "gpu": "H100",
+      "world_size": 1,
+      "segment_seconds": 7200,
+      "worker_timeout_seconds": 8100,
+      "max_segments": 3,
+      "segments_per_call": 3,
+      "qualification_segments": 1,
+      "qualification_steps": 8
+    }
+  ]
+}
