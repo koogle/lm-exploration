@@ -245,7 +245,7 @@ def web():
             "start on the first request (about a minute) and stop after five idle minutes.\n\n"
             "Slot-head boxes show their score: objectness × label confidence × "
             "(box confidence)^0.25, a ranking score rather than a probability; boxes are "
-            "kept from about 0.3. \"Fast\" heads read the full image once; \"tiled\" also "
+            'kept from about 0.3. "Fast" heads read the full image once; "tiled" also '
             "reads a 2 × 2 grid of tiles for small objects, at about 2.5 times the time. Moondream "
             "gives no confidence, so its boxes show only the label. Videos stream in "
             "two-second chunks as they are processed."
