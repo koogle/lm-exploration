@@ -402,6 +402,82 @@ The Argon-labelled images are in the private Hugging Face dataset
 [`jfrick/coco80-teacher-labels-gemini-4-argon`](https://huggingface.co/datasets/jfrick/coco80-teacher-labels-gemini-4-argon),
 none of them in the Carbon dataset.
 
+#### Why the Argon labels did not help
+
+`scripts/diagnose_slots.py --compare` follows every COCO object of the 500 test images
+through both heads, each at its own tuned threshold and score
+(`slots-teachers-coco-rank64-coco-v2/diagnosis.json` in the archive):
+
+| Fate of a COCO object | COCO + Carbon head | + all 20.8k Argon images |
+|---|---|---|
+| Found | 2,319 | 2,189 |
+| Boxed and labelled correctly, scored below the threshold | 390 | 503 |
+| Only loose boxes (IoU 0.1 to 0.5) | 516 | 532 |
+| No box near it | 274 | 278 |
+| Wrong label | 92 | 95 |
+
+- Localisation is unchanged. The loss is in scoring: 146 objects go from found to
+  "below threshold" and 41 the other way, 56 of the 146 small.
+- Two-thirds of it is the threshold. The tuning split picks 0.0152 for the Argon head
+  instead of 0.0133; at 0.0133 it scores F1 0.687 with recall 0.628, against 0.694 and
+  0.640. Its curve is also slightly lower (recall 0.671 against 0.684 at precision
+  0.682).
+- For objects both heads box correctly, the confidences match (median objectness 0.95,
+  0.98 and 0.99 for small, medium and large objects in both). The combined score is
+  dominated by the box confidence, a median of 0.02 to 0.08, which is why thresholds
+  sit near 0.013.
+- The labels differ where recall was lost. `scripts/label_stats.py` counts objects per
+  image by box area: on comparable images Argon labels 30 to 47% fewer objects under
+  0.3% of the image, and nearly as many large ones:
+
+| Labeller, source | Images | Objects per image | Under 0.3% of the image | 0.3 to 1% | 1% and over |
+|---|---|---|---|---|---|
+| Carbon, Open Images | 13,800 | 6.64 | 1.38 | 1.57 | 3.69 |
+| Argon, Open Images | 16,199 | 5.65 | 0.95 | 1.23 | 3.47 |
+| Carbon, Objects365 | 7,387 | 11.22 | 2.33 | 3.06 | 5.83 |
+| Argon, Objects365 | 4,642 | 7.73 | 1.23 | 1.62 | 4.87 |
+
+  On the 200 pilot images both labelled, Argon's recall of COCO's small objects is 0.34
+  against Carbon's 0.43. Unlabelled small objects become "nothing here" targets, which
+  lowers the head's confidence on real ones.
+
+### Pascal VOC 2007 test
+
+A dataset none of these models was trained or tuned on: 1,000 seeded images of the
+4,952 in VOC 2007 test (`davin11/VOC2007`, `configs/voc-*.json`), 1,548 phrases and
+2,978 boxes, the 20 VOC categories prompted by their COCO names (`tasks.VOC_TO_COCO`).
+Objects VOC marks difficult count as truth. Slot heads use the threshold tuned on COCO.
+IoU 0.5, one L40S per model:
+
+| Model | Precision | Recall | F1 | F1, IoU 0.75 | Recall small / medium / large | Area, pooled | Seconds per image |
+|---|---|---|---|---|---|---|---|
+| Moondream 2 `detect`, Photon | 0.787 | **0.927** | 0.851 | 0.703 | 0.72 / **0.90** / **0.98** | | 0.088 |
+| Moondream 3.1, Photon | **0.806** | 0.915 | **0.857** | **0.727** | **0.74** / 0.88 / 0.97 | | 0.095 |
+| `slots-rank64` | 0.781 | 0.892 | 0.833 | 0.714 | 0.59 / 0.85 / 0.97 | 0.878 | **0.051** |
+| `slots-teacher-coco-rank64` | 0.745 | 0.905 | 0.817 | 0.696 | 0.69 / 0.86 / 0.97 | 0.874 | 0.064 |
+| `slots-teacher-coco-rank128` | 0.769 | 0.906 | 0.832 | 0.710 | 0.64 / 0.88 / 0.97 | **0.884** | 0.063 |
+| `slots-teachers-coco-rank64` | 0.765 | 0.897 | 0.826 | 0.714 | 0.60 / 0.87 / 0.97 | 0.869 | 0.066 |
+
+- On VOC the slot heads trail both Moondream models by 2.4 to 4.0 points of F1; paired
+  bootstrap intervals over images exclude zero for every head. With a threshold tuned on
+  VOC itself (an oracle), the best head reaches 0.851. At Moondream 3.1's precision the
+  best head recalls 0.895 against 0.915.
+- The Gemini-labelled images, which helped on COCO, do not help here: the COCO-only head
+  is as good as any. The gain on COCO may partly be COCO-specific.
+- The gap is small objects (275 of the 2,978 boxes) and precision. Of the extra false
+  positives, near-duplicates are the clearest: 51 for the rank-128 head against 6 for
+  Moondream 3.1, because same-label duplicates are removed only above IoU 0.7. Removing
+  them above IoU 0.5 instead raises F1 on the COCO tuning split (0.672 to 0.676), on
+  COCO test (0.694 to 0.699; rank 128: 0.700 to 0.705) and on VOC (0.817 to 0.825;
+  rank 128: 0.832 to 0.838). The detector's default is still 0.7.
+- 14 of 42 wrong labels are VOC cars the head calls trucks: VOC's car includes vans and
+  pickups, which COCO labels truck.
+- VOC images hold 1.5 categories on average, so Moondream's per-category cost is small
+  here and the slot heads are only 1.4 to 1.9 times faster; the speed advantage grows
+  with the number of categories asked for (see Demo).
+- Moondream 2 scores far better on VOC than on COCO (F1 0.851 against 0.587): VOC
+  objects are larger and fewer per image.
+
 ### Where the time goes
 
 `slots-bins-16` on the same 500 images:
@@ -549,7 +625,7 @@ training from its last held-out evaluation.
 - Prompted detection (a slot points at a phrase in the prompt), verified-absent
   categories in training, and labels with several valid wordings as the real test of
   one-pass diffusion.
-- RefCOCO-M and LVIS for the slot head; it is evaluated on COCO only.
+- RefCOCO-M and LVIS for the slot head; it is evaluated on COCO and Pascal VOC only.
 - Kernels: an FP32 PyTorch reference check and timing on the GPU Photon was measured on.
 - Objects365 as training data: `jxu124/objects365` holds annotations only, so its images
   need a prepared subset.
