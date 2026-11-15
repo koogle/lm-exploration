@@ -385,9 +385,19 @@ def recipe_data(config, data_root):
     root = Path(data_root) / recipe["name"]
     replay = recipe.get("replay")
     if replay:
-        replay_recipe = json.loads(
-            (Path(config.recipe).parent / f"{replay['recipe']}.json").read_text()
+        # Beside the recipe, else among the family's pretraining recipes (a chat recipe
+        # in training_data/recipes replaying a pretraining recipe in model_hybrid/recipes).
+        replay_file = next(
+            (
+                path
+                for folder in (Path(config.recipe).parent, Path(__file__).parent / "recipes")
+                if (path := folder / f"{replay['recipe']}.json").is_file()
+            ),
+            None,
         )
+        if replay_file is None:
+            raise FileNotFoundError(f"No replay recipe {replay['recipe']}.json")
+        replay_recipe = json.loads(replay_file.read_text())
         replay_recipe["context"] = recipe["context"]
         replay_root = Path(data_root) / replay_recipe["name"]
         replay_rows = round(config.global_rows * replay["fraction"])
