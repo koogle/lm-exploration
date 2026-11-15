@@ -786,10 +786,12 @@ with their score, objectness × label confidence × box confidence: a ranking sc
 a probability (kept from 0.013; half of the kept boxes on COCO val score under 0.04).
 Moondream gives no confidence, so its boxes carry only the label. The models and thresholds are in
 `configs/demo.json`: Moondream 2's `detect`, four slot heads (the last, trained with tile
-crops and run with 2 x 2 tiles, is the video default) and Moondream 3.1 through Photon. A Camera tab streams the browser's webcam: each frame, downscaled to 640 pixels, goes
-to the GPU container one at a time and comes back boxed, optionally tracked. With the
-rank-128 fast head a frame took 0.095 s on the GPU and 0.12 s round trip (about 8 frames
-a second, measured with a browser's simulated camera). Deploying with `.venv/bin/python demo_app.py` also spawns `shutdown_at`, which
+crops and run with 2 x 2 tiles, is the video default) and Moondream 3.1 through Photon. A Camera tab (`demo_camera.html`) plays the browser's webcam and draws the latest
+boxes over it. The page sends one frame at a time, downscaled to 640 pixels, and the
+next only once the answer is back; tracking runs per stream on the web container. With
+the default rank-64 fast head and a warm GPU, a frame took 0.095 s on the GPU and 0.124 s
+through the web server, measured with a browser's simulated camera; the browser's own
+network adds to that (0.19 s from the test machine). Deploying with `.venv/bin/python demo_app.py` also spawns `shutdown_at`, which
 stops the app just under 24 hours later; the URL is public until then.
 
 Measured through the page on one warm L40S per model family:

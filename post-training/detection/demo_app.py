@@ -8,8 +8,10 @@ Models and example images are listed in `configs/demo.json`. One L40S container 
 Moondream 2 once and shares it between its own `detect` skill and the slot heads;
 Moondream 3.1 runs in a second L40S container through Photon. Both scale to zero after
 five idle minutes, and each call is limited to 30 minutes. The web page runs on a small
-CPU container; its Camera tab sends webcam frames, downscaled to `CAMERA_SIDE`, one at a
-time to `frame` and draws the boxes it returns, for up to `CAMERA_SECONDS` per stream. `shutdown_at` stops the whole app at the deadline set when it is deployed,
+CPU container. Its Camera tab embeds `demo_camera.html`, which plays the browser's
+webcam and draws boxes over it: the page sends one frame at a time, downscaled to
+`CAMERA_SIDE`, to `/camera/frame` and the next only after the answer, for up to
+`CAMERA_SECONDS` per stream; tracking runs on the web container per stream. `shutdown_at` stops the whole app at the deadline set when it is deployed,
 so the demo stops on its own within 24 hours.
 """
 
@@ -29,6 +31,8 @@ LIFETIME_SECONDS = 24 * 60 * 60 - 900
 CALL_SECONDS = 30 * 60
 CAMERA_SIDE = 640
 CAMERA_SECONDS = 10 * 60
+CAMERA_SESSIONS = 64
+CAMERA_PAGE = HERE / "demo_camera.html"
 
 app = modal.App(APP)
 volume = modal.Volume.from_name("lm-exploration-parallel-detection")
@@ -80,7 +84,7 @@ web_image = with_source(
         "numpy==2.2.6",
         "scipy==1.15.3",
     )
-)
+).add_local_file(CAMERA_PAGE, "/root/demo_camera.html")
 
 
 def found_in(result, phrases):
@@ -221,8 +225,12 @@ MOONDREAM_31 = "Moondream 3.1 (Photon)"
 @modal.concurrent(max_inputs=8)
 @modal.asgi_app()
 def web():
+    from collections import OrderedDict
+
     import gradio as gr
-    from fastapi import FastAPI
+    from fastapi import FastAPI, HTTPException, Request
+    from fastapi.concurrency import run_in_threadpool
+    from fastapi.responses import HTMLResponse
 
     from parallel_detection.demo import draw, phrases_of
 
@@ -272,38 +280,62 @@ def web():
             target.write_bytes(chunk)
             yield str(target), "```json\n" + json.dumps(stats, indent=2) + "\n```"
 
-    def camera(image, text, name, track, state):
-        """Detect on one webcam frame; `state` keeps the tracker of this stream's model."""
-        if image is None:
-            return None, "", state
+    api = FastAPI()
+    sessions = OrderedDict()  # camera session id -> {"model", "tracker", "started"}
+
+    @api.get("/camera")
+    def camera_page():
+        return HTMLResponse(CAMERA_PAGE.read_text())
+
+    @api.get("/camera/config")
+    def camera_config():
+        default = "Slots, rank 64, fast"
+        return {"models": names, "default": default, "side": CAMERA_SIDE, "seconds": CAMERA_SECONDS}
+
+    @api.post("/camera/frame")
+    async def camera_frame(request: Request):
+        """Detections on one webcam frame (JPEG body), in the frame's pixels; with
+        `track`, through this session's tracker."""
+        from parallel_detection.demo import colour
         from parallel_detection.tracking import Tracker
 
-        image = image.convert("RGB")
-        image.thumbnail((CAMERA_SIDE, CAMERA_SIDE))
-        buffer = io.BytesIO()
-        image.save(buffer, format="JPEG", quality=85)
-        phrases = phrases_of(text)
-        start = time.perf_counter()
+        query = request.query_params
+        name, session = query.get("model", ""), query.get("session", "")
+        if name not in names or not session:
+            raise HTTPException(400, "Unknown model or missing session.")
+        state = sessions.get(session)
+        if state is None:
+            state = sessions[session] = {"model": name, "tracker": None, "started": time.time()}
+            while len(sessions) > CAMERA_SESSIONS:
+                sessions.popitem(last=False)
+        if time.time() - state["started"] > CAMERA_SECONDS:
+            raise HTTPException(410, "This camera stream reached its time limit; start it again.")
+        data = await request.body()
+        began = time.perf_counter()
+        phrases = phrases_of(query.get("categories", ""))
+        # The blocking client call in a worker thread measured faster than `.remote.aio`.
         if name == MOONDREAM_31:
-            result = Photon().frame.remote(buffer.getvalue(), phrases)
+            result = await run_in_threadpool(Photon().frame.remote, data, phrases)
         else:
-            result = Detectors().frame.remote(buffer.getvalue(), name, phrases)
-        round_trip = time.perf_counter() - start
+            result = await run_in_threadpool(Detectors().frame.remote, data, name, phrases)
         found = result["found"]
-        if track:
-            if state is None or state[0] != name:
-                state = (name, Tracker(smoothing=0.5, coast=1))
-            tracks = state[1].update(
+        if query.get("track") == "1":
+            if state["tracker"] is None or state["model"] != name:
+                state["model"], state["tracker"] = name, Tracker(smoothing=0.5, coast=1)
+            tracks = state["tracker"].update(
                 [b for _, b, _ in found], [s for *_, s in found], [n for n, *_ in found]
             )
             found = [(f"{t['label']} #{t['id']}", t["box"], t["score"]) for t in tracks]
         else:
-            state = None
-        caption = (
-            f"{name}: {len(found)} boxes, detector {result['seconds']:.3f} s, "
-            f"round trip {round_trip:.3f} s"
-        )
-        return draw(image, found), caption, state
+            state["tracker"] = None
+        return {
+            "boxes": [
+                {"label": label, "box": box, "score": score, "colour": colour(label.split(" #")[0])}
+                for label, box, score in found
+            ],
+            "seconds": result["seconds"],
+            "server_seconds": time.perf_counter() - began,
+        }
 
     with gr.Blocks(title="Detection demo") as page:
         gr.Markdown(
@@ -347,30 +379,12 @@ def web():
             stats = gr.Markdown()
             vrun.click(video, [clip, vtext, model, every, limit, track], [annotated, stats])
         with gr.Tab("Camera"):
-            gr.Markdown(
-                "Click the camera box, allow the camera and press Record: each frame is sent to the GPU, detected and "
-                "drawn here, one frame at a time, so the frame rate is set by the round trip. "
-                f"A stream stops after {CAMERA_SECONDS // 60} minutes; start it again to go on."
-            )
-            with gr.Row():
-                webcam = gr.Image(sources=["webcam"], streaming=True, type="pil", label="Camera")
-                live = gr.Image(label="Detections")
-            with gr.Row():
-                ctext = gr.Textbox(label="Categories", value="")
-                cmodel = gr.Dropdown(names, value="Slots, rank 128, fast", label="Model")
-                ctrack = gr.Checkbox(value=True, label="Track across frames")
-            cstats = gr.Markdown()
-            tracked = gr.State(None)
-            webcam.stream(
-                camera,
-                [webcam, ctext, cmodel, ctrack, tracked],
-                [live, cstats, tracked],
-                stream_every=0.1,
-                time_limit=CAMERA_SECONDS,
-                concurrency_limit=4,
+            gr.HTML(
+                '<iframe src="camera" allow="camera" title="Live camera detection" '
+                'style="width:100%;height:900px;border:0"></iframe>'
             )
 
-    return gr.mount_gradio_app(FastAPI(), page, path="/")
+    return gr.mount_gradio_app(api, page, path="/")
 
 
 @app.function(image=web_image, cpu=0.125, memory=256, timeout=24 * 60 * 60, retries=0)

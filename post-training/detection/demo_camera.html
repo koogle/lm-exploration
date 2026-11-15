@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live camera detection</title>
+<style>
+  :root { --ink: #1f1f1e; --muted: #6b6a63; --line: #e4e3dd; --accent: #2a78d6; --surface: #fcfcfb; }
+  body { margin: 0; font: 14px/1.4 system-ui, sans-serif; color: var(--ink); background: var(--surface); }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 10px; }
+  label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+  label.inline { flex-direction: row; align-items: center; color: var(--ink); font-size: 14px; }
+  input[type=text], select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; min-width: 220px; }
+  button { font: inherit; padding: 7px 18px; border: 0; border-radius: 6px; background: var(--accent); color: white; cursor: pointer; }
+  button.stop { background: #e34948; }
+  .stage { position: relative; display: inline-block; background: #000; border-radius: 6px; overflow: hidden; line-height: 0; }
+  video { display: block; max-width: 100%; max-height: 72vh; width: auto; height: auto; min-width: 320px; min-height: 240px; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #status { margin-top: 8px; color: var(--muted); min-height: 1.4em; }
+</style>
+</head>
+<body>
+<div class="controls">
+  <label>Categories (comma-separated COCO names; empty means all 80)
+    <input id="categories" type="text" value="">
+  </label>
+  <label>Model <select id="model"></select></label>
+  <label class="inline"><input id="track" type="checkbox" checked>&nbsp;Track across frames</label>
+  <button id="toggle">Start camera</button>
+</div>
+<div class="stage"><video id="video" muted playsinline autoplay></video><canvas id="overlay"></canvas></div>
+<div id="status">The camera plays live; boxes from the last detected frame are drawn over it.</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const video = $("video"), overlay = $("overlay"), status = $("status"), toggle = $("toggle");
+const grab = document.createElement("canvas");
+let config = null, running = false, stream = null, boxes = [], scale = 1, session = null;
+
+fetch("camera/config").then((r) => r.json()).then((c) => {
+  config = c;
+  for (const name of c.models) $("model").add(new Option(name, name, false, name === c.default));
+});
+
+function draw() {
+  const w = video.videoWidth, h = video.videoHeight;
+  if (w && (overlay.width !== w || overlay.height !== h)) { overlay.width = w; overlay.height = h; }
+  const pen = overlay.getContext("2d");
+  pen.clearRect(0, 0, overlay.width, overlay.height);
+  // Sizes in video pixels, chosen so they read the same at any displayed size.
+  const shown = overlay.getBoundingClientRect().width || w;
+  const unit = w / shown;
+  const line = Math.max(1, Math.round(2 * unit));
+  pen.font = `${Math.round(12 * unit)}px system-ui, sans-serif`;
+  pen.textBaseline = "top";
+  for (const b of boxes) {
+    const [x0, y0, x1, y1] = b.box.map((v) => v * scale);
+    pen.strokeStyle = b.colour; pen.lineWidth = line;
+    pen.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    const text = b.score === null ? b.label : `${b.label} ${b.score.toFixed(2)}`;
+    const width = pen.measureText(text).width, height = Math.round(15 * unit);
+    pen.fillStyle = b.colour; pen.fillRect(x0, y0, width + 6 * unit, height);
+    pen.fillStyle = "white"; pen.fillText(text, x0 + 3 * unit, y0 + 1.5 * unit);
+  }
+  if (running) requestAnimationFrame(draw);
+}
+
+async function detectLoop() {
+  const started = performance.now();
+  let first = true;
+  while (running) {
+    if (performance.now() - started > config.seconds * 1000) {
+      stop(`Stopped after ${config.seconds / 60} minutes; press Start camera to go on.`);
+      return;
+    }
+    const w = video.videoWidth, h = video.videoHeight;
+    if (!w) { await new Promise((r) => setTimeout(r, 100)); continue; }
+    const s = Math.min(1, config.side / Math.max(w, h));
+    grab.width = Math.round(w * s); grab.height = Math.round(h * s);
+    grab.getContext("2d").drawImage(video, 0, 0, grab.width, grab.height);
+    const blob = await new Promise((r) => grab.toBlob(r, "image/jpeg", 0.85));
+    const query = new URLSearchParams({
+      session, model: $("model").value, categories: $("categories").value,
+      track: $("track").checked ? "1" : "0",
+    });
+    const t0 = performance.now();
+    let response;
+    try {
+      response = await fetch(`camera/frame?${query}`, { method: "POST", body: blob });
+    } catch (error) {
+      status.textContent = `Request failed (${error}); retrying.`;
+      await new Promise((r) => setTimeout(r, 1000));
+      continue;
+    }
+    if (!response.ok) {
+      const detail = await response.text();
+      if (response.status === 410) { stop(detail); return; }
+      status.textContent = `Error ${response.status}: ${detail}; retrying.`;
+      await new Promise((r) => setTimeout(r, 1000));
+      continue;
+    }
+    const result = await response.json();
+    if (!running) return;
+    boxes = result.boxes; scale = w / grab.width;
+    const trip = (performance.now() - t0) / 1000;
+    status.textContent = `${$("model").value}: ${boxes.length} boxes; detector ${result.seconds.toFixed(3)} s, `
+      + `server ${result.server_seconds.toFixed(3)} s, with the network ${trip.toFixed(3)} s`
+      + (first ? " (first frame includes the GPU start)" : "");
+    first = false;
+  }
+}
+
+async function start() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } }, audio: false });
+  } catch (error) {
+    status.textContent = `No camera: ${error.message}`;
+    return;
+  }
+  video.srcObject = stream;
+  await video.play();
+  running = true; boxes = []; session = crypto.randomUUID();
+  toggle.textContent = "Stop"; toggle.classList.add("stop");
+  status.textContent = "Starting the GPU: the first boxes can take about a minute; the camera keeps playing.";
+  requestAnimationFrame(draw);
+  detectLoop();
+}
+
+function stop(message) {
+  running = false; boxes = [];
+  overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  stream = null; video.srcObject = null;
+  toggle.textContent = "Start camera"; toggle.classList.remove("stop");
+  if (message) status.textContent = message;
+}
+
+toggle.addEventListener("click", () => (running ? stop("Stopped.") : start()));
+</script>
+</body>
+</html>
