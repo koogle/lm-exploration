@@ -8,11 +8,13 @@ They are rendered with GLM-4.7-Flash's own chat template (pinned like the
 tokenizer), so the token layout is GLM's: tools in a system turn, calls as
 `<tool_call>name<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>`, results
 as `<|observation|><tool_response>...</tool_response>`. Assistant turns are rendered
-without reasoning (`</think>` right after `<|assistant|>`).
+without reasoning (`</think>` right after `<|assistant|>`), or with `thinking` as
+`<|assistant|><think>reasoning</think>answer` from each turn's `reasoning_content`.
 
 `encode` returns token ids and a loss mask that is 1 on what the model must
-generate: each assistant turn after its `<|assistant|></think>` prompt, plus the
-token that ends the turn (the next role token, or EOS at the end).
+generate: each assistant turn after its prompt (`<|assistant|></think>`, or
+`<|assistant|><think>` with `thinking`, so reasoning, `</think>` and answer are all
+trained), plus the token that ends the turn (the next role token, or EOS at the end).
 `parse_assistant` turns generated text back into an OpenAI assistant message.
 """
 
@@ -27,6 +29,7 @@ from tokenizer import glm
 TEMPLATE = {**glm.SOURCE, "file": "chat_template.jinja"}
 TEMPLATE_SHA256 = "d63ad536c3c81880043e22ec7fd08db42b4d8fb7c89c7138bc562bfa25281375"
 ASSISTANT_PROMPT = "<|assistant|></think>"
+THINKING_PROMPT = "<|assistant|><think>"
 TURN_END = ("<|user|>", "<|observation|>", "<|system|>")
 
 
@@ -83,11 +86,13 @@ def render(messages, tools=None, add_generation_prompt=False, thinking=False):
 RENDERERS = {"glm_chat_thinking": lambda messages: render(messages, thinking=True)}
 
 
-def encode(tokenizer, messages, tools=None):
-    """Token ids and loss mask (lists) of one conversation, ending with EOS."""
+def encode(tokenizer, messages, tools=None, thinking=False):
+    """Token ids and loss mask (lists) of one conversation, ending with EOS; with
+    `thinking`, assistant turns carry their reasoning."""
+    prompt = THINKING_PROMPT if thinking else ASSISTANT_PROMPT
     segments, previous = [], ""
     for index in range(len(messages)):
-        text = render(messages[: index + 1], tools)
+        text = render(messages[: index + 1], tools, thinking=thinking)
         if not text.startswith(previous):
             raise ValueError("the chat template is not prefix-stable for these messages")
         segments.append((messages[index]["role"], text[len(previous) :]))
@@ -108,7 +113,7 @@ def encode(tokenizer, messages, tools=None):
             add(head, True)
             add(text[start + len(head) :], False)
         elif role == "assistant":
-            start = text.index(ASSISTANT_PROMPT) + len(ASSISTANT_PROMPT)
+            start = text.index(prompt) + len(prompt)
             add(text[:start], False)
             add(text[start:], True)
         else:

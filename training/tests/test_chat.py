@@ -245,6 +245,18 @@ class RenderingTests(unittest.TestCase):
         self.assertNotIn("Be brief.", trained)
         self.assertNotIn("<tool_response>", trained)
 
+    def test_thinking_mask_trains_reasoning_and_answer(self):
+        tokenizer = glm.load()
+        messages = [
+            {"role": "user", "content": "Add 2 and 3."},
+            {"role": "assistant", "content": "5", "reasoning_content": "2 + 3 = 5"},
+        ]
+        ids, mask = chat.encode(tokenizer, messages, thinking=True)
+        text = tokenizer.decode(ids, skip_special_tokens=False)
+        trained = tokenizer.decode([i for i, m in zip(ids, mask) if m], skip_special_tokens=False)
+        self.assertIn("<|assistant|><think>2 + 3 = 5</think>5", text)
+        self.assertEqual(trained, "2 + 3 = 5</think>5<|endoftext|>")
+
     def test_generated_tool_calls_parse_back_to_openai(self):
         text = "<tool_call>record<arg_key>id</arg_key><arg_value>a</arg_value><arg_key>minutes</arg_key><arg_value>30</arg_value></tool_call><|observation|>"
         message = chat.parse_assistant(text)
