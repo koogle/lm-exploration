@@ -24,8 +24,10 @@ and scores) go to `lm-exploration-hybrid-runs/benchmarks/<launch>/lcb-<model>.js
 `--protocol thinking` scores reasoning models (`THINKING_REFERENCES`) as their reports
 do: the zero-shot instruction as a chat turn with thinking enabled, `THINKING["samples"]`
 samples per problem at temperature 0.6 and top-p 0.95 with up to
-`THINKING["max_new_tokens"]` new tokens, generated with vLLM. Each sample's answer is the
-text after its reasoning span (`livecodebench.final_answer`; a sample whose reasoning
+`THINKING["max_new_tokens"]` new tokens (fewer when the model's positions run out),
+generated with vLLM. A model whose report uses its own system prompt (MobileLLM-R1.5)
+gets that prompt and the question. Each sample's answer is the last Python block after
+its reasoning span (`livecodebench.final_answer`, `last_block`; a sample whose reasoning
 never closes scores 0), and a problem's score is the mean over its samples. Each model
 runs as `THINKING_SHARDS` calls, one per slice of the problems, each writing
 `lcb-<model>.shard-NN-of-NN.json` and `.completions.jsonl`; once they finish,
@@ -65,10 +67,28 @@ LARGER_QWEN = {
     "Qwen/Qwen3.5-9B-Base": "68c46c4b3498877f3ef123c856ecfde50c39f404",
 }
 ALL_REFERENCES = {**REFERENCES, **LARGER_QWEN}
-# Reasoning models for `--protocol thinking`.
+# MobileLLM-R1.5's documented Python-coding system prompt (its model card).
+MOBILELLM_CODE_SYSTEM = (
+    "\nYou are a helpful and harmless assistant. You should think step-by-step before "
+    "responding to the instruction below.\n\nPlease use python programming language only.\n"
+    "You must use ```python for just the final solution code block with the following "
+    "format:\n```python\n# Your code here\n```\n"
+)
+# Reasoning models for `--protocol thinking`: revision, positions, and the system prompt
+# each model's own report uses (None: the question alone, with thinking enabled).
 THINKING_REFERENCES = {
-    "Qwen/Qwen3-0.6B": "c1899de289a04d12100db370d81485cdf75e47ca",
-    "Qwen/Qwen3-1.7B": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+    "Qwen/Qwen3-0.6B": ("c1899de289a04d12100db370d81485cdf75e47ca", 40960, None),
+    "Qwen/Qwen3-1.7B": ("70d244cc86ccca08cf5af4e1e306ecf908b1ad5e", 40960, None),
+    "facebook/MobileLLM-R1.5-950M": (
+        "d4af70ac985faa1d504b3446d8a7448fedf91194",
+        32768,
+        MOBILELLM_CODE_SYSTEM,
+    ),
+    "facebook/MobileLLM-R1.5-360M": (
+        "b8a298b98305a657651dc2d9f5899fd18b86abd3",
+        32768,
+        MOBILELLM_CODE_SYSTEM,
+    ),
 }
 THINKING = {"samples": 16, "temperature": 0.6, "top_p": 0.95, "max_new_tokens": 32768, "seed": 1234}
 # Calls per model: each H100 call takes every THINKING_SHARDS-th problem.
@@ -230,16 +250,21 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
         raise TimeoutError("Launch deadline passed; refusing work")
     from huggingface_hub import hf_hub_download
     from vllm import LLM, SamplingParams
+    from vllm.model_executor.models.llama4 import Llama4ForCausalLM
+    from vllm.model_executor.models.registry import ModelRegistry
 
     from evaluation.benchmarks import livecodebench
 
+    # MobileLLM-R1.5 is a text-only Llama 4; its card registers the class this way.
+    ModelRegistry.register_model("Llama4ForCausalLM", Llama4ForCausalLM)
+    _, positions, system = THINKING_REFERENCES[model]
     path = hf_hub_download(DATASET, RELEASE_FILE, repo_type="dataset", revision=DATASET_REVISION)
     problems = livecodebench.load(path)[: limit or None][shard::shards]
     started = time.time()
     llm = LLM(
         model=model,
         revision=revision,
-        max_model_len=THINKING["max_new_tokens"] + 4096,
+        max_model_len=min(positions, THINKING["max_new_tokens"] + 4096),
         seed=THINKING["seed"],
         enable_prefix_caching=True,
     )
@@ -251,14 +276,26 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
         seed=THINKING["seed"],
     )
     outputs = llm.chat(
-        [[{"role": "user", "content": livecodebench.instruction(p)}] for p in problems],
+        [
+            [{"role": "user", "content": livecodebench.instruction(p)}]
+            if system is None
+            else [
+                {"role": "system", "content": system},
+                {"role": "user", "content": livecodebench.question(p)},
+            ]
+            for p in problems
+        ],
         params,
         chat_template_kwargs={"enable_thinking": True},
     )
     samples = [list(output.outputs) for output in outputs]
     generation_seconds = round(time.time() - started, 1)
     flat_problems = [p for p, group in zip(problems, samples, strict=True) for _ in group]
-    answers = [livecodebench.final_answer(s.text) or "" for group in samples for s in group]
+    answers = [
+        livecodebench.last_block(livecodebench.final_answer(s.text) or "")
+        for group in samples
+        for s in group
+    ]
     flat_scores = iter(livecodebench.grade_all(flat_problems, answers))
     sample_scores = [[next(flat_scores) for _ in group] for group in samples]
     scores = [sum(group) / len(group) for group in sample_scores]
@@ -365,7 +402,7 @@ def _thinking_launch(checkpoints, references):
     unknown = [m for m in wanted if m not in THINKING_REFERENCES]
     if unknown or not wanted:
         raise ValueError(f"Name --references from {sorted(THINKING_REFERENCES)}: {unknown}")
-    return [(m, THINKING_REFERENCES[m]) for m in wanted]
+    return [(m, THINKING_REFERENCES[m][0]) for m in wanted]
 
 
 @app.local_entrypoint()

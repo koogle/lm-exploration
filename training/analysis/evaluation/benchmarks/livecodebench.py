@@ -145,6 +145,13 @@ def final_answer(completion):
     return None if "<think>" in completion else completion
 
 
+def last_block(answer):
+    """The answer from its last opened code block on, so the final program is graded
+    when a reasoning model shows drafts first."""
+    start = answer.rfind("```python")
+    return answer if start < 0 else answer[start:]
+
+
 def finished(text):
     """True once a completion holds a closed code block (generation can stop)."""
     return bool(CODE_BLOCK.search(text))
