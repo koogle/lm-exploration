@@ -10,7 +10,7 @@ each model's own fill-in-the-middle format (`fim_tasks.py`) for the hybrid expor
 
 One H100 call per model, in parallel: the hybrid export through `benchmarks.py`
 and each reference model through the harness's Hugging Face backend, all with the
-same tasks, shot counts and greedy decoding. Each call has `retries=0`, a 6-hour
+same tasks, shot counts and greedy decoding. Each call has `retries=0`, a 12-hour
 timeout and refuses to start 24 hours after launch. Code tasks execute the
 generated programs inside the call's container. Each call writes its results
 (harness JSON) and every prompt, response and per-sample score (`.samples.jsonl`) to
@@ -101,7 +101,7 @@ def _summary(results):
     gpu="H100",
     cpu=8,
     memory=65536,
-    timeout=6 * 60 * 60,
+    timeout=12 * 60 * 60,
     retries=0,
     secrets=[secret],
     volumes={"/runs": runs_volume},
@@ -214,16 +214,17 @@ def main(
     limit: int = 0,
     models: str = "",
     suite: str = "standard",
-    split: bool = False,
+    split: str = "",
 ):
     """Spawn one evaluation per model; results land on the runs volume as each finishes.
 
     `--exports` (comma-separated) names hybrid exports of the 40B run, or of another run
     as `<run id>/<export>`; `--models` (comma-separated,
     "hybrid" for the exports) limits the launch to those. Calls are spawned, not
-    mapped, so they keep running after this client exits. `--split` runs the code
+    mapped, so they keep running after this client exits. `--split all` runs the code
     suite as one call per part (left-to-right, single-line, multi-line infilling), each
-    writing `<model>.<part>.json`, for a model that needs more than one call's time.
+    writing `<model>.<part>.json`, for a model that needs more than one call's time;
+    `--split multi_line` (comma-separated part names) runs only those parts.
     """
     if suite not in ("standard", "code"):
         raise ValueError("--suite is standard or code")
@@ -238,7 +239,12 @@ def main(
         wanted = set(models.split(","))
         chosen = [c for c in chosen if c[0] in wanted or (c[1] is None and "hybrid" in wanted)]
     run_folder = f"{int(time.time())}-{suite}{'-limit' if limit else ''}"
-    parts = ("left_to_right", "single_line", "multi_line") if split and suite == "code" else ("",)
+    code_parts = ("left_to_right", "single_line", "multi_line")
+    parts = ("",)
+    if split and suite == "code":
+        parts = code_parts if split == "all" else tuple(split.split(","))
+        if not set(parts) <= set(code_parts):
+            raise ValueError(f"--split is all or a comma-separated subset of {code_parts}")
     chosen = [(m, r, f, part) for m, r, f in chosen for part in parts]
     calls = [evaluate.spawn(m, r, deadline, run_folder, limit, f, p) for m, r, f, p in chosen]
     supervisor = enforce_deadline.spawn([c.object_id for c in calls], deadline)
