@@ -359,10 +359,12 @@ def main(
     all_slots: bool = False,
     gpu: str = "L4",
     tiles: int = 0,
+    weight_bits: int = 0,
 ):
     """`--slots-run` evaluates that training run's head with a slots config; `--max-crops`
     limits its vision encoder's crops, `--threshold` sets its score threshold and `--tiles`
-    sets its grid of image tiles (1 for the full image only; default the detector's)."""
+    sets its grid of image tiles (1 for the full image only; default the detector's) and
+    `--weight-bits` rounds its backbone's weights to that many bits per group of 32."""
     settings = json.loads(Path(config).read_text())
     if slots_run:
         settings["model"]["checkpoint"] = f"/runs/slots/{slots_run}/head.pt"
@@ -374,6 +376,8 @@ def main(
         settings["model"]["all_slots"] = True
     if tiles:
         settings["model"]["tiles"] = tiles
+    if weight_bits:
+        settings["model"]["weight_bits"] = weight_bits
     launch(evaluate, run_id, settings, "summary.json", gpu=gpu)
 
 

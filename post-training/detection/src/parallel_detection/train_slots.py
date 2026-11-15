@@ -607,6 +607,8 @@ class SlotDetector:
         tiles=2,
         tile_overlap=0.25,
         tile_max_cells=4,
+        weight_bits=None,
+        weight_group=32,
     ):
         """`score` ranks a slot by "objectness" alone or by "objectness_label_box", the
         product of objectness and the sampler's confidence in its label and box; a slot is
@@ -622,7 +624,9 @@ class SlotDetector:
         `merge` ("nms" or "fuse"), `aliases` (phrase -> head labels it covers) and
         `tile_max_cells` are passed to `merge.select`. `tiles` > 1 also runs the head on
         a `tiles` x `tiles` grid of crops overlapping by `tile_overlap` of a tile, for
-        objects too small for the full image's grid."""
+        objects too small for the full image's grid. `weight_bits` rounds the backbone's
+        Linear weights to that many bits per group of `weight_group`
+        (`quantize.round_weights_`), to measure low-bit weights; it needs its own backbone."""
         if score not in SLOT_SCORES:
             raise ValueError(f"Unknown slot score {score!r}")
         if threshold is None and score != "objectness":
@@ -632,6 +636,13 @@ class SlotDetector:
         self.model, self.inner, self.functions = backbone or load_backbone(
             **config["model"], device=device
         )
+        if weight_bits is not None:
+            if backbone is not None:
+                raise ValueError("weight_bits would change a shared backbone")
+            from parallel_detection.quantize import round_weights_
+
+            layers, weights = round_weights_(self.inner, weight_bits, weight_group)
+            print(f"Rounded {layers} Linear layers ({weights:,} weights) to {weight_bits} bits")
         if max_crops is not None:
             vision = replace(self.inner.config.vision, max_crops=max_crops)
             self.inner.config = replace(self.inner.config, vision=vision)
