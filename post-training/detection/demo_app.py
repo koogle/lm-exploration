@@ -8,7 +8,8 @@ Models and example images are listed in `configs/demo.json`. One L40S container 
 Moondream 2 once and shares it between its own `detect` skill and the slot heads;
 Moondream 3.1 runs in a second L40S container through Photon. Both scale to zero after
 five idle minutes, and each call is limited to 30 minutes. The web page runs on a small
-CPU container. `shutdown_at` stops the whole app at the deadline set when it is deployed,
+CPU container; its Camera tab sends webcam frames, downscaled to `CAMERA_SIDE`, one at a
+time to `frame` and draws the boxes it returns, for up to `CAMERA_SECONDS` per stream. `shutdown_at` stops the whole app at the deadline set when it is deployed,
 so the demo stops on its own within 24 hours.
 """
 
@@ -26,6 +27,8 @@ APP = "lm-exploration-detection-demo"
 CONFIG = json.loads((HERE / "configs" / "demo.json").read_text())
 LIFETIME_SECONDS = 24 * 60 * 60 - 900
 CALL_SECONDS = 30 * 60
+CAMERA_SIDE = 640
+CAMERA_SECONDS = 10 * 60
 
 app = modal.App(APP)
 volume = modal.Volume.from_name("lm-exploration-parallel-detection")
@@ -65,11 +68,18 @@ photon_image = with_source(
         "imageio-ffmpeg==0.8.0",
     )
 )
-# Gradio's streaming video output probes each chunk with ffmpeg and ffprobe.
+# Gradio's streaming video output probes each chunk with ffmpeg and ffprobe; the camera
+# tab tracks boxes on the web container (numpy, scipy).
 web_image = with_source(
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("ffmpeg")
-    .pip_install("gradio==6.31.0", "fastapi==0.162.5", "pillow==11.2.1")
+    .pip_install(
+        "gradio==6.31.0",
+        "fastapi==0.162.5",
+        "pillow==11.2.1",
+        "numpy==2.2.6",
+        "scipy==1.15.3",
+    )
 )
 
 
@@ -133,6 +143,15 @@ class Detectors:
         return out
 
     @modal.method()
+    def frame(self, data, name, phrases):
+        """Detections and seconds on one camera frame, without warm-up."""
+        from PIL import Image
+
+        image = Image.open(io.BytesIO(data)).convert("RGB")
+        found, seconds = self._detect(name, image, phrases)
+        return {"found": found, "seconds": seconds}
+
+    @modal.method()
     def video(self, data, name, phrases, every, max_frames, track=False):
         """Annotated video chunks and statistics, as they are produced."""
         from parallel_detection.demo import stream_video
@@ -173,6 +192,15 @@ class Photon:
 
         image = Image.open(io.BytesIO(data)).convert("RGB")
         self._detect(image, phrases[:1])  # warm up
+        found, seconds = self._detect(image, phrases)
+        return {"found": found, "seconds": seconds}
+
+    @modal.method()
+    def frame(self, data, phrases):
+        """Detections and seconds on one camera frame, without warm-up."""
+        from PIL import Image
+
+        image = Image.open(io.BytesIO(data)).convert("RGB")
         found, seconds = self._detect(image, phrases)
         return {"found": found, "seconds": seconds}
 
@@ -244,6 +272,39 @@ def web():
             target.write_bytes(chunk)
             yield str(target), "```json\n" + json.dumps(stats, indent=2) + "\n```"
 
+    def camera(image, text, name, track, state):
+        """Detect on one webcam frame; `state` keeps the tracker of this stream's model."""
+        if image is None:
+            return None, "", state
+        from parallel_detection.tracking import Tracker
+
+        image = image.convert("RGB")
+        image.thumbnail((CAMERA_SIDE, CAMERA_SIDE))
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=85)
+        phrases = phrases_of(text)
+        start = time.perf_counter()
+        if name == MOONDREAM_31:
+            result = Photon().frame.remote(buffer.getvalue(), phrases)
+        else:
+            result = Detectors().frame.remote(buffer.getvalue(), name, phrases)
+        round_trip = time.perf_counter() - start
+        found = result["found"]
+        if track:
+            if state is None or state[0] != name:
+                state = (name, Tracker(smoothing=0.5, coast=1))
+            tracks = state[1].update(
+                [b for _, b, _ in found], [s for *_, s in found], [n for n, *_ in found]
+            )
+            found = [(f"{t['label']} #{t['id']}", t["box"], t["score"]) for t in tracks]
+        else:
+            state = None
+        caption = (
+            f"{name}: {len(found)} boxes, detector {result['seconds']:.3f} s, "
+            f"round trip {round_trip:.3f} s"
+        )
+        return draw(image, found), caption, state
+
     with gr.Blocks(title="Detection demo") as page:
         gr.Markdown(
             "## Detection demo\nCompare Moondream 2, Moondream 3.1 and our one-pass slot "
@@ -285,6 +346,29 @@ def web():
             annotated = gr.Video(label="Annotated", streaming=True, autoplay=True)
             stats = gr.Markdown()
             vrun.click(video, [clip, vtext, model, every, limit, track], [annotated, stats])
+        with gr.Tab("Camera"):
+            gr.Markdown(
+                "Click the camera box, allow the camera and press Record: each frame is sent to the GPU, detected and "
+                "drawn here, one frame at a time, so the frame rate is set by the round trip. "
+                f"A stream stops after {CAMERA_SECONDS // 60} minutes; start it again to go on."
+            )
+            with gr.Row():
+                webcam = gr.Image(sources=["webcam"], streaming=True, type="pil", label="Camera")
+                live = gr.Image(label="Detections")
+            with gr.Row():
+                ctext = gr.Textbox(label="Categories", value="")
+                cmodel = gr.Dropdown(names, value="Slots, rank 128, fast", label="Model")
+                ctrack = gr.Checkbox(value=True, label="Track across frames")
+            cstats = gr.Markdown()
+            tracked = gr.State(None)
+            webcam.stream(
+                camera,
+                [webcam, ctext, cmodel, ctrack, tracked],
+                [live, cstats, tracked],
+                stream_every=0.1,
+                time_limit=CAMERA_SECONDS,
+                concurrency_limit=4,
+            )
 
     return gr.mount_gradio_app(FastAPI(), page, path="/")
 
