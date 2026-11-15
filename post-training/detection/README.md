@@ -727,6 +727,25 @@ image against 0.208 s. The slot pass is a fifth of that time, so fewer positions
 would save little; the vision encoder is the largest stage, and limiting it to one crop
 costs 1.5 points of F1 with a head trained on full-crop features.
 
+### Low-bit backbone weights
+
+For running on a phone or in a browser, `--weight-bits` rounds every Linear weight of
+the backbone (214 layers, 1.82B weights) to that many bits per block of 32
+(`quantize.round_weights_`: symmetric, round to nearest, one scale per block), the
+arithmetic of block-wise integer formats. `slots-teacher-coco-rank64`, evaluated and
+studied as above (`slots-teacher-coco-rank64-w{4,8}-*`):
+
+| Weights | COCO F1, fast / tiled | COCO P / R, fast | COCO area, fast | Category AP, fast | VOC F1, fast / tiled | VOC area, fast |
+|---|---|---|---|---|---|---|
+| BF16 | 0.705 / 0.714 | 0.779 / 0.644 | 0.657 | 0.481 | 0.840 / 0.841 | 0.890 |
+| 8 bits | 0.705 / 0.716 | 0.781 / 0.642 | 0.657 | 0.480 | 0.841 / 0.841 | 0.890 |
+| 4 bits | 0.660 / 0.682 | 0.735 / 0.598 | 0.597 | 0.431 | 0.851 / 0.826 | 0.875 |
+
+8 bits cost nothing. Rounding to 4 bits costs 4.5 points of COCO F1 and 6 of area
+without tiles; VOC holds. The head was trained on the BF16 backbone; 4-bit numbers are
+the starting point for training the head on the rounded backbone or for better 4-bit
+rounding.
+
 `scripts/figures.py` draws the training curves, accuracy against latency per GPU,
 recall by object size and side-by-side example images from downloaded run outputs; the rendered figures are in
 the archive under `figures/`.

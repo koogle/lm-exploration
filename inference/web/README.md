@@ -53,3 +53,6 @@ Serve the contents of `web/` on a static host, including the generated
 The [GPT-2 checkpoint](models/gpt2/README.md) has a pinned download and checksum. See
 [the inference sketch](docs/browser-inference.md) and
 [references](references/README.md) for the planned implementation.
+
+[Plan: the slot detector on hand-written WebGPU kernels](docs/slot-detector-webgpu.md)
+runs `post-training/detection/`'s detector in a phone's browser.
