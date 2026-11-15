@@ -2,6 +2,11 @@
 
 Run from training/:
     modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-A,tokens-B] [--models M,...]
+        [--suite standard|code]
+
+`--suite code` runs HumanEval, MBPP and HumanEval-Infilling (single- and multi-line) in
+each model's own fill-in-the-middle format (`fim_tasks.py`) for the hybrid exports
+(GLM code tokens) and the code reference models.
 
 One H100 call per model, in parallel: the hybrid export through `benchmarks.py`
 and each reference model through the harness's Hugging Face backend, all with the
@@ -54,6 +59,16 @@ SUITES = (
     (["humaneval"], 0),
     (["mbpp"], 3),
 )
+# Code models for `--suite code`: revision and fill-in-the-middle format.
+CODE_REFERENCES = {
+    "bigcode/gpt_bigcode-santacoder": ("291931872cae83498cf984b16319f47f5e9e7a07", "santacoder"),
+    "deepseek-ai/deepseek-coder-1.3b-base": (
+        "c919139c3a9b4070729c8b2cca4847ab29ca8d94",
+        "deepseek",
+    ),
+    "Qwen/Qwen2.5-Coder-0.5B": ("8123ea2e9354afb7ffcc6c8641d1b2f5ecf18301", "qwen"),
+    "Qwen/Qwen2.5-Coder-1.5B": ("df3ce67c0e24480f20468b6ef2894622d69eb73b", "qwen"),
+}
 REFERENCES = {
     "HuggingFaceTB/SmolLM2-360M": "f8027fd0eaeea54caa13c31d31b9fdc459c38b49",
     "Qwen/Qwen3-0.6B-Base": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
@@ -88,7 +103,8 @@ def _summary(results):
     secrets=[secret],
     volumes={"/runs": runs_volume},
 )
-def evaluate(model, revision, deadline, folder, limit=0):
+def evaluate(model, revision, deadline, folder, limit=0, fim_format=None):
+    """Every suite for one model; with `fim_format`, the code suite in that format."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     import lm_eval
@@ -106,7 +122,13 @@ def evaluate(model, revision, deadline, folder, limit=0):
 
         harness_model = HFLM(pretrained=model, revision=revision, dtype="bfloat16", batch_size=8)
     out = {"model": model, "revision": revision, "limit": limit or None, "suites": []}
-    for tasks, shots in SUITES:
+    suites = SUITES
+    if fim_format:
+        from model_hybrid.fim_tasks import task_configs
+
+        suites = ((["humaneval"], 0), (["mbpp"], 3), (task_configs(fim_format), 0))
+        out["fim_format"] = fim_format
+    for tasks, shots in suites:
         started = time.time()
         results = lm_eval.simple_evaluate(
             model=harness_model,
@@ -121,7 +143,7 @@ def evaluate(model, revision, deadline, folder, limit=0):
         )
         out["suites"].append(
             {
-                "tasks": tasks,
+                "tasks": [t["task"] if isinstance(t, dict) else t for t in tasks],
                 "num_fewshot": shots,
                 "seconds": round(time.time() - started, 1),
                 "summary": _summary(results),
@@ -131,7 +153,7 @@ def evaluate(model, revision, deadline, folder, limit=0):
                 "n-samples": results["n-samples"],
             }
         )
-        print(json.dumps({"model": model, "tasks": tasks, **out["suites"][-1]["summary"]}))
+        print(json.dumps({"model": model, **out["suites"][-1]["summary"]}))
     # Plain JSON (the harness's configs hold its own objects), also on the volume so a
     # detached launch keeps every finished model.
     text = json.dumps(out, indent=2, default=str) + "\n"
@@ -152,7 +174,9 @@ def enforce_deadline(call_ids, deadline):
 
 
 @app.local_entrypoint()
-def main(exports: str = "tokens-039998980096", limit: int = 0, models: str = ""):
+def main(
+    exports: str = "tokens-039998980096", limit: int = 0, models: str = "", suite: str = "standard"
+):
     """Spawn one evaluation per model; results land on the runs volume as each finishes.
 
     `--exports` (comma-separated) names hybrid exports of the 40B run, or of another run
@@ -160,19 +184,26 @@ def main(exports: str = "tokens-039998980096", limit: int = 0, models: str = "")
     "hybrid" for the exports) limits the launch to those. Calls are spawned, not
     mapped, so they keep running after this client exits.
     """
+    if suite not in ("standard", "code"):
+        raise ValueError("--suite is standard or code")
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    chosen = [(f"hybrid:{e}", None) for e in exports.split(",")] + list(REFERENCES.items())
+    hybrid = "glm" if suite == "code" else None
+    chosen = [(f"hybrid:{e}", None, hybrid) for e in exports.split(",")]
+    if suite == "code":
+        chosen += [(m, r, f) for m, (r, f) in CODE_REFERENCES.items()]
+    else:
+        chosen += [(m, r, None) for m, r in REFERENCES.items()]
     if models:
         wanted = set(models.split(","))
-        chosen = [(m, r) for m, r in chosen if m in wanted or (r is None and "hybrid" in wanted)]
-    run_folder = f"{int(time.time())}{'-limit' if limit else ''}"
-    calls = [evaluate.spawn(m, r, deadline, run_folder, limit) for m, r in chosen]
+        chosen = [c for c in chosen if c[0] in wanted or (c[1] is None and "hybrid" in wanted)]
+    run_folder = f"{int(time.time())}-{suite}{'-limit' if limit else ''}"
+    calls = [evaluate.spawn(m, r, deadline, run_folder, limit, f) for m, r, f in chosen]
     supervisor = enforce_deadline.spawn([c.object_id for c in calls], deadline)
     print(
         json.dumps(
             {
                 "results": f"lm-exploration-hybrid-runs/benchmarks/{run_folder}/",
-                "calls": {m: c.object_id for (m, _), c in zip(chosen, calls, strict=True)},
+                "calls": {m: c.object_id for (m, _, _), c in zip(chosen, calls, strict=True)},
                 "supervisor": supervisor.object_id,
                 "deadline_unix": deadline,
             },
