@@ -12,7 +12,9 @@ the pretraining recipe's benchmark screen, hold out a hash-selected fraction, an
 write the subset to the `lm-exploration-hybrid-data` volume under `<recipe name>/`
 (see chat_sft.py). Each call has `retries=0`, a 1-hour timeout and refuses to start
 24 hours after launch; finished subsets are skipped. `summary.json` collects the
-per-subset counts.
+per-subset counts. A recipe without `files`, made only of subsets prepared in other
+recipes' folders, is composed instead: each subset is checked and the recipe's folder
+gets a `summary.json` of counts per pass.
 """
 
 import io
@@ -88,9 +90,37 @@ def prepare(recipe, file, deadline):
     return meta
 
 
+@app.function(image=image, cpu=1, memory=2048, timeout=600, retries=0, volumes={"/data": volume})
+def compose(recipe):
+    """A recipe made only of subsets prepared in other recipes' folders: check that each
+    is there and write the recipe's folder with `summary.json` (counts per pass)."""
+    from training_data import chat_sft
+
+    rows = []
+    for name, prepared_in, repeat in chat_sft.subsets(recipe):
+        path = ROOT / (prepared_in or recipe["name"]) / f"{name}.json"
+        if not path.is_file():
+            raise ValueError(f"Subset {name} is not prepared in {path.parent}")
+        rows.append({**json.loads(path.read_text()), "prepared_in": prepared_in, "repeat": repeat})
+    keys = ("conversations", "tokens", "target_tokens")
+    summary = {
+        "recipe": recipe["name"],
+        "subsets": rows,
+        "per_pass": {key: round(sum(r[key] * r["repeat"] for r in rows)) for key in keys},
+    }
+    folder = ROOT / recipe["name"]
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    volume.commit()
+    return summary["per_pass"]
+
+
 @app.local_entrypoint()
 def main(recipe: str = DEFAULT_RECIPE):
     settings = json.loads(Path(recipe).read_text())
+    if not settings.get("files"):
+        print(json.dumps(compose.remote(settings), indent=2))
+        return
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     metas = list(prepare.starmap([(settings, file, deadline) for file in settings["files"]]))
     keys = ("conversations", "tokens", "target_tokens", "heldout_conversations")
