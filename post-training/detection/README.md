@@ -786,8 +786,8 @@ with their score, objectness × label confidence × box confidence: a ranking sc
 a probability (kept from 0.013; half of the kept boxes on COCO val score under 0.04).
 Moondream gives no confidence, so its boxes carry only the label. The models and thresholds are in
 `configs/demo.json`: Moondream 2's `detect`, four slot heads (the last, trained with tile
-crops and run with 2 x 2 tiles, is the video default) and Moondream 3.1 through Photon. A Camera tab (`demo_camera.html`) plays the browser's webcam and draws the latest
-boxes over it. The page sends one frame at a time, downscaled to 640 pixels, and the
+crops and run with 2 x 2 tiles, is the video default) and Moondream 3.1 through Photon. A Camera tab (`demo_camera.html`) plays the browser's webcam, chosen from a list when
+there are several (switchable while running), and draws the latest boxes over it. The page sends one frame at a time, downscaled to 640 pixels, and the
 next only once the answer is back; tracking runs per stream on the web container. With
 the default rank-64 fast head and a warm GPU, a frame took 0.095 s on the GPU and 0.124 s
 through the web server, measured with a browser's simulated camera; the browser's own

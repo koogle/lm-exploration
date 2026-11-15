@@ -24,6 +24,7 @@
   <label>Categories (comma-separated COCO names; empty means all 80)
     <input id="categories" type="text" value="">
   </label>
+  <label>Camera <select id="camera"><option value="">Default camera</option></select></label>
   <label>Model <select id="model"></select></label>
   <label class="inline"><input id="track" type="checkbox" checked>&nbsp;Track across frames</label>
   <button id="toggle">Start camera</button>
@@ -39,6 +40,45 @@ let config = null, running = false, stream = null, boxes = [], scale = 1, sessio
 fetch("camera/config").then((r) => r.json()).then((c) => {
   config = c;
   for (const name of c.models) $("model").add(new Option(name, name, false, name === c.default));
+});
+
+// Camera names are only shown once the page may use a camera, so the list is filled
+// again after each start and whenever a camera is plugged in or out.
+async function listCameras() {
+  const devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+  const picker = $("camera"), chosen = picker.value || currentCamera();
+  picker.replaceChildren(...devices.map((d, i) =>
+    new Option(d.label || `Camera ${i + 1}`, d.deviceId, false, d.deviceId === chosen)));
+  if (!devices.length) picker.add(new Option("No camera found", ""));
+}
+
+function currentCamera() {
+  const track = stream && stream.getVideoTracks()[0];
+  return track ? track.getSettings().deviceId || "" : "";
+}
+
+async function openCamera() {
+  const id = $("camera").value;
+  const video_ = { width: { ideal: 1280 } };
+  if (id) video_.deviceId = { exact: id };
+  const next = await navigator.mediaDevices.getUserMedia({ video: video_, audio: false });
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  stream = next;
+  video.srcObject = stream;
+  await video.play();
+}
+
+navigator.mediaDevices.addEventListener("devicechange", listCameras);
+listCameras();
+$("camera").addEventListener("change", async () => {
+  if (!running) return;
+  try {
+    await openCamera();
+    // The old camera's boxes and tracks do not belong to the new picture.
+    boxes = []; session = crypto.randomUUID();
+  } catch (error) {
+    status.textContent = `Could not open that camera: ${error.message}`;
+  }
 });
 
 function draw() {
@@ -111,13 +151,12 @@ async function detectLoop() {
 
 async function start() {
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } }, audio: false });
+    await openCamera();
   } catch (error) {
     status.textContent = `No camera: ${error.message}`;
     return;
   }
-  video.srcObject = stream;
-  await video.play();
+  await listCameras();
   running = true; boxes = []; session = crypto.randomUUID();
   toggle.textContent = "Stop"; toggle.classList.add("stop");
   status.textContent = "Starting the GPU: the first boxes can take about a minute; the camera keeps playing.";
