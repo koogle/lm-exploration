@@ -1,8 +1,9 @@
 # Malama autocomplete: training plan
 
-Updated November 14, 2026. This is the active path for the Malama models. The second
-path, a sub-1B [coding reasoner](CODING_REASONER_1B.md), shares the same foundation
-model and is deferred.
+Updated November 15, 2026. This is the second path for the Malama models. The primary
+path, a sub-1B [coding reasoner](CODING_REASONER_1B.md) aimed at LiveCodeBench, shares
+the same foundation model; its midtraining keeps FIM data so that one model can serve
+both.
 
 ## Goal
 

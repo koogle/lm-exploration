@@ -1,14 +1,11 @@
-# Sub-1B coding reasoner: training plan
-
 > **Two paths.** The 960M foundation model is trained:
 > [Malama Base](https://huggingface.co/jfrick/malama-base), 100B tokens. Two paths
-> build on it. **Autocomplete** ([plan](MALAMA_AUTOCOMPLETE.md)) is active: code
-> infilling and completion, starting with a fill-in-the-middle midtraining branch.
-> **Coding reasoner** (this plan) is deferred. Its midtraining, reasoning SFT and RL
-> stages below start after the autocomplete path's midtraining results, and can reuse
-> its final midtraining checkpoint.
+> build on it. **Coding reasoner** (this plan) is the primary path, with the
+> LiveCodeBench target below. **Autocomplete** ([plan](MALAMA_AUTOCOMPLETE.md))
+> continues from its fill-in-the-middle branch; the reasoner's midtraining keeps FIM
+> data so that one model can serve both.
 
-Updated November 14, 2026. Train a model from scratch through foundation
+Updated November 15, 2026. Train a model from scratch through foundation
 pretraining, midtraining, reasoning SFT and outcome-based RL. The working model
 has 959,843,116 training parameters and a 927,589,920-parameter deployed trunk
 once auxiliary multi-token prediction (MTP) is removed. Retain KDA, interleaved
@@ -21,6 +18,81 @@ is an ambition, not a forecast from the small-model study. Agentic repository
 work is a later goal: the earlier coding-trajectory experiments did not establish
 successful transfer. See the repository's reasoning-training and negative-result
 references before choosing SFT or RL curricula.
+
+## LiveCodeBench target
+
+Set the best LiveCodeBench v6 pass@1 among models under 1B parameters. The sub-1B
+models to beat, from the [frontier survey](../references/open-model-frontier-2026-11-01.md#november-4-refresh):
+
+| Model | Parameters | LCB v6 | Training |
+| --- | ---: | ---: | --- |
+| MobileLLM-R1.5-950M | 0.95B | 29.1 (19.9 after SFT) | About 4T pretraining tokens, reasoning SFT, on-policy distillation |
+| MobileLLM-R1.5-360M | 0.36B | 8.6 | Same recipe |
+| K2 Horizon "0.9B" | 1.08B stored | 37.4 | 5T pretraining tokens, RL experts, merging, multi-teacher distillation; above the 1B cutoff, reported as the stretch bar |
+
+These are vendor numbers with long reasoning and pass@1 averaged over samples. The
+claim counts only with our own measurement of the reference models under the same
+protocol:
+
+- **Protocol.** Thinking mode, temperature 0.6, top-p 0.95, 16 samples per problem,
+  pass@1 averaged over samples, up to a fixed reasoning budget (32,768 tokens to start),
+  graded on all public and private tests by the existing
+  [LiveCodeBench harness](../analysis/evaluation/README.md#livecodebench).
+- **Windows.** v6 (2025-01-04 to 2025-04-06) for comparison with published numbers,
+  plus the newest release window available, which postdates every teacher used for
+  our traces. Training problems are cut by date before both windows and screened by
+  13-gram overlap against both.
+- **Size.** Malama's deployed trunk is 928M parameters, under the cutoff.
+
+The gap is large. Malama Base saw 100B tokens, 40 times fewer than MobileLLM-R1.5;
+the stages below make up for it with targeted data and dense teacher supervision
+rather than more pretraining, and each one is measured on this protocol before the
+next starts.
+
+### Stage plan
+
+1. **Reasoning midtraining (20–40B tokens).** From the foundation run's last
+   constant-learning-rate checkpoint, as the FIM branch did, with its own decay.
+   Extend the context from 4,096 to 32,768 tokens (RoPE base of the full-attention
+   layers raised; KDA layers need no position change) and validate long-context
+   retrieval before any long traces. Mix: competitive-programming problems with
+   verified solutions, high-quality code and code explanations, math (CC-Math 4+),
+   reasoning traces as plain text, FIM at a reduced rate, and foundation replay.
+2. **Reasoning SFT.** Code-contest reasoning traces from strong open teachers,
+   verified by tests where they ship with them, several epochs, thinking spans
+   supervised and the final fenced program graded. Candidates: OpenCodeReasoning-2,
+   the Nemotron post-training code and math sets, OpenThoughts3; all filtered by
+   license, problem date and the screen above. Compare against answer-only SFT at
+   matched tokens, as planned below.
+3. **On-policy distillation.** Malama uses the GLM tokenizer, so a GLM teacher that
+   shares it (GLM-4.7-Flash or GLM-5.3-Flash, to verify token for token) can score
+   Malama's own samples with full-vocabulary KL and no cross-tokenizer alignment.
+   MobileLLM-R1.5's step from 19.9 to 29.1 came from this stage.
+4. **RL on executable rewards.** GRPO-style RL on test-graded contest problems held
+   out from both windows, with curriculum matched to the model's success rate, after
+   SFT solves enough problems to give mixed groups. KDA's constant-size state keeps
+   long rollouts cheap.
+
+### Work before the first GPU stage
+
+- Score Malama Base and the FIM branch on the current no-reasoning protocol
+  (running), then measure MobileLLM-R1.5-950M, MobileLLM-R1.5-360M and Qwen3-0.6B
+  on the thinking protocol, so the target is our own number.
+- Thinking mode end to end: `data/chat_sft.py` rejects thinking spans and
+  `hybrid/post_train.py` builds non-thinking prompts (see
+  [reasoning training](../references/reasoning-training-2026-11-04.md#required-changes-in-our-pipeline)).
+- Long-context training and generation for the hybrid family at 32,768 tokens.
+- Data audit: sources, licenses, token counts with the GLM tokenizer, date cuts and
+  the contamination screen for both windows.
+
+### Budget
+
+Estimates on 8 × H100 at the foundation run's throughput, before long-context
+slowdowns: midtraining 30B tokens about 220 H100-hours; SFT about 10B tokens
+(three epochs) about 75 H100-hours; on-policy distillation and RL about 400–600
+H100-hours together, dominated by long rollouts and teacher scoring; evaluation
+about 10 H100-hours per model on the thinking protocol. About 700–900 H100-hours in
+all. Reconcile with actual spending before launching the midtraining stage.
 
 ## Stages and advancement
 
