@@ -1,0 +1,29 @@
+{
+  "name": "chat-sft-ocr2-python-v1",
+  "description": "OpenCodeReasoning-2 Python traces (DeepSeek-R1, CC-BY-4.0) in LiveCodeBench's prompt and thinking mode: reasoning, then the release's program in one fenced block. Only programs passing all of the release's tests, problems from TACO, APPS and CodeContests training splits, at most one trace per problem per file; 12 of 70 files (contest_sft.opencodereasoning2).",
+  "repo": "nvidia/OpenCodeReasoning-2",
+  "revision": "eadf535931451525f3e5621d0f960c240bc62fd9",
+  "files": [
+    "train/python/train-00000-of-00070.parquet",
+    "train/python/train-00001-of-00070.parquet",
+    "train/python/train-00002-of-00070.parquet",
+    "train/python/train-00003-of-00070.parquet",
+    "train/python/train-00004-of-00070.parquet",
+    "train/python/train-00005-of-00070.parquet",
+    "train/python/train-00006-of-00070.parquet",
+    "train/python/train-00007-of-00070.parquet",
+    "train/python/train-00008-of-00070.parquet",
+    "train/python/train-00009-of-00070.parquet",
+    "train/python/train-00010-of-00070.parquet",
+    "train/python/train-00011-of-00070.parquet"
+  ],
+  "converter": "opencodereasoning2",
+  "questions": true,
+  "per_question": 1,
+  "thinking": true,
+  "format": "chat-sft",
+  "context": 32768,
+  "heldout_fraction": 0.01,
+  "screen": "kda-foundation-100b-504010-v1/screen.npy",
+  "screen_ngram": 13
+}
