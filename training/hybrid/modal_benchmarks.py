@@ -4,7 +4,7 @@ Run from training/:
     modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-A,tokens-B] [--models M,...]
         [--suite standard|code]
 
-`--suite code` runs HumanEval, MBPP and HumanEval-Infilling (single- and multi-line) in
+`--suite code` runs HumanEval (as shipped and with stripped prompts, `fim_tasks.py`), MBPP and HumanEval-Infilling (single- and multi-line) in
 each model's own fill-in-the-middle format (`fim_tasks.py`) for the hybrid exports
 (GLM code tokens) and the code reference models.
 
@@ -13,7 +13,7 @@ and each reference model through the harness's Hugging Face backend, all with th
 same tasks, shot counts and greedy decoding. Each call has `retries=0`, a 6-hour
 timeout and refuses to start 24 hours after launch. Code tasks execute the
 generated programs inside the call's container. Each call writes its results
-(harness JSON without per-sample logs) to
+(harness JSON) and every prompt, response and per-sample score (`.samples.jsonl`) to
 `lm-exploration-hybrid-runs/benchmarks/<launch>/`; an independent supervisor cancels
 any call still running 24 hours after launch.
 """
@@ -124,10 +124,15 @@ def evaluate(model, revision, deadline, folder, limit=0, fim_format=None):
     out = {"model": model, "revision": revision, "limit": limit or None, "suites": []}
     suites = SUITES
     if fim_format:
-        from model_hybrid.fim_tasks import task_configs
+        from model_hybrid.fim_tasks import humaneval_config, task_configs
 
-        suites = ((["humaneval"], 0), (["mbpp"], 3), (task_configs(fim_format), 0))
+        suites = (
+            (["humaneval", humaneval_config()], 0),
+            (["mbpp"], 3),
+            (task_configs(fim_format), 0),
+        )
         out["fim_format"] = fim_format
+    samples = []
     for tasks, shots in suites:
         started = time.time()
         results = lm_eval.simple_evaluate(
@@ -140,7 +145,20 @@ def evaluate(model, revision, deadline, folder, limit=0, fim_format=None):
             numpy_random_seed=1234,
             torch_random_seed=1234,
             fewshot_random_seed=1234,
+            log_samples=True,
         )
+        for task, rows in results.pop("samples").items():
+            for row in rows:
+                samples.append(
+                    {
+                        "task": task,
+                        "doc_id": row["doc_id"],
+                        "prompt": row["arguments"][0][0],
+                        "response": row["resps"][0][0],
+                        "filtered": row["filtered_resps"][0],
+                        **{m: row[m] for m in row["metrics"]},
+                    }
+                )
         out["suites"].append(
             {
                 "tasks": [t["task"] if isinstance(t, dict) else t for t in tasks],
@@ -160,6 +178,9 @@ def evaluate(model, revision, deadline, folder, limit=0, fim_format=None):
     path = Path("/runs/benchmarks", folder, f"{model.replace('/', '--')}.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
+    with path.with_suffix(".samples.jsonl").open("w") as handle:
+        for row in samples:
+            handle.write(json.dumps(row, default=str) + "\n")
     runs_volume.commit()
     return json.loads(text)
 
