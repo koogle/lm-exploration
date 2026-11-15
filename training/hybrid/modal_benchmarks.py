@@ -106,8 +106,9 @@ def _summary(results):
     secrets=[secret],
     volumes={"/runs": runs_volume},
 )
-def evaluate(model, revision, deadline, folder, limit=0, fim_format=None):
-    """Every suite for one model; with `fim_format`, the code suite in that format."""
+def evaluate(model, revision, deadline, folder, limit=0, fim_format=None, part=""):
+    """Every suite for one model; with `fim_format`, the code suite in that format, or
+    only its `part` (one of `CODE_PARTS`)."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     import lm_eval
@@ -135,11 +136,14 @@ def evaluate(model, revision, deadline, folder, limit=0, fim_format=None):
     if fim_format:
         from model_hybrid.fim_tasks import humaneval_config, task_configs
 
-        suites = (
-            (["humaneval", humaneval_config()], 0),
-            (["mbpp"], 3),
-            (task_configs(fim_format), 0),
-        )
+        single, multi = task_configs(fim_format)
+        parts = {
+            "left_to_right": ((["humaneval", humaneval_config()], 0), (["mbpp"], 3)),
+            "single_line": (([single], 0),),
+            "multi_line": (([multi], 0),),
+        }
+        suites = parts[part] if part else (*parts["left_to_right"], ([single, multi], 0))
+        out["part"] = part or None
         out["fim_format"] = fim_format
     samples = []
     for tasks, shots in suites:
@@ -184,7 +188,8 @@ def evaluate(model, revision, deadline, folder, limit=0, fim_format=None):
     # Plain JSON (the harness's configs hold its own objects), also on the volume so a
     # detached launch keeps every finished model.
     text = json.dumps(out, indent=2, default=str) + "\n"
-    path = Path("/runs/benchmarks", folder, f"{model.replace('/', '--')}.json")
+    name = model.replace("/", "--") + (f".{part}" if part else "")
+    path = Path("/runs/benchmarks", folder, f"{name}.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
     with path.with_suffix(".samples.jsonl").open("w") as handle:
@@ -205,14 +210,20 @@ def enforce_deadline(call_ids, deadline):
 
 @app.local_entrypoint()
 def main(
-    exports: str = "tokens-039998980096", limit: int = 0, models: str = "", suite: str = "standard"
+    exports: str = "tokens-039998980096",
+    limit: int = 0,
+    models: str = "",
+    suite: str = "standard",
+    split: bool = False,
 ):
     """Spawn one evaluation per model; results land on the runs volume as each finishes.
 
     `--exports` (comma-separated) names hybrid exports of the 40B run, or of another run
     as `<run id>/<export>`; `--models` (comma-separated,
     "hybrid" for the exports) limits the launch to those. Calls are spawned, not
-    mapped, so they keep running after this client exits.
+    mapped, so they keep running after this client exits. `--split` runs the code
+    suite as one call per part (left-to-right, single-line, multi-line infilling), each
+    writing `<model>.<part>.json`, for a model that needs more than one call's time.
     """
     if suite not in ("standard", "code"):
         raise ValueError("--suite is standard or code")
@@ -227,13 +238,18 @@ def main(
         wanted = set(models.split(","))
         chosen = [c for c in chosen if c[0] in wanted or (c[1] is None and "hybrid" in wanted)]
     run_folder = f"{int(time.time())}-{suite}{'-limit' if limit else ''}"
-    calls = [evaluate.spawn(m, r, deadline, run_folder, limit, f) for m, r, f in chosen]
+    parts = ("left_to_right", "single_line", "multi_line") if split and suite == "code" else ("",)
+    chosen = [(m, r, f, part) for m, r, f in chosen for part in parts]
+    calls = [evaluate.spawn(m, r, deadline, run_folder, limit, f, p) for m, r, f, p in chosen]
     supervisor = enforce_deadline.spawn([c.object_id for c in calls], deadline)
     print(
         json.dumps(
             {
                 "results": f"lm-exploration-hybrid-runs/benchmarks/{run_folder}/",
-                "calls": {m: c.object_id for (m, _, _), c in zip(chosen, calls, strict=True)},
+                "calls": {
+                    f"{m}{'.' + p if p else ''}": c.object_id
+                    for (m, _, _, p), c in zip(chosen, calls, strict=True)
+                },
                 "supervisor": supervisor.object_id,
                 "deadline_unix": deadline,
             },
