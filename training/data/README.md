@@ -53,6 +53,22 @@ each file in its own call (`retries=0`, refuses work 24 hours after launch):
 uv run --all-extras modal run -m modal_scripts.modal_chat_sft_data
 ```
 
+Contest recipes put problems in LiveCodeBench's own zero-shot prompt
+(`livecodebench.instruction`) and answer with one fenced Python program
+([`contest_sft.py`](contest_sft.py); a recipe names its `converter`):
+`chat-sft-codecontests-v1` and `chat-sft-leetcode-v1` keep programs that pass the
+problem's tests under the harness's grader, and `chat-sft-ocr2-python-v1` takes
+OpenCodeReasoning-2 reasoning traces in thinking mode (`"thinking": true`), joined to
+their TACO, APPS and CodeContests problems through a question table the preparation
+builds once (`"questions": true`), at most one trace per problem per file
+(`per_question`). A recipe made only of `subsets` from other recipes' folders
+(`chat-sft-lcb-format-v1`, `chat-sft-reasoning-pilot-v1`) is composed instead of
+prepared: the same command checks its subsets and writes its `summary.json`.
+
+```sh
+uv run --all-extras modal run -m modal_scripts.modal_chat_sft_data --recipe data/recipes/chat-sft-ocr2-python-v1.json
+```
+
 
 ## PR tasks and agent episodes
 

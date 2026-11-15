@@ -100,6 +100,9 @@ problem at temperature 0.6 and top-p 0.95, up to 32,768 new tokens, generated wi
 vLLM on four H100 calls per model (each a slice of the problems). A sample's answer is
 the text after its reasoning span; a sample whose reasoning never closes scores 0, and
 a problem's score is the mean over its samples. After the calls finish,
-`--merge lcb-thinking-<launch>` writes each model's combined result.
+`--merge lcb-thinking-<launch>` writes each model's combined result. With
+`--checkpoints`, a checkpoint whose family has a thinking prompt (hybrid: the GLM
+chat turn ending `<|assistant|><think>`) samples the same way with its family's
+sampler, on eight H100 calls, up to 32,768 new tokens or what its context leaves.
 
 Findings: [hybrid 720M plan](../../plans/HYBRID_720M.md#livecodebench-v6).

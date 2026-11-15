@@ -6,7 +6,9 @@ Run from training/:
 One call per parquet or JSON-lines file, all in parallel: download it at the recipe's
 pinned revision, convert rows to OpenAI messages (smoltalk2's `chat_sft.convert`, or
 the recipe's `converter` from `contest_sft.CONVERTERS`, run on every CPU since contest
-converters execute each candidate program against its tests), render them in GLM's chat format with
+converters execute each candidate program against its tests; with `questions`, the
+converter looks each problem up in a table built once by `questions`, and
+`per_question` keeps the first conversations per problem in each file), render them in GLM's chat format with
 loss masks, drop conversations longer than the context or sharing a 13-gram with
 the pretraining recipe's benchmark screen, hold out a hash-selected fraction, and
 write the subset to the `lm-exploration-hybrid-data` volume under `<recipe name>/`
@@ -69,6 +71,7 @@ def prepare(recipe, file, deadline):
     )
     if "converter" in recipe:
         from concurrent.futures import ThreadPoolExecutor
+        from functools import partial
 
         from training_data import contest_sft
 
@@ -77,8 +80,14 @@ def prepare(recipe, file, deadline):
             rows = [json.loads(line) for line in Path(path).read_text().split("\n") if line]
         else:
             rows = pq.read_table(path).to_pylist()
+        convert = contest_sft.CONVERTERS[recipe["converter"]]
+        if recipe.get("questions"):
+            questions = json.loads((folder / "questions.json").read_text())
+            convert = partial(convert, questions=questions)
         with ThreadPoolExecutor(8) as pool:
-            rows = list(pool.map(contest_sft.CONVERTERS[recipe["converter"]], rows))
+            rows = list(pool.map(convert, rows))
+        if "per_question" in recipe:
+            rows = first_per_question(rows, recipe["per_question"])
         converter = lambda conversation: conversation
     else:
         rows = pq.read_table(path, columns=["messages", "chat_template_kwargs"]).to_pylist()
@@ -88,6 +97,67 @@ def prepare(recipe, file, deadline):
     meta = chat_sft.prepare_subset(recipe, name, rows, folder, glm, screen, converter)
     volume.commit()
     return meta
+
+
+def first_per_question(rows, limit):
+    """Converted rows with at most `limit` kept per problem (the conversation's prompt);
+    dropped ones become None, so they count as unparsed."""
+    seen = {}
+    kept = []
+    for row in rows:
+        key = row and row["messages"][0]["content"]
+        seen[key] = seen.get(key, 0) + 1
+        kept.append(row if row and seen[key] <= limit else None)
+    return kept
+
+
+@app.function(
+    image=image,
+    cpu=2,
+    memory=16384,
+    timeout=3600,
+    retries=0,
+    secrets=[secret],
+    volumes={"/data": volume},
+)
+def questions(recipe, deadline):
+    """Write `<recipe>/questions.json`: "dataset/split/index" -> {"question",
+    "starter_code"} from `contest_sft.QUESTION_SOURCES`, for converters that look
+    problems up by index."""
+    import pyarrow.parquet as pq
+    from huggingface_hub import hf_hub_download
+    from training_data import contest_sft
+
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    path = ROOT / recipe["name"] / "questions.json"
+    if path.exists():
+        return len(json.loads(path.read_text()))
+    table = {}
+    for dataset, (repo, revision, splits) in contest_sft.QUESTION_SOURCES.items():
+        for split, files in splits.items():
+            rows = []
+            for file in files:
+                local = hf_hub_download(
+                    repo, file, revision=revision, repo_type="dataset", local_dir="/tmp/questions"
+                )
+                if file.endswith(".jsonl"):
+                    text = Path(local).read_text().split("\n")
+                    rows += [json.loads(line) for line in text if line]
+                else:
+                    columns = (
+                        ["description"]
+                        if dataset == "code_contests"
+                        else ["question", "starter_code"]
+                    )
+                    rows += pq.read_table(local, columns=columns).to_pylist()
+                Path(local).unlink()
+            for index, row in enumerate(contest_sft.question_rows(dataset, rows)):
+                table[f"{dataset}/{split}/{index}"] = row
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(table))
+    volume.commit()
+    return len(table)
 
 
 @app.function(image=image, cpu=1, memory=2048, timeout=600, retries=0, volumes={"/data": volume})
@@ -122,6 +192,8 @@ def main(recipe: str = DEFAULT_RECIPE):
         print(json.dumps(compose.remote(settings), indent=2))
         return
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
+    if settings.get("questions"):
+        print(f"questions: {questions.remote(settings, deadline)}")
     metas = list(prepare.starmap([(settings, file, deadline) for file in settings["files"]]))
     keys = ("conversations", "tokens", "target_tokens", "heldout_conversations")
     summary = {

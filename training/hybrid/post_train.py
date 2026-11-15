@@ -57,17 +57,23 @@ class HybridModel:
     def context(self, model):
         return model.config.block_size
 
-    def prompt_ids(self, tokenizer, text):
-        """The prompt text as the user's turn, up to the assistant's reply."""
-        rendered = chat.render([{"role": "user", "content": text}], add_generation_prompt=True)
+    def prompt_ids(self, tokenizer, text, thinking=False):
+        """The prompt text as the user's turn, up to the assistant's reply; with
+        `thinking`, up to its opened reasoning span (`chat.THINKING_PROMPT`)."""
+        rendered = chat.render(
+            [{"role": "user", "content": text}], add_generation_prompt=True, thinking=thinking
+        )
         return tokenizer.encode(rendered, add_special_tokens=False).ids
 
     def text_ids(self, tokenizer, text):
         """Plain text to continue, outside the chat format (pretrained checkpoints)."""
         return tokenizer.encode(text, add_special_tokens=False).ids
 
-    def sample(self, model, prompts, limit, temperature, generator, record_top_k, engine):
-        """(rollout.Samples without the stop token, the stop token of each finished row)."""
+    def sample(
+        self, model, prompts, limit, temperature, generator, record_top_k, engine, top_p=1.0
+    ):
+        """(rollout.Samples without the stop token, the stop token of each finished row);
+        sampled tokens come from nucleus `top_p`."""
         from trainer.rollout import Samples
 
         if record_top_k:
@@ -78,7 +84,7 @@ class HybridModel:
         # In place, so the sampler's cached CUDA graphs stay valid.
         self.sampler.load_state_dict(model.state_dict())
         outputs = generate.generate_batch(
-            self.sampler, prompts, limit, self.stop_ids, temperature, 1.0, generator
+            self.sampler, prompts, limit, self.stop_ids, temperature, top_p, generator
         )
         completions, stops = [], []
         for ids in outputs:
