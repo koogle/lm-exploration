@@ -274,7 +274,7 @@ def web():
                 clip = gr.Video(label="Video")
                 with gr.Column():
                     vtext = gr.Textbox(label="Categories", value="")
-                    model = gr.Dropdown(names, value="Slots, rank 128, fast", label="Model")
+                    model = gr.Dropdown(names, value="Slots, tile crops, tiled", label="Model")
                     every = gr.Slider(1, 30, value=3, step=1, label="Detect every n-th frame")
                     limit = gr.Slider(30, 3000, value=600, step=30, label="Frames to process")
                     track = gr.Checkbox(

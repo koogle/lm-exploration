@@ -785,8 +785,8 @@ in two-second H.264 chunks while the GPU works through it. Slot-head boxes are l
 with their score, objectness × label confidence × box confidence: a ranking score, not
 a probability (kept from 0.013; half of the kept boxes on COCO val score under 0.04).
 Moondream gives no confidence, so its boxes carry only the label. The models and thresholds are in
-`configs/demo.json`: Moondream 2's `detect`, three slot heads and Moondream 3.1 through
-Photon. Deploying with `.venv/bin/python demo_app.py` also spawns `shutdown_at`, which
+`configs/demo.json`: Moondream 2's `detect`, four slot heads (the last, trained with tile
+crops and run with 2 x 2 tiles, is the video default) and Moondream 3.1 through Photon. Deploying with `.venv/bin/python demo_app.py` also spawns `shutdown_at`, which
 stops the app just under 24 hours later; the URL is public until then.
 
 Measured through the page on one warm L40S per model family:

@@ -24,6 +24,13 @@
       "options": {
         "tiles": 2
       }
+    },
+    "Slots, tile crops, tiled": {
+      "run": "slots-tilecrops-teacher-coco-rank64",
+      "threshold": 0.33,
+      "options": {
+        "tiles": 2
+      }
     }
   },
   "photon_model": "moondream3.1-9B-A2B",
