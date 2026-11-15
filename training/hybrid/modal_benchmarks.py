@@ -69,6 +69,9 @@ CODE_REFERENCES = {
     "Qwen/Qwen2.5-Coder-0.5B": ("8123ea2e9354afb7ffcc6c8641d1b2f5ecf18301", "qwen"),
     "Qwen/Qwen2.5-Coder-1.5B": ("df3ce67c0e24480f20468b6ef2894622d69eb73b", "qwen"),
 }
+# Reference models trained with a beginning-of-sequence token that their tokenizer, as
+# transformers loads it, does not add. Without it DeepSeek-Coder infills the wrong line.
+BOS_MODELS = {"deepseek-ai/deepseek-coder-1.3b-base"}
 REFERENCES = {
     "HuggingFaceTB/SmolLM2-360M": "f8027fd0eaeea54caa13c31d31b9fdc459c38b49",
     "Qwen/Qwen3-0.6B-Base": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
@@ -120,7 +123,13 @@ def evaluate(model, revision, deadline, folder, limit=0, fim_format=None):
     else:
         from lm_eval.models.huggingface import HFLM
 
-        harness_model = HFLM(pretrained=model, revision=revision, dtype="bfloat16", batch_size=8)
+        harness_model = HFLM(
+            pretrained=model,
+            revision=revision,
+            dtype="bfloat16",
+            batch_size=8,
+            add_bos_token=True if model in BOS_MODELS else None,
+        )
     out = {"model": model, "revision": revision, "limit": limit or None, "suites": []}
     suites = SUITES
     if fim_format:
