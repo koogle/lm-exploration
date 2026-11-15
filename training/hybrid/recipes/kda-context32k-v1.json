@@ -1,0 +1,63 @@
+{
+  "name": "kda-context32k-v1",
+  "description": "32K context extension of the 960M foundation model: long documents (repository-level code and PG19 books, prepared by hybrid-long32k-v1) and unseen permissive GitHub files (prepared by hybrid-mid32k-v1), with 50% replay of the foundation recipe kda-foundation-100b-504010-v3.",
+  "target_tokens": 2000000000,
+  "context": 32768,
+  "seed": 20261115,
+  "tokenizer_sha256": "19e773648cb4e65de8660ea6365e10acca112d42a854923df93db4a6f333a82d",
+  "replay": {
+    "recipe": "kda-foundation-100b-504010-v3",
+    "fraction": 0.5
+  },
+  "screen": "kda-foundation-100b-504010-v1/screen.npy",
+  "sources": {
+    "repos": {
+      "weight": 0.45,
+      "repo": "codeparrot/github-code-clean",
+      "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
+      "pattern": "data/train-{index:05d}-of-00880.parquet",
+      "file_offset": 100,
+      "shards": 14,
+      "column": "code",
+      "permissive_licenses_only": true,
+      "group_by": "repo_name",
+      "order_by": "path",
+      "min_tokens": 4096,
+      "max_passes": 1,
+      "estimated_tokens_per_shard": 70000000,
+      "prepared_in": "hybrid-long32k-v1"
+    },
+    "github_code": {
+      "weight": 0.35,
+      "repo": "codeparrot/github-code-clean",
+      "revision": "c48d40f9e70f0196f8236901ee35807f7d6c44c0",
+      "pattern": "data/train-{index:05d}-of-00880.parquet",
+      "file_offset": 300,
+      "shards": 10,
+      "column": "code",
+      "permissive_licenses_only": true,
+      "max_passes": 1,
+      "estimated_tokens_per_shard": 139000000,
+      "prepared_in": "hybrid-mid32k-v1"
+    },
+    "books": {
+      "weight": 0.2,
+      "repo": "emozilla/pg19",
+      "revision": "c021754c8e01c5b1cc83a1f549c1f97fbbb756b8",
+      "files": [
+        "data/train-00000-of-00023-5263dc4323e881d2.parquet",
+        "data/train-00001-of-00023-2b13c68dbeba63b5.parquet",
+        "data/train-00002-of-00023-8e4dd6b70d51dfcf.parquet",
+        "data/train-00003-of-00023-e7f0ba0d3c2eb6c0.parquet",
+        "data/train-00004-of-00023-3f9e7e096fa07f4b.parquet",
+        "data/train-00005-of-00023-87dece6a0ab708e8.parquet",
+        "data/train-00006-of-00023-c50fea56d0518a87.parquet"
+      ],
+      "shards": 7,
+      "column": "text",
+      "max_passes": 1,
+      "estimated_tokens_per_shard": 90000000,
+      "prepared_in": "hybrid-long32k-v1"
+    }
+  }
+}
