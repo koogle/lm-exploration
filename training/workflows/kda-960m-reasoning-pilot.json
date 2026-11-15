@@ -1,0 +1,41 @@
+{
+  "name": "kda-960m-reasoning-pilot",
+  "description": "Reasoning pilot from Malama Base: 32K context extension, then thinking-mode SFT on OpenCodeReasoning-2 Python traces with the LiveCodeBench-format programs.",
+  "family": "hybrid",
+  "from": "kda-960m-foundation-20261110-01-pretrain-a7-s02/export/tokens-099999547392",
+  "stages": [
+    {
+      "stage": "data",
+      "name": "context32k-data",
+      "recipe": "hybrid/recipes/kda-context32k-v1.json",
+      "parallel": 4
+    },
+    {
+      "stage": "midtrain",
+      "name": "context32k",
+      "description": "kda-context32k-v1, 2B tokens at 32K (half foundation replay)",
+      "model_config": "hybrid/configs/kda-960m-context32k.json",
+      "gpu": "H100",
+      "world_size": 8,
+      "segment_seconds": 18000,
+      "worker_timeout_seconds": 19800,
+      "max_segments": 1,
+      "segments_per_call": 1,
+      "qualification_segments": 0,
+      "data": "context32k-data"
+    },
+    {
+      "stage": "midtrain",
+      "name": "reasoning",
+      "description": "chat-sft-reasoning-pilot-v1 at 32K, 537M tokens (about two passes of the traces, 10% replay)",
+      "model_config": "hybrid/configs/kda-960m-reasoning-sft-pilot.json",
+      "gpu": "H100",
+      "world_size": 8,
+      "segment_seconds": 18000,
+      "worker_timeout_seconds": 19800,
+      "max_segments": 1,
+      "segments_per_call": 1,
+      "qualification_segments": 0
+    }
+  ]
+}
