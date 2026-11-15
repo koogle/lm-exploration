@@ -137,6 +137,14 @@ def extract_code(completion):
     )
 
 
+def final_answer(completion):
+    """The answer after a reasoning span: the text after its last `</think>`, the whole
+    completion when it has no reasoning span, None when reasoning never closed."""
+    if "</think>" in completion:
+        return completion.rsplit("</think>", 1)[1]
+    return None if "<think>" in completion else completion
+
+
 def finished(text):
     """True once a completion holds a closed code block (generation can stop)."""
     return bool(CODE_BLOCK.search(text))
@@ -215,6 +223,8 @@ def grade_all(problems, completions, workers=16):
 
 
 def summary(problems, scores):
+    """pass@1 overall and by difficulty and platform; a problem's score may be the mean
+    over its samples."""
     out = {"pass@1": sum(scores) / len(scores), "problems": len(scores)}
     for key in ("difficulty", "platform"):
         groups = {}

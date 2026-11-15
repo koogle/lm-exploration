@@ -31,6 +31,7 @@ from pathlib import Path
 import modal
 
 from workflows.checks import run_id
+from workflows.images import vllm_base
 
 LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
 SHARD_SECONDS = 4 * 60 * 60
@@ -42,21 +43,9 @@ SANDBOX_BATCH = 2000
 app = modal.App("simple-llm-teacher")
 volume = modal.Volume.from_name("lm-exploration-training")
 weights = modal.Volume.from_name("lm-exploration-hf-cache", create_if_missing=True)
-# vLLM's FlashInfer kernels compile at load time, so the image carries nvcc (CUDA 13.0,
-# matching vLLM 0.31's torch 2.13).
+# DeepGEMM's FP8 weight preprocessing fails for this model; CUTLASS FP8 runs it.
 vllm_image = (
-    modal.Image.from_registry("nvidia/cuda:13.0.1-devel-ubuntu22.04", add_python="3.12")
-    .pip_install("vllm==0.31.0", "huggingface-hub[hf_transfer]")
-    # DeepGEMM's FP8 weight preprocessing fails for this model; CUTLASS FP8 runs it.
-    .env(
-        {
-            "HF_HOME": "/hf",
-            "HF_HUB_ENABLE_HF_TRANSFER": "1",
-            "PYTHONPATH": "/project",
-            "VLLM_USE_DEEP_GEMM": "0",
-            "CUDA_HOME": "/usr/local/cuda",
-        }
-    )
+    vllm_base({"VLLM_USE_DEEP_GEMM": "0"})
     .add_local_dir("data", "/project/training_data", ignore=["raw", "cache", "__pycache__"])
     .add_local_dir("trainer", "/project/trainer", ignore=["__pycache__", "kernels"])
 )
