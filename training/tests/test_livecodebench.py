@@ -46,6 +46,8 @@ class LiveCodeBenchTests(unittest.TestCase):
         )
         self.assertEqual(livecodebench.final_answer(answer), answer)
         self.assertIsNone(livecodebench.final_answer("<think>still reasoning"))
+        draft = "```python\nprint(4)\n```\nBetter:\n"
+        self.assertEqual(livecodebench.last_block(draft + answer), answer)
 
     def test_stdin_programs_pass_only_on_every_test(self):
         right = "a, b = map(int, input().split())\nprint(a + b)"
