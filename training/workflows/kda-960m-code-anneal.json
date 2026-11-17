@@ -1,0 +1,28 @@
+{
+  "name": "kda-960m-code-anneal",
+  "description": "Code-heavy mid-training of the 960M model from its 32K context extension: synthetic Python exercises, multi-language snippets, unit-tested instruction answers and repository code, with 45% foundation replay.",
+  "family": "hybrid",
+  "from": "kda-960m-reasoning-pilot-20261115-02-context32k-s00/export/tokens-001999634432",
+  "stages": [
+    {
+      "stage": "data",
+      "name": "code-anneal-data",
+      "recipe": "hybrid/recipes/kda-code-anneal-v1.json",
+      "parallel": 8
+    },
+    {
+      "stage": "midtrain",
+      "name": "code",
+      "description": "kda-code-anneal-v1, 5B tokens at 32K (45% foundation replay)",
+      "model_config": "hybrid/configs/kda-960m-code-anneal.json",
+      "gpu": "H100",
+      "world_size": 8,
+      "segment_seconds": 18000,
+      "worker_timeout_seconds": 19800,
+      "max_segments": 2,
+      "segments_per_call": 1,
+      "qualification_segments": 0,
+      "data": "code-anneal-data"
+    }
+  ]
+}
