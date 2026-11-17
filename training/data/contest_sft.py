@@ -26,6 +26,12 @@ harness runs it:
   alone, in one fenced block, as the harness expects. open-r1/codeforces problems are
   skipped: the release does not pin that dataset's revision, so its indices may not
   match the current row order.
+- `codeforces_cots` (open-r1/codeforces-cots, ODC-By): DeepSeek-R1 traces for
+  Codeforces problems, statements inline, in thinking mode. Only finished generations
+  of exact-output (`diff`) problems without interaction are used; the answer is the
+  trace's last Python block, kept if it passes the row's public and private tests
+  (up to `MAX_TESTS`). Its contests end in 2024-07; the release is decontaminated
+  against LiveCodeBench, and preparation applies our screen as well.
 """
 
 import ast
@@ -36,6 +42,7 @@ from evaluation.benchmarks import livecodebench
 CODECONTESTS = ("deepmind/code_contests", "802411c3010cb00d1b05bad57ca77365a3c699d6")
 LEETCODE = ("newfacade/LeetCodeDataset", "215604aeed660029df7de2fea5a4d7b6ed476a08")
 OPENCODEREASONING2 = ("nvidia/OpenCodeReasoning-2", "eadf535931451525f3e5621d0f960c240bc62fd9")
+CODEFORCES_COTS = ("open-r1/codeforces-cots", "39ac85c150806230473c70ad72c31f6232fe3f41")
 CUTOFF = "2025-01-01"
 PYTHON3 = 3  # CodeContests `solutions.language`
 MAX_TESTS = 30
@@ -244,8 +251,51 @@ def opencodereasoning2(row, questions):
     return conversation_
 
 
+def codeforces_statement(row):
+    """A Codeforces row's statement in the layout of LiveCodeBench's stdin problems."""
+    parts = [row["description"].strip()]
+    for title, key in (("Input", "input_format"), ("Output", "output_format")):
+        if row.get(key):
+            parts.append(f"{title}\n\n{row[key].strip()}")
+    for i, example in enumerate(row.get("examples") or [], 1):
+        parts.append(f"Sample Input {i}\n\n{example['input'].strip()}")
+        parts.append(f"Sample Output {i}\n\n{example['output'].strip()}")
+    if row.get("note"):
+        parts.append(f"Note\n\n{row['note'].strip()}")
+    return "\n\n".join(parts)
+
+
+def codeforces_cots(row):
+    """A thinking-mode conversation from a codeforces-cots row, or None unless its last
+    Python block passes the row's tests."""
+    if row.get("finish_reason") != "stop" or row.get("problem_type") != "diff":
+        return None
+    if row.get("interaction_format") or not row.get("description"):
+        return None
+    parts = split_think(row["generation"] or "")
+    blocks = parts and livecodebench.CODE_BLOCK.findall(parts[1])
+    tests = [
+        {"input": i, "output": o}
+        for kind in ("public_tests", "private_tests")
+        for i, o in zip(
+            (row.get(kind) or {}).get("input") or [],
+            (row.get(kind) or {}).get("output") or [],
+            strict=True,
+        )
+    ][:MAX_TESTS]
+    if not blocks or not tests:
+        return None
+    program = blocks[-1].strip()
+    if not _passes({"starter_code": "", "tests": tests}, program):
+        return None
+    conversation_ = conversation(codeforces_statement(row), "", program)
+    conversation_["messages"][1]["reasoning_content"] = parts[0]
+    return conversation_
+
+
 CONVERTERS = {
     "codecontests": codecontests,
+    "codeforces_cots": codeforces_cots,
     "leetcode": leetcode,
     "opencodereasoning2": opencodereasoning2,
 }

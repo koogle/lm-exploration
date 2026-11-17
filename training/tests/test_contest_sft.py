@@ -120,3 +120,34 @@ class SelectionTest(unittest.TestCase):
         repeated = prep.repeat_starter(shortest, 3)
         self.assertEqual(len(repeated), 6)
         self.assertEqual(repeated[4:], [rows[3], rows[3]])
+
+
+CF_ROW = {
+    "description": "Print the sum of two integers.",
+    "input_format": "Two integers a and b.",
+    "output_format": "Print a + b.",
+    "examples": [{"input": "1 2", "output": "3"}],
+    "note": None,
+    "interaction_format": None,
+    "problem_type": "diff",
+    "finish_reason": "stop",
+    "generation": "<think>\nAdd them.\n</think>\n```python\na, b = map(int, input().split())\n"
+    "print(a + b)\n```",
+    "public_tests": {"input": ["1 2\n"], "output": ["3\n"]},
+    "private_tests": {"input": ["5 7\n"], "output": ["12\n"]},
+}
+
+
+class CodeforcesCotsTest(unittest.TestCase):
+    def test_verified_trace_becomes_thinking_conversation(self):
+        conversation = contest_sft.codeforces_cots(CF_ROW)
+        user, assistant = conversation["messages"]
+        self.assertIn("Sample Input 1\n\n1 2\n\nSample Output 1\n\n3", user["content"])
+        self.assertEqual(assistant["reasoning_content"], "Add them.")
+        self.assertTrue(assistant["content"].startswith("```python\na, b ="))
+
+    def test_failing_checker_and_interactive_rows_are_skipped(self):
+        wrong = {**CF_ROW, "private_tests": {"input": ["5 7\n"], "output": ["13\n"]}}
+        self.assertIsNone(contest_sft.codeforces_cots(wrong))
+        self.assertIsNone(contest_sft.codeforces_cots({**CF_ROW, "problem_type": "checker"}))
+        self.assertIsNone(contest_sft.codeforces_cots({**CF_ROW, "interaction_format": "x"}))
