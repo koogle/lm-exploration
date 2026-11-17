@@ -71,6 +71,7 @@ class ContestSFTTests(unittest.TestCase):
     def test_leetcode_drops_problems_from_the_cutoff_on(self):
         self.assertIsNone(contest_sft.leetcode(dict(LEETCODE_ROW, estimated_date="2025-02-01")))
 
+
 class OpenCodeReasoning2Test(unittest.TestCase):
     def test_keeps_reasoning_and_answers_with_the_program(self):
         messages = contest_sft.opencodereasoning2(OCR2_ROW, QUESTIONS)["messages"]
@@ -89,3 +90,33 @@ class OpenCodeReasoning2Test(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SelectionTest(unittest.TestCase):
+    """Per-problem selection and starter-code repeats of `modal_chat_sft_data`."""
+
+    @staticmethod
+    def row(question, starter, reasoning):
+        return contest_sft.conversation(question, starter, "print(1)") | {
+            "messages": [
+                contest_sft.conversation(question, starter, "print(1)")["messages"][0],
+                {"role": "assistant", "content": "x", "reasoning_content": reasoning},
+            ]
+        }
+
+    def test_shortest_per_question_and_starter_copies(self):
+        from modal_scripts import modal_chat_sft_data as prep
+
+        rows = [
+            self.row("A", "", "long reasoning"),
+            None,
+            self.row("A", "", "short"),
+            self.row("B", "def f(x):\n    ", "think"),
+        ]
+        first = prep.per_question(rows, 1)
+        self.assertEqual([r is not None for r in first], [True, False, False, True])
+        shortest = prep.per_question(rows, 1, shortest=True)
+        self.assertEqual([r is not None for r in shortest], [False, False, True, True])
+        repeated = prep.repeat_starter(shortest, 3)
+        self.assertEqual(len(repeated), 6)
+        self.assertEqual(repeated[4:], [rows[3], rows[3]])
