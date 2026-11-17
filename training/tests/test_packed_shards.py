@@ -264,6 +264,47 @@ class HybridDataTests(unittest.TestCase):
             partitions.append(set(found))
         self.assertFalse(partitions[0] & partitions[1])
 
+    def test_joined_columns_and_minimum_values_from_plain_json_lines(self):
+        rows = [
+            {"input": "Add two numbers.", "output": "def add(a, b): return a + b", "score": "1.0"},
+            {"input": "Negate.", "output": "def neg(a): return a", "score": "0.5"},
+            {"input": "Square.", "output": "def sq(a): return a * a", "score": None},
+        ]
+        (self.root / "instruct-0.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+        source = {
+            "weight": 1.0,
+            "repo": "i",
+            "revision": "r",
+            "pattern": "instruct-{index}.jsonl",
+            "shards": 1,
+            "column": "text",
+            "join_columns": ["input", "output"],
+            "min_values": {"score": 1.0},
+            "max_passes": 1,
+        }
+        self.recipe["sources"] = {"instruct": source}
+        dropped = {"empty": 0, "license": 0}
+        texts = [
+            text
+            for batch in data._text_batches(
+                source, data.JsonLines(self.root / "instruct-0.jsonl"), dropped
+            )
+            for text in batch
+        ]
+        self.assertEqual(texts, ["Add two numbers.\n\ndef add(a, b): return a + b"])
+        self.assertEqual(dropped["score"], 2)
+        meta = data.prepare_shard(
+            self.recipe,
+            "instruct",
+            0,
+            self.root / "out",
+            self.tokenizer,
+            np.empty(0, np.uint64),
+            EOS,
+            self.download,
+        )
+        self.assertEqual((meta["documents"], meta["dropped"]["score"]), (1, 2))
+
     def test_capacity_rejects_incomplete_and_insufficient_shards(self):
         from workflows.checks import check_hybrid_capacity
 

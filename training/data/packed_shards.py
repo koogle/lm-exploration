@@ -22,7 +22,11 @@ recipe's benchmark test sets, and code outside `PERMISSIVE_LICENSES` when a sour
 recipe-level `stars` table (repository names with at least `minimum` stars,
 `build_stars`), `starred: true` keeps only rows whose `split_column` repository is
 in the table and `starred: false` only the others. `exclude_repositories` drops
-rows of the listed repositories. Upstream files are parquet or gzipped JSON lines.
+rows of the listed repositories. `join_columns` builds the `column` text from several
+upstream columns joined by a blank line (e.g. an instruction and its answer), and
+`min_values` keeps only rows whose named numeric columns reach the given values (e.g.
+the fraction of unit tests a generated answer passes). Upstream files are parquet or
+JSON lines, plain or gzipped.
 
 With `hash_split`, a training shard keeps a document only when its content and its
 `split_column` group are both outside the held-out partition, and the held-out
@@ -185,7 +189,8 @@ def build_stars(recipe, download=hub_download):
 
 
 class JsonLines:
-    """A gzipped JSON-lines upstream file read like a one-row-group parquet file."""
+    """A JSON-lines upstream file (plain or gzipped) read like a one-row-group parquet
+    file."""
 
     num_row_groups = 1
 
@@ -198,7 +203,8 @@ class JsonLines:
         import pyarrow as pa
 
         rows = []
-        with gzip.open(self.path, "rt", encoding="utf-8") as lines:
+        opener = gzip.open if str(self.path).endswith(".gz") else open
+        with opener(self.path, "rt", encoding="utf-8") as lines:
             for line in lines:
                 row = json.loads(line)
                 rows.append({column: row.get(column) for column in columns})
@@ -282,7 +288,10 @@ def _text_batches(
     """
     licenses = source.get("permissive_licenses_only", False)
     group_by, order_by = source.get("group_by"), source.get("order_by")
-    columns = [source["column"], *(["license"] if licenses else [])]
+    joined = source.get("join_columns")
+    minimums = source.get("min_values", {})
+    columns = [*(joined or [source["column"]]), *(["license"] if licenses else [])]
+    columns += [c for c in minimums if c not in columns]
     select = row_filter(source, starred)
     columns += [c for c in ("language", "path") if select and c in select.columns]
     columns += [c for c in (group_by, order_by) if c]
@@ -293,8 +302,11 @@ def _text_batches(
     import pyarrow as pa
     import pyarrow.compute as pc
 
-    others = [c for c in columns if c != source["column"]]
+    others = [c for c in columns if c != source["column"] and c not in (joined or ())]
     for batch in parquet.iter_batches(batch_size=1024, columns=columns, row_groups=row_groups):
+        if joined:
+            text = pc.binary_join_element_wise(*(batch.column(c) for c in joined), "\n\n")
+            batch = batch.append_column(source["column"], text)
         # Filter on the small columns and the text's byte length first; only the kept
         # rows' texts become Python strings.
         text = batch.column(source["column"])
@@ -304,6 +316,17 @@ def _text_batches(
             allowed = [i for i in kept if fields[i]["license"].lower() in PERMISSIVE_LICENSES]
             dropped["license"] += len(kept) - len(allowed)
             kept = allowed
+        if minimums:
+            reached = [
+                i
+                for i in kept
+                if all(
+                    fields[i][c] is not None and float(fields[i][c]) >= v
+                    for c, v in minimums.items()
+                )
+            ]
+            dropped["score"] = dropped.get("score", 0) + len(kept) - len(reached)
+            kept = reached
         if select:
             sizes = [0] * batch.num_rows
             if not pa.types.is_null(text.type):
@@ -389,7 +412,8 @@ def prepare_shard(
     else:
         file = source["pattern"].format(index=file_index + source.get("file_offset", 0))
     path = download(source["repo"], source["revision"], file)
-    parquet = JsonLines(path) if str(file).endswith(".jsonl.gz") else pq.ParquetFile(path)
+    lines = str(file).endswith((".jsonl", ".jsonl.gz"))
+    parquet = JsonLines(path) if lines else pq.ParquetFile(path)
     if parts > parquet.num_row_groups:
         raise ValueError("parts_per_file exceeds the number of Parquet row groups")
     row_groups = [
