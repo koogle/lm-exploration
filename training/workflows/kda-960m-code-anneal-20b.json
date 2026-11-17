@@ -1,0 +1,28 @@
+{
+  "name": "kda-960m-code-anneal-20b",
+  "description": "Code-heavy mid-training of Malama Base at 4K context: 20B tokens of OpenCoder's Stack v2 algorithmic files and code-related web pages, synthetic exercises, unit-tested instruction answers and permissive GitHub files, with 35% foundation replay.",
+  "family": "hybrid",
+  "from": "kda-960m-foundation-20261110-01-pretrain-a7-s02/export/tokens-099999547392",
+  "stages": [
+    {
+      "stage": "data",
+      "name": "code-anneal-20b-data",
+      "recipe": "hybrid/recipes/kda-code-anneal-v2.json",
+      "parallel": 16
+    },
+    {
+      "stage": "midtrain",
+      "name": "code",
+      "description": "kda-code-anneal-v2, 20B tokens at 4K (35% foundation replay)",
+      "model_config": "hybrid/configs/kda-960m-code-anneal-20b.json",
+      "gpu": "H100",
+      "world_size": 8,
+      "segment_seconds": 18000,
+      "worker_timeout_seconds": 19800,
+      "max_segments": 5,
+      "segments_per_call": 1,
+      "qualification_segments": 0,
+      "data": "code-anneal-20b-data"
+    }
+  ]
+}
