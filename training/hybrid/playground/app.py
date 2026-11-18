@@ -78,7 +78,7 @@ def prompt_ids(text, format_):
 
 
 def split_prompts(text):
-    return [p.strip() for p in text.split(SEPARATOR) if p.strip()]
+    return [p for p in text.split(SEPARATOR) if p.strip()]
 
 
 def compare(prompts_text, labels, format_, temperature, top_p, max_new, seed):
@@ -197,38 +197,10 @@ EXAMPLES = [
     "Question: A train travels 120 km in 2 hours. What is its average speed?\nAnswer:",
     "The history of the printing press",
 ]
+# Prompt sets offered in the Compare tab: {name: [prompt, ...]}.
 PROMPT_SETS = {
-    "Code completion": SEPARATOR.join(
-        [
-            'def is_palindrome(s: str) -> bool:\n    """Return True if s reads the same '
-            'forwards and backwards, ignoring case and non-alphanumeric characters."""\n',
-            'def merge_intervals(intervals: list[list[int]]) -> list[list[int]]:\n    """Merge '
-            'all overlapping intervals and return them sorted by start."""\n',
-            "# Read n and a list of n integers from stdin and print the length of the longest\n"
-            "# strictly increasing subsequence.\nimport sys\n",
-        ]
-    ),
-    "Contest problems": SEPARATOR.join(
-        [
-            "You are given an integer array nums. Return the number of pairs (i, j) with "
-            "i < j such that nums[i] + nums[j] is divisible by 3.\n\nWrite a Python program "
-            "that reads the array from stdin (n on the first line, then n integers) and "
-            "prints the answer.",
-            "Given a string s of lowercase letters, find the length of the longest substring "
-            "in which every letter appears an even number of times. Read s from stdin and "
-            "print the answer.",
-            "There are N cities connected by M bidirectional roads with lengths. Find the "
-            "shortest distance from city 1 to every city, printing -1 for unreachable "
-            "cities. Input: N M, then M lines u v w. Output N integers on one line.",
-        ]
-    ),
-    "General": SEPARATOR.join(
-        [
-            "Explain in two sentences why the sky is blue.",
-            "A train travels 120 km in 2 hours. What is its average speed?",
-            "Write a haiku about debugging.",
-        ]
-    ),
+    name: SEPARATOR.join(prompts)
+    for name, prompts in json.loads((HERE / "prompt-sets.json").read_text()).items()
 }
 LABELS = list(MODELS)
 
