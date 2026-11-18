@@ -192,3 +192,31 @@ class TeacherTracesTest(unittest.TestCase):
                 }
             )
         )
+
+
+class AceReasonLeetCodeTest(unittest.TestCase):
+    def test_matched_row_is_verified_under_the_starter_code(self):
+        row = {
+            "task_id": "add-two",
+            "difficulty": "Easy",
+            "problem_description": "Given two integers `a` and `b`, return their sum as one integer value.",
+            "starter_code": "class Solution:\n    def add(self, a: int, b: int) -> int:\n",
+            "estimated_date": "2020-01-01",
+            "input_output": [{"input": "a = 1, b = 2", "output": "3"}],
+        }
+        questions = contest_sft.leetcode_questions([row])
+        method = "class Solution:\n    def add(self, a, b):\n        return a + b\n"
+        ace = {
+            "source": "leetcode",
+            "input": "Given two integers a and b, return their sum as one integer value.\n\nWrite Python.",
+            "output": f"<think>\nSum.\n</think>\n\n```python\n{method}```",
+        }
+        conversation = contest_sft.acereason_leetcode(ace, questions)
+        self.assertEqual(conversation["messages"][1]["reasoning_content"], "Sum.")
+        self.assertIn("class Solution:", conversation["messages"][0]["content"])
+        function = {
+            **ace,
+            "output": "<think>\nSum.\n</think>\n```python\ndef add(a, b):\n    return a + b\n```",
+        }
+        self.assertIsNone(contest_sft.acereason_leetcode(function, questions))
+        self.assertIsNone(contest_sft.acereason_leetcode({**ace, "source": "TACO"}, questions))
