@@ -1,0 +1,32 @@
+{
+  "name": "chat-sft-teacher-traces-v1",
+  "description": "Qwen3-30B-A3B thinking-mode traces (Apache-2.0) on LiveCodeBench v1-v5 and LeetCodeDataset problems before 2025-01-01: the shortest passing completion per problem, in LiveCodeBench's prompt and thinking mode (contest_sft.teacher_traces). Screened against LiveCodeBench release v6 only (screen-lcb-v6-v2, at least 10 distinct 13-grams).",
+  "repo": "jfrick/lcb-teacher-traces",
+  "revision": "b0b4a734e3dd1efe4c14ee63f876b7a58532e100",
+  "files": [
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-00-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-01-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-02-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-03-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-04-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-05-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-06-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-07-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-08-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-09-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-10-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-11-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-12-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-13-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-14-of-16.traces.jsonl",
+    "qwen3-30b-a3b-v1/lcb-Qwen--Qwen3-30B-A3B-FP8.shard-15-of-16.traces.jsonl"
+  ],
+  "converter": "teacher_traces",
+  "thinking": true,
+  "format": "chat-sft",
+  "context": 32768,
+  "heldout_fraction": 0.01,
+  "screen": "screen-lcb-v6-v2/screen.npy",
+  "screen_ngram": 13,
+  "screen_min_hits": 10
+}
