@@ -1,0 +1,11 @@
+{
+  "name": "Malama versions",
+  "description": "The 960M Malama hybrid (Kimi Delta Attention with one full-attention layer in four, GLM tokenizer) after each training stage, on the same prompts. Base models continue text; chat models answer a chat turn, with or without thinking.",
+  "models": [
+    {"label": "Base (100B tokens)", "repo": "jfrick/malama-base", "export": "tokens-099999547392"},
+    {"label": "32K context", "repo": "jfrick/malama-context32k", "export": "tokens-001999634432"},
+    {"label": "Code mid-training (5B)", "repo": "jfrick/malama-code-anneal", "export": "tokens-004999610368"},
+    {"label": "LCB format SFT", "repo": "jfrick/malama-lcb-format-sft", "export": "tokens-000020971520", "chat": true},
+    {"label": "Reasoning SFT pilot", "repo": "jfrick/malama-reasoning-sft-pilot", "export": "tokens-000536870912", "chat": true}
+  ]
+}
