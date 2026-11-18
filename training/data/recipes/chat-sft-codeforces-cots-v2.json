@@ -1,6 +1,6 @@
 {
   "name": "chat-sft-codeforces-cots-v2",
-  "description": "open-r1/codeforces-cots Python traces (DeepSeek-R1, ODC-By), decontaminated release, in LiveCodeBench's prompt and thinking mode: exact-output Codeforces problems without interaction whose trace's last Python block passes the row's public and private tests (contest_sft.codeforces_cots). Screened against LiveCodeBench release v6 only (screen-lcb-v6-v1), so problems of the earlier releases are kept.",
+  "description": "open-r1/codeforces-cots Python traces (DeepSeek-R1, ODC-By), decontaminated release, in LiveCodeBench's prompt and thinking mode: exact-output Codeforces problems without interaction whose trace's last Python block passes the row's public and private tests (contest_sft.codeforces_cots). Screened against LiveCodeBench release v6 only (screen-lcb-v6-v2, at least 10 distinct 13-grams), so problems of the earlier releases are kept.",
   "repo": "open-r1/codeforces-cots",
   "revision": "39ac85c150806230473c70ad72c31f6232fe3f41",
   "files": [
@@ -13,6 +13,7 @@
   "format": "chat-sft",
   "context": 32768,
   "heldout_fraction": 0.01,
-  "screen": "screen-lcb-v6-v1/screen.npy",
-  "screen_ngram": 13
+  "screen": "screen-lcb-v6-v2/screen.npy",
+  "screen_ngram": 13,
+  "screen_min_hits": 10
 }

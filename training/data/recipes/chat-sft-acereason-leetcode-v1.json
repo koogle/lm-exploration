@@ -1,6 +1,6 @@
 {
   "name": "chat-sft-acereason-leetcode-v1",
-  "description": "AceReason-1.1-SFT LeetCode traces (DeepSeek-R1; CC-BY-4.0 release whose LeetCode rows come from ibragim-bad/leetcode_solutions, which states no license) in LiveCodeBench's starter-code prompt and thinking mode: rows matched to LeetCodeDataset train problems before 2025 by statement, kept when their final program passes the problem's tests under its starter code; the shortest such trace per problem per file (contest_sft.acereason_leetcode). Screened against LiveCodeBench release v6 only (screen-lcb-v6-v1).",
+  "description": "AceReason-1.1-SFT LeetCode traces (DeepSeek-R1; CC-BY-4.0 release whose LeetCode rows come from ibragim-bad/leetcode_solutions, which states no license) in LiveCodeBench's starter-code prompt and thinking mode: rows matched to LeetCodeDataset train problems before 2025 by statement, kept when their final program passes the problem's tests under its starter code; the shortest such trace per problem per file (contest_sft.acereason_leetcode). Screened against LiveCodeBench release v6 only (screen-lcb-v6-v2, at least 10 distinct 13-grams).",
   "repo": "nvidia/AceReason-1.1-SFT",
   "revision": "5ac692742de9f2481f8274d022dc78d5fc96c249",
   "files": [
@@ -200,6 +200,7 @@
   "format": "chat-sft",
   "context": 32768,
   "heldout_fraction": 0.01,
-  "screen": "screen-lcb-v6-v1/screen.npy",
-  "screen_ngram": 13
+  "screen": "screen-lcb-v6-v2/screen.npy",
+  "screen_ngram": 13,
+  "screen_min_hits": 10
 }

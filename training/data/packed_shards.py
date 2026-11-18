@@ -214,12 +214,13 @@ class JsonLines:
             yield pa.Table.from_pylist(rows)
 
 
-def contaminated(ids, screen, n):
-    hashes = ngram_hashes(ids, n)
+def contaminated(ids, screen, n, min_hits=1):
+    """True when `ids` share at least `min_hits` distinct n-grams with the screen."""
+    hashes = np.unique(ngram_hashes(ids, n))
     if not hashes.size or not screen.size:
         return False
     positions = np.searchsorted(screen, hashes).clip(max=screen.size - 1)
-    return bool((screen[positions] == hashes).any())
+    return int((screen[positions] == hashes).sum()) >= min_hits
 
 
 def source_root(recipe, root, name):
