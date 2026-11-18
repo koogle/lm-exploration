@@ -454,9 +454,13 @@ simulated with the run's seed), and trains like pretraining
 ## Playground
 
 [`playground/`](playground) is a Gradio app for a private Hugging Face Space on a GPU
-that serves several exports at once. Its Compare tab runs the same prompts on each
-selected export, as text continuation, a chat turn, or a chat turn with thinking, and
-fills a prompts-by-models table that downloads as JSON with the sampling settings.
+that serves several exports at once. Its Compare tab is a table with one row per
+prompt: a Run box, the prompt, and one column per export. Ticked prompts run in turn,
+and each prompt's replies from the selected exports stream into their columns side by
+side (one token per export per round, each export with its own decoder and sampler),
+as text continuation, a chat turn, or a chat turn with thinking. Prompts load from
+preset sets (`playground/prompt-sets.json`) or are added one by one, and the results
+download as JSON with the sampling settings.
 For chat exports a chat tab has OpenAI tools whose replies are parsed back into
 OpenAI messages, and a text tab continues a prompt with one export. It decodes with
 `generate.py` in bf16, one request at a time, and warms up every export (compiled
