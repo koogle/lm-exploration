@@ -7,7 +7,8 @@ One call per parquet or JSON-lines file, all in parallel: download it at the rec
 pinned revision, convert rows to OpenAI messages (smoltalk2's `chat_sft.convert`, or
 the recipe's `converter` from `contest_sft.CONVERTERS`, run on every CPU since contest
 converters execute each candidate program against its tests; with `questions`, the
-converter looks each problem up in a table built once by `questions`, and
+converter looks each problem up in a table built once by `questions`; files may be
+parquet, JSON lines or Arrow streams; and
 `per_question` keeps the first conversations per problem in each file, or with
 `per_question_order: "shortest"` those with the shortest reasoning and answer;
 `starter_copies` repeats the conversations whose prompt gives starter code), render
@@ -81,6 +82,10 @@ def prepare(recipe, file, deadline):
         if file.endswith(".jsonl"):
             # JSON lines end at "\n" only; statements can hold other line separators.
             rows = [json.loads(line) for line in Path(path).read_text().split("\n") if line]
+        elif file.endswith(".arrow"):
+            import pyarrow as pa
+
+            rows = pa.ipc.open_stream(pa.memory_map(path)).read_all().to_pylist()
         else:
             rows = pq.read_table(path).to_pylist()
         convert = contest_sft.CONVERTERS[recipe["converter"]]
@@ -152,7 +157,8 @@ def repeat_starter(rows, copies):
 def questions(recipe, deadline):
     """Write `<recipe>/questions.json`: "dataset/split/index" -> {"question",
     "starter_code"} from `contest_sft.QUESTION_SOURCES`, for converters that look
-    problems up by index."""
+    problems up by index; with `questions` "leetcode", LeetCodeDataset train problems
+    by statement (`contest_sft.leetcode_questions`)."""
     import pyarrow.parquet as pq
     from huggingface_hub import hf_hub_download
     from training_data import contest_sft
@@ -163,7 +169,15 @@ def questions(recipe, deadline):
     if path.exists():
         return len(json.loads(path.read_text()))
     table = {}
-    for dataset, (repo, revision, splits) in contest_sft.QUESTION_SOURCES.items():
+    if recipe["questions"] == "leetcode":
+        repo, revision = contest_sft.LEETCODE
+        local = hf_hub_download(
+            repo, "LeetCodeDataset-train.jsonl", revision=revision, repo_type="dataset"
+        )
+        rows = [json.loads(line) for line in Path(local).read_text().split("\n") if line]
+        table = contest_sft.leetcode_questions(rows)
+    sources = {} if table else contest_sft.QUESTION_SOURCES
+    for dataset, (repo, revision, splits) in sources.items():
         for split, files in splits.items():
             rows = []
             for file in files:

@@ -36,10 +36,17 @@ harness runs it:
   (LiveCodeBench's own problems from the releases before `CUTOFF`, and LeetCodeDataset
   train problems before it, with their tests), one passing completion per problem; the
   answer is the completion's final program.
+- `acereason_leetcode` (nvidia/AceReason-1.1-SFT, CC-BY-4.0; its LeetCode rows come
+  from ibragim-bad/leetcode_solutions, which states no license): DeepSeek-R1 traces for
+  LeetCode problems, in thinking mode. A row is matched to a LeetCodeDataset train
+  problem by its statement (`leetcode_key`), and kept if its final program passes that
+  problem's tests under its starter code; the prompt is LeetCodeDataset's statement and
+  starter code.
 """
 
 import ast
 import json
+import re
 
 from evaluation.benchmarks import livecodebench
 
@@ -339,7 +346,51 @@ def teacher_traces(row):
     return conversation_
 
 
+def leetcode_key(statement):
+    """A LeetCode statement's first twelve words, lowercased, without punctuation or
+    formatting, so differently formatted copies of a problem match."""
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", statement.lower()).split()[:12])
+
+
+def leetcode_questions(rows):
+    """`leetcode_key` -> {"question", "starter_code", "tests"} of the LeetCodeDataset rows
+    before `CUTOFF` whose cases are plain JSON values."""
+    table = {}
+    for row in rows:
+        tests = leetcode_tests(row) if str(row["estimated_date"]) < CUTOFF else None
+        if tests:
+            table.setdefault(
+                leetcode_key(row["problem_description"]),
+                {
+                    "question": row["problem_description"],
+                    "starter_code": row["starter_code"],
+                    "tests": tests,
+                },
+            )
+    return table
+
+
+def acereason_leetcode(row, questions):
+    """A thinking-mode conversation from an AceReason LeetCode row whose final program
+    passes its matched LeetCodeDataset problem's tests, or None."""
+    if row.get("source") != "leetcode":
+        return None
+    problem = questions.get(leetcode_key(row["input"]))
+    parts = split_think(row["output"] or "")
+    blocks = parts and livecodebench.CODE_BLOCK.findall(livecodebench.last_block(parts[1]))
+    if not problem or not blocks:
+        return None
+    graded = {"starter_code": problem["starter_code"], "tests": problem["tests"]}
+    for program in (blocks[0].strip(), IMPORTS + blocks[0].strip()):
+        if _passes(graded, program):
+            conversation_ = conversation(problem["question"], problem["starter_code"], program)
+            conversation_["messages"][1]["reasoning_content"] = parts[0]
+            return conversation_
+    return None
+
+
 CONVERTERS = {
+    "acereason_leetcode": acereason_leetcode,
     "codecontests": codecontests,
     "codeforces_cots": codeforces_cots,
     "leetcode": leetcode,
