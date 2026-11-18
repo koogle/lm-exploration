@@ -83,6 +83,8 @@ MOBILELLM_CODE_SYSTEM = (
 THINKING_REFERENCES = {
     "Qwen/Qwen3-0.6B": ("c1899de289a04d12100db370d81485cdf75e47ca", 40960, None),
     "Qwen/Qwen3-1.7B": ("70d244cc86ccca08cf5af4e1e306ecf908b1ad5e", 40960, None),
+    "Qwen/Qwen3-32B-FP8": ("aa55da1ecc13d006e8b8e4f54579b1ea8c3db2df", 40960, None),
+    "Qwen/Qwen3-30B-A3B-FP8": ("d206ba732169f29bb77fbf80fc2c4b81d4d30782", 40960, None),
     "facebook/MobileLLM-R1.5-950M": (
         "d4af70ac985faa1d504b3446d8a7448fedf91194",
         32768,
@@ -95,6 +97,11 @@ THINKING_REFERENCES = {
     ),
 }
 THINKING = {"samples": 16, "temperature": 0.6, "top_p": 0.95, "max_new_tokens": 32768, "seed": 1234}
+# `--pool train`: teacher traces for SFT on `contest_sft.trace_problems`, shorter and
+# fewer per problem; each passing problem keeps its shortest passing completion. The
+# KV cache is FP8 there, so more sequences decode together.
+TRACES = {**THINKING, "samples": 4, "max_new_tokens": 16384}
+TRACE_SHARDS = 16
 # Calls per model: each H100 call takes every THINKING_SHARDS-th problem.
 THINKING_SHARDS = 4
 # Checkpoints decode with the family's own sampler: more calls, and problems per batch
@@ -251,9 +258,10 @@ def evaluate_lcb(model, revision, deadline, folder, limit=0):
     secrets=[secret],
     volumes={"/runs": runs_volume, "/hf": hf_cache},
 )
-def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shards=1):
+def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shards=1, pool=""):
     """`THINKING["samples"]` reasoning samples per problem from a reference model, for
-    every `shards`-th problem from `shard` on."""
+    every `shards`-th problem from `shard` on; with `pool` "train", `TRACES` samples of
+    the trace problems instead, and the passing traces are written too."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     from vllm import LLM, SamplingParams
@@ -265,21 +273,23 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
     # MobileLLM-R1.5 is a text-only Llama 4; its card registers the class this way.
     ModelRegistry.register_model("Llama4ForCausalLM", Llama4ForCausalLM)
     _, positions, system = THINKING_REFERENCES[model]
-    problems = _thinking_problems(limit, shard, shards)
+    problems = (_trace_problems if pool else _thinking_problems)(limit, shard, shards)
+    sampling = TRACES if pool else THINKING
     started = time.time()
     llm = LLM(
         model=model,
         revision=revision,
-        max_model_len=min(positions, THINKING["max_new_tokens"] + 4096),
-        seed=THINKING["seed"],
+        max_model_len=min(positions, sampling["max_new_tokens"] + 4096),
+        seed=sampling["seed"],
         enable_prefix_caching=True,
+        **({"kv_cache_dtype": "fp8"} if pool else {}),
     )
     params = SamplingParams(
-        n=THINKING["samples"],
-        temperature=THINKING["temperature"],
-        top_p=THINKING["top_p"],
-        max_tokens=THINKING["max_new_tokens"],
-        seed=THINKING["seed"],
+        n=sampling["samples"],
+        temperature=sampling["temperature"],
+        top_p=sampling["top_p"],
+        max_tokens=sampling["max_new_tokens"],
+        seed=sampling["seed"],
     )
     outputs = llm.chat(
         [
@@ -298,7 +308,17 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
         [(s.text, len(s.token_ids), s.finish_reason) for s in output.outputs] for output in outputs
     ]
     return _write_thinking(
-        model, revision, {}, folder, limit, shard, shards, problems, samples, started
+        model,
+        revision,
+        {},
+        folder,
+        limit,
+        shard,
+        shards,
+        problems,
+        samples,
+        started,
+        traces=bool(pool),
     )
 
 
@@ -389,12 +409,44 @@ def _thinking_problems(limit, shard, shards):
     return livecodebench.load(path)[: limit or None][shard::shards]
 
 
+def _trace_problems(limit, shard, shards):
+    from huggingface_hub import hf_hub_download
+    from training_data import contest_sft
+
+    releases = [
+        hf_hub_download(DATASET, name, repo_type="dataset", revision=DATASET_REVISION)
+        for name in contest_sft.TRACE_RELEASES
+    ]
+    leetcode = hf_hub_download(
+        contest_sft.LEETCODE[0],
+        "LeetCodeDataset-train.jsonl",
+        repo_type="dataset",
+        revision=contest_sft.LEETCODE[1],
+    )
+    # JSON lines end at "\n" only; statements can hold other line separators.
+    rows = [json.loads(line) for line in Path(leetcode).read_text().split("\n") if line]
+    return contest_sft.trace_problems(releases, rows)[: limit or None][shard::shards]
+
+
 def _write_thinking(
-    model, revision, loaded, folder, limit, shard, shards, problems, samples, started, opened=False
+    model,
+    revision,
+    loaded,
+    folder,
+    limit,
+    shard,
+    shards,
+    problems,
+    samples,
+    started,
+    opened=False,
+    traces=False,
 ):
     """Grade (text, tokens, finish reason) samples per problem and write the shard's result
     and completions; with `opened`, the prompt opened the reasoning span, so a completion
-    that never closes it scores 0."""
+    that never closes it scores 0. With `traces`, the samples are teacher traces of the
+    trace problems, and each problem's shortest passing completion is written to
+    `<name>.traces.jsonl` (the rows `contest_sft.teacher_traces` reads)."""
     from evaluation.benchmarks import livecodebench
 
     generation_seconds = round(time.time() - started, 1)
@@ -415,9 +467,13 @@ def _write_thinking(
         "model": model,
         "revision": revision,
         **loaded,
-        "protocol": "thinking",
-        "sampling": THINKING,
-        "dataset": {"repo": DATASET, "revision": DATASET_REVISION, "file": RELEASE_FILE},
+        "protocol": "traces" if traces else "thinking",
+        "sampling": TRACES if traces else THINKING,
+        "dataset": (
+            {"trace_problems": "contest_sft.trace_problems", "revision": DATASET_REVISION}
+            if traces
+            else {"repo": DATASET, "revision": DATASET_REVISION, "file": RELEASE_FILE}
+        ),
         "limit": limit or None,
         "generation_seconds": generation_seconds,
         "summary": livecodebench.summary(problems, scores),
@@ -448,6 +504,22 @@ def _write_thinking(
                 "finish_reasons": [finish for _, _, finish in group],
             }
             handle.write(json.dumps(row) + "\n")
+    if traces:
+        with (folder_path / f"lcb-{name}.traces.jsonl").open("w") as handle:
+            for problem, group, scores_ in zip(problems, samples, sample_scores, strict=True):
+                passing = [(tokens, text) for (text, tokens, _), s in zip(group, scores_) if s]
+                if passing:
+                    row = {
+                        key: problem[key]
+                        for key in ("question_id", "platform", "difficulty", "contest_date")
+                    }
+                    row |= {
+                        "question_content": problem["question_content"],
+                        "starter_code": problem["starter_code"],
+                        "completion": min(passing)[1],
+                        "passing": len(passing),
+                    }
+                    handle.write(json.dumps(row) + "\n")
     runs_volume.commit()
     return out["summary"]
 
@@ -537,15 +609,20 @@ def main(
     limit: int = 0,
     protocol: str = "plain",
     merge: str = "",
+    pool: str = "",
 ):
     """Spawn one call per checkpoint (comma-separated `--checkpoints`) and reference model
     (comma-separated `--references`, or `all`); calls outlive this client. `--merge
-    lcb-thinking-<launch>` instead combines a finished thinking launch's shards."""
+    lcb-thinking-<launch>` instead combines a finished thinking launch's shards.
+    `--protocol thinking --pool train --references <teacher>` samples teacher traces
+    on the trace problems (`TRACES`, `TRACE_SHARDS` calls)."""
     if merge:
         print(json.dumps(merge_thinking.remote(merge), indent=1))
         return
     if protocol not in ("plain", "thinking"):
         raise ValueError("--protocol is plain or thinking")
+    if pool not in ("", "train") or pool and (protocol != "thinking" or checkpoints):
+        raise ValueError("--pool train samples reference models with --protocol thinking")
     if protocol == "thinking":
         chosen = _thinking_launch(checkpoints, references)
     else:
@@ -565,20 +642,28 @@ def main(
             raise ValueError("Name --checkpoints and/or --references")
         function = evaluate_lcb
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    tag = "-thinking" if protocol == "thinking" else ""
+    tag = "-traces" if pool else "-thinking" if protocol == "thinking" else ""
     folder = f"lcb{tag}-{int(time.time())}{'-limit' if limit else ''}"
     if protocol == "thinking":
         calls, names = [], []
         for m, r in chosen:
             checkpoint = m.startswith("checkpoint:")
-            shards = CHECKPOINT_THINKING_SHARDS if checkpoint else THINKING_SHARDS
+            shards = (
+                CHECKPOINT_THINKING_SHARDS
+                if checkpoint
+                else TRACE_SHARDS
+                if pool
+                else THINKING_SHARDS
+            )
             for shard in range(shards):
                 if checkpoint:
                     call = evaluate_thinking_checkpoint.spawn(
                         m.split(":", 1)[1], deadline, folder, limit, shard, shards
                     )
                 else:
-                    call = evaluate_thinking.spawn(m, r, deadline, folder, limit, shard, shards)
+                    call = evaluate_thinking.spawn(
+                        m, r, deadline, folder, limit, shard, shards, pool
+                    )
                 calls.append(call)
                 names.append((f"{m}#{shard}", r))
         chosen = names

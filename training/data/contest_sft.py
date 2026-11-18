@@ -26,17 +26,37 @@ harness runs it:
   alone, in one fenced block, as the harness expects. open-r1/codeforces problems are
   skipped: the release does not pin that dataset's revision, so its indices may not
   match the current row order.
+- `codeforces_cots` (open-r1/codeforces-cots, ODC-By): DeepSeek-R1 traces for
+  Codeforces problems, statements inline, in thinking mode. Only finished generations
+  of exact-output (`diff`) problems without interaction are used; the answer is the
+  trace's last Python block, kept if it passes the row's public and private tests
+  (up to `MAX_TESTS`). Its contests end in 2024-07; the release is decontaminated
+  against LiveCodeBench, and preparation applies our screen as well.
+- `teacher_traces`: reasoning traces sampled from a teacher model on `trace_problems`
+  (LiveCodeBench's own problems from the releases before `CUTOFF`, and LeetCodeDataset
+  train problems before it, with their tests), one passing completion per problem; the
+  answer is the completion's final program.
+- `acereason_leetcode` (nvidia/AceReason-1.1-SFT, CC-BY-4.0; its LeetCode rows come
+  from ibragim-bad/leetcode_solutions, which states no license): DeepSeek-R1 traces for
+  LeetCode problems, in thinking mode. A row is matched to a LeetCodeDataset train
+  problem by its statement (`leetcode_key`), and kept if its final program passes that
+  problem's tests under its starter code; the prompt is LeetCodeDataset's statement and
+  starter code.
 """
 
 import ast
 import json
+import re
 
 from evaluation.benchmarks import livecodebench
 
 CODECONTESTS = ("deepmind/code_contests", "802411c3010cb00d1b05bad57ca77365a3c699d6")
 LEETCODE = ("newfacade/LeetCodeDataset", "215604aeed660029df7de2fea5a4d7b6ed476a08")
 OPENCODEREASONING2 = ("nvidia/OpenCodeReasoning-2", "eadf535931451525f3e5621d0f960c240bc62fd9")
+CODEFORCES_COTS = ("open-r1/codeforces-cots", "39ac85c150806230473c70ad72c31f6232fe3f41")
 CUTOFF = "2025-01-01"
+# LiveCodeBench releases whose problems before CUTOFF are trace problems.
+TRACE_RELEASES = ("test.jsonl", "test2.jsonl", "test3.jsonl", "test4.jsonl", "test5.jsonl")
 PYTHON3 = 3  # CodeContests `solutions.language`
 MAX_TESTS = 30
 MAX_CANDIDATES = 4
@@ -244,8 +264,136 @@ def opencodereasoning2(row, questions):
     return conversation_
 
 
+def codeforces_statement(row):
+    """A Codeforces row's statement in the layout of LiveCodeBench's stdin problems."""
+    parts = [row["description"].strip()]
+    for title, key in (("Input", "input_format"), ("Output", "output_format")):
+        if row.get(key):
+            parts.append(f"{title}\n\n{row[key].strip()}")
+    for i, example in enumerate(row.get("examples") or [], 1):
+        parts.append(f"Sample Input {i}\n\n{example['input'].strip()}")
+        parts.append(f"Sample Output {i}\n\n{example['output'].strip()}")
+    if row.get("note"):
+        parts.append(f"Note\n\n{row['note'].strip()}")
+    return "\n\n".join(parts)
+
+
+def codeforces_cots(row):
+    """A thinking-mode conversation from a codeforces-cots row, or None unless its last
+    Python block passes the row's tests."""
+    if row.get("finish_reason") != "stop" or row.get("problem_type") != "diff":
+        return None
+    if row.get("interaction_format") or not row.get("description"):
+        return None
+    parts = split_think(row["generation"] or "")
+    blocks = parts and livecodebench.CODE_BLOCK.findall(parts[1])
+    tests = [
+        {"input": i, "output": o}
+        for kind in ("public_tests", "private_tests")
+        for i, o in zip(
+            (row.get(kind) or {}).get("input") or [],
+            (row.get(kind) or {}).get("output") or [],
+            strict=True,
+        )
+    ][:MAX_TESTS]
+    if not blocks or not tests:
+        return None
+    program = blocks[-1].strip()
+    if not _passes({"starter_code": "", "tests": tests}, program):
+        return None
+    conversation_ = conversation(codeforces_statement(row), "", program)
+    conversation_["messages"][1]["reasoning_content"] = parts[0]
+    return conversation_
+
+
+def trace_problems(release_paths, leetcode_rows):
+    """Problems with tests for sampling teacher traces: LiveCodeBench problems dated
+    before `CUTOFF` from the release files, then LeetCodeDataset rows before it whose
+    cases are plain JSON values (`leetcode_tests`)."""
+    problems = [
+        problem
+        for path in release_paths
+        for problem in livecodebench.load(path)
+        if problem["contest_date"][:10] < CUTOFF
+    ]
+    for row in leetcode_rows:
+        tests = leetcode_tests(row) if str(row["estimated_date"]) < CUTOFF else None
+        if tests:
+            problems.append(
+                {
+                    "question_id": f"leetcodedataset/{row['task_id']}",
+                    "question_content": row["problem_description"],
+                    "starter_code": row["starter_code"],
+                    "tests": tests,
+                    "platform": "leetcode",
+                    "difficulty": row["difficulty"].lower(),
+                    "contest_date": row["estimated_date"],
+                }
+            )
+    return problems
+
+
+def teacher_traces(row):
+    """A thinking-mode conversation from a passing teacher completion ({"question_content",
+    "starter_code", "completion"}), or None without a closed reasoning span and a
+    final program."""
+    parts = split_think(row["completion"].lstrip())
+    blocks = parts and livecodebench.CODE_BLOCK.findall(livecodebench.last_block(parts[1]))
+    if not blocks or not parts[0]:
+        return None
+    conversation_ = conversation(row["question_content"], row["starter_code"], blocks[0])
+    conversation_["messages"][1]["reasoning_content"] = parts[0]
+    return conversation_
+
+
+def leetcode_key(statement):
+    """A LeetCode statement's first twelve words, lowercased, without punctuation or
+    formatting, so differently formatted copies of a problem match."""
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", statement.lower()).split()[:12])
+
+
+def leetcode_questions(rows):
+    """`leetcode_key` -> {"question", "starter_code", "tests"} of the LeetCodeDataset rows
+    before `CUTOFF` whose cases are plain JSON values."""
+    table = {}
+    for row in rows:
+        tests = leetcode_tests(row) if str(row["estimated_date"]) < CUTOFF else None
+        if tests:
+            table.setdefault(
+                leetcode_key(row["problem_description"]),
+                {
+                    "question": row["problem_description"],
+                    "starter_code": row["starter_code"],
+                    "tests": tests,
+                },
+            )
+    return table
+
+
+def acereason_leetcode(row, questions):
+    """A thinking-mode conversation from an AceReason LeetCode row whose final program
+    passes its matched LeetCodeDataset problem's tests, or None."""
+    if row.get("source") != "leetcode":
+        return None
+    problem = questions.get(leetcode_key(row["input"]))
+    parts = split_think(row["output"] or "")
+    blocks = parts and livecodebench.CODE_BLOCK.findall(livecodebench.last_block(parts[1]))
+    if not problem or not blocks:
+        return None
+    graded = {"starter_code": problem["starter_code"], "tests": problem["tests"]}
+    for program in (blocks[0].strip(), IMPORTS + blocks[0].strip()):
+        if _passes(graded, program):
+            conversation_ = conversation(problem["question"], problem["starter_code"], program)
+            conversation_["messages"][1]["reasoning_content"] = parts[0]
+            return conversation_
+    return None
+
+
 CONVERTERS = {
+    "acereason_leetcode": acereason_leetcode,
     "codecontests": codecontests,
+    "codeforces_cots": codeforces_cots,
     "leetcode": leetcode,
     "opencodereasoning2": opencodereasoning2,
+    "teacher_traces": teacher_traces,
 }

@@ -7,8 +7,12 @@ One call per parquet or JSON-lines file, all in parallel: download it at the rec
 pinned revision, convert rows to OpenAI messages (smoltalk2's `chat_sft.convert`, or
 the recipe's `converter` from `contest_sft.CONVERTERS`, run on every CPU since contest
 converters execute each candidate program against its tests; with `questions`, the
-converter looks each problem up in a table built once by `questions`, and
-`per_question` keeps the first conversations per problem in each file), render them in GLM's chat format with
+converter looks each problem up in a table built once by `questions`; files may be
+parquet, JSON lines or Arrow streams; and
+`per_question` keeps the first conversations per problem in each file, or with
+`per_question_order: "shortest"` those with the shortest reasoning and answer;
+`starter_copies` repeats the conversations whose prompt gives starter code), render
+them in GLM's chat format with
 loss masks, drop conversations longer than the context or sharing a 13-gram with
 the pretraining recipe's benchmark screen, hold out a hash-selected fraction, and
 write the subset to the `lm-exploration-hybrid-data` volume under `<recipe name>/`
@@ -78,6 +82,10 @@ def prepare(recipe, file, deadline):
         if file.endswith(".jsonl"):
             # JSON lines end at "\n" only; statements can hold other line separators.
             rows = [json.loads(line) for line in Path(path).read_text().split("\n") if line]
+        elif file.endswith(".arrow"):
+            import pyarrow as pa
+
+            rows = pa.ipc.open_stream(pa.memory_map(path)).read_all().to_pylist()
         else:
             rows = pq.read_table(path).to_pylist()
         convert = contest_sft.CONVERTERS[recipe["converter"]]
@@ -87,7 +95,10 @@ def prepare(recipe, file, deadline):
         with ThreadPoolExecutor(8) as pool:
             rows = list(pool.map(convert, rows))
         if "per_question" in recipe:
-            rows = first_per_question(rows, recipe["per_question"])
+            shortest = recipe.get("per_question_order", "first") == "shortest"
+            rows = per_question(rows, recipe["per_question"], shortest)
+        if recipe.get("starter_copies", 1) > 1:
+            rows = repeat_starter(rows, recipe["starter_copies"])
         converter = lambda conversation: conversation
     else:
         rows = pq.read_table(path, columns=["messages", "chat_template_kwargs"]).to_pylist()
@@ -99,16 +110,39 @@ def prepare(recipe, file, deadline):
     return meta
 
 
-def first_per_question(rows, limit):
-    """Converted rows with at most `limit` kept per problem (the conversation's prompt);
-    dropped ones become None, so they count as unparsed."""
-    seen = {}
-    kept = []
-    for row in rows:
-        key = row and row["messages"][0]["content"]
-        seen[key] = seen.get(key, 0) + 1
-        kept.append(row if row and seen[key] <= limit else None)
-    return kept
+def per_question(rows, limit, shortest=False):
+    """Converted rows with at most `limit` kept per problem (the conversation's prompt):
+    the first ones, or with `shortest` those with the shortest assistant turn (reasoning
+    and answer). Dropped ones become None, so they count as unparsed."""
+    order = list(range(len(rows)))
+    if shortest:
+        order.sort(key=lambda i: _assistant_length(rows[i]) if rows[i] else 0)
+    seen, kept = {}, set()
+    for i in order:
+        if rows[i]:
+            key = rows[i]["messages"][0]["content"]
+            seen[key] = seen.get(key, 0) + 1
+            if seen[key] <= limit:
+                kept.add(i)
+    return [row if i in kept else None for i, row in enumerate(rows)]
+
+
+def _assistant_length(row):
+    reply = row["messages"][-1]
+    return len(reply.get("reasoning_content") or "") + len(reply["content"])
+
+
+def repeat_starter(rows, copies):
+    """Rows whose LiveCodeBench prompt gives starter code (a function or class to
+    complete) appear `copies` times; the others once."""
+    from evaluation.benchmarks import livecodebench
+
+    starter = [
+        row
+        for row in rows
+        if row and livecodebench.STDIN_FORMAT not in row["messages"][0]["content"]
+    ]
+    return rows + starter * (copies - 1)
 
 
 @app.function(
@@ -123,7 +157,8 @@ def first_per_question(rows, limit):
 def questions(recipe, deadline):
     """Write `<recipe>/questions.json`: "dataset/split/index" -> {"question",
     "starter_code"} from `contest_sft.QUESTION_SOURCES`, for converters that look
-    problems up by index."""
+    problems up by index; with `questions` "leetcode", LeetCodeDataset train problems
+    by statement (`contest_sft.leetcode_questions`)."""
     import pyarrow.parquet as pq
     from huggingface_hub import hf_hub_download
     from training_data import contest_sft
@@ -134,7 +169,15 @@ def questions(recipe, deadline):
     if path.exists():
         return len(json.loads(path.read_text()))
     table = {}
-    for dataset, (repo, revision, splits) in contest_sft.QUESTION_SOURCES.items():
+    if recipe["questions"] == "leetcode":
+        repo, revision = contest_sft.LEETCODE
+        local = hf_hub_download(
+            repo, "LeetCodeDataset-train.jsonl", revision=revision, repo_type="dataset"
+        )
+        rows = [json.loads(line) for line in Path(local).read_text().split("\n") if line]
+        table = contest_sft.leetcode_questions(rows)
+    sources = {} if table else contest_sft.QUESTION_SOURCES
+    for dataset, (repo, revision, splits) in sources.items():
         for split, files in splits.items():
             rows = []
             for file in files:

@@ -156,6 +156,42 @@ class CodingMixAuditTests(unittest.TestCase):
         self.assertFalse(contaminated(tokenizer.encode_batch([hidden])[0].ids, screen, 13))
         self.assertEqual(report[0]["texts"], 1)
 
+    def test_screen_drops_ngrams_shared_across_benchmark_texts(self):
+        tokenizer = CharTokenizer()
+        boilerplate = "Example 1:\n\nInput: nums = [1,2,3]"
+        first = f"Count the inversions of the array. {boilerplate}"
+        second = f"Find the longest rising run here. {boilerplate}"
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "test.jsonl"
+            path.write_text(
+                "".join(
+                    json.dumps({"question_content": q, "starter_code": ""}) + "\n"
+                    for q in (first, second)
+                )
+            )
+            recipe = {
+                "contamination": {
+                    "ngram": 13,
+                    "max_text_frequency": 1,
+                    "benchmarks": [
+                        {
+                            "repo": "livecodebench/code_generation_lite",
+                            "revision": "pin",
+                            "files": ["test.jsonl"],
+                            "columns": ["question_content", "starter_code"],
+                        }
+                    ],
+                }
+            }
+            screen, report = build_screen(recipe, tokenizer, lambda *args: path)
+
+        def flagged(text):
+            return contaminated(tokenizer.encode_batch([text])[0].ids, screen, 13)
+
+        self.assertFalse(flagged(f"An unrelated new problem. {boilerplate}"))
+        self.assertTrue(flagged("Count the inversions of the array."))
+        self.assertGreater(report[-1]["dropped_ngrams"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
