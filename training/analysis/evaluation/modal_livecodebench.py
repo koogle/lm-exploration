@@ -420,7 +420,8 @@ def _trace_problems(limit, shard, shards):
         repo_type="dataset",
         revision=contest_sft.LEETCODE[1],
     )
-    rows = [json.loads(line) for line in Path(leetcode).read_text().splitlines() if line]
+    # JSON lines end at "\n" only; statements can hold other line separators.
+    rows = [json.loads(line) for line in Path(leetcode).read_text().split("\n") if line]
     return contest_sft.trace_problems(releases, rows)[: limit or None][shard::shards]
 
 
