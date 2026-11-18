@@ -1,5 +1,5 @@
 {
-  "recipe": "/project/training_data/recipes/chat-sft-reasoning-v2.json",
+  "recipe": "/project/training_data/recipes/chat-sft-reasoning-v3.json",
   "model": {
     "vocab_size": 154880,
     "eos_id": 154820,
@@ -23,7 +23,7 @@
     "mtp": false,
     "activation_checkpointing": true
   },
-  "target_tokens": 1270874112,
+  "target_tokens": 1420820480,
   "global_rows": 32,
   "microbatch": 1,
   "warmup_tokens": 20000000,
@@ -55,5 +55,5 @@
   "hf_repo": "jfrick/malama-reasoning-sft",
   "hf_every_tokens": 100000000000,
   "seed": 1234,
-  "init_from": "/runs/kda-960m-foundation-20261110-01-pretrain-a7-s02/export/tokens-099999547392"
+  "init_from": "/runs/kda-960m-code-anneal-20261117-02-code-s01/export/tokens-004999610368"
 }
