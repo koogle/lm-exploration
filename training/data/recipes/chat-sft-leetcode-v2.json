@@ -1,0 +1,16 @@
+{
+  "name": "chat-sft-leetcode-v2",
+  "description": "LeetCodeDataset problems dated before 2025 in LiveCodeBench's prompt, each answered with its reference class Solution after it passes the problem's cases under the LiveCodeBench grader (contest_sft.leetcode). Screened against LiveCodeBench release v6 only (screen-lcb-v6-v1), so problems of the earlier releases are kept.",
+  "repo": "newfacade/LeetCodeDataset",
+  "revision": "215604aeed660029df7de2fea5a4d7b6ed476a08",
+  "files": [
+    "LeetCodeDataset-train.jsonl",
+    "LeetCodeDataset-test.jsonl"
+  ],
+  "converter": "leetcode",
+  "format": "chat-sft",
+  "context": 4096,
+  "heldout_fraction": 0.01,
+  "screen": "screen-lcb-v6-v1/screen.npy",
+  "screen_ngram": 13
+}
