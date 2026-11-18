@@ -151,3 +151,44 @@ class CodeforcesCotsTest(unittest.TestCase):
         self.assertIsNone(contest_sft.codeforces_cots(wrong))
         self.assertIsNone(contest_sft.codeforces_cots({**CF_ROW, "problem_type": "checker"}))
         self.assertIsNone(contest_sft.codeforces_cots({**CF_ROW, "interaction_format": "x"}))
+
+
+class TeacherTracesTest(unittest.TestCase):
+    def test_leetcode_trace_problems_and_teacher_conversation(self):
+        row = {
+            "task_id": "add-two",
+            "difficulty": "Easy",
+            "problem_description": "Return a + b.",
+            "starter_code": "class Solution:\n    def add(self, a: int, b: int) -> int:\n",
+            "estimated_date": "2020-01-01",
+            "input_output": [{"input": "a = 1, b = 2", "output": "3"}],
+        }
+        late = {**row, "task_id": "late", "estimated_date": "2025-02-01"}
+        (problem,) = contest_sft.trace_problems([], [row, late])
+        self.assertEqual(problem["question_id"], "leetcodedataset/add-two")
+        self.assertEqual(problem["tests"], [{"input": "1\n2", "output": "3"}])
+        completion = (
+            "<think>\nAdd.\n</think>\n\nDraft:\n```python\npass\n```\nFinal:\n"
+            "```python\nclass Solution:\n    def add(self, a, b):\n        return a + b\n```"
+        )
+        conversation = contest_sft.teacher_traces(
+            {
+                "question_content": "Return a + b.",
+                "starter_code": row["starter_code"],
+                "completion": completion,
+            }
+        )
+        assistant = conversation["messages"][1]
+        self.assertEqual(assistant["reasoning_content"], "Add.")
+        self.assertIn("return a + b", assistant["content"])
+        self.assertNotIn("pass", assistant["content"])
+        self.assertIsNone(
+            contest_sft.teacher_traces(
+                {
+                    **conversation,
+                    "question_content": "q",
+                    "starter_code": "",
+                    "completion": "no reasoning",
+                }
+            )
+        )
