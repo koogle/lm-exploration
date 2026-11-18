@@ -84,6 +84,7 @@ THINKING_REFERENCES = {
     "Qwen/Qwen3-0.6B": ("c1899de289a04d12100db370d81485cdf75e47ca", 40960, None),
     "Qwen/Qwen3-1.7B": ("70d244cc86ccca08cf5af4e1e306ecf908b1ad5e", 40960, None),
     "Qwen/Qwen3-32B-FP8": ("aa55da1ecc13d006e8b8e4f54579b1ea8c3db2df", 40960, None),
+    "Qwen/Qwen3-30B-A3B-FP8": ("d206ba732169f29bb77fbf80fc2c4b81d4d30782", 40960, None),
     "facebook/MobileLLM-R1.5-950M": (
         "d4af70ac985faa1d504b3446d8a7448fedf91194",
         32768,
@@ -97,7 +98,8 @@ THINKING_REFERENCES = {
 }
 THINKING = {"samples": 16, "temperature": 0.6, "top_p": 0.95, "max_new_tokens": 32768, "seed": 1234}
 # `--pool train`: teacher traces for SFT on `contest_sft.trace_problems`, shorter and
-# fewer per problem; each passing problem keeps its shortest passing completion.
+# fewer per problem; each passing problem keeps its shortest passing completion. The
+# KV cache is FP8 there, so more sequences decode together.
 TRACES = {**THINKING, "samples": 8, "max_new_tokens": 16384}
 TRACE_SHARDS = 16
 # Calls per model: each H100 call takes every THINKING_SHARDS-th problem.
@@ -280,6 +282,7 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
         max_model_len=min(positions, sampling["max_new_tokens"] + 4096),
         seed=sampling["seed"],
         enable_prefix_caching=True,
+        **({"kv_cache_dtype": "fp8"} if pool else {}),
     )
     params = SamplingParams(
         n=sampling["samples"],
