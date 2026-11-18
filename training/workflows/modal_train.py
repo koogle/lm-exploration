@@ -736,6 +736,7 @@ def launch_hybrid(run_id, bundle, provenance, resume="", init_from="", phase_fro
         Path("/hybrid-data") / recipe["name"],
         settings["target_tokens"],
         settings.get("context") or settings["model"]["block_size"],
+        settings["global_rows"],
     )
     if resume and not (Path("/hybrid-runs") / resume).exists():
         raise ValueError(f"No checkpoint {resume} on the hybrid runs volume")

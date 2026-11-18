@@ -1,6 +1,7 @@
 """Hybrid data preparation, contamination screen and the prepared-shard loader."""
 
 import json
+import math
 import tempfile
 import unittest
 from pathlib import Path
@@ -317,6 +318,25 @@ class HybridDataTests(unittest.TestCase):
         binary.write_bytes(binary.read_bytes()[:-4])
         with self.assertRaisesRegex(ValueError, "incomplete"):
             check_hybrid_capacity(self.recipe, root, 16, 8)
+
+    def test_capacity_counts_only_the_rows_left_after_replay(self):
+        from workflows.checks import check_hybrid_capacity
+
+        self.prepare()
+        root = self.root / "out"
+        capacity = check_hybrid_capacity(self.recipe, root, 16, 8)
+        # A target the sources hold only when replay fills half of every batch.
+        target = min(
+            2 * (entry["train_tokens"] - 9) / self.recipe["sources"][name]["weight"]
+            for name, entry in capacity.items()
+        )
+        with self.assertRaisesRegex(ValueError, "needs"):
+            check_hybrid_capacity(self.recipe, root, target, 8)
+        replayed = {**self.recipe, "replay": {"recipe": "foundation", "fraction": 0.5}}
+        capacity = check_hybrid_capacity(replayed, root, target, 8, global_rows=4)
+        for name, entry in capacity.items():
+            weight = self.recipe["sources"][name]["weight"]
+            self.assertEqual(entry["needed_tokens"], math.ceil(target / 2 * weight) + 9)
 
     def test_row_group_parts_cover_upstream_once(self):
         pq.write_table(
