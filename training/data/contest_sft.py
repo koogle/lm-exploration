@@ -32,6 +32,10 @@ harness runs it:
   trace's last Python block, kept if it passes the row's public and private tests
   (up to `MAX_TESTS`). Its contests end in 2024-07; the release is decontaminated
   against LiveCodeBench, and preparation applies our screen as well.
+- `teacher_traces`: reasoning traces sampled from a teacher model on `trace_problems`
+  (LiveCodeBench's own problems from the releases before `CUTOFF`, and LeetCodeDataset
+  train problems before it, with their tests), one passing completion per problem; the
+  answer is the completion's final program.
 """
 
 import ast
@@ -44,6 +48,8 @@ LEETCODE = ("newfacade/LeetCodeDataset", "215604aeed660029df7de2fea5a4d7b6ed476a
 OPENCODEREASONING2 = ("nvidia/OpenCodeReasoning-2", "eadf535931451525f3e5621d0f960c240bc62fd9")
 CODEFORCES_COTS = ("open-r1/codeforces-cots", "39ac85c150806230473c70ad72c31f6232fe3f41")
 CUTOFF = "2025-01-01"
+# LiveCodeBench releases whose problems before CUTOFF are trace problems.
+TRACE_RELEASES = ("test.jsonl", "test2.jsonl", "test3.jsonl", "test4.jsonl", "test5.jsonl")
 PYTHON3 = 3  # CodeContests `solutions.language`
 MAX_TESTS = 30
 MAX_CANDIDATES = 4
@@ -293,9 +299,50 @@ def codeforces_cots(row):
     return conversation_
 
 
+def trace_problems(release_paths, leetcode_rows):
+    """Problems with tests for sampling teacher traces: LiveCodeBench problems dated
+    before `CUTOFF` from the release files, then LeetCodeDataset rows before it whose
+    cases are plain JSON values (`leetcode_tests`)."""
+    problems = [
+        problem
+        for path in release_paths
+        for problem in livecodebench.load(path)
+        if problem["contest_date"][:10] < CUTOFF
+    ]
+    for row in leetcode_rows:
+        tests = leetcode_tests(row) if str(row["estimated_date"]) < CUTOFF else None
+        if tests:
+            problems.append(
+                {
+                    "question_id": f"leetcodedataset/{row['task_id']}",
+                    "question_content": row["problem_description"],
+                    "starter_code": row["starter_code"],
+                    "tests": tests,
+                    "platform": "leetcode",
+                    "difficulty": row["difficulty"].lower(),
+                    "contest_date": row["estimated_date"],
+                }
+            )
+    return problems
+
+
+def teacher_traces(row):
+    """A thinking-mode conversation from a passing teacher completion ({"question_content",
+    "starter_code", "completion"}), or None without a closed reasoning span and a
+    final program."""
+    parts = split_think(row["completion"].lstrip())
+    blocks = parts and livecodebench.CODE_BLOCK.findall(livecodebench.last_block(parts[1]))
+    if not blocks or not parts[0]:
+        return None
+    conversation_ = conversation(row["question_content"], row["starter_code"], blocks[0])
+    conversation_["messages"][1]["reasoning_content"] = parts[0]
+    return conversation_
+
+
 CONVERTERS = {
     "codecontests": codecontests,
     "codeforces_cots": codeforces_cots,
     "leetcode": leetcode,
     "opencodereasoning2": opencodereasoning2,
+    "teacher_traces": teacher_traces,
 }
