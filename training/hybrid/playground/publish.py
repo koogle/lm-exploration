@@ -78,6 +78,7 @@ def main():
         for file in files:
             shutil.copy(TRAINING / file, stage / package / Path(file).name)
     shutil.copy(HERE / "app.py", stage / "app.py")
+    shutil.copy(HERE / "prompt-sets.json", stage / "prompt-sets.json")
     shutil.copy(HERE / "requirements.txt", stage / "requirements.txt")
     shutil.copy(HERE / "Dockerfile", stage / "Dockerfile")
     card = (HERE / "space-card.md").read_text()
