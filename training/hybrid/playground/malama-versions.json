@@ -6,6 +6,7 @@
     {"label": "32K context", "repo": "jfrick/malama-context32k", "export": "tokens-001999634432"},
     {"label": "Code mid-training (5B)", "repo": "jfrick/malama-code-anneal", "export": "tokens-004999610368"},
     {"label": "LCB format SFT", "repo": "jfrick/malama-lcb-format-sft", "export": "tokens-000020971520", "chat": true},
-    {"label": "Reasoning SFT pilot", "repo": "jfrick/malama-reasoning-sft-pilot", "export": "tokens-000536870912", "chat": true}
+    {"label": "Reasoning SFT pilot", "repo": "jfrick/malama-reasoning-sft-pilot", "export": "tokens-000536870912", "chat": true},
+    {"label": "Reasoning SFT (code model)", "repo": "jfrick/malama-reasoning-sft", "export": "tokens-001420820480", "chat": true}
   ]
 }
