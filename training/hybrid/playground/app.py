@@ -6,9 +6,11 @@ model-settings.json is downloaded from its private model repo with the Space's
 HF_TOKEN secret and kept on the GPU. Generation is serialized: one request decodes at
 a time.
 
-- Compare: the same prompts on several exports, side by side, as text continuation,
-  a chat turn, or a chat turn with thinking; the table fills in as each reply
-  finishes and can be downloaded as JSON.
+- Compare: a table with one row per prompt (a Run box to pick which prompts run, the
+  prompt, then one column per export). Ticked prompts run in turn; each prompt's
+  replies from the selected exports stream into their columns side by side, as text
+  continuation, a chat turn, or a chat turn with thinking. The results download as
+  JSON with the sampling settings.
 - Chat (when an export is a chat model, `"chat": true`): OpenAI messages and tools
   rendered in GLM's chat format, with each reply parsed back into an OpenAI assistant
   message (content and tool_calls); tool results are sent as `tool` turns.
@@ -49,7 +51,6 @@ CHAT_MODELS = [label for label, entry in ENTRIES.items() if entry.get("chat")]
 # Decoders are reused per shape, so requests take turns.
 LOCK = threading.Lock()
 FORMATS = ("Continue text", "Chat", "Chat with thinking")
-SEPARATOR = "\n---\n"
 
 
 def stream(label, prompt_ids, temperature, top_p, max_new, stop_ids=(glm.EOS_ID,), seed=0):
@@ -77,51 +78,87 @@ def prompt_ids(text, format_):
     return TOKENIZER.encode(rendered, add_special_tokens=False).ids, chat_sft.STOP_IDS
 
 
-def split_prompts(text):
-    return [p for p in text.split(SEPARATOR) if p.strip()]
+def stream_together(labels, prompt_ids_, stop_ids, temperature, top_p, max_new, seed):
+    """Decode one prompt on several exports in turn, a token each per round, yielding
+    {label: ids so far} and the labels whose reply ended on a stop token. Each export
+    has its own decoder and sampler, so every reply is the one it would decode alone."""
+    with LOCK:
+        live = {
+            label: generate.generate(
+                MODELS[label],
+                prompt_ids_,
+                int(max_new),
+                stop_ids,
+                temperature,
+                top_p,
+                torch.Generator(device="cuda").manual_seed(int(seed)),
+            )
+            for label in labels
+        }
+        ids, stopped = {label: [] for label in labels}, set()
+        while live:
+            for label in list(live):
+                token = next(live[label], None)
+                if token is None or token in stop_ids:
+                    del live[label]
+                    if token is not None:
+                        stopped.add(label)
+                else:
+                    ids[label].append(token)
+            yield ids, stopped
 
 
-def compare(prompts_text, labels, format_, temperature, top_p, max_new, seed):
-    """Fill a prompts x models table, one reply at a time, then offer it as JSON."""
-    prompts, labels = split_prompts(prompts_text), list(labels)
-    if not prompts or not labels:
-        raise gr.Error("Enter at least one prompt and pick at least one model.")
-    table = [[prompt] + [""] * len(labels) for prompt in prompts]
-    headers = ["Prompt"] + labels
+def checked(value):
+    return value is True or str(value).strip().lower() in ("true", "1", "yes", "x")
+
+
+def table_rows(prompts):
+    return [[True, prompt] + [""] * len(LABELS) for prompt in prompts]
+
+
+def compare(rows, labels, format_, temperature, top_p, max_new, seed):
+    """Stream every selected export's reply to every prompt whose Run box is ticked
+    into the table (prompts in turn, exports side by side), then offer it as JSON."""
+    rows = [list(row) for row in rows if str(row[1]).strip()]
+    labels = [label for label in LABELS if label in labels]
+    chosen = [index for index, row in enumerate(rows) if checked(row[0])]
+    if not chosen or not labels:
+        raise gr.Error("Tick at least one prompt's Run box and pick at least one model.")
+    columns = {label: 2 + LABELS.index(label) for label in labels}
     results = []
-    for row, prompt in enumerate(prompts):
+    for done, index in enumerate(chosen):
+        prompt = rows[index][1]
+        for column in columns.values():
+            rows[index][column] = ""
         ids_, stop_ids = prompt_ids(prompt, format_)
-        for column, label in enumerate(labels, start=1):
-            reply, count, rate, last = "", 0, 0.0, 0.0
-            for ids, rate in stream(label, ids_, temperature, top_p, max_new, stop_ids, seed):
-                count = len(ids)
-                if time.time() - last > 0.5:
-                    reply, last = TOKENIZER.decode(ids, skip_special_tokens=False), time.time()
-                    table[row][column] = reply
-                    yield (
-                        gr.update(value={"headers": headers, "data": table}),
-                        f"{label}: {count} tokens",
-                        None,
-                    )
-            reply = TOKENIZER.decode(ids, skip_special_tokens=False) if count else ""
-            table[row][column] = reply
+        started, last = time.time(), 0.0
+        ids, stopped = {label: [] for label in labels}, set()
+        for ids, stopped in stream_together(
+            labels, ids_, stop_ids, temperature, top_p, max_new, seed
+        ):
+            if time.time() - last > 0.25:
+                last = time.time()
+                for label, column in columns.items():
+                    rows[index][column] = TOKENIZER.decode(ids[label], skip_special_tokens=False)
+                status = f"Prompt {done + 1} of {len(chosen)} · " + " · ".join(
+                    f"{label}: {len(ids[label])}" for label in labels
+                )
+                yield rows, status, None
+        seconds = max(time.time() - started, 1e-6)
+        for label, column in columns.items():
+            rows[index][column] = TOKENIZER.decode(ids[label], skip_special_tokens=False)
             results.append(
                 {
                     "prompt": prompt,
                     "model": label,
                     "repo": ENTRIES[label]["repo"],
                     "export": ENTRIES[label]["export"],
-                    "reply": reply,
-                    "tokens": count,
-                    "finished": count < int(max_new),
-                    "tokens_per_second": round(rate, 1),
+                    "reply": rows[index][column],
+                    "tokens": len(ids[label]),
+                    "stopped": label in stopped,
                 }
             )
-            yield (
-                gr.update(value={"headers": headers, "data": table}),
-                f"{label}: {count} tokens",
-                None,
-            )
+        yield rows, f"Prompt {done + 1} of {len(chosen)} done in {seconds:.0f} s", None
     record = {
         "format": format_,
         "sampling": {
@@ -134,11 +171,22 @@ def compare(prompts_text, labels, format_, temperature, top_p, max_new, seed):
     }
     path = Path(tempfile.mkdtemp()) / "comparison.json"
     path.write_text(json.dumps(record, indent=1))
-    yield (
-        gr.update(value={"headers": headers, "data": table}),
-        f"Done: {len(results)} replies",
-        str(path),
-    )
+    yield rows, f"Done: {len(results)} replies", str(path)
+
+
+def add_prompt(rows, text):
+    rows = [list(row) for row in rows if str(row[1]).strip()]
+    if text.strip():
+        rows.append([True, text] + [""] * len(LABELS))
+    return rows, ""
+
+
+def set_run(rows, value):
+    return [[value, *list(row)[1:]] for row in rows if str(row[1]).strip()]
+
+
+def clear_answers(rows):
+    return [list(row)[:2] + [""] * len(LABELS) for row in rows if str(row[1]).strip()]
 
 
 def continue_text(label, prefix, temperature, top_p, max_new):
@@ -198,10 +246,7 @@ EXAMPLES = [
     "The history of the printing press",
 ]
 # Prompt sets offered in the Compare tab: {name: [prompt, ...]}.
-PROMPT_SETS = {
-    name: SEPARATOR.join(prompts)
-    for name, prompts in json.loads((HERE / "prompt-sets.json").read_text()).items()
-}
+PROMPT_SETS = json.loads((HERE / "prompt-sets.json").read_text())
 LABELS = list(MODELS)
 
 with gr.Blocks(title=SETTINGS["name"]) as demo:
@@ -221,25 +266,41 @@ with gr.Blocks(title=SETTINGS["name"]) as demo:
     with gr.Tab("Compare"):
         with gr.Row():
             prompt_set = gr.Dropdown(
-                list(PROMPT_SETS), value="Contest problems", label="Prompt set"
+                list(PROMPT_SETS), value="Contest problems", label="Load prompt set"
             )
             format_ = gr.Radio(FORMATS, value="Chat with thinking", label="Format")
-        prompts_text = gr.Textbox(
-            PROMPT_SETS["Contest problems"],
-            lines=10,
-            label="Prompts (separate prompts with a line containing only ---)",
-        )
-        labels = gr.CheckboxGroup(LABELS, value=LABELS, label="Models")
+        labels = gr.CheckboxGroup(LABELS, value=LABELS, label="Models to run")
         with gr.Row():
-            run = gr.Button("Run all", variant="primary")
+            run = gr.Button("Run ticked prompts", variant="primary")
             stop = gr.Button("Stop")
+            tick_all = gr.Button("Tick all")
+            tick_none = gr.Button("Untick all")
+            clear = gr.Button("Clear answers")
         progress = gr.Markdown()
-        grid = gr.Dataframe(headers=["Prompt"] + LABELS, wrap=True, interactive=False)
+        grid = gr.Dataframe(
+            table_rows(PROMPT_SETS["Contest problems"]),
+            headers=["Run", "Prompt", *LABELS],
+            datatype=["bool", "str", *["str"] * len(LABELS)],
+            static_columns=list(range(2, 2 + len(LABELS))),
+            pinned_columns=2,
+            column_widths=["70px", "320px", *["420px"] * len(LABELS)],
+            type="array",
+            wrap=True,
+            interactive=True,
+            max_height=900,
+        )
+        with gr.Row():
+            new_prompt = gr.Textbox(lines=3, label="New prompt", scale=4)
+            add = gr.Button("Add prompt", scale=1)
         download = gr.File(label="Results (JSON)")
-        prompt_set.change(lambda name: PROMPT_SETS[name], prompt_set, prompts_text)
+        prompt_set.change(lambda name: table_rows(PROMPT_SETS[name]), prompt_set, grid)
+        add.click(add_prompt, [grid, new_prompt], [grid, new_prompt])
+        tick_all.click(lambda rows: set_run(rows, True), grid, grid)
+        tick_none.click(lambda rows: set_run(rows, False), grid, grid)
+        clear.click(clear_answers, grid, grid)
         event = run.click(
             compare,
-            [prompts_text, labels, format_, temperature, top_p, max_new, seed],
+            [grid, labels, format_, temperature, top_p, max_new, seed],
             [grid, progress, download],
         )
         stop.click(None, None, None, cancels=[event])
