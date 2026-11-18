@@ -394,6 +394,10 @@ class HybridDataTests(unittest.TestCase):
         screen = np.unique(data.ngram_hashes(list(range(5, 18)), 13))
         self.assertTrue(data.contaminated(ids, screen, 13))
         self.assertFalse(data.contaminated(list(range(100, 130)), screen, 13))
+        # range(5, 18) is a single shared 13-gram: one hit, not two.
+        self.assertFalse(data.contaminated(ids, screen, 13, min_hits=2))
+        wide = np.unique(data.ngram_hashes(list(range(3, 18)), 13))
+        self.assertTrue(data.contaminated(ids, wide, 13, min_hits=3))
 
     def test_prepared_shards(self):
         metas = self.prepare()
