@@ -114,10 +114,15 @@ def benchmark_texts(benchmark, table):
 
 
 def build_screen(recipe, tokenizer, download=hub_download):
-    """Sorted unique n-gram hashes of every benchmark text, with per-benchmark counts."""
+    """Sorted unique n-gram hashes of every benchmark text, with per-benchmark counts.
+
+    With `contamination.max_text_frequency` k, only n-grams found in at most k benchmark
+    texts are kept: phrases a benchmark repeats across its problems (example and
+    constraint layouts, common signatures) are formatting, not a problem's content."""
     import pyarrow.parquet as pq
 
     n = recipe["contamination"]["ngram"]
+    limit = recipe["contamination"].get("max_text_frequency")
     hashes, report = [], []
     for benchmark in recipe["contamination"]["benchmarks"]:
         texts = []
@@ -140,7 +145,7 @@ def build_screen(recipe, tokenizer, download=hub_download):
                 table = pq.read_table(path, columns=benchmark["columns"])
             texts.extend(benchmark_texts(benchmark, table))
         encodings = tokenizer.encode_batch(texts, add_special_tokens=False)
-        found = [ngram_hashes(e.ids, n) for e in encodings]
+        found = [np.unique(ngram_hashes(e.ids, n)) for e in encodings]
         hashes.extend(found)
         report.append(
             {
@@ -150,7 +155,11 @@ def build_screen(recipe, tokenizer, download=hub_download):
                 "ngrams": int(sum(len(h) for h in found)),
             }
         )
-    return np.unique(np.concatenate(hashes)), report
+    if not limit:
+        return np.unique(np.concatenate(hashes)), report
+    unique, counts = np.unique(np.concatenate(hashes), return_counts=True)
+    report.append({"max_text_frequency": limit, "dropped_ngrams": int((counts > limit).sum())})
+    return unique[counts <= limit], report
 
 
 def repository_hash(name):
