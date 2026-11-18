@@ -100,7 +100,7 @@ THINKING = {"samples": 16, "temperature": 0.6, "top_p": 0.95, "max_new_tokens": 
 # `--pool train`: teacher traces for SFT on `contest_sft.trace_problems`, shorter and
 # fewer per problem; each passing problem keeps its shortest passing completion. The
 # KV cache is FP8 there, so more sequences decode together.
-TRACES = {**THINKING, "samples": 8, "max_new_tokens": 16384}
+TRACES = {**THINKING, "samples": 4, "max_new_tokens": 16384}
 TRACE_SHARDS = 16
 # Calls per model: each H100 call takes every THINKING_SHARDS-th problem.
 THINKING_SHARDS = 4
