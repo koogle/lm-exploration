@@ -1,17 +1,19 @@
-"""Publish a hybrid-family export to a private Gradio Space on Hugging Face.
+"""Publish hybrid-family exports to a private Gradio Space on Hugging Face.
 
 Run from training/ (needs HF_TOKEN with write access):
 
     uv run --all-extras python -m model_hybrid.playground.publish \\
-        --space jfrick/hybrid-720m-playground --export tokens-039998980096
+        --space jfrick/malama-versions --models hybrid/playground/malama-versions.json
 
-Uploads this app as a Docker Space (Dockerfile: CUDA 13.0 devel, the family's
+`--models` is a JSON file {"name", "description", "models": [{"label", "repo",
+"export", "chat"?}]}: every export is loaded on the Space's GPU and offered in the
+Compare, Chat (chat exports) and Continue text tabs. Uploads this app as a Docker Space (Dockerfile: CUDA 13.0 devel, the family's
 kernels prebuilt) with the model code (the inference modules and kernels of hybrid/
 as model_hybrid/, 10m/model.py as model_10m/, trainer/roles.py, tokenizer/glm.py and
 data/subword.py, chat.py, chat_sft.py), on GPU hardware (`--hardware`, L4 by
 default; it sleeps after `--sleep-seconds` without visitors). GPU hardware is billed
 to the Space owner while it runs. Spaces hold at most 1 GB, so the app downloads the
-export from the private model repo at startup; add a read token as the Space secret
+exports from their private model repos at startup; add a read token as the Space secret
 HF_TOKEN in the Space settings. `--stage-only` assembles locally.
 """
 
@@ -46,29 +48,16 @@ SHARED = {
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--space", required=True)
-    parser.add_argument("--repo", default="jfrick/hybrid-720m-40b")
-    parser.add_argument("--export", required=True, help="export folder in the model repo")
-    parser.add_argument("--name", default="Hybrid 720M, 40B tokens (base model)")
-    parser.add_argument("--description", default="")
-    parser.add_argument("--chat", action="store_true", help="a chat SFT export: add the chat tab")
+    parser.add_argument("--models", required=True, help="JSON file naming the exports")
     parser.add_argument("--hardware", default="l4x1", help="Space GPU hardware")
     parser.add_argument("--sleep-seconds", type=int, default=3600)
     parser.add_argument("--stage-only", action="store_true", help="assemble locally, no upload")
     args = parser.parse_args()
-    local = TRAINING / "artifacts" / "playground" / args.export
-    progress_file = hf_hub_download(args.repo, f"{args.export}/progress.json", local_dir=local)
-    progress = json.loads(Path(progress_file).read_text())
-    settings = {
-        "name": args.name,
-        "description": args.description
-        or (
-            f"`{args.repo}/{args.export}`: trained on {progress['tokens'] / 1e9:.1f}B tokens of "
-            "ClimbMix, permissive code and FineMath. A base model: it continues text."
-        ),
-        "repo": args.repo,
-        "export": args.export,
-        "chat": args.chat,
-    }
+    settings = json.loads(Path(args.models).read_text())
+    local = TRAINING / "artifacts" / "playground" / args.space.replace("/", "--")
+    for entry in settings["models"]:
+        # Fails before any upload when an export is missing from its repo.
+        hf_hub_download(entry["repo"], f"{entry['export']}/config.json", local_dir=local)
     stage = local / "space"
     if stage.exists():
         shutil.rmtree(stage)
@@ -89,9 +78,11 @@ def main():
         for file in files:
             shutil.copy(TRAINING / file, stage / package / Path(file).name)
     shutil.copy(HERE / "app.py", stage / "app.py")
+    shutil.copy(HERE / "prompt-sets.json", stage / "prompt-sets.json")
     shutil.copy(HERE / "requirements.txt", stage / "requirements.txt")
     shutil.copy(HERE / "Dockerfile", stage / "Dockerfile")
-    shutil.copy(HERE / "space-card.md", stage / "README.md")
+    card = (HERE / "space-card.md").read_text()
+    (stage / "README.md").write_text(card.replace("{name}", settings["name"]))
     (stage / "model-settings.json").write_text(json.dumps(settings, indent=1))
     if args.stage_only:
         print(stage)
@@ -111,9 +102,9 @@ def main():
         repo_id=args.space,
         repo_type="space",
         folder_path=str(stage),
-        commit_message=f"Publish {args.repo}/{args.export}",
+        commit_message=f"Publish {settings['name']}",
     )
-    print(json.dumps({"space": args.space, "revision": commit.oid, **settings}, indent=1))
+    print(json.dumps({"space": args.space, "revision": commit.oid}, indent=1))
 
 
 if __name__ == "__main__":
