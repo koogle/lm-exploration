@@ -15,5 +15,9 @@ runs the tests, calls every `test*` function the tests define and prints a rando
 program nonce last; it passes only with exit code 0 and the nonce as its last line, so a
 solution that exits early or skips the tests fails.
 
+The `contest` test style grades LiveCodeBench-style input/output cases: every case runs
+in its own process (inheriting the program's limits) with LiveCodeBench's runner, and
+the program prints its nonce only if every case's output matches (`execution.py`).
+
 `run_local` runs a batch with the same runner in a local subprocess, for tests of our
 own fixtures only.

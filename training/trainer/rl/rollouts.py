@@ -4,7 +4,8 @@
 `collect` samples answers with the model family's sampler (`trainer/families.py`) and
 scores them (`training_data.rl_tasks`, in each problem's answer format): 1 for an answer
 that ends in one of the family's stop tokens and is correct (Math-Verify for math, every
-unit test passing in the code sandbox for code), else 0.
+unit test passing in the code sandbox for code), `unfinished` for one that never ends
+(or never closes its reasoning), else 0.
 `Sampler` is the trajectory source of on-policy training: every step it samples a group
 of answers to each drawn prompt with the current weights.
 """
@@ -18,8 +19,8 @@ from trainer.rl.ranks import Ranks
 
 
 class Scheduler:
-    """Draws training prompts per task; a prompt solved by none or all of its group on
-    two visits in a row rests for `rest` steps."""
+    """Draws training prompts per task; a prompt whose whole group got the same reward on
+    two visits in a row (all wrong, all right or all unfinished) rests for `rest` steps."""
 
     def __init__(self, rows, rest, rng):
         self.rows, self.rest, self.rng = rows, rest, rng
@@ -30,11 +31,12 @@ class Scheduler:
         ready = [r for r in rows if self.state.get(r["id"], {}).get("until", 0) <= step]
         return self.rng.sample(ready if len(ready) >= count else rows, count)
 
-    def update(self, row, mean, step):
+    def update(self, row, uniform, step):
+        """`uniform`: the reward every answer of the prompt's group got, or None."""
         state = self.state.setdefault(row["id"], {"until": 0, "extreme": None, "streak": 0})
-        if mean in (0.0, 1.0):
-            state["streak"] = state["streak"] + 1 if state["extreme"] == mean else 1
-            state["extreme"] = mean
+        if uniform is not None:
+            state["streak"] = state["streak"] + 1 if state["extreme"] == uniform else 1
+            state["extreme"] = uniform
             if state["streak"] >= 2:
                 state.update(until=step + self.rest, streak=0, extreme=None)
         else:
@@ -44,10 +46,22 @@ class Scheduler:
         return sum(s["until"] > step for s in self.state.values())
 
 
-def collect(family, model, rows, rollouts, temperature, generator, tokenizer, sandbox, top_k=0):
+def collect(
+    family,
+    model,
+    rows,
+    rollouts,
+    temperature,
+    generator,
+    tokenizer,
+    sandbox,
+    top_k=0,
+    unfinished=0.0,
+):
     """A `Batch` for `rows`, sampled by `family` at `temperature` (0 is greedy), one
     sampler batch per task, recording the sampler's `top_k` likeliest tokens; code answers
-    are checked in a background thread while math is sampled."""
+    are checked in a background thread while math is sampled. Unfinished answers score
+    `unfinished`."""
     completions, finished = [None] * len(rows), [None] * len(rows)
     stops = [None] * len(rows)
     sampler = [None] * len(rows)
@@ -81,7 +95,7 @@ def collect(family, model, rows, rollouts, temperature, generator, tokenizer, sa
                     )
             chosen = [rows[i] for i in indices]
             texts = [tokenizer.decode(c, skip_special_tokens=True) for c in samples.completions]
-            scores = (rl_tasks.rewards, chosen, texts, samples.finished, sandbox)
+            scores = (rl_tasks.rewards, chosen, texts, samples.finished, sandbox, unfinished)
             if task == "code":
                 pending = (indices, checker.submit(*scores))
             else:
@@ -113,13 +127,11 @@ class Sampler:
         )
         mine = self.ranks.shard(drawn)
         batch = self.sample([row for row in mine for _ in range(group)])
-        means = [
-            sum(batch.rewards[index * group : (index + 1) * group]) / group
-            for index in range(len(mine))
-        ]
-        # Every rank updates the scheduler with every prompt's mean, so they stay equal.
-        for row, mean in zip(drawn, self.ranks.unshard(means), strict=True):
-            self.scheduler.update(row, mean, step)
+        groups = [set(batch.rewards[i * group : (i + 1) * group]) for i in range(len(mine))]
+        uniform = [next(iter(g)) if len(g) == 1 else None for g in groups]
+        # Every rank updates the scheduler with every prompt's group, so they stay equal.
+        for row, score in zip(drawn, self.ranks.unshard(uniform), strict=True):
+            self.scheduler.update(row, score, step)
         batch.group = group
         return batch
 

@@ -165,7 +165,7 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(scheduler.resting(1), 0)
         scheduler.update(pool[0], 0.0, 1)
         scheduler.update(pool[1], 1.0, 1)
-        scheduler.update(pool[1], 0.5, 2)
+        scheduler.update(pool[1], None, 2)
         self.assertEqual(scheduler.resting(2), 1)
         drawn = {r["id"] for _ in range(20) for r in scheduler.draw("math", 3, 2)}
         self.assertNotIn("0", drawn)

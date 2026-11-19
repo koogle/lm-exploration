@@ -36,7 +36,9 @@ class Rollouts:
     """Prompts drawn per step and how their answers are sampled.
 
     A prompt whose group is all wrong or all right on two visits in a row rests for
-    `rest_steps` steps.
+    `rest_steps` steps. Pool prompts longer than `prompt_tokens` are left out. A training
+    answer that never ends within its token limit, or never closes its reasoning, scores
+    `unfinished_reward` (at most 0) instead of 0; validation scores it 0.
     """
 
     prompts_per_step: int = 64
@@ -46,11 +48,22 @@ class Rollouts:
     code_tokens: int = 384
     temperature: float = 1.0
     rest_steps: int = 50
+    prompt_tokens: int = 512
+    unfinished_reward: float = 0.0
     # Sampler engine (`trainer/rollout.py`): "graph" replays custom-kernel CUDA graphs.
     engine: str = "graph"
 
     def __post_init__(self):
-        positive_int(self, "prompts_per_step", "samples_per_prompt", "math_tokens", "code_tokens")
+        positive_int(
+            self,
+            "prompts_per_step",
+            "samples_per_prompt",
+            "math_tokens",
+            "code_tokens",
+            "prompt_tokens",
+        )
+        if not -1 <= self.unfinished_reward <= 0:
+            raise ValueError("unfinished_reward must be in [-1, 0]")
         if self.samples_per_prompt < 2:
             raise ValueError("Group advantages need at least two samples per prompt")
         if not 0 <= self.math_share <= 1:

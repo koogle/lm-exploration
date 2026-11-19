@@ -55,8 +55,6 @@ from trainer.rl.ranks import Ranks
 from trainer.rl.rollouts import Sampler, Scheduler, collect
 
 FORMAT = "rl-v1"
-# Longest pool prompt used, in tokens.
-MAX_PROMPT_TOKENS = 512
 
 
 def token_logprobs(network, x, y):
@@ -134,11 +132,14 @@ def train(
     tokenizer = family.tokenizer()
 
     def with_prompt(row):
-        return {**row, "prompt_ids": family.prompt_ids(tokenizer, row["prompt"])}
+        # A `thinking` answer follows the family's opened reasoning span.
+        thinking = {"thinking": True} if row.get("answer_format") == "thinking" else {}
+        return {**row, "prompt_ids": family.prompt_ids(tokenizer, row["prompt"], **thinking)}
 
+    longest = rollouts.prompt_tokens
     pool, pool_hash = rl_tasks.load(pool_path)
     pool = {
-        split: [r for r in map(with_prompt, rows) if len(r["prompt_ids"]) <= MAX_PROMPT_TOKENS]
+        split: [r for r in map(with_prompt, rows) if len(r["prompt_ids"]) <= longest]
         for split, rows in pool.items()
     }
     trajectory_hash = None
@@ -150,7 +151,7 @@ def train(
                 row["completion"], add_special_tokens=False
             ).ids
             # Answers the policy could have written within its prompt and token limits.
-            if len(row["prompt_ids"]) <= MAX_PROMPT_TOKENS and len(
+            if len(row["prompt_ids"]) <= longest and len(
                 row["completion_ids"]
             ) < rollouts.token_limit(row["task"]):
                 trajectories.append(row)
@@ -211,6 +212,7 @@ def train(
             tokenizer,
             sandbox,
             stable.top_k if stable else 0,
+            rollouts.unfinished_reward,
         )
 
     scheduler = Scheduler(pool["train"], rollouts.rest_steps, rng)

@@ -48,6 +48,7 @@ from model_hybrid import modal_benchmarks
 from model_hybrid.image import LAUNCH_LIMIT_SECONDS
 from model_hybrid.modal_benchmarks import REFERENCES, enforce_deadline, image, runs_volume, secret
 
+from evaluation.benchmarks import livecodebench
 from workflows.images import add_project, vllm_base
 
 app = modal.App("lm-exploration-livecodebench")
@@ -55,8 +56,7 @@ app.include(modal_benchmarks.app)  # the deadline supervisor
 training_volume = modal.Volume.from_name("lm-exploration-training")
 # Checkpoint paths start with one of these mounts.
 MOUNTS = {"runs": runs_volume, "training": training_volume}
-DATASET = "livecodebench/code_generation_lite"
-DATASET_REVISION = "0fe84c3912ea0c4d4a78037083943e8f0c4dd505"
+DATASET, DATASET_REVISION = livecodebench.DATASET, livecodebench.DATASET_REVISION
 RELEASE_FILE = "test6.jsonl"
 MAX_NEW_TOKENS = 2048
 BATCH_ROWS = 32
