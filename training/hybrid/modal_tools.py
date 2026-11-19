@@ -5,6 +5,8 @@ Run from training/:
     modal run -m model_hybrid.modal_tools::bench --gpus 1 [--microbatch 4]
     modal run -m model_hybrid.modal_tools::heldout --export <run>/export/<name>
     modal run -m model_hybrid.modal_tools::export --run-id <run folder>
+    modal run -m model_hybrid.modal_tools::merge --target <run>/step-N.pt \
+        --add <run>/step-N.pt --subtract <run>/step-N.pt --scale 0.5 --run-id <fresh id>
     modal run -m model_hybrid.modal_tools::publish --checkpoint <run>/step-NNNNNNNNN.pt \\
         --repo <owner/name> [--public] [--card <README.md>]
 
@@ -652,6 +654,66 @@ def export_latest(run_id):
     (out / "progress.json").write_text(json.dumps(progress, indent=2) + "\n")
     runs_volume.commit()
     return {"export": f"{run_id}/{latest.stem}", "progress": progress}
+
+
+@app.function(image=image, cpu=8, memory=131072, timeout=3600, retries=0, volumes=VOLUMES)
+def merge_checkpoints(target, add, subtract, scale, run_id, deadline):
+    """`target`'s checkpoint with its weights replaced by target + scale·(add − subtract)
+    (task arithmetic), as `<run_id>/step-N.pt` with `latest.json`, and its export. Every
+    target weight must exist with the same shape in `add` and `subtract`; MTP heads, which
+    post-training drops, keep the target's values. The checkpoint records the merge."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import torch
+
+    from trainer.loop import atomic_json
+
+    runs = Path("/runs")
+    folder = runs / run_id
+    if folder.exists():
+        raise ValueError("Use a fresh run ID")
+    # Only load our trusted private run-volume checkpoints.
+    state = torch.load(runs / target, map_location="cpu", weights_only=False)
+    plus = torch.load(runs / add, map_location="cpu", weights_only=False)["model"]
+    minus = torch.load(runs / subtract, map_location="cpu", weights_only=False)["model"]
+    merged = {}
+    for key, value in state["model"].items():
+        if key.startswith("mtp."):
+            merged[key] = value
+            continue
+        if key not in plus or key not in minus:
+            raise ValueError(f"{key} is missing from the added or subtracted checkpoint")
+        if not value.shape == plus[key].shape == minus[key].shape:
+            raise ValueError(f"{key} has another shape in the added or subtracted checkpoint")
+        delta = plus[key].float() - minus[key].float()
+        merged[key] = (value.float() + scale * delta).to(value.dtype)
+    state["model"] = merged
+    state.pop("optimizer", None)
+    state["merge"] = {"target": target, "add": add, "subtract": subtract, "scale": scale}
+    folder.mkdir(parents=True)
+    name = Path(target).name
+    torch.save(state, folder / name)
+    latest = {"checkpoint": name, "step": state["step"], "tokens": state["tokens"]}
+    atomic_json(folder / "latest.json", latest)
+    runs_volume.commit()
+    return {"checkpoint": f"{run_id}/{name}", **export_latest.local(run_id)}
+
+
+@app.local_entrypoint()
+def merge(target: str, add: str, subtract: str, scale: float, run_id: str):
+    """Task arithmetic on the runs volume: `--target` + `--scale`·(`--add` − `--subtract`),
+    a checkpoint for later stages and evaluation and its export (`merge_checkpoints`)."""
+    from workflows.checks import run_id as checked
+    from workflows.deadline import MAX_LAUNCH_SECONDS
+
+    deadline = time.time() + MAX_LAUNCH_SECONDS
+    print(
+        json.dumps(
+            merge_checkpoints.remote(
+                target, add, subtract, scale, checked(run_id, "run_id"), deadline
+            )
+        )
+    )
 
 
 @app.local_entrypoint()
