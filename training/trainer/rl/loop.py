@@ -284,7 +284,7 @@ def train(
         with torch.no_grad():
             for start in range(0, len(answers), settings.micro_batch):
                 chosen = answers[start : start + settings.micro_batch]
-                x, y = collate([sequences[i] for i in chosen], "cuda")
+                x, y = collate([sequences[i] for i in chosen], "cuda", family.width_multiple)
                 logp, _ = token_logprobs(model, x, y)
                 for b, i in enumerate(chosen):
                     result[i] = logp[b, : len(sequences[i]["y"])]
@@ -299,7 +299,7 @@ def train(
         per_update = len(batch.rows) / source.updates_per_batch
         for start in range(0, len(answers), settings.micro_batch):
             chosen = answers[start : start + settings.micro_batch]
-            x, y = collate([sequences[i] for i in chosen], "cuda")
+            x, y = collate([sequences[i] for i in chosen], "cuda", family.width_multiple)
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 logits = model(x).float()
             mask = y != LOSS_IGNORE_INDEX

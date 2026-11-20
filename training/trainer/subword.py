@@ -388,6 +388,7 @@ class SubwordModel:
     module = "model_100m.model"
     # The sampler records log-probabilities and top tokens (off-policy corrections).
     records_sampler = True
+    width_multiple = 1
     # The checkpoint is the artifact: no exports.
     exports = False
 
