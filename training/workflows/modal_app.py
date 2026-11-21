@@ -91,6 +91,7 @@ def terminate_sandboxes(launch):
     memory=512,
     timeout=86400,
     retries=0,
+    nonpreemptible=True,
     volumes={"/runs": run_volume},
 )
 def enforce_deadline(run_id, deadline_unix):

@@ -1,4 +1,4 @@
-"""Training-step throughput and MFU of a hybrid run config on synthetic packed documents.
+"""Training-step throughput and MFU of a hybrid run config on prepared or synthetic packed documents.
 
     torchrun --nproc_per_node=<gpus> -m model_hybrid.benchmark --config <run.json> \\
         --steps 20 [--microbatch 4] [--document-tokens 1000] [--profile <out.json>]
@@ -15,9 +15,11 @@ per kernel category and the slowest kernels.
 import argparse
 import collections
 import dataclasses
+import gc
+import gzip
 import json
 import os
-import re
+import shutil
 import tempfile
 import time
 
@@ -28,24 +30,10 @@ from tokenizer import glm
 from trainer import loop
 
 from . import hnet
-from .train import RunConfig, family_of
+from .profile_categories import kernel_category
+from .train import RunConfig, family_of, recipe_data
 
 PROFILE_SKIP, PROFILE_STEPS = 6, 3
-# First match wins; names are CUDA kernel names as the profiler reports them.
-KERNEL_CATEGORIES = (
-    ("communication", r"nccl"),
-    ("flex_attention", r"flex_attention|triton_tem_fused"),
-    ("kda_convolution", r"kda_conv_"),
-    (
-        "kda_fla",
-        r"chunk_kda|kda|chunk_gated_delta|chunk_fwd|chunk_bwd|chunk_local|solve_tril|wy_|l2norm",
-    ),
-    ("loss_softmax_gradient", r"softmax_gradient"),
-    ("matmul", r"gemm|cutlass|nvjet|sm90_xmma|cublas|matmul"),
-    ("optimizer", r"multi_tensor|foreach|adam|newton|muon"),
-    ("compiled_elementwise", r"triton_(poi|red|per)"),
-    ("memory", r"memcpy|memset|Memcpy|Memset|copy_|fill"),
-)
 
 
 class SyntheticMixture:
@@ -66,14 +54,63 @@ class SyntheticMixture:
         """Synthetic batches have no cursor."""
 
 
+def validate_window(settings, rows, steps, profile=False):
+    """Reject a benchmark that would stop before its requested timing window."""
+    if steps <= 0 or rows <= 0:
+        raise ValueError("Benchmark steps and global rows must be positive")
+    if settings["target_tokens"] < steps * rows * settings["model"]["block_size"]:
+        raise ValueError("Config token budget would end before requested benchmark steps")
+    if profile and steps < PROFILE_SKIP + PROFILE_STEPS + 1:
+        raise ValueError("Profile requires warmup, full capture and a post-capture step")
+
+
 def summarize(lines, skip=5):
     """Median throughput and MFU of the steps after the first `skip` (compile, warmup)."""
     steps = [json.loads(line) for line in lines if line.startswith('{"step"')]
     timed = [s for s in steps if s["step"] > skip]
+    metadata = [
+        json.loads(line)["benchmark_model"]
+        for line in lines
+        if line.startswith('{"benchmark_model"')
+    ]
     return {
+        **({"model": metadata[-1]} if metadata else {}),
         "steps_timed": len(timed),
-        "tokens_per_second": float(np.median([s["tokens_per_second"] for s in timed])),
-        "mfu": float(np.median([s["mfu"] for s in timed])),
+        "timing_valid": bool(timed),
+        "timed_tokens": sum(s["budget_tokens"] for s in timed),
+        "timed_seconds": sum(s["seconds"] for s in timed),
+        "aggregate_tokens_per_second": sum(s["budget_tokens"] for s in timed)
+        / sum(s["seconds"] for s in timed)
+        if timed
+        else None,
+        "aggregate_mfu": sum(s["mfu"] * s["seconds"] for s in timed)
+        / sum(s["seconds"] for s in timed)
+        if timed
+        else None,
+        **{
+            "aggregate_" + key: sum(s[key] * s["seconds"] for s in timed)
+            / sum(s["seconds"] for s in timed)
+            for key in (
+                "mfu_fp8_peak",
+                "mfu_mixed_precision",
+                "estimated_model_tflops_per_gpu",
+                "estimated_fp8_flop_fraction",
+            )
+            if timed and key in timed[0]
+        },
+        "tokens_per_second": float(np.median([s["tokens_per_second"] for s in timed]))
+        if timed
+        else None,
+        "mfu": float(np.median([s["mfu"] for s in timed])) if timed else None,
+        **(
+            {
+                "peak_allocated_bytes": max(
+                    r["peak_allocated_bytes"] for s in timed for r in s["ranks"]
+                )
+            }
+            if timed and "ranks" in timed[0]
+            else {}
+        ),
         **(
             {"bytes_per_chunk": float(np.median([s["bytes_per_chunk"] for s in timed]))}
             if timed and "bytes_per_chunk" in timed[0]
@@ -82,13 +119,6 @@ def summarize(lines, skip=5):
         "loss_first": steps[0]["loss"] if steps else None,
         "loss_last": steps[-1]["loss"] if steps else None,
     }
-
-
-def kernel_category(name):
-    for category, pattern in KERNEL_CATEGORIES:
-        if re.search(pattern, name):
-            return category
-    return "other"
 
 
 def profile_summary(profiler, steps):
@@ -104,8 +134,64 @@ def profile_summary(profiler, steps):
     for name, ms in kernels.items():
         categories[kernel_category(name)] += ms
     total = sum(categories.values())
+    phases = collections.defaultdict(lambda: {"cpu_ms_per_step": 0.0})
+    for event in profiler.events():
+        if (
+            event.is_user_annotation
+            and event.device_type.name == "CPU"
+            and event.name.startswith("train/")
+        ):
+            phases[event.name]["cpu_ms_per_step"] += event.cpu_time_total / 1000 / steps
+    # Union device intervals: overlapping streams count once. This is observed
+    # CUDA activity, not tensor-core utilization or a prediction of removable idle.
+    # Scheduled profilers do not expose ProfilerStep annotations in every torch
+    # build. Use our closed step-work ranges as the window in that case.
+    spans = [
+        e.time_range
+        for e in profiler.events()
+        if e.device_type.name == "CPU" and e.name.startswith("ProfilerStep")
+    ]
+    if not spans:
+        spans = [
+            e.time_range
+            for e in profiler.events()
+            if e.is_user_annotation and e.name in ("train/data_fetch", "train/device_wait")
+        ]
+    window = (min(s.start for s in spans), max(s.end for s in spans)) if spans else None
+    intervals = sorted(
+        (max(e.time_range.start, window[0]), min(e.time_range.end, window[1]))
+        for e in profiler.events()
+        if window
+        and e.device_type.name == "CUDA"
+        and not e.is_user_annotation
+        and e.time_range.end > window[0]
+        and e.time_range.start < window[1]
+    )
+    busy, previous_end = 0.0, window[0] if window else 0.0
+    for start, end in intervals:
+        busy += max(0.0, end - max(start, previous_end))
+        previous_end = max(previous_end, end)
+    averages = list(profiler.key_averages(group_by_input_shape=True))
+    operations = [
+        {
+            "name": e.key,
+            "shapes": e.input_shapes,
+            "calls_per_step": e.count / steps,
+            "self_device_ms_per_step": e.self_device_time_total / 1000 / steps,
+            "self_cpu_ms_per_step": e.self_cpu_time_total / 1000 / steps,
+        }
+        for e in sorted(averages, key=lambda e: e.self_device_time_total, reverse=True)[:40]
+    ]
     return {
         "steps": steps,
+        "phases": dict(phases),
+        "operations_by_shape": operations,
+        "cpu_operations": [
+            {"name": e.key, "self_cpu_ms_per_step": e.self_cpu_time_total / 1000 / steps}
+            for e in sorted(averages, key=lambda e: e.self_cpu_time_total, reverse=True)[:20]
+        ],
+        "trace_window_ms_per_step": (window[1] - window[0]) / 1000 / steps if window else None,
+        "device_busy_ms_per_step": busy / 1000 / steps if window else None,
         "gpu_kernel_ms_per_step": total,
         "categories_ms": dict(categories.most_common()),
         "categories_share": {k: v / total for k, v in categories.most_common()},
@@ -124,13 +210,79 @@ def main():
     parser.add_argument("--global-rows", type=int)
     parser.add_argument("--document-tokens", type=int, default=1000)
     parser.add_argument("--profile", help="write a kernel-time summary JSON here (rank 0)")
+    parser.add_argument(
+        "--real-data", action="store_true", help="read the configured prepared mixture"
+    )
+    parser.add_argument("--scalar-delta", action="store_true")
+    parser.add_argument("--profile-all-ranks", action="store_true")
+    parser.add_argument("--profile-stacks", action="store_true")
+    parser.add_argument("--data-root", default="/data")
+    parser.add_argument("--reference-output-gradient", action="store_true")
+    parser.add_argument(
+        "--compile-mode", default="default", choices=["default", "max-autotune-no-cudagraphs"]
+    )
+    parser.add_argument("--kda-save-intermediates", action="store_true")
+    parser.add_argument("--hardware-counters", action="store_true")
+    parser.add_argument("--reference-kda-wy", action="store_true")
+    parser.add_argument("--phase-timings", action="store_true")
+    parser.add_argument("--reference-intra", action="store_true")
+    parser.add_argument("--reference-kda-metadata", action="store_true")
+    parser.add_argument("--shared-kda-metadata", action="store_true")
+    parser.add_argument("--reference-muon", action="store_true")
+    parser.add_argument("--fp8-loss", choices=("logits", "logits_dx", "dx"), default="")
+    parser.add_argument("--host-diagnostics", action="store_true")
+    parser.add_argument("--freeze-gc-after-warmup", action="store_true")
+    parser.add_argument("--fp8-linears", action="store_true")
+    parser.add_argument("--fp8-scope", choices=("all", "mlp"), default="all")
+    parser.add_argument(
+        "--fp8-recipe",
+        default="rowwise",
+        choices=("rowwise", "tensorwise", "rowwise_with_gw_hp", "rowwise_no_pow2"),
+    )
+    parser.add_argument("--consolidation", choices=["joint-loss", "projections", "norm", "all"])
+    parser.add_argument("--mtp-loss-fraction", type=float)
     args = parser.parse_args()
+    from .model import DocumentMask
+
+    if args.reference_kda_metadata and args.shared_kda_metadata:
+        parser.error("Choose either shared or reference KDA metadata")
+    DocumentMask.share_kda_metadata = args.shared_kda_metadata
+    if (args.profile_all_ranks or args.profile_stacks) and not args.profile:
+        parser.error("Rank and stack profiling require --profile")
+    if args.hardware_counters and args.profile:
+        parser.error("Counter replay and timeline profiling must run separately")
+    if args.kda_save_intermediates:
+        from functools import partial
+
+        import fla.ops.kda
+
+        fla.ops.kda.chunk_kda = partial(fla.ops.kda.chunk_kda, disable_recompute=True)
+    if args.reference_output_gradient:
+        # Benchmark-only reference for a matched before/after on the same GPU.
+        # Production always uses the implementation in fused_loss.py.
+        import torch
+
+        from . import output_gradient
+
+        def reference(destination, grad, hidden):
+            destination.add_(torch.mm(grad.T, hidden, out_dtype=torch.float32))
+
+        output_gradient.accumulate_output_gradient_ = reference
+    if args.fp8_loss:
+        from . import fused_loss
+
+        fused_loss.FP8_PROJECTION = args.fp8_loss
     config = RunConfig.load(args.config)
-    overrides = {"recipe": "", "hf_repo": "", "log_every_steps": 1, "checkpoint_seconds": 10**9}
+    overrides = {"hf_repo": "", "log_every_steps": 1, "checkpoint_seconds": 10**9}
+    if not args.real_data:
+        overrides["recipe"] = ""
     if args.microbatch:
         overrides["microbatch"] = args.microbatch
     if args.global_rows:
         overrides["global_rows"] = args.global_rows
+    overrides["gc_warmup_steps"] = 5 if args.freeze_gc_after_warmup else 0
+    if args.mtp_loss_fraction:
+        overrides["model"] = {**config.model, "mtp_loss_fraction": args.mtp_loss_fraction}
     config = dataclasses.replace(config, **overrides)
     context = config.model["block_size"]
     if config.architecture == "hnet":
@@ -138,34 +290,241 @@ def main():
     else:
         ids, eos_id = glm.TOKENIZER_SIZE - 64, glm.EOS_ID
     profiler = None
-    if args.profile and int(os.environ.get("RANK", "0")) == 0:
+    rank = int(os.environ.get("RANK", "0"))
+    if args.profile and (rank == 0 or args.profile_all_ranks):
         import torch
+
+        torch.cuda.set_device(int(os.environ.get("LOCAL_RANK", "0")))
+        profile_path = args.profile if rank == 0 else f"{args.profile}.rank{rank}"
 
         def write(finished):
             summary = profile_summary(finished, PROFILE_STEPS)
-            with open(args.profile, "w") as out:
+            summary["rank"] = rank
+            with open(profile_path, "w") as out:
                 json.dump(summary, out, indent=2)
+            trace = profile_path + ".trace.json"
+            finished.export_chrome_trace(trace)
+            with open(trace, "rb") as source, gzip.open(trace + ".gz", "wb") as target:
+                shutil.copyfileobj(source, target)
+            os.unlink(trace)
 
         activities = [torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA]
-        schedule = torch.profiler.schedule(wait=PROFILE_SKIP - 1, warmup=1, active=PROFILE_STEPS)
+        schedule = torch.profiler.schedule(
+            wait=PROFILE_SKIP - 1, warmup=1, active=PROFILE_STEPS, repeat=1
+        )
         profiler = torch.profiler.profile(
-            activities=activities, schedule=schedule, on_trace_ready=write
+            activities=activities,
+            schedule=schedule,
+            on_trace_ready=write,
+            record_shapes=True,
+            with_stack=args.profile_stacks,
         )
         profiler.start()
 
     with tempfile.TemporaryDirectory() as run_dir:
-        mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
-        family = family_of(config)(config, run_dir, data=({"synthetic": True}, lambda: mixture))
-        if profiler:
-            family.after_step = lambda data, model, progress: profiler.step()
-        loop.train(
+        if args.real_data:
+            identity, factory, _, _ = recipe_data(config, args.data_root)
+            if identity["recipe"]["context"] != context:
+                raise ValueError(
+                    f"Benchmark recipe context {identity['recipe']['context']} "
+                    f"does not match model context {context}"
+                )
+
+            def open_mixture():
+                mixture = factory()
+                mixture.wait_seconds = 0
+                return mixture
+
+            data = (identity, open_mixture)
+        else:
+            mixture = SyntheticMixture(context, args.document_tokens, ids, eos_id)
+            data = ({"synthetic": True}, lambda: mixture)
+        family = family_of(config)(config, run_dir, data=data)
+        if args.fp8_linears:
+            from .float8_training import configure as configure_float8
+
+            fp8_build = family.build
+
+            def float8_build(device):
+                model = fp8_build(device)
+                names = configure_float8(model, args.fp8_recipe, args.fp8_scope)
+                if rank == 0:
+                    print(
+                        json.dumps(
+                            {
+                                "fp8_linear_modules": names,
+                                "recipe": args.fp8_recipe,
+                                "scope": args.fp8_scope,
+                                "library": "torchao==0.18.0",
+                            }
+                        ),
+                        flush=True,
+                    )
+                return model
+
+            family.build = float8_build
+        if args.scalar_delta:
+            from .gated_delta import configure as configure_scalar
+
+            original_build = family.build
+
+            def scalar_build(device):
+                model = original_build(device)
+                configure_scalar(model)
+                return model
+
+            family.build = scalar_build
+        if args.consolidation:
+            from .consolidation import configure
+
+            family.joint_loss = args.consolidation in ("joint-loss", "all")
+            build = family.build
+
+            def consolidated_build(device, build=build):
+                model = build(device)
+                configure(model, args.consolidation)
+                return model
+
+            family.build = consolidated_build
+        if args.reference_intra:
+            from unittest.mock import patch
+
+            build = family.build
+
+            def reference_intra_build(device, build=build):
+                # Import/register FLA after the loop binds this rank's device.
+                with patch("model_hybrid.kda_intra.install"):
+                    return build(device)
+
+            family.build = reference_intra_build
+        if args.reference_muon:
+            from trainer.optimizers import orthogonalize
+
+            make_optimizer = family.make_optimizer
+
+            def reference_optimizer(model):
+                optimizer = make_optimizer(model)
+                optimizer.muon.orthogonalize = orthogonalize
+                return optimizer
+
+            family.make_optimizer = reference_optimizer
+        if args.reference_kda_wy:
+            from unittest.mock import patch
+
+            build = family.build
+
+            def reference_build(device):
+                # The loop has bound LOCAL_RANK before build: import FLA on the
+                # correct device, and preserve the original backend for this arm.
+                with patch("model_hybrid.kda_wy.install"):
+                    return build(device)
+
+            family.build = reference_build
+        if args.compile_mode != "default":
+            import torch
+
+            family.compile = lambda model: torch.compile(model, mode=args.compile_mode)
+        if args.hardware_counters:
+            import torch
+
+            def counter_step(data, model, progress):
+                if progress["step"] == PROFILE_SKIP:
+                    torch.cuda.synchronize()
+                    torch.cuda.cudart().cudaProfilerStart()
+                elif progress["step"] == PROFILE_SKIP + 1:
+                    torch.cuda.synchronize()
+                    torch.cuda.cudart().cudaProfilerStop()
+
+            family.after_step = counter_step
+        measured_build = family.build
+
+        def describe_build(device):
+            lm = measured_build(device)
+            lm._fp8_loss_mode = args.fp8_loss
+            if rank == 0:
+                print(
+                    json.dumps(
+                        {
+                            "benchmark_model": {
+                                "linear_precision": f"fp8_{args.fp8_recipe}"
+                                if args.fp8_linears
+                                else "bf16",
+                                "fp8_scope": args.fp8_scope if args.fp8_linears else None,
+                                "fp8_loss": args.fp8_loss,
+                                "shared_kda_metadata": args.shared_kda_metadata,
+                                "mfu_peak_basis": "H100_dense_BF16_equivalent",
+                                "mixer": "scalar_delta" if args.scalar_delta else "configured",
+                                "parameters": sum(p.numel() for p in lm.parameters()),
+                                "matrix_parameters": sum(
+                                    p.numel() for p in lm.parameters() if p.ndim == 2
+                                ),
+                                "scalar_gate_optimizer": "adamw" if args.scalar_delta else None,
+                            }
+                        }
+                    ),
+                    flush=True,
+                )
+            return lm
+
+        family.build = describe_build
+        host_events, active_gc, active_compile = [], {}, []
+        current_step = [1]
+        if args.host_diagnostics:
+            import torch
+
+            def gc_event(phase, info):
+                generation = info["generation"]
+                if phase == "start":
+                    active_gc[generation] = (time.perf_counter(), current_step[0])
+                else:
+                    started, step = active_gc.pop(generation)
+                    elapsed = (time.perf_counter() - started) * 1000
+                    if elapsed >= 10:
+                        host_events.append(
+                            {
+                                "kind": "gc",
+                                "step": step,
+                                "ms": elapsed,
+                                "generation": generation,
+                                "collected": info["collected"],
+                            }
+                        )
+
+            def compile_start(*args, **kwargs):
+                active_compile.append((time.perf_counter(), current_step[0]))
+
+            def compile_end(*args, **kwargs):
+                started, step = active_compile.pop()
+                host_events.append(
+                    {"kind": "compile", "step": step, "ms": (time.perf_counter() - started) * 1000}
+                )
+
+            gc.callbacks.append(gc_event)
+            torch._dynamo.on_compile_start(compile_start)
+            torch._dynamo.on_compile_end(compile_end)
+
+        def observer():
+            if profiler:
+                profiler.step()
+            current_step[0] += 1
+
+        report = loop.train(
             family,
             run_dir,
             runtime=DistributedRuntime.from_torchrun(os.environ),
             stop_unix=time.time() + 3600,
             max_steps=args.steps,
             save=False,
+            phase_timings=args.phase_timings,
+            step_observer=observer,
         )
+        if args.host_diagnostics:
+            gc.callbacks.remove(gc_event)
+            print(
+                json.dumps({"host_diagnostics": {"rank": rank, "events": host_events}}), flush=True
+            )
+        if report["steps"] != args.steps or report["stop_reason"] != "step_limit":
+            raise RuntimeError(f"Benchmark did not complete its requested steps: {report}")
     if profiler:
         profiler.stop()
 

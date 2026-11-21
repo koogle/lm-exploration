@@ -24,7 +24,7 @@ def load_workflow(name="h100x1-pilot.json", dataset_config=None):
 
 
 # Module helpers the controllers call; compiled alongside each one.
-HELPERS = ("spawn_training", "started_chain")
+HELPERS = ("spawn_training", "started_chain", "start_stage", "await_stage")
 
 
 def controller(name):
@@ -174,7 +174,9 @@ class WorkflowControllerTests(unittest.TestCase):
 class RunWorkflowTests(unittest.TestCase):
     """`run_workflow` with its stage runners replaced: order, parents, branches, relaunch."""
 
-    def run_plan(self, root, stages, start="", end="", checkpoint="", fail=(), reasons=None):
+    def run_plan(
+        self, root, stages, start="", end="", checkpoint="", fail=(), reasons=None, error=None
+    ):
         path = Path(root, "workflow.json")
         path.write_text(
             json.dumps({"family": "subword", "from": "base/step-000000100.pt", "stages": stages})
@@ -187,7 +189,7 @@ class RunWorkflowTests(unittest.TestCase):
             calls.append(recipe)
             call = Mock()
             if recipe["run_id"].removeprefix("flow-").split("-a")[0] in fail:
-                call.get.side_effect = RuntimeError("training failed")
+                call.get.side_effect = error or RuntimeError("training failed")
             else:
                 call.get.return_value = {
                     "checkpoint": f"/runs/{recipe['run_id']}/step-1.pt",
@@ -256,6 +258,16 @@ class RunWorkflowTests(unittest.TestCase):
             self.assertEqual(parents, {"flow-chat-a2": "other/step-000000002.pt"})
             self.assertEqual(result["chat"]["status"], "completed")
 
+    def test_interruption_leaves_the_running_stage_to_a_rerun(self):
+        stages = [
+            {"stage": "sft", "name": "chat", "data": {"volume": "d"}, "settings": {"steps": 1}}
+        ]
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaises(KeyboardInterrupt):
+                self.run_plan(root, stages, fail=("chat",), error=KeyboardInterrupt())
+            state = json.loads(Path(root, "runs/flow/stages.json").read_text())
+            self.assertEqual(state["stages"]["chat"]["status"], "running")
+
     def test_unfinished_parent_needs_a_checkpoint(self):
         sft = {"stage": "sft", "data": {"volume": "d"}, "settings": {"steps": 1}}
         stages = [{**sft, "name": "chat"}, {**sft, "name": "more"}]
@@ -264,3 +276,71 @@ class RunWorkflowTests(unittest.TestCase):
                 self.run_plan(root, stages, start="more")
             _, parents = self.run_plan(root, stages, start="more", checkpoint="x/step-000000003.pt")
             self.assertEqual(parents, {"flow-more": "x/step-000000003.pt"})
+
+
+class TrainingStageRerunTests(unittest.TestCase):
+    """`run_training_stage` across a rerun of the same launch and a later launch."""
+
+    def setUp(self):
+        self.root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.root.cleanup)
+        self.saved = []
+        self.spawned = []
+        self.state = {"stages": {}}
+        self.stage = {"name": "pretrain", "stage": "pretrain", "run_id": "flow-pretrain"}
+        self.stage["spec"] = {}
+        self.plan = {"run_id": "flow", "family": "hybrid"}
+        root = self.root.name
+
+        def spawn(run, bundle, provenance, resume, init_from):
+            # The run is recorded before its chain starts.
+            self.assertEqual(self.saved[-1]["run_id"], run)
+            self.spawned.append((run, resume))
+            call = Mock(object_id=f"call-{len(self.spawned)}")
+            call.get.return_value = {"training_call_id": "chain"}
+            return call
+
+        self.reconnected = []
+
+        def from_id(call_id):
+            self.reconnected.append(call_id)
+            return Mock(get=Mock(return_value={"training_call_id": "chain"}))
+
+        self.run = controller("run_training_stage")
+        self.run.__globals__.update(
+            Path=lambda path: Path(root) / str(path).lstrip("/"),
+            json=json,
+            run_volume=Mock(),
+            modal=Mock(FunctionCall=Mock(from_id=from_id)),
+            launch_hybrid=Mock(spawn=spawn),
+            await_training=Mock(return_value=None),
+            last_checkpoint=lambda run: f"/runs/{run}-s00/step-000000010.pt",
+            relative=lambda path: str(Path(path).relative_to("/runs")),
+        )
+
+    def launch(self, deadline):
+        def save():
+            self.saved.append(dict(self.state["stages"]["pretrain"]))
+
+        provenance = {"deadline_unix": deadline}
+        return self.run(self.stage, self.plan, self.state, None, provenance, None, save)
+
+    def test_rerun_of_the_same_launch_reattaches_to_its_run(self):
+        self.assertIsNone(self.launch(1000.0))
+        self.assertEqual(self.spawned, [("flow-pretrain", "")])
+        # Modal reruns the preempted controller of the same launch.
+        self.assertIsNone(self.launch(1000.0))
+        self.assertEqual(len(self.spawned), 1)
+        self.assertEqual(self.reconnected, ["call-1"])
+        record = self.state["stages"]["pretrain"]
+        self.assertEqual((record["run_id"], record["attempt"]), ("flow-pretrain", 1))
+
+    def test_later_launch_opens_the_next_attempt_from_the_last_checkpoint(self):
+        self.launch(1000.0)
+        self.launch(2000.0)
+        self.assertEqual(
+            self.spawned,
+            [("flow-pretrain", ""), ("flow-pretrain-a2", "flow-pretrain-s00/step-000000010.pt")],
+        )
+        self.assertEqual(self.reconnected, [])
+        self.assertEqual(self.state["stages"]["pretrain"]["attempt"], 2)

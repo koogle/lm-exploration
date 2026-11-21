@@ -1,5 +1,8 @@
 # Simple LLM — training from scratch
 
+[Sub-1B coding reasoner training plan](plans/CODING_REASONER_1B.md): budget,
+reasoning stages, data qualification and the initial 128M control pilot.
+
 ## Naming and artifact compatibility
 
 The project uses **Simple LLM** in source filenames, module names, commands and
