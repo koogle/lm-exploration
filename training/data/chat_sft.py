@@ -282,7 +282,12 @@ def prepare_subset(recipe, name, rows, folder, tokenizer, screen=None, converter
             dropped["unparsed"] += 1
             continue
         try:
-            ids, mask = chat.encode(tokenizer, conversation["messages"], conversation["tools"])
+            ids, mask = chat.encode(
+                tokenizer,
+                conversation["messages"],
+                conversation["tools"],
+                thinking=recipe.get("thinking", False),
+            )
         except (ValueError, StopIteration, TypeError, KeyError):
             dropped["unparsed"] += 1
             continue
