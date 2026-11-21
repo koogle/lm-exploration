@@ -71,6 +71,7 @@ class ContestSFTTests(unittest.TestCase):
     def test_leetcode_drops_problems_from_the_cutoff_on(self):
         self.assertIsNone(contest_sft.leetcode(dict(LEETCODE_ROW, estimated_date="2025-02-01")))
 
+
 class OpenCodeReasoning2Test(unittest.TestCase):
     def test_keeps_reasoning_and_answers_with_the_program(self):
         messages = contest_sft.opencodereasoning2(OCR2_ROW, QUESTIONS)["messages"]
@@ -89,3 +90,133 @@ class OpenCodeReasoning2Test(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SelectionTest(unittest.TestCase):
+    """Per-problem selection and starter-code repeats of `modal_chat_sft_data`."""
+
+    @staticmethod
+    def row(question, starter, reasoning):
+        return contest_sft.conversation(question, starter, "print(1)") | {
+            "messages": [
+                contest_sft.conversation(question, starter, "print(1)")["messages"][0],
+                {"role": "assistant", "content": "x", "reasoning_content": reasoning},
+            ]
+        }
+
+    def test_shortest_per_question_and_starter_copies(self):
+        from modal_scripts import modal_chat_sft_data as prep
+
+        rows = [
+            self.row("A", "", "long reasoning"),
+            None,
+            self.row("A", "", "short"),
+            self.row("B", "def f(x):\n    ", "think"),
+        ]
+        first = prep.per_question(rows, 1)
+        self.assertEqual([r is not None for r in first], [True, False, False, True])
+        shortest = prep.per_question(rows, 1, shortest=True)
+        self.assertEqual([r is not None for r in shortest], [False, False, True, True])
+        repeated = prep.repeat_starter(shortest, 3)
+        self.assertEqual(len(repeated), 6)
+        self.assertEqual(repeated[4:], [rows[3], rows[3]])
+
+
+CF_ROW = {
+    "description": "Print the sum of two integers.",
+    "input_format": "Two integers a and b.",
+    "output_format": "Print a + b.",
+    "examples": [{"input": "1 2", "output": "3"}],
+    "note": None,
+    "interaction_format": None,
+    "problem_type": "diff",
+    "finish_reason": "stop",
+    "generation": "<think>\nAdd them.\n</think>\n```python\na, b = map(int, input().split())\n"
+    "print(a + b)\n```",
+    "public_tests": {"input": ["1 2\n"], "output": ["3\n"]},
+    "private_tests": {"input": ["5 7\n"], "output": ["12\n"]},
+}
+
+
+class CodeforcesCotsTest(unittest.TestCase):
+    def test_verified_trace_becomes_thinking_conversation(self):
+        conversation = contest_sft.codeforces_cots(CF_ROW)
+        user, assistant = conversation["messages"]
+        self.assertIn("Sample Input 1\n\n1 2\n\nSample Output 1\n\n3", user["content"])
+        self.assertEqual(assistant["reasoning_content"], "Add them.")
+        self.assertTrue(assistant["content"].startswith("```python\na, b ="))
+
+    def test_failing_checker_and_interactive_rows_are_skipped(self):
+        wrong = {**CF_ROW, "private_tests": {"input": ["5 7\n"], "output": ["13\n"]}}
+        self.assertIsNone(contest_sft.codeforces_cots(wrong))
+        self.assertIsNone(contest_sft.codeforces_cots({**CF_ROW, "problem_type": "checker"}))
+        self.assertIsNone(contest_sft.codeforces_cots({**CF_ROW, "interaction_format": "x"}))
+
+
+class TeacherTracesTest(unittest.TestCase):
+    def test_leetcode_trace_problems_and_teacher_conversation(self):
+        row = {
+            "task_id": "add-two",
+            "difficulty": "Easy",
+            "problem_description": "Return a + b.",
+            "starter_code": "class Solution:\n    def add(self, a: int, b: int) -> int:\n",
+            "estimated_date": "2020-01-01",
+            "input_output": [{"input": "a = 1, b = 2", "output": "3"}],
+        }
+        late = {**row, "task_id": "late", "estimated_date": "2025-02-01"}
+        (problem,) = contest_sft.trace_problems([], [row, late])
+        self.assertEqual(problem["question_id"], "leetcodedataset/add-two")
+        self.assertEqual(problem["tests"], [{"input": "1\n2", "output": "3"}])
+        completion = (
+            "<think>\nAdd.\n</think>\n\nDraft:\n```python\npass\n```\nFinal:\n"
+            "```python\nclass Solution:\n    def add(self, a, b):\n        return a + b\n```"
+        )
+        conversation = contest_sft.teacher_traces(
+            {
+                "question_content": "Return a + b.",
+                "starter_code": row["starter_code"],
+                "completion": completion,
+            }
+        )
+        assistant = conversation["messages"][1]
+        self.assertEqual(assistant["reasoning_content"], "Add.")
+        self.assertIn("return a + b", assistant["content"])
+        self.assertNotIn("pass", assistant["content"])
+        self.assertIsNone(
+            contest_sft.teacher_traces(
+                {
+                    **conversation,
+                    "question_content": "q",
+                    "starter_code": "",
+                    "completion": "no reasoning",
+                }
+            )
+        )
+
+
+class AceReasonLeetCodeTest(unittest.TestCase):
+    def test_matched_row_is_verified_under_the_starter_code(self):
+        row = {
+            "task_id": "add-two",
+            "difficulty": "Easy",
+            "problem_description": "Given two integers `a` and `b`, return their sum as one integer value.",
+            "starter_code": "class Solution:\n    def add(self, a: int, b: int) -> int:\n",
+            "estimated_date": "2020-01-01",
+            "input_output": [{"input": "a = 1, b = 2", "output": "3"}],
+        }
+        questions = contest_sft.leetcode_questions([row])
+        method = "class Solution:\n    def add(self, a, b):\n        return a + b\n"
+        ace = {
+            "source": "leetcode",
+            "input": "Given two integers a and b, return their sum as one integer value.\n\nWrite Python.",
+            "output": f"<think>\nSum.\n</think>\n\n```python\n{method}```",
+        }
+        conversation = contest_sft.acereason_leetcode(ace, questions)
+        self.assertEqual(conversation["messages"][1]["reasoning_content"], "Sum.")
+        self.assertIn("class Solution:", conversation["messages"][0]["content"])
+        function = {
+            **ace,
+            "output": "<think>\nSum.\n</think>\n```python\ndef add(a, b):\n    return a + b\n```",
+        }
+        self.assertIsNone(contest_sft.acereason_leetcode(function, questions))
+        self.assertIsNone(contest_sft.acereason_leetcode({**ace, "source": "TACO"}, questions))

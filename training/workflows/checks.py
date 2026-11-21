@@ -64,9 +64,11 @@ def check_capacity(report, target):
         raise ValueError("Every source needs validation data")
 
 
-def check_hybrid_capacity(recipe, root, target, context):
+def check_hybrid_capacity(recipe, root, target, context, global_rows=1):
     """Verify every required shard before allocating training GPUs; a source's train
-    tokens count once per allowed pass."""
+    tokens count once per allowed pass. With replay, the recipe's sources fill the
+    batch rows that `hybrid.train` leaves to them (`global_rows` less the rounded
+    replay rows), so they supply that share of `target`."""
     import json
     from pathlib import Path
 
@@ -74,6 +76,9 @@ def check_hybrid_capacity(recipe, root, target, context):
 
     if recipe.get("format") == "chat-sft":
         return None  # ChatMixture owns conversation packing and its capacity.
+    if replay := recipe.get("replay"):
+        replay_rows = round(global_rows * replay["fraction"])
+        target = target * (global_rows - replay_rows) / global_rows
     capacity = {}
     for name, source in recipe["sources"].items():
         train, validation = 0, 0

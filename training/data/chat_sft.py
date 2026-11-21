@@ -11,7 +11,8 @@ this recipe's folder by another stage), each read `repeat` times per pass (a
 fraction reads a seeded sample of that share). `convert` turns a smoltalk2 row
 (Hermes-style tool calls in the text, tool schemas in
 `chat_template_kwargs.xml_tools`) into OpenAI messages and tools; `prepare_subset` renders each conversation with `chat.encode`, drops those
-longer than the context or sharing a 13-gram with the benchmark screen, holds out
+longer than the context or sharing a 13-gram with the benchmark screen (at least
+`screen_min_hits` distinct ones when the recipe sets it), holds out
 a hash-selected fraction, and writes per subset through `SubsetWriter`, which also
 serves sources streamed in rank order:
 
@@ -294,7 +295,8 @@ def prepare_subset(recipe, name, rows, folder, tokenizer, screen=None, converter
         if len(ids) > recipe["context"] + 1:
             dropped["too_long"] += 1
             continue
-        if screen is not None and contaminated(ids, screen, recipe["screen_ngram"]):
+        hits = recipe.get("screen_min_hits", 1)
+        if screen is not None and contaminated(ids, screen, recipe["screen_ngram"], hits):
             dropped["contaminated"] += 1
             continue
         writer.write(ids, mask, is_heldout(conversation["messages"], recipe["heldout_fraction"]))

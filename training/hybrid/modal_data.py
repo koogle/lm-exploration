@@ -306,6 +306,17 @@ def coordinate(launch, recipe, deadline, parallel):
 
 
 @app.local_entrypoint()
+def screen(recipe: str):
+    """Build only a recipe's contamination screen (`<name>/screen.npy`), e.g. a screen
+    recipe that names benchmarks and no sources."""
+    from workflows.deadline import new_deadline
+
+    print(
+        "screen n-grams", build_screen.remote(json.loads(Path(recipe).read_text()), new_deadline())
+    )
+
+
+@app.local_entrypoint()
 def smoke(recipe: str = DEFAULT_RECIPE):
     """Build the screen and prepare each source's held-out shard (one bounded call each)."""
     from training_data.packed_shards import heldout_index, load_recipe

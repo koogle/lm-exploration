@@ -1,6 +1,7 @@
 """Hybrid data preparation, contamination screen and the prepared-shard loader."""
 
 import json
+import math
 import tempfile
 import unittest
 from pathlib import Path
@@ -264,6 +265,47 @@ class HybridDataTests(unittest.TestCase):
             partitions.append(set(found))
         self.assertFalse(partitions[0] & partitions[1])
 
+    def test_joined_columns_and_minimum_values_from_plain_json_lines(self):
+        rows = [
+            {"input": "Add two numbers.", "output": "def add(a, b): return a + b", "score": "1.0"},
+            {"input": "Negate.", "output": "def neg(a): return a", "score": "0.5"},
+            {"input": "Square.", "output": "def sq(a): return a * a", "score": None},
+        ]
+        (self.root / "instruct-0.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+        source = {
+            "weight": 1.0,
+            "repo": "i",
+            "revision": "r",
+            "pattern": "instruct-{index}.jsonl",
+            "shards": 1,
+            "column": "text",
+            "join_columns": ["input", "output"],
+            "min_values": {"score": 1.0},
+            "max_passes": 1,
+        }
+        self.recipe["sources"] = {"instruct": source}
+        dropped = {"empty": 0, "license": 0}
+        texts = [
+            text
+            for batch in data._text_batches(
+                source, data.JsonLines(self.root / "instruct-0.jsonl"), dropped
+            )
+            for text in batch
+        ]
+        self.assertEqual(texts, ["Add two numbers.\n\ndef add(a, b): return a + b"])
+        self.assertEqual(dropped["score"], 2)
+        meta = data.prepare_shard(
+            self.recipe,
+            "instruct",
+            0,
+            self.root / "out",
+            self.tokenizer,
+            np.empty(0, np.uint64),
+            EOS,
+            self.download,
+        )
+        self.assertEqual((meta["documents"], meta["dropped"]["score"]), (1, 2))
+
     def test_capacity_rejects_incomplete_and_insufficient_shards(self):
         from workflows.checks import check_hybrid_capacity
 
@@ -276,6 +318,25 @@ class HybridDataTests(unittest.TestCase):
         binary.write_bytes(binary.read_bytes()[:-4])
         with self.assertRaisesRegex(ValueError, "incomplete"):
             check_hybrid_capacity(self.recipe, root, 16, 8)
+
+    def test_capacity_counts_only_the_rows_left_after_replay(self):
+        from workflows.checks import check_hybrid_capacity
+
+        self.prepare()
+        root = self.root / "out"
+        capacity = check_hybrid_capacity(self.recipe, root, 16, 8)
+        # A target the sources hold only when replay fills half of every batch.
+        target = min(
+            2 * (entry["train_tokens"] - 9) / self.recipe["sources"][name]["weight"]
+            for name, entry in capacity.items()
+        )
+        with self.assertRaisesRegex(ValueError, "needs"):
+            check_hybrid_capacity(self.recipe, root, target, 8)
+        replayed = {**self.recipe, "replay": {"recipe": "foundation", "fraction": 0.5}}
+        capacity = check_hybrid_capacity(replayed, root, target, 8, global_rows=4)
+        for name, entry in capacity.items():
+            weight = self.recipe["sources"][name]["weight"]
+            self.assertEqual(entry["needed_tokens"], math.ceil(target / 2 * weight) + 9)
 
     def test_row_group_parts_cover_upstream_once(self):
         pq.write_table(
@@ -353,6 +414,10 @@ class HybridDataTests(unittest.TestCase):
         screen = np.unique(data.ngram_hashes(list(range(5, 18)), 13))
         self.assertTrue(data.contaminated(ids, screen, 13))
         self.assertFalse(data.contaminated(list(range(100, 130)), screen, 13))
+        # range(5, 18) is a single shared 13-gram: one hit, not two.
+        self.assertFalse(data.contaminated(ids, screen, 13, min_hits=2))
+        wide = np.unique(data.ngram_hashes(list(range(3, 18)), 13))
+        self.assertTrue(data.contaminated(ids, wide, 13, min_hits=3))
 
     def test_prepared_shards(self):
         metas = self.prepare()
