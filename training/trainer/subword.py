@@ -301,6 +301,20 @@ class SubwordFamily:
     def open_data(self, deadline, state):
         return SubwordData(self.config, self.manifest, deadline, state)
 
+    def phase_data(self, saved):
+        """Data identity and a fresh cursor for a new phase seeded from `saved`."""
+        config = self.config
+        data = open_mixture(
+            self.manifest,
+            loader=config.data_loader,
+            context=config.context,
+            allow_unreviewed=config.allow_unreviewed_data,
+        )
+        try:
+            return data.identity, data.state_dict()
+        finally:
+            data.close()
+
     def metadata(self):
         from model_100m.model import ModelConfig
 

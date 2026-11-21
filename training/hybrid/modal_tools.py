@@ -4,14 +4,18 @@ Training runs through the workflows like every model family (workflows/README.md
 Run from training/:
     modal run -m model_hybrid.modal_tools::bench --gpus 1 [--microbatch 4]
     modal run -m model_hybrid.modal_tools::heldout --export <run>/export/<name>
+    modal run -m model_hybrid.modal_tools::samples --export <run>/export/<name> \\
+        [--prompts hybrid/sample_prompts.json] [--output samples.json]
     modal run -m model_hybrid.modal_tools::export --run-id <run folder>
     modal run -m model_hybrid.modal_tools::publish --checkpoint <run>/step-NNNNNNNNN.pt \\
-        --repo <owner/name> [--public] [--card <README.md>]
+        --repo <owner/name> [--public] [--card <README.md>] [--full]
 
 Each benchmark is one call with a 30-minute timeout and no retries. `publish` uploads
 one checkpoint from the runs volume as bf16 weights, config, progress and the run's
 logs (private unless --public), with an optional model card; one CPU call, one hour,
-no retries.
+no retries. With `--full` it uploads the training checkpoint file itself (weights,
+optimizer, data and RNG state) and checks the uploaded SHA-256; one CPU call, two
+hours, no retries.
 """
 
 import json
@@ -392,6 +396,48 @@ def export_checkpoint(checkpoint, repo, private, card, deadline):
     return {"repo": repo, "private": private, **progress}
 
 
+@app.function(
+    image=image,
+    cpu=4,
+    memory=8192,
+    timeout=7200,
+    retries=0,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes=VOLUMES,
+)
+def upload_training_checkpoint(checkpoint, repo, private, card, deadline):
+    """One training checkpoint file from our runs volume to HF, byte for byte, with its
+    SHA-256 checked against the uploaded copy."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import hashlib
+
+    from huggingface_hub import HfApi
+
+    path = Path("/runs") / checkpoint
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 24), b""):
+            digest.update(block)
+    api = HfApi()
+    api.create_repo(repo, private=private, exist_ok=True)
+    api.upload_file(
+        path_or_fileobj=str(path),
+        path_in_repo=path.name,
+        repo_id=repo,
+        commit_message=f"Training checkpoint {checkpoint}",
+    )
+    if card:
+        api.upload_file(path_or_fileobj=card.encode(), path_in_repo="README.md", repo_id=repo)
+    files = api.model_info(repo, files_metadata=True).siblings
+    remote = next(f.lfs.sha256 for f in files if f.rfilename == path.name)
+    if remote != digest.hexdigest():
+        raise RuntimeError(
+            f"Uploaded {path.name} has SHA-256 {remote}, expected {digest.hexdigest()}"
+        )
+    return {"repo": repo, "private": private, "file": path.name, "sha256": remote}
+
+
 def load_config(path):
     return json.loads(Path(path).read_text())
 
@@ -626,6 +672,67 @@ def heldout(export: str, recipe: str = "hybrid/recipes/hybrid-40b-v1.json", docu
     print(json.dumps({"export": export, "heldout": result}, indent=1))
 
 
+@app.function(
+    image=image, gpu="H100", cpu=8, memory=65536, timeout=3600, retries=0, volumes=VOLUMES
+)
+def generate_samples(export, spec, deadline):
+    """Continuations of each prompt in `spec` by an export, once per decode setting."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import torch
+    from model_hybrid import generate
+
+    from tokenizer import glm
+
+    lm = generate.load_export(Path("/runs") / export, dtype=torch.bfloat16, device="cuda")
+    tokenizer = glm.load()
+    prompts = [tokenizer.encode(p["text"], add_special_tokens=False).ids for p in spec["prompts"]]
+    samples = []
+    for decode in spec["decodes"]:
+        generator = None
+        if decode["temperature"] > 0:
+            generator = torch.Generator(device="cuda").manual_seed(decode.get("seed", 0))
+        outputs = generate.generate_batch(
+            lm,
+            prompts,
+            spec["max_new_tokens"],
+            (glm.EOS_ID,),
+            temperature=decode["temperature"],
+            top_p=decode["top_p"],
+            generator=generator,
+        )
+        for prompt, ids in zip(spec["prompts"], outputs, strict=True):
+            samples.append(
+                {
+                    "prompt": prompt["name"],
+                    "decode": decode["name"],
+                    "text": prompt["text"],
+                    "completion": tokenizer.decode(ids, skip_special_tokens=False),
+                    "new_tokens": len(ids),
+                    "ended": bool(ids) and ids[-1] == glm.EOS_ID,
+                }
+            )
+    return samples
+
+
+@app.local_entrypoint()
+def samples(export: str, prompts: str = "hybrid/sample_prompts.json", output: str = ""):
+    """Generations of `<run id>/export/<export>` for a prompt file; JSON on stdout or
+    in `--output`."""
+    from workflows.deadline import MAX_LAUNCH_SECONDS
+
+    spec = json.loads(Path(prompts).read_text())
+    result = {
+        "export": export,
+        "prompts": prompts,
+        "samples": generate_samples.remote(export, spec, time.time() + MAX_LAUNCH_SECONDS),
+    }
+    if output:
+        Path(output).write_text(json.dumps(result, indent=1) + "\n")
+    else:
+        print(json.dumps(result, indent=1))
+
+
 @app.function(image=image, cpu=8, memory=65536, timeout=1800, retries=0, volumes=VOLUMES)
 def export_latest(run_id):
     """bf16 trunk export (config.json, model.safetensors) of a run's latest checkpoint."""
@@ -661,14 +768,68 @@ def export(run_id: str):
 
 
 @app.local_entrypoint()
-def publish(checkpoint: str, repo: str, public: bool = False, card: str = ""):
-    """Upload one checkpoint (RUN/step-NNNNNNNNN.pt on the runs volume) to an HF model repo."""
+def publish(checkpoint: str, repo: str, public: bool = False, card: str = "", full: bool = False):
+    """Upload one checkpoint (RUN/step-NNNNNNNNN.pt on the runs volume) to an HF model repo:
+    bf16 inference weights, or with `--full` the training checkpoint file itself."""
     from workflows.deadline import MAX_LAUNCH_SECONDS
 
     text = Path(card).read_text() if card else ""
-    result = export_checkpoint.remote(
-        checkpoint, repo, not public, text, time.time() + MAX_LAUNCH_SECONDS
-    )
+    upload = upload_training_checkpoint if full else export_checkpoint
+    result = upload.remote(checkpoint, repo, not public, text, time.time() + MAX_LAUNCH_SECONDS)
+    print(json.dumps(result, indent=2))
+
+
+@app.function(
+    image=counter_image,
+    gpu="H100!",
+    cpu=4,
+    memory=16384,
+    timeout=300,
+    retries=0,
+    volumes=VOLUMES,
+)
+def counter_probe(deadline, run_id):
+    """Check hardware-counter access before allocating eight training GPUs."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed")
+    from model_hybrid.hardware_counters import probe
+
+    folder = Path("/runs/throughput") / run_id
+    try:
+        result = probe(folder)
+        result["hardware"] = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
+            text=True,
+        ).strip()
+        result["profiling_driver_parameters"] = Path("/proc/driver/nvidia/params").read_text()
+        (folder / "probe.json").write_text(json.dumps(result, indent=2))
+        return result
+    finally:
+        runs_volume.commit()
+
+
+@app.local_entrypoint()
+def counters_probe(run_id: str, output: str):
+    """Bounded single-H100 access check; no training or optimization experiment."""
+    deadline = time.time() + 900
+    call = counter_probe.spawn(deadline, run_id)
+    try:
+        supervisor = enforce_deadline.spawn([call.object_id], deadline)
+    except Exception:
+        call.cancel()
+        raise
+    record = {
+        "run_id": run_id,
+        "call": call.object_id,
+        "supervisor": supervisor.object_id,
+        "deadline": deadline,
+    }
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.with_suffix(".launch.json").write_text(json.dumps(record, indent=2))
+    print(json.dumps(record), flush=True)
+    result = call.get()
+    path.write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))
 
 
