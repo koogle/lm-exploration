@@ -12,8 +12,10 @@ a time.
   continuation, a chat turn, or a chat turn with thinking. The results download as
   JSON with the sampling settings.
 - Chat (when an export is a chat model, `"chat": true`): OpenAI messages and tools
-  rendered in GLM's chat format, with each reply parsed back into an OpenAI assistant
-  message (content and tool_calls); tool results are sent as `tool` turns.
+  rendered in GLM's chat format, with or without thinking, and each reply parsed back
+  into one OpenAI assistant message (reasoning_content, content and tool_calls); a
+  reply's thinking shows inside its bubble, folded above the answer; tool results are
+  sent as `tool` turns.
 - Continue text: one export continues a prompt.
 """
 
@@ -125,6 +127,9 @@ def compare(rows, labels, format_, temperature, top_p, max_new, seed):
     if not chosen or not labels:
         raise gr.Error("Tick at least one prompt's Run box and pick at least one model.")
     columns = {label: 2 + LABELS.index(label) for label in labels}
+    # A thinking reply continues the prompt's opened `<think>`: show it with that tag,
+    # so the cell reads as the one assistant turn "<think>reasoning</think>answer".
+    opened = "<think>" if format_ == "Chat with thinking" else ""
     results = []
     for done, index in enumerate(chosen):
         prompt = rows[index][1]
@@ -139,14 +144,16 @@ def compare(rows, labels, format_, temperature, top_p, max_new, seed):
             if time.time() - last > 0.25:
                 last = time.time()
                 for label, column in columns.items():
-                    rows[index][column] = TOKENIZER.decode(ids[label], skip_special_tokens=False)
+                    rows[index][column] = opened + TOKENIZER.decode(
+                        ids[label], skip_special_tokens=False
+                    )
                 status = f"Prompt {done + 1} of {len(chosen)} · " + " · ".join(
                     f"{label}: {len(ids[label])}" for label in labels
                 )
                 yield rows, status, None
         seconds = max(time.time() - started, 1e-6)
         for label, column in columns.items():
-            rows[index][column] = TOKENIZER.decode(ids[label], skip_special_tokens=False)
+            rows[index][column] = opened + TOKENIZER.decode(ids[label], skip_special_tokens=False)
             results.append(
                 {
                     "prompt": prompt,
@@ -195,6 +202,15 @@ def continue_text(label, prefix, temperature, top_p, max_new):
         yield prefix + TOKENIZER.decode(ids), f"{len(ids)} tokens · {rate:.1f} tokens/s"
 
 
+def with_thinking(reasoning, answer, done=True):
+    """One assistant bubble: the reasoning folded into a "Thinking" section (open while
+    it is still being written), then the answer."""
+    if not reasoning:
+        return answer
+    opened = "" if done else " open"
+    return f"<details{opened}><summary>Thinking</summary>\n\n{reasoning}\n\n</details>\n\n{answer}"
+
+
 def display(messages):
     """OpenAI messages as Gradio chat bubbles (tool calls and results shown as JSON)."""
     out = []
@@ -208,8 +224,9 @@ def display(messages):
                 }
             )
             continue
-        if message.get("content"):
-            out.append({"role": message["role"], "content": message["content"]})
+        if message.get("content") or message.get("reasoning_content"):
+            content = with_thinking(message.get("reasoning_content"), message.get("content") or "")
+            out.append({"role": message["role"], "content": content})
         for call in message.get("tool_calls") or []:
             function = call["function"]
             out.append(
@@ -222,17 +239,24 @@ def display(messages):
     return out
 
 
-def respond(label, text, role, system, tools_json, history, temperature, top_p, max_new):
+def respond(label, text, role, system, tools_json, thinking, history, temperature, top_p, max_new):
     tools = json.loads(tools_json) if tools_json.strip() else None
     history = [*history, {"role": role, "content": text}]
     system_turn = [{"role": "system", "content": system}] if system.strip() else []
-    prompt = chat.render(system_turn + history, tools, add_generation_prompt=True)
+    prompt = chat.render(
+        system_turn + history, tools, add_generation_prompt=True, thinking=thinking
+    )
     prompt_ids_ = TOKENIZER.encode(prompt, add_special_tokens=False).ids
     reply, status = "", ""
     for ids, rate in stream(label, prompt_ids_, temperature, top_p, max_new, chat_sft.STOP_IDS):
         reply = TOKENIZER.decode(ids, skip_special_tokens=False)
         status = f"{len(ids)} tokens · {rate:.1f} tokens/s"
-        partial = display(history) + [{"role": "assistant", "content": reply}]
+        if thinking:
+            reasoning, _, answer = reply.partition("</think>")
+            shown = with_thinking(reasoning or " ", answer, done="</think>" in reply)
+        else:
+            shown = reply
+        partial = display(history) + [{"role": "assistant", "content": shown}]
         yield partial, history, "", None, status
     message = chat.parse_assistant(reply)
     history = [*history, message]
@@ -319,12 +343,14 @@ with gr.Blocks(title=SETTINGS["name"]) as demo:
             with gr.Row():
                 text = gr.Textbox(label="Message", scale=4)
                 role = gr.Radio(["user", "tool"], value="user", label="Send as", scale=1)
+                thinking = gr.Checkbox(value=True, label="Thinking", scale=1)
             with gr.Row():
                 send = gr.Button("Send", variant="primary")
                 clear = gr.Button("Clear")
             chat_rate = gr.Markdown()
             parsed = gr.JSON(label="Last reply as an OpenAI assistant message")
-            inputs = [chat_model, text, role, system, tools_json, history, temperature, top_p]
+            inputs = [chat_model, text, role, system, tools_json, thinking, history]
+            inputs += [temperature, top_p]
             inputs.append(max_new)
             outputs = [chatbot, history, text, parsed, chat_rate]
             send.click(respond, inputs, outputs)
