@@ -395,6 +395,28 @@ def _chunk_loss(features, weight, targets):
     return ce, z
 
 
+def _chunk_logprobs(features, weight, targets):
+    logits = F.linear(features, weight)
+    logits = logits.float() if logits.dtype in (torch.float16, torch.bfloat16) else logits
+    values = -F.cross_entropy(logits, targets.clamp_min(0), reduction="none")
+    return torch.where(targets != IGNORE_INDEX, values, 0.0)
+
+
+def chunked_logprobs(hidden, weight, targets, chunk_size):
+    """Log-probabilities of `targets` (0 where ignored), shaped like `targets`.
+
+    Each chunk's logits are recomputed in backward, so peak memory holds one
+    [chunk_size, vocab] fp32 block rather than the full logit tensor.
+    """
+    parts = [
+        checkpoint(_chunk_logprobs, features, weight, labels, use_reentrant=False)
+        for features, labels in zip(
+            hidden.flatten(0, -2).split(chunk_size), targets.flatten().split(chunk_size)
+        )
+    ]
+    return torch.cat(parts).view_as(targets)
+
+
 def chunked_cross_entropy(hidden, weight, labels, chunk_size):
     """Summed cross-entropy and summed squared log-normalizer over valid targets.
 
@@ -589,6 +611,11 @@ class HybridLM(nn.Module):
 
     def hidden_states(self, tokens, loops=None):
         return self.final_norm(self.trunk(tokens, loops)[0])
+
+    def target_logprobs(self, tokens, targets, chunk_size=2048):
+        """Log-probabilities [batch, time] of `targets` (0 where ignored), without the
+        full [batch, time, vocab] logits (`chunked_logprobs`)."""
+        return chunked_logprobs(self.hidden_states(tokens), self.output_weight, targets, chunk_size)
 
     def loss_sums(self, hidden, labels, prefix=""):
         if hidden.is_cuda and torch.is_grad_enabled():

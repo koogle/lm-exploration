@@ -18,8 +18,9 @@ sampler and learner probabilities. Pretraining replay (`replay_*`, the hook
 `trainer/replay_hook.py` that SFT also uses) adds its loss at `replay_weight` to every
 update. Gradients are clipped to norm 1.
 
-Validation is greedy accuracy on the pool's validation problems, and replay validation
-loss. The parent is a checkpoint of any stage and model family (`trainer/checkpoints.py`;
+Validation is accuracy on the pool's validation problems: of one greedy answer each, or
+the mean over `validation_samples` sampled answers (with the share of problems any of
+them solves), and replay validation loss. The parent is a checkpoint of any stage and model family (`trainer/checkpoints.py`;
 usually SFT, which has learned the answer formats) on the run volume; its recorded
 architecture picks the family adapter (`trainer/families.py`), which builds the model,
 encodes prompts, samples, says where answers are and writes exports (at the end, and to
@@ -55,21 +56,16 @@ from trainer.rl.ranks import Ranks
 from trainer.rl.rollouts import Sampler, Scheduler, collect
 
 FORMAT = "rl-v1"
-# Longest pool prompt used, in tokens.
-MAX_PROMPT_TOKENS = 512
 
 
-def token_logprobs(network, x, y):
-    """Log-probabilities of the targets `y` (0 where `y` is ignored), and the target mask."""
+def token_logprobs(family, network, x, y):
+    """Log-probabilities of the targets `y` (0 where `y` is ignored), and the target mask,
+    through the family's `target_logprobs` (chunked where the family supports it)."""
     import torch
-    from torch.nn import functional as F
 
     with torch.autocast("cuda", dtype=torch.bfloat16):
-        logits = network(x)
+        values = family.target_logprobs(network, x, y)
     mask = y != LOSS_IGNORE_INDEX
-    values = -F.cross_entropy(
-        logits.float().flatten(0, 1), y.clamp(min=0).flatten(), reduction="none"
-    ).view_as(y)
     return values * mask, mask
 
 
@@ -134,11 +130,14 @@ def train(
     tokenizer = family.tokenizer()
 
     def with_prompt(row):
-        return {**row, "prompt_ids": family.prompt_ids(tokenizer, row["prompt"])}
+        # A `thinking` answer follows the family's opened reasoning span.
+        thinking = {"thinking": True} if row.get("answer_format") == "thinking" else {}
+        return {**row, "prompt_ids": family.prompt_ids(tokenizer, row["prompt"], **thinking)}
 
+    longest = rollouts.prompt_tokens
     pool, pool_hash = rl_tasks.load(pool_path)
     pool = {
-        split: [r for r in map(with_prompt, rows) if len(r["prompt_ids"]) <= MAX_PROMPT_TOKENS]
+        split: [r for r in map(with_prompt, rows) if len(r["prompt_ids"]) <= longest]
         for split, rows in pool.items()
     }
     trajectory_hash = None
@@ -150,7 +149,7 @@ def train(
                 row["completion"], add_special_tokens=False
             ).ids
             # Answers the policy could have written within its prompt and token limits.
-            if len(row["prompt_ids"]) <= MAX_PROMPT_TOKENS and len(
+            if len(row["prompt_ids"]) <= longest and len(
                 row["completion_ids"]
             ) < rollouts.token_limit(row["task"]):
                 trajectories.append(row)
@@ -211,6 +210,7 @@ def train(
             tokenizer,
             sandbox,
             stable.top_k if stable else 0,
+            rollouts.unfinished_reward,
         )
 
     scheduler = Scheduler(pool["train"], rollouts.rest_steps, rng)
@@ -250,8 +250,14 @@ def train(
 
     def evaluate():
         metrics = {}
-        mine = pool["validation"][ranks.rank :: ranks.world]
-        local = collect(family, model, mine, rollouts, 0, generator, tokenizer, sandbox)
+        count = settings.validation_samples
+        mine = [row for row in pool["validation"][ranks.rank :: ranks.world] for _ in range(count)]
+        # Its own generator per step, so validation leaves training's random state alone.
+        own = torch.Generator(device="cuda").manual_seed(
+            settings.seed + 1_000_003 * (step + 1) + ranks.rank
+        )
+        temperature = settings.validation_temperature if count > 1 else 0
+        local = collect(family, model, mine, rollouts, temperature, own, tokenizer, sandbox)
         batch = merged(local, ranks)
         for task in rl_tasks.TASKS:
             picked = [i for i, row in enumerate(batch.rows) if row["task"] == task]
@@ -262,6 +268,13 @@ def train(
                 metrics[f"validation_{task}_truncated"] = 1 - sum(
                     batch.finished[i] for i in picked
                 ) / len(picked)
+                if count > 1:
+                    solved = {}
+                    for i in picked:
+                        solved[batch.rows[i]["id"]] = solved.get(batch.rows[i]["id"], False) or (
+                            batch.rewards[i] == 1
+                        )
+                    metrics[f"validation_{task}_solved"] = sum(solved.values()) / len(solved)
         # Per dataset, named by the row ID's prefix (gsm8k, math, kodcode, mbpp, oci).
         datasets = {}
         for i, row in enumerate(batch.rows):
@@ -282,8 +295,8 @@ def train(
         with torch.no_grad():
             for start in range(0, len(answers), settings.micro_batch):
                 chosen = answers[start : start + settings.micro_batch]
-                x, y = collate([sequences[i] for i in chosen], "cuda")
-                logp, _ = token_logprobs(model, x, y)
+                x, y = collate([sequences[i] for i in chosen], "cuda", family.width_multiple)
+                logp, _ = token_logprobs(family, model, x, y)
                 for b, i in enumerate(chosen):
                     result[i] = logp[b, : len(sequences[i]["y"])]
         return result
@@ -297,11 +310,17 @@ def train(
         per_update = len(batch.rows) / source.updates_per_batch
         for start in range(0, len(answers), settings.micro_batch):
             chosen = answers[start : start + settings.micro_batch]
-            x, y = collate([sequences[i] for i in chosen], "cuda")
-            with torch.autocast("cuda", dtype=torch.bfloat16):
-                logits = model(x).float()
-            mask = y != LOSS_IGNORE_INDEX
-            logp = logits.log_softmax(-1).gather(-1, y.clamp(min=0)[..., None])[..., 0] * mask
+            x, y = collate([sequences[i] for i in chosen], "cuda", family.width_multiple)
+            # Full logits only for the correction that reads them; otherwise the family's
+            # target log-probabilities, which need not materialize [batch, time, vocab].
+            if stable:
+                with torch.autocast("cuda", dtype=torch.bfloat16):
+                    logits = model(x).float()
+                mask = y != LOSS_IGNORE_INDEX
+                logp = logits.log_softmax(-1).gather(-1, y.clamp(min=0)[..., None])[..., 0] * mask
+            else:
+                logits = None
+                logp, mask = token_logprobs(family, model, x, y)
             if old is None:
                 old_logp = logp.detach()
             else:
@@ -309,7 +328,7 @@ def train(
                 for b, i in enumerate(chosen):
                     old_logp[b, : len(old[i])] = old[i]
             with torch.no_grad():
-                reference_logp, _ = token_logprobs(reference, x, y)
+                reference_logp, _ = token_logprobs(family, reference, x, y)
             scale = torch.tensor(
                 [1 / (per_update * rollouts.token_limit(batch.rows[i]["task"])) for i in chosen],
                 device="cuda",
@@ -513,8 +532,17 @@ def merged(batch, ranks):
     return Batch(rows, completions, finished, rewards, [None] * len(rows), group=batch.group)
 
 
-# Settings a resumed run may change: the step target and when it saves, validates, stops.
-RESUMABLE = ("steps", "evaluate_every", "save_every", "save_seconds", "max_seconds")
+# Settings a resumed run may change: the step target and when and how it saves,
+# validates and stops.
+RESUMABLE = (
+    "steps",
+    "evaluate_every",
+    "validation_samples",
+    "validation_temperature",
+    "save_every",
+    "save_seconds",
+    "max_seconds",
+)
 
 
 def latest_checkpoint(output):

@@ -1,4 +1,6 @@
+import json
 import unittest
+from pathlib import Path
 
 from training_data import rl_tasks
 from training_data.sandbox import run_local
@@ -81,6 +83,130 @@ class RLTaskTests(unittest.TestCase):
                 {"task": "code", "question": "Add two numbers.", "declaration": "def add(a, b):"}
             ),
             "Question: Add two numbers.\nWrite a Python function `def add(a, b):`.\nAnswer:\n",
+        )
+
+    def test_contest_cases_run_like_livecodebench(self):
+        stdin = rl_tasks.contest_tests([["1 2\n", "3\n"], ["5 7\n", "12"]], "")
+        functional = rl_tasks.contest_tests(
+            [["[1, 2]\n3", "[4, 5]"]], "class Solution:\n    def shift(self, xs, k):\n        "
+        )
+        pairs = [
+            ("a, b = map(int, input().split())\nprint(a + b)", stdin, "contest"),
+            (
+                "import sys\na, b = map(int, sys.stdin.buffer.read().split())\nprint(a + b)",
+                stdin,
+                "contest",
+            ),
+            ("a, b = map(int, open(0).read().split())\nprint(a + b)\nexit(0)", stdin, "contest"),
+            ("a, b = map(int, input().split())\nprint(a * b)", stdin, "contest"),
+            ("import sys\nsys.exit(1)", stdin, "contest"),
+            (
+                "class Solution:\n    def shift(self, xs, k):\n        return [x + k for x in xs]",
+                functional,
+                "contest",
+            ),
+            (
+                "class Solution:\n    def shift(self, xs, k):\n        return xs",
+                functional,
+                "contest",
+            ),
+            ("while True:\n    pass", stdin, "contest"),
+        ]
+        passed = [result["passed"] for result in run_local(pairs)]
+        self.assertEqual(passed, [True, True, True, False, False, True, False, False])
+
+    def test_thinking_rewards_read_the_answer_after_the_reasoning(self):
+        row = {
+            "task": "code",
+            "answer_format": "thinking",
+            "test_style": "contest",
+            "tests": rl_tasks.contest_tests([["2\n", "4\n"]], ""),
+        }
+        right = "```python\nprint(int(input()) * 2)\n```"
+        completions = [
+            f"Draft:\n```python\nprint(0)\n```\n</think>\n\n{right}",
+            f"I think\n{right}\nand so on",
+            "Done.</think>\n```python\nprint(1)\n```",
+            f"Done.</think>\n{right}",
+        ]
+        rewards = rl_tasks.rewards(
+            [row] * 4, completions, [True, True, True, False], LocalSandbox(), unfinished=-0.5
+        )
+        self.assertEqual(rewards, [1, -0.5, 0, -0.5])
+
+    def test_contest_rows_keep_the_example_and_a_sample_within_the_limits(self):
+        tests = [{"input": f"{i}\n", "output": f"{i}\n"} for i in range(30)]
+        tests[5] = {"input": "x" * (rl_tasks.CONTEST_CASE_CHARS + 1), "output": ""}
+        cases = rl_tasks.contest_cases(tests, "seed")
+        self.assertEqual(len(cases), rl_tasks.CONTEST_CASES)
+        self.assertEqual(cases[0], ["0\n", "0\n"])
+        self.assertNotIn(tests[5]["input"], [c[0] for c in cases])
+        self.assertEqual(cases, rl_tasks.contest_cases(tests, "seed"))
+        problem = {
+            "question_id": "abc100_a",
+            "question_content": "Print twice the number.",
+            "starter_code": "",
+            "tests": tests[:3],
+            "platform": "atcoder",
+            "difficulty": "easy",
+            "contest_date": "2024-01-01T00:00:00",
+        }
+        row = rl_tasks.contest_row(problem, 0.0)
+        self.assertEqual(
+            (row["split"], row["answer_format"], row["cases"]), ("train", "thinking", "3 of 3")
+        )
+        self.assertIn("Print twice the number.", row["prompt"])
+        self.assertIsNone(rl_tasks.contest_row({**problem, "tests": [tests[5]]}, 0.0))
+
+    def test_contest_pool_keeps_problems_whose_teacher_program_passes(self):
+        import tempfile
+
+        def problem(qid, difficulty="easy", content="Echo the number."):
+            return {
+                "question_id": qid,
+                "question_content": content,
+                "starter_code": "",
+                "tests": [{"input": "3\n", "output": "3\n"}],
+                "platform": "atcoder",
+                "difficulty": difficulty,
+                "contest_date": "2024-01-01T00:00:00",
+            }
+
+        problems = [
+            problem("ok"),
+            problem("wrong"),
+            problem("hard", "hard"),
+            problem("leak", content="Leaked statement."),
+            problem("untraced"),
+        ]
+        trace = "<think>\nhmm\n</think>\n```python\nprint(input())\n```"
+        traces = [
+            {"question_id": "ok", "completion": trace},
+            {"question_id": "wrong", "completion": trace.replace("input()", "0")},
+            {"question_id": "hard", "completion": trace},
+            {"question_id": "leak", "completion": trace},
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            report = rl_tasks.build_contest(
+                problems,
+                traces,
+                lambda text: "Leaked" in text,
+                run_local,
+                Path(folder) / "pool",
+                ("easy", "medium"),
+                0.0,
+            )
+            pool = [json.loads(line) for line in (Path(folder) / "pool" / "pool.jsonl").open()]
+        self.assertEqual([r["id"] for r in pool], ["contest-ok"])
+        self.assertEqual(
+            report["dropped"],
+            {
+                "problems": 5,
+                "difficulty": 1,
+                "contaminated": 1,
+                "no_trace": 1,
+                "reference_failed": 1,
+            },
         )
 
 

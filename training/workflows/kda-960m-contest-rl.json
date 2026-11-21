@@ -1,0 +1,46 @@
+{
+  "name": "kda-960m-contest-rl",
+  "description": "RL of the 960M KDA hybrid's reasoning SFT (v3, from the 5B code mid-training) on LiveCodeBench-style contest problems in the harness's thinking prompt: Dr. GRPO with Muon on 8 H100s, 64 prompts x 8 answers per step, 8K-token answers, and a reward of -0.5 for answers that never finish or never close their reasoning",
+  "family": "hybrid",
+  "from": "kda-960m-reasoning-sft-v3-20261118-01-reasoning-s01/step-000001355.pt",
+  "stages": [
+    {
+      "stage": "rl",
+      "name": "rl",
+      "description": "Contest problems (rl-pool-contest-02: easy and medium LiveCodeBench v1-v5 and LeetCodeDataset problems before 2025 whose teacher program passes the sandbox's cases), 300 steps",
+      "pool": "rl-pool-contest-02",
+      "gpus": 8,
+      "settings": {
+        "steps": 300,
+        "algorithm": {
+          "name": "on_policy/grpo"
+        },
+        "rollouts": {
+          "prompts_per_step": 64,
+          "samples_per_prompt": 8,
+          "math_share": 0.0,
+          "code_tokens": 8192,
+          "prompt_tokens": 2048,
+          "temperature": 1.0,
+          "unfinished_reward": -0.5
+        },
+        "optimizer": {
+          "muon": true,
+          "muon_lr": 0.0001,
+          "lr": 1.5e-06,
+          "betas": [
+            0.9,
+            0.95
+          ],
+          "weight_decay": 0.0,
+          "warmup_steps": 10
+        },
+        "micro_batch": 2,
+        "evaluate_every": 25,
+        "save_every": 25,
+        "keep_checkpoints": 3,
+        "hf_repo": "jfrick/malama-contest-rl"
+      }
+    }
+  ]
+}

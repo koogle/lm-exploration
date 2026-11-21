@@ -402,6 +402,7 @@ class SubwordModel:
     module = "model_100m.model"
     # The sampler records log-probabilities and top tokens (off-policy corrections).
     records_sampler = True
+    width_multiple = 1
     # The checkpoint is the artifact: no exports.
     exports = False
 
@@ -437,6 +438,16 @@ class SubwordModel:
 
     def context(self, model):
         return model.config.block_size
+
+    def target_logprobs(self, model, x, y):
+        """Log-probabilities of targets `y` [batch, time] from the full logits (0 where
+        `y` is ignored)."""
+        import torch.nn.functional as F
+
+        values = -F.cross_entropy(
+            model(x).float().flatten(0, 1), y.clamp(min=0).flatten(), reduction="none"
+        ).view_as(y)
+        return values * (y != LOSS_IGNORE_INDEX)
 
     def prompt_ids(self, tokenizer, text):
         """BOS and the prompt text."""

@@ -14,9 +14,16 @@ model family only renders the prompt text in its own format (`trainer/families.p
   one Python code block; `boxed` answers: the last `\\boxed{...}`, compared with `answer`
   by Math-Verify (LaTeX and expressions), or the last fenced Python block.
 
+Contest rows (`contest_row`: LiveCodeBench and LeetCodeDataset problems with
+input/output cases, test style `contest`) carry LiveCodeBench's own instruction
+(`livecodebench.instruction`) as the prompt and the `thinking` answer format: the family
+opens a reasoning span, and the answer is the last Python block after the reasoning
+closes, as the harness's thinking protocol reads it.
+
 Code is correct if every test passes in the code sandbox (`training_data.sandbox`). A
-completion that does not end in one of its family's stop tokens within the token limit
-scores 0 regardless.
+completion that does not end in one of its family's stop tokens within the token limit,
+or (`thinking`) never closes its reasoning, is unfinished: it scores `unfinished`
+(0 unless the RL settings give another value) regardless.
 """
 
 import hashlib
@@ -24,8 +31,10 @@ import json
 import re
 from pathlib import Path
 
+from evaluation.benchmarks import livecodebench
 from training_data.code_sft import code_prompt, mbpp_row, opencodeinstruct_row
 from training_data.math_sft import answer_matches, ngrams, question_prompt
+from training_data.sandbox.execution import contest_tests
 
 FORMAT = "rl-pool-v1"
 PROMPT_STYLES = ("sft", "boxed")
@@ -38,7 +47,11 @@ CODE_INSTRUCTION = (
 MATH_LIGHTEVAL = ("DigitalLearningGmbH/MATH-lighteval", "0530c78699ea5e8eb5530600900e1f328b48acad")
 KODCODE = ("KodCode/KodCode-Light-RL-10K", "dcf78a8bbba9a613b596ce993c4921a38687dfcc")
 TASKS = ("math", "code")
-ANSWER_FORMATS = ("plain", "boxed")
+ANSWER_FORMATS = ("plain", "boxed", "thinking")
+# Cases a contest row keeps, and their size limits in characters (input plus output).
+CONTEST_CASES = 12
+CONTEST_CASE_CHARS = 128 * 1024
+CONTEST_TOTAL_CHARS = 512 * 1024
 CODE_BLOCK = re.compile(r"```(?:python|py)?\s*\n(.*?)```", re.DOTALL)
 
 
@@ -98,24 +111,35 @@ def boxed_matches(text, gold):
         return False
 
 
+def answer(text, answer_format):
+    """The part of a completion that holds its answer: after the reasoning span for
+    `thinking` (the prompt opened it), None if the reasoning never closed."""
+    if answer_format == "thinking":
+        return livecodebench.final_answer("<think>" + text)
+    return text
+
+
 def program(text, answer_format):
-    """The code a completion submits: all of it (`plain`) or its last Python block."""
+    """The code an answer submits: all of it (`plain`) or its last Python block."""
     if answer_format == "plain":
         return text
     blocks = CODE_BLOCK.findall(text)
     return blocks[-1] if blocks else None
 
 
-def rewards(rows, completions, finished, sandbox):
-    """1.0 or 0.0 per (row, completion text, ended in a stop token), reading each answer
-    in its row's `answer_format`; code runs in `sandbox`."""
+def rewards(rows, completions, finished, sandbox, unfinished=0.0):
+    """A reward per (row, completion text, ended in a stop token), reading each answer in
+    its row's `answer_format`: 1.0 if correct, 0.0 if wrong, `unfinished` if it never
+    ended or never closed its reasoning; code runs in `sandbox`."""
     scores = [0.0] * len(rows)
     code = []
     for index, (row, text, done) in enumerate(zip(rows, completions, finished, strict=True)):
         answer_format = row["answer_format"]
         if answer_format not in ANSWER_FORMATS:
             raise ValueError(f"answer_format must be one of {ANSWER_FORMATS}")
-        if not done:
+        text = answer(text, answer_format) if done else None
+        if text is None:
+            scores[index] = unfinished
             continue
         if row["task"] == "math":
             if answer_format == "plain":
@@ -127,6 +151,50 @@ def rewards(rows, completions, finished, sandbox):
     for (index, _), result in zip(code, sandbox.run([pair for _, pair in code]), strict=True):
         scores[index] = float(result["passed"])
     return scores
+
+
+def contest_cases(tests, seed):
+    """At most `CONTEST_CASES` (input, output) pairs of a problem's tests within the size
+    limits, in their order: the first test that fits (the statement's example for
+    LiveCodeBench, whose public tests come first), then a seeded sample of the rest."""
+    import random
+
+    sizes = [len(test["input"]) + len(test["output"]) for test in tests]
+    fits = [index for index, size in enumerate(sizes) if size <= CONTEST_CASE_CHARS]
+    rest = fits[1:]
+    random.Random(seed).shuffle(rest)
+    chosen, total = [], 0
+    for index in fits[:1] + rest:
+        if len(chosen) < CONTEST_CASES and total + sizes[index] <= CONTEST_TOTAL_CHARS:
+            chosen.append(index)
+            total += sizes[index]
+    return [[tests[i]["input"], tests[i]["output"]] for i in sorted(chosen)]
+
+
+def contest_row(problem, heldout_fraction):
+    """A pool row of a contest problem (`contest_sft.trace_problems`), or None without
+    cases that fit the limits."""
+    cases = contest_cases(problem["tests"], problem["question_id"])
+    if not cases:
+        return None
+    question = {k: problem[k] for k in ("question_content", "starter_code")}
+    return {
+        "id": f"contest-{problem['question_id']}",
+        "task": "code",
+        "split": "validation"
+        if is_heldout(problem["question_content"], heldout_fraction)
+        else "train",
+        "question": problem["question_content"],
+        "starter_code": problem["starter_code"],
+        "tests": contest_tests(cases, problem["starter_code"]),
+        "test_style": "contest",
+        "cases": f"{len(cases)} of {len(problem['tests'])}",
+        "platform": problem["platform"],
+        "difficulty": problem["difficulty"],
+        "contest_date": str(problem["contest_date"]),
+        "prompt": livecodebench.instruction(question),
+        "answer_format": "thinking",
+    }
 
 
 def is_heldout(text, fraction):
@@ -297,6 +365,62 @@ def build(
         "decontamination": "13-word n-grams of GSM8K/SVAMP test and code benchmark problems",
         "prompt_style": prompt_style,
         "kept": counts,
+    }
+    (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    return report
+
+
+def build_contest(problems, traces, contaminated, check, output, difficulties, heldout_fraction):
+    """Write a pool of contest rows (`contest_row`) to `output` (`pool.jsonl`, `report.json`).
+
+    `problems` are `contest_sft.trace_problems`; `traces` the teacher's trace rows
+    (`question_id`, `completion`: its shortest passing completion). A problem is kept if
+    it is of `difficulties`, `contaminated(statement)` is false, it has a teacher trace,
+    and the trace's final program passes the row's cases in the sandbox (`check`: the
+    code sandbox's `run`), so every kept row is solvable under the reward's grader."""
+    output = Path(output)
+    programs = {}
+    for trace in traces:
+        final = livecodebench.final_answer(trace["completion"].lstrip())
+        blocks = final and CODE_BLOCK.findall(livecodebench.last_block(final))
+        if blocks:
+            programs[trace["question_id"]] = blocks[0]
+    counts = {"problems": len(problems), "difficulty": 0, "contaminated": 0, "no_trace": 0}
+    candidates = []
+    for problem in problems:
+        if problem["difficulty"] not in difficulties:
+            counts["difficulty"] += 1
+        elif contaminated(problem["question_content"]):
+            counts["contaminated"] += 1
+        elif problem["question_id"] not in programs:
+            counts["no_trace"] += 1
+        elif (row := contest_row(problem, heldout_fraction)) is None:
+            counts["no_cases"] = counts.get("no_cases", 0) + 1
+        else:
+            candidates.append(row)
+    results = check(
+        [(programs[r["id"].removeprefix("contest-")], r["tests"], "contest") for r in candidates]
+    )
+    rows = [row for row, result in zip(candidates, results, strict=True) if result["passed"]]
+    counts["reference_failed"] = len(candidates) - len(rows)
+    kept = {}
+    for row in rows:
+        key = f"{row['split']}/{row['platform']}/{row['difficulty']}"
+        kept[key] = kept.get(key, 0) + 1
+    output.mkdir(parents=True, exist_ok=False)
+    path = output / "pool.jsonl"
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    report = {
+        "format": FORMAT,
+        "pool_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "prompt_style": "contest",
+        "case_limits": {
+            "cases": CONTEST_CASES,
+            "case_chars": CONTEST_CASE_CHARS,
+            "total_chars": CONTEST_TOTAL_CHARS,
+        },
+        "dropped": counts,
+        "kept": dict(sorted(kept.items())),
     }
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     return report

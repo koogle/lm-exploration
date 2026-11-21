@@ -3,12 +3,13 @@
 from training_data.subword import LOSS_IGNORE_INDEX
 
 
-def collate(rows, device):
-    """Inputs and targets of rows `{"x": ids, "y": targets}`, right-padded to the longest:
-    inputs with 0, targets with `LOSS_IGNORE_INDEX`."""
+def collate(rows, device, multiple=1):
+    """Inputs and targets of rows `{"x": ids, "y": targets}`, right-padded to the longest
+    rounded up to `multiple` (so compiled models see few widths): inputs with 0, targets
+    with `LOSS_IGNORE_INDEX`."""
     import torch
 
-    width = max(len(row["x"]) for row in rows)
+    width = -(-max(len(row["x"]) for row in rows) // multiple) * multiple
     x = torch.zeros((len(rows), width), dtype=torch.long, device=device)
     y = torch.full_like(x, LOSS_IGNORE_INDEX)
     for i, row in enumerate(rows):

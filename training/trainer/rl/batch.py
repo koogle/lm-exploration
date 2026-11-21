@@ -39,7 +39,7 @@ class Batch:
 @dataclass
 class Tokens:
     """One micro-batch of answers, `[batch, time]` unless noted: the learner's `logits`
-    `[batch, time, vocab]` and its log-probabilities `logp` of the `targets` (both with
+    `[batch, time, vocab]` (None unless a correction reads them) and its log-probabilities `logp` of the `targets` (both with
     gradient), `old_logp` of the weights that sampled the answers (detached; `logp` itself
     when they are the current weights), the answer-token `mask`, and per answer its
     `advantage` and constant normalization `scale` `[batch]` (see `loop.py`).
@@ -47,7 +47,7 @@ class Tokens:
     `score` is what an algorithm's loss pushes up per token: `logp`, unless a correction
     replaces it by a term with another gradient (`off_policy/stable_reinforce.py`)."""
 
-    logits: torch.Tensor
+    logits: torch.Tensor | None
     targets: torch.Tensor
     mask: torch.Tensor
     logp: torch.Tensor

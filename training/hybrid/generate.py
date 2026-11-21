@@ -181,13 +181,18 @@ def parameter_pointers(lm):
 
 def decoder(lm, rows, capacity):
     """A Decoder for `lm` with at least `capacity` slots, reused across calls while the
-    model's parameters stay in the same memory."""
+    model's parameters stay in the same memory. The smallest cached decoder with `rows`
+    rows and enough slots serves the call (attention reads only each row's slots), so
+    batches of varying prompt width do not capture a new graph each time."""
     if lm.config.short_conv_size or lm.config.embedding_norm:
         raise NotImplementedError("Cached decoding does not implement the study options")
     capacity = -(-capacity // CAPACITY_STEP) * CAPACITY_STEP
     decoders = lm.__dict__.setdefault("_decoders", {})
     if decoders and next(iter(decoders.values())).parameters != parameter_pointers(lm):
         decoders.clear()
+    fits = [key for key in decoders if key[0] == rows and key[1] >= capacity]
+    if fits:
+        return decoders[min(fits, key=lambda key: key[1])]
     key = (rows, capacity)
     if key not in decoders:
         while len(decoders) >= MAX_DECODERS:

@@ -418,7 +418,9 @@ output norm and gate, one thread per state column) and attention over the cache 
 the sink (online softmax, one block per row and query head). Rows follow the model's
 document rule (after EOS the next token starts a new document), so each row of
 `generate_batch` decodes exactly as it would alone. Decoders are kept per model and
-shape and read the parameters in place, so RL's in-place weight updates reach them.
+shape and read the parameters in place, so RL's in-place weight updates reach them; a
+call reuses the smallest cached decoder with its row count and enough cache slots, so
+batches of varying prompt width replay one graph instead of capturing a new one.
 On one H100, a randomly initialized 720M model in bf16 decodes 64 rows (512-token
 prompts) at 4.1 ms per step, 15,550 tokens/s; the plain-PyTorch step it replaces took
 15.8 ms (4,046 tokens/s).

@@ -1,6 +1,6 @@
 """Check model-written Python functions against unit tests, only inside a Modal Sandbox.
 
-`program` joins a solution and its tests into one script, in one of two test styles:
+`program` joins a solution and its tests into one script, in one of three test styles:
 
 - `functions` (the default): the solution becomes the module `solution` and its names
   are visible to the tests, the tests run, every `test*` function they define (not ones
@@ -8,6 +8,15 @@
 - `pytest`: the solution is written as `solution.py` beside the tests as
   `test_solution.py` in the program's own folder, pytest runs them (fixtures, parametrization,
   `pytest.raises`), and the script prints the nonce last only if every test passed.
+- `contest`: input/output cases graded as LiveCodeBench grades them
+  (`evaluation.benchmarks.livecodebench.grade`). The tests are the JSON object
+  `{"functional": bool, "method": name, "cases": [[input, expected output], ...]}`
+  (`contest_tests`). Each case runs in its own process, as LiveCodeBench's runner does:
+  a stdin program as `__main__` with the case's input as its standard input, its output
+  matched by whitespace-separated tokens; a functional solution's `Solution().<method>`
+  called with the case's JSON lines as arguments, its JSON result equal to the expected
+  one. The script prints the nonce only if every case matched; it has `CONTEST_SECONDS`
+  for all cases and each case `CONTEST_CASE_SECONDS`.
  `runner.py` runs the
 scripts with resource limits and passes a script only if it exits cleanly and prints its
 nonce, so a solution that exits early, raises or skips the tests fails.
@@ -20,6 +29,7 @@ fixtures only.
 
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -29,13 +39,82 @@ RUNNER = Path(__file__).with_name("runner.py")
 SANDBOX_RUNNER = "/runner/runner.py"
 # Seconds each program may run.
 PROGRAM_SECONDS = 5
-TEST_STYLES = ("functions", "pytest")
+# Seconds a `contest` program has for all of its cases.
+CONTEST_SECONDS = 20
+TEST_STYLES = ("functions", "pytest", "contest")
+# Characters of a request written to the sandbox's standard input at a time.
+STDIN_CHUNK = 1 << 20
+# What LiveCodeBench's runner gives functional solutions.
+CONTEST_PRELUDE = (
+    "from typing import *\nfrom collections import *\n"
+    "import math, heapq, bisect, itertools, functools\n"
+)
+CONTEST_PROGRAM = """import json, subprocess, sys
+_tests = json.loads({tests!r})
+with open("solution.py", "w") as _file:
+    _file.write({solution!r})
+with open("case.py", "w") as _file:
+    _file.write({case!r})
+def _same(expected, actual):
+    if _tests["functional"]:
+        try:
+            return json.loads(expected) == json.loads(actual)
+        except json.JSONDecodeError:
+            return expected.strip() == actual.strip()
+    return expected.split() == actual.split()
+_mode = "functional" if _tests["functional"] else "stdin"
+for _input, _expected in _tests["cases"]:
+    try:
+        _result = subprocess.run(
+            [sys.executable, "-I", "case.py", _mode, _tests["method"]],
+            input=_input, capture_output=True, text=True, timeout={case_seconds},
+        )
+    except subprocess.TimeoutExpired:
+        sys.exit(1)
+    if _result.returncode != 0 or not _same(_expected, _result.stdout):
+        sys.exit(1)
+print({nonce!r})
+"""
+# One case, in its own process: LiveCodeBench's runner without its resource limits (the
+# sandbox runner's limits are inherited).
+CONTEST_CASE = """import json, sys
+sys.setrecursionlimit(100000)
+mode, method = sys.argv[1], sys.argv[2]
+source = open("solution.py").read()
+if mode == "stdin":
+    exec(compile(source, "solution.py", "exec"), {"__name__": "__main__"})
+else:
+    scope = {"__name__": "solution"}
+    exec(compile(PRELUDE + source, "solution.py", "exec"), scope)
+    args = [json.loads(line) for line in sys.stdin.read().splitlines() if line.strip()]
+    print(json.dumps(getattr(scope["Solution"](), method)(*args)))
+""".replace("PRELUDE", repr(CONTEST_PRELUDE))
+# Seconds per case, as LiveCodeBench's grader allows.
+CONTEST_CASE_SECONDS = 8
+
+
+def contest_tests(cases, starter_code):
+    """The `contest` tests of a problem with (input, expected output) `cases`: functional
+    when it has LeetCode starter code, calling its last `self` method."""
+    names = re.findall(r"def\s+(\w+)\s*\(\s*self", starter_code or "")
+    functional = bool(starter_code)
+    return json.dumps(
+        {"functional": functional, "method": names[-1] if names else "", "cases": cases}
+    )
 
 
 def program(solution, tests, nonce, style="functions"):
     """The script that runs `tests` against `solution` in `style` and prints `nonce`."""
     if style not in TEST_STYLES:
         raise ValueError(f"test style must be one of {TEST_STYLES}")
+    if style == "contest":
+        return CONTEST_PROGRAM.format(
+            tests=tests,
+            solution=solution,
+            case=CONTEST_CASE,
+            case_seconds=CONTEST_CASE_SECONDS,
+            nonce=nonce,
+        )
     if style == "pytest":
         return (
             "import os, sys\n"
@@ -69,7 +148,10 @@ def _request(pairs, seconds, python=None):
     programs = []
     for solution, tests, *style in pairs:
         nonce = secrets.token_hex(16)
-        programs.append({"source": program(solution, tests, nonce, *style), "nonce": nonce})
+        entry = {"source": program(solution, tests, nonce, *style), "nonce": nonce}
+        if style == ["contest"]:
+            entry["timeout"] = max(seconds, CONTEST_SECONDS)
+        programs.append(entry)
     return json.dumps(
         {"programs": programs, "timeout": seconds, **({"python": python} if python else {})}
     )
@@ -121,7 +203,11 @@ class Sandbox:
         if not pairs:
             return []
         process = self.sandbox.exec("python", SANDBOX_RUNNER)
-        process.stdin.write(_request(pairs, seconds))
+        request = _request(pairs, seconds)
+        # The stream buffers a bounded amount: write the request in drained chunks.
+        for start in range(0, len(request), STDIN_CHUNK):
+            process.stdin.write(request[start : start + STDIN_CHUNK])
+            process.stdin.drain()
         process.stdin.write_eof()
         process.stdin.drain()
         output = process.stdout.read()
