@@ -128,9 +128,15 @@ ARGUMENT = re.compile(r"<arg_key>(.*?)</arg_key>\s*<arg_value>(.*?)</arg_value>"
 
 
 def parse_assistant(text):
-    """An OpenAI assistant message from generated GLM text (up to the turn end)."""
+    """An OpenAI assistant message from generated GLM text (up to the turn end). Text
+    generated after a thinking prompt (`THINKING_PROMPT`) holds the reasoning, `</think>`
+    and the answer; the reasoning becomes `reasoning_content`, as `render` reads it."""
     for end in (*TURN_END, "<|endoftext|>"):
         text = text.split(end)[0]
+    reasoning = None
+    if "</think>" in text:
+        reasoning, text = text.split("</think>", 1)
+        reasoning = reasoning.removeprefix("<think>").strip() or None
     calls = []
     for index, match in enumerate(TOOL_CALL.finditer(text)):
         body = match.group(1)
@@ -150,6 +156,8 @@ def parse_assistant(text):
         )
     content = TOOL_CALL.sub("", text).strip()
     message = {"role": "assistant", "content": content or None}
+    if reasoning:
+        message["reasoning_content"] = reasoning
     if calls:
         message["tool_calls"] = calls
     return message
