@@ -6,7 +6,8 @@ Run from training/:
 
 `--suite code` runs HumanEval (as shipped and with stripped prompts, `fim_tasks.py`), MBPP and HumanEval-Infilling (single- and multi-line) in
 each model's own fill-in-the-middle format (`fim_tasks.py`) for the hybrid exports
-(GLM code tokens) and the code reference models.
+(GLM code tokens) and the code reference models; a reference model without infilling
+tokens (MobileLLM-R1) runs HumanEval and MBPP only.
 
 One H100 call per model, in parallel: the hybrid export through `benchmarks.py`
 and each reference model through the harness's Hugging Face backend, all with the
@@ -59,7 +60,8 @@ SUITES = (
     (["humaneval"], 0),
     (["mbpp"], 3),
 )
-# Code models for `--suite code`: revision and fill-in-the-middle format.
+# Code models for `--suite code`: revision and fill-in-the-middle format (None: the model
+# has no infilling tokens, so it runs only the left-to-right part).
 CODE_REFERENCES = {
     "bigcode/gpt_bigcode-santacoder": ("291931872cae83498cf984b16319f47f5e9e7a07", "santacoder"),
     "deepseek-ai/deepseek-coder-1.3b-base": (
@@ -68,6 +70,8 @@ CODE_REFERENCES = {
     ),
     "Qwen/Qwen2.5-Coder-0.5B": ("8123ea2e9354afb7ffcc6c8641d1b2f5ecf18301", "qwen"),
     "Qwen/Qwen2.5-Coder-1.5B": ("df3ce67c0e24480f20468b6ef2894622d69eb73b", "qwen"),
+    "facebook/MobileLLM-R1-950M-base": ("f84ce13a2f4e512911e7086d7739d4600aff8423", None),
+    "facebook/MobileLLM-R1.5-950M": ("d4af70ac985faa1d504b3446d8a7448fedf91194", None),
 }
 # Reference models trained with a beginning-of-sequence token that their tokenizer, as
 # transformers loads it, does not add. Without it DeepSeek-Coder infills the wrong line.
@@ -106,9 +110,9 @@ def _summary(results):
     secrets=[secret],
     volumes={"/runs": runs_volume},
 )
-def evaluate(model, revision, deadline, folder, limit=0, fim_format=None, part=""):
-    """Every suite for one model; with `fim_format`, the code suite in that format, or
-    only its `part` (one of `CODE_PARTS`)."""
+def evaluate(model, revision, deadline, folder, limit=0, fim_format=None, part="", code=False):
+    """Every suite for one model; with `code`, the code suite (infilling in `fim_format`,
+    none without one), or only its `part` (one of `CODE_PARTS`)."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     import lm_eval
@@ -133,16 +137,16 @@ def evaluate(model, revision, deadline, folder, limit=0, fim_format=None, part="
         )
     out = {"model": model, "revision": revision, "limit": limit or None, "suites": []}
     suites = SUITES
-    if fim_format:
+    if code:
         from model_hybrid.fim_tasks import humaneval_config, task_configs
 
-        single, multi = task_configs(fim_format)
-        parts = {
-            "left_to_right": ((["humaneval", humaneval_config()], 0), (["mbpp"], 3)),
-            "single_line": (([single], 0),),
-            "multi_line": (([multi], 0),),
-        }
-        suites = parts[part] if part else (*parts["left_to_right"], ([single, multi], 0))
+        parts = {"left_to_right": ((["humaneval", humaneval_config()], 0), (["mbpp"], 3))}
+        suites = parts["left_to_right"]
+        if fim_format:
+            single, multi = task_configs(fim_format)
+            parts |= {"single_line": (([single], 0),), "multi_line": (([multi], 0),)}
+            suites = (*suites, ([single, multi], 0))
+        suites = parts[part] if part else suites
         out["part"] = part or None
         out["fim_format"] = fim_format
     samples = []
@@ -245,8 +249,15 @@ def main(
         parts = code_parts if split == "all" else tuple(split.split(","))
         if not set(parts) <= set(code_parts):
             raise ValueError(f"--split is all or a comma-separated subset of {code_parts}")
-    chosen = [(m, r, f, part) for m, r, f in chosen for part in parts]
-    calls = [evaluate.spawn(m, r, deadline, run_folder, limit, f, p) for m, r, f, p in chosen]
+    # A code model without infilling tokens runs only the left-to-right part.
+    chosen = [
+        (m, r, f, part)
+        for m, r, f in chosen
+        for part in parts
+        if f or suite != "code" or part in ("", "left_to_right")
+    ]
+    code = suite == "code"
+    calls = [evaluate.spawn(m, r, deadline, run_folder, limit, f, p, code) for m, r, f, p in chosen]
     supervisor = enforce_deadline.spawn([c.object_id for c in calls], deadline)
     print(
         json.dumps(
