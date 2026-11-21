@@ -94,4 +94,12 @@ uv run --all-extras modal run --detach -m evaluation.modal_livecodebench \
   --checkpoints runs/RUN/step-N.pt,training/RUN/step-M.pt [--references M,...|all] [--limit N]
 ```
 
+`--protocol thinking` scores reasoning models (`THINKING_REFERENCES`) the way their
+reports do: the zero-shot question as a chat turn with thinking enabled, 16 samples per
+problem at temperature 0.6 and top-p 0.95, up to 32,768 new tokens, generated with
+vLLM on four H100 calls per model (each a slice of the problems). A sample's answer is
+the text after its reasoning span; a sample whose reasoning never closes scores 0, and
+a problem's score is the mean over its samples. After the calls finish,
+`--merge lcb-thinking-<launch>` writes each model's combined result.
+
 Findings: [hybrid 720M plan](../../plans/HYBRID_720M.md#livecodebench-v6).
