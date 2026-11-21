@@ -1,0 +1,20 @@
+{
+  "name": "study-128m-kda-middle",
+  "family": "hybrid",
+  "description": "Final middle-ground mixture check, 200M tokens, same KDA settings and heldout as the four-arm study.",
+  "stages": [
+    {
+      "stage": "pretrain",
+      "name": "pretrain",
+      "model_config": "hybrid/configs/study-128m-kda-middle.json",
+      "gpu": "H100",
+      "world_size": 1,
+      "segment_seconds": 7200,
+      "worker_timeout_seconds": 8100,
+      "max_segments": 3,
+      "segments_per_call": 3,
+      "qualification_segments": 1,
+      "qualification_steps": 8
+    }
+  ]
+}
