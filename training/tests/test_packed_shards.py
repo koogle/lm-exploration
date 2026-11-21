@@ -428,3 +428,129 @@ class HybridDataTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+PRE, SUF, MID = 95, 96, 97
+FIM = {
+    "rate": 1.0,
+    "spm_rate": 0.0,
+    "sources": ["code"],
+    "seed": 3,
+    "tokens": {"prefix": PRE, "suffix": SUF, "middle": MID},
+}
+
+
+def undo_fim(piece):
+    """The original segment of a rearranged one. SPM, and PSM with an empty prefix,
+    start `PRE SUF`: everything after MID precedes the suffix."""
+    piece = list(piece)
+    if piece[:2] == [PRE, SUF]:
+        middle_at = piece.index(MID)
+        return piece[middle_at + 1 :] + piece[2:middle_at]
+    suffix_at, middle_at = piece.index(SUF), piece.index(MID)
+    return piece[1:suffix_at] + piece[middle_at + 1 :] + piece[suffix_at + 1 : middle_at]
+
+
+class FimTests(unittest.TestCase):
+    def documents(self):
+        lengths = np.array([6, 1, 30, 3], dtype=np.int64)
+        tokens = np.concatenate(
+            [
+                np.append(np.arange(1, n, dtype=np.uint32) + 10 * i, EOS)
+                for i, n in enumerate(lengths)
+            ]
+        )
+        return tokens, lengths
+
+    def test_psm_segments_restore_their_documents(self):
+        tokens, lengths = self.documents()
+        out, new = data.fim_rearrange(tokens, lengths, FIM, np.random.default_rng(0), 10)
+        self.assertEqual(int(new.sum()), len(out))
+        start = 0
+        for original, size in zip(np.split(tokens, np.cumsum(lengths)[:-1]), new):
+            document = list(out[start : start + size])
+            start += size
+            self.assertEqual(document[-1], EOS)
+            body = document[:-1]
+            pieces, restored = [], []
+            for i, token in enumerate(body):
+                if token == PRE and i:
+                    pieces.append(i)
+            for piece in np.split(np.array(body), pieces) if body else []:
+                restored += undo_fim(piece)
+            self.assertEqual(restored, list(original[:-1]))
+            # every segment of at most 10 tokens became one FIM example (3 extra tokens)
+            segments = -(-(len(original) - 1) // 10) if len(original) > 2 else 0
+            self.assertEqual(size, len(original) + 3 * segments)
+
+    def test_spm_moves_the_suffix_first(self):
+        tokens = np.append(np.arange(1, 9, dtype=np.uint32), EOS)
+        fim = dict(FIM, spm_rate=1.0)
+        out, _ = data.fim_rearrange(tokens, np.array([9]), fim, np.random.default_rng(1), 100)
+        body = list(out[:-1])
+        self.assertEqual(body[:2], [PRE, SUF])
+        middle_at = body.index(MID)
+        tail, head_and_middle = body[2:middle_at], body[middle_at + 1 :]
+        self.assertEqual(head_and_middle + tail, list(range(1, 9)))
+
+    def test_rate_zero_keeps_the_shard(self):
+        tokens, lengths = self.documents()
+        out, new = data.fim_rearrange(
+            tokens, lengths, dict(FIM, rate=0.0), np.random.default_rng(0), 10
+        )
+        np.testing.assert_array_equal(out, tokens)
+        np.testing.assert_array_equal(new, lengths)
+
+
+class FimMixtureTests(unittest.TestCase):
+    setUp, tearDown, prepare = (
+        HybridDataTests.setUp,
+        HybridDataTests.tearDown,
+        HybridDataTests.prepare,
+    )
+
+    def mixture(self, fim=FIM):
+        return data.PreparedMixture(self.recipe, self.root / "out", fim=fim)
+
+    def test_fim_stream_is_seeded_and_resumes(self):
+        self.prepare()
+        first, second = self.mixture(), self.mixture()
+        np.testing.assert_array_equal(first.next_batch(6)[0], second.next_batch(6)[0])
+        state = json.loads(json.dumps(first.state_dict()))
+        expected = first.next_batch(5)
+        resumed = self.mixture()
+        resumed.load_state_dict(state)
+        np.testing.assert_array_equal(resumed.next_batch(5)[0], expected[0])
+
+    def test_other_sources_are_unchanged(self):
+        self.prepare()
+        plain, fim = self.mixture(None), self.mixture()
+        for _ in range(4):
+            a, b = plain.next_window(), fim.next_window()
+            self.assertEqual(a[0], b[0])
+            if a[0] == "web":
+                np.testing.assert_array_equal(a[1], b[1])
+        self.assertTrue(
+            any(PRE in w for n, w in (fim.next_window() for _ in range(8)) if n == "code")
+        )
+
+    def test_continue_state_starts_the_next_document(self):
+        self.prepare()
+        plain = self.mixture(None)
+        while plain.state["code"]["offset"] in (0,) or plain.state["code"]["shard"] > 0:
+            plain.next_window()
+            if plain.state["code"]["shard"] > 0:
+                self.skipTest("first code shard ended before a mid-document cursor")
+        raw = plain.state["code"]["offset"]
+        fim = self.mixture()
+        state = fim.continue_state(plain.state_dict())
+        self.assertEqual(state["sources"]["web"], plain.state_dict()["sources"]["web"])
+        index = fim.orders["code"][0]
+        lengths = np.load(data.shard_paths(self.root / "out", "code", index)[1])[:, 0]
+        starts = np.concatenate(([0], np.cumsum(lengths)))
+        document = int(np.searchsorted(starts, raw))
+        tokens, new = fim._shard("code", 0)
+        self.assertEqual(state["sources"]["code"]["offset"], int(new[:document].sum()))
+        self.assertEqual(tokens[state["sources"]["code"]["offset"]], PRE)
+        with self.assertRaises(ValueError):
+            fim.continue_state(dict(plain.state_dict(), recipe="other"))
