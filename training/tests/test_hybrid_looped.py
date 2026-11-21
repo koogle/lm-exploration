@@ -142,6 +142,25 @@ class LoopedHybridTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             tiny_config(loop_retrofit=True)
 
+    def test_closed_entry_gate_retrofit_is_the_plain_model_at_every_loop_count(self):
+        plain = model.HybridLM(looped_config(loop_prelude=0, loop_coda=0, n_loops=1)).double()
+        looped = model.HybridLM(looped_config(loop_retrofit=True, loop_entry_gate=True)).double()
+        missing, unexpected = looped.load_state_dict(plain.state_dict(), strict=False)
+        self.assertEqual(unexpected, [])
+        self.assertIn("loop_update.entry_scale", missing)
+        self.assertTrue(all(name.startswith("loop_update.") for name in missing))
+        tokens = torch.randint(3, 37, (2, 13))
+        tokens[1, 4] = looped.config.eos_id
+        for loops in (1, 2, 3, 4):
+            torch.testing.assert_close(looped(tokens, loops=loops), plain(tokens))
+        # The closed gate still receives a gradient, so training can open it.
+        looped(tokens, loops=2).square().mean().backward()
+        self.assertGreater(float(looped.loop_update.entry_scale.grad.abs().sum()), 0.0)
+        groups = parameter_groups(looped)
+        self.assertIn("loop_update.entry_scale", [name for name, _ in groups["adamw_no_decay"]])
+        with self.assertRaises(ValueError):
+            tiny_config(loop_entry_gate=True)
+
     def test_loop_counts_are_shared_across_ranks_with_one_loop_overrides(self):
         def family(one_loop_ranks, start=0):
             f = train.HybridFamily.__new__(train.HybridFamily)
