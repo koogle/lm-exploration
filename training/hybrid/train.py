@@ -149,10 +149,15 @@ def runtime_rank():
 @torch.no_grad()
 def loop_step_statistics(lm):
     """The loop update's base step softplus(gamma) / 2 (its value at a zero gate input):
-    mean, min and max over channels."""
+    mean, min and max over channels; with the entry gate, also its mean and max |g|."""
     update = lm.loop_update
     base = torch.nn.functional.softplus(update.rate.float()) / 2
-    return {"mean": float(base.mean()), "min": float(base.min()), "max": float(base.max())}
+    stats = {"mean": float(base.mean()), "min": float(base.min()), "max": float(base.max())}
+    if update.entry_scale is not None:
+        # How far the closed entry gate has opened: mean and max |g| over channels.
+        gate = update.entry_scale.float().abs()
+        stats |= {"entry_mean": float(gate.mean()), "entry_max": float(gate.max())}
+    return stats
 
 
 def mean_attended_keys(positions):
