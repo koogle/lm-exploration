@@ -17,7 +17,9 @@ LiveCodeBench evaluated on a frozen dated window. Sub-1B frontier performance
 is an ambition, not a forecast from the small-model study. Agentic repository
 work is a later goal: the earlier coding-trajectory experiments did not establish
 successful transfer. See the repository's reasoning-training and negative-result
-references before choosing SFT or RL curricula.
+references before choosing SFT or RL curricula. Measured results of the code
+mid-training, reasoning SFT and contest RL stages are in the
+[findings](CODING_REASONER_1B_FINDINGS.md).
 
 ## LiveCodeBench target
 
