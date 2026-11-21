@@ -8,6 +8,7 @@ kernel from the PyTorch profiler, and compares outputs and gradients with
 """
 
 import collections
+import math
 import time
 
 import torch
@@ -145,17 +146,19 @@ def convolution_accuracy(implementation, dtype, tolerance):
     names = ("q", "k", "v", "dq", "dk", "dv", "dwq", "dwk", "dwv")
     for name, a, b in zip(names, (*outs, *grads), (*expected, *expected_grads), strict=True):
         errors[name] = ((a.double() - b).abs().max() / b.abs().max().clamp_min(1e-12)).item()
-    if max(errors.values()) > tolerance:
+    if any(not math.isfinite(error) or error > tolerance for error in errors.values()):
         raise AssertionError(f"Convolutions differ from the reference: {errors}")
     return errors
 
 
-def accuracy(implementation, dtype, length=512, tolerance=5e-2):
+def accuracy(implementation, dtype, length=512, tolerance=5e-2, width=64, gate_bias_shift=0):
     """Relative max error of outputs and all input gradients against kda_reference."""
     generator = torch.Generator().manual_seed(2)
     documents = packed_documents(2, length, 150, generator)
-    tensors, documents = layer_inputs(2, length, 4, 64, documents, dtype, generator)
-    upstream = torch.randn(2, length, 4, 64, generator=generator).cuda()
+    tensors, documents = layer_inputs(2, length, 4, width, documents, dtype, generator)
+    if gate_bias_shift:
+        tensors[-1] = (tensors[-1] + gate_bias_shift).detach().requires_grad_()
+    upstream = torch.randn(2, length, 4, width, generator=generator).cuda()
     out = implementation(*tensors, documents)
     grads = torch.autograd.grad(out, tensors, upstream.to(out.dtype))
     reference_inputs = [t.detach().double().requires_grad_() for t in tensors]
@@ -192,4 +195,151 @@ def run(implementations=None):
             for dtype, tolerance in ((torch.float32, 1e-5), (torch.bfloat16, 2e-2))
         },
         "short_convolutions": {name: time_convolutions(f) for name, f in convolutions.items()},
+    }
+
+
+def backward_tiling(data_root="/data", hoisted=False, intra=False):
+    """Measure backward layouts on tensors produced from real 4K document packing."""
+    import importlib
+    import json
+    from pathlib import Path
+
+    import triton
+    import triton.testing
+    from training_data.packed_shards import PreparedMixture
+
+    module = importlib.import_module(
+        "fla.ops.kda.chunk_intra" if intra else "fla.ops.kda.chunk_bwd"
+    )
+    attribute = "chunk_kda_bwd_kernel_intra" if intra else "chunk_kda_bwd_kernel_wy_dqkg_fused"
+    original = getattr(module, attribute)
+    captured = {}
+
+    class Capture:
+        def __getitem__(self, grid):
+            def launch(*args, **kwargs):
+                if args:
+                    raise AssertionError("Expected named backward-kernel launch arguments")
+                captured.update(grid=grid, kwargs=kwargs)
+                return original[grid](**kwargs)
+
+            return launch
+
+    recipe = json.loads(
+        (Path(__file__).parent / "recipes/kda-foundation-100b-504010-v1.json").read_text()
+    )
+    mixture = PreparedMixture(recipe, Path(data_root) / recipe["name"])
+    mixture.wait_seconds = 0
+    batch = 6 if intra else 4
+    tokens, _, sources = mixture.next_batch(batch)
+    documents = document_ids(torch.as_tensor(tokens, device="cuda"), 154820)
+    generator = torch.Generator().manual_seed(14)
+    tensors, _ = layer_inputs(batch, 4096, 12, 128, documents, torch.bfloat16, generator)
+    setattr(module, attribute, Capture())
+    try:
+        out = kda.kda_kernel(*tensors, documents)
+        torch.autograd.grad(out, tensors, torch.ones_like(out))
+    finally:
+        setattr(module, attribute, original)
+    grid, kwargs = captured["grid"], captured["kwargs"]
+    output_names = ("dq2", "dk2", "dg2", "db") if intra else ("dq", "dk", "dv2", "dg", "db", "dA")
+    original[grid](**kwargs)
+    expected = {name: kwargs[name].clone() for name in output_names}
+    tuner = original.fn
+    selected = tuner.best_config
+    jit = tuner.fn
+    configurations = [("upstream", selected)] + [
+        (
+            f"bk{bk}-bv{bv}-w{warps}-s{stages}",
+            triton.Config({"BK": bk, "BV": bv}, num_warps=warps, num_stages=stages),
+        )
+        for bk, bv, warps, stages in (
+            (32, 64, 4, 1),
+            (32, 64, 4, 2),
+            (32, 64, 8, 1),
+            (32, 32, 4, 1),
+            (16, 64, 4, 1),
+            (16, 32, 4, 1),
+            (64, 64, 8, 1),
+            (64, 64, 8, 2),
+            (32, 128, 8, 1),
+        )
+    ]
+    if hoisted:
+        from .kernels.kda_wy import wy_backward
+
+        configurations = [configurations[0]] + [
+            ("hoisted-" + name, config) for name, config in configurations
+        ]
+    if intra:
+        from .kernels.kda_intra import intra_backward
+
+        configurations = [("upstream", selected)] + [
+            (f"adaptive-w{w}-s{st}", triton.Config({}, num_warps=w, num_stages=st))
+            for w, st in ((2, 1), (4, 1), (8, 1), (4, 2))
+        ]
+    measurements = []
+    for name, config in configurations:
+        selected_jit = (
+            intra_backward
+            if name.startswith("adaptive-")
+            else wy_backward
+            if name.startswith("hoisted-")
+            else jit
+        )
+
+        def launch(config=config, selected_jit=selected_jit):
+            return selected_jit[grid](
+                **kwargs,
+                IS_VARLEN=True,
+                **config.kwargs,
+                num_warps=config.num_warps,
+                num_stages=config.num_stages,
+            )
+
+        try:
+            compiled = launch()
+            torch.cuda.synchronize()
+            errors = {}
+            for output in output_names:
+                actual, reference = kwargs[output].float(), expected[output].float()
+                if not torch.isfinite(actual).all():
+                    raise AssertionError(f"Non-finite {output}")
+                errors[output] = {
+                    "relative_max": (
+                        (actual - reference).abs().max() / reference.abs().max().clamp_min(1e-8)
+                    ).item(),
+                    "relative_rms": (
+                        (actual - reference).square().mean().sqrt()
+                        / reference.square().mean().sqrt().clamp_min(1e-8)
+                    ).item(),
+                }
+            valid = all(
+                e["relative_max"] < 0.02 and e["relative_rms"] < 0.01 for e in errors.values()
+            )
+            samples = [triton.testing.do_bench_cudagraph(launch, rep=100) for _ in range(3)]
+            row = {
+                "name": name,
+                "BK": config.kwargs.get("BK", kwargs.get("BK")),
+                "BV": config.kwargs.get("BV"),
+                "warps": config.num_warps,
+                "stages": config.num_stages,
+                "ms": samples,
+                "valid": valid,
+                "errors": errors,
+                "registers": compiled.n_regs,
+                "spills": compiled.n_spills,
+                "shared_bytes": compiled.metadata.shared,
+            }
+        except Exception as error:  # noqa: BLE001 - retain failed launch layouts in the audit
+            row = {"name": name, "valid": False, "error": str(error)}
+        measurements.append(row)
+        print(json.dumps(row), flush=True)
+    return {
+        "gpu": torch.cuda.get_device_name(),
+        "torch": torch.__version__,
+        "shape": SHAPE | {"batch": batch},
+        "grid": grid,
+        "sources": sources,
+        "measurements": measurements,
     }
