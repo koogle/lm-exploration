@@ -1,0 +1,21 @@
+{
+  "name": "kda-960m-reasoning-sft-v4",
+  "description": "Thinking-mode reasoning SFT v4 at 32K from the 5B code mid-training export: about three times v3's unique traces, two passes.",
+  "family": "hybrid",
+  "from": "kda-960m-code-anneal-20261117-02-code-s01/export/tokens-004999610368",
+  "stages": [
+    {
+      "stage": "midtrain",
+      "name": "reasoning",
+      "description": "chat-sft-reasoning-v4 at 32K, 4.30B tokens (two passes of the trace mix, 10% replay)",
+      "model_config": "hybrid/configs/kda-960m-reasoning-sft-v4.json",
+      "gpu": "H100",
+      "world_size": 8,
+      "segment_seconds": 18000,
+      "worker_timeout_seconds": 19800,
+      "max_segments": 3,
+      "segments_per_call": 1,
+      "qualification_segments": 0
+    }
+  ]
+}

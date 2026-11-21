@@ -60,8 +60,11 @@ Contest recipes put problems in LiveCodeBench's own zero-shot prompt
 problem's tests under the harness's grader, and `chat-sft-ocr2-python-v1` takes
 OpenCodeReasoning-2 reasoning traces in thinking mode (`"thinking": true`), joined to
 their TACO, APPS and CodeContests problems through a question table the preparation
-builds once (`"questions": true`), at most one trace per problem per file
-(`per_question`). A recipe made only of `subsets` from other recipes' folders
+builds once (`"questions": true`), at most `per_question` traces per problem per file
+(one in `-v1` and `-v2`, the four shortest in `chat-sft-ocr2-python-v3`, about three
+times the conversations). The reasoning SFT mixes (`chat-sft-reasoning-v3`, and
+`chat-sft-reasoning-v4` with the multi-trace OCR2 and AceReason subsets, two passes) are
+composed. A recipe made only of `subsets` from other recipes' folders
 (`chat-sft-lcb-format-v1`, `chat-sft-reasoning-pilot-v1`) is composed instead of
 prepared: the same command checks its subsets and writes its `summary.json`.
 

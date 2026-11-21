@@ -167,7 +167,9 @@ hybrid runs volume and pools on the training volume. Subword workflows take SFT 
 stages, hybrid workflows RL stages (hybrid chat SFT is a `midtrain` stage with a chat
 run config). See the [RL guide](../rl/README.md).
 
-`math-sft-20b.json` and `math-sft-5b.json` run math SFT of the WSD end points, with
+`kda-960m-reasoning-sft-v3.json` and `-v4.json` run thinking-mode reasoning SFT of the
+960M 5B code export at 32K as `midtrain` stages (v4: `chat-sft-reasoning-v4`, 4.30B
+tokens). `math-sft-20b.json` and `math-sft-5b.json` run math SFT of the WSD end points, with
 and without pretraining replay. `hybrid-720m-rl.json` runs chat SFT of the hybrid 720M 40B
 export, then RL from it. `kda-960m-contest-rl.json` runs RL of the 960M reasoning SFT on
 contest problems in LiveCodeBench's thinking prompt, and `kda-960m-contest-rl-hard.json`
