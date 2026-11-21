@@ -17,6 +17,15 @@ harness runs it:
   kept as written if it passes; otherwise with `IMPORTS` written out at the top, if
   that passes, so every answer runs on its own. Problems dated from `CUTOFF` on, and
   cases whose values are not JSON literals (linked lists, trees), are skipped.
+- `opencodereasoning2` (OpenCodeReasoning-2, CC-BY-4.0): DeepSeek-R1 reasoning traces,
+  in thinking mode. The release leaves `question` blank and names the problem by
+  (`dataset`, `split`, `index`) in TACO, APPS or CodeContests; `questions` builds that
+  table from the pinned `QUESTION_SOURCES`. A trace is kept only if its program passed
+  all of the release's tests (`pass_rate` 1.0) and its problem is not in a benchmark
+  split (`BENCHMARK_SPLITS`). The answer after the reasoning is the release's program
+  alone, in one fenced block, as the harness expects. open-r1/codeforces problems are
+  skipped: the release does not pin that dataset's revision, so its indices may not
+  match the current row order.
 """
 
 import ast
@@ -26,6 +35,7 @@ from evaluation.benchmarks import livecodebench
 
 CODECONTESTS = ("deepmind/code_contests", "802411c3010cb00d1b05bad57ca77365a3c699d6")
 LEETCODE = ("newfacade/LeetCodeDataset", "215604aeed660029df7de2fea5a4d7b6ed476a08")
+OPENCODEREASONING2 = ("nvidia/OpenCodeReasoning-2", "eadf535931451525f3e5621d0f960c240bc62fd9")
 CUTOFF = "2025-01-01"
 PYTHON3 = 3  # CodeContests `solutions.language`
 MAX_TESTS = 30
@@ -140,4 +150,102 @@ def leetcode(row):
     return None
 
 
-CONVERTERS = {"codecontests": codecontests, "leetcode": leetcode}
+# (repo, revision, {split: files in row order}) for the problems OpenCodeReasoning-2
+# indexes; an `index` counts rows across a split's files in this order.
+QUESTION_SOURCES = {
+    "taco": (
+        "BAAI/TACO",
+        "d593ed0a2becbbc952230bb89be09189bf1056dc",
+        {"train": [f"ALL/train-{i:05d}-of-00009.parquet" for i in range(9)]},
+    ),
+    "apps": (
+        "codeparrot/apps",
+        "21e74ddf8de1a21436da12e3e653065c5213e9d1",
+        {"train": ["train.jsonl"]},
+    ),
+    "code_contests": (
+        CODECONTESTS[0],
+        CODECONTESTS[1],
+        {
+            "train": [
+                "data/train-00000-of-00039-e991a271dbfa9925.parquet",
+                "data/train-00001-of-00039-e092fe56fda18715.parquet",
+                "data/train-00002-of-00039-9cea23812e920e41.parquet",
+                "data/train-00003-of-00039-e3822fccad6e083a.parquet",
+                "data/train-00004-of-00039-cefe355b4667b27e.parquet",
+                "data/train-00005-of-00039-b7580d2d846c2136.parquet",
+                "data/train-00006-of-00039-65184bb9f7d61fde.parquet",
+                "data/train-00007-of-00039-05785de21e8b8429.parquet",
+                "data/train-00008-of-00039-7246e6b7423b404f.parquet",
+                "data/train-00009-of-00039-b8c920f6629b57b2.parquet",
+                "data/train-00010-of-00039-6de28ba20654f69b.parquet",
+                "data/train-00011-of-00039-5de236be5188959d.parquet",
+                "data/train-00012-of-00039-da9476a39a1bdbb7.parquet",
+                "data/train-00013-of-00039-30b8c3829ee3b962.parquet",
+                "data/train-00014-of-00039-dc3ebb07a3cba8e4.parquet",
+                "data/train-00015-of-00039-19ccd7331d695677.parquet",
+                "data/train-00016-of-00039-bf38b0908b322307.parquet",
+                "data/train-00017-of-00039-ae5533a2f822e6ef.parquet",
+                "data/train-00018-of-00039-8c793837880f5507.parquet",
+                "data/train-00019-of-00039-d688fad5ee604390.parquet",
+                "data/train-00020-of-00039-5d59387098675b73.parquet",
+                "data/train-00021-of-00039-b257bf03d6876780.parquet",
+                "data/train-00022-of-00039-1cfd39fa43c1917c.parquet",
+                "data/train-00023-of-00039-d078bcb55e45cbf0.parquet",
+                "data/train-00024-of-00039-f4e3da0e5661e6d1.parquet",
+                "data/train-00025-of-00039-3f6ebfbaba5f4c70.parquet",
+                "data/train-00026-of-00039-7d4898300894cbbe.parquet",
+                "data/train-00027-of-00039-f8196766547533a2.parquet",
+                "data/train-00028-of-00039-79a302af3c924863.parquet",
+                "data/train-00029-of-00039-2b6615897d038115.parquet",
+                "data/train-00030-of-00039-4135cc54050afc22.parquet",
+                "data/train-00031-of-00039-40309dd907c042b7.parquet",
+                "data/train-00032-of-00039-7b7d2068a3d9c359.parquet",
+                "data/train-00033-of-00039-53b0f749aacff9c1.parquet",
+                "data/train-00034-of-00039-a36ff0bff7d2a76f.parquet",
+                "data/train-00035-of-00039-d28f9be60314601f.parquet",
+                "data/train-00036-of-00039-146e1a11c054aeab.parquet",
+                "data/train-00037-of-00039-995207c374a4e6f2.parquet",
+                "data/train-00038-of-00039-96a59dd6a98cd075.parquet",
+            ],
+            "valid": ["data/valid-00000-of-00001-5e672c5751f060d3.parquet"],
+        },
+    ),
+}
+BENCHMARK_SPLITS = {("apps", "test"), ("taco", "test")}
+
+
+def question_rows(dataset, rows):
+    """{"question", "starter_code"} for each source row, in order."""
+    if dataset == "code_contests":
+        return [{"question": r["description"], "starter_code": ""} for r in rows]
+    return [{"question": r["question"], "starter_code": r["starter_code"] or ""} for r in rows]
+
+
+def split_think(generation):
+    """(reasoning, answer) of a `<think>…</think>answer` generation, or None."""
+    if not generation.startswith("<think>") or generation.count("</think>") != 1:
+        return None
+    reasoning, answer = generation[len("<think>") :].split("</think>")
+    return reasoning.strip(), answer.strip()
+
+
+def opencodereasoning2(row, questions):
+    """A thinking-mode conversation from an OpenCodeReasoning-2 row, or None.
+    `questions` maps "dataset/split/index" to {"question", "starter_code"}."""
+    if row["pass_rate"] != "1.0" or (row["dataset"], row["split"]) in BENCHMARK_SPLITS:
+        return None
+    problem = questions.get(f"{row['dataset']}/{row['split']}/{row['index']}")
+    parts = split_think(row["r1_generation"])
+    if not problem or not problem["question"] or parts is None or not row["solution"].strip():
+        return None
+    conversation_ = conversation(problem["question"], problem["starter_code"], row["solution"])
+    conversation_["messages"][1]["reasoning_content"] = parts[0]
+    return conversation_
+
+
+CONVERTERS = {
+    "codecontests": codecontests,
+    "leetcode": leetcode,
+    "opencodereasoning2": opencodereasoning2,
+}

@@ -20,6 +20,15 @@ CODECONTESTS_ROW = {
     "input_file": "",
     "output_file": "",
 }
+OCR2_ROW = {
+    "pass_rate": "1.0",
+    "dataset": "taco",
+    "split": "train",
+    "index": "7",
+    "r1_generation": "<think>\nAdd the two numbers.\n</think>\n\nRead both and print the sum.",
+    "solution": "a, b = map(int, input().split())\nprint(a + b)",
+}
+QUESTIONS = {"taco/train/7": {"question": "Print the sum of two integers.", "starter_code": ""}}
 LEETCODE_ROW = {
     "estimated_date": "2020-01-01",
     "problem_description": "Return the number of vowels in s.",
@@ -61,6 +70,21 @@ class ContestSFTTests(unittest.TestCase):
 
     def test_leetcode_drops_problems_from_the_cutoff_on(self):
         self.assertIsNone(contest_sft.leetcode(dict(LEETCODE_ROW, estimated_date="2025-02-01")))
+
+class OpenCodeReasoning2Test(unittest.TestCase):
+    def test_keeps_reasoning_and_answers_with_the_program(self):
+        messages = contest_sft.opencodereasoning2(OCR2_ROW, QUESTIONS)["messages"]
+        self.assertIn("Print the sum of two integers.", messages[0]["content"])
+        self.assertEqual(messages[1]["reasoning_content"], "Add the two numbers.")
+        self.assertEqual(messages[1]["content"], f"```python\n{OCR2_ROW['solution']}\n```")
+
+    def test_skips_partial_passes_benchmark_splits_and_unknown_problems(self):
+        for change in ({"pass_rate": "0.98"}, {"split": "test"}, {"index": "8"}):
+            self.assertIsNone(contest_sft.opencodereasoning2(OCR2_ROW | change, QUESTIONS))
+
+    def test_needs_one_closed_reasoning_span(self):
+        row = OCR2_ROW | {"r1_generation": "<think>\nAdd the two numbers."}
+        self.assertIsNone(contest_sft.opencodereasoning2(row, QUESTIONS))
 
 
 if __name__ == "__main__":

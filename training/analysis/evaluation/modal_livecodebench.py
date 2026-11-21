@@ -32,7 +32,11 @@ never closes scores 0), and a problem's score is the mean over its samples. Each
 runs as `THINKING_SHARDS` calls, one per slice of the problems, each writing
 `lcb-<model>.shard-NN-of-NN.json` and `.completions.jsonl`; once they finish,
 `modal run -m evaluation.modal_livecodebench --merge lcb-thinking-<launch>`
-writes the combined `lcb-<model>.json`.
+writes the combined `lcb-<model>.json`. Checkpoints (`--checkpoints`) get the
+instruction as their family's user turn with the reasoning span opened
+(`prompt_ids(..., thinking=True)`) and sample with the family's own sampler, as
+`CHECKPOINT_THINKING_SHARDS` calls each, with up to what the context leaves after the
+prompt when that is under `THINKING["max_new_tokens"]`.
 """
 
 import json
@@ -93,6 +97,10 @@ THINKING_REFERENCES = {
 THINKING = {"samples": 16, "temperature": 0.6, "top_p": 0.95, "max_new_tokens": 32768, "seed": 1234}
 # Calls per model: each H100 call takes every THINKING_SHARDS-th problem.
 THINKING_SHARDS = 4
+# Checkpoints decode with the family's own sampler: more calls, and problems per batch
+# (each batch decodes all of its problems' samples together until the longest ends).
+CHECKPOINT_THINKING_SHARDS = 8
+CHECKPOINT_THINKING_PROBLEMS = 4
 thinking_image = add_project(vllm_base())
 hf_cache = modal.Volume.from_name("lm-exploration-hf-cache", create_if_missing=True)
 
@@ -248,7 +256,6 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
     every `shards`-th problem from `shard` on."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
-    from huggingface_hub import hf_hub_download
     from vllm import LLM, SamplingParams
     from vllm.model_executor.models.llama4 import Llama4ForCausalLM
     from vllm.model_executor.models.registry import ModelRegistry
@@ -258,8 +265,7 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
     # MobileLLM-R1.5 is a text-only Llama 4; its card registers the class this way.
     ModelRegistry.register_model("Llama4ForCausalLM", Llama4ForCausalLM)
     _, positions, system = THINKING_REFERENCES[model]
-    path = hf_hub_download(DATASET, RELEASE_FILE, repo_type="dataset", revision=DATASET_REVISION)
-    problems = livecodebench.load(path)[: limit or None][shard::shards]
+    problems = _thinking_problems(limit, shard, shards)
     started = time.time()
     llm = LLM(
         model=model,
@@ -288,22 +294,127 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
         params,
         chat_template_kwargs={"enable_thinking": True},
     )
-    samples = [list(output.outputs) for output in outputs]
+    samples = [
+        [(s.text, len(s.token_ids), s.finish_reason) for s in output.outputs] for output in outputs
+    ]
+    return _write_thinking(
+        model, revision, {}, folder, limit, shard, shards, problems, samples, started
+    )
+
+
+@app.function(
+    image=image,
+    gpu="H100",
+    cpu=16,
+    memory=65536,
+    timeout=6 * 60 * 60,
+    retries=0,
+    secrets=[secret],
+    volumes={"/runs": runs_volume, "/training": training_volume},
+)
+def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shards=1):
+    """`THINKING["samples"]` reasoning samples per problem from a checkpoint whose family
+    has a thinking prompt (`prompt_ids(..., thinking=True)`), for every `shards`-th
+    problem from `shard` on; up to `THINKING["max_new_tokens"]` new tokens, or what the
+    model's context leaves after the prompt."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import torch
+
+    from evaluation.benchmarks import livecodebench
+    from trainer import checkpoints
+
+    problems = _thinking_problems(limit, shard, shards)
+    started = time.time()
+    saved, description, family = checkpoints.parent(checkpoint_path(name))
+    model = family.build(description.model_config).cuda()
+    family.load(model, saved["model"])
+    del saved
+    model.eval()
+    tokenizer = family.tokenizer()
+    prompts = [
+        family.prompt_ids(tokenizer, livecodebench.instruction(p), thinking=True) for p in problems
+    ]
+    generator = torch.Generator(device="cuda").manual_seed(THINKING["seed"])
+    count = THINKING["samples"]
+    samples = []
+    for start in range(0, len(prompts), CHECKPOINT_THINKING_PROBLEMS):
+        rows = [
+            ids
+            for ids in prompts[start : start + CHECKPOINT_THINKING_PROBLEMS]
+            for _ in range(count)
+        ]
+        limit_tokens = min(THINKING["max_new_tokens"], family.context(model) - max(map(len, rows)))
+        result, stops = family.sample(
+            model,
+            rows,
+            limit_tokens,
+            THINKING["temperature"],
+            generator,
+            0,
+            "graph",
+            top_p=THINKING["top_p"],
+        )
+        group = [
+            (
+                tokenizer.decode(ids),
+                len(ids) + (stop is not None),
+                "stop" if stop is not None else "length",
+            )
+            for ids, stop in zip(result.completions, stops, strict=True)
+        ]
+        samples += [group[i : i + count] for i in range(0, len(group), count)]
+    loaded = {"stage": description.stage, "family": family.name, "prompt": "instruction"}
+    return _write_thinking(
+        f"checkpoint:{name}",
+        None,
+        loaded,
+        folder,
+        limit,
+        shard,
+        shards,
+        problems,
+        samples,
+        started,
+        opened=True,
+    )
+
+
+def _thinking_problems(limit, shard, shards):
+    from huggingface_hub import hf_hub_download
+
+    from evaluation.benchmarks import livecodebench
+
+    path = hf_hub_download(DATASET, RELEASE_FILE, repo_type="dataset", revision=DATASET_REVISION)
+    return livecodebench.load(path)[: limit or None][shard::shards]
+
+
+def _write_thinking(
+    model, revision, loaded, folder, limit, shard, shards, problems, samples, started, opened=False
+):
+    """Grade (text, tokens, finish reason) samples per problem and write the shard's result
+    and completions; with `opened`, the prompt opened the reasoning span, so a completion
+    that never closes it scores 0."""
+    from evaluation.benchmarks import livecodebench
+
     generation_seconds = round(time.time() - started, 1)
     flat_problems = [p for p, group in zip(problems, samples, strict=True) for _ in group]
     answers = [
-        livecodebench.last_block(livecodebench.final_answer(s.text) or "")
+        livecodebench.last_block(
+            livecodebench.final_answer(("<think>" if opened else "") + text) or ""
+        )
         for group in samples
-        for s in group
+        for text, _, _ in group
     ]
     flat_scores = iter(livecodebench.grade_all(flat_problems, answers))
     sample_scores = [[next(flat_scores) for _ in group] for group in samples]
     scores = [sum(group) / len(group) for group in sample_scores]
-    lengths = [len(s.token_ids) for group in samples for s in group]
-    truncated = sum(s.finish_reason == "length" for group in samples for s in group)
+    lengths = [tokens for group in samples for _, tokens, _ in group]
+    truncated = sum(finish == "length" for group in samples for _, _, finish in group)
     out = {
         "model": model,
         "revision": revision,
+        **loaded,
         "protocol": "thinking",
         "sampling": THINKING,
         "dataset": {"repo": DATASET, "revision": DATASET_REVISION, "file": RELEASE_FILE},
@@ -326,14 +437,15 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
     print(json.dumps({"model": model, **out["summary"], **out["samples"]}))
     folder_path = Path("/runs/benchmarks", folder)
     folder_path.mkdir(parents=True, exist_ok=True)
-    name = model.replace("/", "--") + (f".shard-{shard:02d}-of-{shards:02d}" if shards > 1 else "")
+    name = model.removeprefix("checkpoint:").removesuffix(".pt").replace("/", "--")
+    name += f".shard-{shard:02d}-of-{shards:02d}" if shards > 1 else ""
     (folder_path / f"lcb-{name}.json").write_text(json.dumps(out, indent=1) + "\n")
     with (folder_path / f"lcb-{name}.completions.jsonl").open("w") as handle:
         for problem, group in zip(problems, samples, strict=True):
             row = {
                 "question_id": problem["question_id"],
-                "completions": [s.text for s in group],
-                "finish_reasons": [s.finish_reason for s in group],
+                "completions": [text for text, _, _ in group],
+                "finish_reasons": [finish for _, _, finish in group],
             }
             handle.write(json.dumps(row) + "\n")
     runs_volume.commit()
@@ -371,7 +483,18 @@ def merge_thinking(folder):
         out = {
             **{
                 k: parts[0][k]
-                for k in ("model", "revision", "protocol", "sampling", "dataset", "limit")
+                for k in (
+                    "model",
+                    "revision",
+                    "stage",
+                    "family",
+                    "prompt",
+                    "protocol",
+                    "sampling",
+                    "dataset",
+                    "limit",
+                )
+                if k in parts[0]
             },
             "generation_seconds": [p["generation_seconds"] for p in parts],
             "summary": livecodebench.summary(problems, [row["score"] for row in problems]),
@@ -390,19 +513,21 @@ def merge_thinking(folder):
 
 
 def _thinking_launch(checkpoints, references):
-    if checkpoints:
-        raise ValueError(
-            "--protocol thinking scores reference models; checkpoints need a family thinking mode"
-        )
+    """(model or checkpoint:<path>, revision) to score with thinking."""
+    chosen = [(f"checkpoint:{name}", None) for name in filter(None, checkpoints.split(","))]
+    for name, _ in chosen:
+        checkpoint_path(name.split(":", 1)[1])
     wanted = (
         list(THINKING_REFERENCES)
         if references == "all"
         else list(filter(None, references.split(",")))
     )
     unknown = [m for m in wanted if m not in THINKING_REFERENCES]
-    if unknown or not wanted:
-        raise ValueError(f"Name --references from {sorted(THINKING_REFERENCES)}: {unknown}")
-    return [(m, THINKING_REFERENCES[m][0]) for m in wanted]
+    if unknown or not (wanted or chosen):
+        raise ValueError(
+            f"Name --checkpoints or --references from {sorted(THINKING_REFERENCES)}: {unknown}"
+        )
+    return chosen + [(m, THINKING_REFERENCES[m][0]) for m in wanted]
 
 
 @app.local_entrypoint()
@@ -443,12 +568,20 @@ def main(
     tag = "-thinking" if protocol == "thinking" else ""
     folder = f"lcb{tag}-{int(time.time())}{'-limit' if limit else ''}"
     if protocol == "thinking":
-        calls = [
-            evaluate_thinking.spawn(m, r, deadline, folder, limit, shard, THINKING_SHARDS)
-            for m, r in chosen
-            for shard in range(THINKING_SHARDS)
-        ]
-        chosen = [(f"{m}#{shard}", r) for m, r in chosen for shard in range(THINKING_SHARDS)]
+        calls, names = [], []
+        for m, r in chosen:
+            checkpoint = m.startswith("checkpoint:")
+            shards = CHECKPOINT_THINKING_SHARDS if checkpoint else THINKING_SHARDS
+            for shard in range(shards):
+                if checkpoint:
+                    call = evaluate_thinking_checkpoint.spawn(
+                        m.split(":", 1)[1], deadline, folder, limit, shard, shards
+                    )
+                else:
+                    call = evaluate_thinking.spawn(m, r, deadline, folder, limit, shard, shards)
+                calls.append(call)
+                names.append((f"{m}#{shard}", r))
+        chosen = names
     else:
         calls = [function.spawn(m, r, deadline, folder, limit) for m, r in chosen]
     supervisor = enforce_deadline.spawn([c.object_id for c in calls], deadline)
