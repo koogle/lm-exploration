@@ -64,6 +64,11 @@ class HybridModel:
     def context(self, model):
         return model.config.block_size
 
+    def target_logprobs(self, model, x, y):
+        """Log-probabilities of targets `y` [batch, time], one checkpointed chunk of
+        logits at a time (`HybridLM.target_logprobs`)."""
+        return model.target_logprobs(x, y)
+
     def prompt_ids(self, tokenizer, text, thinking=False):
         """The prompt text as the user's turn, up to the assistant's reply; with
         `thinking`, up to its opened reasoning span (`chat.THINKING_PROMPT`)."""

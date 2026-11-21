@@ -425,6 +425,16 @@ class SubwordModel:
     def context(self, model):
         return model.config.block_size
 
+    def target_logprobs(self, model, x, y):
+        """Log-probabilities of targets `y` [batch, time] from the full logits (0 where
+        `y` is ignored)."""
+        import torch.nn.functional as F
+
+        values = -F.cross_entropy(
+            model(x).float().flatten(0, 1), y.clamp(min=0).flatten(), reduction="none"
+        ).view_as(y)
+        return values * (y != LOSS_IGNORE_INDEX)
+
     def prompt_ids(self, tokenizer, text):
         """BOS and the prompt text."""
         return [BOS_TOKEN_ID, *tokenizer.encode(text, add_special_tokens=False).ids]

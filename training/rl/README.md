@@ -167,6 +167,11 @@ clipping, and AWR's weights.
    updates; with `"muon": true` Muon at `muon_lr` for hidden matrices. Gradient clipping
    at 1.0.
 
+The learner's, sampler's and reference's log-probabilities of answer tokens come from the
+family's `target_logprobs`. The hybrid computes them over 2,048-token chunks of logits,
+each recomputed in backward, so a 16K-token answer never holds its full logits; only
+Stable REINFORCE, which reads the logits, computes them whole.
+
 Validation is accuracy on the pool's validation problems plus replay validation loss, at
 the start, every `evaluate_every` steps and at the end: of one greedy answer per problem,
 or with `validation_samples` above 1 the mean over that many answers sampled at
@@ -302,7 +307,7 @@ format:
 [`../workflows/kda-960m-contest-rl-hard.json`](../workflows/kda-960m-contest-rl-hard.json)
 continues from the first stage's final checkpoint on medium and hard problems only
 (`--difficulties medium,hard`, pool `rl-pool-contest-03`), with 16K-token answers, one
-answer per forward and backward pass (16K-token logits over the 155K vocabulary), and
+answer per forward and backward pass, and
 validation on 4 answers per problem sampled at temperature 0.6 (`validation_samples`,
 `validation_temperature`; `validation_code_solved` is the share of problems any of them
 solves).

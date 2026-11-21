@@ -58,17 +58,14 @@ from trainer.rl.rollouts import Sampler, Scheduler, collect
 FORMAT = "rl-v1"
 
 
-def token_logprobs(network, x, y):
-    """Log-probabilities of the targets `y` (0 where `y` is ignored), and the target mask."""
+def token_logprobs(family, network, x, y):
+    """Log-probabilities of the targets `y` (0 where `y` is ignored), and the target mask,
+    through the family's `target_logprobs` (chunked where the family supports it)."""
     import torch
-    from torch.nn import functional as F
 
     with torch.autocast("cuda", dtype=torch.bfloat16):
-        logits = network(x)
+        values = family.target_logprobs(network, x, y)
     mask = y != LOSS_IGNORE_INDEX
-    values = -F.cross_entropy(
-        logits.float().flatten(0, 1), y.clamp(min=0).flatten(), reduction="none"
-    ).view_as(y)
     return values * mask, mask
 
 
@@ -299,7 +296,7 @@ def train(
             for start in range(0, len(answers), settings.micro_batch):
                 chosen = answers[start : start + settings.micro_batch]
                 x, y = collate([sequences[i] for i in chosen], "cuda", family.width_multiple)
-                logp, _ = token_logprobs(model, x, y)
+                logp, _ = token_logprobs(family, model, x, y)
                 for b, i in enumerate(chosen):
                     result[i] = logp[b, : len(sequences[i]["y"])]
         return result
@@ -314,10 +311,16 @@ def train(
         for start in range(0, len(answers), settings.micro_batch):
             chosen = answers[start : start + settings.micro_batch]
             x, y = collate([sequences[i] for i in chosen], "cuda", family.width_multiple)
-            with torch.autocast("cuda", dtype=torch.bfloat16):
-                logits = model(x).float()
-            mask = y != LOSS_IGNORE_INDEX
-            logp = logits.log_softmax(-1).gather(-1, y.clamp(min=0)[..., None])[..., 0] * mask
+            # Full logits only for the correction that reads them; otherwise the family's
+            # target log-probabilities, which need not materialize [batch, time, vocab].
+            if stable:
+                with torch.autocast("cuda", dtype=torch.bfloat16):
+                    logits = model(x).float()
+                mask = y != LOSS_IGNORE_INDEX
+                logp = logits.log_softmax(-1).gather(-1, y.clamp(min=0)[..., None])[..., 0] * mask
+            else:
+                logits = None
+                logp, mask = token_logprobs(family, model, x, y)
             if old is None:
                 old_logp = logp.detach()
             else:
@@ -325,7 +328,7 @@ def train(
                 for b, i in enumerate(chosen):
                     old_logp[b, : len(old[i])] = old[i]
             with torch.no_grad():
-                reference_logp, _ = token_logprobs(reference, x, y)
+                reference_logp, _ = token_logprobs(family, reference, x, y)
             scale = torch.tensor(
                 [1 / (per_update * rollouts.token_limit(batch.rows[i]["task"])) for i in chosen],
                 device="cuda",

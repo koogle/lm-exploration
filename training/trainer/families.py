@@ -11,7 +11,9 @@ An adapter gives the stages what depends on the family: building the model from 
 config and loading a parent's weights, the tokenizer (object, SHA256, files to copy),
 rendering a prompt text as a user turn (the data supplies the text and its answer
 format) or plain text to continue (`text_ids`, for pretrained checkpoints), the tokens
-that end an answer, sampling, the source files a run hashes and copies, and exports.
+that end an answer, sampling, the log-probabilities of an answer's tokens
+(`target_logprobs`), the padding multiple of training rows, the source files a run hashes
+and copies, and exports.
 """
 
 import importlib
