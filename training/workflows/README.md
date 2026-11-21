@@ -76,6 +76,12 @@ uv run modal run -m workflows.modal_train::stop --run-id my-run-01
 - An independent supervisor cancels every call and sandbox of the launch at its
   deadline ([`modal_app.py`](modal_app.py), [`deadline.py`](deadline.py)). A stage
   starts only if at least 30 minutes remain.
+- The controller, the session chain and the supervisor run on non-preemptible CPU
+  containers. A training stage records its run in `stages.json`, with the launch's
+  deadline, before it starts the run's chain. If Modal reruns the controller of the
+  same launch anyway, the stage reattaches to that run's recorded start call, so no
+  second attempt trains beside the first. An interruption leaves running stages
+  `running` for that rerun or the next launch; only a failure marks them `failed`.
 
 ## Pretraining and mid-training stages
 

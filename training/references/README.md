@@ -4,6 +4,10 @@ Source-backed reading notes and proposed experiments for our from-scratch models
 External results are attributed to their authors; proposals are not measured
 results or changes to the agreed training plan.
 
+- [Thinking Machines Inkling 2 Mini — 2026-11-21](thinking-machines-inkling2-mini-2026-11-21.md):
+  a fixed three-pass looped MoE (6 / 12 / 6, closed-gate loop entry), its reported
+  per-pass and monitorability findings, and a comparison with our looped hybrid and
+  its conversion-test null result.
 - [Marin 535B-A23B architecture — 2026-11-11](marin-535b-architecture-2026-11-11.md):
   a decision log of Open Athena's architecture choices with the stated reasoning and
   driver (quality, MFU, memory, stability, deadline) for each, what transfers to our
