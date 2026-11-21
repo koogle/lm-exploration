@@ -1,0 +1,48 @@
+{
+  "name": "kda-960m-contest-rl-hard",
+  "description": "Second contest RL stage of the 960M KDA hybrid, from the first stage's final checkpoint (400 steps): Dr. GRPO with Muon on 8 H100s on medium and hard problems only, 16K-token answers, and validation on 4 sampled answers per problem at temperature 0.6",
+  "family": "hybrid",
+  "from": "kda-960m-contest-rl-20261120-02-rl/step-000000300.pt",
+  "stages": [
+    {
+      "stage": "rl",
+      "name": "rl",
+      "description": "Contest problems (rl-pool-contest-03: medium and hard LiveCodeBench v1-v5 and LeetCodeDataset problems before 2025 whose teacher program passes the sandbox's cases), 200 steps",
+      "pool": "rl-pool-contest-03",
+      "gpus": 8,
+      "settings": {
+        "steps": 200,
+        "algorithm": {
+          "name": "on_policy/grpo"
+        },
+        "rollouts": {
+          "prompts_per_step": 64,
+          "samples_per_prompt": 8,
+          "math_share": 0.0,
+          "code_tokens": 16384,
+          "prompt_tokens": 2048,
+          "temperature": 1.0,
+          "unfinished_reward": -0.5
+        },
+        "optimizer": {
+          "muon": true,
+          "muon_lr": 0.0001,
+          "lr": 1.5e-06,
+          "betas": [
+            0.9,
+            0.95
+          ],
+          "weight_decay": 0.0,
+          "warmup_steps": 10
+        },
+        "micro_batch": 1,
+        "evaluate_every": 25,
+        "save_every": 25,
+        "keep_checkpoints": 3,
+        "hf_repo": "jfrick/malama-contest-rl-hard",
+        "validation_samples": 4,
+        "validation_temperature": 0.6
+      }
+    }
+  ]
+}

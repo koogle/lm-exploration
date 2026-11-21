@@ -120,6 +120,8 @@ class SettingsTests(unittest.TestCase):
             {"trajectories": {"source": "file"}},
             {"trajectories": {"source": "sampler", "data": "x"}},
             {"rollout": {}},
+            {"validation_samples": 0},
+            {"validation_temperature": 0},
         ):
             with self.subTest(values=values), self.assertRaises((ValueError, TypeError)):
                 Settings.from_dict(values)
@@ -131,6 +133,8 @@ class ResumeTests(unittest.TestCase):
 
         identity = {"pool_sha256": "p", "settings": {"steps": 10, "save_every": 5, "seed": 1}}
         check_resume(identity, {**identity, "settings": {"steps": 20, "save_every": 2, "seed": 1}})
+        sampled = {"steps": 10, "save_every": 5, "seed": 1, "validation_samples": 4}
+        check_resume(identity, {**identity, "settings": sampled})
         for changed in ({"pool_sha256": "q"}, {"settings": {**identity["settings"], "seed": 2}}):
             with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, "identity"):
                 check_resume(identity, {**identity, **changed})

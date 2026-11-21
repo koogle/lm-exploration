@@ -18,8 +18,9 @@ sampler and learner probabilities. Pretraining replay (`replay_*`, the hook
 `trainer/replay_hook.py` that SFT also uses) adds its loss at `replay_weight` to every
 update. Gradients are clipped to norm 1.
 
-Validation is greedy accuracy on the pool's validation problems, and replay validation
-loss. The parent is a checkpoint of any stage and model family (`trainer/checkpoints.py`;
+Validation is accuracy on the pool's validation problems: of one greedy answer each, or
+the mean over `validation_samples` sampled answers (with the share of problems any of
+them solves), and replay validation loss. The parent is a checkpoint of any stage and model family (`trainer/checkpoints.py`;
 usually SFT, which has learned the answer formats) on the run volume; its recorded
 architecture picks the family adapter (`trainer/families.py`), which builds the model,
 encodes prompts, samples, says where answers are and writes exports (at the end, and to
@@ -252,8 +253,14 @@ def train(
 
     def evaluate():
         metrics = {}
-        mine = pool["validation"][ranks.rank :: ranks.world]
-        local = collect(family, model, mine, rollouts, 0, generator, tokenizer, sandbox)
+        count = settings.validation_samples
+        mine = [row for row in pool["validation"][ranks.rank :: ranks.world] for _ in range(count)]
+        # Its own generator per step, so validation leaves training's random state alone.
+        own = torch.Generator(device="cuda").manual_seed(
+            settings.seed + 1_000_003 * (step + 1) + ranks.rank
+        )
+        temperature = settings.validation_temperature if count > 1 else 0
+        local = collect(family, model, mine, rollouts, temperature, own, tokenizer, sandbox)
         batch = merged(local, ranks)
         for task in rl_tasks.TASKS:
             picked = [i for i, row in enumerate(batch.rows) if row["task"] == task]
@@ -264,6 +271,13 @@ def train(
                 metrics[f"validation_{task}_truncated"] = 1 - sum(
                     batch.finished[i] for i in picked
                 ) / len(picked)
+                if count > 1:
+                    solved = {}
+                    for i in picked:
+                        solved[batch.rows[i]["id"]] = solved.get(batch.rows[i]["id"], False) or (
+                            batch.rewards[i] == 1
+                        )
+                    metrics[f"validation_{task}_solved"] = sum(solved.values()) / len(solved)
         # Per dataset, named by the row ID's prefix (gsm8k, math, kodcode, mbpp, oci).
         datasets = {}
         for i, row in enumerate(batch.rows):
@@ -515,8 +529,17 @@ def merged(batch, ranks):
     return Batch(rows, completions, finished, rewards, [None] * len(rows), group=batch.group)
 
 
-# Settings a resumed run may change: the step target and when it saves, validates, stops.
-RESUMABLE = ("steps", "evaluate_every", "save_every", "save_seconds", "max_seconds")
+# Settings a resumed run may change: the step target and when and how it saves,
+# validates and stops.
+RESUMABLE = (
+    "steps",
+    "evaluate_every",
+    "validation_samples",
+    "validation_temperature",
+    "save_every",
+    "save_seconds",
+    "max_seconds",
+)
 
 
 def latest_checkpoint(output):

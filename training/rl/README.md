@@ -167,8 +167,12 @@ clipping, and AWR's weights.
    updates; with `"muon": true` Muon at `muon_lr` for hidden matrices. Gradient clipping
    at 1.0.
 
-Validation is greedy accuracy on the pool's validation problems plus replay validation
-loss, at the start, every `evaluate_every` steps and at the end.
+Validation is accuracy on the pool's validation problems plus replay validation loss, at
+the start, every `evaluate_every` steps and at the end: of one greedy answer per problem,
+or with `validation_samples` above 1 the mean over that many answers sampled at
+`validation_temperature` (from a generator of their own, so training's sampling is the
+same either way), with `validation_<task>_solved` the share of problems any of them
+solves.
 
 ### 24-hour limit
 
@@ -295,6 +299,14 @@ format:
   over looping even in groups where no answer is correct. A prompt whose whole group got
   the same reward on two visits rests.
 
+[`../workflows/kda-960m-contest-rl-hard.json`](../workflows/kda-960m-contest-rl-hard.json)
+continues from the first stage's final checkpoint on medium and hard problems only
+(`--difficulties medium,hard`, pool `rl-pool-contest-03`), with 16K-token answers, one
+answer per forward and backward pass (16K-token logits over the 155K vocabulary), and
+validation on 4 answers per problem sampled at temperature 0.6 (`validation_samples`,
+`validation_temperature`; `validation_code_solved` is the share of problems any of them
+solves).
+
 ## Run
 
 RL is a workflow stage ([`../workflows/stages/rl.py`](../workflows/stages/rl.py)). Its
@@ -331,6 +343,11 @@ uv run --all-extras modal run -m modal_scripts.modal_sft_data::contest_pool \
   --data-id rl-pool-contest-02
 uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --workflow workflows/kda-960m-contest-rl.json --run-id ID
+# The medium and hard pool, then the second stage from the first one's final checkpoint:
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::contest_pool \
+  --data-id rl-pool-contest-03 --difficulties medium,hard
+uv run --all-extras modal run --detach -m workflows.modal_train::main \
+  --workflow workflows/kda-960m-contest-rl-hard.json --run-id ID
 # Off-policy trajectories from the Qwen teacher's saved code answers:
 uv run --all-extras modal run -m modal_scripts.modal_teacher::trajectories \
   --teacher code-teacher-qwen35-02 --data-id <fresh-id> [--limit N]

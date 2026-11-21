@@ -174,6 +174,10 @@ class Settings(ReplaySettings):
     micro_batch: int = 16
     seed: int = 42
     evaluate_every: int = 50
+    # Answers per validation problem: one is greedy; more are sampled at
+    # `validation_temperature` from their own generator (training sampling is unchanged).
+    validation_samples: int = 1
+    validation_temperature: float = 0.6
     save_every: int = 100
     # Also save once this many seconds have passed since the last checkpoint.
     save_seconds: int = 3600
@@ -202,12 +206,15 @@ class Settings(ReplaySettings):
             "steps",
             "micro_batch",
             "evaluate_every",
+            "validation_samples",
             "save_every",
             "save_seconds",
             "max_seconds",
         )
         if type(self.keep_checkpoints) is not int or self.keep_checkpoints < 0:
             raise ValueError("keep_checkpoints must be a nonnegative integer")
+        if not 0 < self.validation_temperature <= 2:
+            raise ValueError("validation_temperature must be in (0, 2]")
         if not math.isfinite(self.kl_coef) or self.kl_coef < 0:
             raise ValueError("Invalid KL coefficient")
         if self.stable_reinforce is not None:
