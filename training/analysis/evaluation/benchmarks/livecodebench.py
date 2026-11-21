@@ -160,6 +160,24 @@ def finished(text):
     return bool(CODE_BLOCK.search(text))
 
 
+def verbatim_loop(text, shortest=10, longest=4000):
+    """(period, onset) if `text` ends in a block of `shortest`..`longest` characters
+    repeated at least three times verbatim, else None; the onset is where that
+    repetition starts, as a fraction of the text's length."""
+    n = len(text)
+    for period in range(shortest, min(longest, n // 3) + 1):
+        if (
+            text[n - period :]
+            == text[n - 2 * period : n - period]
+            == text[n - 3 * period : n - 2 * period]
+        ):
+            start = n - 3 * period
+            while start > 0 and text[start - 1] == text[start - 1 + period]:
+                start -= 1
+            return period, start / n
+    return None
+
+
 RUNNER = f"""
 import json, resource, sys
 resource.setrlimit(resource.RLIMIT_AS, ({MEMORY_BYTES}, {MEMORY_BYTES}))

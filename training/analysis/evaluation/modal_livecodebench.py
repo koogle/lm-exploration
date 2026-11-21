@@ -534,6 +534,38 @@ def _sample_stats(count, tokens, truncated, unclosed):
     }
 
 
+def _loop_stats(paths):
+    """Verbatim loops (`livecodebench.verbatim_loop`) among the samples in `paths`: the
+    share of samples that end in one, of truncated samples that do, and the median onset
+    (fraction of the sample's length) and period (characters) of the truncated ones."""
+    import statistics
+
+    from evaluation.benchmarks import livecodebench
+
+    count = truncated = looping = looping_truncated = 0
+    onsets, periods = [], []
+    for path in paths:
+        for line in path.open():
+            row = json.loads(line)
+            for text, finish in zip(row["completions"], row["finish_reasons"], strict=True):
+                cut = finish == "length"
+                found = livecodebench.verbatim_loop(text)
+                count, truncated = count + 1, truncated + cut
+                looping, looping_truncated = (
+                    looping + bool(found),
+                    looping_truncated + bool(found and cut),
+                )
+                if found and cut:
+                    periods.append(found[0])
+                    onsets.append(found[1])
+    return {
+        "looping": looping / max(1, count),
+        "truncated_looping": looping_truncated / max(1, truncated),
+        "loop_onset_median": statistics.median(onsets) if onsets else None,
+        "loop_period_median": statistics.median(periods) if periods else None,
+    }
+
+
 @app.function(
     image=image, cpu=2, memory=8192, timeout=1800, retries=0, volumes={"/runs": runs_volume}
 )
@@ -576,10 +608,11 @@ def merge_thinking(folder):
                 round(sum(s["truncated"] * s["count"] for s in stats)),
                 round(sum(s["unclosed_reasoning"] * s["count"] for s in stats)),
             ),
+            "loops": _loop_stats(sorted(folder_path.glob(f"{name}.shard-*.completions.jsonl"))),
             "problems": problems,
         }
         (folder_path / f"{name}.json").write_text(json.dumps(out, indent=1) + "\n")
-        merged[name] = {**out["summary"], **out["samples"]}
+        merged[name] = {**out["summary"], **out["samples"], **out["loops"]}
     runs_volume.commit()
     return merged
 
