@@ -28,7 +28,9 @@ references before choosing SFT or RL curricula.
    solutions and longer-context tasks in bounded continuation comparisons.
    Code Concepts and STEM instructional data are candidates, not committed
    foundation shares. Keep a foundation-data replay component and measure
-   retention; freeze weights after source and capacity audits.
+   retention; freeze weights after source and capacity audits. Compare
+   continuing with and without short convolutions added at identity
+   ([128M study](KDA_960M_PRETRAINING.md#architecture-options-from-the-marin-notes-128m-study)).
 3. **Reasoning SFT:** train explicit reasoning followed by final answers, with
    assistant-token loss masks that preserve reasoning content. Compare against
    answer-only supervision from the same base, at matched training and inference
