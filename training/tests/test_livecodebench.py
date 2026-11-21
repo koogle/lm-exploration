@@ -38,6 +38,17 @@ class LiveCodeBenchTests(unittest.TestCase):
         self.assertFalse(livecodebench.finished("```python\nx = 2"))
         self.assertTrue(livecodebench.finished(fenced("x = 2")))
 
+    def test_final_answer_follows_the_reasoning_span(self):
+        answer = "```python\nprint(5)\n```"
+        self.assertEqual(
+            livecodebench.final_answer(f"<think>```python\nprint(4)\n```</think>\n{answer}"),
+            f"\n{answer}",
+        )
+        self.assertEqual(livecodebench.final_answer(answer), answer)
+        self.assertIsNone(livecodebench.final_answer("<think>still reasoning"))
+        draft = "```python\nprint(4)\n```\nBetter:\n"
+        self.assertEqual(livecodebench.last_block(draft + answer), answer)
+
     def test_stdin_programs_pass_only_on_every_test(self):
         right = "a, b = map(int, input().split())\nprint(a + b)"
         self.assertEqual(livecodebench.grade(STDIN, fenced(right)), 1.0)

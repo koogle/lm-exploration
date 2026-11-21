@@ -54,7 +54,7 @@ from model_hybrid import modal_benchmarks
 from model_hybrid.image import build
 
 from modal_scripts import modal_chat_sft_data, modal_pr_tasks
-from workflows.images import add_project
+from workflows.images import add_project, vllm_base
 
 app = modal.App("lm-exploration-hybrid-agentic")
 app.include(modal_benchmarks.app)  # the deadline supervisor
@@ -83,20 +83,8 @@ REFERENCE_CONTEXT = 32768  # the pinned Qwen3 models' positions
 REFERENCE_TRAIN_SECONDS = 20 * 60 * 60
 # As the hybrid evaluation (agent_policy.LocalPolicy): greedy, 1,536 new tokens per turn.
 REFERENCE_MAX_NEW_TOKENS = 1536
-# vLLM's FlashInfer kernels compile at load time, so the image carries nvcc (as in
-# modal_teacher.py); training uses the torch and transformers that vLLM installs.
-reference_base = (
-    modal.Image.from_registry("nvidia/cuda:13.0.1-devel-ubuntu22.04", add_python="3.12")
-    .pip_install("vllm==0.31.0", "huggingface-hub[hf_transfer]", "pyarrow==26.0.0")
-    .env(
-        {
-            "HF_HOME": "/hf",
-            "HF_HUB_ENABLE_HF_TRANSFER": "1",
-            "PYTHONPATH": "/project",
-            "CUDA_HOME": "/usr/local/cuda",
-        }
-    )
-)
+# Training uses the torch and transformers that vLLM installs.
+reference_base = vllm_base()
 reference_image = add_project(reference_base)
 # Training adds Liger's Triton kernels (`trainer.reference`).
 train_image = add_project(reference_base.pip_install("liger-kernel==0.8.4"))
