@@ -13,7 +13,10 @@ sessions, qualification, and for subword the token target and data review) and
 workflow's `from`): subword seeds a new phase with the parent's weights and optimizer
 state (`trainer/continued_pretraining.py`, same architecture and GPU count); hybrid starts
 from the parent's exported weights (`init_from`) with a fresh optimizer, so its run
-config may change the context length or drop MTP heads.
+config may change the context length or drop MTP heads. A hybrid stage with
+`continue_state: true` instead seeds a new phase from the parent's training checkpoint
+(weights, optimizer, RNG and data cursor; same architecture), for example a decay
+branch with different data.
 """
 
 from workflows.config import pretrain_bundle

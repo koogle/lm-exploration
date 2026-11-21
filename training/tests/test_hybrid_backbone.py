@@ -35,6 +35,23 @@ class HybridBackboneTests(unittest.TestCase):
         torch.set_num_threads(1)
         torch.manual_seed(3)
 
+    def test_target_logprobs_match_full_logits(self):
+        torch.manual_seed(5)
+        lm = model.HybridLM(tiny_config()).double()
+        tokens = torch.randint(0, 37, (2, 11))
+        targets = torch.randint(0, 37, (2, 11))
+        targets[0, :4] = -100
+        chunked = lm.target_logprobs(tokens, targets, chunk_size=5)
+        logits = lm(tokens)
+        full = logits.log_softmax(-1).gather(-1, targets.clamp(min=0)[..., None])[..., 0]
+        full = full * (targets != -100)
+        torch.testing.assert_close(chunked, full)
+        weights = torch.randn(2, 11, dtype=torch.float64)
+        grads = torch.autograd.grad((chunked * weights).sum(), list(lm.parameters()))
+        expected = torch.autograd.grad((full * weights).sum(), list(lm.parameters()))
+        for actual, reference in zip(grads, expected, strict=True):
+            torch.testing.assert_close(actual, reference)
+
     def test_defaults(self):
         config = model.HybridConfig(154_880, eos_id=154_820)
         self.assertEqual((config.head_dim, config.rope_base, config.z_loss), (128, 1e6, 1e-4))

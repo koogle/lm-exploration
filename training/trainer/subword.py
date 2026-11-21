@@ -301,6 +301,20 @@ class SubwordFamily:
     def open_data(self, deadline, state):
         return SubwordData(self.config, self.manifest, deadline, state)
 
+    def phase_data(self, saved):
+        """Data identity and a fresh cursor for a new phase seeded from `saved`."""
+        config = self.config
+        data = open_mixture(
+            self.manifest,
+            loader=config.data_loader,
+            context=config.context,
+            allow_unreviewed=config.allow_unreviewed_data,
+        )
+        try:
+            return data.identity, data.state_dict()
+        finally:
+            data.close()
+
     def metadata(self):
         from model_100m.model import ModelConfig
 
@@ -424,6 +438,16 @@ class SubwordModel:
 
     def context(self, model):
         return model.config.block_size
+
+    def target_logprobs(self, model, x, y):
+        """Log-probabilities of targets `y` [batch, time] from the full logits (0 where
+        `y` is ignored)."""
+        import torch.nn.functional as F
+
+        values = -F.cross_entropy(
+            model(x).float().flatten(0, 1), y.clamp(min=0).flatten(), reduction="none"
+        ).view_as(y)
+        return values * (y != LOSS_IGNORE_INDEX)
 
     def prompt_ids(self, tokenizer, text):
         """BOS and the prompt text."""
