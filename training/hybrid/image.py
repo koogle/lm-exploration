@@ -35,13 +35,15 @@ def build_kernel(kernel):
     )
 
 
-def build(extra_packages=(), env=None):
+def build(extra_packages=(), env=None, apt_packages=()):
     """The family's image; `extra_packages` and `env` go in before the local sources."""
     built = (
         modal.Image.from_registry(CUDA_BASE, add_python="3.12")
         .pip_install(*PACKAGES)
         .env({"PYTHONPATH": "/project", "TORCH_CUDA_ARCH_LIST": "9.0"})
     )
+    if apt_packages:
+        built = built.apt_install(*apt_packages)
     for kernel in KERNELS:
         built = built.add_local_file(
             f"hybrid/kernels/{kernel}.cu", f"/opt/hybrid_kernels/{kernel}/{kernel}.cu", copy=True
