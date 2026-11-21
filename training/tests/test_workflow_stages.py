@@ -110,6 +110,8 @@ class WorkflowPlanTests(unittest.TestCase):
             ([sft("../a")], {}),
             ([subword_pretrain(), subword_pretrain("again")], {}),  # pretraining starts a model
             ([sft("a")], {"family": "hybrid"}),
+            # only a hybrid midtrain stage continues its parent's training state
+            ([{**subword_pretrain("mid"), "stage": "midtrain", "continue_state": True}], {}),
         )
         for stages, fields in cases:
             fields = {"from": START, **fields}

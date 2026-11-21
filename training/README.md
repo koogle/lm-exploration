@@ -1,7 +1,10 @@
 # Simple LLM — training from scratch
 
-[Sub-1B coding reasoner training plan](plans/CODING_REASONER_1B.md): budget,
-reasoning stages, data qualification and the initial 128M control pilot.
+Malama, the 960M model trained here, has two paths: the
+[coding reasoner](plans/CODING_REASONER_1B.md) (primary: the best sub-1B LiveCodeBench
+score through reasoning midtraining, SFT, on-policy distillation and RL) and
+[autocomplete](plans/MALAMA_AUTOCOMPLETE.md) (fill-in-the-middle midtraining, light
+instruction tuning and RL on executable completions).
 
 ## Naming and artifact compatibility
 
