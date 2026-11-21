@@ -12,13 +12,17 @@ Run from training/:
     modal run -m modal_scripts.modal_sft_data::mixture --data-id <fresh-id> \
         --math <math-data-id> --code <code-data-id> [--report <report.json>]
     modal run -m modal_scripts.modal_sft_data::rl_pool --data-id <fresh-id> [--report <report.json>]
+    modal run -m modal_scripts.modal_sft_data::contest_pool --data-id <fresh-id> \
+        [--report <report.json>]
 
 `curriculum` execute-verifies every original arithmetic repair and writes the JSONL locally.
 `commitpack`, `private_patches`, `math` (GSM8K + MetaMathQA word problems), `code` (OpenCodeInstruct +
 MBPP functions) and `mixture` (prepared math and code rows in one file) write `examples.jsonl`
 and `report.json` to `/runs/<data-id>` on the private run volume for SFT workflows
-(`"data": {"volume": data-id}`). `rl_pool` writes the RL prompt pool `pool.jsonl` (`training_data.rl_tasks`).
-No supplied code is executed during preparation. Every function has
+(`"data": {"volume": data-id}`). `rl_pool` writes the RL prompt pool `pool.jsonl` (`training_data.rl_tasks`);
+`contest_pool` writes a pool of LiveCodeBench-style contest problems (`rl_tasks.build_contest`)
+and runs the teacher's final programs only in the network-blocked code sandbox.
+No supplied code is executed during preparation otherwise. Every function has
 no retries and a timeout under 24 hours; calls that start more than 24 hours after launch refuse
 work.
 """
@@ -398,6 +402,114 @@ def prepare_rl_pool(
             sandbox.close()
     volume.commit()
     return report
+
+
+# The teacher traces and the LiveCodeBench v6 screen (on the hybrid data volume) of the
+# reasoning SFT.
+TRACES_RECIPE = "/project/training_data/recipes/chat-sft-teacher-traces-v1.json"
+hybrid_data = modal.Volume.from_name("lm-exploration-hybrid-data")
+contest_image = add_project(
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install("tokenizers==0.22.2", "huggingface-hub==1.33.0", "numpy==2.2.6")
+    .env({"PYTHONPATH": "/project"})
+)
+
+
+@app.function(
+    image=contest_image,
+    cpu=4,
+    memory=65536,
+    timeout=3 * 3600,
+    retries=0,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes={"/runs": volume, "/data": hybrid_data},
+)
+def prepare_contest_pool(data_id, deadline, difficulties, heldout_fraction):
+    import numpy as np
+    from evaluation.benchmarks.livecodebench import DATASET, DATASET_REVISION
+    from huggingface_hub import hf_hub_download
+    from training_data import contest_sft
+    from training_data.packed_shards import contaminated
+    from training_data.rl_tasks import build_contest
+    from training_data.rl_trajectories import SANDBOX_BATCH
+    from training_data.sandbox import Sandbox
+
+    from tokenizer import glm
+
+    check_deadline(deadline)
+    volume.reload()
+    output = fresh_output(data_id)
+    recipe = json.loads(Path(TRACES_RECIPE).read_text())
+    screen = np.load(Path("/data") / recipe["screen"])
+    tokenizer = glm.load()
+
+    def leaked(text):
+        ids = tokenizer.encode(text, add_special_tokens=False).ids
+        return contaminated(ids, screen, recipe["screen_ngram"], recipe["screen_min_hits"])
+
+    traces = []
+    for name in recipe["files"]:
+        path = hf_hub_download(
+            recipe["repo"], name, repo_type="dataset", revision=recipe["revision"]
+        )
+        traces += [json.loads(line) for line in Path(path).read_text().split("\n") if line]
+    releases = [
+        hf_hub_download(DATASET, name, repo_type="dataset", revision=DATASET_REVISION)
+        for name in contest_sft.TRACE_RELEASES
+    ]
+    leetcode = hf_hub_download(
+        contest_sft.LEETCODE[0],
+        "LeetCodeDataset-train.jsonl",
+        repo_type="dataset",
+        revision=contest_sft.LEETCODE[1],
+    )
+    rows = [json.loads(line) for line in Path(leetcode).read_text().split("\n") if line]
+    problems = contest_sft.trace_problems(releases, rows)
+    sandboxes = []
+
+    def check(pairs):
+        # Started once checking begins (after the downloads), for at most half an hour.
+        sandboxes.append(Sandbox(app, min(1800, deadline - time.time()), cpu=32))
+        return [
+            result
+            for start in range(0, len(pairs), SANDBOX_BATCH)
+            for result in sandboxes[-1].run(pairs[start : start + SANDBOX_BATCH])
+        ]
+
+    try:
+        report = build_contest(
+            problems, traces, leaked, check, output, tuple(difficulties), heldout_fraction
+        )
+    finally:
+        for sandbox in sandboxes:
+            sandbox.close()
+    report["sources"] = {
+        "traces": f"{recipe['repo']}@{recipe['revision']}",
+        "livecodebench": f"{DATASET}@{DATASET_REVISION} {list(contest_sft.TRACE_RELEASES)}",
+        "leetcode": "@".join(contest_sft.LEETCODE),
+        "screen": f"{recipe['screen']} (at least {recipe['screen_min_hits']} "
+        f"{recipe['screen_ngram']}-grams)",
+    }
+    (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    volume.commit()
+    return report
+
+
+@app.local_entrypoint()
+def contest_pool(
+    data_id: str,
+    report: str = "",
+    difficulties: str = "easy,medium",
+    heldout_fraction: float = 0.03,
+):
+    """Contest problems of `--difficulties` with a passing teacher trace, in LiveCodeBench's
+    thinking-mode prompt; a hash-selected `--heldout-fraction` is validation."""
+    run_id(data_id, "data_id")
+    deadline = time.time() + LAUNCH_LIMIT_SECONDS
+    write(
+        report,
+        prepare_contest_pool.remote(data_id, deadline, difficulties.split(","), heldout_fraction),
+    )
 
 
 @app.local_entrypoint()

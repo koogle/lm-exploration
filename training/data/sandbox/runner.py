@@ -1,7 +1,8 @@
 """Run untrusted Python programs and report which finished cleanly. Standard library only.
 
 This file is copied into the code sandbox (`execution.py`) and run there as
-`python runner.py`: it reads `{"programs": [{"source", "nonce"}], "timeout"}` (and
+`python runner.py`: it reads `{"programs": [{"source", "nonce"}], "timeout"}` (a
+program's own `"timeout"` replaces the batch's; and
 optionally `"python"`, the interpreter for programs; default this one) as JSON on stdin
 and writes one result per program as JSON on stdout. Each program runs as
 `python -I -` (source on stdin, so it has no `__file__`) in its own empty directory, which
@@ -104,7 +105,7 @@ def run_all(request):
     def one(program):
         uid = slots.get()
         try:
-            return run(program, seconds, uid, python)
+            return run(program, program.get("timeout", seconds), uid, python)
         finally:
             slots.put(uid)
 

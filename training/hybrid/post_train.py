@@ -27,9 +27,16 @@ class HybridModel:
     module = "model_hybrid.model"
     # generate.py returns tokens only: no sampler log-probabilities or top tokens.
     records_sampler = False
+    # Training rows are padded to multiples of this, so compiled FlexAttention sees at
+    # most context / width_multiple widths per grad mode instead of one per batch.
+    width_multiple = 1024
     exports = True
 
     def __init__(self):
+        # Room for every training width in both grad modes and the prefill buckets;
+        # past the limit torch.compile falls back to unfused attention (full scores).
+        limits = torch._dynamo.config
+        limits.recompile_limit = max(limits.recompile_limit, 64)
         self.tokenizer_sha256 = glm.SHA256
         self.special_tokens = {"eos": glm.EOS_ID}
         self.stop_ids = tuple(chat_sft.STOP_IDS)
@@ -56,6 +63,11 @@ class HybridModel:
 
     def context(self, model):
         return model.config.block_size
+
+    def target_logprobs(self, model, x, y):
+        """Log-probabilities of targets `y` [batch, time], one checkpointed chunk of
+        logits at a time (`HybridLM.target_logprobs`)."""
+        return model.target_logprobs(x, y)
 
     def prompt_ids(self, tokenizer, text, thinking=False):
         """The prompt text as the user's turn, up to the assistant's reply; with

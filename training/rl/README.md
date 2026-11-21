@@ -167,8 +167,17 @@ clipping, and AWR's weights.
    updates; with `"muon": true` Muon at `muon_lr` for hidden matrices. Gradient clipping
    at 1.0.
 
-Validation is greedy accuracy on the pool's validation problems plus replay validation
-loss, at the start, every `evaluate_every` steps and at the end.
+The learner's, sampler's and reference's log-probabilities of answer tokens come from the
+family's `target_logprobs`. The hybrid computes them over 2,048-token chunks of logits,
+each recomputed in backward, so a 16K-token answer never holds its full logits; only
+Stable REINFORCE, which reads the logits, computes them whole.
+
+Validation is accuracy on the pool's validation problems plus replay validation loss, at
+the start, every `evaluate_every` steps and at the end: of one greedy answer per problem,
+or with `validation_samples` above 1 the mean over that many answers sampled at
+`validation_temperature` (from a generator of their own, so training's sampling is the
+same either way), with `validation_<task>_solved` the share of problems any of them
+solves.
 
 ### 24-hour limit
 
@@ -268,6 +277,41 @@ be compared in the private playground Space (`jfrick/climbmix-124m-playground`).
 3. Check code answers on more sandbox CPUs in parallel.
 4. Repeat the best setting with a second seed before claiming a gain.
 
+## Contest problems in thinking mode
+
+[`../workflows/kda-960m-contest-rl.json`](../workflows/kda-960m-contest-rl.json) trains the
+960M KDA hybrid's reasoning SFT on the problems LiveCodeBench scores, in the harness's
+own thinking-mode prompt, so the reward is the benchmark's grader on the benchmark's
+format:
+
+- **Pool** (`modal_scripts.modal_sft_data::contest_pool`, `rl_tasks.build_contest`): the
+  teacher-trace problems (`contest_sft.trace_problems`: LiveCodeBench v1–v5 and
+  LeetCodeDataset problems before 2025), easy and medium, screened against LiveCodeBench
+  v6 like the reasoning SFT (`screen-lcb-v6-v2`, at least 10 shared 13-grams). A problem
+  is kept only if the Qwen3-30B-A3B teacher's passing program also passes the row's
+  cases in the sandbox, so every problem is solvable under the reward's grader. A row
+  keeps up to 12 of its test cases (the statement's example and a seeded sample, each at
+  most 128 KB and 512 KB in all), so very large efficiency tests are not checked.
+- **Prompt and answer** (`answer_format` `thinking`): `livecodebench.instruction` as the
+  user turn, with the reasoning span opened (`HybridModel.prompt_ids(thinking=True)`);
+  the answer is the last Python block after the reasoning closes, as the harness reads it.
+- **Grading** (sandbox test style `contest`): each case runs in its own process with
+  LiveCodeBench's runner (stdin programs as `__main__`, LeetCode `Solution` methods
+  called on JSON arguments) and is compared as the harness compares it.
+- **Reward:** 1 if every case passes, 0 if not, and `rollouts.unfinished_reward` (−0.5)
+  for an answer that hits the 8K-token limit or never closes its reasoning. The
+  reasoning SFT's answers mostly loop until the limit, so finishing at all is rewarded
+  over looping even in groups where no answer is correct. A prompt whose whole group got
+  the same reward on two visits rests.
+
+[`../workflows/kda-960m-contest-rl-hard.json`](../workflows/kda-960m-contest-rl-hard.json)
+continues from the first stage's final checkpoint on medium and hard problems only
+(`--difficulties medium,hard`, pool `rl-pool-contest-03`), with 16K-token answers, one
+answer per forward and backward pass, and
+validation on 4 answers per problem sampled at temperature 0.6 (`validation_samples`,
+`validation_temperature`; `validation_code_solved` is the share of problems any of them
+solves).
+
 ## Run
 
 RL is a workflow stage ([`../workflows/stages/rl.py`](../workflows/stages/rl.py)). Its
@@ -299,6 +343,16 @@ uv run --all-extras modal run -m modal_scripts.modal_sft_data::rl_pool \
   --prompt-style boxed
 uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --workflow workflows/hybrid-720m-rl.json --run-id ID
+# The contest pool, then RL of the reasoning SFT on it:
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::contest_pool \
+  --data-id rl-pool-contest-02
+uv run --all-extras modal run --detach -m workflows.modal_train::main \
+  --workflow workflows/kda-960m-contest-rl.json --run-id ID
+# The medium and hard pool, then the second stage from the first one's final checkpoint:
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::contest_pool \
+  --data-id rl-pool-contest-03 --difficulties medium,hard
+uv run --all-extras modal run --detach -m workflows.modal_train::main \
+  --workflow workflows/kda-960m-contest-rl-hard.json --run-id ID
 # Off-policy trajectories from the Qwen teacher's saved code answers:
 uv run --all-extras modal run -m modal_scripts.modal_teacher::trajectories \
   --teacher code-teacher-qwen35-02 --data-id <fresh-id> [--limit N]

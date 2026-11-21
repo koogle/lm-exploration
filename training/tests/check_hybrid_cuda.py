@@ -410,7 +410,22 @@ def decode_against_forward():
         alone = [list(generate.generate(lm, p, 12, (EOS,))) for p in prompts]
     if batch != alone:
         raise AssertionError("batched generation differs from one row at a time")
-    return {"max_logit_error": error, "max_logit": scale, "batched_matches_alone": True}
+    # A decoder with spare slots (captured for a longer request) decodes the same.
+    with torch.no_grad():
+        lm.__dict__.pop("_decoders", None)
+        generate.generate_batch(lm, prompts, 400, (EOS,))
+        larger = next(iter(lm._decoders.values()))
+        reused = generate.generate_batch(lm, prompts, 12, (EOS,))
+        if len(lm._decoders) != 1 or next(iter(lm._decoders.values())) is not larger:
+            raise AssertionError("a shorter request captured a new decoder")
+    if reused != batch:
+        raise AssertionError("a reused larger decoder generates differently")
+    return {
+        "max_logit_error": error,
+        "max_logit": scale,
+        "batched_matches_alone": True,
+        "larger_decoder_matches": True,
+    }
 
 
 def decode_timing(rows=64, prompt=512, new_tokens=256):

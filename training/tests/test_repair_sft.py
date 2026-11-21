@@ -134,6 +134,14 @@ class TensorBatchTests(unittest.TestCase):
         self.assertEqual(x.tolist(), [[1, 5, 6], [1, 0, 0]])
         self.assertEqual(y.tolist(), [[-100, 6, 2], [2, -100, -100]])
 
+    def test_width_rounds_up_to_the_multiple(self):
+        from trainer.batches import collate
+
+        x, y = collate([{"x": [1, 5, 6], "y": [5, 6, 2]}], "cpu", multiple=4)
+        self.assertEqual(x.tolist(), [[1, 5, 6, 0]])
+        self.assertEqual(y.tolist(), [[5, 6, 2, -100]])
+        self.assertEqual(collate([{"x": [1] * 4, "y": [2] * 4}], "cpu", 4)[0].shape[1], 4)
+
 
 if __name__ == "__main__":
     unittest.main()

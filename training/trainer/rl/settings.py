@@ -36,7 +36,9 @@ class Rollouts:
     """Prompts drawn per step and how their answers are sampled.
 
     A prompt whose group is all wrong or all right on two visits in a row rests for
-    `rest_steps` steps.
+    `rest_steps` steps. Pool prompts longer than `prompt_tokens` are left out. A training
+    answer that never ends within its token limit, or never closes its reasoning, scores
+    `unfinished_reward` (at most 0) instead of 0; validation scores it 0.
     """
 
     prompts_per_step: int = 64
@@ -46,11 +48,22 @@ class Rollouts:
     code_tokens: int = 384
     temperature: float = 1.0
     rest_steps: int = 50
+    prompt_tokens: int = 512
+    unfinished_reward: float = 0.0
     # Sampler engine (`trainer/rollout.py`): "graph" replays custom-kernel CUDA graphs.
     engine: str = "graph"
 
     def __post_init__(self):
-        positive_int(self, "prompts_per_step", "samples_per_prompt", "math_tokens", "code_tokens")
+        positive_int(
+            self,
+            "prompts_per_step",
+            "samples_per_prompt",
+            "math_tokens",
+            "code_tokens",
+            "prompt_tokens",
+        )
+        if not -1 <= self.unfinished_reward <= 0:
+            raise ValueError("unfinished_reward must be in [-1, 0]")
         if self.samples_per_prompt < 2:
             raise ValueError("Group advantages need at least two samples per prompt")
         if not 0 <= self.math_share <= 1:
@@ -161,6 +174,10 @@ class Settings(ReplaySettings):
     micro_batch: int = 16
     seed: int = 42
     evaluate_every: int = 50
+    # Answers per validation problem: one is greedy; more are sampled at
+    # `validation_temperature` from their own generator (training sampling is unchanged).
+    validation_samples: int = 1
+    validation_temperature: float = 0.6
     save_every: int = 100
     # Also save once this many seconds have passed since the last checkpoint.
     save_seconds: int = 3600
@@ -189,12 +206,15 @@ class Settings(ReplaySettings):
             "steps",
             "micro_batch",
             "evaluate_every",
+            "validation_samples",
             "save_every",
             "save_seconds",
             "max_seconds",
         )
         if type(self.keep_checkpoints) is not int or self.keep_checkpoints < 0:
             raise ValueError("keep_checkpoints must be a nonnegative integer")
+        if not 0 < self.validation_temperature <= 2:
+            raise ValueError("validation_temperature must be in (0, 2]")
         if not math.isfinite(self.kl_coef) or self.kl_coef < 0:
             raise ValueError("Invalid KL coefficient")
         if self.stable_reinforce is not None:

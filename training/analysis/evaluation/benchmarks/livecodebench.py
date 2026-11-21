@@ -28,6 +28,9 @@ import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+# The pinned problem releases (`test.jsonl` ... `test6.jsonl`).
+DATASET = "livecodebench/code_generation_lite"
+DATASET_REVISION = "0fe84c3912ea0c4d4a78037083943e8f0c4dd505"
 SYSTEM = (
     "You will be given a question (problem specification) and will generate a correct "
     "Python program that matches the specification and passes all tests."
@@ -155,6 +158,24 @@ def last_block(answer):
 def finished(text):
     """True once a completion holds a closed code block (generation can stop)."""
     return bool(CODE_BLOCK.search(text))
+
+
+def verbatim_loop(text, shortest=10, longest=4000):
+    """(period, onset) if `text` ends in a block of `shortest`..`longest` characters
+    repeated at least three times verbatim, else None; the onset is where that
+    repetition starts, as a fraction of the text's length."""
+    n = len(text)
+    for period in range(shortest, min(longest, n // 3) + 1):
+        if (
+            text[n - period :]
+            == text[n - 2 * period : n - period]
+            == text[n - 3 * period : n - 2 * period]
+        ):
+            start = n - 3 * period
+            while start > 0 and text[start - 1] == text[start - 1 + period]:
+                start -= 1
+            return period, start / n
+    return None
 
 
 RUNNER = f"""

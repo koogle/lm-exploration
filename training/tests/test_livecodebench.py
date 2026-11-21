@@ -80,6 +80,15 @@ class LiveCodeBenchTests(unittest.TestCase):
         self.assertEqual(out["difficulty"], {"easy": 1.0, "hard": 0.0})
         self.assertEqual(out["platform"], {"atcoder": 0.5})
 
+    def test_verbatim_loop_needs_three_repeats_at_the_end(self):
+        block = "Wait, let me check the sum again. "
+        text = "First I read the input. " * 1 + "Then " + block * 5
+        period, onset = livecodebench.verbatim_loop(text)
+        self.assertEqual(period, len(block))
+        self.assertAlmostEqual(onset, text.index(block) / len(text), delta=2 / len(text))
+        self.assertIsNone(livecodebench.verbatim_loop("Then " + block * 2))
+        self.assertIsNone(livecodebench.verbatim_loop(block * 5 + "```python\nprint(1)\n```"))
+
 
 if __name__ == "__main__":
     unittest.main()
