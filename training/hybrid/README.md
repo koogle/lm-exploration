@@ -373,11 +373,15 @@ network's length varies with the chunk count.
 uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hnet-h100x8.json \
     --run-id <id>
 uv run modal run -m model_hybrid.modal_tools::publish --checkpoint <run>-sNN/step-NNNNNNNNN.pt \
-    --repo <owner/name> [--public] [--card <README.md>]
+    --repo <owner/name> [--public] [--card <README.md>] [--full]
 ```
 
 `publish` uploads one checkpoint of either architecture as bf16 weights, config
 (with its `architecture`), progress and the run's logs, private unless `--public`.
+`--full` uploads the training checkpoint file itself instead (weights with the MTP
+head, optimizer, data cursor and RNG state, for continued training), and fails unless
+the uploaded file's SHA-256 matches the volume copy. Checkpoints are PyTorch pickles:
+the card should say to load them only with `weights_only=False` from a trusted repo.
 The published H-Net is [`jfrick/hnet-720m`](https://huggingface.co/jfrick/hnet-720m).
 
 ## Generation
