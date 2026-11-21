@@ -3,14 +3,18 @@
 Run from training/:
     modal run -m modal_scripts.modal_chat_sft_data [--recipe data/recipes/chat-sft-v1.json]
 
-One call per parquet file, all in parallel: download it at the recipe's pinned
-revision, convert rows to OpenAI messages, render them in GLM's chat format with
+One call per parquet or JSON-lines file, all in parallel: download it at the recipe's
+pinned revision, convert rows to OpenAI messages (smoltalk2's `chat_sft.convert`, or
+the recipe's `converter` from `contest_sft.CONVERTERS`, run on every CPU since contest
+converters execute each candidate program against its tests), render them in GLM's chat format with
 loss masks, drop conversations longer than the context or sharing a 13-gram with
 the pretraining recipe's benchmark screen, hold out a hash-selected fraction, and
 write the subset to the `lm-exploration-hybrid-data` volume under `<recipe name>/`
 (see chat_sft.py). Each call has `retries=0`, a 1-hour timeout and refuses to start
 24 hours after launch; finished subsets are skipped. `summary.json` collects the
-per-subset counts.
+per-subset counts. A recipe without `files`, made only of subsets prepared in other
+recipes' folders, is composed instead: each subset is checked and the recipe's folder
+gets a `summary.json` of counts per pass.
 """
 
 import io
@@ -39,7 +43,7 @@ LAUNCH_LIMIT_SECONDS = 24 * 60 * 60
 
 @app.function(
     image=image,
-    cpu=4,
+    cpu=8,
     memory=16384,
     timeout=3600,
     retries=0,
@@ -63,17 +67,60 @@ def prepare(recipe, file, deadline):
     path = hf_hub_download(
         recipe["repo"], file, revision=recipe["revision"], repo_type="dataset", local_dir="/tmp/sft"
     )
-    rows = pq.read_table(path, columns=["messages", "chat_template_kwargs"]).to_pylist()
+    if "converter" in recipe:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from training_data import contest_sft
+
+        if file.endswith(".jsonl"):
+            # JSON lines end at "\n" only; statements can hold other line separators.
+            rows = [json.loads(line) for line in Path(path).read_text().split("\n") if line]
+        else:
+            rows = pq.read_table(path).to_pylist()
+        with ThreadPoolExecutor(8) as pool:
+            rows = list(pool.map(contest_sft.CONVERTERS[recipe["converter"]], rows))
+        converter = lambda conversation: conversation
+    else:
+        rows = pq.read_table(path, columns=["messages", "chat_template_kwargs"]).to_pylist()
+        converter = chat_sft.convert
     screen = np.load(ROOT / recipe["screen"])
     glm = tokenizer.load(tokenizer.tokenizer_file("/tmp/tokenizer"))
-    meta = chat_sft.prepare_subset(recipe, name, rows, folder, glm, screen)
+    meta = chat_sft.prepare_subset(recipe, name, rows, folder, glm, screen, converter)
     volume.commit()
     return meta
+
+
+@app.function(image=image, cpu=1, memory=2048, timeout=600, retries=0, volumes={"/data": volume})
+def compose(recipe):
+    """A recipe made only of subsets prepared in other recipes' folders: check that each
+    is there and write the recipe's folder with `summary.json` (counts per pass)."""
+    from training_data import chat_sft
+
+    rows = []
+    for name, prepared_in, repeat in chat_sft.subsets(recipe):
+        path = ROOT / (prepared_in or recipe["name"]) / f"{name}.json"
+        if not path.is_file():
+            raise ValueError(f"Subset {name} is not prepared in {path.parent}")
+        rows.append({**json.loads(path.read_text()), "prepared_in": prepared_in, "repeat": repeat})
+    keys = ("conversations", "tokens", "target_tokens")
+    summary = {
+        "recipe": recipe["name"],
+        "subsets": rows,
+        "per_pass": {key: round(sum(r[key] * r["repeat"] for r in rows)) for key in keys},
+    }
+    folder = ROOT / recipe["name"]
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    volume.commit()
+    return summary["per_pass"]
 
 
 @app.local_entrypoint()
 def main(recipe: str = DEFAULT_RECIPE):
     settings = json.loads(Path(recipe).read_text())
+    if not settings.get("files"):
+        print(json.dumps(compose.remote(settings), indent=2))
+        return
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     metas = list(prepare.starmap([(settings, file, deadline) for file in settings["files"]]))
     keys = ("conversations", "tokens", "target_tokens", "heldout_conversations")

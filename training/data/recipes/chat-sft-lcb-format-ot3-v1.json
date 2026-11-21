@@ -1,0 +1,245 @@
+{
+  "name": "chat-sft-lcb-format-ot3-v1",
+  "description": "chat-sft-lcb-format-v1 plus a seeded tenth of chat-sft-v1's answer-only OpenThoughts3 conversations per pass, with foundation replay.",
+  "subsets": [
+    {
+      "name": "test-00000-of-00001-9c49eeff30aacaa8",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00000-of-00039-e991a271dbfa9925",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00001-of-00039-e092fe56fda18715",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00002-of-00039-9cea23812e920e41",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00003-of-00039-e3822fccad6e083a",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00004-of-00039-cefe355b4667b27e",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00005-of-00039-b7580d2d846c2136",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00006-of-00039-65184bb9f7d61fde",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00007-of-00039-05785de21e8b8429",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00008-of-00039-7246e6b7423b404f",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00009-of-00039-b8c920f6629b57b2",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00010-of-00039-6de28ba20654f69b",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00011-of-00039-5de236be5188959d",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00012-of-00039-da9476a39a1bdbb7",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00013-of-00039-30b8c3829ee3b962",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00014-of-00039-dc3ebb07a3cba8e4",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00015-of-00039-19ccd7331d695677",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00016-of-00039-bf38b0908b322307",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00017-of-00039-ae5533a2f822e6ef",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00018-of-00039-8c793837880f5507",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00019-of-00039-d688fad5ee604390",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00020-of-00039-5d59387098675b73",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00021-of-00039-b257bf03d6876780",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00022-of-00039-1cfd39fa43c1917c",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00023-of-00039-d078bcb55e45cbf0",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00024-of-00039-f4e3da0e5661e6d1",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00025-of-00039-3f6ebfbaba5f4c70",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00026-of-00039-7d4898300894cbbe",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00027-of-00039-f8196766547533a2",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00028-of-00039-79a302af3c924863",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00029-of-00039-2b6615897d038115",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00030-of-00039-4135cc54050afc22",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00031-of-00039-40309dd907c042b7",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00032-of-00039-7b7d2068a3d9c359",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00033-of-00039-53b0f749aacff9c1",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00034-of-00039-a36ff0bff7d2a76f",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00035-of-00039-d28f9be60314601f",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00036-of-00039-146e1a11c054aeab",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00037-of-00039-995207c374a4e6f2",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "train-00038-of-00039-96a59dd6a98cd075",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "valid-00000-of-00001-5e672c5751f060d3",
+      "prepared_in": "chat-sft-codecontests-v1",
+      "repeat": 4
+    },
+    {
+      "name": "LeetCodeDataset-train",
+      "prepared_in": "chat-sft-leetcode-v1",
+      "repeat": 4
+    },
+    {
+      "name": "LeetCodeDataset-test",
+      "prepared_in": "chat-sft-leetcode-v1",
+      "repeat": 4
+    },
+    {
+      "name": "OpenThoughts3_1.2M_no_think_no_think-00000-of-00003",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.1
+    },
+    {
+      "name": "OpenThoughts3_1.2M_no_think_no_think-00001-of-00003",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.1
+    },
+    {
+      "name": "OpenThoughts3_1.2M_no_think_no_think-00002-of-00003",
+      "prepared_in": "chat-sft-v1",
+      "repeat": 0.1
+    }
+  ],
+  "format": "chat-sft",
+  "context": 4096,
+  "heldout_fraction": 0.01,
+  "screen": "kda-foundation-100b-504010-v1/screen.npy",
+  "screen_ngram": 13,
+  "replay": {
+    "recipe": "kda-foundation-100b-504010-v3",
+    "fraction": 0.25
+  }
+}

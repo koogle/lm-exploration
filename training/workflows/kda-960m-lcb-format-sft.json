@@ -1,0 +1,37 @@
+{
+  "name": "kda-960m-lcb-format-sft",
+  "description": "LiveCodeBench-format SFT of Malama Base, two arms side by side: verified harness-format programs only, and with answer-only OpenThoughts3 added.",
+  "family": "hybrid",
+  "from": "kda-960m-foundation-20261110-01-pretrain-a7-s02/export/tokens-099999547392",
+  "stages": [
+    {
+      "stage": "midtrain",
+      "branches": [
+        {
+          "name": "format",
+          "description": "chat-sft-lcb-format-v1, 20M tokens (24 chat and 8 replay rows per step)",
+          "model_config": "hybrid/configs/kda-960m-lcb-format-sft.json",
+          "gpu": "H100",
+          "world_size": 8,
+          "segment_seconds": 10800,
+          "worker_timeout_seconds": 12600,
+          "max_segments": 1,
+          "segments_per_call": 1,
+          "qualification_segments": 0
+        },
+        {
+          "name": "format-ot3",
+          "description": "chat-sft-lcb-format-ot3-v1, 63M tokens (24 chat and 8 replay rows per step)",
+          "model_config": "hybrid/configs/kda-960m-lcb-format-ot3-sft.json",
+          "gpu": "H100",
+          "world_size": 8,
+          "segment_seconds": 10800,
+          "worker_timeout_seconds": 12600,
+          "max_segments": 1,
+          "segments_per_call": 1,
+          "qualification_segments": 0
+        }
+      ]
+    }
+  ]
+}
