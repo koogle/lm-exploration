@@ -831,3 +831,57 @@ def counters_probe(run_id: str, output: str):
     result = call.get()
     path.write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))
+
+
+@app.function(
+    image=counter_image,
+    gpu="H100!",
+    cpu=4,
+    memory=16384,
+    timeout=300,
+    retries=0,
+    volumes=VOLUMES,
+)
+def counter_probe(deadline, run_id):
+    """Check hardware-counter access before allocating eight training GPUs."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed")
+    from model_hybrid.hardware_counters import probe
+
+    folder = Path("/runs/throughput") / run_id
+    try:
+        result = probe(folder)
+        result["hardware"] = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
+            text=True,
+        ).strip()
+        result["profiling_driver_parameters"] = Path("/proc/driver/nvidia/params").read_text()
+        (folder / "probe.json").write_text(json.dumps(result, indent=2))
+        return result
+    finally:
+        runs_volume.commit()
+
+
+@app.local_entrypoint()
+def counters_probe(run_id: str, output: str):
+    """Bounded single-H100 access check; no training or optimization experiment."""
+    deadline = time.time() + 900
+    call = counter_probe.spawn(deadline, run_id)
+    try:
+        supervisor = enforce_deadline.spawn([call.object_id], deadline)
+    except Exception:
+        call.cancel()
+        raise
+    record = {
+        "run_id": run_id,
+        "call": call.object_id,
+        "supervisor": supervisor.object_id,
+        "deadline": deadline,
+    }
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.with_suffix(".launch.json").write_text(json.dumps(record, indent=2))
+    print(json.dumps(record), flush=True)
+    result = call.get()
+    path.write_text(json.dumps(result, indent=2))
+    print(json.dumps(result, indent=2))
