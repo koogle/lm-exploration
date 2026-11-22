@@ -19,6 +19,7 @@ class PPO:
 
     SOURCES = ("reuse",)
     needs_behaviour = True
+    needs_teacher = False
     skips_zero_advantage = True
 
     def __post_init__(self):

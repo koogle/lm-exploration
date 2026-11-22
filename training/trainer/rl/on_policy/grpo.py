@@ -17,6 +17,7 @@ class GRPO:
 
     SOURCES = ("sampler",)
     needs_behaviour = False
+    needs_teacher = False
     skips_zero_advantage = True
 
     def advantages(self, batch):

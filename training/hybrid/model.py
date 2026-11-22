@@ -418,6 +418,44 @@ def chunked_logprobs(hidden, weight, targets, chunk_size):
     return torch.cat(parts).view_as(targets)
 
 
+def _chunk_distillation(features, weight, targets, teacher_ids, teacher_logprobs):
+    logits = F.linear(features, weight)
+    logits = logits.float() if logits.dtype in (torch.float16, torch.bfloat16) else logits
+    logprobs = logits.log_softmax(-1)
+    valid = targets != IGNORE_INDEX
+    target = logprobs.gather(-1, targets.clamp_min(0)[:, None]).squeeze(-1)
+    student = logprobs.gather(-1, teacher_ids)
+    teacher = teacher_logprobs.exp()
+    # Everything outside the teacher's listed tokens is one more outcome.
+    teacher_rest = (1 - teacher.sum(-1)).clamp_min(0)
+    student_rest = (1 - student.exp().sum(-1)).clamp_min(1e-6)
+    rest = teacher_rest * (teacher_rest.clamp_min(1e-6).log() - student_rest.log())
+    kl = (teacher * (teacher_logprobs - student)).sum(-1) + rest
+    return torch.where(valid, target, 0.0), torch.where(valid, kl, 0.0)
+
+
+def chunked_distillation(hidden, weight, targets, teacher_ids, teacher_logprobs, chunk_size):
+    """(log-probabilities of `targets`, KL(teacher ‖ model) per position), both shaped
+    like `targets` and 0 where ignored.
+
+    `teacher_ids` and `teacher_logprobs` [..., k] list the teacher's k likeliest tokens at
+    each position; the KL is over those tokens plus one outcome for all the others, a
+    lower bound of the full KL. Chunks are recomputed in backward like `chunked_logprobs`.
+    """
+    k = teacher_ids.shape[-1]
+    parts = [
+        checkpoint(_chunk_distillation, features, weight, labels, ids, scores, use_reentrant=False)
+        for features, labels, ids, scores in zip(
+            hidden.flatten(0, -2).split(chunk_size),
+            targets.flatten().split(chunk_size),
+            teacher_ids.reshape(-1, k).split(chunk_size),
+            teacher_logprobs.reshape(-1, k).split(chunk_size),
+            strict=True,
+        )
+    ]
+    return tuple(torch.cat([part[i] for part in parts]).view_as(targets) for i in range(2))
+
+
 def chunked_cross_entropy(hidden, weight, labels, chunk_size):
     """Summed cross-entropy and summed squared log-normalizer over valid targets.
 
@@ -630,6 +668,18 @@ class HybridLM(nn.Module):
         """Log-probabilities [batch, time] of `targets` (0 where ignored), without the
         full [batch, time, vocab] logits (`chunked_logprobs`)."""
         return chunked_logprobs(self.hidden_states(tokens), self.output_weight, targets, chunk_size)
+
+    def distillation(self, tokens, targets, teacher_ids, teacher_logprobs, chunk_size=2048):
+        """Log-probabilities of `targets` and KL(teacher ‖ model) per position
+        (`chunked_distillation`)."""
+        return chunked_distillation(
+            self.hidden_states(tokens),
+            self.output_weight,
+            targets,
+            teacher_ids,
+            teacher_logprobs,
+            chunk_size,
+        )
 
     def loss_sums(self, hidden, labels, prefix=""):
         if hidden.is_cuda and torch.is_grad_enabled():

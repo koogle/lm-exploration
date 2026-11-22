@@ -2,12 +2,15 @@
 
 Each step takes one `Batch` of answers with rewards from the trajectory source
 (`settings.trajectories`): sampled by the current weights (`rollouts.Sampler`), sampled
-and reused for several updates, or read from a trajectory file (`off_policy/sources.py`).
+and reused for several updates, or read from a trajectory file or a set of
+teacher-scored student answers (`off_policy/sources.py`).
 The algorithm (`algorithms.py`) gives one advantage per answer; policy-gradient
 algorithms skip answers with zero advantage (every answer of a group scored the same).
 The answers are shuffled into the source's `updates_per_batch` equal shares, one
 optimizer update each. When the algorithm needs the sampling weights' log-probabilities,
-they are computed once before the batch's first update.
+they are computed once before the batch's first update. An algorithm that needs a
+teacher's scores (`off_policy/distill.py`) gets KL(teacher ‖ learner) per answer token
+from the family's `distillation`.
 
 Each answer's token loss is divided by a constant, the answers per update times the
 task's token limit (no per-answer length normalization, as in Dr. GRPO,
@@ -43,14 +46,14 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from training_data import rl_tasks, rl_trajectories
+from training_data import distillation, rl_tasks, rl_trajectories
 from training_data.subword import LOSS_IGNORE_INDEX, digest
 
 from trainer import batches, checkpoints, optimizers
 from trainer.batches import collate
 from trainer.replay_hook import ReplayHook
 from trainer.rl.batch import Batch, Tokens
-from trainer.rl.off_policy.sources import Reuse, TrajectoryFile
+from trainer.rl.off_policy.sources import Reuse, Scored, TrajectoryFile
 from trainer.rl.off_policy.stable_reinforce import StableReinforce
 from trainer.rl.ranks import Ranks
 from trainer.rl.rollouts import Sampler, Scheduler, collect
@@ -85,6 +88,7 @@ def source_files(family):
         "checkpoints": checkpoints.__file__,
         "rl_tasks": rl_tasks.__file__,
         "rl_trajectories": rl_trajectories.__file__,
+        "distillation": distillation.__file__,
         "math_sft": sys.modules["training_data.math_sft"].__file__,
         "code_sft": sys.modules["training_data.code_sft"].__file__,
         "sandbox_execution": execution_module.__file__,
@@ -109,7 +113,7 @@ def train(
 ):
     """Train, or resume `output`'s latest checkpoint, until a stop (see the module
     docstring). `sandbox.run` checks code answers; `trajectories_path` is the trajectory
-    file of the `"file"` source. With `ranks` (a process group per GPU), every rank draws
+    file of the `"file"` source or the folder of the `"scored"` source. With `ranks` (a process group per GPU), every rank draws
     the same prompts and samples and trains its share; gradients are averaged before
     clipping, and rank 0 logs, saves and exports."""
     import torch
@@ -153,6 +157,17 @@ def train(
                 row["completion_ids"]
             ) < rollouts.token_limit(row["task"]):
                 trajectories.append(row)
+    scored = None
+    if settings.trajectories.source == "scored":
+        scored = distillation.Answers(trajectories_path)
+        trajectory_hash = scored.sha256
+        # Answers the policy could have written within its prompt and token limits.
+        trajectories = [
+            index
+            for index in range(len(scored))
+            if scored.lengths(index)[0] <= longest
+            and scored.lengths(index)[1] <= rollouts.token_limit("code")
+        ]
     files = source_files(family)
     source_hashes = {name: digest(path) for name, path in files.items()}
     config = description.model_config
@@ -170,6 +185,9 @@ def train(
     optimizer = settings.optimizer.make(model)
     replay = ReplayHook.attach(settings, data_root, family.context(model))
     stable = StableReinforce.attach(settings)
+    teacher = algorithm.needs_teacher
+    if teacher and not hasattr(family, "distillation"):
+        raise ValueError(f"The {family.name} family has no distillation loss")
     identity = {
         "parent": str(parent),
         "parent_sha256": digest(parent),
@@ -225,6 +243,9 @@ def train(
             rng,
             family.stop_ids[0],
             ranks,
+        ),
+        "scored": lambda: Scored(
+            scored, trajectories, settings.trajectories.answers_per_step, rng, ranks
         ),
     }[settings.trajectories.source]()
     step, update, trained_tokens = 0, 0, 0
@@ -301,6 +322,21 @@ def train(
                     result[i] = logp[b, : len(sequences[i]["y"])]
         return result
 
+    def teacher_targets(batch, sequences, chosen, y):
+        """The teacher's listed tokens and their log-probabilities at the targets of `y`,
+        `[batch, time, k]`; elsewhere token 0 with nearly all the probability (finite
+        values, so the masked positions have finite gradients)."""
+        k = batch.teacher[chosen[0]][0].shape[1]
+        ids = torch.zeros((*y.shape, k), dtype=torch.long, device="cuda")
+        scores = torch.zeros((*y.shape, k), dtype=torch.float32, device="cuda")
+        scores[..., 1:] = -30.0
+        for b, i in enumerate(chosen):
+            listed, logprobs = batch.teacher[i]
+            end = len(sequences[i]["y"])
+            ids[b, end - len(listed) : end] = torch.from_numpy(listed).to("cuda")
+            scores[b, end - len(listed) : end] = torch.from_numpy(logprobs).to("cuda")
+        return ids, scores
+
     def optimize(batch, sequences, advantage, answers, old, totals):
         """One optimizer update on `answers`; adds token statistics to `totals`."""
         nonlocal update
@@ -313,11 +349,18 @@ def train(
             x, y = collate([sequences[i] for i in chosen], "cuda", family.width_multiple)
             # Full logits only for the correction that reads them; otherwise the family's
             # target log-probabilities, which need not materialize [batch, time, vocab].
+            teacher_kl = None
             if stable:
                 with torch.autocast("cuda", dtype=torch.bfloat16):
                     logits = model(x).float()
                 mask = y != LOSS_IGNORE_INDEX
                 logp = logits.log_softmax(-1).gather(-1, y.clamp(min=0)[..., None])[..., 0] * mask
+            elif teacher:
+                logits = None
+                mask = y != LOSS_IGNORE_INDEX
+                ids, scores = teacher_targets(batch, sequences, chosen, y)
+                with torch.autocast("cuda", dtype=torch.bfloat16):
+                    logp, teacher_kl = family.distillation(model, x, y, ids, scores)
             else:
                 logits = None
                 logp, mask = token_logprobs(family, model, x, y)
@@ -334,7 +377,9 @@ def train(
                 device="cuda",
             )
             weight = torch.tensor([advantage[i] for i in chosen], device="cuda")
-            tokens = Tokens(logits, y, mask, logp, old_logp.detach(), weight, scale)
+            tokens = Tokens(
+                logits, y, mask, logp, old_logp.detach(), weight, scale, teacher_kl=teacher_kl
+            )
             correction = stable.apply(tokens, batch, chosen) if stable else 0.0
             loss, stats = algorithm.loss(tokens)
             loss = loss + correction

@@ -130,6 +130,11 @@ def train_rl(recipe, deadline, launch, runs_volume, pools):
         report = json.loads((folder / "report.json").read_text())
         if digest(trajectories) != report["trajectories_sha256"]:
             raise ValueError("Trajectories differ from their report")
+    if settings.trajectories.source == "scored":
+        from training_data.distillation import Answers
+
+        trajectories = pools / settings.trajectories.data
+        Answers(trajectories, verify=True)
     gpus = recipe["gpus"]
     if settings.rollouts.prompts_per_step % gpus:
         raise ValueError("prompts_per_step must split evenly over the GPUs")

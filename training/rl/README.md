@@ -49,7 +49,7 @@ algorithm or a source of answers can change without touching the rest:
 | `settings.py` | What an RL stage's `settings` set, in sections: `algorithm`, `trajectories`, `rollouts`, `optimizer`, plus the shared `replay_*` fields |
 | `algorithms.py` | The algorithms by name |
 | `on_policy/` | Algorithms that train only on answers the current weights just sampled: `grpo.py` |
-| `off_policy/` | Algorithms that also train on older or other models' answers (`ppo.py`, `awr.py`), and their trajectory sources (`sources.py`) |
+| `off_policy/` | Algorithms that also train on older or other models' answers (`ppo.py`, `awr.py`), distillation on the student's stored answers (`distill.py`), and their trajectory sources (`sources.py`) |
 | `rollouts.py` | Sampling answers with the current weights and rewarding them |
 | `batch.py`, `policy_gradient.py` | What the algorithms share |
 | `loop.py` | The training loop, checkpoints and provenance |
@@ -311,6 +311,33 @@ answer per forward and backward pass, and
 validation on 4 answers per problem sampled at temperature 0.6 (`validation_samples`,
 `validation_temperature`; `validation_code_solved` is the share of problems any of them
 solves).
+
+## On-policy distillation
+
+[`../workflows/kda-960m-distill.json`](../workflows/kda-960m-distill.json) trains the
+student on a teacher's next-token distribution at every token of answers the student
+itself sampled, instead of a reward per answer. The teacher is GLM-4.7-Flash (31B, MIT):
+Malama uses its tokenizer and chat template ([`../tokenizer/glm.py`](../tokenizer/glm.py)),
+so the student's token ids are the teacher's input and the two distributions are over
+the same vocabulary, with no alignment step.
+
+- **Prompts** (`distillation.chat_prompts`): the distinct problems of the prepared
+  reasoning SFT recipe, each as its conversation's tokens up to the opened reasoning
+  span. They need no tests, so the set is the SFT's problems (14,710 in
+  `chat-sft-reasoning-v4` within 2,048 prompt tokens) rather than the RL pool's.
+- **Answers** ([`../modal_scripts/modal_distill.py`](../modal_scripts/modal_distill.py)
+  `sample`): the student checkpoint samples answers with the LiveCodeBench thinking
+  protocol's settings (temperature 0.6, top-p 0.95), up to 8,192 tokens.
+- **Scores** (`score`): the teacher reads each prompt and answer once and keeps its 20
+  likeliest next tokens and their log-probabilities at every answer token.
+- **Training** (`algorithm` `off_policy/distill`, `trajectories.source` `scored`): the
+  RL loop draws `answers_per_step` stored answers per step and minimizes
+  KL(teacher ‖ student) per answer token over the teacher's listed tokens plus one
+  outcome for all the others (`HybridLM.distillation`). The answers stay fixed for the
+  run's passes, as in MobileLLM-R1.5's semi on-policy distillation. Validation is the
+  stage's pool, as in RL.
+
+The set's layout is in [`../data/distillation.py`](../data/distillation.py).
 
 ## Run
 
