@@ -1,9 +1,16 @@
 import json
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
-from workflows.sessions import continued_checkpoint, newest_checkpoint, session_state
+from workflows.sessions import (
+    continued_checkpoint,
+    newest_checkpoint,
+    run_session,
+    session_state,
+)
 
 
 def session(root, name, steps=(), report=None, latest=True):
@@ -61,3 +68,33 @@ class SessionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RunSessionTests(unittest.TestCase):
+    def run_script(self, script, grace=1.0):
+        with tempfile.TemporaryDirectory() as folder:
+            report = Path(folder) / "report.json"
+            with (Path(folder) / "log").open("w") as log:
+                started = time.time()
+                code = run_session(
+                    [sys.executable, "-c", script, str(report)], log, report, grace=grace, poll=0.1
+                )
+            return code, time.time() - started, (Path(folder) / "log").read_text()
+
+    def test_exit_code_of_a_session_that_ends(self):
+        self.assertEqual(self.run_script("import sys; sys.exit(0)")[0], 0)
+        self.assertEqual(self.run_script("import sys; sys.exit(3)")[0], 3)
+
+    def test_reported_session_stuck_in_shutdown_is_terminated(self):
+        script = "import sys, time; open(sys.argv[1], 'w').write('{}'); time.sleep(600)"
+        code, seconds, log = self.run_script(script)
+        self.assertEqual(code, 0)
+        self.assertLess(seconds, 30)
+        self.assertIn("terminating", log)
+
+    def test_unreported_session_is_waited_for(self):
+        code, seconds, _ = self.run_script(
+            "import sys, time; time.sleep(2); sys.exit(1)", grace=0.5
+        )
+        self.assertEqual(code, 1)
+        self.assertGreaterEqual(seconds, 2)

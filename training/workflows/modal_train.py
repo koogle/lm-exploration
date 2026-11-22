@@ -145,7 +145,7 @@ def hybrid_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_
     """
     from workflows.checks import validate_paths
     from workflows.config import resolve_payload
-    from workflows.sessions import session_state
+    from workflows.sessions import run_session, session_state
 
     policy, _, settings = resolve_payload(bundle)
     validate_paths(run_id, None, resume)
@@ -194,9 +194,7 @@ def hybrid_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_
     watching = watch(provenance["workflow_run_id"], 60, (hybrid_data.reload, hybrid_runs.commit))
     try:
         with (output / "torchrun.log").open("a") as log:
-            code = subprocess.run(
-                command, cwd="/project", stdout=log, stderr=subprocess.STDOUT, check=False
-            ).returncode
+            code = run_session(command, log, output / "report.json", cwd="/project")
     finally:
         watching.set()
         hybrid_runs.commit()
