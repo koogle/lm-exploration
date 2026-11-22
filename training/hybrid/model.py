@@ -165,8 +165,9 @@ class HybridConfig:
     loop_prelude: int = 0
     loop_coda: int = 0
     n_loops: int = 1
-    # Converting a trained plain model: the loop state starts at zero instead of the
-    # prelude output and the step size at 1, so one loop computes the plain stack.
+    # Converting a trained plain model: the loop state starts at zero, the step size at
+    # 1 and a per-channel gate on the state where it enters the recurrent blocks at zero
+    # (closed), so every loop count computes the plain stack until training opens it.
     loop_retrofit: bool = False
     # Recompute each KDA block in backward instead of storing its activations (training
     # only), for contexts whose activations do not fit, such as 40,960 tokens on an H100.
@@ -478,24 +479,36 @@ class LoopUpdate(nn.Module):
     ablations this is the only update rule that matches the unlooped baseline at one
     loop; replacing the state with the proposal, or adding it, does worse.
 
-    With `initial_step = 1` (a converted plain model) gamma starts at
-    softplus^-1(2), so the first loop's state is exactly the recurrent blocks' output.
+    With `retrofit` (a converted plain model) gamma starts at softplus^-1(2), so each
+    loop's state is exactly the recurrent blocks' output, and `entry_scale` (zeros)
+    scales the state where it enters the recurrent blocks (`HybridLM.trunk`), so every
+    loop reads only the prelude output until training opens it.
     """
 
-    def __init__(self, width, initial_step=None):
+    def __init__(self, width, retrofit=False):
         super().__init__()
         self.gate = nn.Linear(width, width)
         self.rate = nn.Parameter(torch.zeros(width))
-        self.initial_rate = 0.0 if initial_step is None else math.log(math.expm1(2 * initial_step))
+        self.initial_rate = math.log(math.expm1(2.0)) if retrofit else 0.0
+        self.entry_scale = nn.Parameter(torch.zeros(width)) if retrofit else None
 
     def reset_parameters(self):
         nn.init.zeros_(self.gate.weight)
         nn.init.zeros_(self.gate.bias)
         nn.init.constant_(self.rate, self.initial_rate)
+        if self.entry_scale is not None:
+            nn.init.zeros_(self.entry_scale)
 
     def optimizer(self):
         yield from declare("muon", self.gate.weight)
         yield from declare("adamw_no_decay", self.gate.bias, self.rate)
+        if self.entry_scale is not None:
+            yield from declare("adamw_no_decay", self.entry_scale)
+
+    def entry(self, state, injected):
+        """The recurrent blocks' input: `state + injected`, or after a retrofit
+        `entry_scale * state + injected`."""
+        return injected + (state if self.entry_scale is None else self.entry_scale * state)
 
     def forward(self, state, proposal, entry):
         step = torch.sigmoid(self.gate(entry)) * F.softplus(self.rate)
@@ -514,7 +527,7 @@ class HybridLM(nn.Module):
         )
         self.loop_update = None
         if config.looped:
-            self.loop_update = LoopUpdate(config.n_embd, 1.0 if config.loop_retrofit else None)
+            self.loop_update = LoopUpdate(config.n_embd, config.loop_retrofit)
         self.mtp = MultiTokenPrediction(config) if config.mtp else None
         self.apply(self.initialize)
         cos, sin = rope_tables(config.block_size, config.head_dim, config.rope_base, None)
@@ -561,8 +574,9 @@ class HybridLM(nn.Module):
         positions restart after it. A looped model runs its prelude once, the
         recurrent blocks `loops` times (default `n_loops`) and its coda once. The
         state starts as the prelude output `h` (zero with `loop_retrofit`); each loop
-        re-injects `h`, runs the recurrent blocks on `state + h` and takes a gated step
-        towards their output (`LoopUpdate`).
+        re-injects `h`, runs the recurrent blocks on `state + h` (with `loop_retrofit`,
+        `g * state + h`, `g` starting at zero) and takes a gated step towards their
+        output (`LoopUpdate`).
         """
         length = tokens.size(1)
         if not 0 < length <= self.config.block_size:
@@ -589,7 +603,7 @@ class HybridLM(nn.Module):
         injected = x
         state = torch.zeros_like(x) if config.loop_retrofit else x
         for _ in range(loops):
-            x = entry = state + injected
+            x = entry = self.loop_update.entry(state, injected)
             for block in self.blocks[recurrent.start : recurrent.stop]:
                 x = self.run_block(block, x, rope, mask)
             state = self.loop_update(state, x, entry)

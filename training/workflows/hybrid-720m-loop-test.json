@@ -21,7 +21,7 @@
         },
         {
           "name": "looped",
-          "description": "Converted looped model; one loop equals the parent at the start",
+          "description": "Converted looped model with a closed entry gate; every loop count equals the parent at the start",
           "model_config": "hybrid/configs/hybrid-720m-loop-test-looped.json",
           "gpu": "H100",
           "world_size": 8,
