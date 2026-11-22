@@ -335,7 +335,7 @@ def train(
             end = len(sequences[i]["y"])
             ids[b, end - len(listed) : end] = torch.from_numpy(listed).to("cuda")
             scores[b, end - len(listed) : end] = torch.from_numpy(logprobs).to("cuda")
-        return ids, scores
+        return ids, algorithm.targets(scores)
 
     def optimize(batch, sequences, advantage, answers, old, totals):
         """One optimizer update on `answers`; adds token statistics to `totals`."""

@@ -55,7 +55,7 @@ class DataTests(unittest.TestCase):
             report = write_set(folder)
             self.assertEqual((report["answers"], report["answer_tokens"]), (2, 4))
             answers = distillation.Answers(folder, verify=True)
-            prompt, completion, stop, (ids, logprobs) = answers.answer(0)
+            prompt, completion, stop, (ids, _) = answers.answer(0)
             self.assertEqual(
                 (prompt, completion, stop), ([USER, 5, ASSISTANT, THINK], [11, 12], glm.EOS_ID)
             )
@@ -126,6 +126,15 @@ class LossTests(unittest.TestCase):
         loss, stats = algorithm.loss(micro)
         self.assertAlmostEqual(loss.item(), 1.5)
         self.assertAlmostEqual(stats["teacher_kl"], 3.0)
+
+    def test_a_temperature_below_one_sharpens_the_listed_tokens(self):
+        logprobs = torch.tensor([[0.6, 0.3, 0.05]]).log()
+        self.assertIs(make({"name": "off_policy/distill"}).targets(logprobs), logprobs)
+        sharp = make({"name": "off_policy/distill", "temperature": 0.5}).targets(logprobs).exp()
+        expected = torch.tensor([[0.36, 0.09, 0.0025]]) / 0.4525
+        torch.testing.assert_close(sharp, expected, atol=1e-6, rtol=1e-5)
+        with self.assertRaises(ValueError):
+            make({"name": "off_policy/distill", "temperature": 1.5})
 
 
 class SourceTests(unittest.TestCase):
