@@ -115,6 +115,16 @@ class WorkflowResolutionTests(unittest.TestCase):
         bundle["stage"]["overlap_preparation"] = False
         resolve_payload(bundle)
 
+    def test_session_retries_default_and_bounds(self):
+        bundle = load_workflow(ROOT / "kda-960m-reasoning-sft-v4.json", "check")["stages"][-1][
+            "spec"
+        ]
+        policy, _, _ = resolve_payload(bundle)
+        self.assertEqual(policy.session_retries, 2)
+        bundle["stage"]["session_retries"] = -1
+        with self.assertRaisesRegex(ValueError, "session_retries"):
+            resolve_payload(bundle)
+
     def test_payload_is_frozen_when_source_files_change(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
