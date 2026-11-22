@@ -4,14 +4,20 @@ Training runs through the workflows like every model family (workflows/README.md
 Run from training/:
     modal run -m model_hybrid.modal_tools::bench --gpus 1 [--microbatch 4]
     modal run -m model_hybrid.modal_tools::heldout --export <run>/export/<name>
+    modal run -m model_hybrid.modal_tools::samples --export <run>/export/<name> \\
+        [--prompts hybrid/sample_prompts.json] [--output samples.json]
     modal run -m model_hybrid.modal_tools::export --run-id <run folder>
+    modal run -m model_hybrid.modal_tools::merge --target <run>/step-N.pt \
+        --add <run>/step-N.pt --subtract <run>/step-N.pt --scale 0.5 --run-id <fresh id>
     modal run -m model_hybrid.modal_tools::publish --checkpoint <run>/step-NNNNNNNNN.pt \\
-        --repo <owner/name> [--public] [--card <README.md>]
+        --repo <owner/name> [--public] [--card <README.md>] [--full]
 
 Each benchmark is one call with a 30-minute timeout and no retries. `publish` uploads
 one checkpoint from the runs volume as bf16 weights, config, progress and the run's
 logs (private unless --public), with an optional model card; one CPU call, one hour,
-no retries.
+no retries. With `--full` it uploads the training checkpoint file itself (weights,
+optimizer, data and RNG state) and checks the uploaded SHA-256; one CPU call, two
+hours, no retries.
 """
 
 import json
@@ -392,6 +398,48 @@ def export_checkpoint(checkpoint, repo, private, card, deadline):
     return {"repo": repo, "private": private, **progress}
 
 
+@app.function(
+    image=image,
+    cpu=4,
+    memory=8192,
+    timeout=7200,
+    retries=0,
+    secrets=[modal.Secret.from_name("simple-llm-hf")],
+    volumes=VOLUMES,
+)
+def upload_training_checkpoint(checkpoint, repo, private, card, deadline):
+    """One training checkpoint file from our runs volume to HF, byte for byte, with its
+    SHA-256 checked against the uploaded copy."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import hashlib
+
+    from huggingface_hub import HfApi
+
+    path = Path("/runs") / checkpoint
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 24), b""):
+            digest.update(block)
+    api = HfApi()
+    api.create_repo(repo, private=private, exist_ok=True)
+    api.upload_file(
+        path_or_fileobj=str(path),
+        path_in_repo=path.name,
+        repo_id=repo,
+        commit_message=f"Training checkpoint {checkpoint}",
+    )
+    if card:
+        api.upload_file(path_or_fileobj=card.encode(), path_in_repo="README.md", repo_id=repo)
+    files = api.model_info(repo, files_metadata=True).siblings
+    remote = next(f.lfs.sha256 for f in files if f.rfilename == path.name)
+    if remote != digest.hexdigest():
+        raise RuntimeError(
+            f"Uploaded {path.name} has SHA-256 {remote}, expected {digest.hexdigest()}"
+        )
+    return {"repo": repo, "private": private, "file": path.name, "sha256": remote}
+
+
 def load_config(path):
     return json.loads(Path(path).read_text())
 
@@ -626,6 +674,67 @@ def heldout(export: str, recipe: str = "hybrid/recipes/hybrid-40b-v1.json", docu
     print(json.dumps({"export": export, "heldout": result}, indent=1))
 
 
+@app.function(
+    image=image, gpu="H100", cpu=8, memory=65536, timeout=3600, retries=0, volumes=VOLUMES
+)
+def generate_samples(export, spec, deadline):
+    """Continuations of each prompt in `spec` by an export, once per decode setting."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import torch
+    from model_hybrid import generate
+
+    from tokenizer import glm
+
+    lm = generate.load_export(Path("/runs") / export, dtype=torch.bfloat16, device="cuda")
+    tokenizer = glm.load()
+    prompts = [tokenizer.encode(p["text"], add_special_tokens=False).ids for p in spec["prompts"]]
+    samples = []
+    for decode in spec["decodes"]:
+        generator = None
+        if decode["temperature"] > 0:
+            generator = torch.Generator(device="cuda").manual_seed(decode.get("seed", 0))
+        outputs = generate.generate_batch(
+            lm,
+            prompts,
+            spec["max_new_tokens"],
+            (glm.EOS_ID,),
+            temperature=decode["temperature"],
+            top_p=decode["top_p"],
+            generator=generator,
+        )
+        for prompt, ids in zip(spec["prompts"], outputs, strict=True):
+            samples.append(
+                {
+                    "prompt": prompt["name"],
+                    "decode": decode["name"],
+                    "text": prompt["text"],
+                    "completion": tokenizer.decode(ids, skip_special_tokens=False),
+                    "new_tokens": len(ids),
+                    "ended": bool(ids) and ids[-1] == glm.EOS_ID,
+                }
+            )
+    return samples
+
+
+@app.local_entrypoint()
+def samples(export: str, prompts: str = "hybrid/sample_prompts.json", output: str = ""):
+    """Generations of `<run id>/export/<export>` for a prompt file; JSON on stdout or
+    in `--output`."""
+    from workflows.deadline import MAX_LAUNCH_SECONDS
+
+    spec = json.loads(Path(prompts).read_text())
+    result = {
+        "export": export,
+        "prompts": prompts,
+        "samples": generate_samples.remote(export, spec, time.time() + MAX_LAUNCH_SECONDS),
+    }
+    if output:
+        Path(output).write_text(json.dumps(result, indent=1) + "\n")
+    else:
+        print(json.dumps(result, indent=1))
+
+
 @app.function(image=image, cpu=8, memory=65536, timeout=1800, retries=0, volumes=VOLUMES)
 def export_latest(run_id):
     """bf16 trunk export (config.json, model.safetensors) of a run's latest checkpoint."""
@@ -654,6 +763,66 @@ def export_latest(run_id):
     return {"export": f"{run_id}/{latest.stem}", "progress": progress}
 
 
+@app.function(image=image, cpu=8, memory=131072, timeout=3600, retries=0, volumes=VOLUMES)
+def merge_checkpoints(target, add, subtract, scale, run_id, deadline):
+    """`target`'s checkpoint with its weights replaced by target + scale·(add − subtract)
+    (task arithmetic), as `<run_id>/step-N.pt` with `latest.json`, and its export. Every
+    target weight must exist with the same shape in `add` and `subtract`; MTP heads, which
+    post-training drops, keep the target's values. The checkpoint records the merge."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    import torch
+
+    from trainer.loop import atomic_json
+
+    runs = Path("/runs")
+    folder = runs / run_id
+    if folder.exists():
+        raise ValueError("Use a fresh run ID")
+    # Only load our trusted private run-volume checkpoints.
+    state = torch.load(runs / target, map_location="cpu", weights_only=False)
+    plus = torch.load(runs / add, map_location="cpu", weights_only=False)["model"]
+    minus = torch.load(runs / subtract, map_location="cpu", weights_only=False)["model"]
+    merged = {}
+    for key, value in state["model"].items():
+        if key.startswith("mtp."):
+            merged[key] = value
+            continue
+        if key not in plus or key not in minus:
+            raise ValueError(f"{key} is missing from the added or subtracted checkpoint")
+        if not value.shape == plus[key].shape == minus[key].shape:
+            raise ValueError(f"{key} has another shape in the added or subtracted checkpoint")
+        delta = plus[key].float() - minus[key].float()
+        merged[key] = (value.float() + scale * delta).to(value.dtype)
+    state["model"] = merged
+    state.pop("optimizer", None)
+    state["merge"] = {"target": target, "add": add, "subtract": subtract, "scale": scale}
+    folder.mkdir(parents=True)
+    name = Path(target).name
+    torch.save(state, folder / name)
+    latest = {"checkpoint": name, "step": state["step"], "tokens": state["tokens"]}
+    atomic_json(folder / "latest.json", latest)
+    runs_volume.commit()
+    return {"checkpoint": f"{run_id}/{name}", **export_latest.local(run_id)}
+
+
+@app.local_entrypoint()
+def merge(target: str, add: str, subtract: str, scale: float, run_id: str):
+    """Task arithmetic on the runs volume: `--target` + `--scale`·(`--add` − `--subtract`),
+    a checkpoint for later stages and evaluation and its export (`merge_checkpoints`)."""
+    from workflows.checks import run_id as checked
+    from workflows.deadline import MAX_LAUNCH_SECONDS
+
+    deadline = time.time() + MAX_LAUNCH_SECONDS
+    print(
+        json.dumps(
+            merge_checkpoints.remote(
+                target, add, subtract, scale, checked(run_id, "run_id"), deadline
+            )
+        )
+    )
+
+
 @app.local_entrypoint()
 def export(run_id: str):
     """Export a run's latest checkpoint for evaluation (`<run id>/export/step-N/`)."""
@@ -661,14 +830,14 @@ def export(run_id: str):
 
 
 @app.local_entrypoint()
-def publish(checkpoint: str, repo: str, public: bool = False, card: str = ""):
-    """Upload one checkpoint (RUN/step-NNNNNNNNN.pt on the runs volume) to an HF model repo."""
+def publish(checkpoint: str, repo: str, public: bool = False, card: str = "", full: bool = False):
+    """Upload one checkpoint (RUN/step-NNNNNNNNN.pt on the runs volume) to an HF model repo:
+    bf16 inference weights, or with `--full` the training checkpoint file itself."""
     from workflows.deadline import MAX_LAUNCH_SECONDS
 
     text = Path(card).read_text() if card else ""
-    result = export_checkpoint.remote(
-        checkpoint, repo, not public, text, time.time() + MAX_LAUNCH_SECONDS
-    )
+    upload = upload_training_checkpoint if full else export_checkpoint
+    result = upload.remote(checkpoint, repo, not public, text, time.time() + MAX_LAUNCH_SECONDS)
     print(json.dumps(result, indent=2))
 
 
