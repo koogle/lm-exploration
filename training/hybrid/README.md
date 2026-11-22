@@ -393,11 +393,15 @@ network's length varies with the chunk count.
 uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hnet-h100x8.json \
     --run-id <id>
 uv run modal run -m model_hybrid.modal_tools::publish --checkpoint <run>-sNN/step-NNNNNNNNN.pt \
-    --repo <owner/name> [--public] [--card <README.md>]
+    --repo <owner/name> [--public] [--card <README.md>] [--full]
 ```
 
 `publish` uploads one checkpoint of either architecture as bf16 weights, config
 (with its `architecture`), progress and the run's logs, private unless `--public`.
+`--full` uploads the training checkpoint file itself instead (weights with the MTP
+head, optimizer, data cursor and RNG state, for continued training), and fails unless
+the uploaded file's SHA-256 matches the volume copy. Checkpoints are PyTorch pickles:
+the card should say to load them only with `weights_only=False` from a trusted repo.
 The published H-Net is [`jfrick/hnet-720m`](https://huggingface.co/jfrick/hnet-720m).
 
 ## Generation
@@ -451,20 +455,29 @@ simulated with the run's seed), and trains like pretraining
 
 ## Playground
 
-[`playground/`](playground) is a Gradio app for a private Hugging Face Space on a GPU:
-text continuation, and for chat exports a chat tab with OpenAI tools whose replies
-are parsed back into OpenAI messages. It decodes with `generate.py` in bf16, one
-request at a time, and warms up (compiled prefill attention, captured decode graph)
-before serving. `playground/publish.py` uploads a Docker Space
-([`playground/Dockerfile`](playground/Dockerfile): CUDA 13.0 devel, torch 2.14.1, the
-family kernels prebuilt) with the inference modules and kernels, on L4 hardware by
-default (`--hardware`), sleeping after an hour without visitors (`--sleep-seconds`);
-GPU time is billed to the Space owner. The Space downloads the export from the
-private model repo with its `HF_TOKEN` secret.
+[`playground/`](playground) is a Gradio app for a private Hugging Face Space on a GPU
+that serves several exports at once. Its Compare tab is a table with one row per
+prompt: a Run box, the prompt, and one column per export. Ticked prompts run in turn,
+and each prompt's replies from the selected exports stream into their columns side by
+side (one token per export per round, each export with its own decoder and sampler),
+as text continuation, a chat turn, or a chat turn with thinking. Prompts load from
+preset sets (`playground/prompt-sets.json`) or are added one by one, and the results
+download as JSON with the sampling settings.
+For chat exports a chat tab has OpenAI tools whose replies are parsed back into
+OpenAI messages, and a text tab continues a prompt with one export. It decodes with
+`generate.py` in bf16, one request at a time, and warms up every export (compiled
+prefill attention, captured decode graph) before serving. `playground/publish.py`
+uploads a Docker Space ([`playground/Dockerfile`](playground/Dockerfile): CUDA 13.0
+devel, torch 2.14.1, the family kernels prebuilt) with the inference modules and
+kernels, on L4 hardware by default (`--hardware`), sleeping after an hour without
+visitors (`--sleep-seconds`); GPU time is billed to the Space owner. The exports are
+listed in a JSON file (`--models`; [`playground/malama-versions.json`](playground/malama-versions.json)
+lists the Malama stages), and the Space downloads them from their private model repos
+with its `HF_TOKEN` secret.
 
 ```sh
 uv run --all-extras python -m model_hybrid.playground.publish \
-  --space jfrick/hybrid-720m-playground --export tokens-039998980096 [--chat] [--hardware l4x1]
+  --space jfrick/malama-versions --models hybrid/playground/malama-versions.json [--hardware l4x1]
 ```
 
 ## Benchmarks

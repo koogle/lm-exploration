@@ -18,6 +18,7 @@ hybrid at one loop and gain on reasoning and code at two to four loops, for abou
 | 1 | Model: prelude / recurrent / coda split, input re-injection, adaptive-delta update, `loops` per forward call, FLOPs accounting | Implemented, CPU-tested |
 | 2 | Trainer: mixed-depth sampling with one-loop rank overrides, delayed switch, per-`k` held-out loss; converting a plain export (`loop_retrofit`) | Implemented, CPU-tested |
 | 2b | Conversion test: Hybrid v2 base (mid32k export), 1B tokens, plain vs looped | Done 2026-11-03: one-loop cost within the gate, no gain from extra loops |
+| 2c | Conversion test with a closed loop-entry gate, now part of `loop_retrofit` | Run 2026-11-22 (`hybrid-720m-loop-test-03g`) |
 | 3 | Matched pilot: baseline vs looped 720M at 10B tokens | Proposed; needs approval and budget |
 | 4 | Decoding: per-loop and last-loop caches in `generate.py`; benchmarks at `k = 1..4` | Proposed |
 | 5 | Loop-conditioned modulation grafted at the switch | Proposed, after stage 3 succeeds |
@@ -163,6 +164,23 @@ branches' held-out losses, metrics, reports, configs and the samples):
 `training/results/hybrid-720m-loop-test/` in `jfrick/lm-exploration-results`; the
 looped export is `jfrick/hybrid-720m-loop-test-looped`, the control's
 `jfrick/hybrid-720m-loop-test-control`.
+
+### Closed-gate retrofit
+
+The conversion above started its extra loops far from the parent, because the second
+loop's input, the recurrent blocks' own output plus the prelude output, is one the parent
+never saw. Inkling 2 Mini introduced looping with a closed gate on the loop state at the
+loop's input ([reading note](../references/thinking-machines-inkling2-mini-2026-11-21.md)).
+`loop_retrofit` now includes that gate: the recurrent blocks read `g * state + h`, with a
+per-channel `g` (`LoopUpdate.entry_scale`) starting at zero, so at step 0 every loop
+count computes the parent exactly (`tests/test_hybrid_looped.py`), and training opens
+`g` as far as the extra loops help. The run's loop statistics report its mean and
+largest `|g|`. The workflow's `looped` branch therefore runs the gated conversion; the
+results above are of the conversion without the gate.
+
+It passes if `k = 2..4` fall below the control on code, math and the thinking traces
+while `k = 1` stays within 0.01 nats, and if `|g|` grows away from zero; a gate that
+stays near zero says the extra loops have nothing to add at this budget.
 
 ## Stage 3: matched pilot
 
