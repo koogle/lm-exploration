@@ -59,8 +59,10 @@ SAMPLING = {
 SAVE_BATCHES = 4
 TEACHER = ("zai-org/GLM-4.7-Flash", "7dd20894a642a0aa287e9827cb1a1f7f91386b67")
 TOP_K = 20
-# Padded tokens per teacher forward pass, and answers between saves.
-SCORE_TOKENS = 12_000
+# Padded tokens per teacher forward pass, answer positions scored at a time, and answers
+# between saves.
+SCORE_TOKENS = 8_000
+SCORE_POSITIONS = 2048
 SCORE_SAVE_ANSWERS = 500
 SHARD_SECONDS = 12 * 60 * 60
 
@@ -342,17 +344,21 @@ def score_shard(data_id, shard, shards, deadline):
             start, prompt, answer, _ = (int(v) for v in answers[first + i])
             # Position p predicts token p + 1: the answer's tokens are predicted at
             # prompt - 1 .. prompt + answer - 2.
-            scores = logits[b, prompt - 1 : prompt + answer - 1].float().log_softmax(-1)
             target = torch.from_numpy(
                 tokens[start + prompt : start + prompt + answer].astype(np.int64)
             ).cuda()
-            top = scores.topk(TOP_K, dim=-1)
             row = int(offsets[i])
-            ids[row : row + answer] = top.indices.cpu().numpy()
-            logprobs[row : row + answer] = top.values.cpu().numpy()
-            sums["nll"] += -scores.gather(-1, target[:, None]).sum().item()
-            sums["mass"] += top.values.exp().sum().item()
-            sums["top1"] += (top.indices[:, 0] == target).sum().item()
+            # A few thousand positions of fp32 scores at a time.
+            for at in range(0, answer, SCORE_POSITIONS):
+                end = min(answer, at + SCORE_POSITIONS)
+                scores = logits[b, prompt - 1 + at : prompt - 1 + end].float().log_softmax(-1)
+                top = scores.topk(TOP_K, dim=-1)
+                ids[row + at : row + end] = top.indices.cpu().numpy()
+                logprobs[row + at : row + end] = top.values.cpu().numpy()
+                sums["nll"] += -scores.gather(-1, target[at:end, None]).sum().item()
+                sums["mass"] += top.values.exp().sum().item()
+                sums["top1"] += (top.indices[:, 0] == target[at:end]).sum().item()
+                del scores, top
             scored[i] = True
         del logits
         since_save += len(group)
