@@ -11,9 +11,9 @@
       "model_config": "hybrid/configs/kda-960m-reasoning-sft-v4.json",
       "gpu": "H100",
       "world_size": 8,
-      "segment_seconds": 18000,
-      "worker_timeout_seconds": 19800,
-      "max_segments": 3,
+      "segment_seconds": 50400,
+      "worker_timeout_seconds": 54000,
+      "max_segments": 1,
       "segments_per_call": 1,
       "qualification_segments": 0
     }

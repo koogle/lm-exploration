@@ -42,7 +42,7 @@
   "compile": true,
   "checkpoint_seconds": 1800,
   "keep_checkpoints": 1,
-  "eval_every_steps": 100,
+  "eval_every_steps": 500,
   "eval_documents": {
     "chat": 40,
     "climbmix": 128,
