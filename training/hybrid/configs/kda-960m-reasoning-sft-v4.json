@@ -44,7 +44,7 @@
   "keep_checkpoints": 1,
   "eval_every_steps": 500,
   "eval_documents": {
-    "chat": 40,
+    "chat": 4,
     "climbmix": 128,
     "python": 128,
     "code": 128,
