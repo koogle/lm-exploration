@@ -329,7 +329,12 @@ the same vocabulary, with no alignment step.
   `sample`): the student checkpoint samples answers with the LiveCodeBench thinking
   protocol's settings (temperature 0.6, top-p 0.95), up to 8,192 tokens.
 - **Scores** (`score`): the teacher reads each prompt and answer once and keeps its 20
-  likeliest next tokens and their log-probabilities at every answer token.
+  likeliest next tokens and their log-probabilities at every answer token. The teacher ends
+  a turn with the next turn's role token and Malama's single-turn answers end with EOS,
+  so the teacher's probability of any stop token is counted as EOS. Without that, the
+  teacher gives the student's EOS no probability, and a distilled student stops ending
+  its answers (the learning-rate pilot's first runs: validation answers 98–100%
+  truncated after 32 steps).
 - **Training** (`algorithm` `off_policy/distill`, `trajectories.source` `scored`): the
   RL loop draws `answers_per_step` stored answers per step and minimizes
   KL(teacher ‖ student) per answer token over the teacher's listed tokens plus one

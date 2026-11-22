@@ -21,7 +21,8 @@ Run from training/, in this order; `<data-id>` is a fresh folder on the training
 - `merge` (one CPU call): the shards as `tokens.npy` and `answers.npy`.
 - `score` (`--shards` H100 calls): the teacher (`TEACHER`, same tokenizer and chat format
   as the student) reads each answer once and keeps its `TOP_K` likeliest next tokens and
-  their log-probabilities at every answer token, as
+  their log-probabilities at every answer token, with the teacher's probability of
+  ending the turn (any of `chat_sft.STOP_IDS`) counted as the student's EOS, as
   `<data-id>/shards/scores-NN-of-NN.npz` (saved as it goes; a relaunch continues).
 - `finish` (one CPU call): `teacher_ids.npy`, `teacher_logprobs.npy` and `report.json`.
 
@@ -280,7 +281,7 @@ def score_shard(data_id, shard, shards, deadline):
     refuse_after(deadline)
     import numpy as np
     import torch
-    from training_data import distillation
+    from training_data import chat_sft, distillation
     from transformers import AutoModelForCausalLM
 
     from tokenizer import glm
@@ -310,6 +311,8 @@ def score_shard(data_id, shard, shards, deadline):
     model.eval()
     if model.config.vocab_size != glm.VOCAB_SIZE:
         raise ValueError("The teacher's vocabulary differs from the student's")
+
+    ends = torch.tensor(chat_sft.STOP_IDS, device="cuda")
 
     def save():
         temporary = output.with_suffix(".partial.npz")
@@ -352,10 +355,15 @@ def score_shard(data_id, shard, shards, deadline):
             for at in range(0, answer, SCORE_POSITIONS):
                 end = min(answer, at + SCORE_POSITIONS)
                 scores = logits[b, prompt - 1 + at : prompt - 1 + end].float().log_softmax(-1)
+                # The teacher ends a turn with the next turn's role token, the student's
+                # single-turn answers with EOS: every way to end counts as EOS.
+                ended = scores[:, ends].logsumexp(-1)
+                scores[:, ends] = -float("inf")
+                scores[:, glm.EOS_ID] = ended
                 top = scores.topk(TOP_K, dim=-1)
                 ids[row + at : row + end] = top.indices.cpu().numpy()
                 logprobs[row + at : row + end] = top.values.cpu().numpy()
-                sums["nll"] += -scores.gather(-1, target[at:end, None]).sum().item()
+                sums["nll"] += -scores.gather(-1, target[at:end, None]).clamp_min(-30).sum().item()
                 sums["mass"] += top.values.exp().sum().item()
                 sums["top1"] += (top.indices[:, 0] == target[at:end]).sum().item()
                 del scores, top
