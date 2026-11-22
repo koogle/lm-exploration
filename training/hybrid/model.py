@@ -165,13 +165,10 @@ class HybridConfig:
     loop_prelude: int = 0
     loop_coda: int = 0
     n_loops: int = 1
-    # Converting a trained plain model: the loop state starts at zero instead of the
-    # prelude output and the step size at 1, so one loop computes the plain stack.
+    # Converting a trained plain model: the loop state starts at zero, the step size at
+    # 1 and a per-channel gate on the state where it enters the recurrent blocks at zero
+    # (closed), so every loop count computes the plain stack until training opens it.
     loop_retrofit: bool = False
-    # A per-channel gate on the loop state where it enters the recurrent blocks:
-    # entry = prelude output + gate * state, the gate starting at zero (closed), so every
-    # loop count starts as the one-loop model and training opens it as far as it helps.
-    loop_entry_gate: bool = False
     # Recompute each KDA block in backward instead of storing its activations (training
     # only), for contexts whose activations do not fit, such as 40,960 tokens on an H100.
     # Full-attention blocks keep theirs: recomputed under torch.compile, FlexAttention
@@ -208,12 +205,8 @@ class HybridConfig:
             raise ValueError("loop_prelude and loop_coda must be >= 0 and n_loops >= 1")
         if self.n_loops > 1 and self.loop_prelude + self.loop_coda >= self.n_layer:
             raise ValueError("a looped model needs at least one recurrent block")
-        if self.n_loops == 1 and (
-            self.loop_prelude + self.loop_coda or self.loop_retrofit or self.loop_entry_gate
-        ):
-            raise ValueError(
-                "loop_prelude, loop_coda, loop_retrofit and loop_entry_gate need n_loops > 1"
-            )
+        if self.n_loops == 1 and (self.loop_prelude + self.loop_coda or self.loop_retrofit):
+            raise ValueError("loop_prelude, loop_coda and loop_retrofit need n_loops > 1")
 
     @property
     def layer_kinds(self):
@@ -486,18 +479,18 @@ class LoopUpdate(nn.Module):
     ablations this is the only update rule that matches the unlooped baseline at one
     loop; replacing the state with the proposal, or adding it, does worse.
 
-    With `initial_step = 1` (a converted plain model) gamma starts at
-    softplus^-1(2), so the first loop's state is exactly the recurrent blocks' output.
-    With `entry_gate`, `entry_scale` (zeros) scales the state where it enters the
-    recurrent blocks (`HybridLM.trunk`).
+    With `retrofit` (a converted plain model) gamma starts at softplus^-1(2), so each
+    loop's state is exactly the recurrent blocks' output, and `entry_scale` (zeros)
+    scales the state where it enters the recurrent blocks (`HybridLM.trunk`), so every
+    loop reads only the prelude output until training opens it.
     """
 
-    def __init__(self, width, initial_step=None, entry_gate=False):
+    def __init__(self, width, retrofit=False):
         super().__init__()
         self.gate = nn.Linear(width, width)
         self.rate = nn.Parameter(torch.zeros(width))
-        self.initial_rate = 0.0 if initial_step is None else math.log(math.expm1(2 * initial_step))
-        self.entry_scale = nn.Parameter(torch.zeros(width)) if entry_gate else None
+        self.initial_rate = math.log(math.expm1(2.0)) if retrofit else 0.0
+        self.entry_scale = nn.Parameter(torch.zeros(width)) if retrofit else None
 
     def reset_parameters(self):
         nn.init.zeros_(self.gate.weight)
@@ -513,7 +506,7 @@ class LoopUpdate(nn.Module):
             yield from declare("adamw_no_decay", self.entry_scale)
 
     def entry(self, state, injected):
-        """The recurrent blocks' input: `state + injected`, or with the entry gate
+        """The recurrent blocks' input: `state + injected`, or after a retrofit
         `entry_scale * state + injected`."""
         return injected + (state if self.entry_scale is None else self.entry_scale * state)
 
@@ -534,9 +527,7 @@ class HybridLM(nn.Module):
         )
         self.loop_update = None
         if config.looped:
-            self.loop_update = LoopUpdate(
-                config.n_embd, 1.0 if config.loop_retrofit else None, config.loop_entry_gate
-            )
+            self.loop_update = LoopUpdate(config.n_embd, config.loop_retrofit)
         self.mtp = MultiTokenPrediction(config) if config.mtp else None
         self.apply(self.initialize)
         cos, sin = rope_tables(config.block_size, config.head_dim, config.rope_base, None)
@@ -583,7 +574,7 @@ class HybridLM(nn.Module):
         positions restart after it. A looped model runs its prelude once, the
         recurrent blocks `loops` times (default `n_loops`) and its coda once. The
         state starts as the prelude output `h` (zero with `loop_retrofit`); each loop
-        re-injects `h`, runs the recurrent blocks on `state + h` (with `loop_entry_gate`,
+        re-injects `h`, runs the recurrent blocks on `state + h` (with `loop_retrofit`,
         `g * state + h`, `g` starting at zero) and takes a gated step towards their
         output (`LoopUpdate`).
         """

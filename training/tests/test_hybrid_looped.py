@@ -121,30 +121,9 @@ class LoopedHybridTests(unittest.TestCase):
         self.assertIn("loop_update.rate", no_decay)
         self.assertIn("loop_update.gate.bias", no_decay)
 
-    def test_retrofit_at_one_loop_is_the_plain_model(self):
+    def test_retrofit_is_the_plain_model_at_every_loop_count(self):
         plain = model.HybridLM(looped_config(loop_prelude=0, loop_coda=0, n_loops=1)).double()
         looped = model.HybridLM(looped_config(loop_retrofit=True)).double()
-        missing, unexpected = looped.load_state_dict(plain.state_dict(), strict=False)
-        self.assertEqual(unexpected, [])
-        self.assertTrue(all(name.startswith("loop_update.") for name in missing))
-        tokens = torch.randint(3, 37, (2, 13))
-        tokens[1, 4] = looped.config.eos_id
-        torch.testing.assert_close(looped(tokens, loops=1), plain(tokens))
-        self.assertFalse(torch.allclose(looped(tokens, loops=2), plain(tokens)))
-        # Two loops start as: rerun the recurrent blocks on their output plus the input.
-        mask = model.DocumentMask(model.document_ids(tokens, looped.config.eos_id))
-        rope = (looped.rope_cos[mask.positions][:, None], looped.rope_sin[mask.positions][:, None])
-        prelude, first, second, coda = looped.blocks
-        h = prelude(looped.token_embedding(tokens), rope, mask)
-        once = second(first(h, rope, mask), rope, mask)
-        twice = second(first(once + h, rope, mask), rope, mask)
-        torch.testing.assert_close(looped.trunk(tokens, 2)[0], coda(twice, rope, mask))
-        with self.assertRaises(ValueError):
-            tiny_config(loop_retrofit=True)
-
-    def test_closed_entry_gate_retrofit_is_the_plain_model_at_every_loop_count(self):
-        plain = model.HybridLM(looped_config(loop_prelude=0, loop_coda=0, n_loops=1)).double()
-        looped = model.HybridLM(looped_config(loop_retrofit=True, loop_entry_gate=True)).double()
         missing, unexpected = looped.load_state_dict(plain.state_dict(), strict=False)
         self.assertEqual(unexpected, [])
         self.assertIn("loop_update.entry_scale", missing)
@@ -153,13 +132,23 @@ class LoopedHybridTests(unittest.TestCase):
         tokens[1, 4] = looped.config.eos_id
         for loops in (1, 2, 3, 4):
             torch.testing.assert_close(looped(tokens, loops=loops), plain(tokens))
-        # The closed gate still receives a gradient, so training can open it.
+        # The closed entry gate still receives a gradient, so training can open it, and
+        # once open the next loop reads its state: g * state + h.
         looped(tokens, loops=2).square().mean().backward()
         self.assertGreater(float(looped.loop_update.entry_scale.grad.abs().sum()), 0.0)
         groups = parameter_groups(looped)
         self.assertIn("loop_update.entry_scale", [name for name, _ in groups["adamw_no_decay"]])
+        with torch.no_grad():
+            looped.loop_update.entry_scale.fill_(0.5)
+        mask = model.DocumentMask(model.document_ids(tokens, looped.config.eos_id))
+        rope = (looped.rope_cos[mask.positions][:, None], looped.rope_sin[mask.positions][:, None])
+        prelude, first, second, coda = looped.blocks
+        h = prelude(looped.token_embedding(tokens), rope, mask)
+        once = second(first(h, rope, mask), rope, mask)
+        twice = second(first(0.5 * once + h, rope, mask), rope, mask)
+        torch.testing.assert_close(looped.trunk(tokens, 2)[0], coda(twice, rope, mask))
         with self.assertRaises(ValueError):
-            tiny_config(loop_entry_gate=True)
+            tiny_config(loop_retrofit=True)
 
     def test_loop_counts_are_shared_across_ranks_with_one_loop_overrides(self):
         def family(one_loop_ranks, start=0):
