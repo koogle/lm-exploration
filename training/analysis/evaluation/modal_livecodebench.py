@@ -800,7 +800,9 @@ def publish_traces(folder, name, retrace=False):
     folder_path = Path("/runs/benchmarks", folder)
     if retrace:
         problems = {p["question_id"]: p for p in _trace_problems(0, 0, 1)}
-        for part in sorted(folder_path.glob("lcb-*.shard-*-of-*.json")):
+        for part in sorted(folder_path.glob("lcb-*.json")):
+            if not part.with_name(part.name.removesuffix(".json") + ".completions.jsonl").exists():
+                continue
             scores = {
                 row["question_id"]: row["sample_scores"]
                 for row in json.loads(part.read_text())["problems"]
