@@ -40,6 +40,7 @@ prompt when that is under `THINKING["max_new_tokens"]`.
 """
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -102,6 +103,20 @@ THINKING = {"samples": 16, "temperature": 0.6, "top_p": 0.95, "max_new_tokens": 
 # KV cache is FP8 there, so more sequences decode together.
 TRACES = {**THINKING, "samples": 4, "max_new_tokens": 16384}
 TRACE_SHARDS = 16
+# Hosted teachers for `--pool train --openrouter <ids>`: open-weight reasoning models
+# whose OpenRouter responses carry the full reasoning text. One CPU call per model.
+OPENROUTER_TEACHERS = (
+    "z-ai/glm-5.3",
+    "z-ai/glm-5.3-flash",
+    "deepseek/deepseek-v4-pro",
+    "deepseek/deepseek-v4-flash",
+    "deepseek/deepseek-v3.2",
+)
+OPENROUTER_WORKERS = 48
+# The key comes from the launching shell's OPENROUTER_API_KEY and lives only for the run.
+openrouter = modal.Secret.from_dict(
+    {"OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY", "")}
+)
 # Calls per model: each H100 call takes every THINKING_SHARDS-th problem.
 THINKING_SHARDS = 4
 # Checkpoints decode with the family's own sampler: more calls, and problems per batch
@@ -409,7 +424,102 @@ def _thinking_problems(limit, shard, shards):
     return livecodebench.load(path)[: limit or None][shard::shards]
 
 
-def _trace_problems(limit, shard, shards):
+def _openrouter_sample(model, prompt, seed):
+    """One (text, tokens, finish reason) sample of `model` through OpenRouter, as
+    `<think>reasoning</think>answer`; an empty truncated sample after three failures."""
+    import urllib.request
+
+    body = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": TRACES["temperature"],
+        "top_p": TRACES["top_p"],
+        "max_tokens": TRACES["max_new_tokens"],
+        "seed": seed,
+        "reasoning": {"enabled": True},
+    }
+    request = urllib.request.Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=json.dumps(body).encode(),
+        headers={
+            "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
+            "Content-Type": "application/json",
+        },
+    )
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=1800) as response:
+                data = json.loads(response.read())
+            choice = data["choices"][0]
+            message = choice["message"]
+            text = f"<think>\n{message.get('reasoning') or ''}\n</think>\n\n"
+            text += message.get("content") or ""
+            return text, data["usage"]["completion_tokens"], choice.get("finish_reason")
+        except Exception as error:  # noqa: BLE001 - any failed request is retried
+            print(json.dumps({"model": model, "attempt": attempt, "error": repr(error)[:200]}))
+            time.sleep(5 * (attempt + 1))
+    return "", 0, "length"
+
+
+@app.function(
+    image=image,
+    cpu=8,
+    memory=16384,
+    timeout=6 * 60 * 60,
+    retries=0,
+    secrets=[secret, openrouter],
+    volumes={"/runs": runs_volume},
+)
+def evaluate_thinking_openrouter(model, deadline, folder, limit=0, unsolved=""):
+    """`TRACES` samples per trace problem from the hosted teacher `model`, graded and
+    written like `evaluate_thinking`'s traces."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        raise RuntimeError("Launch with OPENROUTER_API_KEY set")
+    from concurrent.futures import ThreadPoolExecutor
+
+    from evaluation.benchmarks import livecodebench
+
+    problems = _trace_problems(limit, 0, 1, unsolved)
+    started = time.time()
+    jobs = [
+        (model, livecodebench.instruction(p), TRACES["seed"] + n)
+        for p in problems
+        for n in range(TRACES["samples"])
+    ]
+    with ThreadPoolExecutor(OPENROUTER_WORKERS) as pool:
+        flat = list(pool.map(lambda job: _openrouter_sample(*job), jobs))
+    samples = [flat[i : i + TRACES["samples"]] for i in range(0, len(flat), TRACES["samples"])]
+    return _write_thinking(
+        f"openrouter/{model}",
+        None,
+        {},
+        folder,
+        limit,
+        0,
+        1,
+        problems,
+        samples,
+        started,
+        traces=True,
+    )
+
+
+def _solved(folder):
+    """Question ids with a passing sample in the trace launch `folder`."""
+    runs_volume.reload()
+    return {
+        row["question_id"]
+        for part in Path("/runs/benchmarks", folder).glob("lcb-*.shard-*.json")
+        for row in json.loads(part.read_text())["problems"]
+        if row["score"] > 0
+    }
+
+
+def _trace_problems(limit, shard, shards, unsolved=""):
+    """The trace problems of one shard; with `unsolved`, only those without a passing
+    sample in that earlier trace launch."""
     from huggingface_hub import hf_hub_download
     from training_data import contest_sft
 
@@ -425,7 +535,11 @@ def _trace_problems(limit, shard, shards):
     )
     # JSON lines end at "\n" only; statements can hold other line separators.
     rows = [json.loads(line) for line in Path(leetcode).read_text().split("\n") if line]
-    return contest_sft.trace_problems(releases, rows)[: limit or None][shard::shards]
+    problems = contest_sft.trace_problems(releases, rows)
+    if unsolved:
+        solved = _solved(unsolved)
+        problems = [p for p in problems if p["question_id"] not in solved]
+    return problems[: limit or None][shard::shards]
 
 
 def _write_thinking(
@@ -643,12 +757,17 @@ def main(
     protocol: str = "plain",
     merge: str = "",
     pool: str = "",
+    openrouter: str = "",
+    unsolved: str = "",
 ):
     """Spawn one call per checkpoint (comma-separated `--checkpoints`) and reference model
     (comma-separated `--references`, or `all`); calls outlive this client. `--merge
     lcb-thinking-<launch>` instead combines a finished thinking launch's shards.
     `--protocol thinking --pool train --references <teacher>` samples teacher traces
-    on the trace problems (`TRACES`, `TRACE_SHARDS` calls)."""
+    on the trace problems (`TRACES`, `TRACE_SHARDS` calls); `--pool train --openrouter
+    <ids>` samples hosted teachers (`OPENROUTER_TEACHERS`, with the launching shell's
+    `OPENROUTER_API_KEY`) instead, and `--unsolved lcb-traces-<launch>` keeps only the
+    problems that launch never solved."""
     if merge:
         print(json.dumps(merge_thinking.remote(merge), indent=1))
         return
@@ -656,7 +775,14 @@ def main(
         raise ValueError("--protocol is plain or thinking")
     if pool not in ("", "train") or pool and (protocol != "thinking" or checkpoints):
         raise ValueError("--pool train samples reference models with --protocol thinking")
-    if protocol == "thinking":
+    hosted = list(filter(None, openrouter.split(",")))
+    if hosted and (pool != "train" or references or set(hosted) - set(OPENROUTER_TEACHERS)):
+        raise ValueError(f"--openrouter takes {OPENROUTER_TEACHERS} with --pool train alone")
+    if unsolved and not hosted:
+        raise ValueError("--unsolved goes with --openrouter")
+    if hosted:
+        chosen = [(m, None) for m in hosted]
+    elif protocol == "thinking":
         chosen = _thinking_launch(checkpoints, references)
     else:
         chosen = [(f"checkpoint:{name}", None) for name in filter(None, checkpoints.split(","))]
@@ -677,7 +803,12 @@ def main(
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     tag = "-traces" if pool else "-thinking" if protocol == "thinking" else ""
     folder = f"lcb{tag}-{int(time.time())}{'-limit' if limit else ''}"
-    if protocol == "thinking":
+    if hosted:
+        calls = [
+            evaluate_thinking_openrouter.spawn(m, deadline, folder, limit, unsolved)
+            for m, _ in chosen
+        ]
+    elif protocol == "thinking":
         calls, names = [], []
         for m, r in chosen:
             checkpoint = m.startswith("checkpoint:")
