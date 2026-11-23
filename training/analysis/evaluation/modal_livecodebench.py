@@ -792,6 +792,9 @@ def publish_traces(folder, name, retrace=False):
     `TRACES_REPO` under `name/`; the commit to pin in a recipe. With `retrace`, first
     rewrite each shard's traces from its saved completions and scores, keeping
     `TRACES_KEPT` passing completions per problem (shortest text first)."""
+    import shutil
+    import tempfile
+
     from huggingface_hub import HfApi
 
     folder_path = Path("/runs/benchmarks", folder)
@@ -824,12 +827,19 @@ def publish_traces(folder, name, retrace=False):
         for path in folder_path.glob("lcb-*")
         if path.name.endswith(".traces.jsonl") or path.suffix == ".json"
     )
+    # Files are named after `name`, so every published trace file has its own stem
+    # (a chat SFT recipe names its subsets by file stem).
+    staged = Path(tempfile.mkdtemp())
+    for path in files:
+        suffix = ".traces.jsonl" if path.name.endswith(".traces.jsonl") else ".json"
+        shard = path.name.removesuffix(suffix).partition(".shard-")[2]
+        shutil.copy(path, staged / f"{name}{'.shard-' + shard if shard else ''}{suffix}")
     commit = HfApi().upload_folder(
         repo_id=TRACES_REPO,
         repo_type="dataset",
-        folder_path=folder_path,
+        folder_path=staged,
         path_in_repo=name,
-        allow_patterns=[path.name for path in files],
+        delete_patterns="*",
         commit_message=f"Teacher traces {name} from {folder}",
     )
     rows = sum(
