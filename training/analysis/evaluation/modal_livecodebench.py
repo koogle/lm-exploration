@@ -428,7 +428,7 @@ def _thinking_problems(limit, shard, shards):
 
 def _openrouter_sample(model, prompt, seed):
     """One (text, tokens, finish reason) sample of `model` through OpenRouter, as
-    `<think>reasoning</think>answer`; an empty truncated sample after three failures."""
+    `<think>reasoning</think>answer`; an empty truncated sample after six failures."""
     import urllib.request
 
     body = {
@@ -448,7 +448,7 @@ def _openrouter_sample(model, prompt, seed):
             "Content-Type": "application/json",
         },
     )
-    for attempt in range(3):
+    for attempt in range(6):
         try:
             with urllib.request.urlopen(request, timeout=1800) as response:
                 data = json.loads(response.read())
@@ -459,7 +459,7 @@ def _openrouter_sample(model, prompt, seed):
             return text, data["usage"]["completion_tokens"], choice.get("finish_reason")
         except Exception as error:  # noqa: BLE001 - any failed request is retried
             print(json.dumps({"model": model, "attempt": attempt, "error": repr(error)[:200]}))
-            time.sleep(5 * (attempt + 1))
+            time.sleep(15 * (attempt + 1))
     return "", 0, "length"
 
 
