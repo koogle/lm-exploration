@@ -333,6 +333,54 @@ def trace_problems(release_paths, leetcode_rows):
     return problems
 
 
+CODECONTESTS_SOURCES = {
+    1: "codechef",
+    2: "codeforces",
+    3: "hackerearth",
+    4: "codejam",
+    5: "atcoder",
+    6: "aizu",
+}
+MIN_TRACE_TESTS = 5
+
+
+def codecontests_problems(rows):
+    """Trace problems from CodeContests rows: stdin problems in their original language
+    with at least `MIN_TRACE_TESTS` tests. Difficulty is from the Codeforces rating
+    (under 1400 easy, under 2000 medium, else hard; "unrated" without one)."""
+    problems = []
+    for row in rows:
+        tests = codecontests_tests(row)
+        if (
+            row.get("input_file")
+            or row.get("output_file")
+            or row.get("is_description_translated")
+            or len(tests) < MIN_TRACE_TESTS
+        ):
+            continue
+        rating = row.get("cf_rating") or 0
+        problems.append(
+            {
+                "question_id": f"codecontests/{row['name']}",
+                "question_content": row["description"],
+                "starter_code": "",
+                "tests": tests,
+                "platform": CODECONTESTS_SOURCES.get(row.get("source"), "other"),
+                "difficulty": (
+                    "unrated"
+                    if not rating
+                    else "easy"
+                    if rating < 1400
+                    else "medium"
+                    if rating < 2000
+                    else "hard"
+                ),
+                "contest_date": "",
+            }
+        )
+    return problems
+
+
 def teacher_traces(row):
     """A thinking-mode conversation from a passing teacher completion ({"question_content",
     "starter_code", "completion"}), or None without a closed reasoning span and a

@@ -99,10 +99,12 @@ THINKING_REFERENCES = {
 }
 THINKING = {"samples": 16, "temperature": 0.6, "top_p": 0.95, "max_new_tokens": 32768, "seed": 1234}
 # `--pool train`: teacher traces for SFT on `contest_sft.trace_problems`, shorter and
-# fewer per problem; each passing problem keeps its shortest passing completion. The
+# fewer per problem; each passing problem keeps its shortest passing completions. The
 # KV cache is FP8 there, so more sequences decode together.
 TRACES = {**THINKING, "samples": 4, "max_new_tokens": 16384}
 TRACE_SHARDS = 16
+# Passing completions kept per problem, shortest first.
+TRACES_KEPT = 4
 # Hosted teachers for `--pool train --openrouter <ids>`: open-weight reasoning models
 # whose OpenRouter responses carry the full reasoning text. One CPU call per model.
 OPENROUTER_TEACHERS = (
@@ -112,7 +114,7 @@ OPENROUTER_TEACHERS = (
     "deepseek/deepseek-v4-flash",
     "deepseek/deepseek-v3.2",
 )
-OPENROUTER_WORKERS = 48
+OPENROUTER_WORKERS = 96
 # The key comes from the launching shell's OPENROUTER_API_KEY and lives only for the run.
 openrouter = modal.Secret.from_dict(
     {"OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY", "")}
@@ -470,9 +472,11 @@ def _openrouter_sample(model, prompt, seed):
     secrets=[secret, openrouter],
     volumes={"/runs": runs_volume},
 )
-def evaluate_thinking_openrouter(model, deadline, folder, limit=0, unsolved=""):
-    """`TRACES` samples per trace problem from the hosted teacher `model`, graded and
-    written like `evaluate_thinking`'s traces."""
+def evaluate_thinking_openrouter(
+    model, deadline, folder, limit=0, unsolved="", pool="train", shard=0, shards=1
+):
+    """`TRACES` samples per trace problem of `pool` from the hosted teacher `model`,
+    graded and written like `evaluate_thinking`'s traces."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     if not os.environ.get("OPENROUTER_API_KEY"):
@@ -481,15 +485,18 @@ def evaluate_thinking_openrouter(model, deadline, folder, limit=0, unsolved=""):
 
     from evaluation.benchmarks import livecodebench
 
-    problems = _trace_problems(limit, 0, 1, unsolved)
+    if pool == "codecontests":
+        problems = _codecontests_problems(limit, shard, shards)
+    else:
+        problems = _trace_problems(limit, shard, shards, unsolved)
     started = time.time()
     jobs = [
         (model, livecodebench.instruction(p), TRACES["seed"] + n)
         for p in problems
         for n in range(TRACES["samples"])
     ]
-    with ThreadPoolExecutor(OPENROUTER_WORKERS) as pool:
-        flat = list(pool.map(lambda job: _openrouter_sample(*job), jobs))
+    with ThreadPoolExecutor(OPENROUTER_WORKERS) as workers:
+        flat = list(workers.map(lambda job: _openrouter_sample(*job), jobs))
     samples = [flat[i : i + TRACES["samples"]] for i in range(0, len(flat), TRACES["samples"])]
     return _write_thinking(
         f"openrouter/{model}",
@@ -497,13 +504,39 @@ def evaluate_thinking_openrouter(model, deadline, folder, limit=0, unsolved=""):
         {},
         folder,
         limit,
-        0,
-        1,
+        shard,
+        shards,
         problems,
         samples,
         started,
-        traces=True,
+        traces=pool,
     )
+
+
+def _codecontests_problems(limit, shard, shards):
+    """CodeContests trace problems (`contest_sft.codecontests_problems`) of the train and
+    validation files of the `chat-sft-codecontests-v1` recipe."""
+    from huggingface_hub import hf_hub_download
+    from pyarrow import parquet
+    from training_data import contest_sft
+
+    recipe = json.loads(
+        Path(contest_sft.__file__)
+        .with_name("recipes")
+        .joinpath("chat-sft-codecontests-v1.json")
+        .read_text()
+    )
+    rows = []
+    for name in recipe["files"]:
+        if "/test-" in name:
+            continue
+        path = hf_hub_download(
+            recipe["repo"], name, repo_type="dataset", revision=recipe["revision"]
+        )
+        rows += parquet.read_table(path).to_pylist()
+    problems = contest_sft.codecontests_problems(rows)
+    print(json.dumps({"codecontests_rows": len(rows), "trace_problems": len(problems)}))
+    return problems[: limit or None][shard::shards]
 
 
 def _solved(folder):
@@ -559,7 +592,7 @@ def _write_thinking(
     """Grade (text, tokens, finish reason) samples per problem and write the shard's result
     and completions; with `opened`, the prompt opened the reasoning span, so a completion
     that never closes it scores 0. With `traces`, the samples are teacher traces of the
-    trace problems, and each problem's shortest passing completion is written to
+    trace problems, and each problem's `TRACES_KEPT` shortest passing completions are written to
     `<name>.traces.jsonl` (the rows `contest_sft.teacher_traces` reads)."""
     from evaluation.benchmarks import livecodebench
 
@@ -584,7 +617,12 @@ def _write_thinking(
         "protocol": "traces" if traces else "thinking",
         "sampling": TRACES if traces else THINKING,
         "dataset": (
-            {"trace_problems": "contest_sft.trace_problems", "revision": DATASET_REVISION}
+            {
+                "trace_problems": "contest_sft.codecontests_problems"
+                if traces == "codecontests"
+                else "contest_sft.trace_problems",
+                "revision": DATASET_REVISION,
+            }
             if traces
             else {"repo": DATASET, "revision": DATASET_REVISION, "file": RELEASE_FILE}
         ),
@@ -622,7 +660,7 @@ def _write_thinking(
         with (folder_path / f"lcb-{name}.traces.jsonl").open("w") as handle:
             for problem, group, scores_ in zip(problems, samples, sample_scores, strict=True):
                 passing = [(tokens, text) for (text, tokens, _), s in zip(group, scores_) if s]
-                if passing:
+                for _, completion in sorted(passing)[:TRACES_KEPT]:
                     row = {
                         key: problem[key]
                         for key in ("question_id", "platform", "difficulty", "contest_date")
@@ -630,7 +668,7 @@ def _write_thinking(
                     row |= {
                         "question_content": problem["question_content"],
                         "starter_code": problem["starter_code"],
-                        "completion": min(passing)[1],
+                        "completion": completion,
                         "passing": len(passing),
                     }
                     handle.write(json.dumps(row) + "\n")
@@ -767,17 +805,24 @@ def main(
     on the trace problems (`TRACES`, `TRACE_SHARDS` calls); `--pool train --openrouter
     <ids>` samples hosted teachers (`OPENROUTER_TEACHERS`, with the launching shell's
     `OPENROUTER_API_KEY`) instead, and `--unsolved lcb-traces-<launch>` keeps only the
-    problems that launch never solved."""
+    problems that launch never solved. `--pool codecontests --openrouter <ids>` samples
+    them on the CodeContests trace problems, in `TRACE_SHARDS` calls per teacher."""
     if merge:
         print(json.dumps(merge_thinking.remote(merge), indent=1))
         return
     if protocol not in ("plain", "thinking"):
         raise ValueError("--protocol is plain or thinking")
-    if pool not in ("", "train") or pool and (protocol != "thinking" or checkpoints):
-        raise ValueError("--pool train samples reference models with --protocol thinking")
+    if (
+        pool not in ("", "train", "codecontests")
+        or pool
+        and (protocol != "thinking" or checkpoints)
+    ):
+        raise ValueError("--pool samples reference models with --protocol thinking")
     hosted = list(filter(None, openrouter.split(",")))
-    if hosted and (pool != "train" or references or set(hosted) - set(OPENROUTER_TEACHERS)):
-        raise ValueError(f"--openrouter takes {OPENROUTER_TEACHERS} with --pool train alone")
+    if hosted and (not pool or references or set(hosted) - set(OPENROUTER_TEACHERS)):
+        raise ValueError(f"--openrouter takes {OPENROUTER_TEACHERS} with --pool alone")
+    if pool == "codecontests" and not hosted:
+        raise ValueError("--pool codecontests goes with --openrouter")
     if unsolved and not hosted:
         raise ValueError("--unsolved goes with --openrouter")
     if hosted:
@@ -804,10 +849,15 @@ def main(
     tag = "-traces" if pool else "-thinking" if protocol == "thinking" else ""
     folder = f"lcb{tag}-{int(time.time())}{'-limit' if limit else ''}"
     if hosted:
+        shards = TRACE_SHARDS if pool == "codecontests" else 1
         calls = [
-            evaluate_thinking_openrouter.spawn(m, deadline, folder, limit, unsolved)
+            evaluate_thinking_openrouter.spawn(
+                m, deadline, folder, limit, unsolved, pool, shard, shards
+            )
             for m, _ in chosen
+            for shard in range(shards)
         ]
+        chosen = [(f"{m}#{shard}", None) for m, _ in chosen for shard in range(shards)]
     elif protocol == "thinking":
         calls, names = [], []
         for m, r in chosen:

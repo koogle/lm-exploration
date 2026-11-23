@@ -374,7 +374,7 @@ def build_contest(problems, traces, contaminated, check, output, difficulties, h
     """Write a pool of contest rows (`contest_row`) to `output` (`pool.jsonl`, `report.json`).
 
     `problems` are `contest_sft.trace_problems`; `traces` the teacher's trace rows
-    (`question_id`, `completion`: its shortest passing completion). A problem is kept if
+    (`question_id`, `completion`: passing completions, a problem's shortest first). A problem is kept if
     it is of `difficulties`, `contaminated(statement)` is false, it has a teacher trace,
     and the trace's final program passes the row's cases in the sandbox (`check`: the
     code sandbox's `run`), so every kept row is solvable under the reward's grader."""
@@ -384,7 +384,7 @@ def build_contest(problems, traces, contaminated, check, output, difficulties, h
         final = livecodebench.final_answer(trace["completion"].lstrip())
         blocks = final and CODE_BLOCK.findall(livecodebench.last_block(final))
         if blocks:
-            programs[trace["question_id"]] = blocks[0]
+            programs.setdefault(trace["question_id"], blocks[0])
     counts = {"problems": len(problems), "difficulty": 0, "contaminated": 0, "no_trace": 0}
     candidates = []
     for problem in problems:
