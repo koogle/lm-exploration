@@ -486,7 +486,7 @@ def evaluate_thinking_openrouter(
     from evaluation.benchmarks import livecodebench
 
     if pool == "codecontests":
-        problems = _codecontests_problems(limit, shard, shards)
+        problems = _codecontests_problems(limit, shard, shards, unsolved)
     else:
         problems = _trace_problems(limit, shard, shards, unsolved)
     started = time.time()
@@ -513,9 +513,10 @@ def evaluate_thinking_openrouter(
     )
 
 
-def _codecontests_problems(limit, shard, shards):
+def _codecontests_problems(limit, shard, shards, attempted=""):
     """CodeContests trace problems (`contest_sft.codecontests_problems`) of the train and
-    validation files of the `chat-sft-codecontests-v1` recipe."""
+    validation files of the `chat-sft-codecontests-v1` recipe; with `attempted`, only
+    those the earlier trace launch of that name did not sample."""
     from huggingface_hub import hf_hub_download
     from pyarrow import parquet
     from training_data import contest_sft
@@ -535,18 +536,22 @@ def _codecontests_problems(limit, shard, shards):
         )
         rows += parquet.read_table(path).to_pylist()
     problems = contest_sft.codecontests_problems(rows)
+    if attempted:
+        done = _solved(attempted, -1.0)
+        problems = [p for p in problems if p["question_id"] not in done]
     print(json.dumps({"codecontests_rows": len(rows), "trace_problems": len(problems)}))
     return problems[: limit or None][shard::shards]
 
 
-def _solved(folder):
-    """Question ids with a passing sample in the trace launch `folder`."""
+def _solved(folder, least=0.0):
+    """Question ids with a score above `least` in the trace launch `folder` (a passing
+    sample by default; every attempted problem with `least` below 0)."""
     runs_volume.reload()
     return {
         row["question_id"]
         for part in Path("/runs/benchmarks", folder).glob("lcb-*.shard-*.json")
         for row in json.loads(part.read_text())["problems"]
-        if row["score"] > 0
+        if row["score"] > least
     }
 
 
@@ -805,7 +810,7 @@ def main(
     on the trace problems (`TRACES`, `TRACE_SHARDS` calls); `--pool train --openrouter
     <ids>` samples hosted teachers (`OPENROUTER_TEACHERS`, with the launching shell's
     `OPENROUTER_API_KEY`) instead, and `--unsolved lcb-traces-<launch>` keeps only the
-    problems that launch never solved. `--pool codecontests --openrouter <ids>` samples
+    problems that launch never solved (with `--pool codecontests`: never sampled). `--pool codecontests --openrouter <ids>` samples
     them on the CodeContests trace problems, in `TRACE_SHARDS` calls per teacher."""
     if merge:
         print(json.dumps(merge_thinking.remote(merge), indent=1))
