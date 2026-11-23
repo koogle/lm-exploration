@@ -666,16 +666,7 @@ def _write_thinking(
             for problem, group, scores_ in zip(problems, samples, sample_scores, strict=True):
                 passing = [(tokens, text) for (text, tokens, _), s in zip(group, scores_) if s]
                 for _, completion in sorted(passing)[:TRACES_KEPT]:
-                    row = {
-                        key: problem[key]
-                        for key in ("question_id", "platform", "difficulty", "contest_date")
-                    }
-                    row |= {
-                        "question_content": problem["question_content"],
-                        "starter_code": problem["starter_code"],
-                        "completion": completion,
-                        "passing": len(passing),
-                    }
+                    row = _trace_row(problem, completion, len(passing))
                     handle.write(json.dumps(row) + "\n")
     runs_volume.commit()
     return out["summary"]
@@ -774,6 +765,83 @@ def merge_thinking(folder):
     return merged
 
 
+TRACES_REPO = "jfrick/lcb-teacher-traces"
+
+
+def _trace_row(problem, completion, passing):
+    row = {key: problem[key] for key in ("question_id", "platform", "difficulty", "contest_date")}
+    return row | {
+        "question_content": problem["question_content"],
+        "starter_code": problem["starter_code"],
+        "completion": completion,
+        "passing": passing,
+    }
+
+
+@app.function(
+    image=image,
+    cpu=4,
+    memory=32768,
+    timeout=3600,
+    retries=0,
+    secrets=[secret],
+    volumes={"/runs": runs_volume},
+)
+def publish_traces(folder, name, retrace=False):
+    """Upload the trace launch `folder`'s `*.traces.jsonl` and shard results to
+    `TRACES_REPO` under `name/`; the commit to pin in a recipe. With `retrace`, first
+    rewrite each shard's traces from its saved completions and scores, keeping
+    `TRACES_KEPT` passing completions per problem (shortest text first)."""
+    from huggingface_hub import HfApi
+
+    folder_path = Path("/runs/benchmarks", folder)
+    if retrace:
+        problems = {p["question_id"]: p for p in _trace_problems(0, 0, 1)}
+        for part in sorted(folder_path.glob("lcb-*.shard-*-of-*.json")):
+            scores = {
+                row["question_id"]: row["sample_scores"]
+                for row in json.loads(part.read_text())["problems"]
+            }
+            stem = part.name.removesuffix(".json")
+            with (folder_path / f"{stem}.traces.jsonl").open("w") as handle:
+                for line in (folder_path / f"{stem}.completions.jsonl").read_text().split("\n"):
+                    if not line:
+                        continue
+                    row = json.loads(line)
+                    passing = sorted(
+                        (len(text), text)
+                        for text, score in zip(
+                            row["completions"], scores[row["question_id"]], strict=True
+                        )
+                        if score
+                    )
+                    for _, completion in passing[:TRACES_KEPT]:
+                        trace = _trace_row(problems[row["question_id"]], completion, len(passing))
+                        handle.write(json.dumps(trace) + "\n")
+        runs_volume.commit()
+    files = sorted(
+        path
+        for path in folder_path.glob("lcb-*")
+        if path.name.endswith(".traces.jsonl") or path.suffix == ".json"
+    )
+    commit = HfApi().upload_folder(
+        repo_id=TRACES_REPO,
+        repo_type="dataset",
+        folder_path=folder_path,
+        path_in_repo=name,
+        allow_patterns=[path.name for path in files],
+        commit_message=f"Teacher traces {name} from {folder}",
+    )
+    rows = sum(
+        1
+        for path in files
+        if path.name.endswith(".traces.jsonl")
+        for line in path.read_text().split("\n")
+        if line
+    )
+    return {"repo": TRACES_REPO, "folder": name, "revision": commit.oid, "traces": rows}
+
+
 def _thinking_launch(checkpoints, references):
     """(model or checkpoint:<path>, revision) to score with thinking."""
     chosen = [(f"checkpoint:{name}", None) for name in filter(None, checkpoints.split(","))]
@@ -802,6 +870,9 @@ def main(
     pool: str = "",
     openrouter: str = "",
     unsolved: str = "",
+    publish: str = "",
+    publish_as: str = "",
+    retrace: bool = False,
 ):
     """Spawn one call per checkpoint (comma-separated `--checkpoints`) and reference model
     (comma-separated `--references`, or `all`); calls outlive this client. `--merge
@@ -811,9 +882,16 @@ def main(
     <ids>` samples hosted teachers (`OPENROUTER_TEACHERS`, with the launching shell's
     `OPENROUTER_API_KEY`) instead, and `--unsolved lcb-traces-<launch>` keeps only the
     problems that launch never solved (with `--pool codecontests`: never sampled). `--pool codecontests --openrouter <ids>` samples
-    them on the CodeContests trace problems, in `TRACE_SHARDS` calls per teacher."""
+    them on the CodeContests trace problems, in `TRACE_SHARDS` calls per teacher.
+    `--publish lcb-traces-<launch> --publish-as <folder>` uploads a finished trace launch to
+    `TRACES_REPO` (`--retrace` first rebuilds its traces from the saved completions)."""
     if merge:
         print(json.dumps(merge_thinking.remote(merge), indent=1))
+        return
+    if publish:
+        if not publish_as:
+            raise ValueError("--publish <trace launch> takes --publish-as <traces repo folder>")
+        print(json.dumps(publish_traces.remote(publish, publish_as, retrace), indent=1))
         return
     if protocol not in ("plain", "thinking"):
         raise ValueError("--protocol is plain or thinking")
