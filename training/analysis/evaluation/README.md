@@ -106,5 +106,9 @@ repeated at least three times) among all and among truncated samples. With
 `--checkpoints`, a checkpoint whose family has a thinking prompt (hybrid: the GLM
 chat turn ending `<|assistant|><think>`) samples the same way with its family's
 sampler, on eight H100 calls, up to 32,768 new tokens or what its context leaves.
+`--suite humaneval` or `--suite mbpp` runs the same protocol on that benchmark's test
+problems as chat problems (`benchmarks/function_problems.py`): HumanEval gives the
+function's signature and docstring as starter code, MBPP states the task with its test
+assertions, and an answer passes when the benchmark's own checks run cleanly after it.
 
 Findings: [hybrid 720M plan](../../plans/HYBRID_720M.md#livecodebench-v6).

@@ -36,7 +36,9 @@ writes the combined `lcb-<model>.json`. Checkpoints (`--checkpoints`) get the
 instruction as their family's user turn with the reasoning span opened
 (`prompt_ids(..., thinking=True)`) and sample with the family's own sampler, as
 `CHECKPOINT_THINKING_SHARDS` calls each, with up to what the context leaves after the
-prompt when that is under `THINKING["max_new_tokens"]`.
+prompt when that is under `THINKING["max_new_tokens"]`. `--suite humaneval` or `--suite
+mbpp` runs the same protocol on that benchmark's test problems as chat problems
+(`function_problems`), written to `lcb-thinking-<launch>-<suite>/`.
 """
 
 import json
@@ -49,7 +51,7 @@ from model_hybrid import modal_benchmarks
 from model_hybrid.image import LAUNCH_LIMIT_SECONDS
 from model_hybrid.modal_benchmarks import REFERENCES, enforce_deadline, image, runs_volume, secret
 
-from evaluation.benchmarks import livecodebench
+from evaluation.benchmarks import function_problems, livecodebench
 from workflows.images import add_project, vllm_base
 
 app = modal.App("lm-exploration-livecodebench")
@@ -275,7 +277,9 @@ def evaluate_lcb(model, revision, deadline, folder, limit=0):
     secrets=[secret],
     volumes={"/runs": runs_volume, "/hf": hf_cache},
 )
-def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shards=1, pool=""):
+def evaluate_thinking(
+    model, revision, deadline, folder, limit=0, shard=0, shards=1, pool="", suite=""
+):
     """`THINKING["samples"]` reasoning samples per problem from a reference model, for
     every `shards`-th problem from `shard` on; with `pool` "train", `TRACES` samples of
     the trace problems instead, and the passing traces are written too."""
@@ -290,7 +294,11 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
     # MobileLLM-R1.5 is a text-only Llama 4; its card registers the class this way.
     ModelRegistry.register_model("Llama4ForCausalLM", Llama4ForCausalLM)
     _, positions, system = THINKING_REFERENCES[model]
-    problems = (_trace_problems if pool else _thinking_problems)(limit, shard, shards)
+    problems = (
+        _trace_problems(limit, shard, shards)
+        if pool
+        else _thinking_problems(limit, shard, shards, suite)
+    )
     sampling = TRACES if pool else THINKING
     started = time.time()
     llm = LLM(
@@ -336,6 +344,7 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
         samples,
         started,
         traces=bool(pool),
+        suite=suite,
     )
 
 
@@ -349,7 +358,7 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
     secrets=[secret],
     volumes={"/runs": runs_volume, "/training": training_volume},
 )
-def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shards=1):
+def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shards=1, suite=""):
     """`THINKING["samples"]` reasoning samples per problem from a checkpoint whose family
     has a thinking prompt (`prompt_ids(..., thinking=True)`), for every `shards`-th
     problem from `shard` on; up to `THINKING["max_new_tokens"]` new tokens, or what the
@@ -361,7 +370,7 @@ def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shard
     from evaluation.benchmarks import livecodebench
     from trainer import checkpoints
 
-    problems = _thinking_problems(limit, shard, shards)
+    problems = _thinking_problems(limit, shard, shards, suite)
     started = time.time()
     saved, description, family = checkpoints.parent(checkpoint_path(name))
     model = family.build(description.model_config).cuda()
@@ -414,14 +423,18 @@ def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shard
         samples,
         started,
         opened=True,
+        suite=suite,
     )
 
 
-def _thinking_problems(limit, shard, shards):
+def _thinking_problems(limit, shard, shards, suite=""):
+    """One shard of the LiveCodeBench release, or of `suite` (`function_problems.SUITES`)."""
     from huggingface_hub import hf_hub_download
 
-    from evaluation.benchmarks import livecodebench
+    from evaluation.benchmarks import function_problems, livecodebench
 
+    if suite:
+        return function_problems.load(suite)[: limit or None][shard::shards]
     path = hf_hub_download(DATASET, RELEASE_FILE, repo_type="dataset", revision=DATASET_REVISION)
     return livecodebench.load(path)[: limit or None][shard::shards]
 
@@ -593,13 +606,14 @@ def _write_thinking(
     started,
     opened=False,
     traces=False,
+    suite="",
 ):
     """Grade (text, tokens, finish reason) samples per problem and write the shard's result
     and completions; with `opened`, the prompt opened the reasoning span, so a completion
     that never closes it scores 0. With `traces`, the samples are teacher traces of the
     trace problems, and each problem's `TRACES_KEPT` shortest passing completions are written to
     `<name>.traces.jsonl` (the rows `contest_sft.teacher_traces` reads)."""
-    from evaluation.benchmarks import livecodebench
+    from evaluation.benchmarks import function_problems, livecodebench
 
     generation_seconds = round(time.time() - started, 1)
     flat_problems = [p for p, group in zip(problems, samples, strict=True) for _ in group]
@@ -629,6 +643,8 @@ def _write_thinking(
                 "revision": DATASET_REVISION,
             }
             if traces
+            else dict(zip(("repo", "revision", "file"), function_problems.SUITES[suite]))
+            if suite
             else {"repo": DATASET, "revision": DATASET_REVISION, "file": RELEASE_FILE}
         ),
         "limit": limit or None,
@@ -885,6 +901,7 @@ def main(
     publish: str = "",
     publish_as: str = "",
     retrace: bool = False,
+    suite: str = "",
 ):
     """Spawn one call per checkpoint (comma-separated `--checkpoints`) and reference model
     (comma-separated `--references`, or `all`); calls outlive this client. `--merge
@@ -896,7 +913,9 @@ def main(
     problems that launch never solved (with `--pool codecontests`: never sampled). `--pool codecontests --openrouter <ids>` samples
     them on the CodeContests trace problems, in `TRACE_SHARDS` calls per teacher.
     `--publish lcb-traces-<launch> --publish-as <folder>` uploads a finished trace launch to
-    `TRACES_REPO` (`--retrace` first rebuilds its traces from the saved completions)."""
+    `TRACES_REPO` (`--retrace` first rebuilds its traces from the saved completions).
+    `--protocol thinking --suite humaneval|mbpp` scores that benchmark instead of
+    LiveCodeBench."""
     if merge:
         print(json.dumps(merge_thinking.remote(merge), indent=1))
         return
@@ -907,6 +926,8 @@ def main(
         return
     if protocol not in ("plain", "thinking"):
         raise ValueError("--protocol is plain or thinking")
+    if suite and (suite not in function_problems.SUITES or protocol != "thinking" or pool):
+        raise ValueError(f"--suite is one of {sorted(function_problems.SUITES)}, with thinking")
     if (
         pool not in ("", "train", "codecontests")
         or pool
@@ -943,6 +964,7 @@ def main(
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     tag = "-traces" if pool else "-thinking" if protocol == "thinking" else ""
     folder = f"lcb{tag}-{int(time.time())}{'-limit' if limit else ''}"
+    folder += f"-{suite}" if suite else ""
     if hosted:
         shards = TRACE_SHARDS if pool == "codecontests" else 1
         calls = [
@@ -967,11 +989,11 @@ def main(
             for shard in range(shards):
                 if checkpoint:
                     call = evaluate_thinking_checkpoint.spawn(
-                        m.split(":", 1)[1], deadline, folder, limit, shard, shards
+                        m.split(":", 1)[1], deadline, folder, limit, shard, shards, suite
                     )
                 else:
                     call = evaluate_thinking.spawn(
-                        m, r, deadline, folder, limit, shard, shards, pool
+                        m, r, deadline, folder, limit, shard, shards, pool, suite
                     )
                 calls.append(call)
                 names.append((f"{m}#{shard}", r))

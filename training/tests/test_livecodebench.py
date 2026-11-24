@@ -1,4 +1,4 @@
-"""LiveCodeBench grading: private-test decoding, code extraction and both test modes."""
+"""LiveCodeBench grading: private-test decoding, code extraction and the test modes."""
 
 import base64
 import json
@@ -6,7 +6,7 @@ import pickle
 import unittest
 import zlib
 
-from evaluation.benchmarks import livecodebench
+from evaluation.benchmarks import function_problems, livecodebench
 
 STDIN = {
     "starter_code": "",
@@ -63,6 +63,34 @@ class LiveCodeBenchTests(unittest.TestCase):
         wrong = right.replace("n + k", "n")
         self.assertEqual(livecodebench.grade(FUNCTIONAL, fenced(right)), 1.0)
         self.assertEqual(livecodebench.grade(FUNCTIONAL, fenced(wrong)), 0.0)
+
+    def test_check_problems_run_their_check_program_after_the_answer(self):
+        humaneval = function_problems.humaneval(
+            {
+                "task_id": "HumanEval/0",
+                "prompt": 'import math\n\ndef root(x):\n    """The square root of x."""\n',
+                "test": "def check(candidate):\n    assert candidate(9) == 3",
+                "entry_point": "root",
+            }
+        )
+        whole = "def root(x):\n    return math.sqrt(x)"
+        self.assertEqual(livecodebench.grade(humaneval, fenced(whole)), 1.0)
+        self.assertEqual(livecodebench.grade(humaneval, fenced("    return math.sqrt(x)")), 1.0)
+        self.assertEqual(livecodebench.grade(humaneval, fenced("def root(x):\n    return x")), 0.0)
+        self.assertIn("def root(x):", livecodebench.instruction(humaneval))
+        mbpp = function_problems.mbpp(
+            {
+                "task_id": 11,
+                "text": "Write a function to add two numbers.",
+                "test_list": ["assert add(2, 3) == 5", "assert add(1, 1) == 2"],
+                "test_setup_code": "",
+            }
+        )
+        right = "def add(a, b):\n    return a + b"
+        self.assertEqual(livecodebench.grade(mbpp, fenced(right)), 1.0)
+        self.assertEqual(livecodebench.grade(mbpp, fenced(right.replace("+", "*"))), 0.0)
+        self.assertIn("assert add(2, 3) == 5", livecodebench.instruction(mbpp))
+        self.assertIn(livecodebench.FUNCTION_FORMAT, livecodebench.instruction(mbpp))
 
     def test_prompts_carry_the_question_and_its_format(self):
         problem = {"question_content": "Add two numbers.", "starter_code": ""}
