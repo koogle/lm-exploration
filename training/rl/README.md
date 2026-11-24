@@ -385,6 +385,12 @@ uv run --all-extras modal run -m modal_scripts.modal_sft_data::contest_pool \
   --data-id rl-pool-contest-03 --difficulties medium,hard
 uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --workflow workflows/kda-960m-contest-rl-hard.json --run-id ID
+# Contest and function problems in one pool, then RL continuing the v5 contest run on it:
+uv run --all-extras modal run -m modal_scripts.modal_sft_data::mixed_pool \
+  --data-id rl-pool-contest-functions-01 --contest rl-pool-contest-02 \
+  --functions rl-pool-hybrid-04 --count 900
+uv run --all-extras modal run --detach -m workflows.modal_train::main \
+  --workflow workflows/kda-960m-contest-functions-rl.json --run-id ID
 # Off-policy trajectories from the Qwen teacher's saved code answers:
 uv run --all-extras modal run -m modal_scripts.modal_teacher::trajectories \
   --teacher code-teacher-qwen35-02 --data-id <fresh-id> [--limit N]

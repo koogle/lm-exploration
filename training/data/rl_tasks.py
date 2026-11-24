@@ -18,7 +18,9 @@ Contest rows (`contest_row`: LiveCodeBench and LeetCodeDataset problems with
 input/output cases, test style `contest`) carry LiveCodeBench's own instruction
 (`livecodebench.instruction`) as the prompt and the `thinking` answer format: the family
 opens a reasoning span, and the answer is the last Python block after the reasoning
-closes, as the harness's thinking protocol reads it.
+closes, as the harness's thinking protocol reads it. A mixed pool (`build_mixed`) adds
+function problems to contest rows in the same instruction and answer format
+(`function_row`), so one model trains on programs and on plain functions.
 
 Code is correct if every test passes in the code sandbox (`training_data.sandbox`). A
 completion that does not end in one of its family's stop tokens within the token limit,
@@ -195,6 +197,50 @@ def contest_row(problem, heldout_fraction):
         "prompt": livecodebench.instruction(question),
         "answer_format": "thinking",
     }
+
+
+def function_row(row):
+    """A function problem (a code row with a `declaration`) in LiveCodeBench's instruction
+    with the `thinking` answer format. A hash-selected half give the declaration as
+    starter code; the others name the function after the question."""
+    declaration = row["declaration"]
+    if is_heldout(row["question"], 0.5):
+        problem = {"question_content": row["question"].strip(), "starter_code": declaration}
+    else:
+        name = declaration.partition(" ")[2].removesuffix(":")
+        problem = {
+            "question_content": f"{row['question'].strip()}\n\nName it `{name}`.",
+            "starter_code": "",
+            "check": True,
+        }
+    return {**row, "prompt": livecodebench.instruction(problem), "answer_format": "thinking"}
+
+
+def build_mixed(contest, functions, count, output):
+    """Write a pool of every row of `contest` (a contest pool's rows) and `count` function
+    problems of `functions` (another pool's rows: its code rows with a declaration, in
+    the order of their IDs' hashes) as `function_row`s, each keeping its split."""
+    output = Path(output)
+    candidates = sorted(
+        (r for r in functions if r["task"] == "code" and r.get("declaration")),
+        key=lambda r: hashlib.sha256(r["id"].encode()).hexdigest(),
+    )
+    rows = list(contest) + [function_row(r) for r in candidates[:count]]
+    kept = {}
+    for row in rows:
+        key = f"{row['split']}/{row.get('test_style', 'functions')}"
+        kept[key] = kept.get(key, 0) + 1
+    output.mkdir(parents=True, exist_ok=False)
+    path = output / "pool.jsonl"
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    report = {
+        "format": FORMAT,
+        "pool_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "prompt_style": "contest and functions",
+        "kept": dict(sorted(kept.items())),
+    }
+    (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    return report
 
 
 def is_heldout(text, fraction):
