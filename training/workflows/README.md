@@ -186,5 +186,7 @@ export, then RL from it. `kda-960m-contest-rl.json` runs RL of the 960M reasonin
 contest problems in LiveCodeBench's thinking prompt, and `kda-960m-contest-rl-hard.json`
 continues it on medium and hard problems with 16K-token answers ([RL guide](../rl/README.md));
 `kda-960m-contest-rl-v4.json` runs 100 steps of the same RL from reasoning SFT v4;
+`kda-960m-contest-rl-v5.json` runs 1,000 steps from reasoning SFT v5 and keeps a checkpoint
+every 50 steps for evaluation;
 `kda-960m-distill.json` distills GLM-4.7-Flash into it on its own sampled answers
 ([on-policy distillation](../rl/README.md#on-policy-distillation)).

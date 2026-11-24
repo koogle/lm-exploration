@@ -1,0 +1,46 @@
+{
+  "name": "kda-960m-contest-rl-v5",
+  "description": "RL of the 960M KDA hybrid's reasoning SFT v5 on contest problems in the thinking prompt, with the settings of kda-960m-contest-rl: 1,000 steps with a checkpoint every 50 for LiveCodeBench evaluations along the way",
+  "family": "hybrid",
+  "from": "kda-960m-reasoning-sft-v5-20261123-01-reasoning-s00/step-000004660.pt",
+  "stages": [
+    {
+      "stage": "rl",
+      "name": "rl",
+      "description": "Contest problems (rl-pool-contest-02), 1,000 steps",
+      "pool": "rl-pool-contest-02",
+      "gpus": 8,
+      "settings": {
+        "steps": 1000,
+        "algorithm": {
+          "name": "on_policy/grpo"
+        },
+        "rollouts": {
+          "prompts_per_step": 64,
+          "samples_per_prompt": 8,
+          "math_share": 0.0,
+          "code_tokens": 8192,
+          "prompt_tokens": 2048,
+          "temperature": 1.0,
+          "unfinished_reward": -0.5
+        },
+        "optimizer": {
+          "muon": true,
+          "muon_lr": 0.0001,
+          "lr": 1.5e-06,
+          "betas": [
+            0.9,
+            0.95
+          ],
+          "weight_decay": 0.0,
+          "warmup_steps": 10
+        },
+        "micro_batch": 2,
+        "evaluate_every": 25,
+        "save_every": 50,
+        "keep_checkpoints": 0,
+        "hf_repo": "jfrick/malama-contest-rl"
+      }
+    }
+  ]
+}
