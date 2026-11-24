@@ -1,17 +1,17 @@
 {
   "name": "kda-960m-contest-rl-v5",
-  "description": "RL of the 960M KDA hybrid's reasoning SFT v5 on contest problems in the thinking prompt, with the settings of kda-960m-contest-rl: 2,000 steps with a checkpoint every 50 for LiveCodeBench evaluations along the way",
+  "description": "RL of the 960M KDA hybrid's reasoning SFT v5 on contest problems in the thinking prompt, with the settings of kda-960m-contest-rl: 1,000 steps with a checkpoint every 50 for LiveCodeBench evaluations along the way",
   "family": "hybrid",
   "from": "kda-960m-reasoning-sft-v5-20261123-01-reasoning-s00/step-000004660.pt",
   "stages": [
     {
       "stage": "rl",
       "name": "rl",
-      "description": "Contest problems (rl-pool-contest-02), 2,000 steps",
+      "description": "Contest problems (rl-pool-contest-02), 1,000 steps",
       "pool": "rl-pool-contest-02",
       "gpus": 8,
       "settings": {
-        "steps": 2000,
+        "steps": 1000,
         "algorithm": {
           "name": "on_policy/grpo"
         },
