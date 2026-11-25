@@ -541,6 +541,22 @@ results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
 uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
 ```
 
+`--suite perplexity` scores text instead: the harness's WikiText-2 task and, with `--text`,
+a JSONL file of documents on the runs volume ([`perplexity_tasks.py`](perplexity_tasks.py)),
+as word perplexity and bits per byte, for the export, the reference models above,
+MobileLLM-R1-950M-base and Qwen3-1.7B/4B-Base.
+[`fresh_text.py`](../analysis/evaluation/fresh_text.py) writes such a file from arXiv
+abstracts submitted in a date range, text newer than every model's training data:
+
+```sh
+uv run python -m analysis.evaluation.fresh_text --since 2026-11-16 --until 2026-11-24 \
+  --output artifacts/evaluation/arxiv-2026-11-16.jsonl
+uv run --all-extras modal volume put lm-exploration-hybrid-runs \
+  artifacts/evaluation/arxiv-2026-11-16.jsonl benchmarks/texts/arxiv-2026-11-16.jsonl
+uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks --suite perplexity \
+  --text benchmarks/texts/arxiv-2026-11-16.jsonl --exports RUN/tokens-N
+```
+
 LiveCodeBench, for checkpoints of any family:
 [`analysis/evaluation`](../analysis/evaluation/README.md#livecodebench).
 

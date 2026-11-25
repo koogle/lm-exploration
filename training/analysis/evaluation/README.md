@@ -10,6 +10,7 @@ by hand in the owning study's docs. uv installs this folder as `evaluation`.
 | `benchmarks/` | One module per benchmark: its prompt format and `score` |
 | `scoring.py` | The scored model interface of a checkpoint (loaded by [`trainer/checkpoints.py`](../../trainer/checkpoints.py) with its run's verified model code), log-likelihood batching, greedy generation, answer checking, bits per byte |
 | `heldout.py` | Validation windows of a raw snapshot |
+| `fresh_text.py` | Recent arXiv abstracts as a JSONL text file for the [perplexity suite](../../hybrid/README.md) |
 | `modal_evaluate.py` | Modal launcher: one H100, 3-hour timeout, no retries; a code sandbox for code benchmarks |
 | `benchmarks/livecodebench.py`, `modal_livecodebench.py` | LiveCodeBench v6 for checkpoints of any family and reference models ([below](#livecodebench)) |
 

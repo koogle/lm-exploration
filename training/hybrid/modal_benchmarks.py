@@ -2,12 +2,17 @@
 
 Run from training/:
     modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-A,tokens-B] [--models M,...]
-        [--suite standard|code]
+        [--suite standard|code|perplexity] [--text benchmarks/texts/NAME.jsonl]
 
 `--suite code` runs HumanEval (as shipped and with stripped prompts, `fim_tasks.py`), MBPP and HumanEval-Infilling (single- and multi-line) in
 each model's own fill-in-the-middle format (`fim_tasks.py`) for the hybrid exports
 (GLM code tokens) and the code reference models; a reference model without infilling
 tokens (MobileLLM-R1) runs HumanEval and MBPP only.
+
+`--suite perplexity` scores text without generating: the harness's `wikitext` task and,
+with `--text`, a JSONL file of documents on the runs volume (`perplexity_tasks.py`), as
+word perplexity and bits per byte, for the hybrid exports, the reference models and
+`PERPLEXITY_REFERENCES`.
 
 One H100 call per model, in parallel: the hybrid export through `benchmarks.py`
 and each reference model through the harness's Hugging Face backend, all with the
@@ -88,6 +93,24 @@ REFERENCES = {
 }
 
 
+# Larger dense Qwen base models, beyond the shared benchmark references.
+LARGER_QWEN = {
+    "Qwen/Qwen3-1.7B-Base": "ea980cb0a6c2ae4b936e82123acc929f1cec04c1",
+    "Qwen/Qwen3-4B-Base": "906bfd4b4dc7f14ee4320094d8b41684abff8539",
+    "Qwen/Qwen3-8B-Base": "49e3418fbbbca6ecbdf9608b4d22e5a407081db4",
+    "Qwen/Qwen3-14B-Base": "0b0bd3732e2c374d483664439ea334928b65f304",
+    "Qwen/Qwen3.5-2B-Base": "b1485b2fa6dfa1287294f269f5fb618e03d52d7c",
+    "Qwen/Qwen3.5-4B-Base": "1001bb4d826a52d1f399e183466143f4da7b741b",
+    "Qwen/Qwen3.5-9B-Base": "68c46c4b3498877f3ef123c856ecfde50c39f404",
+}
+# Base models scored by `--suite perplexity` besides `REFERENCES`.
+PERPLEXITY_REFERENCES = {
+    "facebook/MobileLLM-R1-950M-base": CODE_REFERENCES["facebook/MobileLLM-R1-950M-base"][0],
+    "Qwen/Qwen3-1.7B-Base": LARGER_QWEN["Qwen/Qwen3-1.7B-Base"],
+    "Qwen/Qwen3-4B-Base": LARGER_QWEN["Qwen/Qwen3-4B-Base"],
+}
+
+
 def _summary(results):
     """Task -> "metric,filter" -> value, without the harness's stderr and alias entries."""
     return {
@@ -110,9 +133,13 @@ def _summary(results):
     secrets=[secret],
     volumes={"/runs": runs_volume},
 )
-def evaluate(model, revision, deadline, folder, limit=0, fim_format=None, part="", code=False):
+def evaluate(
+    model, revision, deadline, folder, limit=0, fim_format=None, part="", code=False,
+    perplexity=False, text="",
+):  # fmt: skip
     """Every suite for one model; with `code`, the code suite (infilling in `fim_format`,
-    none without one), or only its `part` (one of `CODE_PARTS`)."""
+    none without one), or only its `part` (one of `CODE_PARTS`); with `perplexity`,
+    `wikitext` and the documents of `text` (a JSONL path on the runs volume)."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     import lm_eval
@@ -149,6 +176,11 @@ def evaluate(model, revision, deadline, folder, limit=0, fim_format=None, part="
         suites = parts[part] if part else suites
         out["part"] = part or None
         out["fim_format"] = fim_format
+    if perplexity:
+        from model_hybrid.perplexity_tasks import text_config
+
+        suites = ((["wikitext", *([text_config(f"/runs/{text}")] if text else [])], 0),)
+        out["text"] = text or None
     samples = []
     for tasks, shots in suites:
         started = time.time()
@@ -162,9 +194,10 @@ def evaluate(model, revision, deadline, folder, limit=0, fim_format=None, part="
             numpy_random_seed=1234,
             torch_random_seed=1234,
             fewshot_random_seed=1234,
-            log_samples=True,
+            # A scored document has no prompt or response to keep.
+            log_samples=not perplexity,
         )
-        for task, rows in results.pop("samples").items():
+        for task, rows in results.pop("samples", {}).items():
             for row in rows:
                 samples.append(
                     {
@@ -219,6 +252,7 @@ def main(
     models: str = "",
     suite: str = "standard",
     split: str = "",
+    text: str = "",
 ):
     """Spawn one evaluation per model; results land on the runs volume as each finishes.
 
@@ -230,8 +264,10 @@ def main(
     writing `<model>.<part>.json`, for a model that needs more than one call's time;
     `--split multi_line` (comma-separated part names) runs only those parts.
     """
-    if suite not in ("standard", "code"):
-        raise ValueError("--suite is standard or code")
+    if suite not in ("standard", "code", "perplexity"):
+        raise ValueError("--suite is standard, code or perplexity")
+    if text and (suite != "perplexity" or ".." in Path(text).parts):
+        raise ValueError("--text is a path under the runs volume, for --suite perplexity")
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     hybrid = "glm" if suite == "code" else None
     chosen = [(f"hybrid:{e}", None, hybrid) for e in exports.split(",")]
@@ -239,6 +275,8 @@ def main(
         chosen += [(m, r, f) for m, (r, f) in CODE_REFERENCES.items()]
     else:
         chosen += [(m, r, None) for m, r in REFERENCES.items()]
+    if suite == "perplexity":
+        chosen += [(m, r, None) for m, r in PERPLEXITY_REFERENCES.items()]
     if models:
         wanted = set(models.split(","))
         chosen = [c for c in chosen if c[0] in wanted or (c[1] is None and "hybrid" in wanted)]
@@ -257,7 +295,11 @@ def main(
         if f or suite != "code" or part in ("", "left_to_right")
     ]
     code = suite == "code"
-    calls = [evaluate.spawn(m, r, deadline, run_folder, limit, f, p, code) for m, r, f, p in chosen]
+    perplexity = suite == "perplexity"
+    calls = [
+        evaluate.spawn(m, r, deadline, run_folder, limit, f, p, code, perplexity, text)
+        for m, r, f, p in chosen
+    ]
     supervisor = enforce_deadline.spawn([c.object_id for c in calls], deadline)
     print(
         json.dumps(
