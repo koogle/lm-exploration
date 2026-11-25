@@ -387,8 +387,8 @@ uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --workflow workflows/kda-960m-contest-rl-hard.json --run-id ID
 # Contest and function problems in one pool, then RL continuing the v5 contest run on it:
 uv run --all-extras modal run -m modal_scripts.modal_sft_data::mixed_pool \
-  --data-id rl-pool-contest-functions-01 --contest rl-pool-contest-02 \
-  --functions rl-pool-hybrid-04 --count 900
+  --data-id rl-pool-contest-functions-02 --contest rl-pool-contest-02 \
+  --functions rl-pool-hybrid-04 --count 900 --mbpp
 uv run --all-extras modal run --detach -m workflows.modal_train::main \
   --workflow workflows/kda-960m-contest-functions-rl.json --run-id ID
 # Off-policy trajectories from the Qwen teacher's saved code answers:

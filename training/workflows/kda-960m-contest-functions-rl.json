@@ -1,14 +1,14 @@
 {
   "name": "kda-960m-contest-functions-rl",
-  "description": "RL of the 960M KDA hybrid on contest and function problems in the thinking prompt, continuing kda-960m-contest-rl-v5 from its step 550 with the same settings: 400 steps with a checkpoint every 50",
+  "description": "RL of the 960M KDA hybrid on contest and function problems in the thinking prompt, continuing kda-960m-contest-rl-v5 from its step 250 with the same settings: 400 steps with a checkpoint every 50",
   "family": "hybrid",
-  "from": "kda-960m-contest-rl-v5-20261124-01-rl/step-000000550.pt",
+  "from": "kda-960m-contest-rl-v5-20261124-01-rl/step-000000250.pt",
   "stages": [
     {
       "stage": "rl",
       "name": "rl",
-      "description": "Contest problems and KodCode function problems (rl-pool-contest-functions-01: 1,843 and 873 training problems), 400 steps",
-      "pool": "rl-pool-contest-functions-01",
+      "description": "Contest problems, KodCode function problems and MBPP training problems with their test assertions (rl-pool-contest-functions-02: 1,843, 879 and 374 training problems), 400 steps",
+      "pool": "rl-pool-contest-functions-02",
       "gpus": 8,
       "settings": {
         "steps": 400,

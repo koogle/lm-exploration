@@ -20,7 +20,8 @@ input/output cases, test style `contest`) carry LiveCodeBench's own instruction
 opens a reasoning span, and the answer is the last Python block after the reasoning
 closes, as the harness's thinking protocol reads it. A mixed pool (`build_mixed`) adds
 function problems to contest rows in the same instruction and answer format
-(`function_row`), so one model trains on programs and on plain functions.
+(`function_row`) and MBPP's training problems as the chat benchmark states them
+(`mbpp_thinking_row`), so one model trains on programs and on plain functions.
 
 Code is correct if every test passes in the code sandbox (`training_data.sandbox`). A
 completion that does not end in one of its family's stop tokens within the token limit,
@@ -33,7 +34,7 @@ import json
 import re
 from pathlib import Path
 
-from evaluation.benchmarks import livecodebench
+from evaluation.benchmarks import function_problems, livecodebench
 from training_data.code_sft import code_prompt, mbpp_row, opencodeinstruct_row
 from training_data.math_sft import answer_matches, ngrams, question_prompt
 from training_data.sandbox.execution import contest_tests
@@ -216,19 +217,36 @@ def function_row(row):
     return {**row, "prompt": livecodebench.instruction(problem), "answer_format": "thinking"}
 
 
-def build_mixed(contest, functions, count, output):
-    """Write a pool of every row of `contest` (a contest pool's rows) and `count` function
+def mbpp_thinking_row(row, split):
+    """An MBPP problem as the chat benchmark states it (`function_problems.mbpp`: the task
+    with its test assertions) with the `thinking` answer format, or None."""
+    base = pool_row(mbpp_row(row, split))
+    if base is None:
+        return None
+    problem = function_problems.mbpp(row)
+    return {**base, "prompt": livecodebench.instruction(problem), "answer_format": "thinking"}
+
+
+def build_mixed(contest, functions, count, output, mbpp=()):
+    """Write a pool of every row of `contest` (a contest pool's rows), `count` function
     problems of `functions` (another pool's rows: its code rows with a declaration, in
-    the order of their IDs' hashes) as `function_row`s, each keeping its split."""
+    the order of their IDs' hashes) as `function_row`s, each keeping its split, and the
+    `mbpp` rows (`mbpp_thinking_row`), which replace function problems of the same ID."""
     output = Path(output)
+    mbpp = [row for row in mbpp if row is not None]
+    stated = {row["id"] for row in mbpp}
     candidates = sorted(
-        (r for r in functions if r["task"] == "code" and r.get("declaration")),
+        (
+            r
+            for r in functions
+            if r["task"] == "code" and r.get("declaration") and r["id"] not in stated
+        ),
         key=lambda r: hashlib.sha256(r["id"].encode()).hexdigest(),
     )
-    rows = list(contest) + [function_row(r) for r in candidates[:count]]
+    rows = list(contest) + [function_row(r) for r in candidates[:count]] + mbpp
     kept = {}
     for row in rows:
-        key = f"{row['split']}/{row.get('test_style', 'functions')}"
+        key = f"{row['split']}/{row['id'].split('-')[0]}"
         kept[key] = kept.get(key, 0) + 1
     output.mkdir(parents=True, exist_ok=False)
     path = output / "pool.jsonl"

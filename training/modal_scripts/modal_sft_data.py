@@ -15,7 +15,7 @@ Run from training/:
     modal run -m modal_scripts.modal_sft_data::contest_pool --data-id <fresh-id> \
         [--report <report.json>]
     modal run -m modal_scripts.modal_sft_data::mixed_pool --data-id <fresh-id> \
-        --contest <pool-id> --functions <pool-id> --count <function problems>
+        --contest <pool-id> --functions <pool-id> --count <function problems> [--mbpp]
 
 `curriculum` execute-verifies every original arithmetic repair and writes the JSONL locally.
 `commitpack`, `private_patches`, `math` (GSM8K + MetaMathQA word problems), `code` (OpenCodeInstruct +
@@ -517,10 +517,12 @@ def contest_pool(
 
 
 @app.function(
-    image=contest_image, cpu=2, memory=8192, timeout=3600, retries=0, volumes={"/runs": volume}
+    image=data_image, cpu=2, memory=8192, timeout=3600, retries=0, volumes={"/runs": volume}
 )
-def prepare_mixed_pool(data_id, deadline, contest, functions, count):
-    from training_data.rl_tasks import build_mixed
+def prepare_mixed_pool(data_id, deadline, contest, functions, count, mbpp):
+    from training_data.code_sft import MBPP
+    from training_data.hub_files import pinned_rows
+    from training_data.rl_tasks import build_mixed, mbpp_thinking_row
 
     check_deadline(deadline)
     volume.reload()
@@ -530,20 +532,30 @@ def prepare_mixed_pool(data_id, deadline, contest, functions, count):
         path = Path("/runs") / run_id(pool, "pool") / "pool.jsonl"
         return [json.loads(line) for line in path.read_text().splitlines()]
 
-    report = build_mixed(rows(contest), rows(functions), count, output)
+    stated = [
+        mbpp_thinking_row(row, split)
+        for split in (("train", "validation") if mbpp else ())
+        for row in pinned_rows(*MBPP, f"full/{split}-00000-of-00001.parquet")
+    ]
+    report = build_mixed(rows(contest), rows(functions), count, output, stated)
     report["sources"] = {"contest": contest, "functions": functions}
+    if mbpp:
+        report["sources"]["mbpp"] = "@".join(MBPP) + " train and validation"
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     volume.commit()
     return report
 
 
 @app.local_entrypoint()
-def mixed_pool(data_id: str, contest: str, functions: str, count: int, report: str = ""):
+def mixed_pool(
+    data_id: str, contest: str, functions: str, count: int, mbpp: bool = False, report: str = ""
+):
     """Every row of the contest pool `--contest` and `--count` function problems of the
-    pool `--functions`, in LiveCodeBench's thinking-mode prompt."""
+    pool `--functions`, in LiveCodeBench's thinking-mode prompt; `--mbpp` adds MBPP's
+    training and validation problems stated with their test assertions."""
     run_id(data_id, "data_id")
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    write(report, prepare_mixed_pool.remote(data_id, deadline, contest, functions, count))
+    write(report, prepare_mixed_pool.remote(data_id, deadline, contest, functions, count, mbpp))
 
 
 @app.local_entrypoint()

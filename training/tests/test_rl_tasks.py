@@ -174,13 +174,26 @@ class RLTaskTests(unittest.TestCase):
             for index in range(8)
         ] + [{"id": "gsm8k-1", "task": "math", "split": "train", "question": "1+1?"}]
         with tempfile.TemporaryDirectory() as folder:
-            report = rl_tasks.build_mixed(contest, functions, 6, Path(folder) / "pool")
+            stated = rl_tasks.mbpp_thinking_row(
+                {
+                    "task_id": 601,
+                    "text": "Write a function to add two numbers.",
+                    "code": "def add(a, b):\n    return a + b",
+                    "test_list": ["assert add(1, 2) == 3"],
+                    "test_setup_code": "",
+                },
+                "train",
+            )
+            report = rl_tasks.build_mixed(contest, functions, 6, Path(folder) / "pool", [stated])
             rows = [
                 json.loads(line)
                 for line in (Path(folder) / "pool" / "pool.jsonl").read_text().splitlines()
             ]
-        self.assertEqual(report["kept"], {"train/contest": 1, "train/pytest": 6})
-        added = rows[1:]
+        self.assertEqual(report["kept"], {"train/contest": 1, "train/kodcode": 6, "train/mbpp": 1})
+        self.assertIn(
+            "Your code should pass these tests:\n\nassert add(1, 2) == 3", rows[-1]["prompt"]
+        )
+        added = rows[1:-1]
         self.assertTrue(all(row["answer_format"] == "thinking" for row in added))
         starters = [row for row in added if "starter code" in row["prompt"]]
         named = [row for row in added if "Name it `add(a, b)`" in row["prompt"]]
@@ -192,7 +205,9 @@ class RLTaskTests(unittest.TestCase):
             def run(self, pairs):
                 return run_local(pairs)
 
-        self.assertEqual(rl_tasks.rewards(added[:1], [answer], [True], Local()), [1.0])
+        self.assertEqual(
+            rl_tasks.rewards([added[0], rows[-1]], [answer] * 2, [True] * 2, Local()), [1.0, 1.0]
+        )
 
     def test_contest_pool_keeps_problems_whose_teacher_program_passes(self):
         import tempfile
