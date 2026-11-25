@@ -159,7 +159,8 @@ def evaluate(
             pretrained=model,
             revision=revision,
             dtype="bfloat16",
-            batch_size=8,
+            # A long-context model's rolling window with its vocabulary's logits fills the GPU.
+            batch_size=1 if perplexity else 8,
             add_bos_token=True if model in BOS_MODELS else None,
         )
     out = {"model": model, "revision": revision, "limit": limit or None, "suites": []}
