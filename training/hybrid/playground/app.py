@@ -1,9 +1,11 @@
-"""Gradio playground for hybrid-family checkpoints, decoding on the Space's GPU.
+"""Gradio playground for hybrid-family checkpoints, decoding on one GPU.
 
 Runs inside a Hugging Face Space assembled by publish.py: the model code is copied
 next to this file (model_hybrid/, model_10m/), and every export listed in
 model-settings.json is downloaded from its private model repo with the Space's
-HF_TOKEN secret and kept on the GPU. Generation is serialized: one request decodes at
+HF_TOKEN secret and kept on the GPU. On Modal (modal_serve.py) the settings file is
+named by `PLAYGROUND_SETTINGS` and each export is a folder on the runs volume
+(`"path"` in place of `"repo"`). Generation is serialized: one request decodes at
 a time.
 
 - Compare: a table with one row per prompt (a Run box to pick which prompts run, the
@@ -20,6 +22,7 @@ a time.
 """
 
 import json
+import os
 import tempfile
 import threading
 import time
@@ -34,13 +37,19 @@ from training_data import chat, chat_sft
 from tokenizer import glm
 
 HERE = Path(__file__).parent
-SETTINGS = json.loads((HERE / "model-settings.json").read_text())
+SETTINGS = json.loads(
+    Path(os.environ.get("PLAYGROUND_SETTINGS", HERE / "model-settings.json")).read_text()
+)
 TOKENIZER = glm.load()
 
 
 def load(entry):
-    folder = Path(snapshot_download(entry["repo"], allow_patterns=[f"{entry['export']}/*"]))
-    model = generate.load_export(folder / entry["export"], dtype=torch.bfloat16, device="cuda")
+    if "path" in entry:
+        folder = Path(entry["path"])
+    else:
+        repo = snapshot_download(entry["repo"], allow_patterns=[f"{entry['export']}/*"])
+        folder = Path(repo) / entry["export"]
+    model = generate.load_export(folder, dtype=torch.bfloat16, device="cuda")
     # Compile prefill attention and capture the decode graph before the first visitor.
     for _ in generate.generate(model, TOKENIZER.encode("Hello").ids, 8, ()):
         pass
@@ -275,7 +284,7 @@ LABELS = list(MODELS)
 
 with gr.Blocks(title=SETTINGS["name"]) as demo:
     rows = "\n".join(
-        f"| {label} | `{entry['repo']}/{entry['export']}` | {'chat' if entry.get('chat') else 'base'} |"
+        f"| {label} | `{entry.get('path') or entry['repo'] + '/' + entry['export']}` | {'chat' if entry.get('chat') else 'base'} |"
         for label, entry in ENTRIES.items()
     )
     gr.Markdown(

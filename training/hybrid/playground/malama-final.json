@@ -1,0 +1,8 @@
+{
+  "name": "Malama final",
+  "description": "The 960M Malama hybrid after reasoning SFT v5, 250 contest RL steps and 400 RL steps on contest and function problems, beside its 100B-token base. The base continues text; the final model answers a chat turn, with or without thinking.",
+  "models": [
+    {"label": "Final (v5 + contest RL + mixed RL)", "run": "kda-960m-contest-functions-rl-20261125-01-rl", "export": "tokens-000288341556", "chat": true},
+    {"label": "Base (100B tokens)", "run": "kda-960m-foundation-20261110-01-pretrain-a7-s02", "export": "tokens-099999547392"}
+  ]
+}
