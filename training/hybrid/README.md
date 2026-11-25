@@ -483,7 +483,8 @@ uv run --all-extras python -m model_hybrid.playground.publish \
 [`playground/modal_serve.py`](playground/modal_serve.py) runs the same app on one Modal
 H100 for exports on the runs volume (`--models` lists `run` and `export`;
 [`playground/malama-final.json`](playground/malama-final.json) is the final reasoning
-model beside its base). It prints a public URL, and the call's timeout stops the GPU
+model beside its base, and [`playground/malama-chat.json`](playground/malama-chat.json)
+that model alone as a plain chat with folded thinking). It prints a public URL, and the call's timeout stops the GPU
 after `--hours` (4 by default, at most 24):
 
 ```sh

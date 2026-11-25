@@ -1,0 +1,10 @@
+{
+  "name": "Malama chat",
+  "description": "The 960M Malama reasoning model (reasoning SFT v5, 250 contest RL steps and 400 RL steps on contest and function problems). It was trained to solve programming problems in Python.",
+  "tabs": ["Chat"],
+  "temperature": 0.6,
+  "max_new_tokens": 8192,
+  "models": [
+    {"label": "Malama final", "run": "kda-960m-contest-functions-rl-20261125-01-rl", "export": "tokens-000288341556", "chat": true}
+  ]
+}

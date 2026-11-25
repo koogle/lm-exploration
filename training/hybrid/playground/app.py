@@ -19,6 +19,10 @@ a time.
   reply's thinking shows inside its bubble, folded above the answer; tool results are
   sent as `tool` turns.
 - Continue text: one export continues a prompt.
+
+The settings file may name the tabs to show (`"tabs": ["Chat"]`; all by default) and the
+sliders' starting values (`"temperature"`, `"max_new_tokens"`). With only the Chat tab,
+the tools editor, the tool role and the parsed reply are hidden: a plain chat.
 """
 
 import json
@@ -281,6 +285,8 @@ EXAMPLES = [
 # Prompt sets offered in the Compare tab: {name: [prompt, ...]}.
 PROMPT_SETS = json.loads((HERE / "prompt-sets.json").read_text())
 LABELS = list(MODELS)
+TABS = SETTINGS.get("tabs", ["Compare", "Chat", "Continue text"])
+PLAIN_CHAT = TABS == ["Chat"]
 
 with gr.Blocks(title=SETTINGS["name"]) as demo:
     rows = "\n".join(
@@ -292,11 +298,16 @@ with gr.Blocks(title=SETTINGS["name"]) as demo:
         f"| Model | Export | Kind |\n|---|---|---|\n{rows}"
     )
     with gr.Row():
-        temperature = gr.Slider(0, 1.5, value=0.0, step=0.05, label="Temperature (0 = greedy)")
+        temperature = gr.Slider(
+            0, 1.5, value=SETTINGS.get("temperature", 0.0), step=0.05,
+            label="Temperature (0 = greedy)",
+        )  # fmt: skip
         top_p = gr.Slider(0.1, 1, value=0.95, step=0.05, label="Top-p")
-        max_new = gr.Slider(16, 16384, value=512, step=16, label="Max new tokens")
+        max_new = gr.Slider(
+            16, 16384, value=SETTINGS.get("max_new_tokens", 512), step=16, label="Max new tokens"
+        )
         seed = gr.Number(0, precision=0, label="Seed")
-    with gr.Tab("Compare"):
+    with gr.Tab("Compare", visible="Compare" in TABS):
         with gr.Row():
             prompt_set = gr.Dropdown(
                 list(PROMPT_SETS), value="Contest problems", label="Load prompt set"
@@ -337,27 +348,34 @@ with gr.Blocks(title=SETTINGS["name"]) as demo:
             [grid, progress, download],
         )
         stop.click(None, None, None, cancels=[event])
-    if CHAT_MODELS:
-        with gr.Tab("Chat"):
+    if CHAT_MODELS and "Chat" in TABS:
+        # Alone, the chat is the page itself: a lone tab beside hidden ones opens blank.
+        with gr.Column() if PLAIN_CHAT else gr.Tab("Chat"):
             chat_model = gr.Dropdown(CHAT_MODELS, value=CHAT_MODELS[-1], label="Model")
             history = gr.State([])
             with gr.Row():
                 system = gr.Textbox(lines=2, label="System prompt")
                 tools_json = gr.Code(
-                    json.dumps([chat_sft.WEATHER_TOOL], indent=1),
+                    "" if PLAIN_CHAT else json.dumps([chat_sft.WEATHER_TOOL], indent=1),
                     language="json",
                     label="Tools (OpenAI format; empty for none)",
+                    visible=not PLAIN_CHAT,
                 )
             chatbot = gr.Chatbot(height=420)
             with gr.Row():
                 text = gr.Textbox(label="Message", scale=4)
-                role = gr.Radio(["user", "tool"], value="user", label="Send as", scale=1)
+                role = gr.Radio(
+                    ["user", "tool"], value="user", label="Send as", scale=1,
+                    visible=not PLAIN_CHAT,
+                )  # fmt: skip
                 thinking = gr.Checkbox(value=True, label="Thinking", scale=1)
             with gr.Row():
                 send = gr.Button("Send", variant="primary")
                 clear = gr.Button("Clear")
             chat_rate = gr.Markdown()
-            parsed = gr.JSON(label="Last reply as an OpenAI assistant message")
+            parsed = gr.JSON(
+                label="Last reply as an OpenAI assistant message", visible=not PLAIN_CHAT
+            )
             inputs = [chat_model, text, role, system, tools_json, thinking, history]
             inputs += [temperature, top_p]
             inputs.append(max_new)
@@ -365,7 +383,7 @@ with gr.Blocks(title=SETTINGS["name"]) as demo:
             send.click(respond, inputs, outputs)
             text.submit(respond, inputs, outputs)
             clear.click(lambda: ([], [], None), None, [chatbot, history, parsed])
-    with gr.Tab("Continue text"):
+    with gr.Tab("Continue text", visible="Continue text" in TABS):
         text_model = gr.Dropdown(LABELS, value=LABELS[0], label="Model")
         prefix = gr.Textbox(lines=6, label="Prompt", value=EXAMPLES[0])
         go = gr.Button("Continue", variant="primary")
