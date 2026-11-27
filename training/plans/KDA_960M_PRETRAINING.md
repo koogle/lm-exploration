@@ -253,6 +253,48 @@ Decisions:
 
 [Run reports, metrics and common evaluation](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/marin-ablation-20261111).
 
+## Sizing the run and the loss forecast
+
+**Sizing (November 10, at launch).** The model has 959.8M training parameters (with its
+one-block MTP head), so 100B tokens is about 104 tokens per parameter. At the measured
+391K tokens/s on eight H100s, 100B tokens is about 71 hours of training, about $22 per
+billion tokens at an assumed $4 per H100-hour: about $2,200 of the $5,000 foundation
+allocation. The strongest models near this size trained on far more, Qwen3-0.6B on about
+36T tokens and SmolLM2 on about 4T. Reaching 4T would have cost on the order of $90,000,
+and the prepared code would not have lasted: Python is about 5B tokens (3.95B, plus 0.98B
+starred) and the rest of the permissive GitHub code about 45B, so past roughly 150B tokens
+the code share would mostly repeat. A frontier base model at this size was out of reach by
+pretraining alone. The decision was to stop at 100B, keep the rest of the budget for
+mid-training, reasoning SFT and RL, and compete in a narrow coding category instead.
+
+**Forecast (November 11).** At 26.4B tokens a curve `loss = c + a * tokens^-b` was fitted
+to the training loss (means of 0.5B-token bins) over three windows ending at 26B, and
+frozen ([`publication.loss_forecast`](../publication/README.md#loss-forecast)). The
+central fit (window 5–26B) has `c = 2.057`, `a = 0.419`, `b = 0.665`. It covers the
+constant learning rate only, up to the decay at 85B.
+
+| Tokens | Forecast | Measured (0.5B-token mean) |
+|---:|---:|---:|
+| 26B | 2.105 | 2.098 |
+| 50B | 2.088 | 2.085 |
+| 75B | 2.081 | 2.064 |
+| 85B | 2.079 (range 2.079–2.084) | 2.068 |
+| 100B, after the decay | not forecast | 1.755 |
+
+- The run tracked the forecast within 0.02 and finished the constant phase slightly below
+  it, so no abnormal dynamics showed.
+- The 59B tokens from the forecast to the decay bought about 0.03 in training loss, as
+  forecast, while the 15B-token decay bought 0.31. The constant phase was longer than it
+  needed to be; an earlier decay or a lower rate is the schedule lesson for the next run.
+- Held-out bits per byte followed the same shape: flat from about 20B, then down in the
+  decay on every source.
+
+![Training loss against the forecast, and held-out loss by source](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/results/kda-960m-foundation-20261110-01/forecast/training-loss-forecast.png)
+
+The forecast and chart are in `training/results/kda-960m-foundation-20261110-01/forecast/`
+of `jfrick/lm-exploration-results`; the run's metrics are `logs/lineage-*.jsonl` in
+[`jfrick/malama-base`](https://huggingface.co/jfrick/malama-base).
+
 ## Training and budget
 
 Use exactly eight 80GB H100s, the shared trainer, frozen model/tokenizer and MTP
