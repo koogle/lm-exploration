@@ -122,10 +122,12 @@ Building a small reasoning model on a modest token budget turned up several clea
   - *Looped (latent-recurrent) conversion did not pay off.* On the earlier 720M KDA
     hybrid, we tested retrofitting the middle blocks into a shared recurrent group
     (`4 / 8 / 4` blocks, up to 4 loops, Elastic Latent Recurrence style) over 1B tokens
-    against a plain continuation control (1.45× training FLOPs/token). At 1 loop it
-    trailed the control by 0.004–0.007 nats; 2–3 loops only matched the control (within
-    ~0.002 nats); and 4 loops was 0.002–0.004 nats worse with higher greedy repetition
-    (4-gram repetition rose from 0.47 to 0.56). Looping was not adopted for Malama.
+    against a plain continuation control (1.45× training FLOPs/token). The ungated
+    conversion trailed the control at 1 loop (+0.004–0.007 nats) and degraded at 4 loops;
+    adding a closed loop-entry gate removed the 1-loop penalty (+0.0002–0.0004 nats),
+    but 2–4 loops still improved held-out loss by only ~0.001 nats on code and ~0.004
+    nats on thinking traces and books, with the gate barely opening. Looping was not
+    adopted for Malama.
   - *Task-arithmetic weight merging failed.* Adding the 20B code mid-training delta onto
     Reasoning SFT v3 (`v3 + λ·(code-20B − Base)`) broke the model completely: held-out
     loss exploded to 3.09–4.24 at `λ = 0.5` and ~13.7 at `λ = 1.0` (worse than uniform
