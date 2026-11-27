@@ -21,6 +21,7 @@ class AWR:
 
     SOURCES = ("reuse", "file")
     needs_behaviour = False
+    needs_teacher = False
     skips_zero_advantage = False
 
     def __post_init__(self):

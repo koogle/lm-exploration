@@ -1,4 +1,5 @@
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -157,6 +158,56 @@ class RLTaskTests(unittest.TestCase):
         )
         self.assertIn("Print twice the number.", row["prompt"])
         self.assertIsNone(rl_tasks.contest_row({**problem, "tests": [tests[5]]}, 0.0))
+
+    def test_mixed_pool_adds_function_problems_in_the_thinking_prompt(self):
+        contest = [{"id": "contest-1", "task": "code", "split": "train", "test_style": "contest"}]
+        functions = [
+            {
+                "id": f"kodcode-{index}",
+                "task": "code",
+                "split": "train",
+                "question": f"Add two numbers, variant {index}.",
+                "declaration": "def add(a, b):",
+                "tests": "from solution import add\n\ndef test_add():\n    assert add(1, 2) == 3\n",
+                "test_style": "pytest",
+            }
+            for index in range(8)
+        ] + [{"id": "gsm8k-1", "task": "math", "split": "train", "question": "1+1?"}]
+        with tempfile.TemporaryDirectory() as folder:
+            stated = rl_tasks.mbpp_thinking_row(
+                {
+                    "task_id": 601,
+                    "text": "Write a function to add two numbers.",
+                    "code": "def add(a, b):\n    return a + b",
+                    "test_list": ["assert add(1, 2) == 3"],
+                    "test_setup_code": "",
+                },
+                "train",
+            )
+            report = rl_tasks.build_mixed(contest, functions, 6, Path(folder) / "pool", [stated])
+            rows = [
+                json.loads(line)
+                for line in (Path(folder) / "pool" / "pool.jsonl").read_text().splitlines()
+            ]
+        self.assertEqual(report["kept"], {"train/contest": 1, "train/kodcode": 6, "train/mbpp": 1})
+        self.assertIn(
+            "Your code should pass these tests:\n\nassert add(1, 2) == 3", rows[-1]["prompt"]
+        )
+        added = rows[1:-1]
+        self.assertTrue(all(row["answer_format"] == "thinking" for row in added))
+        starters = [row for row in added if "starter code" in row["prompt"]]
+        named = [row for row in added if "Name it `add(a, b)`" in row["prompt"]]
+        self.assertTrue(starters and named)
+        self.assertEqual(len(starters) + len(named), 6)
+        answer = "plan</think>```python\ndef add(a, b):\n    return a + b\n```"
+
+        class Local:
+            def run(self, pairs):
+                return run_local(pairs)
+
+        self.assertEqual(
+            rl_tasks.rewards([added[0], rows[-1]], [answer] * 2, [True] * 2, Local()), [1.0, 1.0]
+        )
 
     def test_contest_pool_keeps_problems_whose_teacher_program_passes(self):
         import tempfile

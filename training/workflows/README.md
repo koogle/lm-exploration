@@ -178,10 +178,17 @@ hybrid runs volume and pools on the training volume. Subword workflows take SFT 
 stages, hybrid workflows RL stages (hybrid chat SFT is a `midtrain` stage with a chat
 run config). See the [RL guide](../rl/README.md).
 
-`kda-960m-reasoning-sft-v3.json` and `-v4.json` run thinking-mode reasoning SFT of the
-960M 5B code export at 32K as `midtrain` stages (v4: `chat-sft-reasoning-v4`, 4.30B
-tokens). `math-sft-20b.json` and `math-sft-5b.json` run math SFT of the WSD end points, with
+`kda-960m-reasoning-sft-v3.json`, `-v4.json` and `-v5.json` run thinking-mode reasoning SFT
+of the 960M 5B code export at 32K as `midtrain` stages (v4: `chat-sft-reasoning-v4`, 4.30B
+tokens; v5: `chat-sft-reasoning-v5`, 4.89B tokens). `math-sft-20b.json` and `math-sft-5b.json` run math SFT of the WSD end points, with
 and without pretraining replay. `hybrid-720m-rl.json` runs chat SFT of the hybrid 720M 40B
 export, then RL from it. `kda-960m-contest-rl.json` runs RL of the 960M reasoning SFT on
 contest problems in LiveCodeBench's thinking prompt, and `kda-960m-contest-rl-hard.json`
-continues it on medium and hard problems with 16K-token answers ([RL guide](../rl/README.md)).
+continues it on medium and hard problems with 16K-token answers ([RL guide](../rl/README.md));
+`kda-960m-contest-rl-v4.json` runs 100 steps of the same RL from reasoning SFT v4;
+`kda-960m-contest-rl-v5.json` runs 1,000 steps from reasoning SFT v5 and keeps a checkpoint
+every 50 steps for evaluation;
+`kda-960m-contest-functions-rl.json` continues that run from its step 250 on contest,
+function and MBPP training problems together (`rl-pool-contest-functions-02`);
+`kda-960m-distill.json` distills GLM-4.7-Flash into it on its own sampled answers
+([on-policy distillation](../rl/README.md#on-policy-distillation)).

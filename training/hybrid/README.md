@@ -480,6 +480,20 @@ uv run --all-extras python -m model_hybrid.playground.publish \
   --space jfrick/malama-versions --models hybrid/playground/malama-versions.json [--hardware l4x1]
 ```
 
+The published Space serves the Malama v0.0.1 release ([lineage, data and results](../plans/MALAMA_V0_0_1.md)).
+
+[`playground/modal_serve.py`](playground/modal_serve.py) runs the same app on one Modal
+H100 for exports on the runs volume (`--models` lists `run` and `export`;
+[`playground/malama-final.json`](playground/malama-final.json) is the final reasoning
+model beside its base, and [`playground/malama-chat.json`](playground/malama-chat.json)
+that model alone as a plain chat with folded thinking). It prints a public URL, and the call's timeout stops the GPU
+after `--hours` (4 by default, at most 24):
+
+```sh
+uv run --all-extras modal run --detach -m model_hybrid.playground.modal_serve \
+  --models hybrid/playground/malama-final.json [--hours 4]
+```
+
 ## Benchmarks
 
 Training throughput metrics use explicit dense H100 SXM ceilings. `mfu` retains
@@ -539,6 +553,22 @@ results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
 
 ```sh
 uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
+```
+
+`--suite perplexity` scores text instead: the harness's WikiText-2 task and, with `--text`,
+a JSONL file of documents on the runs volume ([`perplexity_tasks.py`](perplexity_tasks.py)),
+as word perplexity and bits per byte, for the export, the reference models above,
+MobileLLM-R1-950M-base and Qwen3-1.7B/4B-Base.
+[`fresh_text.py`](../analysis/evaluation/fresh_text.py) writes such a file from arXiv
+abstracts submitted in a date range, text newer than every model's training data:
+
+```sh
+uv run python -m analysis.evaluation.fresh_text --since 2026-11-16 --until 2026-11-24 \
+  --output artifacts/evaluation/arxiv-2026-11-16.jsonl
+uv run --all-extras modal volume put lm-exploration-hybrid-runs \
+  artifacts/evaluation/arxiv-2026-11-16.jsonl benchmarks/texts/arxiv-2026-11-16.jsonl
+uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks --suite perplexity \
+  --text benchmarks/texts/arxiv-2026-11-16.jsonl --exports RUN/tokens-N
 ```
 
 LiveCodeBench, for checkpoints of any family:

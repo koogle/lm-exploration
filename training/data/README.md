@@ -63,8 +63,14 @@ their TACO, APPS and CodeContests problems through a question table the preparat
 builds once (`"questions": true`), at most `per_question` traces per problem per file
 (one in `-v1` and `-v2`, the four shortest in `chat-sft-ocr2-python-v3`, about three
 times the conversations). The reasoning SFT mixes (`chat-sft-reasoning-v3`, and
-`chat-sft-reasoning-v4` with the multi-trace OCR2 and AceReason subsets, two passes) are
-composed. A recipe made only of `subsets` from other recipes' folders
+`chat-sft-reasoning-v4` with the multi-trace OCR2 and AceReason subsets, two passes, and
+`chat-sft-reasoning-v5` with the teacher traces of `chat-sft-teacher-traces-v2`) are
+composed. `chat-sft-teacher-traces-v2` holds teacher traces in that prompt, up to four
+passing completions per problem: `evaluation.modal_livecodebench --pool train` samples a
+teacher on LiveCodeBench v1-v5 and LeetCodeDataset problems, `--pool codecontests
+--openrouter <ids>` a hosted teacher on CodeContests problems
+(`contest_sft.codecontests_problems`), and `--publish` uploads a launch's passing traces
+to `jfrick/lcb-teacher-traces`. A recipe made only of `subsets` from other recipes' folders
 (`chat-sft-lcb-format-v1`, `chat-sft-reasoning-pilot-v1`) is composed instead of
 prepared: the same command checks its subsets and writes its `summary.json`.
 

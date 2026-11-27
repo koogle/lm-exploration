@@ -25,6 +25,7 @@ uv run modal run -m workflows.modal_train::main \
 | `modal_tokenizer_research.py` | Tokenizer fitting grid; [research](../tokenizer/research/README.md) |
 | `modal_tokenizer_evaluation.py` | Held-out parent coverage and rescoring; same research guide |
 | `modal_structured_tokenizer.py` | Structured-code/tokenizer comparison; same research guide |
+| `modal_distill.py` | Student answers and GLM-4.7-Flash's scores of them for [on-policy distillation](../rl/README.md#on-policy-distillation) |
 | `modal_simple_llm_8k.py` | Eight-H100 124M / 8K / 5B controller; [workflow](../distributed/SIMPLE_LLM_8K.md) |
 | `modal_validate_repetition.py` | Four-checkpoint held-out loss and reference-continuation scores; [report](https://huggingface.co/jfrick/scholarly-code-modern-gpt-124m-step2/blob/a5111f064480c8b39b7d6e791a6f7746290619ab/analysis/repetition/simple-llm-repetition-validation-20261018.md). Its generation part is the recipe `analysis/repetition/previous-comparison.json` |
 | `modal_training_optimizations.py` | Opt-in padding crop/chunked loss/compile/RoPE benchmark suite; [guide](../distributed/OPTIMIZATIONS.md) |

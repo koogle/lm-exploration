@@ -1,0 +1,46 @@
+{
+  "name": "kda-960m-contest-functions-rl",
+  "description": "RL of the 960M KDA hybrid on contest and function problems in the thinking prompt, continuing kda-960m-contest-rl-v5 from its step 250 with the same settings: 400 steps with a checkpoint every 50",
+  "family": "hybrid",
+  "from": "kda-960m-contest-rl-v5-20261124-01-rl/step-000000250.pt",
+  "stages": [
+    {
+      "stage": "rl",
+      "name": "rl",
+      "description": "Contest problems, KodCode function problems and MBPP training problems with their test assertions (rl-pool-contest-functions-02: 1,843, 879 and 374 training problems), 400 steps",
+      "pool": "rl-pool-contest-functions-02",
+      "gpus": 8,
+      "settings": {
+        "steps": 400,
+        "algorithm": {
+          "name": "on_policy/grpo"
+        },
+        "rollouts": {
+          "prompts_per_step": 64,
+          "samples_per_prompt": 8,
+          "math_share": 0.0,
+          "code_tokens": 8192,
+          "prompt_tokens": 2048,
+          "temperature": 1.0,
+          "unfinished_reward": -0.5
+        },
+        "optimizer": {
+          "muon": true,
+          "muon_lr": 0.0001,
+          "lr": 1.5e-06,
+          "betas": [
+            0.9,
+            0.95
+          ],
+          "weight_decay": 0.0,
+          "warmup_steps": 10
+        },
+        "micro_batch": 2,
+        "evaluate_every": 25,
+        "save_every": 50,
+        "keep_checkpoints": 0,
+        "hf_repo": "jfrick/malama-contest-rl"
+      }
+    }
+  ]
+}

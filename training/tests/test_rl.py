@@ -31,7 +31,10 @@ def rows(tasks):
 
 class AlgorithmTests(unittest.TestCase):
     def test_algorithms_are_named_by_their_folder(self):
-        self.assertEqual(sorted(ALGORITHMS), ["off_policy/awr", "off_policy/ppo", "on_policy/grpo"])
+        self.assertEqual(
+            sorted(ALGORITHMS),
+            ["off_policy/awr", "off_policy/distill", "off_policy/ppo", "on_policy/grpo"],
+        )
         self.assertEqual(make({"name": "off_policy/ppo", "clip": 0.1}), PPO(clip=0.1))
         for spec in ({"name": "grpo"}, {"name": "on_policy/grpo", "clip": 0.2}):
             with self.subTest(spec=spec), self.assertRaises((ValueError, TypeError)):

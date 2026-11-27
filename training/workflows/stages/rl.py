@@ -23,6 +23,6 @@ def settings(values):
     from trainer.rl.settings import Settings
 
     resolved = Settings.from_dict(values)
-    if resolved.trajectories.source == "file":
+    if resolved.trajectories.source in ("file", "scored"):
         run_id(resolved.trajectories.data, "trajectories.data")
     return asdict(resolved)

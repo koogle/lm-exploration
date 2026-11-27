@@ -69,6 +69,11 @@ class HybridModel:
         logits at a time (`HybridLM.target_logprobs`)."""
         return model.target_logprobs(x, y)
 
+    def distillation(self, model, x, y, teacher_ids, teacher_logprobs):
+        """Log-probabilities of targets `y` and KL(teacher ‖ model) at each, from the
+        teacher's listed tokens `[batch, time, k]` (`HybridLM.distillation`)."""
+        return model.distillation(x, y, teacher_ids, teacher_logprobs)
+
     def prompt_ids(self, tokenizer, text, thinking=False):
         """The prompt text as the user's turn, up to the assistant's reply; with
         `thinking`, up to its opened reasoning span (`chat.THINKING_PROMPT`)."""

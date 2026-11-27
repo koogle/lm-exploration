@@ -14,6 +14,10 @@ passes when all of its tests pass. Run this only inside a disposable container.
 
 Private tests are stored base64(zlib(pickle(json string))); they are unpickled
 with an unpickler that refuses every class, so only plain strings load.
+
+A problem with a `check` program (`function_problems`: HumanEval, MBPP) is graded by
+running that program after the answer, preceded by the problem's `preamble`; it passes
+when the run exits cleanly.
 """
 
 import base64
@@ -44,6 +48,10 @@ STDIN_FORMAT = (
 STARTER_FORMAT = (
     "You will use the following starter code to write the solution to the problem and "
     "enclose your code within delimiters.\n```python\n{starter}\n```"
+)
+FUNCTION_FORMAT = (
+    "Write the Python function the problem asks for. Enclose your code within delimiters "
+    "as follows.\n```python\n# YOUR CODE HERE\n```"
 )
 CODE_BLOCK = re.compile(r"```(?:python|py)?\s*\n(.*?)```", re.DOTALL)
 TIMEOUT_SECONDS = 6
@@ -80,6 +88,8 @@ def question(problem):
     form = (
         STARTER_FORMAT.format(starter=problem["starter_code"])
         if problem["starter_code"]
+        else FUNCTION_FORMAT
+        if problem.get("check")
         else STDIN_FORMAT
     )
     return f"Question: {problem['question_content']}\n\n{form}"
@@ -187,6 +197,10 @@ mode, method = sys.argv[1], sys.argv[2]
 source = open("solution.py").read()
 if mode == "stdin":
     exec(compile(source, "solution.py", "exec"), {{"__name__": "__main__"}})
+elif mode == "check":
+    scope = {{"__name__": "solution"}}
+    exec(compile(source, "solution.py", "exec"), scope)
+    exec(compile(open("check.py").read(), "check.py", "exec"), scope)
 else:
     scope = {{"__name__": "solution"}}
     exec(compile("from typing import *\\nfrom collections import *\\nimport math, heapq, bisect, itertools, functools\\n" + source, "solution.py", "exec"), scope)
@@ -214,21 +228,19 @@ def grade(problem, completion):
     code = extract_code(completion)
     if code is None:
         return 0.0
-    functional = bool(problem["starter_code"])
+    check = problem.get("check")
+    functional = bool(problem["starter_code"]) and not check
     method = _method(problem["starter_code"]) if functional else ""
+    mode = "check" if check else "functional" if functional else "stdin"
     with tempfile.TemporaryDirectory() as folder:
-        Path(folder, "solution.py").write_text(code)
+        Path(folder, "solution.py").write_text(problem.get("preamble", "") + code)
         Path(folder, "runner.py").write_text(RUNNER)
-        for test in problem["tests"]:
+        if check:
+            Path(folder, "check.py").write_text(check)
+        for test in [{"input": ""}] if check else problem["tests"]:
             try:
                 result = subprocess.run(
-                    [
-                        sys.executable,
-                        "-I",
-                        "runner.py",
-                        "functional" if functional else "stdin",
-                        method,
-                    ],
+                    [sys.executable, "-I", "runner.py", mode, method],
                     cwd=folder,
                     input=test["input"],
                     capture_output=True,
@@ -240,7 +252,9 @@ def grade(problem, completion):
                 )
             except subprocess.TimeoutExpired:
                 return 0.0
-            if result.returncode != 0 or not _same(test["output"], result.stdout, functional):
+            if result.returncode != 0 or not (
+                check or _same(test["output"], result.stdout, functional)
+            ):
                 return 0.0
     return 1.0
 

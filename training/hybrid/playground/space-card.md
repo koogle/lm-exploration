@@ -11,7 +11,8 @@ pinned: false
 # {name}
 
 From-scratch hybrid decoders (Kimi Delta Attention and full-attention layers, GLM
-tokenizer) side by side: the Compare tab runs the same prompts on every export listed
+tokenizer): the Chat tab is a conversation with one chat export, its thinking folded
+above each answer, and the Compare tab runs the same prompts on every export listed
 in `model-settings.json`, as text continuation or a chat turn with or without
 thinking. The code lives in
 [`training/hybrid`](https://github.com/koogle/lm-exploration/tree/main/training/hybrid)

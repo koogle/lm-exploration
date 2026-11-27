@@ -36,19 +36,29 @@ writes the combined `lcb-<model>.json`. Checkpoints (`--checkpoints`) get the
 instruction as their family's user turn with the reasoning span opened
 (`prompt_ids(..., thinking=True)`) and sample with the family's own sampler, as
 `CHECKPOINT_THINKING_SHARDS` calls each, with up to what the context leaves after the
-prompt when that is under `THINKING["max_new_tokens"]`.
+prompt when that is under `THINKING["max_new_tokens"]`. `--suite humaneval` or `--suite
+mbpp` runs the same protocol on that benchmark's test problems as chat problems
+(`function_problems`), written to `lcb-thinking-<launch>-<suite>/`.
 """
 
 import json
+import os
 import time
 from pathlib import Path
 
 import modal
 from model_hybrid import modal_benchmarks
 from model_hybrid.image import LAUNCH_LIMIT_SECONDS
-from model_hybrid.modal_benchmarks import REFERENCES, enforce_deadline, image, runs_volume, secret
+from model_hybrid.modal_benchmarks import (
+    LARGER_QWEN,
+    REFERENCES,
+    enforce_deadline,
+    image,
+    runs_volume,
+    secret,
+)
 
-from evaluation.benchmarks import livecodebench
+from evaluation.benchmarks import function_problems, livecodebench
 from workflows.images import add_project, vllm_base
 
 app = modal.App("lm-exploration-livecodebench")
@@ -60,16 +70,6 @@ DATASET, DATASET_REVISION = livecodebench.DATASET, livecodebench.DATASET_REVISIO
 RELEASE_FILE = "test6.jsonl"
 MAX_NEW_TOKENS = 2048
 BATCH_ROWS = 32
-# Larger dense Qwen base models, beyond the shared benchmark references.
-LARGER_QWEN = {
-    "Qwen/Qwen3-1.7B-Base": "ea980cb0a6c2ae4b936e82123acc929f1cec04c1",
-    "Qwen/Qwen3-4B-Base": "906bfd4b4dc7f14ee4320094d8b41684abff8539",
-    "Qwen/Qwen3-8B-Base": "49e3418fbbbca6ecbdf9608b4d22e5a407081db4",
-    "Qwen/Qwen3-14B-Base": "0b0bd3732e2c374d483664439ea334928b65f304",
-    "Qwen/Qwen3.5-2B-Base": "b1485b2fa6dfa1287294f269f5fb618e03d52d7c",
-    "Qwen/Qwen3.5-4B-Base": "1001bb4d826a52d1f399e183466143f4da7b741b",
-    "Qwen/Qwen3.5-9B-Base": "68c46c4b3498877f3ef123c856ecfde50c39f404",
-}
 ALL_REFERENCES = {**REFERENCES, **LARGER_QWEN}
 # MobileLLM-R1.5's documented Python-coding system prompt (its model card).
 MOBILELLM_CODE_SYSTEM = (
@@ -98,10 +98,26 @@ THINKING_REFERENCES = {
 }
 THINKING = {"samples": 16, "temperature": 0.6, "top_p": 0.95, "max_new_tokens": 32768, "seed": 1234}
 # `--pool train`: teacher traces for SFT on `contest_sft.trace_problems`, shorter and
-# fewer per problem; each passing problem keeps its shortest passing completion. The
+# fewer per problem; each passing problem keeps its shortest passing completions. The
 # KV cache is FP8 there, so more sequences decode together.
 TRACES = {**THINKING, "samples": 4, "max_new_tokens": 16384}
 TRACE_SHARDS = 16
+# Passing completions kept per problem, shortest first.
+TRACES_KEPT = 4
+# Hosted teachers for `--pool train --openrouter <ids>`: open-weight reasoning models
+# whose OpenRouter responses carry the full reasoning text. One CPU call per model.
+OPENROUTER_TEACHERS = (
+    "z-ai/glm-5.3",
+    "z-ai/glm-5.3-flash",
+    "deepseek/deepseek-v4-pro",
+    "deepseek/deepseek-v4-flash",
+    "deepseek/deepseek-v3.2",
+)
+OPENROUTER_WORKERS = 96
+# The key comes from the launching shell's OPENROUTER_API_KEY and lives only for the run.
+openrouter = modal.Secret.from_dict(
+    {"OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY", "")}
+)
 # Calls per model: each H100 call takes every THINKING_SHARDS-th problem.
 THINKING_SHARDS = 4
 # Checkpoints decode with the family's own sampler: more calls, and problems per batch
@@ -258,7 +274,9 @@ def evaluate_lcb(model, revision, deadline, folder, limit=0):
     secrets=[secret],
     volumes={"/runs": runs_volume, "/hf": hf_cache},
 )
-def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shards=1, pool=""):
+def evaluate_thinking(
+    model, revision, deadline, folder, limit=0, shard=0, shards=1, pool="", suite=""
+):
     """`THINKING["samples"]` reasoning samples per problem from a reference model, for
     every `shards`-th problem from `shard` on; with `pool` "train", `TRACES` samples of
     the trace problems instead, and the passing traces are written too."""
@@ -273,7 +291,11 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
     # MobileLLM-R1.5 is a text-only Llama 4; its card registers the class this way.
     ModelRegistry.register_model("Llama4ForCausalLM", Llama4ForCausalLM)
     _, positions, system = THINKING_REFERENCES[model]
-    problems = (_trace_problems if pool else _thinking_problems)(limit, shard, shards)
+    problems = (
+        _trace_problems(limit, shard, shards)
+        if pool
+        else _thinking_problems(limit, shard, shards, suite)
+    )
     sampling = TRACES if pool else THINKING
     started = time.time()
     llm = LLM(
@@ -319,6 +341,7 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
         samples,
         started,
         traces=bool(pool),
+        suite=suite,
     )
 
 
@@ -332,7 +355,7 @@ def evaluate_thinking(model, revision, deadline, folder, limit=0, shard=0, shard
     secrets=[secret],
     volumes={"/runs": runs_volume, "/training": training_volume},
 )
-def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shards=1):
+def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shards=1, suite=""):
     """`THINKING["samples"]` reasoning samples per problem from a checkpoint whose family
     has a thinking prompt (`prompt_ids(..., thinking=True)`), for every `shards`-th
     problem from `shard` on; up to `THINKING["max_new_tokens"]` new tokens, or what the
@@ -344,7 +367,7 @@ def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shard
     from evaluation.benchmarks import livecodebench
     from trainer import checkpoints
 
-    problems = _thinking_problems(limit, shard, shards)
+    problems = _thinking_problems(limit, shard, shards, suite)
     started = time.time()
     saved, description, family = checkpoints.parent(checkpoint_path(name))
     model = family.build(description.model_config).cuda()
@@ -397,19 +420,154 @@ def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shard
         samples,
         started,
         opened=True,
+        suite=suite,
     )
 
 
-def _thinking_problems(limit, shard, shards):
+def _thinking_problems(limit, shard, shards, suite=""):
+    """One shard of the LiveCodeBench release, or of `suite` (`function_problems.SUITES`)."""
     from huggingface_hub import hf_hub_download
 
-    from evaluation.benchmarks import livecodebench
+    from evaluation.benchmarks import function_problems, livecodebench
 
+    if suite:
+        return function_problems.load(suite)[: limit or None][shard::shards]
     path = hf_hub_download(DATASET, RELEASE_FILE, repo_type="dataset", revision=DATASET_REVISION)
     return livecodebench.load(path)[: limit or None][shard::shards]
 
 
-def _trace_problems(limit, shard, shards):
+def _openrouter_sample(model, prompt, seed):
+    """One (text, tokens, finish reason) sample of `model` through OpenRouter, as
+    `<think>reasoning</think>answer`; an empty truncated sample after six failures."""
+    import urllib.request
+
+    body = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": TRACES["temperature"],
+        "top_p": TRACES["top_p"],
+        "max_tokens": TRACES["max_new_tokens"],
+        "seed": seed,
+        "reasoning": {"enabled": True},
+    }
+    request = urllib.request.Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=json.dumps(body).encode(),
+        headers={
+            "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
+            "Content-Type": "application/json",
+        },
+    )
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(request, timeout=1800) as response:
+                data = json.loads(response.read())
+            choice = data["choices"][0]
+            message = choice["message"]
+            text = f"<think>\n{message.get('reasoning') or ''}\n</think>\n\n"
+            text += message.get("content") or ""
+            return text, data["usage"]["completion_tokens"], choice.get("finish_reason")
+        except Exception as error:  # noqa: BLE001 - any failed request is retried
+            print(json.dumps({"model": model, "attempt": attempt, "error": repr(error)[:200]}))
+            time.sleep(15 * (attempt + 1))
+    return "", 0, "length"
+
+
+@app.function(
+    image=image,
+    cpu=8,
+    memory=16384,
+    timeout=6 * 60 * 60,
+    retries=0,
+    secrets=[secret, openrouter],
+    volumes={"/runs": runs_volume},
+)
+def evaluate_thinking_openrouter(
+    model, deadline, folder, limit=0, unsolved="", pool="train", shard=0, shards=1
+):
+    """`TRACES` samples per trace problem of `pool` from the hosted teacher `model`,
+    graded and written like `evaluate_thinking`'s traces."""
+    if time.time() >= deadline:
+        raise TimeoutError("Launch deadline passed; refusing work")
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        raise RuntimeError("Launch with OPENROUTER_API_KEY set")
+    from concurrent.futures import ThreadPoolExecutor
+
+    from evaluation.benchmarks import livecodebench
+
+    if pool == "codecontests":
+        problems = _codecontests_problems(limit, shard, shards, unsolved)
+    else:
+        problems = _trace_problems(limit, shard, shards, unsolved)
+    started = time.time()
+    jobs = [
+        (model, livecodebench.instruction(p), TRACES["seed"] + n)
+        for p in problems
+        for n in range(TRACES["samples"])
+    ]
+    with ThreadPoolExecutor(OPENROUTER_WORKERS) as workers:
+        flat = list(workers.map(lambda job: _openrouter_sample(*job), jobs))
+    samples = [flat[i : i + TRACES["samples"]] for i in range(0, len(flat), TRACES["samples"])]
+    return _write_thinking(
+        f"openrouter/{model}",
+        None,
+        {},
+        folder,
+        limit,
+        shard,
+        shards,
+        problems,
+        samples,
+        started,
+        traces=pool,
+    )
+
+
+def _codecontests_problems(limit, shard, shards, attempted=""):
+    """CodeContests trace problems (`contest_sft.codecontests_problems`) of the train and
+    validation files of the `chat-sft-codecontests-v1` recipe; with `attempted`, only
+    those the earlier trace launch of that name did not sample."""
+    from huggingface_hub import hf_hub_download
+    from pyarrow import parquet
+    from training_data import contest_sft
+
+    recipe = json.loads(
+        Path(contest_sft.__file__)
+        .with_name("recipes")
+        .joinpath("chat-sft-codecontests-v1.json")
+        .read_text()
+    )
+    rows = []
+    for name in recipe["files"]:
+        if "/test-" in name:
+            continue
+        path = hf_hub_download(
+            recipe["repo"], name, repo_type="dataset", revision=recipe["revision"]
+        )
+        rows += parquet.read_table(path).to_pylist()
+    problems = contest_sft.codecontests_problems(rows)
+    if attempted:
+        done = _solved(attempted, -1.0)
+        problems = [p for p in problems if p["question_id"] not in done]
+    print(json.dumps({"codecontests_rows": len(rows), "trace_problems": len(problems)}))
+    return problems[: limit or None][shard::shards]
+
+
+def _solved(folder, least=0.0):
+    """Question ids with a score above `least` in the trace launch `folder` (a passing
+    sample by default; every attempted problem with `least` below 0)."""
+    runs_volume.reload()
+    return {
+        row["question_id"]
+        for part in Path("/runs/benchmarks", folder).glob("lcb-*.shard-*.json")
+        for row in json.loads(part.read_text())["problems"]
+        if row["score"] > least
+    }
+
+
+def _trace_problems(limit, shard, shards, unsolved=""):
+    """The trace problems of one shard; with `unsolved`, only those without a passing
+    sample in that earlier trace launch."""
     from huggingface_hub import hf_hub_download
     from training_data import contest_sft
 
@@ -425,7 +583,11 @@ def _trace_problems(limit, shard, shards):
     )
     # JSON lines end at "\n" only; statements can hold other line separators.
     rows = [json.loads(line) for line in Path(leetcode).read_text().split("\n") if line]
-    return contest_sft.trace_problems(releases, rows)[: limit or None][shard::shards]
+    problems = contest_sft.trace_problems(releases, rows)
+    if unsolved:
+        solved = _solved(unsolved)
+        problems = [p for p in problems if p["question_id"] not in solved]
+    return problems[: limit or None][shard::shards]
 
 
 def _write_thinking(
@@ -441,13 +603,14 @@ def _write_thinking(
     started,
     opened=False,
     traces=False,
+    suite="",
 ):
     """Grade (text, tokens, finish reason) samples per problem and write the shard's result
     and completions; with `opened`, the prompt opened the reasoning span, so a completion
     that never closes it scores 0. With `traces`, the samples are teacher traces of the
-    trace problems, and each problem's shortest passing completion is written to
+    trace problems, and each problem's `TRACES_KEPT` shortest passing completions are written to
     `<name>.traces.jsonl` (the rows `contest_sft.teacher_traces` reads)."""
-    from evaluation.benchmarks import livecodebench
+    from evaluation.benchmarks import function_problems, livecodebench
 
     generation_seconds = round(time.time() - started, 1)
     flat_problems = [p for p, group in zip(problems, samples, strict=True) for _ in group]
@@ -470,8 +633,15 @@ def _write_thinking(
         "protocol": "traces" if traces else "thinking",
         "sampling": TRACES if traces else THINKING,
         "dataset": (
-            {"trace_problems": "contest_sft.trace_problems", "revision": DATASET_REVISION}
+            {
+                "trace_problems": "contest_sft.codecontests_problems"
+                if traces == "codecontests"
+                else "contest_sft.trace_problems",
+                "revision": DATASET_REVISION,
+            }
             if traces
+            else dict(zip(("repo", "revision", "file"), function_problems.SUITES[suite]))
+            if suite
             else {"repo": DATASET, "revision": DATASET_REVISION, "file": RELEASE_FILE}
         ),
         "limit": limit or None,
@@ -508,17 +678,8 @@ def _write_thinking(
         with (folder_path / f"lcb-{name}.traces.jsonl").open("w") as handle:
             for problem, group, scores_ in zip(problems, samples, sample_scores, strict=True):
                 passing = [(tokens, text) for (text, tokens, _), s in zip(group, scores_) if s]
-                if passing:
-                    row = {
-                        key: problem[key]
-                        for key in ("question_id", "platform", "difficulty", "contest_date")
-                    }
-                    row |= {
-                        "question_content": problem["question_content"],
-                        "starter_code": problem["starter_code"],
-                        "completion": min(passing)[1],
-                        "passing": len(passing),
-                    }
+                for _, completion in sorted(passing)[:TRACES_KEPT]:
+                    row = _trace_row(problem, completion, len(passing))
                     handle.write(json.dumps(row) + "\n")
     runs_volume.commit()
     return out["summary"]
@@ -617,6 +778,95 @@ def merge_thinking(folder):
     return merged
 
 
+TRACES_REPO = "jfrick/lcb-teacher-traces"
+
+
+def _trace_row(problem, completion, passing):
+    row = {key: problem[key] for key in ("question_id", "platform", "difficulty", "contest_date")}
+    return row | {
+        "question_content": problem["question_content"],
+        "starter_code": problem["starter_code"],
+        "completion": completion,
+        "passing": passing,
+    }
+
+
+@app.function(
+    image=image,
+    cpu=4,
+    memory=32768,
+    timeout=3600,
+    retries=0,
+    secrets=[secret],
+    volumes={"/runs": runs_volume},
+)
+def publish_traces(folder, name, retrace=False):
+    """Upload the trace launch `folder`'s `*.traces.jsonl` and shard results to
+    `TRACES_REPO` under `name/`; the commit to pin in a recipe. With `retrace`, first
+    rewrite each shard's traces from its saved completions and scores, keeping
+    `TRACES_KEPT` passing completions per problem (shortest text first)."""
+    import shutil
+    import tempfile
+
+    from huggingface_hub import HfApi
+
+    folder_path = Path("/runs/benchmarks", folder)
+    if retrace:
+        problems = {p["question_id"]: p for p in _trace_problems(0, 0, 1)}
+        for part in sorted(folder_path.glob("lcb-*.json")):
+            if not part.with_name(part.name.removesuffix(".json") + ".completions.jsonl").exists():
+                continue
+            scores = {
+                row["question_id"]: row["sample_scores"]
+                for row in json.loads(part.read_text())["problems"]
+            }
+            stem = part.name.removesuffix(".json")
+            with (folder_path / f"{stem}.traces.jsonl").open("w") as handle:
+                for line in (folder_path / f"{stem}.completions.jsonl").read_text().split("\n"):
+                    if not line:
+                        continue
+                    row = json.loads(line)
+                    passing = sorted(
+                        (len(text), text)
+                        for text, score in zip(
+                            row["completions"], scores[row["question_id"]], strict=True
+                        )
+                        if score
+                    )
+                    for _, completion in passing[:TRACES_KEPT]:
+                        trace = _trace_row(problems[row["question_id"]], completion, len(passing))
+                        handle.write(json.dumps(trace) + "\n")
+        runs_volume.commit()
+    files = sorted(
+        path
+        for path in folder_path.glob("lcb-*")
+        if path.name.endswith(".traces.jsonl") or path.suffix == ".json"
+    )
+    # Files are named after `name`, so every published trace file has its own stem
+    # (a chat SFT recipe names its subsets by file stem).
+    staged = Path(tempfile.mkdtemp())
+    for path in files:
+        suffix = ".traces.jsonl" if path.name.endswith(".traces.jsonl") else ".json"
+        shard = path.name.removesuffix(suffix).partition(".shard-")[2]
+        shutil.copy(path, staged / f"{name}{'.shard-' + shard if shard else ''}{suffix}")
+    commit = HfApi().upload_folder(
+        repo_id=TRACES_REPO,
+        repo_type="dataset",
+        folder_path=staged,
+        path_in_repo=name,
+        delete_patterns="*",
+        commit_message=f"Teacher traces {name} from {folder}",
+    )
+    rows = sum(
+        1
+        for path in files
+        if path.name.endswith(".traces.jsonl")
+        for line in path.read_text().split("\n")
+        if line
+    )
+    return {"repo": TRACES_REPO, "folder": name, "revision": commit.oid, "traces": rows}
+
+
 def _thinking_launch(checkpoints, references):
     """(model or checkpoint:<path>, revision) to score with thinking."""
     chosen = [(f"checkpoint:{name}", None) for name in filter(None, checkpoints.split(","))]
@@ -643,20 +893,54 @@ def main(
     protocol: str = "plain",
     merge: str = "",
     pool: str = "",
+    openrouter: str = "",
+    unsolved: str = "",
+    publish: str = "",
+    publish_as: str = "",
+    retrace: bool = False,
+    suite: str = "",
 ):
     """Spawn one call per checkpoint (comma-separated `--checkpoints`) and reference model
     (comma-separated `--references`, or `all`); calls outlive this client. `--merge
     lcb-thinking-<launch>` instead combines a finished thinking launch's shards.
     `--protocol thinking --pool train --references <teacher>` samples teacher traces
-    on the trace problems (`TRACES`, `TRACE_SHARDS` calls)."""
+    on the trace problems (`TRACES`, `TRACE_SHARDS` calls); `--pool train --openrouter
+    <ids>` samples hosted teachers (`OPENROUTER_TEACHERS`, with the launching shell's
+    `OPENROUTER_API_KEY`) instead, and `--unsolved lcb-traces-<launch>` keeps only the
+    problems that launch never solved (with `--pool codecontests`: never sampled). `--pool codecontests --openrouter <ids>` samples
+    them on the CodeContests trace problems, in `TRACE_SHARDS` calls per teacher.
+    `--publish lcb-traces-<launch> --publish-as <folder>` uploads a finished trace launch to
+    `TRACES_REPO` (`--retrace` first rebuilds its traces from the saved completions).
+    `--protocol thinking --suite humaneval|mbpp` scores that benchmark instead of
+    LiveCodeBench."""
     if merge:
         print(json.dumps(merge_thinking.remote(merge), indent=1))
         return
+    if publish:
+        if not publish_as:
+            raise ValueError("--publish <trace launch> takes --publish-as <traces repo folder>")
+        print(json.dumps(publish_traces.remote(publish, publish_as, retrace), indent=1))
+        return
     if protocol not in ("plain", "thinking"):
         raise ValueError("--protocol is plain or thinking")
-    if pool not in ("", "train") or pool and (protocol != "thinking" or checkpoints):
-        raise ValueError("--pool train samples reference models with --protocol thinking")
-    if protocol == "thinking":
+    if suite and (suite not in function_problems.SUITES or protocol != "thinking" or pool):
+        raise ValueError(f"--suite is one of {sorted(function_problems.SUITES)}, with thinking")
+    if (
+        pool not in ("", "train", "codecontests")
+        or pool
+        and (protocol != "thinking" or checkpoints)
+    ):
+        raise ValueError("--pool samples reference models with --protocol thinking")
+    hosted = list(filter(None, openrouter.split(",")))
+    if hosted and (not pool or references or set(hosted) - set(OPENROUTER_TEACHERS)):
+        raise ValueError(f"--openrouter takes {OPENROUTER_TEACHERS} with --pool alone")
+    if pool == "codecontests" and not hosted:
+        raise ValueError("--pool codecontests goes with --openrouter")
+    if unsolved and not hosted:
+        raise ValueError("--unsolved goes with --openrouter")
+    if hosted:
+        chosen = [(m, None) for m in hosted]
+    elif protocol == "thinking":
         chosen = _thinking_launch(checkpoints, references)
     else:
         chosen = [(f"checkpoint:{name}", None) for name in filter(None, checkpoints.split(","))]
@@ -677,7 +961,18 @@ def main(
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
     tag = "-traces" if pool else "-thinking" if protocol == "thinking" else ""
     folder = f"lcb{tag}-{int(time.time())}{'-limit' if limit else ''}"
-    if protocol == "thinking":
+    folder += f"-{suite}" if suite else ""
+    if hosted:
+        shards = TRACE_SHARDS if pool == "codecontests" else 1
+        calls = [
+            evaluate_thinking_openrouter.spawn(
+                m, deadline, folder, limit, unsolved, pool, shard, shards
+            )
+            for m, _ in chosen
+            for shard in range(shards)
+        ]
+        chosen = [(f"{m}#{shard}", None) for m, _ in chosen for shard in range(shards)]
+    elif protocol == "thinking":
         calls, names = [], []
         for m, r in chosen:
             checkpoint = m.startswith("checkpoint:")
@@ -691,11 +986,11 @@ def main(
             for shard in range(shards):
                 if checkpoint:
                     call = evaluate_thinking_checkpoint.spawn(
-                        m.split(":", 1)[1], deadline, folder, limit, shard, shards
+                        m.split(":", 1)[1], deadline, folder, limit, shard, shards, suite
                     )
                 else:
                     call = evaluate_thinking.spawn(
-                        m, r, deadline, folder, limit, shard, shards, pool
+                        m, r, deadline, folder, limit, shard, shards, pool, suite
                     )
                 calls.append(call)
                 names.append((f"{m}#{shard}", r))

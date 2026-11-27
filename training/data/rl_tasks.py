@@ -18,7 +18,10 @@ Contest rows (`contest_row`: LiveCodeBench and LeetCodeDataset problems with
 input/output cases, test style `contest`) carry LiveCodeBench's own instruction
 (`livecodebench.instruction`) as the prompt and the `thinking` answer format: the family
 opens a reasoning span, and the answer is the last Python block after the reasoning
-closes, as the harness's thinking protocol reads it.
+closes, as the harness's thinking protocol reads it. A mixed pool (`build_mixed`) adds
+function problems to contest rows in the same instruction and answer format
+(`function_row`) and MBPP's training problems as the chat benchmark states them
+(`mbpp_thinking_row`), so one model trains on programs and on plain functions.
 
 Code is correct if every test passes in the code sandbox (`training_data.sandbox`). A
 completion that does not end in one of its family's stop tokens within the token limit,
@@ -31,7 +34,7 @@ import json
 import re
 from pathlib import Path
 
-from evaluation.benchmarks import livecodebench
+from evaluation.benchmarks import function_problems, livecodebench
 from training_data.code_sft import code_prompt, mbpp_row, opencodeinstruct_row
 from training_data.math_sft import answer_matches, ngrams, question_prompt
 from training_data.sandbox.execution import contest_tests
@@ -195,6 +198,67 @@ def contest_row(problem, heldout_fraction):
         "prompt": livecodebench.instruction(question),
         "answer_format": "thinking",
     }
+
+
+def function_row(row):
+    """A function problem (a code row with a `declaration`) in LiveCodeBench's instruction
+    with the `thinking` answer format. A hash-selected half give the declaration as
+    starter code; the others name the function after the question."""
+    declaration = row["declaration"]
+    if is_heldout(row["question"], 0.5):
+        problem = {"question_content": row["question"].strip(), "starter_code": declaration}
+    else:
+        name = declaration.partition(" ")[2].removesuffix(":")
+        problem = {
+            "question_content": f"{row['question'].strip()}\n\nName it `{name}`.",
+            "starter_code": "",
+            "check": True,
+        }
+    return {**row, "prompt": livecodebench.instruction(problem), "answer_format": "thinking"}
+
+
+def mbpp_thinking_row(row, split):
+    """An MBPP problem as the chat benchmark states it (`function_problems.mbpp`: the task
+    with its test assertions) with the `thinking` answer format, or None."""
+    base = pool_row(mbpp_row(row, split))
+    if base is None:
+        return None
+    problem = function_problems.mbpp(row)
+    return {**base, "prompt": livecodebench.instruction(problem), "answer_format": "thinking"}
+
+
+def build_mixed(contest, functions, count, output, mbpp=()):
+    """Write a pool of every row of `contest` (a contest pool's rows), `count` function
+    problems of `functions` (another pool's rows: its code rows with a declaration, in
+    the order of their IDs' hashes) as `function_row`s, each keeping its split, and the
+    `mbpp` rows (`mbpp_thinking_row`), which replace function problems of the same ID."""
+    output = Path(output)
+    mbpp = [row for row in mbpp if row is not None]
+    stated = {row["id"] for row in mbpp}
+    candidates = sorted(
+        (
+            r
+            for r in functions
+            if r["task"] == "code" and r.get("declaration") and r["id"] not in stated
+        ),
+        key=lambda r: hashlib.sha256(r["id"].encode()).hexdigest(),
+    )
+    rows = list(contest) + [function_row(r) for r in candidates[:count]] + mbpp
+    kept = {}
+    for row in rows:
+        key = f"{row['split']}/{row['id'].split('-')[0]}"
+        kept[key] = kept.get(key, 0) + 1
+    output.mkdir(parents=True, exist_ok=False)
+    path = output / "pool.jsonl"
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    report = {
+        "format": FORMAT,
+        "pool_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "prompt_style": "contest and functions",
+        "kept": dict(sorted(kept.items())),
+    }
+    (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    return report
 
 
 def is_heldout(text, fraction):
@@ -374,7 +438,7 @@ def build_contest(problems, traces, contaminated, check, output, difficulties, h
     """Write a pool of contest rows (`contest_row`) to `output` (`pool.jsonl`, `report.json`).
 
     `problems` are `contest_sft.trace_problems`; `traces` the teacher's trace rows
-    (`question_id`, `completion`: its shortest passing completion). A problem is kept if
+    (`question_id`, `completion`: passing completions, a problem's shortest first). A problem is kept if
     it is of `difficulties`, `contaminated(statement)` is false, it has a teacher trace,
     and the trace's final program passes the row's cases in the sandbox (`check`: the
     code sandbox's `run`), so every kept row is solvable under the reward's grader."""
@@ -384,7 +448,7 @@ def build_contest(problems, traces, contaminated, check, output, difficulties, h
         final = livecodebench.final_answer(trace["completion"].lstrip())
         blocks = final and CODE_BLOCK.findall(livecodebench.last_block(final))
         if blocks:
-            programs[trace["question_id"]] = blocks[0]
+            programs.setdefault(trace["question_id"], blocks[0])
     counts = {"problems": len(problems), "difficulty": 0, "contaminated": 0, "no_trace": 0}
     candidates = []
     for problem in problems:

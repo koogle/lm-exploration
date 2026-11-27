@@ -14,6 +14,8 @@ Run from training/:
     modal run -m modal_scripts.modal_sft_data::rl_pool --data-id <fresh-id> [--report <report.json>]
     modal run -m modal_scripts.modal_sft_data::contest_pool --data-id <fresh-id> \
         [--report <report.json>]
+    modal run -m modal_scripts.modal_sft_data::mixed_pool --data-id <fresh-id> \
+        --contest <pool-id> --functions <pool-id> --count <function problems> [--mbpp]
 
 `curriculum` execute-verifies every original arithmetic repair and writes the JSONL locally.
 `commitpack`, `private_patches`, `math` (GSM8K + MetaMathQA word problems), `code` (OpenCodeInstruct +
@@ -22,6 +24,8 @@ and `report.json` to `/runs/<data-id>` on the private run volume for SFT workflo
 (`"data": {"volume": data-id}`). `rl_pool` writes the RL prompt pool `pool.jsonl` (`training_data.rl_tasks`);
 `contest_pool` writes a pool of LiveCodeBench-style contest problems (`rl_tasks.build_contest`)
 and runs the teacher's final programs only in the network-blocked code sandbox.
+`mixed_pool` joins a contest pool with function problems of another pool
+(`rl_tasks.build_mixed`).
 No supplied code is executed during preparation otherwise. Every function has
 no retries and a timeout under 24 hours; calls that start more than 24 hours after launch refuse
 work.
@@ -510,6 +514,48 @@ def contest_pool(
         report,
         prepare_contest_pool.remote(data_id, deadline, difficulties.split(","), heldout_fraction),
     )
+
+
+@app.function(
+    image=data_image, cpu=2, memory=8192, timeout=3600, retries=0, volumes={"/runs": volume}
+)
+def prepare_mixed_pool(data_id, deadline, contest, functions, count, mbpp):
+    from training_data.code_sft import MBPP
+    from training_data.hub_files import pinned_rows
+    from training_data.rl_tasks import build_mixed, mbpp_thinking_row
+
+    check_deadline(deadline)
+    volume.reload()
+    output = fresh_output(data_id)
+
+    def rows(pool):
+        path = Path("/runs") / run_id(pool, "pool") / "pool.jsonl"
+        return [json.loads(line) for line in path.read_text().splitlines()]
+
+    stated = [
+        mbpp_thinking_row(row, split)
+        for split in (("train", "validation") if mbpp else ())
+        for row in pinned_rows(*MBPP, f"full/{split}-00000-of-00001.parquet")
+    ]
+    report = build_mixed(rows(contest), rows(functions), count, output, stated)
+    report["sources"] = {"contest": contest, "functions": functions}
+    if mbpp:
+        report["sources"]["mbpp"] = "@".join(MBPP) + " train and validation"
+    (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    volume.commit()
+    return report
+
+
+@app.local_entrypoint()
+def mixed_pool(
+    data_id: str, contest: str, functions: str, count: int, mbpp: bool = False, report: str = ""
+):
+    """Every row of the contest pool `--contest` and `--count` function problems of the
+    pool `--functions`, in LiveCodeBench's thinking-mode prompt; `--mbpp` adds MBPP's
+    training and validation problems stated with their test assertions."""
+    run_id(data_id, "data_id")
+    deadline = time.time() + LAUNCH_LIMIT_SECONDS
+    write(report, prepare_mixed_pool.remote(data_id, deadline, contest, functions, count, mbpp))
 
 
 @app.local_entrypoint()

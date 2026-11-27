@@ -79,7 +79,7 @@ class Rollouts:
         return self.math_tokens if task == "math" else self.code_tokens
 
 
-SOURCES = ("sampler", "reuse", "file")
+SOURCES = ("sampler", "reuse", "file", "scored")
 
 
 @dataclass(frozen=True)
@@ -91,6 +91,8 @@ class Trajectories:
       shares with one update each.
     - `"file"`: `answers_per_step` answers per step from the trajectory file of `data`
       (a data ID on the run volume, `training_data.rl_trajectories`).
+    - `"scored"`: `answers_per_step` answers per step from the teacher-scored student
+      answers of `data` (`training_data.distillation`).
     """
 
     source: str = "sampler"
@@ -104,8 +106,8 @@ class Trajectories:
         positive_int(self, "updates_per_batch", "answers_per_step")
         if (self.source == "reuse") != (self.updates_per_batch > 1):
             raise ValueError("Only the reuse source takes more than one update per batch")
-        if (self.source == "file") != bool(self.data):
-            raise ValueError("The file source, and only it, names trajectory data")
+        if (self.source in ("file", "scored")) != bool(self.data):
+            raise ValueError("The file and scored sources, and only they, name trajectory data")
 
 
 @dataclass(frozen=True)

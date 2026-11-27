@@ -1,0 +1,21 @@
+{
+  "name": "kda-960m-reasoning-sft-v5",
+  "description": "Thinking-mode reasoning SFT v5 at 32K from the 5B code mid-training export: v4's sources with 31,568 teacher traces in LiveCodeBench's prompt (v4: 2,234) at four passes.",
+  "family": "hybrid",
+  "from": "kda-960m-code-anneal-20261117-02-code-s01/export/tokens-004999610368",
+  "stages": [
+    {
+      "stage": "midtrain",
+      "name": "reasoning",
+      "description": "chat-sft-reasoning-v5 at 32K, 4.89B tokens (one pass of the trace mix, 10% replay)",
+      "model_config": "hybrid/configs/kda-960m-reasoning-sft-v5.json",
+      "gpu": "H100",
+      "world_size": 8,
+      "segment_seconds": 50400,
+      "worker_timeout_seconds": 54000,
+      "max_segments": 1,
+      "segments_per_call": 1,
+      "qualification_segments": 0
+    }
+  ]
+}

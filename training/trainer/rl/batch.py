@@ -23,6 +23,7 @@ class Batch:
     stops: list
     group: int | None = None
     sampler: list | None = None
+    teacher: list | None = None
 
     def sequences(self):
         """{x, y}: prompt + answer (+ its stop token) and its targets; only answer tokens
@@ -45,7 +46,9 @@ class Tokens:
     `advantage` and constant normalization `scale` `[batch]` (see `loop.py`).
 
     `score` is what an algorithm's loss pushes up per token: `logp`, unless a correction
-    replaces it by a term with another gradient (`off_policy/stable_reinforce.py`)."""
+    replaces it by a term with another gradient (`off_policy/stable_reinforce.py`).
+    `teacher_kl` is KL(teacher ‖ learner) per token (with gradient) when the answers
+    carry teacher scores."""
 
     logits: torch.Tensor | None
     targets: torch.Tensor
@@ -55,6 +58,7 @@ class Tokens:
     advantage: torch.Tensor
     scale: torch.Tensor
     score: torch.Tensor | None = None
+    teacher_kl: torch.Tensor | None = None
 
     def __post_init__(self):
         if self.score is None:
