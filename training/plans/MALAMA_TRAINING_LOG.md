@@ -49,6 +49,7 @@ the same dataset. LiveCodeBench scores are v6 pass@1 in the thinking protocol.
 | `kda-960m-contest-rl-v5-20261124-01` | `kda-960m-contest-rl-v5` | Nov 24–25 | Stopped at about step 650: 15.6 pass@1 at step 100, 18.9 at 250, 17.0 at 500 |
 | `kda-960m-contest-functions-rl-20261124-01` | `kda-960m-contest-functions-rl` | Nov 24–25 | Stopped at step 45: the first mixed pool gave MBPP problems without their assertions and held-out MBPP stayed at 0% |
 | `kda-960m-contest-functions-rl-20261125-01` | `kda-960m-contest-functions-rl` | Nov 25 | Completed: 400 mixed RL steps from contest RL step 250 (19.1 pass@1, HumanEval 50.1, MBPP 41.6). Step 400 is Malama v0.0.1 |
+| `kda-960m-distill-rkl-pilot-a-20261127-01` | `kda-960m-distill-pilot-a` | Nov 27 | Completed (reverse KL): 32 steps on `distill-pilot-20261122-01`; held-out accuracy fell 37.1% to 31.7% and truncation rose to 28.1% (worse than forward KL at the same LR) |
 
 ## Day by day, 10 to 27 November 2026
 
@@ -309,9 +310,25 @@ four code/config bugs (now fixed on `main`) and several plan-vs-operated gaps:
   `0.02 / sqrt(48) = 0.00289` (~6.9× larger std). Moved to `__init__()`.
 - **On-policy distillation KL direction (`hybrid/model.py`, `trainer/rl/off_policy/distill.py`).**
   `_chunk_distillation` minimized forward KL `KL(teacher ‖ student)` (mode-covering)
-  instead of reverse KL `KL(student ‖ teacher)` (mode-seeking). Applying forward KL to the
-  RL-sharpened 14.1 checkpoint flattened its distribution and brought back verbatim loops
-  across all five pilots (`a`–`e`). Switched to reverse KL.
+  instead of reverse KL `KL(student ‖ teacher)` (mode-seeking). Switched to reverse KL
+  and re-tested `kda-960m-distill-pilot-a` (`kda-960m-distill-rkl-pilot-a-20261127-01`,
+  32 steps on `distill-pilot-20261122-01`, 15.8 min on 8 H100s, ~$8.40):
+
+  | Metric | Forward KL (`pilot-a-20261122-02`) | Reverse KL (`rkl-pilot-a-20261127-01`) |
+  | --- | ---: | ---: |
+  | Baseline val acc / solved / trunc | 37.5% / 57.1% / 0.9% | 37.1% / 53.6% / 0.9% |
+  | Step 16 val acc / solved / trunc | 35.7% / 50.0% / 1.3% | 34.4% / 46.4% / 5.4% |
+  | Step 32 val acc / solved / trunc | 32.6% / 50.0% / 11.6% | 31.7% / 44.6% / 28.1% |
+  | Teacher KL (step 1 to 32) | 0.703 to 0.320 | 0.460 to 0.278 |
+  | KL from parent at step 32 | 5.23 | 866.4 |
+  | Sampled NLL (step 1 to 32) | 0.205 to 0.416 | 0.205 to 0.395 |
+
+  Reverse KL did not fix distillation and degraded faster at the same learning rate.
+  With `kl_coef = 0` on frozen offline answers (`scored` source), policy-to-parent KL
+  exploded to 866.4 by step 32 and truncation reached 28.1%. The failure is driven by
+  offline drift toward a distant teacher distribution (`teacher_nll = 0.72` vs
+  `student_nll = 0.21`) without a parent-KL anchor or online resampling, not by KL
+  direction alone.
 - **Greedy RL validation (`workflows/kda-960m-contest-rl-v4.json`, `-v5.json`,
   `-contest-functions-rl.json`).** These workflows omitted `validation_samples` and fell
   back to greedy (`1`), explaining the 3–42% MBPP validation swings and 71% unfinished
