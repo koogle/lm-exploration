@@ -1,12 +1,15 @@
 # Sub-1B coding reasoner: findings, November 2026
 
 Measured results of the stages after foundation pretraining in the
-[training plan](CODING_REASONER_1B.md): code mid-training, thinking-mode reasoning SFT,
-a weight-merge attempt and contest RL. The target is LiveCodeBench v6 in thinking mode,
+[training plan](CODING_REASONER_1B.md): code mid-training, thinking-mode reasoning SFT
+(v3 and v4), a weight-merge attempt and contest RL. The target is LiveCodeBench v6 in thinking mode,
 where MobileLLM-R1.5-950M reports 29.0 pass@1 (a reference score only; none of its
 outputs are used). Result files are in the HF dataset
 [`jfrick/lm-exploration-results`](https://huggingface.co/datasets/jfrick/lm-exploration-results),
-folder `coding-reasoner-1b/`: `code/`, `lcb-thinking/`, `merge/`, `rl/` and `pools/`.
+folder `training/results/coding-reasoner-1b/`: `runs/` (each launch's workflow record,
+stage records, run configs, metrics, held-out losses, reports and logs), `lcb-thinking/`
+(per-problem LiveCodeBench scores and our models' completions), `code/`, `merge/` and
+`pools/`. The [run log](#run-log) lists every launch.
 
 ## Code mid-training: 5B and 20B tokens
 
@@ -147,8 +150,101 @@ What this shows:
 - Answers got shorter than the benchmark allows: 3.4K tokens on average with 32K
   available. Hard problems may need longer reasoning than the 8K training limit rewards.
 
-The second stage, [`kda-960m-contest-rl-hard.json`](../workflows/kda-960m-contest-rl-hard.json),
-follows from these: it continues from step 400 on medium and hard problems only
-(`rl-pool-contest-03`: 1,154 medium and 403 hard training problems, 44 held out; hard
-problems are limited to those the teacher solved), with 16K-token answers and
-validation on 4 sampled answers per problem at temperature 0.6.
+## Contest RL on medium and hard problems: negative result
+
+[`kda-960m-contest-rl-hard.json`](../workflows/kda-960m-contest-rl-hard.json) continued
+from step 400 on medium and hard problems only (`rl-pool-contest-03`: 1,154 medium and 403
+hard training problems, 44 held out; hard problems limited to those the teacher solved),
+with 16K-token answers and validation on 4 sampled answers per problem at temperature 0.6.
+
+The first launch ran out of GPU memory at 16K tokens (rank 7 aborted). Computing the
+target log-probabilities in chunks of 2,048 positions instead of from the full logits
+(`HybridLM.target_logprobs`, commit `41efe89`) fixed it. The second launch was stopped at
+step 146 of 200, after its step-100 checkpoint scored below the starting model; it saved a
+checkpoint and paused, and its deadline supervisor later closed the launch.
+
+| Steps | Reward | Truncated | Answer tokens | KL |
+|---|---|---|---|---|
+| 1–10 | 0.36 | 0% | 3,290 | 0.00 |
+| 41–50 | 0.45 | 0% | 2,870 | 0.04 |
+| 91–100 | 0.45 | 0% | 3,240 | 0.11 |
+| 137–146 | 0.50 | 0% | 3,740 | 0.17 |
+
+| Step | 0 | 25 | 50 | 75 | 100 | 125 |
+|---|---|---|---|---|---|---|
+| Validation accuracy (4 samples) | 22.2 | 26.7 | 22.7 | 22.2 | 19.3 | 18.8 |
+| Solved by any of the 4 | 38.6 | 38.6 | 34.1 | 34.1 | 29.5 | 31.8 |
+
+| LiveCodeBench v6 | pass@1 | Easy | Medium | Hard | Truncated |
+|---|---|---|---|---|---|
+| RL step 400 (start) | 14.1 | 46.9 | 6.4 | 1.6 | 0.04% |
+| + 100 steps | 11.8 | 36.2 | 7.1 | 1.6 | 3.6% |
+| + 146 steps | 12.4 | 41.0 | 5.6 | 1.4 | 1.2% |
+
+Training reward rose while held-out accuracy and the benchmark fell. Medium and hard did
+not improve, and easy problems, absent from the pool, lost 6 to 11 points. The model was
+short of capability on these problems more than of RL signal, which led to the larger
+distillation below.
+
+## Reasoning SFT v4
+
+[`kda-960m-reasoning-sft-v4.json`](../workflows/kda-960m-reasoning-sft-v4.json): 4.30B
+tokens of `chat-sft-reasoning-v4` at 32K (about three times v3's unique traces, two
+passes, 10% replay) from the same 5B code export as v3, 4,100 steps in one 10-hour
+session on 8 H100s. Held-out loss (mean over the recipe's sources): 1.401 at step 0, 0.774
+at 500, 0.706 at 1,500, 0.674 at 2,500, 0.656 at 3,500.
+
+LiveCodeBench v6, thinking protocol; pass@6 is unbiased from the 16 samples:
+
+| | pass@1 | Easy | Medium | Hard | pass@6 | Medium @6 | Truncated | Looping |
+|---|---|---|---|---|---|---|---|---|
+| Reasoning SFT v3 | 8.4 | 32.8 | 1.1 | 0.1 | 14.8 | 5.4 | 78.9% | 76.7% |
+| RL step 400 (from v3) | 14.1 | 46.9 | 6.4 | 1.6 | 21.3 | 13.1 | 0.04% | 0.04% |
+| Reasoning SFT v4 | 14.0 | 46.7 | 7.1 | 0.9 | **26.6** | **21.3** | 57.9% | 50.0% |
+
+- Three times the distillation data, without RL, matches 400 RL steps on pass@1 and beats
+  them on pass@6. It solves 57 of the 175 problems at least once (14 medium, 6 hard).
+- Looping remains: 58% of answers reach the 32K limit, 86% of those in a verbatim loop
+  (median onset 57% into the answer, median period 365 characters). RL removed this
+  failure from v3 within 50 steps, so RL from v4 is the next step.
+- The benchmark took 82 minutes per shard (mean answer 23.7K tokens).
+
+The first launch failed on its 5.5-hour function timeout at step 900: rank 0's held-out
+evaluation over 207 subsets took 18 minutes at every evaluation, the final evaluation
+repeated the last one, and the session hung on shutdown after writing its report. The
+config now evaluates every 500 steps on 4 documents per chat subset, the trainer reuses
+an evaluation already made at the final step, the workflow ends a session that has
+written its report and does not exit (`workflows.sessions.run_session`), and the run is
+one 14-hour session. A failed session is now retried within the launch's deadline when
+it saved a new checkpoint (`session_retries`, [workflows README](../workflows/README.md)).
+
+## Run log
+
+Every launch in this study, by workflow run ID (dates UTC, from each launch's workflow
+record). Records are under `runs/<run ID>/` in the archive.
+
+| Run ID | Workflow | Dates | Outcome |
+|---|---|---|---|
+| `kda-960m-fim-midtrain-20261114-01` | `kda-960m-fim-midtrain` | Nov 14–15 | Completed: about 15B tokens with fill-in-the-middle from Malama Base at 84.8B tokens |
+| `kda-960m-lcb-format-sft-20261115-01` | `kda-960m-lcb-format-sft` | Nov 15 | Failed before training: the recipe was not prepared on the data volume |
+| `kda-960m-lcb-format-sft-20261115-02` | `kda-960m-lcb-format-sft` | Nov 15 | Failed at startup: the trainer could not read the recipe's data files |
+| `kda-960m-lcb-format-sft-20261115-03` | `kda-960m-lcb-format-sft` | Nov 15 | Completed (answer-only format SFT, two variants); 4.7 pass@1 on an 8-problem LiveCodeBench check |
+| `kda-960m-reasoning-pilot-20261115-01` | `kda-960m-reasoning-pilot` | Nov 15 | Failed in the 32K context extension stage |
+| `kda-960m-reasoning-pilot-20261115-02` | `kda-960m-reasoning-pilot` | Nov 15 | Completed: 32K context extension, then the reasoning pilot (3.8 pass@1) |
+| `kda-960m-code-anneal-20261117-01` | `kda-960m-code-anneal` | Nov 17 | Failed in data preparation: one source had fewer training tokens than the recipe asked for |
+| `kda-960m-code-anneal-20261117-02` | `kda-960m-code-anneal` | Nov 17–18 | Completed: 5B code tokens at 32K |
+| `kda-960m-code-anneal-20b-20261117-01` | `kda-960m-code-anneal-20b` | Nov 18 | Completed: 20B code tokens at 4K |
+| `kda-960m-reasoning-sft-v3-20261118-01` | `kda-960m-reasoning-sft-v3` | Nov 18 | Completed: reasoning SFT v3 (8.4 pass@1) |
+| `kda-960m-merge-sft-v3-code20b-l05`, `-l10` | `modal_tools::merge` | Nov 19 | Weight merges; both broke the model |
+| `kda-960m-contest-rl-20261119-01` | `kda-960m-contest-rl` | Nov 19–20 | Illegal memory access while sampling at step 64; its resumed launch hung (FlexAttention recompilation) |
+| `kda-960m-contest-rl-20261120-01` | `kda-960m-contest-rl` | Nov 20 | From step 50; illegal memory access at step 62 of the run |
+| `kda-960m-contest-rl-20261120-02` | `kda-960m-contest-rl` | Nov 20–21 | Completed: from step 100 to 400 (14.1 pass@1) |
+| `kda-960m-contest-rl-hard-20261121-01` | `kda-960m-contest-rl-hard` | Nov 21 | Out of GPU memory at 16K tokens |
+| `kda-960m-contest-rl-hard-20261121-02` | `kda-960m-contest-rl-hard` | Nov 21–22 | Stopped at step 146 of 200 (11.8 pass@1 at step 100, 12.4 at 146) |
+| `hybrid-720m-loop-test-03g` | `hybrid-720m-loop-test` | Nov 21–22 | Completed: closed-gate looping conversion ([looped LM plan](LOOPED_LM.md)) |
+| `kda-960m-reasoning-sft-v4-20261121-01` | `kda-960m-reasoning-sft-v4` | Nov 21–22 | Function timeout at step 900 |
+| `kda-960m-reasoning-sft-v4-20261122-01` | `kda-960m-reasoning-sft-v4` | Nov 22 | Stopped after 5 minutes and relaunched with the fixed session handling |
+| `kda-960m-reasoning-sft-v4-20261122-02` | `kda-960m-reasoning-sft-v4` | Nov 22 | Completed: 4,100 steps (14.0 pass@1, 26.6 pass@6) |
+
+Later stages of this line (on-policy distillation pilots, RL from SFT v4, SFT v5 and the
+mixed RL behind the first release) are in [MALAMA_V0_0_1.md](MALAMA_V0_0_1.md).
