@@ -1,722 +1,133 @@
-# Hybrid model family
+# Hybrid model family (`model_hybrid`)
 
-`hybrid/` (installed as `model_hybrid`) holds the decoder for the
-[~720M hybrid pretraining plan](../plans/HYBRID_720M.md). It is separate from
-`10m/` and `100m/`, so the 124M Simple LLM runs use unchanged code.
+`hybrid/` implements the Kimi Delta Attention (KDA) + full-attention hybrid decoder used
+for **Malama** (0.93B released / 960M with MTP; see the
+[Malama v0.0.1 card](../publication/cards/malama-v0.0.1/README.md) and
+[release notes](../plans/MALAMA_V0_0_1.md)), as well as the earlier 720M token and
+byte-level [H-Net](../plans/HNET_720M.md) models.
 
-## Backbone
+## Architecture
 
 [`model.py`](model.py) defines `HybridConfig` and `HybridLM`:
 
-- Pre-norm blocks with `RMSNorm` (statistics in fp32) and a `SwiGLU`
-  feed-forward layer, both the shared classes from [`10m/model.py`](../10m/model.py);
-  the hybrid family builds `SwiGLU` without biases at a configurable hidden width.
-- Tied input/output embeddings; no bias parameters except the attention output
-  gate's (below).
-- Full-attention layers use grouped-query attention (`n_head` query heads,
-  `n_kv_head` key/value heads, head dimension 128), RMSNorm on each query and key
-  head (QK-norm), and RoPE with a configurable base (default 1,000,000).
-- Initialization: Normal(0, 0.02) for embeddings and projections; residual
-  output projections (attention `o_proj`, SwiGLU `down`) use
-  `0.02 / sqrt(2 * n_layer)`. Norm scales start at 1.
-- `forward(tokens)` returns logits. `forward(tokens, labels)` returns summed
-  cross-entropy `ce`, summed squared log-normalizer `z`, `loss = ce + 1e-4 * z` and
-  the valid-target `count`. Logits are computed in chunks of `loss_chunk_size`
-  rows and recomputed in backward, so the full `[tokens, vocab]` logit tensor is
-  never stored. Labels of `-100` are ignored.
+- **Backbone:** Pre-norm blocks with fp32-statistics `RMSNorm`, bias-free `SwiGLU` MLPs,
+  and tied input/output embeddings. Residual output projections (`o_proj`, SwiGLU `down`)
+  scale init by `0.02 / sqrt(2 * n_layer)`.
+- **3:1 hybrid layout:** `layer_pattern` defaults to `("kda", "kda", "kda", "full")`,
+  placing full attention at every fourth layer (e.g., 18 KDA + 6 full-attention layers in
+  the 24-layer Malama 960M model).
+- **Full-attention layers:** Grouped-query attention (12 query / 4 KV heads, head dim 128),
+  QK-norm, RoPE (base 1,000,000), a learned per-head **attention sink** (`sigmoid(lse - sink)`
+  so heads can attend to nothing), and a per-channel **sigmoid output gate** before
+  `o_proj` (bias init `3.0`). Uses compiled `FlexAttention` on CUDA and explicit softmax
+  on CPU.
+- **KDA layers ([`kda.py`](kda.py)):** Linear-attention recurrence following
+  [Kimi Linear](https://arxiv.org/abs/2510.26692) (`chunk_kda` via `fla-core` on CUDA,
+  explicit fp32/fp64 recurrence on CPU): causal depthwise conv (size 4) + SiLU on q/k/v,
+  L2-normalized q/k, sigmoid beta, per-channel decay, per-head RMSNorm, and low-rank
+  output gate. No positional encoding. See [KDA, step by step](../references/kda.md).
+- **Document masking ([`documents.py`](documents.py)):** Packed documents end in EOS;
+  every forward pass derives per-token document IDs and `cu_seqlens` from `eos_id`,
+  isolating attention, RoPE positions, KDA convolutions, and recurrent states across
+  document boundaries.
+- **Multi-token prediction (`mtp=True`):** Optional one-block DeepSeek-V3/GLM-style head
+  predicting `x_(t+2)` through the shared output layer (weight decays 0.3 → 0.1; optional
+  `mtp_loss_fraction < 1` subsampling). Dropped at inference/release (`mtp=False`).
+- **Looping (`n_loops > 1`):** Optional shared recurrent middle block with gated updates
+  following Elastic Latent Recurrence; see [LOOPED_LM.md](../plans/LOOPED_LM.md).
 
-### Grouped-query attention
+## Custom kernels and fast decode
 
-With the default 12 query heads and 4 key/value heads, each key/value head
-serves a group of 3 consecutive query heads: query head `h` reads key/value
-head `h // (n_head // n_kv_head)`. Every query head still has its own attention
-pattern; the groups share only the keys and values they attend over, so
-`k_proj`/`v_proj` and the KV cache are a third the size of multi-head attention.
+- **Fused chunked output loss ([`fused_loss.py`](fused_loss.py), [`kernels/softmax_gradient.cu`](kernels/softmax_gradient.cu)):**
+  Computes the vocabulary projection, cross-entropy, z-loss (`1e-4`), and in-place logit
+  gradients in chunks without materializing `[tokens, vocab]` logits (+15% throughput on
+  H100).
+- **CUDA-graph decoding ([`generate.py`](generate.py), [`kernels/decode.cu`](kernels/decode.cu)):**
+  Single-pass prefill loads full-attention KV caches and KDA conv/recurrent states into a
+  cached `Decoder`, then replays captured CUDA graphs using custom KDA-step and
+  sink-attention kernels (64 × 512-token prompts on H100: ~4.1 ms/step, 15.5K tok/s in
+  bf16 for 720M). Cached decoders are reused across prompt widths and read weights in
+  place for RL rollouts.
+- **H100 KDA backward kernels ([`kernels/kda_wy.py`](kernels/kda_wy.py), [`kernels/kda_intra.py`](kernels/kda_intra.py)):**
+  Registered via FLA's backend dispatch for Hopper (`sm_90`, head dim 128, chunk 64); see
+  [KDA_REAL_DATA_MFU.md](../plans/KDA_REAL_DATA_MFU.md) for measurements and throughput
+  comparisons.
 
-```mermaid
-flowchart TB
-    subgraph queries["12 query heads (q_proj)"]
-        direction LR
-        q0["q0"]
-        q1["q1"]
-        q2["q2"]
-        q3["q3"]
-        q4["q4"]
-        q5["q5"]
-        q6["q6"]
-        q7["q7"]
-        q8["q8"]
-        q9["q9"]
-        q10["q10"]
-        q11["q11"]
-    end
-    subgraph keys["4 key/value heads (k_proj, v_proj, KV cache)"]
-        direction LR
-        kv0["k0, v0"]
-        kv1["k1, v1"]
-        kv2["k2, v2"]
-        kv3["k3, v3"]
-    end
-    q0 --> kv0
-    q1 --> kv0
-    q2 --> kv0
-    q3 --> kv1
-    q4 --> kv1
-    q5 --> kv1
-    q6 --> kv2
-    q7 --> kv2
-    q8 --> kv2
-    q9 --> kv3
-    q10 --> kv3
-    q11 --> kv3
-```
+## Optimizer and tokenizer
 
-Multi-head attention is the case `n_kv_head == n_head` (one query per group);
-multi-query attention is `n_kv_head == 1` (all queries in one group).
-
-## Document masking
-
-Loaders pack documents back to back, each ending in EOS. Every forward pass is
-document-masked: the model derives per-row document ids from the EOS tokens in
-its input (`HybridConfig.eos_id`, [`documents.py`](documents.py)
-`document_ids`), so a token sees earlier tokens of its own document only and RoPE
-positions restart after each EOS. Training, evaluation and sampling all call
-`forward(tokens[, labels])` with no separate mask. `cu_seqlens` converts the
-ids to flattened document offsets for varlen kernels.
-
-## Attention
-
-On CUDA, full attention is FlexAttention (`torch.nn.attention.flex_attention`,
-compiled once, tensor cores) with a block mask built from the document ids: query
-`q` may see key `k` when `k <= q` and both are in the same document. Blocks outside
-every document are skipped. It returns the output and the fp32 log-sum-exp, whose
-gradient flows back (the attention sink uses it). On CPU, `model.reference_attention`
-(an explicit masked softmax, fp32 or fp64) is the model's attention.
-
-## Attention sink and output gate
-
-Each full-attention layer has a learned sink: one logit per head, initialized to
-0, acting as an extra key with a zero value. Softmax over the scores plus the sink
-equals the plain attention output times `sigmoid(lse - sink)`, where `lse` is the
-log-sum-exp of the scores, so the layer applies that factor to FlexAttention's (or
-the reference's) output; gradients flow through the log-sum-exp. A head can then
-attend to "nothing" without spending probability on a real token.
-
-After the sink, an elementwise sigmoid gate multiplies the merged heads before
-`o_proj`: `sigmoid(gate_proj(x) + gate_bias)`, with `x` the layer's normalized
-input. `gate_bias` (per channel) starts at `gate_bias_init = 3.0`, so the gate
-starts about 95% open. With the gate fully open and the sink at -inf the layer
-reduces exactly to plain document-causal attention.
-
-## Kimi Delta Attention and the hybrid layout
-
-The experimental `--shared-kda-metadata` benchmark mode enables
-`DocumentMask.kda_offsets`, which lazily builds one int64 document-offset tensor per
-forward pass and shares it across recurrent layers. Each forward owns its mask,
-so changing EOS positions or batch rows cannot reuse a previous batch's layout.
-The standalone recurrence helpers also accept explicit offsets. The benchmark's
-`--reference-kda-metadata` rebuilds offsets per layer for matched comparisons;
-the Modal launcher exposes `--compare-kda-metadata`, including with `--fp8-only`.
-`--larger-microbatch 8` preserves the baseline precision in all comparison arms.
-`--compare-mtp-fraction 0.25` runs configured / sampled / configured MTP loss
-fractions with the precision and microbatch of the other arguments.
-Shared metadata is opt-in: the corrected control comparison found a throughput
-regression, so normal training retains per-layer offset construction.
-
-[`kda.py`](kda.py) implements KDA layers following flash-linear-attention's
-`KimiDeltaAttention` ([Kimi Linear](https://arxiv.org/abs/2510.26692)), without
-biases:
-
-- q/k/v projections to `n_kda_head` heads of width `head_dim`, each followed by a
-  causal depthwise convolution (kernel `kda_conv_size = 4`) and SiLU.
-- L2-normalized q and k (q further scaled by `1/sqrt(head_dim)`), sigmoid beta
-  from `b_proj`, and a per-channel decay `-exp(A_log) * softplus(f_proj(x) + dt_bias)`
-  with a low-rank `f_proj`.
-- Per-head output RMSNorm, a sigmoid gate from a low-rank `g_proj`, and `o_proj`
-  (a residual output projection for initialization).
-- No positional encoding; the recurrent state is fp32.
-
-Document boundaries reset both the convolutions (they never read a previous
-document's tokens) and the recurrent state. On CUDA the recurrence is fla's
-`chunk_kda`, run over the flattened batch with `cu_seqlens` from the document ids;
-gate, beta and L2 normalization run inside the kernel. On CPU, `kda_reference`
-is an explicit per-token recurrence with fp32 (or fp64) state.
-[KDA, step by step](../references/kda.md) walks through the recurrence on a toy head.
-
-`torch.compile` traces through the fla call. On one H100, a small compiled hybrid
-model (4 layers, width 512, 4 x 1024 tokens, bf16) took 18.7–19.1 ms per training
-step that way and 19.0–19.5 ms with fla excluded by `torch.compiler.disable`
-(three alternating rounds after warming up both), so the graph stays unbroken.
-
-`HybridConfig.layer_pattern` lists `"kda"` and `"full"` layers and repeats to
-`n_layer`; the default `("kda", "kda", "kda", "full")` puts full attention at
-layers 3, 7, 11 and 15 of 16. Full-attention layers keep RoPE, the sink and the
-output gate.
-
-## Multi-token prediction
-
-`MultiTokenPrediction` is one DeepSeek-V3/GLM-style module (`mtp=True` by
-default). At position `t` it concatenates RMSNorm of the trunk's last residual
-state `h_t` with RMSNorm of the embedding of `x_(t+1)`, projects back to the
-model width, runs one hybrid block (`mtp_layer_kind`, full attention by
-default, sharing the trunk's document mask and RoPE) and an output RMSNorm, and
-predicts `x_(t+2)` through the shared tied output layer. Its loss uses the same
-chunked cross-entropy and z-loss.
-
-`documents.mtp_labels(inputs, labels, eos_id)` builds the `t+2` targets:
-`labels[t + 1]`, ignored when `x_t` or `x_(t+1)` is EOS (the target would be in
-the next document) and at the last position. `forward(tokens, labels, mtp_labels)` adds `mtp_loss`, `mtp_ce`,
-`mtp_z` and `mtp_count`. The trainer combines the means as
-`loss / count + mtp_weight(config, progress) * mtp_loss / mtp_count`, where the
-weight decays linearly from 0.3 to 0.1 over training progress. With
-`mtp_loss_fraction < 1` (default 1.0), training passes only a uniformly random
-fixed-size fraction of positions through the output layer for the MTP loss (the
-module itself still runs over every position) and divides by the expected count;
-evaluation uses every position. At 0.5 the 720M step on one H100 runs at 57.3K
-tokens/s instead of 54.8K, since the two output-layer projections are about half
-of the model's FLOPs.
-
-Inference does not run the module: `forward(tokens)` returns trunk logits, and
-a model built with `mtp=False` loads the trunk weights (all keys outside `mtp.`)
-and produces identical logits.
-
-## Looping
-
-With `n_loops > 1`, blocks `[loop_prelude, n_layer - loop_coda)` form one shared
-recurrent group that runs `n_loops` times per token (or `loops` times, passed to
-`forward`), following Elastic Latent Recurrence
-([arXiv:2610.12582](https://arxiv.org/abs/2610.12582)). The prelude output `h` is
-re-injected at every loop: the recurrent blocks run on `state + h`, and `LoopUpdate`
-takes a gated step `state + beta * (proposal - state)` with
-`beta = sigmoid(W (state + h) + b) * softplus(gamma)`, all zero-initialized (step ≈
-0.35). `n_loops = 1` is the plain stack. FLOP accounting counts the recurrent blocks
-once per loop; cached decoding of looped models is not implemented. The plan, from
-trainer changes to a matched 720M pilot, is [plans/LOOPED_LM.md](../plans/LOOPED_LM.md).
-
-## Optimizer grouping
-
-Each module declares the optimizer role of the parameters it creates, next to its
-`__init__`: `optimizer()` in [`model.py`](model.py) and [`kda.py`](kda.py)
-yields `(parameter, role)` pairs (helper `declare` in
-[`trainer/roles.py`](../trainer/roles.py)). `trainer.optimizers.RoleOptimizer`
-collects them by parameter identity:
+Parameters declare their optimizer role via [`trainer/roles.py`](../trainer/roles.py) and
+are grouped by `trainer.optimizers.RoleOptimizer`:
 
 | Role | Optimizer | Parameters |
 | --- | --- | --- |
-| `muon` | Muon, LR 0.02, momentum 0.95, weight decay 0.1 | 2D hidden matrices in blocks and MTP: q/k/v/o, attention `gate_proj`, KDA `f_proj`/`g_proj`, SwiGLU, MTP `fuse` |
-| `adamw_decay` | AdamW, LR 3e-4, betas (0.9, 0.95), weight decay 0.1 | tied embedding/output table, KDA beta projection `b_proj` |
-| `adamw_no_decay` | AdamW, LR 3e-4, betas (0.9, 0.95), no weight decay | norm scales, attention sinks, gate biases, KDA `A_log`, `dt_bias`, convolution kernels |
+| `muon` | Muon (LR 0.02, mom 0.95, WD 0.1) | 2D hidden matrices (q/k/v/o, gates, KDA `f_proj`/`g_proj`, SwiGLU, MTP `fuse`) |
+| `adamw_decay` | AdamW (LR 3e-4, betas 0.9/0.95, WD 0.1) | Tied embedding/output table, KDA `b_proj` |
+| `adamw_no_decay` | AdamW (LR 3e-4, betas 0.9/0.95, WD 0) | Norm scales, sinks, gate biases, KDA `A_log`/`dt_bias`, conv kernels |
 
-Muon is `trainer.optimizers.Muon` (five-step Newton–Schulz with the original
-aspect-ratio scaling); its weight decay is decoupled, `p *= 1 - lr * 0.1`.
-The learning rates are the 124M comparison's
-([MUON_COMPARISON.md](../distributed/MUON_COMPARISON.md)), starting values for
-the 720M pilot rather than tuned at this scale. Every group keeps its base rate
-and `trainer.optimizers.set_learning_rate` applies one schedule factor to all of
-them. A parameter that no module declares, one declared twice, or a non-matrix
-declared for Muon raises.
+[`tokenizer/glm.py`](../tokenizer/glm.py) pins `zai-org/GLM-4.7-Flash`'s `tokenizer.json`
+(154,856 tokens padded to 154,880; EOS `<|endoftext|>` = 154820; preserves GLM chat,
+`<think>`, and tool tokens).
 
-## Tokenizer and data recipe
+## Training, data, and variants
 
-[`tokenizer/glm.py`](../tokenizer/glm.py) pins zai-org/GLM-4.7-Flash's `tokenizer.json`
-(revision `7dd20894`, SHA-256 `19e77364…a82d`). On 2026-10-25 it was
-byte-identical to zai-org/GLM-5.3-Flash's (revision `46a050be`). It has 154,856
-entries; the model pads its embedding to 154,880. Documents end with
-`<|endoftext|>` (154820); GLM's chat (`<|system|>`, `<|user|>`, `<|assistant|>`,
-`<|observation|>`), reasoning (`<think>`) and tool (`<tool_call>`, `<arg_key>`, …)
-tokens keep their GLM ids, which `load()` verifies.
+[`train.py`](train.py) adapts the hybrid family to the shared [`trainer/loop.py`](../trainer/loop.py)
+for pretraining (`PreparedMixture`), chat/reasoning SFT (`ChatMixture` with replay), and
+long-context mid-training. [`post_train.py`](post_train.py) connects it to the RL and
+on-policy distillation loops ([`rl/README.md`](../rl/README.md)). [`modal_data.py`](modal_data.py)
+prepares uint32 packed shards on Modal CPUs with license/language/path filters and
+13-gram benchmark contamination screening.
 
-[`recipes/hybrid-40b-v1.json`](recipes/hybrid-40b-v1.json) targets 40B tokens,
-each source read once (`max_passes: 1`):
-
-| Source | Share | Pinned input | Shards |
-| --- | ---: | --- | ---: |
-| ClimbMix | 70% | `karpathy/climbmix-400b-shuffle` | 600 |
-| Permissive code | 20% | `codeparrot/github-code-clean`, licenses MIT, Apache-2.0, BSD-2/3, ISC, CC0, Unlicense | 80 |
-| Math | 10% | `HuggingFaceTB/finemath` `finemath-4plus` | 38 |
-
-The last shard of each source is held out for evaluation. Preparation drops any
-document sharing a 13-token n-gram with the test sets of GSM8K, MATH, HumanEval,
-MBPP, MMLU, ARC and HellaSwag (validation), all pinned by revision.
-
-[`data/packed_shards.py`](../data/packed_shards.py) turns each upstream parquet file into a shard of uint32 GLM
-ids (documents shuffled within the shard, each ending in EOS) plus per-document
-token and byte counts. `PreparedMixture` reads each source's shards in a seeded
-order and packs 4,097-token windows (consecutive windows share one token), each
-from the source furthest below its weight (`data.mixture.deficit_source`, the rule
-`TokenMixture` uses too); it is resumable and waits for shards
-that are still being prepared, so training can start while preparation runs.
-
-[`modal_data.py`](modal_data.py) is the family's data stage: it prepares shards on
-Modal CPUs (8 cores, eight shards per call, up to the stage's `parallel`, 48 by
-default), held-out shards first and then in the order training reads them, onto the
-`lm-exploration-hybrid-data` volume. A workflow runs it as a `data` stage, alone or
-before pretraining (`workflows/hybrid-h100x8.json`):
+Run workflows from `training/` (see [`workflows/README.md`](../workflows/README.md)):
 
 ```sh
-uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
-    --run-id <id> --end corpus
+# Prepare data or run a training workflow on Modal
+uv run modal run --detach -m workflows.modal_train::main --workflow workflows/kda-960m-foundation.json --run-id <id>
+uv run modal run -m workflows.modal_train::stop --run-id <id>
+
+# Throughput benchmark (supports --fp8-only, --compare-kda-wy, --compare-intra, --hardware-kernel)
+uv run modal run -m model_hybrid.modal_tools::bench --config hybrid/configs/kda-960m-100b.json --gpus 1
+
+# Publish an exported checkpoint (add --full for raw training checkpoint with optimizer/cursor)
+uv run modal run -m model_hybrid.modal_tools::publish --checkpoint <run>-sNN/step-NNNNNNNNN.pt --repo <owner/name>
 ```
 
-The workflow launch's supervisor cancels every recorded call at the 24-hour
-deadline, and each call has `retries=0` and a timeout bounded by the deadline.
-Finished shards are skipped, so another launch continues. The
-coordinator writes `capacity.json` (train/held-out tokens, documents and drops
-per source) and the screen writes `screen.json`.
+**Byte-level H-Net ([`hnet.py`](hnet.py), [`byte_data.py`](byte_data.py)):** Wraps the
+hybrid trunk in one dynamic-chunking stage operating directly on UTF-8 bytes (0–255 + EOS
+256) with cosine boundary routing, chunked EMA dechunking, and ratio loss. Selected via
+`"architecture": "hnet"` (`jfrick/hnet-720m`; see [HNET_720M.md](../plans/HNET_720M.md)).
 
-A code source can select upstream rows before tokenizing: `languages` or
-`exclude_languages`, `exclude_path` (a regular expression searched in `path`) and
-`max_bytes`. [`recipes/kda-foundation-100b-504010-v2.json`](recipes/kda-foundation-100b-504010-v2.json)
-uses them for its `python` and `code` sources and reuses the ClimbMix and math
-shards prepared under v1 (`prepared_in`); see the
-[corpus audit](../plans/KDA_960M_PRETRAINING.md#filtered-code-sources-recipe-v2).
+## Benchmarks and playground
 
-Measured on the held-out shards (2026-10-25): ClimbMix 52.6M tokens per shard
-(103 of 84,992 documents screened out), code 139M (43,776 of 126,925 files outside
-the license allowlist, 740 screened out), FineMath-4+ 125M (8,281 of 104,680
-screened out). The screen holds 3,225,682 unique 13-grams. At those sizes the
-training shards hold about 31B ClimbMix, 11B code and 4.6B math tokens, above
-the 28B/8B/4B shares.
-
-## 720M configuration and training
-
-[`configs/hybrid-720m-40b.json`](configs/hybrid-720m-40b.json): width 1536, 16
-layers as 4 x [KDA, KDA, KDA, full] (full attention at 3, 7, 11, 15), 12 query /
-4 KV heads, 12 KDA heads, head dimension 128, SwiGLU 4,224, GLM vocabulary
-154,880, context 4,096, one MTP module. The trunk used for inference has
-707,129,536 parameters; with the MTP module 739,972,556 (`test_hybrid_720m`
-asserts both). Training: 256 x 4,096 = 1,048,576 tokens per step, warmup over
-500M tokens, then constant, then linear decay to 0 over the last 15%; Muon/AdamW
-as above with weight decay 0.1, gradient clipping 1.0, bf16 autocast with fp32
-parameters, `torch.compile`, z-loss 1e-4, MTP weight 0.3 to 0.1.
-
-Full attention trains with FlexAttention (above).
-[`fused_loss.py`](fused_loss.py) computes the output layer, cross-entropy, z-loss
-and their gradients in one chunked pass, without storing or recomputing the
-[tokens, 154,880] logits, for the next-token and MTP heads.
-
-Custom kernels in this family: the fused output-layer loss (+15% training
-throughput on one H100) and, inside it, a CUDA kernel
-([`kernels/softmax_gradient.cu`](kernels/softmax_gradient.cu)) that turns each bf16 logit row
-into its cross-entropy/z-loss gradient in place in two passes, instead of several
-fp32 copies of the [rows, 154,880] block. FlexAttention and fla supply the
-tensor-core attention and KDA kernels.
-
-[`train.py`](train.py) is the hybrid family for the common loop
-([`trainer/loop.py`](../trainer/loop.py), see [trainer/README.md](../trainer/README.md)),
-run as `torchrun -m model_hybrid.train`: rank 0 reads the recipe's mixture
-(`PreparedMixture` or `ChatMixture`, with replay) and scatters each batch; every
-rank derives MTP targets (the model derives its own document ids from `eos_id`,
-which must be the GLM EOS), and DDP averages gradients. Each loss is normalized by
-its global target count. Rank 0 writes `metrics.jsonl` (loss, z, MTP loss,
-learning-rate factor, gradient norm, tokens/s, MFU, rows per source, peak memory per
-rank), and at start, every `eval_every_steps` and at the end `validation.jsonl`:
-held-out loss, bits per byte and MTP loss per source (above 4K context also per in-document
-position bucket) with per-layer gate openness
-and sink weight, sink, gate-bias and KDA-decay parameters, and (every
-`sample_every_steps` and at the end) greedy continuations of fixed prompts.
-Checkpoints (`step-<step>.pt`: model, optimizer, data cursor, every rank's RNG;
-the last `keep_checkpoints` kept) are written every `checkpoint_seconds` and at
-stop, and a run directory resumes from its `latest.json` with the same config,
-GPU count and source files. `report.json` closes each session. With `hf_repo`
-set, bf16 trunk weights and config (under `export/`) and the logs go to that
-private HF model repo every `hf_every_tokens` and at the end.
-
-Training runs through the workflows like every model family
-([workflows/README.md](../workflows/README.md)); a stage's `model_config` selects
-the run config:
-
-```sh
-uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hybrid-h100x8.json \
-    --run-id <id> [--start pretrain]
-uv run modal run -m workflows.modal_train::stop --run-id <id>    # checkpoint and exit
-uv run modal run -m model_hybrid.modal_tools::bench --gpus 1     # 30-minute benchmark
-```
-
-Each session trains in `lm-exploration-hybrid-runs/<stage run>-sNN/` and resumes
-the previous session's final checkpoint; launching the workflow run again continues
-its unfinished stage. A `midtrain` stage starts from the previous stage's exported
-weights (`init_from`). MFU counts 6 x (matmul weights, including both output-layer uses) plus
-attention FLOPs over the mean attended keys, against 989 TFLOPS per H100.
-
-## Byte-level H-Net
-
-[`hnet.py`](hnet.py) wraps the hybrid trunk in one stage of dynamic chunking
-([H-Net](https://arxiv.org/abs/2507.07955), following
-[goombalab/hnet](https://github.com/goombalab/hnet)) and reads UTF-8 bytes instead
-of GLM tokens. The [H-Net comparison plan](../plans/HNET_720M.md) records the
-configuration, the compute matching and the run.
-
-- Bytes 0–255 and EOS 256 are embedded at width `outer_embd` and run through
-  `outer_layers` encoder blocks (KDA mixer and SwiGLU, as in the trunk).
-- The routing module gives each byte a boundary probability
-  `p_t = (1 - cos(W_q x_(t-1), W_k x_t)) / 2`, with `W_q`, `W_k` starting at the
-  identity and `p = 1` on the first byte of every document. Bytes with `p > 0.5`
-  start chunks.
-- The chunk layer gathers the boundary bytes, appends a learned vector up to the
-  main width and runs the main network (`main`: any `HybridConfig` fields) over
-  the chunks, document-masked like the token model. The number of chunks per batch
-  is rounded up to `chunk_bucket`, so `torch.compile` builds one static graph per
-  bucket (`static_compilation`).
-- The dechunk layer smooths chunk outputs with `z_t = p_t h_t + (1 - p_t) z_(t-1)`
-  (`dechunk_ema`, restarting at each document) and repeats each chunk over its
-  bytes. Since every chunk has `p > 0.5`, a chunk 128 positions back carries a
-  weight below 2^-128, so the EMA is computed exactly from 2 x 128-chunk windows
-  with one matrix product each.
-- The decoder input is the dechunked value times a straight-through estimator of
-  the chosen probability (1 in the forward pass) plus a zero-initialized fp32
-  projection of the encoder output; `outer_layers` decoder blocks and an untied
-  byte output layer follow.
-- The loss adds `ratio_loss_weight * N/(N-1) * ((N-1) F G + (1-F)(1-G))`, with `F`
-  the fraction of bytes that start chunks, `G` their mean probability and
-  `N = target_ratio`; it is 1 at `F = G = 1/N`. The model folds it into its summed
-  `loss` (times the target count), so the trainer's objective is unchanged.
-
-[`byte_data.py`](byte_data.py) decodes the prepared GLM shards back to bytes: the
-GLM tokenizer is byte-level BPE without a normalizer, so each token id maps to
-fixed bytes (`token_byte_table`; added tokens to their text, EOS to 256).
-`ByteMixture` reads the shards in `PreparedMixture`'s order, with source weights
-converted from tokens to bytes by each source's bytes per token, so the byte model
-trains on the token model's documents in the same proportions.
-`heldout_byte_windows` builds the same held-out documents and checks that the
-decoded lengths equal the recorded UTF-8 byte counts.
-
-A run config with `"architecture": "hnet"` trains the H-Net through the same
-loop as `HNetFamily` in [`train.py`](train.py); `target_tokens`, `warmup_tokens`,
-the context and batch rows then count bytes. It logs the ratio loss and bytes per
-chunk, held-out bits per byte with bytes per chunk per source, and 192-byte greedy
-samples; MFU counts outer-stage FLOPs per byte and main-network FLOPs per chunk
-(`flops_per_byte`). H-Net runs use expandable CUDA segments, since the main
-network's length varies with the chunk count.
-
-```sh
-uv run modal run --detach -m workflows.modal_train::main --workflow workflows/hnet-h100x8.json \
-    --run-id <id>
-uv run modal run -m model_hybrid.modal_tools::publish --checkpoint <run>-sNN/step-NNNNNNNNN.pt \
-    --repo <owner/name> [--public] [--card <README.md>] [--full]
-```
-
-`publish` uploads one checkpoint of either architecture as bf16 weights, config
-(with its `architecture`), progress and the run's logs, private unless `--public`.
-`--full` uploads the training checkpoint file itself instead (weights with the MTP
-head, optimizer, data cursor and RNG state, for continued training), and fails unless
-the uploaded file's SHA-256 matches the volume copy. Checkpoints are PyTorch pickles:
-the card should say to load them only with `weights_only=False` from a trusted repo.
-The published H-Net is [`jfrick/hnet-720m`](https://huggingface.co/jfrick/hnet-720m).
-
-## Generation
-
-[`generate.py`](generate.py) generates on CUDA. `prefill` reads each prompt with one
-forward pass of the model (the training kernels; the KDA kernels return each
-document's final state) and loads the rows into a `Decoder`, left-padded to the
-longest prompt: preallocated keys and values for the full-attention layers, and for
-KDA the convolution history and the fp32 recurrent state. Each decode step feeds one
-token per row as one replay of a captured CUDA graph: projections and the MLP through
-cuBLAS, and two kernels from [`kernels/decode.cu`](kernels/decode.cu): the KDA step
-(short convolutions, normalized q and k, decay, the delta-rule update and read-out,
-output norm and gate, one thread per state column) and attention over the cache with
-the sink (online softmax, one block per row and query head). Rows follow the model's
-document rule (after EOS the next token starts a new document), so each row of
-`generate_batch` decodes exactly as it would alone. Decoders are kept per model and
-shape and read the parameters in place, so RL's in-place weight updates reach them; a
-call reuses the smallest cached decoder with its row count and enough cache slots, so
-batches of varying prompt width replay one graph instead of capturing a new one.
-On one H100, a randomly initialized 720M model in bf16 decodes 64 rows (512-token
-prompts) at 4.1 ms per step, 15,550 tokens/s; the plain-PyTorch step it replaces took
-15.8 ms (4,046 tokens/s).
-
-## Chat SFT
-
-The chat format ([`data/chat.py`](../data/chat.py), GLM-4.7-Flash's own chat
-template) and the chat SFT data ([`data/chat_sft.py`](../data/chat_sft.py), recipe
-[`data/recipes/chat-sft-v1.json`](../data/recipes/chat-sft-v1.json)) are data
-sources: see [Chat format and chat SFT data](../data/README.md#chat-format-and-chat-sft-data).
-PR tasks and the agent episodes on them are too
-([PR tasks and agent episodes](../data/README.md#pr-tasks-and-agent-episodes)); a hybrid
-export acts as the agent through [`agent_policy.py`](agent_policy.py).
-
-`chat_sft.ChatMixture` packs whole conversations, in one seeded order across files, into
-4,097-token windows padded with EOS; labels are `-100` outside the loss mask, and
-the document mask keeps conversations apart. One pass is one epoch. The recipe's
-`replay` takes a quarter of every batch's rows from the pretraining mixture
-(`hybrid-40b-v1`, read from the start of its order, every token a target), so
-fine-tuning keeps the pretraining objective; the run also evaluates the
-pretraining held-out sources with the same document counts as the 40B run, which
-measures what SFT costs there. `train.py`
-selects it for recipes with `"format": "chat-sft"`, evaluates loss and bits per
-byte on each file's held-out conversations, and samples greedy replies to fixed
-chat prompts (one with a tool) up to the end of the turn.
-[`configs/hybrid-720m-chat-sft.json`](configs/hybrid-720m-chat-sft.json) starts
-from the 40B export (`init_from`, trunk only, `mtp=False`) with a tenth of the
-pretraining learning rates, a 50M-token warmup and linear decay to 0 over one
-epoch of the chat data (2,913 steps of 96 chat and 32 replay rows, from packing
-simulated with the run's seed), and trains like pretraining
-(`torchrun -m model_hybrid.train --config hybrid/configs/hybrid-720m-chat-sft.json`).
-
-## Playground
-
-[`playground/`](playground) is a Gradio app for a private Hugging Face Space on a GPU
-that serves several exports at once. Its Compare tab is a table with one row per
-prompt: a Run box, the prompt, and one column per export. Ticked prompts run in turn,
-and each prompt's replies from the selected exports stream into their columns side by
-side (one token per export per round, each export with its own decoder and sampler),
-as text continuation, a chat turn, or a chat turn with thinking. Prompts load from
-preset sets (`playground/prompt-sets.json`) or are added one by one, and the results
-download as JSON with the sampling settings.
-For chat exports a chat tab has OpenAI tools whose replies are parsed back into
-OpenAI messages, and a text tab continues a prompt with one export. It decodes with
-`generate.py` in bf16, one request at a time, and warms up every export (compiled
-prefill attention, captured decode graph) before serving. `playground/publish.py`
-uploads a Docker Space ([`playground/Dockerfile`](playground/Dockerfile): CUDA 13.0
-devel, torch 2.14.1, the family kernels prebuilt) with the inference modules and
-kernels, on L4 hardware by default (`--hardware`), sleeping after an hour without
-visitors (`--sleep-seconds`); GPU time is billed to the Space owner. The exports are
-listed in a JSON file (`--models`; [`playground/malama-versions.json`](playground/malama-versions.json)
-lists the Malama stages), and the Space downloads them from their private model repos
-with its `HF_TOKEN` secret.
-
-```sh
-uv run --all-extras python -m model_hybrid.playground.publish \
-  --space jfrick/malama-versions --models hybrid/playground/malama-versions.json [--hardware l4x1]
-```
-
-The published Space serves the Malama v0.0.1 release ([lineage, data and results](../plans/MALAMA_V0_0_1.md)).
-
-[`playground/modal_serve.py`](playground/modal_serve.py) runs the same app on one Modal
-H100 for exports on the runs volume (`--models` lists `run` and `export`;
-[`playground/malama-final.json`](playground/malama-final.json) is the final reasoning
-model beside its base, and [`playground/malama-chat.json`](playground/malama-chat.json)
-that model alone as a plain chat with folded thinking). It prints a public URL, and the call's timeout stops the GPU
-after `--hours` (4 by default, at most 24):
-
-```sh
-uv run --all-extras modal run --detach -m model_hybrid.playground.modal_serve \
-  --models hybrid/playground/malama-final.json [--hours 4]
-```
-
-## Benchmarks
-
-Training throughput metrics use explicit dense H100 SXM ceilings. `mfu` retains
-the BF16-equivalent estimate (989 TF/s/GPU); `mfu_fp8_peak` divides the same
-estimated model FLOPs by the 1,978 TF/s/GPU FP8 ceiling. The latter assumes an
-all-FP8 device ceiling even though this model uses mixed precision.
-`mfu_mixed_precision` instead sums ideal time for FP8 and remaining BF16 work:
-`tokens/sec/GPU * (FP8 FLOPs/token / FP8 peak + BF16 FLOPs/token / BF16 peak)`.
-The logs include estimated TFLOP/s/GPU and the FP8 share of model FLOPs.
-
-The FP8 partition follows the converted linear modules and their actual recipe
-(including BF16 weight gradients in `rowwise_with_gw_hp`). Vocabulary heads and
-attention remain in the BF16 partition. These estimates retain the existing
-matrix/attention accounting and sampled document lengths; recurrence,
-elementwise, optimizer and conversion work is omitted. They are not measurements
-of hardware tensor-core activity. Compare aggregate tokens/sec as well as MFU;
-changing the peak denominator alone does not change performance.
-
-The experimental vocabulary-head path uses custom Triton amax/scale/cast kernels
-and Hopper FP8 GEMMs, while retaining FP32 softmax statistics and FP32
-weight-gradient accumulation from BF16 operands. FP8 weights/layouts are prepared
-once per loss call and reused across its chunks; they are rebuilt after each
-optimizer update because nothing is cached across calls. `logits` quantizes only
-the logit projection, `logits_dx` also quantizes the hidden-gradient matmul, and
-`dx` retains BF16 logits and quantizes only that hidden gradient. These options
-are experimental: synthetic outlier tests expose large gradient errors when
-logits are quantized. Production vocabulary-head precision remains BF16.
-
-The shared benchmark compares BF16-head / experimental-head / BF16-head with
-the same FP8 trunk and independently reports the additional FP8 FLOP share:
-
-```sh
-uv run modal run --detach -m model_hybrid.modal_tools::bench \
-  --config hybrid/configs/kda-960m-100b.json --gpus 8 --steps 40 \
-  --microbatch 6 --global-rows 256 --real-data --require-gpu-model \
-  --fp8-only --fp8-recipe tensorwise --compare-fp8-loss logits_dx \
-  --phase-timings --host-diagnostics --freeze-gc-after-warmup --run-id UNIQUE_RUN
-```
-
-`model_hybrid.modal_checks::main --only fp8_loss` runs compiled-autograd smoke
-checks and complete loss/gradient timings at the production vocabulary shapes,
-including normal, peaked and outlier inputs. This is performance/numerical
-qualification, not a learning-quality evaluation.
-
-[`benchmarks.py`](benchmarks.py) wraps an export as an lm-evaluation-harness
-model. Multiple-choice and perplexity requests are scored with the model's
-document-masked forward pass on CUDA (each request is `[EOS] + context +
-continuation`, grouped into five fixed shapes so the compiled attention reuses its
-graphs); generation is greedy `generate_batch` cut at the task's stop strings.
-[`modal_benchmarks.py`](modal_benchmarks.py) runs the same suite on one H100 per
-model for the export and pinned reference models through the harness's Hugging
-Face backend (SmolLM2-360M, Qwen3-0.6B, Qwen3.5-0.8B, LFM2.5-1.2B, OLMo-2-1B,
-Gemma 3 270M and 1B, Gemma 4 E2B; `--models` picks a subset): HellaSwag, ARC-Easy/Challenge, PIQA, WinoGrande, OpenBookQA, SciQ and
-LAMBADA zero-shot, MMLU 5-shot, GSM8K 5-shot, HumanEval zero-shot and MBPP 3-shot
-(`retries=0`, 6-hour timeout, refuses work 24 hours after launch; each call writes its
-results to `lm-exploration-hybrid-runs/benchmarks/<launch>/`):
-
-```sh
-uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks [--exports tokens-039998980096] [--models M,...]
-```
-
-`--suite perplexity` scores text instead: the harness's WikiText-2 task and, with `--text`,
-a JSONL file of documents on the runs volume ([`perplexity_tasks.py`](perplexity_tasks.py)),
-as word perplexity and bits per byte, for the export, the reference models above,
-MobileLLM-R1-950M-base and Qwen3-1.7B/4B-Base.
-[`fresh_text.py`](../analysis/evaluation/fresh_text.py) writes such a file from arXiv
-abstracts submitted in a date range, text newer than every model's training data:
-
-```sh
-uv run python -m analysis.evaluation.fresh_text --since 2026-11-16 --until 2026-11-24 \
-  --output artifacts/evaluation/arxiv-2026-11-16.jsonl
-uv run --all-extras modal volume put lm-exploration-hybrid-runs \
-  artifacts/evaluation/arxiv-2026-11-16.jsonl benchmarks/texts/arxiv-2026-11-16.jsonl
-uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks --suite perplexity \
-  --text benchmarks/texts/arxiv-2026-11-16.jsonl --exports RUN/tokens-N
-```
-
-LiveCodeBench, for checkpoints of any family:
-[`analysis/evaluation`](../analysis/evaluation/README.md#livecodebench).
+- **lm-evaluation-harness ([`benchmarks.py`](benchmarks.py), [`modal_benchmarks.py`](modal_benchmarks.py)):**
+  Scores exports and pinned reference models on standard QA/code tasks or `--suite perplexity`
+  (WikiText-2 + fresh arXiv JSONL from [`analysis/evaluation/fresh_text.py`](../analysis/evaluation/fresh_text.py)).
+  LiveCodeBench/HumanEval/MBPP thinking-mode evaluation lives in
+  [`analysis/evaluation/`](../analysis/evaluation/README.md).
+  ```sh
+  uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks --exports <run/tokens-N>
+  uv run --all-extras modal run --detach -m model_hybrid.modal_benchmarks --suite perplexity \
+    --text benchmarks/texts/arxiv-2026-11-16.jsonl --exports <run/tokens-N>
+  ```
+- **Playground ([`playground/`](playground/)):** Gradio app serving one or more exports
+  with Chat, Compare, and Text tabs using `generate.py`. Deploy to a HF Docker Space with
+  `playground/publish.py` or run on a Modal H100 (auto-stopping after `--hours`, max 24):
+  ```sh
+  uv run --all-extras modal run --detach -m model_hybrid.playground.modal_serve \
+    --models hybrid/playground/malama-final.json --hours 4
+  ```
 
 ## Tests
 
 From `training/`:
 
 ```sh
+# CPU unit tests
 uv run python -m unittest tests.test_hybrid_backbone tests.test_hybrid_documents \
   tests.test_hybrid_sink_gate tests.test_hybrid_kda tests.test_hybrid_mtp \
   tests.test_hybrid_optim tests.test_hybrid_tokenizer tests.test_packed_shards \
   tests.test_hybrid_720m tests.test_hybrid_fused_loss tests.test_hybrid_hnet \
   tests.test_chat tests.test_hybrid_long_context tests.test_hybrid_looped -v
+
+# Modal H100 CUDA checks (FlexAttention, FLA KDA, decode, H-Net, fp8_loss)
+uv run modal run -m model_hybrid.modal_checks::main [--only decode|hnet|fp8_loss]
 ```
-
-On one H100 (30-minute timeout, no retries, refuses work 24 hours after launch):
-
-```sh
-uv run modal run -m model_hybrid.modal_checks::main
-uv run modal run -m model_hybrid.modal_checks::main --only hnet   # the H-Net check alone
-uv run modal run -m model_hybrid.modal_checks::main --only decode # the decode check alone
-```
-
-The Modal image uses the CUDA 13.0 devel base with torch 2.14.1.
-[`check_hybrid_cuda.py`](../tests/check_hybrid_cuda.py) compares FlexAttention's
-output, log-sum-exp and gradients (including through the log-sum-exp) with fp64
-softmax attention (fp32 and bf16, GQA, packed documents, a one-token document,
-lengths that are not block multiples, head dimensions 64 and 128), checks document
-isolation in a compiled bf16 model, and times FlexAttention against causal SDPA.
-
-The same check compares fla's `chunk_kda` with `cu_seqlens` against
-`kda_reference` (output and all input gradients, within TF32 tolerance) and times
-bf16 training steps of a small compiled hybrid model with the fla call outside the
-compiled graph (`torch.compiler.disable`) and inside it, after warming up both.
-The CUDA path needs the `hybrid` extra (`fla-core`); the Modal image installs it. The decode
-check continues prefilled prompts (rows of different lengths, EOS mid-way) and
-compares every step's logits with the full forward pass in fp32, checks that batched
-rows decode exactly as one row at a time, and times 720M bf16 decoding.
-
-`test_hybrid_720m` checks the configuration, parameter count, schedule, FLOP
-accounting and gate/sink statistics;
-`test_hybrid_fused_loss` checks the fused loss and its gradients against autograd.
-`test_packed_shards` prepares shards from small parquet files (license filter,
-empty documents, contamination drops, EOS layout, byte counts) and checks the
-mixture's weights, contiguity across shards, resume and the held-out windows;
-`test_hybrid_tokenizer` checks the pinned constants and the recipe, and the GLM
-file itself when downloaded. `test_hybrid_optim` checks that every parameter lands in exactly one group, the
-role of each parameter kind, the learning rates and decay per group, and a step
-plus state round trip. `test_hybrid_mtp` checks target alignment and boundary masking, the loss
-against an explicit computation, that the module never sees its own target,
-the weight schedule and inference without MTP. `test_hybrid_kda` compares the KDA recurrence with an independent matrix form
-`S_t = (I - b k k^T) diag(a) S_(t-1) + b k v^T`, the short convolution with
-`F.conv1d`, checks state and convolution resets at document boundaries, the
-layout, document isolation and causality through mixed KDA/full stacks, and that
-every parameter receives a gradient. `test_hybrid_sink_gate` compares the sink with an explicit softmax that has an
-extra zero-value key, checks that an open gate and a -inf sink reproduce plain
-attention exactly, and that the gate starts mostly open and receives gradients.
-`test_hybrid_documents` checks document ids, positions and `cu_seqlens`, and that
-document B's logits are identical whether it follows a different document A, or
-none. The backbone tests cover output shapes, tied weights and absent biases, initialization scales,
-fp32 RMSNorm statistics, causality (changing future tokens leaves earlier logits
-bit-identical), attention against an explicit softmax, GQA against MHA with
-duplicated key/value heads, the RoPE base and the chunked loss against
-`F.cross_entropy` plus an explicit z-loss.
-
-`test_hybrid_hnet` compares `dechunk_ema` with the sequential recurrence (across
-blocks and document resets), checks chunk ordering, the loss against an explicit
-cross-entropy, gradients reaching every parameter, the ratio loss, forced
-document-start boundaries, causality and document isolation in fp64, optimizer
-roles, initialization, that the 720M config's main network equals the hybrid
-trunk and its FLOPs per byte match the GLM model, `HNetFamily`'s objective and
-logged ratio loss and bytes per chunk, that the H-Net workflows count bytes, and
-the byte decoding, mixture weights and held-out windows; with the GLM tokenizer
-downloaded, that GLM tokens decode to the exact UTF-8 text. The CUDA check compares
-a compiled bf16 H-Net's loss with its fp64 CPU reference and checks document
-isolation when compiled.
-
-## Hardware-counter profiling
-
-`hardware_counters.py` uses Nsight Compute to measure individual kernels from the
-existing benchmark. First check counter access on one exact H100:
-
-```sh
-uv run modal run --detach -m model_hybrid.modal_tools::counters_probe \
-  --run-id <access-run> --output artifacts/results/counter-access.json
-```
-
-The probe requires actual metric rows; CUDA execution alone is insufficient. Its
-five-minute function timeout and independent 15-minute launch supervisor bound
-cost. `ERR_NVGPUCTRPERM` means the host driver/container permissions prevent
-collection; it is not a measurement of GPU performance. Host-admin/provider
-configuration is required to enable counters in that case.
-
-After a successful probe, collect one selected kernel invocation on rank zero,
-using the foundation mixture and the eight-H100 run's per-rank batch shapes:
-
-```sh
-uv run modal run --detach -m model_hybrid.modal_tools::bench \
-  --config hybrid/configs/kda-960m-100b.json \
-  --gpus 1 --gpu H100 --require-gpu-model --microbatch 4 --global-rows 32 \
-  --steps 8 --real-data --run-id <counter-run> \
-  --hardware-kernel chunk_kda_bwd_kernel_intra
-```
-
-The wrapper starts collection after six warmup steps and profiles a single matching
-launch in step seven. Kernel choices are in `hardware_counters.KERNELS`; collect
-separate runs for the two expensive KDA backward kernels, softmax, dtype copies,
-and a dense GEMM. Nsight sections cover compute/memory throughput, scheduling,
-warp stalls, launch resources and achieved occupancy. Kernel replay is restricted to one GPU after an eight-GPU profiling attempt
-failed with NVLink/peer-memory errors. Use the eight-GPU timeline for communication
-and overlap; isolated counters cannot measure DDP contention. Clocks and cache-control overrides are disabled.
-This is a sample of one kernel invocation, not a distribution over document shapes.
-The recipe context must match the model context.
-
-The existing benchmark timeout/supervisor bounds the run. Results, raw `.ncu-rep`,
-CSV metrics and logs go under `throughput/<run-id>/` on the hybrid runs volume.
-`throughput_valid` is false during counter replay: use separate uninstrumented
-runs for throughput and MFU. The collector rejects empty reports instead of treating
-successful process exit as successful profiling.
-
-
-## Qualified KDA WY backward specialization
-
-The hybrid family registers `kda_wy.py` through FLA's backend dispatch. For
-compute capability 9.0, BF16/FP32, head dimension 128 and 64-token chunks,
-`kernels/kda_wy.py` shortens accumulator live ranges and uses 32/128 key/value
-tiles. H100 measurements show zero compiler-reported spills and 0.676 ms versus
-1.368 ms for the original kernel. Full KDA forward/input-gradient reference
-checks pass. The matched eight-H100 training result is approximately 339k versus
-330k tokens/second, or 31.2% versus 30.4% MFU. See
-[measurement details](../plans/KDA_REAL_DATA_MFU.md).
-
-Reproduce the bounded original/revised/original comparison on one allocation:
-
-```sh
-uv run modal run --detach -m model_hybrid.modal_tools::bench \
-  --config hybrid/configs/kda-960m-100b.json \
-  --gpus 8 --gpu H100 --require-gpu-model --microbatch 4 --global-rows 256 \
-  --steps 30 --real-data --run-id <wy-comparison> --compare-kda-wy
-```
-
-The family also registers `kda_intra.py`. Its diagonal backward uses centered
-gate factors and tensor-core matrix products for tiles with a bounded observed
-gate range, retaining the scalar calculation for wider ranges. This preserves
-the model's unbounded gate function. On H100 the isolated kernel takes 1.181 ms
-versus 1.992 ms. The matched eight-H100 microbatch-six comparison measures
-355,471 tokens/s versus 345,615/346,043 for its controls (32.72% versus 31.85% MFU).
-Full gradient and fallback-path checks pass. Use `--compare-intra` with
-`--microbatch 6 --phase-timings` for the corresponding comparison.
