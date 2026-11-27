@@ -1,12 +1,13 @@
 {
-  "name": "Malama versions",
-  "description": "The 960M Malama hybrid (Kimi Delta Attention with one full-attention layer in four, GLM tokenizer) after each training stage, on the same prompts. Base models continue text; chat models answer a chat turn, with or without thinking.",
-  "models": [
-    {"label": "Base (100B tokens)", "repo": "jfrick/malama-base", "export": "tokens-099999547392"},
-    {"label": "32K context", "repo": "jfrick/malama-context32k", "export": "tokens-001999634432"},
-    {"label": "Code mid-training (5B)", "repo": "jfrick/malama-code-anneal", "export": "tokens-004999610368"},
-    {"label": "LCB format SFT", "repo": "jfrick/malama-lcb-format-sft", "export": "tokens-000020971520", "chat": true},
-    {"label": "Reasoning SFT pilot", "repo": "jfrick/malama-reasoning-sft-pilot", "export": "tokens-000536870912", "chat": true},
-    {"label": "Reasoning SFT (code model)", "repo": "jfrick/malama-reasoning-sft", "export": "tokens-001420820480", "chat": true}
-  ]
+ "name": "Malama v0.0.1",
+ "description": "The 960M Malama hybrid (Kimi Delta Attention with one full-attention layer in four, GLM tokenizer). Chat with Malama v0.0.1, the reasoning model trained to solve Python programming problems, or compare it with earlier training stages on the same prompts. Base models continue text; chat models answer a chat turn, with or without thinking.",
+ "temperature": 0.6,
+ "max_new_tokens": 8192,
+ "models": [
+  {"label": "Base (100B tokens)", "repo": "jfrick/malama-base", "export": "tokens-099999547392"},
+  {"label": "32K context", "repo": "jfrick/malama-context32k", "export": "tokens-001999634432"},
+  {"label": "Code mid-training (5B)", "repo": "jfrick/malama-code-anneal", "export": "tokens-004999610368"},
+  {"label": "Reasoning SFT v3", "repo": "jfrick/malama-reasoning-sft", "export": "tokens-001420820480", "chat": true},
+  {"label": "Malama v0.0.1", "repo": "jfrick/malama-v0.0.1", "export": "tokens-000288341556", "chat": true}
+ ]
 }

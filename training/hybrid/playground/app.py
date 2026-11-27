@@ -8,16 +8,17 @@ named by `PLAYGROUND_SETTINGS` and each export is a folder on the runs volume
 (`"path"` in place of `"repo"`). Generation is serialized: one request decodes at
 a time.
 
+- Chat, the first tab (when an export is a chat model, `"chat": true`): a conversation
+  with one export, with or without thinking; a reply's thinking shows inside its bubble,
+  folded above the answer. A folded section holds the system prompt and OpenAI tools;
+  messages and tools are rendered in GLM's chat format, each reply is parsed back into
+  one OpenAI assistant message (reasoning_content, content and tool_calls), and tool
+  results are sent as `tool` turns.
 - Compare: a table with one row per prompt (a Run box to pick which prompts run, the
   prompt, then one column per export). Ticked prompts run in turn; each prompt's
   replies from the selected exports stream into their columns side by side, as text
   continuation, a chat turn, or a chat turn with thinking. The results download as
   JSON with the sampling settings.
-- Chat (when an export is a chat model, `"chat": true`): OpenAI messages and tools
-  rendered in GLM's chat format, with or without thinking, and each reply parsed back
-  into one OpenAI assistant message (reasoning_content, content and tool_calls); a
-  reply's thinking shows inside its bubble, folded above the answer; tool results are
-  sent as `tool` turns.
 - Continue text: one export continues a prompt.
 
 The settings file may name the tabs to show (`"tabs": ["Chat"]`; all by default) and the
@@ -253,6 +254,8 @@ def display(messages):
 
 
 def respond(label, text, role, system, tools_json, thinking, history, temperature, top_p, max_new):
+    # A field inside the folded section arrives as None until it has been opened.
+    system, tools_json = system or "", tools_json or ""
     tools = json.loads(tools_json) if tools_json.strip() else None
     history = [*history, {"role": role, "content": text}]
     system_turn = [{"role": "system", "content": system}] if system.strip() else []
@@ -307,6 +310,43 @@ with gr.Blocks(title=SETTINGS["name"]) as demo:
             16, 16384, value=SETTINGS.get("max_new_tokens", 512), step=16, label="Max new tokens"
         )
         seed = gr.Number(0, precision=0, label="Seed")
+    if CHAT_MODELS and "Chat" in TABS:
+        # Alone, the chat is the page itself: a lone tab beside hidden ones opens blank.
+        with gr.Column() if PLAIN_CHAT else gr.Tab("Chat"):
+            chat_model = gr.Dropdown(CHAT_MODELS, value=CHAT_MODELS[-1], label="Model")
+            history = gr.State([])
+            with gr.Accordion("System prompt and tools", open=False):
+                system = gr.Textbox(lines=2, label="System prompt")
+                tools_json = gr.Code(
+                    "", language="json", label="Tools (OpenAI format; empty for none)",
+                    visible=not PLAIN_CHAT,
+                )  # fmt: skip
+                gr.Examples(
+                    [json.dumps([chat_sft.WEATHER_TOOL], indent=1)], inputs=tools_json,
+                    label="Example tool", visible=not PLAIN_CHAT,
+                )  # fmt: skip
+            chatbot = gr.Chatbot(height=420)
+            with gr.Row():
+                text = gr.Textbox(label="Message", scale=4)
+                role = gr.Radio(
+                    ["user", "tool"], value="user", label="Send as", scale=1,
+                    visible=not PLAIN_CHAT,
+                )  # fmt: skip
+                thinking = gr.Checkbox(value=True, label="Thinking", scale=1)
+            with gr.Row():
+                send = gr.Button("Send", variant="primary")
+                clear = gr.Button("Clear")
+            chat_rate = gr.Markdown()
+            parsed = gr.JSON(
+                label="Last reply as an OpenAI assistant message", visible=not PLAIN_CHAT
+            )
+            inputs = [chat_model, text, role, system, tools_json, thinking, history]
+            inputs += [temperature, top_p]
+            inputs.append(max_new)
+            outputs = [chatbot, history, text, parsed, chat_rate]
+            send.click(respond, inputs, outputs)
+            text.submit(respond, inputs, outputs)
+            clear.click(lambda: ([], [], None), None, [chatbot, history, parsed])
     with gr.Tab("Compare", visible="Compare" in TABS):
         with gr.Row():
             prompt_set = gr.Dropdown(
@@ -348,41 +388,6 @@ with gr.Blocks(title=SETTINGS["name"]) as demo:
             [grid, progress, download],
         )
         stop.click(None, None, None, cancels=[event])
-    if CHAT_MODELS and "Chat" in TABS:
-        # Alone, the chat is the page itself: a lone tab beside hidden ones opens blank.
-        with gr.Column() if PLAIN_CHAT else gr.Tab("Chat"):
-            chat_model = gr.Dropdown(CHAT_MODELS, value=CHAT_MODELS[-1], label="Model")
-            history = gr.State([])
-            with gr.Row():
-                system = gr.Textbox(lines=2, label="System prompt")
-                tools_json = gr.Code(
-                    "" if PLAIN_CHAT else json.dumps([chat_sft.WEATHER_TOOL], indent=1),
-                    language="json",
-                    label="Tools (OpenAI format; empty for none)",
-                    visible=not PLAIN_CHAT,
-                )
-            chatbot = gr.Chatbot(height=420)
-            with gr.Row():
-                text = gr.Textbox(label="Message", scale=4)
-                role = gr.Radio(
-                    ["user", "tool"], value="user", label="Send as", scale=1,
-                    visible=not PLAIN_CHAT,
-                )  # fmt: skip
-                thinking = gr.Checkbox(value=True, label="Thinking", scale=1)
-            with gr.Row():
-                send = gr.Button("Send", variant="primary")
-                clear = gr.Button("Clear")
-            chat_rate = gr.Markdown()
-            parsed = gr.JSON(
-                label="Last reply as an OpenAI assistant message", visible=not PLAIN_CHAT
-            )
-            inputs = [chat_model, text, role, system, tools_json, thinking, history]
-            inputs += [temperature, top_p]
-            inputs.append(max_new)
-            outputs = [chatbot, history, text, parsed, chat_rate]
-            send.click(respond, inputs, outputs)
-            text.submit(respond, inputs, outputs)
-            clear.click(lambda: ([], [], None), None, [chatbot, history, parsed])
     with gr.Tab("Continue text", visible="Continue text" in TABS):
         text_model = gr.Dropdown(LABELS, value=LABELS[0], label="Model")
         prefix = gr.Textbox(lines=6, label="Prompt", value=EXAMPLES[0])

@@ -84,3 +84,14 @@ uv run --extra corpus python -m publication.build_completed_card \
 The checked-in Markdown is authored source. Generated `README.md` files and copied
 result JSONs belong in the HF artifact archive, not Git. Rendering does not publish
 or upload anything and does not modify the original evidence.
+
+## Malama card charts
+
+[`malama_charts.py`](malama_charts.py) draws the charts of the
+[Malama v0.0.1 card](https://huggingface.co/jfrick/malama-v0.0.1) from the release's
+`results.json`, which is kept beside the card:
+
+```sh
+uv run --extra research python -m publication.malama_charts \
+  --results artifacts/malama/results.json --output artifacts/malama/charts
+```

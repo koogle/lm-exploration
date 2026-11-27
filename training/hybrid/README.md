@@ -480,6 +480,8 @@ uv run --all-extras python -m model_hybrid.playground.publish \
   --space jfrick/malama-versions --models hybrid/playground/malama-versions.json [--hardware l4x1]
 ```
 
+The published Space serves the Malama v0.0.1 release ([lineage, data and results](../plans/MALAMA_V0_0_1.md)).
+
 [`playground/modal_serve.py`](playground/modal_serve.py) runs the same app on one Modal
 H100 for exports on the runs volume (`--models` lists `run` and `export`;
 [`playground/malama-final.json`](playground/malama-final.json) is the final reasoning
