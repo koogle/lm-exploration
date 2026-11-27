@@ -220,31 +220,9 @@ it saved a new checkpoint (`session_retries`, [workflows README](../workflows/RE
 
 ## Run log
 
-Every launch in this study, by workflow run ID (dates UTC, from each launch's workflow
-record). Records are under `runs/<run ID>/` in the archive.
-
-| Run ID | Workflow | Dates | Outcome |
-|---|---|---|---|
-| `kda-960m-fim-midtrain-20261114-01` | `kda-960m-fim-midtrain` | Nov 14–15 | Completed: about 15B tokens with fill-in-the-middle from Malama Base at 84.8B tokens |
-| `kda-960m-lcb-format-sft-20261115-01` | `kda-960m-lcb-format-sft` | Nov 15 | Failed before training: the recipe was not prepared on the data volume |
-| `kda-960m-lcb-format-sft-20261115-02` | `kda-960m-lcb-format-sft` | Nov 15 | Failed at startup: the trainer could not read the recipe's data files |
-| `kda-960m-lcb-format-sft-20261115-03` | `kda-960m-lcb-format-sft` | Nov 15 | Completed (answer-only format SFT, two variants); 4.7 pass@1 on an 8-problem LiveCodeBench check |
-| `kda-960m-reasoning-pilot-20261115-01` | `kda-960m-reasoning-pilot` | Nov 15 | Failed in the 32K context extension stage |
-| `kda-960m-reasoning-pilot-20261115-02` | `kda-960m-reasoning-pilot` | Nov 15 | Completed: 32K context extension, then the reasoning pilot (3.8 pass@1) |
-| `kda-960m-code-anneal-20261117-01` | `kda-960m-code-anneal` | Nov 17 | Failed in data preparation: one source had fewer training tokens than the recipe asked for |
-| `kda-960m-code-anneal-20261117-02` | `kda-960m-code-anneal` | Nov 17–18 | Completed: 5B code tokens at 32K |
-| `kda-960m-code-anneal-20b-20261117-01` | `kda-960m-code-anneal-20b` | Nov 18 | Completed: 20B code tokens at 4K |
-| `kda-960m-reasoning-sft-v3-20261118-01` | `kda-960m-reasoning-sft-v3` | Nov 18 | Completed: reasoning SFT v3 (8.4 pass@1) |
-| `kda-960m-merge-sft-v3-code20b-l05`, `-l10` | `modal_tools::merge` | Nov 19 | Weight merges; both broke the model |
-| `kda-960m-contest-rl-20261119-01` | `kda-960m-contest-rl` | Nov 19–20 | Illegal memory access while sampling at step 64; its resumed launch hung (FlexAttention recompilation) |
-| `kda-960m-contest-rl-20261120-01` | `kda-960m-contest-rl` | Nov 20 | From step 50; illegal memory access at step 62 of the run |
-| `kda-960m-contest-rl-20261120-02` | `kda-960m-contest-rl` | Nov 20–21 | Completed: from step 100 to 400 (14.1 pass@1) |
-| `kda-960m-contest-rl-hard-20261121-01` | `kda-960m-contest-rl-hard` | Nov 21 | Out of GPU memory at 16K tokens |
-| `kda-960m-contest-rl-hard-20261121-02` | `kda-960m-contest-rl-hard` | Nov 21–22 | Stopped at step 146 of 200 (11.8 pass@1 at step 100, 12.4 at 146) |
-| `hybrid-720m-loop-test-03g` | `hybrid-720m-loop-test` | Nov 21–22 | Completed: closed-gate looping conversion ([looped LM plan](LOOPED_LM.md)) |
-| `kda-960m-reasoning-sft-v4-20261121-01` | `kda-960m-reasoning-sft-v4` | Nov 21–22 | Function timeout at step 900 |
-| `kda-960m-reasoning-sft-v4-20261122-01` | `kda-960m-reasoning-sft-v4` | Nov 22 | Stopped after 5 minutes and relaunched with the fixed session handling |
-| `kda-960m-reasoning-sft-v4-20261122-02` | `kda-960m-reasoning-sft-v4` | Nov 22 | Completed: 4,100 steps (14.0 pass@1, 26.6 pass@6) |
+Every launch of this study, with the later launches behind the first release, is in the
+[Malama training log](MALAMA_TRAINING_LOG.md#run-log), by workflow run ID. Records of
+this study's launches are under `runs/<run ID>/` in the archive.
 
 Later stages of this line (on-policy distillation pilots, RL from SFT v4, SFT v5 and the
 mixed RL behind the first release) are in [MALAMA_V0_0_1.md](MALAMA_V0_0_1.md).

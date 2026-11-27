@@ -7,7 +7,8 @@ weights, charts and `results.json` are in
 completions, RL pools and run logs are in the dataset `jfrick/lm-exploration-results` under
 `pr-197/`. This page records the lineage, the data of each stage and where other models
 produced training data. Earlier findings are in
-[CODING_REASONER_1B_FINDINGS.md](CODING_REASONER_1B_FINDINGS.md).
+[CODING_REASONER_1B_FINDINGS.md](CODING_REASONER_1B_FINDINGS.md), and the dated sequence of
+runs is in [MALAMA_TRAINING_LOG.md](MALAMA_TRAINING_LOG.md).
 
 ## How it was trained
 
