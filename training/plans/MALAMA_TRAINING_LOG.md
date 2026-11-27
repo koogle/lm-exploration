@@ -260,6 +260,45 @@ from the contest RL checkpoint at step 400 (14.1) with about $3,000 of Modal cre
   [LOOPED_LM.md](LOOPED_LM.md) and its records uploaded. No looping run exists for the
   960M model.
 
+### Post-release code and plan audit
+
+Review of the training stack against [CODING_REASONER_1B.md](CODING_REASONER_1B.md) found
+four code/config bugs (now fixed on `main`) and several plan-vs-operated gaps:
+
+**Bugs fixed:**
+
+- **KDA residual-output init (`hybrid/kda.py`).** `self.o_proj.residual_output = True`
+  was set in `optimizer()` instead of `__init__()`, after `HybridLM.initialize` had
+  already run. All 18 KDA `o_proj` matrices initialized at `std = 0.02` instead of
+  `0.02 / sqrt(48) = 0.00289` (~6.9× larger std). Moved to `__init__()`.
+- **On-policy distillation KL direction (`hybrid/model.py`, `trainer/rl/off_policy/distill.py`).**
+  `_chunk_distillation` minimized forward KL `KL(teacher ‖ student)` (mode-covering)
+  instead of reverse KL `KL(student ‖ teacher)` (mode-seeking). Applying forward KL to the
+  RL-sharpened 14.1 checkpoint flattened its distribution and brought back verbatim loops
+  across all five pilots (`a`–`e`). Switched to reverse KL.
+- **Greedy RL validation (`workflows/kda-960m-contest-rl-v4.json`, `-v5.json`,
+  `-contest-functions-rl.json`).** These workflows omitted `validation_samples` and fell
+  back to greedy (`1`), explaining the 3–42% MBPP validation swings and 71% unfinished
+  validation answers at step 250 of mixed RL while sampled benchmarks stayed stable. Set
+  to `validation_samples: 4` at temperature `0.6`.
+- **Replay row placement (`data/packed_shards.py`).** `ReplayMixture.next_batch` appended
+  all replay rows at the end of the batch, putting all 3 replay rows on rank 7 in 8-GPU
+  SFT (gradients were still exact via global valid-token normalization). Now spread evenly
+  across the batch.
+
+**Plan vs. operated gaps:**
+
+- 32K midtraining started from the decayed 100B export (`tokens-099999547392`), not the
+  84.8B constant-LR checkpoint, and kept `rope_base = 1000000` unchanged.
+- Midtraining on the released line ran 7B tokens (2B context extension + 5B code) instead
+  of 20–40B, without FIM, CC-Math 4+, or the matched short-convolution comparison.
+- `kda-context32k-v1.json` reused older 720M GitHub shards (`hybrid-mid32k-v1`,
+  `hybrid-long32k-v1`) that overlapped the 880-file 960M foundation corpus and lacked
+  v2/v3 markup/size/vendor filters.
+- Reasoning SFT v5 ran 4.89B tokens (contest code + 10% replay) instead of ~10B at
+  70/20/10 code/math/general, with no matched answer-only SFT comparison.
+- On-policy distillation was dropped after the forward-KL pilots regressed (`14.1 → 13.2`).
+
 ### Spend
 
 Modal credit was about $3,000 at the start of the session and about $1,600 on 24 November
