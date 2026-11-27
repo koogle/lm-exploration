@@ -9,8 +9,8 @@ algorithms skip answers with zero advantage (every answer of a group scored the 
 The answers are shuffled into the source's `updates_per_batch` equal shares, one
 optimizer update each. When the algorithm needs the sampling weights' log-probabilities,
 they are computed once before the batch's first update. An algorithm that needs a
-teacher's scores (`off_policy/distill.py`) gets KL(teacher ‖ learner) per answer token
-from the family's `distillation`.
+teacher's scores (`off_policy/distill.py`) gets reverse KL(learner ‖ teacher) per answer
+token from the family's `distillation`.
 
 Each answer's token loss is divided by a constant, the answers per update times the
 task's token limit (no per-answer length normalization, as in Dr. GRPO,
