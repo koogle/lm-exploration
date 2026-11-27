@@ -214,6 +214,14 @@ class PackingTests(unittest.TestCase):
             again = resumed.next_batch(2)
             np.testing.assert_array_equal(second[0], again[0])
             np.testing.assert_array_equal(second[1], again[1])
+            # Replay rows spread across the batch rather than clustering at the tail.
+            spread = packed_shards.ReplayMixture(
+                chat_sft.ChatMixture(recipe, folder), Pretraining(), replay_rows=2
+            )
+            _, _, spread_names = spread.next_batch(8)
+            self.assertEqual(spread_names.count("climbmix"), 2)
+            self.assertEqual(spread_names[:4].count("climbmix"), 1)
+            self.assertEqual(spread_names[4:].count("climbmix"), 1)
 
 
 @unittest.skipUnless(template_available(), "GLM tokenizer or chat template not downloadable")

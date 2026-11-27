@@ -657,7 +657,8 @@ class PreparedMixture:
 
 
 class ReplayMixture:
-    """Batches whose last `replay_rows` rows come from a replay mixture.
+    """Batches with `replay_rows` rows from a replay mixture spread evenly across the
+    batch, so DDP ranks share replay rows instead of concentrating them on one rank.
 
     Replay keeps an earlier training objective (for example the pretraining mix) in
     every step, so later training does not trade away what it learned. The primary
@@ -673,11 +674,21 @@ class ReplayMixture:
             raise ValueError("replay must take some but not all rows of a batch")
         inputs, labels, names = self.primary.next_batch(rows - self.replay_rows)
         replay_inputs, replay_labels, replay_names = self.replay.next_batch(self.replay_rows)
-        return (
-            np.concatenate((inputs, replay_inputs)),
-            np.concatenate((labels, replay_labels)),
-            names + replay_names,
-        )
+        replay_at = {((i + 1) * rows - 1) // self.replay_rows for i in range(self.replay_rows)}
+        out_inputs = np.empty((rows, inputs.shape[1]), dtype=inputs.dtype)
+        out_labels = np.empty((rows, labels.shape[1]), dtype=labels.dtype)
+        out_names = []
+        p = r = 0
+        for row in range(rows):
+            if row in replay_at:
+                out_inputs[row], out_labels[row] = replay_inputs[r], replay_labels[r]
+                out_names.append(replay_names[r])
+                r += 1
+            else:
+                out_inputs[row], out_labels[row] = inputs[p], labels[p]
+                out_names.append(names[p])
+                p += 1
+        return out_inputs, out_labels, out_names
 
     def state_dict(self):
         return {"primary": self.primary.state_dict(), "replay": self.replay.state_dict()}
