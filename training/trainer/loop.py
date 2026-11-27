@@ -4,7 +4,7 @@ Rank 0 reads each global batch from the family's data and scatters one slice to 
 rank; ranks accumulate gradients over microbatches (bf16 autocast, DDP), then clip
 and step the optimizer with the family's learning-rate factor. Rank 0 logs a row per
 step to `metrics.jsonl`, evaluates at start, every `evaluate_every` steps and at the
-end (`validation.jsonl`), and writes `step-<step>.pt` checkpoints (model, optimizer,
+end unless that step was just evaluated (`validation.jsonl`), and writes `step-<step>.pt` checkpoints (model, optimizer,
 data cursor, every rank's RNG) with `latest.json`, then `report.json`. A run resumes
 from an explicit checkpoint or from its output folder's `latest.json`, only with the
 same settings, data identity, source files and PyTorch version (or a change the
@@ -312,6 +312,8 @@ def train(
 
         primary(load_heldout)
 
+        evaluated = {}  # step -> its validation, so a stop at an evaluated step reuses it
+
         def evaluate(final=False):
             def run():
                 progress = {"step": step, "tokens": tokens}
@@ -320,7 +322,9 @@ def train(
                     handle.write(json.dumps(result) + "\n")
                 return result
 
-            return primary(run)
+            evaluated.clear()
+            evaluated[step] = primary(run)
+            return evaluated[step]
 
         def checkpoint():
             nonlocal last_saved, final_checkpoint
@@ -529,7 +533,9 @@ def train(
                 checkpoint()
                 last_checkpoint = time.monotonic()
         faulthandler.cancel_dump_traceback_later()
-        final_validation = evaluate(final=True)
+        # The final validation is the step's own when one just ran (held-out evaluation can
+        # take many minutes on rank zero, and repeating it delayed a timed session's exit).
+        final_validation = evaluated.get(step) or evaluate(final=True)
         if save and reason != "non_finite" and last_saved != step:
             checkpoint()
 
