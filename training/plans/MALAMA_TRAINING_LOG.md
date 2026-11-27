@@ -293,6 +293,24 @@ Modal credit.
   [LOOPED_LM.md](LOOPED_LM.md) and its records uploaded. No looping run exists for the
   960M model.
 
+- **Reasoning off.** `modal_livecodebench --protocol chat` scores checkpoints with the
+  thinking protocol's samples and grading but no reasoning span. Three checkpoints of the
+  v0.0.1 line, pass@1:
+
+  | Checkpoint | HumanEval | LiveCodeBench v6 | HumanEval with reasoning | LiveCodeBench with reasoning |
+  | --- | ---: | ---: | ---: | ---: |
+  | SFT v5, before RL | 21.1 | 7.0 | not measured | 12.8 |
+  | + 250 contest RL steps | 21.6 | 13.1 (153 of 175 problems) | 10.6 | 18.9 |
+  | + 400 mixed RL steps (v0.0.1) | 27.1 | 13.1 | 50.1 | 19.1 |
+
+  Contest RL raised LiveCodeBench without reasoning from 7.0 to 13.1 and left HumanEval
+  where it was; mixed RL raised HumanEval by 5.5 points and left LiveCodeBench where it
+  was. The workspace reached its Modal spend limit twice during these runs: one of eight
+  LiveCodeBench shards of the contest RL checkpoint and most of MBPP did not finish (MBPP:
+  7.1 for the contest RL checkpoint on 251 of 500 problems, nothing for the other two).
+  The thinking-protocol HumanEval run of SFT v5 was stopped at the start in favour of
+  these.
+
 ### Spend
 
 Modal credit was about $3,000 at the start of the session and about $1,600 on 24 November
