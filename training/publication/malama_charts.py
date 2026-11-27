@@ -7,7 +7,9 @@ Run from training/:
 `--results` is the release's `results.json` (kept beside the card on Hugging Face): one
 section per protocol, each a list of models with `name`, `params` (billions), `ours` and
 that protocol's scores. Writes one PNG per chart; Malama is drawn in warm terracotta and
-reference models in cool slate, with each point or bar labelled by name.
+reference models in cool slate, with each point or bar labelled by name. The HumanEval and
+MBPP rankings show the plain-completion models and, in a soft shade, Malama's chat models
+with their chat-protocol scores.
 """
 
 import argparse
@@ -111,8 +113,11 @@ def grouped(models, keys, labels, title, path):
             (OURS if "v0.0.1" in model["name"] else OURS_SOFT) if model["ours"] else next(shades)
         )
         places = [group + (index - (len(models) - 1) / 2) * width for group in range(len(keys))]
-        bars = axis.bar(places, [model[key] for key in keys], width * 0.92, color=color,
-                        label=model["name"])  # fmt: skip
+        # A benchmark the model was not scored on leaves its place empty.
+        scored = [(place, model[key]) for place, key in zip(places, keys, strict=True)
+                  if model.get(key) is not None]  # fmt: skip
+        bars = axis.bar([place for place, _ in scored], [value for _, value in scored],
+                        width * 0.92, color=color, label=model["name"])  # fmt: skip
         axis.bar_label(bars, fmt="%.1f", fontsize=7.5, color=LABEL, padding=2)
     axis.set_xticks(range(len(keys)), labels)
     axis.set_ylabel("pass@1 (%)", fontsize=9, color=MUTED)
@@ -122,13 +127,15 @@ def grouped(models, keys, labels, title, path):
 
 
 def ranked(models, key, title, path):
-    """Horizontal bars ranked by `key`, best first."""
+    """Horizontal bars ranked by `key`, best first; a model marked `chat` (scored in the
+    chat protocol) is drawn in the soft shade."""
     models = sorted(models, key=lambda model: model[key])
     figure, axis = axes(7.5, 0.42 * len(models) + 1.2)
     axis.grid(axis="y", visible=False)
     axis.grid(axis="x", color=GRID, linewidth=0.8)
     bars = axis.barh([m["name"] for m in models], [m[key] for m in models], height=0.62,
-                     color=[OURS if m["ours"] else OTHER for m in models])  # fmt: skip
+                     color=[(OURS_SOFT if m.get("chat") else OURS) if m["ours"] else OTHER
+                            for m in models])  # fmt: skip
     axis.bar_label(bars, fmt="%.1f", fontsize=8.5, color=LABEL, padding=4)
     axis.set_xlim(0, max(m[key] for m in models) * 1.12)
     axis.set_xlabel("pass@1 (%)", fontsize=9, color=MUTED)
@@ -165,9 +172,16 @@ def main():
             {"Malama Base": (-4, 11, "center"), "SmolLM2-360M": (-7, 0, "right"), "Qwen3-0.6B-Base": (-7, -2, "right"),
              "Qwen3.5-0.8B-Base": (-7, 5, "right"), "OLMo-2-1B": (7, -5, "left"),
              "MobileLLM-R1-950M-base": (7, 2, "left")})  # fmt: skip
-    for key, label in (("humaneval", "HumanEval, zero-shot"), ("mbpp", "MBPP, 3-shot")):
-        ranked(results["plain_completion"]["models"], key, f"Plain completion: {label}",
-               output / f"completion-{key}.png")  # fmt: skip
+    # Malama's chat models join the plain-completion ranking with their chat-protocol score.
+    chat = [
+        {**model, "name": f"{model['name']} (chat with thinking)", "chat": True}
+        for model in results["chat_function_tasks"]["models"]
+        if model["ours"]
+    ]
+    for key, label in (("humaneval", "HumanEval"), ("mbpp", "MBPP")):
+        models = results["plain_completion"]["models"] + chat
+        ranked([model for model in models if model.get(key) is not None], key,
+               f"{label}: plain completion and chat", output / f"completion-{key}.png")  # fmt: skip
     ranked(results["infilling"]["models"], "single", "HumanEval-Infilling, single line",
            output / "infilling-single-line.png")  # fmt: skip
 

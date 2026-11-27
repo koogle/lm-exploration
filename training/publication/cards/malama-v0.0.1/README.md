@@ -72,6 +72,10 @@ standard deviation) with **Muon**, 64 problems × 8 sampled answers per step, up
 answer tokens, on 8 H100s. An answer scores `1` when its program passes every test in a
 sandbox, `0` when it fails, and `−0.5` when it does not finish.
 
+Every launch behind this release, from pretraining to the final RL run and including the
+runs that did not help, is listed with its outcome in the
+[training log](logs/TRAINING_LOG.md).
+
 ## What we tried and what we learned
 
 Building a small reasoning model on a modest token budget turned up several clear lessons
@@ -232,8 +236,14 @@ fill-in-the-middle format.
 
 A dash means not measured; MobileLLM-R1 has no fill-in-the-middle tokens.
 
-![Plain completion, HumanEval](charts/completion-humaneval.png)
-![Plain completion, MBPP](charts/completion-mbpp.png)
+The HumanEval and MBPP charts rank these plain-completion models and, as soft bars,
+Malama's chat models with their scores from [Chat with thinking](#chat-with-thinking):
+the checkpoint after contest RL only, and v0.0.1 after mixed RL. The soft bars are a
+different protocol (a chat turn with thinking, 16 samples at temperature 0.6), so they
+show where the reasoning models stand on the same problems, not a like-for-like ranking.
+
+![HumanEval, plain completion and chat](charts/completion-humaneval.png)
+![MBPP, plain completion and chat](charts/completion-mbpp.png)
 ![Infilling, single line](charts/infilling-single-line.png)
 
 ## Transparency: teacher models and synthetic data
