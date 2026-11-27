@@ -8,9 +8,9 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Distill:
-    """Minimizes KL(teacher ‖ student) at every answer token, over the teacher's listed
-    tokens (`training_data.distillation`). Rewards play no part: every answer trains,
-    whether or not it is correct, because the teacher's distribution corrects each
+    """Minimizes reverse KL(student ‖ teacher) at every answer token, over the teacher's
+    listed tokens (`training_data.distillation`). Rewards play no part: every answer
+    trains, whether or not it is correct, because the teacher's distribution corrects each
     step of it.
 
     `temperature` below 1 sharpens the teacher: its listed log-probabilities are divided

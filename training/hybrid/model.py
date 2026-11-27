@@ -425,22 +425,25 @@ def _chunk_distillation(features, weight, targets, teacher_ids, teacher_logprobs
     valid = targets != IGNORE_INDEX
     target = logprobs.gather(-1, targets.clamp_min(0)[:, None]).squeeze(-1)
     student = logprobs.gather(-1, teacher_ids)
-    teacher = teacher_logprobs.exp()
-    # Everything outside the teacher's listed tokens is one more outcome.
-    teacher_rest = (1 - teacher.sum(-1)).clamp_min(0)
-    student_rest = (1 - student.exp().sum(-1)).clamp_min(1e-6)
-    rest = teacher_rest * (teacher_rest.clamp_min(1e-6).log() - student_rest.log())
-    kl = (teacher * (teacher_logprobs - student)).sum(-1) + rest
+    student_probs = student.exp()
+    teacher_probs = teacher_logprobs.exp()
+    # Everything outside the teacher's listed tokens is one more outcome (reverse KL:
+    # KL(student ‖ teacher), mode-seeking).
+    student_rest = (1 - student_probs.sum(-1)).clamp_min(0)
+    teacher_rest = (1 - teacher_probs.sum(-1)).clamp_min(1e-6)
+    rest = student_rest * (student_rest.clamp_min(1e-6).log() - teacher_rest.log())
+    kl = (student_probs * (student - teacher_logprobs)).sum(-1) + rest
     return torch.where(valid, target, 0.0), torch.where(valid, kl, 0.0)
 
 
 def chunked_distillation(hidden, weight, targets, teacher_ids, teacher_logprobs, chunk_size):
-    """(log-probabilities of `targets`, KL(teacher ‖ model) per position), both shaped
+    """(log-probabilities of `targets`, KL(model ‖ teacher) per position), both shaped
     like `targets` and 0 where ignored.
 
     `teacher_ids` and `teacher_logprobs` [..., k] list the teacher's k likeliest tokens at
-    each position; the KL is over those tokens plus one outcome for all the others, a
-    lower bound of the full KL. Chunks are recomputed in backward like `chunked_logprobs`.
+    each position; the reverse KL is over those tokens plus one outcome for all the others,
+    a lower bound of the full reverse KL. Chunks are recomputed in backward like
+    `chunked_logprobs`.
     """
     k = teacher_ids.shape[-1]
     parts = [
@@ -670,7 +673,7 @@ class HybridLM(nn.Module):
         return chunked_logprobs(self.hidden_states(tokens), self.output_weight, targets, chunk_size)
 
     def distillation(self, tokens, targets, teacher_ids, teacher_logprobs, chunk_size=2048):
-        """Log-probabilities of `targets` and KL(teacher ‖ model) per position
+        """Log-probabilities of `targets` and KL(model ‖ teacher) per position
         (`chunked_distillation`)."""
         return chunked_distillation(
             self.hidden_states(tokens),

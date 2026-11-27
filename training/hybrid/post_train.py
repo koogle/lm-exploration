@@ -70,8 +70,8 @@ class HybridModel:
         return model.target_logprobs(x, y)
 
     def distillation(self, model, x, y, teacher_ids, teacher_logprobs):
-        """Log-probabilities of targets `y` and KL(teacher ‖ model) at each, from the
-        teacher's listed tokens `[batch, time, k]` (`HybridLM.distillation`)."""
+        """Log-probabilities of targets `y` and reverse KL(model ‖ teacher) at each, from
+        the teacher's listed tokens `[batch, time, k]` (`HybridLM.distillation`)."""
         return model.distillation(x, y, teacher_ids, teacher_logprobs)
 
     def prompt_ids(self, tokenizer, text, thinking=False):

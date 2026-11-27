@@ -76,7 +76,7 @@ class DataTests(unittest.TestCase):
 
 
 class LossTests(unittest.TestCase):
-    def test_the_listed_kl_is_the_full_kl_when_every_token_is_listed(self):
+    def test_the_listed_kl_is_the_full_reverse_kl_when_every_token_is_listed(self):
         torch.manual_seed(0)
         hidden = torch.randn(2, 5, 8, requires_grad=True)
         weight = torch.randn(12, 8)
@@ -86,7 +86,7 @@ class LossTests(unittest.TestCase):
         ids = torch.arange(12).expand(2, 5, 12)
         logp, kl = chunked_distillation(hidden, weight, targets, ids, teacher, chunk_size=3)
         student = (hidden @ weight.T).log_softmax(-1)
-        expected = (teacher.exp() * (teacher - student)).sum(-1) * (targets != -100)
+        expected = (student.exp() * (student - teacher)).sum(-1) * (targets != -100)
         torch.testing.assert_close(kl, expected, atol=1e-5, rtol=1e-4)
         chosen = student.gather(-1, targets.clamp_min(0)[..., None])[..., 0] * (targets != -100)
         torch.testing.assert_close(logp, chosen, atol=1e-5, rtol=1e-4)
@@ -94,7 +94,7 @@ class LossTests(unittest.TestCase):
         self.assertTrue(torch.isfinite(grad).all())
 
     def test_unlisted_tokens_count_as_one_outcome(self):
-        hidden = torch.eye(4)[None]
+        hidden = torch.eye(4)[None].requires_grad_(True)
         weight = torch.eye(4) * 3
         targets = torch.zeros(1, 4, dtype=torch.long)
         student = (hidden @ weight.T).log_softmax(-1)
@@ -102,11 +102,17 @@ class LossTests(unittest.TestCase):
         ids = torch.arange(2).expand(1, 4, 2)
         _, kl = chunked_distillation(hidden, weight, targets, ids, teacher[..., :2], chunk_size=8)
         listed = student[..., :2]
-        rest = (1 - listed.exp().sum(-1)).log()
-        expected = (teacher[..., :2].exp() * (teacher[..., :2] - listed)).sum(-1) + 0.2 * (
-            torch.tensor(0.2).log() - rest
+        student_rest = 1 - listed.exp().sum(-1)
+        expected = (listed.exp() * (listed - teacher[..., :2])).sum(-1) + student_rest * (
+            student_rest.log() - torch.tensor(0.2).log()
         )
         torch.testing.assert_close(kl, expected, atol=1e-5, rtol=1e-4)
+        # Sharpened teacher (zero rest mass) stays finite with finite gradients.
+        sharp = make({"name": "off_policy/distill", "temperature": 0.6}).targets(teacher[..., :2])
+        _, sharp_kl = chunked_distillation(hidden, weight, targets, ids, sharp, chunk_size=8)
+        (grad,) = torch.autograd.grad(sharp_kl.sum(), hidden)
+        self.assertTrue(torch.isfinite(sharp_kl).all())
+        self.assertTrue(torch.isfinite(grad).all())
 
     def test_distill_minimizes_the_teacher_kl_on_answer_tokens(self):
         algorithm = make({"name": "off_policy/distill"})
