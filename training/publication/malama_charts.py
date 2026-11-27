@@ -6,8 +6,8 @@ Run from training/:
 
 `--results` is the release's `results.json` (kept beside the card on Hugging Face): one
 section per protocol, each a list of models with `name`, `params` (billions), `ours` and
-that protocol's scores. Writes one PNG per chart; Malama is drawn in blue and every other
-model in gray, with each point or bar labelled by name.
+that protocol's scores. Writes one PNG per chart; Malama is drawn in warm terracotta and
+reference models in cool slate, with each point or bar labelled by name.
 """
 
 import argparse
@@ -19,14 +19,22 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-OURS, OTHER, INK, MUTED, GRID = "#257de0", "#8d8c85", "#191919", "#666666", "#e6e5e0"
-# Lines of the RL-step chart, one per reasoning SFT run, lightest to the final run.
+OURS = "#d95f2b"
+OURS_SOFT = "#f2b291"
+OTHER = "#94a3b8"
+INK = "#0f172a"
+LABEL = "#334155"
+MUTED = "#64748b"
+GRID = "#e2e8f0"
+# Lines of the RL-step chart, one per reasoning SFT run, progressing to the final run.
 RUNS = {"v3": "SFT v3", "v4": "SFT v4", "v5": "SFT v5", "mix": "SFT v5, mixed RL"}
-RUN_COLORS = {"v3": "#c9c8c1", "v4": "#a3a29a", "v5": "#6f6e68", "mix": OURS}
+RUN_COLORS = {"v3": "#94a3b8", "v4": "#5b8fb9", "v5": "#1d4e89", "mix": OURS}
+GROUP_SHADES = ("#cbd5e1", "#64748b", "#334155", "#1e293b")
 
 
 def axes(width=8.0, height=4.6):
-    figure, axis = plt.subplots(figsize=(width, height), dpi=160)
+    figure, axis = plt.subplots(figsize=(width, height), dpi=160, facecolor="white")
+    axis.set_facecolor("white")
     axis.spines[["top", "right"]].set_visible(False)
     axis.spines[["left", "bottom"]].set_color(GRID)
     axis.tick_params(colors=MUTED, labelsize=9, length=0)
@@ -36,9 +44,9 @@ def axes(width=8.0, height=4.6):
 
 
 def save(figure, axis, title, path):
-    axis.set_title(title, loc="left", fontsize=12, color=INK, pad=12)
+    axis.set_title(title, loc="left", fontsize=12, fontweight="bold", color=INK, pad=12)
     figure.tight_layout()
-    figure.savefig(path)
+    figure.savefig(path, facecolor="white")
     plt.close(figure)
 
 
@@ -47,12 +55,13 @@ def by_size(models, value, ylabel, title, path, offsets=None):
     figure, axis = axes()
     for model in models:
         color = OURS if model["ours"] else OTHER
-        axis.scatter(model["params"], value(model), s=70 if model["ours"] else 42, color=color,
-                     edgecolors="white", linewidths=1.5, zorder=3)  # fmt: skip
+        axis.scatter(model["params"], value(model), s=84 if model["ours"] else 46, color=color,
+                     edgecolors="white", linewidths=1.5, zorder=4 if model["ours"] else 3)  # fmt: skip
         dx, dy, align = (offsets or {}).get(model["name"], (7, 0, "left"))
         axis.annotate(model["name"], (model["params"], value(model)), xytext=(dx, dy),
                       textcoords="offset points", ha=align, va="center", fontsize=8.5,
-                      color=INK, fontweight="bold" if model["ours"] else "normal")  # fmt: skip
+                      color=OURS if model["ours"] else LABEL,
+                      fontweight="bold" if model["ours"] else "normal")  # fmt: skip
     axis.set_xscale("log")
     ticks = [0.25, 0.5, 1, 2, 4]
     axis.set_xticks(ticks, [f"{tick:g}B" for tick in ticks])
@@ -77,10 +86,15 @@ def by_step(models, branches, path):
                 if m.get("run") == parent["run"] and m["step"] == parent["step"]
             ] + points
         steps, scores = zip(*points, strict=True)
-        axis.plot(steps, scores, color=RUN_COLORS[run], linewidth=2, marker="o", markersize=6,
-                  markeredgecolor="white", markeredgewidth=1.5, label=label)  # fmt: skip
+        is_final = run == "mix"
+        axis.plot(steps, scores, color=RUN_COLORS[run], linewidth=2.5 if is_final else 2.0,
+                  marker="o", markersize=6.5 if is_final else 5.5,
+                  markeredgecolor="white", markeredgewidth=1.5, label=label,
+                  zorder=4 if is_final else 3)  # fmt: skip
         axis.annotate(f"{scores[-1]:.1f}", (steps[-1], scores[-1]), xytext=(7, 0),
-                      textcoords="offset points", va="center", fontsize=8.5, color=INK)  # fmt: skip
+                      textcoords="offset points", va="center", fontsize=8.5,
+                      color=OURS if is_final else LABEL,
+                      fontweight="bold" if is_final else "normal")  # fmt: skip
     axis.set_xlabel("RL steps after the run's reasoning SFT", fontsize=9, color=MUTED)
     axis.set_ylabel("pass@1 (%)", fontsize=9, color=MUTED)
     axis.legend(frameon=False, fontsize=9, loc="lower right")
@@ -91,15 +105,15 @@ def grouped(models, keys, labels, title, path):
     """One group of bars per benchmark, one bar per model, each labelled with its value."""
     figure, axis = axes(9.0, 4.8)
     width = 0.8 / len(models)
-    shades = iter(["#c9c8c1", "#a3a29a", "#6f6e68", "#55544f"])
+    shades = iter(GROUP_SHADES)
     for index, model in enumerate(models):
         color = (
-            (OURS if "v0.0.1" in model["name"] else "#9cc3f0") if model["ours"] else next(shades)
+            (OURS if "v0.0.1" in model["name"] else OURS_SOFT) if model["ours"] else next(shades)
         )
         places = [group + (index - (len(models) - 1) / 2) * width for group in range(len(keys))]
         bars = axis.bar(places, [model[key] for key in keys], width * 0.92, color=color,
                         label=model["name"])  # fmt: skip
-        axis.bar_label(bars, fmt="%.1f", fontsize=7.5, color=INK, padding=2)
+        axis.bar_label(bars, fmt="%.1f", fontsize=7.5, color=LABEL, padding=2)
     axis.set_xticks(range(len(keys)), labels)
     axis.set_ylabel("pass@1 (%)", fontsize=9, color=MUTED)
     axis.legend(frameon=False, fontsize=8.5, loc="upper left", ncols=2)
@@ -115,7 +129,8 @@ def ranked(models, key, title, path):
     axis.grid(axis="x", color=GRID, linewidth=0.8)
     bars = axis.barh([m["name"] for m in models], [m[key] for m in models], height=0.62,
                      color=[OURS if m["ours"] else OTHER for m in models])  # fmt: skip
-    axis.bar_label(bars, fmt="%.1f", fontsize=8.5, color=INK, padding=3)
+    axis.bar_label(bars, fmt="%.1f", fontsize=8.5, color=LABEL, padding=4)
+    axis.set_xlim(0, max(m[key] for m in models) * 1.12)
     axis.set_xlabel("pass@1 (%)", fontsize=9, color=MUTED)
     axis.tick_params(axis="y", labelsize=9, colors=INK)
     save(figure, axis, title, path)

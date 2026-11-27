@@ -161,7 +161,7 @@ medium and hard problems (25.1% and 4.3%).
 
 Three rounds of reasoning SFT were each followed by contest RL. v4 used about three times
 the tokens of v3; v5 used about fourteen times the teacher traces of v4 (31,568 against
-2,234). The blue line is the mixed RL stage that ends in v0.0.1.
+2,234). The orange line is the mixed RL stage that ends in v0.0.1.
 
 ![LiveCodeBench by RL step](charts/livecodebench-by-rl-step.png)
 
