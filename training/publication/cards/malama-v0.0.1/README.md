@@ -13,8 +13,7 @@ tags:
 
 # Malama v0.0.1
 
-Malama v0.0.1 is an experimental 0.93B-parameter language model trained from random
-initialization that reasons in a `<think>` span before writing Python. Its base model was
+Malama v0.0.1 is an experimental 0.93B-parameter language model that reasons in a `<think>` span before writing Python. Its base model was
 pretrained from scratch on **100B tokens** (602 H100-hours, about 5.8e20 FLOPs), followed
 by roughly 12B tokens of context extension, code mid-training and reasoning SFT, and 650
 steps of reinforcement learning against unit tests.
@@ -23,19 +22,19 @@ On LiveCodeBench v6 with thinking it scores **19.1 pass@1**, ahead of Qwen3-0.6B
 and behind MobileLLM-R1.5-950M (29.0) and Qwen3-1.7B (31.0), alongside **50.1** on
 HumanEval and **41.6** on MBPP.
 
-**What this model is—and is not.** For a ~112B-token total budget, those scores are decent,
-especially compared to sub-2B models trained on orders of magnitude more data. At the same
-time, **Malama v0.0.1 is by far not a great model.** Its base model sits at the weak end
+**What this model is—and is not.** For a ~112B-token total budget, those scores are okay,
+especially compared to sub-2B models trained on trillions of tokens. To be clear, **Malama v0.0.1 is by far not a great model.** Its base model sits at the weak end
 of its size class on raw text perplexity—likely because it is undertrained at 100B
-pretraining tokens compared to multi-trillion-token baselines—it is narrow (Python
+pretraining tokens compared to multi-trillion-token baselines. It is narrow (Python
 programming problems only), and medium and hard competitive-programming problems remain
-mostly out of reach. While the
-weights were trained from scratch, the coding and reasoning improvements lean heavily on
-stronger teacher models and synthetic datasets—both traces we generated ourselves
+mostly out of reach.
+
+While the weights were trained from scratch, the coding and reasoning improvements lean heavily on
+stronger teacher models and synthetic datasets — traces we generated ourselves
 (Qwen3-30B-A3B and DeepSeek V4 Flash) and public teacher-generated datasets (DeepSeek-R1
-traces and synthetic code corpora)—combined with unit-test RL. This card documents the
-released checkpoint, the other branches, the exact data and teacher models behind each
-stage, and what did and did not work along the way.
+traces and synthetic code corpora) — combined with unit-test RL.
+
+This card documents the released checkpoint, other branches, and the exact data and teacher models used. We show what did and did not work along the way.
 
 ![LiveCodeBench v6 by model size](charts/livecodebench-by-size.png)
 
@@ -120,6 +119,13 @@ Building a small reasoning model on a modest token budget turned up several clea
     problems looped heavily (30–80% truncation mid-run) and failed to predict the
     temperature-0.6 LiveCodeBench benchmark, where the later checkpoint was strongest.
 - **What did not make it into v0.0.1 (negative results and side branches):**
+  - *Looped (latent-recurrent) conversion did not pay off.* On the earlier 720M KDA
+    hybrid, we tested retrofitting the middle blocks into a shared recurrent group
+    (`4 / 8 / 4` blocks, up to 4 loops, Elastic Latent Recurrence style) over 1B tokens
+    against a plain continuation control (1.45× training FLOPs/token). At 1 loop it
+    trailed the control by 0.004–0.007 nats; 2–3 loops only matched the control (within
+    ~0.002 nats); and 4 loops was 0.002–0.004 nats worse with higher greedy repetition
+    (4-gram repetition rose from 0.47 to 0.56). Looping was not adopted for Malama.
   - *Task-arithmetic weight merging failed.* Adding the 20B code mid-training delta onto
     Reasoning SFT v3 (`v3 + λ·(code-20B − Base)`) broke the model completely: held-out
     loss exploded to 3.09–4.24 at `λ = 0.5` and ~13.7 at `λ = 1.0` (worse than uniform
