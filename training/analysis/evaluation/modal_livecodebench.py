@@ -3,7 +3,7 @@
 Run from training/:
     modal run --detach -m evaluation.modal_livecodebench \
         [--checkpoints runs/RUN/step-N.pt,training/RUN/step-M.pt] [--references M,...|all] \
-        [--limit N] [--protocol plain|thinking] [--merge lcb-thinking-<launch>]
+        [--limit N] [--protocol plain|thinking|chat] [--merge lcb-thinking-<launch>]
 
 A checkpoint path starts with the volume it is on: `runs/` (lm-exploration-hybrid-runs)
 or `training/` (lm-exploration-training). Checkpoints load through their family's
@@ -38,7 +38,10 @@ instruction as their family's user turn with the reasoning span opened
 `CHECKPOINT_THINKING_SHARDS` calls each, with up to what the context leaves after the
 prompt when that is under `THINKING["max_new_tokens"]`. `--suite humaneval` or `--suite
 mbpp` runs the same protocol on that benchmark's test problems as chat problems
-(`function_problems`), written to `lcb-thinking-<launch>-<suite>/`.
+(`function_problems`), written to `lcb-thinking-<launch>-<suite>/`. `--protocol chat`
+scores checkpoints the same way with reasoning off: the prompt ends at the assistant's
+reply (`prompt_ids(..., thinking=False)`) and each sample is an answer alone, written to
+`lcb-chat-<launch>[-<suite>]/`.
 """
 
 import json
@@ -355,11 +358,14 @@ def evaluate_thinking(
     secrets=[secret],
     volumes={"/runs": runs_volume, "/training": training_volume},
 )
-def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shards=1, suite=""):
+def evaluate_thinking_checkpoint(
+    name, deadline, folder, limit=0, shard=0, shards=1, suite="", thinking=True
+):
     """`THINKING["samples"]` reasoning samples per problem from a checkpoint whose family
     has a thinking prompt (`prompt_ids(..., thinking=True)`), for every `shards`-th
     problem from `shard` on; up to `THINKING["max_new_tokens"]` new tokens, or what the
-    model's context leaves after the prompt."""
+    model's context leaves after the prompt. Without `thinking` the prompt ends at the
+    assistant's reply with reasoning off, and the samples are answers alone."""
     if time.time() >= deadline:
         raise TimeoutError("Launch deadline passed; refusing work")
     import torch
@@ -376,7 +382,8 @@ def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shard
     model.eval()
     tokenizer = family.tokenizer()
     prompts = [
-        family.prompt_ids(tokenizer, livecodebench.instruction(p), thinking=True) for p in problems
+        family.prompt_ids(tokenizer, livecodebench.instruction(p), thinking=thinking)
+        for p in problems
     ]
     generator = torch.Generator(device="cuda").manual_seed(THINKING["seed"])
     count = THINKING["samples"]
@@ -419,7 +426,8 @@ def evaluate_thinking_checkpoint(name, deadline, folder, limit=0, shard=0, shard
         problems,
         samples,
         started,
-        opened=True,
+        opened=thinking,
+        reasoning=thinking,
         suite=suite,
     )
 
@@ -604,6 +612,7 @@ def _write_thinking(
     opened=False,
     traces=False,
     suite="",
+    reasoning=True,
 ):
     """Grade (text, tokens, finish reason) samples per problem and write the shard's result
     and completions; with `opened`, the prompt opened the reasoning span, so a completion
@@ -630,7 +639,7 @@ def _write_thinking(
         "model": model,
         "revision": revision,
         **loaded,
-        "protocol": "traces" if traces else "thinking",
+        "protocol": "traces" if traces else "thinking" if reasoning else "chat",
         "sampling": TRACES if traces else THINKING,
         "dataset": (
             {
@@ -912,7 +921,8 @@ def main(
     `--publish lcb-traces-<launch> --publish-as <folder>` uploads a finished trace launch to
     `TRACES_REPO` (`--retrace` first rebuilds its traces from the saved completions).
     `--protocol thinking --suite humaneval|mbpp` scores that benchmark instead of
-    LiveCodeBench."""
+    LiveCodeBench. `--protocol chat` is the thinking protocol for checkpoints with
+    reasoning off (results in `lcb-chat-<launch>`)."""
     if merge:
         print(json.dumps(merge_thinking.remote(merge), indent=1))
         return
@@ -921,10 +931,15 @@ def main(
             raise ValueError("--publish <trace launch> takes --publish-as <traces repo folder>")
         print(json.dumps(publish_traces.remote(publish, publish_as, retrace), indent=1))
         return
-    if protocol not in ("plain", "thinking"):
-        raise ValueError("--protocol is plain or thinking")
-    if suite and (suite not in function_problems.SUITES or protocol != "thinking" or pool):
-        raise ValueError(f"--suite is one of {sorted(function_problems.SUITES)}, with thinking")
+    if protocol not in ("plain", "thinking", "chat"):
+        raise ValueError("--protocol is plain, thinking or chat")
+    if protocol == "chat" and (references or pool or openrouter):
+        raise ValueError("--protocol chat scores --checkpoints only")
+    sampled = protocol in ("thinking", "chat")
+    if suite and (suite not in function_problems.SUITES or not sampled or pool):
+        raise ValueError(
+            f"--suite is one of {sorted(function_problems.SUITES)}, with thinking or chat"
+        )
     if (
         pool not in ("", "train", "codecontests")
         or pool
@@ -940,7 +955,7 @@ def main(
         raise ValueError("--unsolved goes with --openrouter")
     if hosted:
         chosen = [(m, None) for m in hosted]
-    elif protocol == "thinking":
+    elif sampled:
         chosen = _thinking_launch(checkpoints, references)
     else:
         chosen = [(f"checkpoint:{name}", None) for name in filter(None, checkpoints.split(","))]
@@ -959,7 +974,7 @@ def main(
             raise ValueError("Name --checkpoints and/or --references")
         function = evaluate_lcb
     deadline = time.time() + LAUNCH_LIMIT_SECONDS
-    tag = "-traces" if pool else "-thinking" if protocol == "thinking" else ""
+    tag = "-traces" if pool else f"-{protocol}" if sampled else ""
     folder = f"lcb{tag}-{int(time.time())}{'-limit' if limit else ''}"
     folder += f"-{suite}" if suite else ""
     if hosted:
@@ -972,7 +987,7 @@ def main(
             for shard in range(shards)
         ]
         chosen = [(f"{m}#{shard}", None) for m, _ in chosen for shard in range(shards)]
-    elif protocol == "thinking":
+    elif sampled:
         calls, names = [], []
         for m, r in chosen:
             checkpoint = m.startswith("checkpoint:")
@@ -986,8 +1001,9 @@ def main(
             for shard in range(shards):
                 if checkpoint:
                     call = evaluate_thinking_checkpoint.spawn(
-                        m.split(":", 1)[1], deadline, folder, limit, shard, shards, suite
-                    )
+                        m.split(":", 1)[1], deadline, folder, limit, shard, shards, suite,
+                        protocol == "thinking",
+                    )  # fmt: skip
                 else:
                     call = evaluate_thinking.spawn(
                         m, r, deadline, folder, limit, shard, shards, pool, suite

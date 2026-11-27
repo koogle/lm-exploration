@@ -5,7 +5,7 @@ run, what it measured and the decision that followed. Times are UTC. Results and
 conclusions are summarized in [MALAMA_V0_0_1.md](MALAMA_V0_0_1.md) and
 [CODING_REASONER_1B_FINDINGS.md](CODING_REASONER_1B_FINDINGS.md); this file keeps the
 sequence, including what did not work: a table of every launch, then a day-by-day account
-from code mid-training to the release.
+from pretraining to the release.
 
 ## Run log
 
@@ -49,11 +49,31 @@ the same dataset. LiveCodeBench scores are v6 pass@1 in the thinking protocol.
 | `kda-960m-contest-rl-v5-20261124-01` | `kda-960m-contest-rl-v5` | Nov 24–25 | Stopped at about step 650: 15.6 pass@1 at step 100, 18.9 at 250, 17.0 at 500 |
 | `kda-960m-contest-functions-rl-20261124-01` | `kda-960m-contest-functions-rl` | Nov 24–25 | Stopped at step 45: the first mixed pool gave MBPP problems without their assertions and held-out MBPP stayed at 0% |
 | `kda-960m-contest-functions-rl-20261125-01` | `kda-960m-contest-functions-rl` | Nov 25 | Completed: 400 mixed RL steps from contest RL step 250 (19.1 pass@1, HumanEval 50.1, MBPP 41.6). Step 400 is Malama v0.0.1 |
+| `kda-960m-distill-rkl-pilot-a-20261127-01` | `kda-960m-distill-pilot-a` | Nov 27 | Completed (reverse KL): 32 steps on `distill-pilot-20261122-01`; held-out accuracy fell 37.1% to 31.7% and truncation rose to 28.1% (worse than forward KL at the same LR) |
 
-## Day by day, 14 to 27 November 2026
+## Day by day, 10 to 27 November 2026
 
 Scores are LiveCodeBench v6 pass@1 in the thinking protocol (16 samples, temperature 0.6,
 up to 32,768 new tokens) unless stated.
+
+### 10 to 14 November: pretraining
+
+- **Malama Base** (`kda-960m-foundation-20261110-01`, recipe
+  `kda-foundation-100b-504010-v3`): 99,999,547,392 tokens at 4K context, 95,367 steps of
+  256 sequences, on 8 H100s. 50% web text, 40% code, 10% math. Muon for matrices and
+  AdamW for the rest, constant learning rate to 85B tokens, then decay over the last 15%.
+- **Seven launches.** Each launch has a 24-hour limit and sessions of up to six hours, so
+  the run resumed from checkpoints as attempts `a1` to `a7`. Training steps took 75.3
+  hours (602 H100-hours) at a median 380.5k tokens per second.
+- **Three stretches were retrained** from an earlier checkpoint: steps 9 to 8,276 of the
+  first launch, after a preemption of the workflow controller opened a second attempt;
+  steps 27,909 to 30,527, after a GPU preemption; and steps 85,676 to 85,972, cut off by a
+  launch deadline before its final checkpoint.
+- **Loss.** Training loss fell from 2.07 at the start of the decay to 1.75 at the end.
+  Held-out bits per byte fell 13% to 28% per source during the decay (general web 0.823
+  to 0.715, starred Python 0.564 to 0.407); between 50B and 85B tokens at constant
+  learning rate they had moved by about 1% or less.
+- **Published** as `jfrick/malama-base` with an export every 5B tokens.
 
 ### 14 November
 
@@ -259,6 +279,23 @@ from the contest RL checkpoint at step 400 (14.1) with about $3,000 of Modal cre
   (`hybrid-720m-loop-test-03g`, run on 22 November by another session) was written up in
   [LOOPED_LM.md](LOOPED_LM.md) and its records uploaded. No looping run exists for the
   960M model.
+- **Reasoning off.** `modal_livecodebench --protocol chat` scores checkpoints with the
+  thinking protocol's samples and grading but no reasoning span. Three checkpoints of the
+  v0.0.1 line, pass@1:
+
+  | Checkpoint | HumanEval | LiveCodeBench v6 | HumanEval with reasoning | LiveCodeBench with reasoning |
+  | --- | ---: | ---: | ---: | ---: |
+  | SFT v5, before RL | 21.1 | 7.0 | not measured | 12.8 |
+  | + 250 contest RL steps | 21.6 | 13.1 (153 of 175 problems) | 10.6 | 18.9 |
+  | + 400 mixed RL steps (v0.0.1) | 27.1 | 13.1 | 50.1 | 19.1 |
+
+  Contest RL raised LiveCodeBench without reasoning from 7.0 to 13.1 and left HumanEval
+  where it was; mixed RL raised HumanEval by 5.5 points and left LiveCodeBench where it
+  was. The workspace reached its Modal spend limit twice during these runs: one of eight
+  LiveCodeBench shards of the contest RL checkpoint and most of MBPP did not finish (MBPP:
+  7.1 for the contest RL checkpoint on 251 of 500 problems, nothing for the other two).
+  The thinking-protocol HumanEval run of SFT v5 was stopped at the start in favour of
+  these.
 
 ### Post-release code and plan audit
 
@@ -273,9 +310,25 @@ four code/config bugs (now fixed on `main`) and several plan-vs-operated gaps:
   `0.02 / sqrt(48) = 0.00289` (~6.9× larger std). Moved to `__init__()`.
 - **On-policy distillation KL direction (`hybrid/model.py`, `trainer/rl/off_policy/distill.py`).**
   `_chunk_distillation` minimized forward KL `KL(teacher ‖ student)` (mode-covering)
-  instead of reverse KL `KL(student ‖ teacher)` (mode-seeking). Applying forward KL to the
-  RL-sharpened 14.1 checkpoint flattened its distribution and brought back verbatim loops
-  across all five pilots (`a`–`e`). Switched to reverse KL.
+  instead of reverse KL `KL(student ‖ teacher)` (mode-seeking). Switched to reverse KL
+  and re-tested `kda-960m-distill-pilot-a` (`kda-960m-distill-rkl-pilot-a-20261127-01`,
+  32 steps on `distill-pilot-20261122-01`, 15.8 min on 8 H100s, ~$8.40):
+
+  | Metric | Forward KL (`pilot-a-20261122-02`) | Reverse KL (`rkl-pilot-a-20261127-01`) |
+  | --- | ---: | ---: |
+  | Baseline val acc / solved / trunc | 37.5% / 57.1% / 0.9% | 37.1% / 53.6% / 0.9% |
+  | Step 16 val acc / solved / trunc | 35.7% / 50.0% / 1.3% | 34.4% / 46.4% / 5.4% |
+  | Step 32 val acc / solved / trunc | 32.6% / 50.0% / 11.6% | 31.7% / 44.6% / 28.1% |
+  | Teacher KL (step 1 to 32) | 0.703 to 0.320 | 0.460 to 0.278 |
+  | KL from parent at step 32 | 5.23 | 866.4 |
+  | Sampled NLL (step 1 to 32) | 0.205 to 0.416 | 0.205 to 0.395 |
+
+  Reverse KL did not fix distillation and degraded faster at the same learning rate.
+  With `kl_coef = 0` on frozen offline answers (`scored` source), policy-to-parent KL
+  exploded to 866.4 by step 32 and truncation reached 28.1%. The failure is driven by
+  offline drift toward a distant teacher distribution (`teacher_nll = 0.72` vs
+  `student_nll = 0.21`) without a parent-KL anchor or online resampling, not by KL
+  direction alone.
 - **Greedy RL validation (`workflows/kda-960m-contest-rl-v4.json`, `-v5.json`,
   `-contest-functions-rl.json`).** These workflows omitted `validation_samples` and fell
   back to greedy (`1`), explaining the 3–42% MBPP validation swings and 71% unfinished

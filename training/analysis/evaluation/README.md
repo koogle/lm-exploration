@@ -112,4 +112,8 @@ problems as chat problems (`benchmarks/function_problems.py`): HumanEval gives t
 function's signature and docstring as starter code, MBPP states the task with its test
 assertions, and an answer passes when the benchmark's own checks run cleanly after it.
 
+`--protocol chat` scores checkpoints with reasoning off: the same problems, samples and
+grading, but the prompt ends at the assistant's reply and each sample is an answer alone.
+Results go to `lcb-chat-<launch>[-<suite>]/`.
+
 Findings: [hybrid 720M plan](../../plans/HYBRID_720M.md#livecodebench-v6).
