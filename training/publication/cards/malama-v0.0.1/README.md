@@ -350,6 +350,7 @@ Repositories without a link are private.
 | `tokens-000288341556/` | Released weights: `model.safetensors`, `config.json`, `progress.json` |
 | `results.json` | Every number in this card, by protocol |
 | `charts/` | The charts in this card, drawn from `results.json` by `training/publication/malama_charts.py` |
+| `logs/TRAINING_LOG.md` | Dated log of the runs behind this release, including those that did not work |
 | `logs/` | `metrics.jsonl`, `result.json` and `manifest.json` of the mixed RL run |
 
 Per-problem completions and scores of every evaluation, the RL pools and the logs of the
