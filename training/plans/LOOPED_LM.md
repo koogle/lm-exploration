@@ -18,7 +18,7 @@ hybrid at one loop and gain on reasoning and code at two to four loops, for abou
 | 1 | Model: prelude / recurrent / coda split, input re-injection, adaptive-delta update, `loops` per forward call, FLOPs accounting | Implemented, CPU-tested |
 | 2 | Trainer: mixed-depth sampling with one-loop rank overrides, delayed switch, per-`k` held-out loss; converting a plain export (`loop_retrofit`) | Implemented, CPU-tested |
 | 2b | Conversion test: Hybrid v2 base (mid32k export), 1B tokens, plain vs looped | Done 2026-11-03: one-loop cost within the gate, no gain from extra loops |
-| 2c | Conversion test with a closed loop-entry gate, now part of `loop_retrofit` | Run 2026-11-22 (`hybrid-720m-loop-test-03g`) |
+| 2c | Conversion test with a closed loop-entry gate, now part of `loop_retrofit` | Done 2026-11-22 (`hybrid-720m-loop-test-03g`): one loop at parity, two and three loops 0.001–0.005 nats below the control |
 | 3 | Matched pilot: baseline vs looped 720M at 10B tokens | Proposed; needs approval and budget |
 | 4 | Decoding: per-loop and last-loop caches in `generate.py`; benchmarks at `k = 1..4` | Proposed |
 | 5 | Loop-conditioned modulation grafted at the switch | Proposed, after stage 3 succeeds |
@@ -181,6 +181,39 @@ results above are of the conversion without the gate.
 It passes if `k = 2..4` fall below the control on code, math and the thinking traces
 while `k = 1` stays within 0.01 nats, and if `|g|` grows away from zero; a gate that
 stays near zero says the extra loops have nothing to add at this budget.
+
+#### Result
+
+`hybrid-720m-loop-test-03g-gated` against the same control, at the end (999,292,928
+tokens; held-out loss in nats per token, gated minus control; evaluated at one to three
+loops):
+
+| Source | Control | `k = 1` | `k = 2` | `k = 3` |
+| --- | ---: | ---: | ---: | ---: |
+| Repository code | 0.9686 | +0.0002 | −0.0013 | −0.0014 |
+| Unseen GitHub files | 0.9305 | +0.0002 | −0.0012 | −0.0013 |
+| Code (replay) | 0.9362 | +0.0003 | −0.0012 | −0.0013 |
+| Thinking traces | 1.6979 | +0.0004 | −0.0043 | −0.0046 |
+| Math (replay) | 1.7794 | +0.0004 | −0.0029 | −0.0031 |
+| ClimbMix (replay) | 2.6281 | +0.0004 | −0.0033 | −0.0036 |
+| PG19 books | 2.9378 | +0.0003 | −0.0040 | −0.0043 |
+
+- Every loop count equals the control at step 0, as the closed gate intends.
+- One loop stays at the control (within 0.0005 at every evaluation), where the conversion
+  without the gate cost 0.004–0.007.
+- Two and three loops are below the control on every source, and the gap grew at each
+  evaluation (thinking traces at two loops: −0.0016, −0.0030, −0.0040, −0.0043 at steps
+  240, 480, 720, 953). The gain is at most 0.3% of the loss; a third loop adds 0.0003 or
+  less over the second.
+- The entry gate opened slowly and was still rising at the end: mean `|g|` 0.006, 0.011,
+  0.014, 0.015 and largest 0.022, against a loop update that stayed at 1.0.
+- Training averaged 2.3 loops per step.
+
+By the criteria above the gated conversion passes: the extra loops help and one loop costs
+nothing. The help is small at 1B tokens, and the gate had not stopped opening. Records
+(held-out losses by loop count, metrics, report and configs):
+`training/results/hybrid-720m-loop-test/gated/` in `jfrick/lm-exploration-results`; the
+export is `jfrick/hybrid-720m-loop-test-gated`.
 
 ## Stage 3: matched pilot
 
