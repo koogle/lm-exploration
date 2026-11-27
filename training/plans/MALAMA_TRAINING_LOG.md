@@ -5,7 +5,7 @@ run, what it measured and the decision that followed. Times are UTC. Results and
 conclusions are summarized in [MALAMA_V0_0_1.md](MALAMA_V0_0_1.md) and
 [CODING_REASONER_1B_FINDINGS.md](CODING_REASONER_1B_FINDINGS.md); this file keeps the
 sequence, including what did not work: a table of every launch, then a day-by-day account
-of the last stretch.
+from code mid-training to the release.
 
 ## Run log
 
@@ -50,14 +50,94 @@ the same dataset. LiveCodeBench scores are v6 pass@1 in the thinking protocol.
 | `kda-960m-contest-functions-rl-20261124-01` | `kda-960m-contest-functions-rl` | Nov 24–25 | Stopped at step 45: the first mixed pool gave MBPP problems without their assertions and held-out MBPP stayed at 0% |
 | `kda-960m-contest-functions-rl-20261125-01` | `kda-960m-contest-functions-rl` | Nov 25 | Completed: 400 mixed RL steps from contest RL step 250 (19.1 pass@1, HumanEval 50.1, MBPP 41.6). Step 400 is Malama v0.0.1 |
 
-## Day by day, 22 to 27 November 2026
+## Day by day, 14 to 27 November 2026
 
-Session behind [koogle/lm-exploration#197](https://github.com/koogle/lm-exploration/pull/197).
-It started from the contest RL checkpoint of reasoning SFT v3 at step 400 (14.1 pass@1 on
-LiveCodeBench v6 with thinking), with about $3,000 of Modal credit. Scores below are
-LiveCodeBench v6 pass@1 in the thinking protocol unless stated.
+Scores are LiveCodeBench v6 pass@1 in the thinking protocol (16 samples, temperature 0.6,
+up to 32,768 new tokens) unless stated.
+
+### 14 November
+
+- Launched `kda-960m-fim-midtrain-20261114-01` (12:16): about 15B tokens with half of the
+  code documents rearranged for fill-in-the-middle, from Malama Base at 84.8B tokens.
+
+### 15 November
+
+- The FIM run completed (01:00). HumanEval infilling: 57.1 single-line and 19.8 multi-line,
+  against 2.9 single-line for Malama Base.
+- Reference scores in the thinking protocol: Qwen3-0.6B 15.2, Qwen3-1.7B 31.0,
+  MobileLLM-R1.5-360M 7.0, MobileLLM-R1.5-950M 29.0.
+- Answer-only format SFT: `-01` failed before training (recipe not prepared on the data
+  volume), `-02` failed at startup reading the recipe's data files, `-03` completed both
+  variants (12:21). 4.7 on an 8-problem check.
+- Reasoning pilot: `-01` failed in its 32K context extension stage; `-02` ran the context
+  extension and the pilot (15:25–20:23): 3.8. **Decision:** code mid-training first, then a
+  larger reasoning SFT.
+
+### 17 November
+
+- Code mid-training `kda-960m-code-anneal-20261117-01` failed in data preparation (one
+  source had fewer training tokens than the recipe asked for); `-02` started at 20:50:
+  5B tokens at 32K from the context extension.
+- Launched the 20B-token variant at 4K from Malama Base
+  (`kda-960m-code-anneal-20b-20261117-01`).
+
+### 18 November
+
+- The 5B code run completed (02:55): HumanEval 50.0 (39.0 without the docstring examples),
+  MBPP 33.2.
+- **Reasoning SFT v3** from the 5B export (09:00–15:22): 8.4, with 79% of answers running to
+  the token limit, almost all in verbatim loops.
+- The 20B code run's second attempt ran 09:34–23:29 and completed.
+
+### 19 November
+
+- 20B code results: HumanEval 42.7, MBPP 42.4; four times the code tokens did not improve
+  both tests.
+- **Weight merges** `v3 + λ·(code-20B − Base)` at λ = 0.5 and 1.0 (13:40): both broke the
+  model (held-out loss 3 to 14 nats). Dropped.
+- **Contest RL** from SFT v3 (`kda-960m-contest-rl-20261119-01`): step 50 scored 10.9 and
+  truncation fell from 79% to 8%. The run stopped at step 64 with a CUDA illegal memory
+  access while sampling.
+
+### 20 November
+
+- The resumed launch hung for two hours: compiled FlexAttention recompiled for each new
+  micro-batch width and fell back to the unfused path, which ran out of memory. Fix: pad
+  training rows to multiples of 1,024 tokens and raise the recompile limit (`41e0477`).
+- `kda-960m-contest-rl-20261120-01` from step 50 (18:39): illegal memory access again, at
+  step 62 of the run. Its step 50 (cumulative 100) scored 11.3.
+- Fix: reuse the smallest cached decoder with enough slots instead of capturing a new KV
+  cache and CUDA graph almost every step (`9949f11`). `-20261120-02` started from
+  cumulative step 100 at 22:05.
+
+### 21 November
+
+- **Contest RL reached step 400** (06:58), exported to `jfrick/malama-contest-rl`: 14.1
+  pass@1, 21.3 pass@6, 0.04% truncated. Greedy held-out validation had not tracked the
+  benchmark; the next stage validates on sampled answers.
+- **RL on medium and hard problems** from step 400 with 16K-token answers: `-01`
+  (13:48–14:50) ran out of GPU memory; target log-probabilities are now computed in chunks
+  of 2,048 positions (`41efe89`), and `-02` was launched in the afternoon. Its step 100
+  scored 11.8 (easy 46.9 to 36.2) and it was stopped at step 146 of 200. **Decision:** the
+  gap to MobileLLM is capability, not RL; distil more.
+- Launched **reasoning SFT v4** (`-20261121-01`, 21:23): 4.30B tokens, about three times
+  v3's traces. Launched the closed-gate looping test `hybrid-720m-loop-test-03g` (21:23).
 
 ### 22 November
+
+- The looping test completed (00:04): one loop within 0.0004 nats of the control, two and
+  three loops 0.001 to 0.005 better, the gate opened only to 0.02
+  ([looped LM plan](LOOPED_LM.md)).
+- SFT v4 `-20261121-01` hit its 5.5-hour function timeout at step 900 (03:09): 18-minute
+  held-out evaluations on rank 0, a repeated final evaluation and a hang on shutdown.
+  Fixes: evaluate every 500 steps on fewer documents, reuse the final evaluation, end a
+  session that has written its report, one 14-hour session, and retry a failed session
+  within the launch's deadline. `-20261122-01` was stopped after five minutes to pick up
+  the fixes; `-20261122-02` ran 07:04–17:20.
+
+From here the account follows the session behind
+[koogle/lm-exploration#197](https://github.com/koogle/lm-exploration/pull/197), which started
+from the contest RL checkpoint at step 400 (14.1) with about $3,000 of Modal credit.
 
 - **Plan.** Spend most of the budget on on-policy distillation from GLM-4.7-Flash, which
   shares Malama's tokenizer; one round only, after reasoning SFT v4 finishes. SFT v4
