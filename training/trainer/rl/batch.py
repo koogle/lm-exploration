@@ -47,8 +47,8 @@ class Tokens:
 
     `score` is what an algorithm's loss pushes up per token: `logp`, unless a correction
     replaces it by a term with another gradient (`off_policy/stable_reinforce.py`).
-    `teacher_kl` is KL(teacher ‖ learner) per token (with gradient) when the answers
-    carry teacher scores."""
+    `teacher_kl` is reverse KL(learner ‖ teacher) per token (with gradient) when the
+    answers carry teacher scores."""
 
     logits: torch.Tensor | None
     targets: torch.Tensor

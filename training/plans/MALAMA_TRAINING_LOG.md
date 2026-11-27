@@ -1,16 +1,11 @@
 # Malama training log
 
-A dated record of everything that was run to produce Malama v0.0.1, from pretraining to
-the release: each launch, what it measured, what went wrong and the decision that
-followed. Times are UTC and LiveCodeBench scores are v6 pass@1 in the thinking protocol
-unless stated. The [run log](#run-log) lists every launch in one table; the
-[day-by-day account](#day-by-day) below it tells what happened. Results are summarized in
-[MALAMA_V0_0_1.md](MALAMA_V0_0_1.md) and
-[CODING_REASONER_1B_FINDINGS.md](CODING_REASONER_1B_FINDINGS.md).
-
-Days up to 21 November are written from the run records, the base model's card and the
-findings documents. Days from 22 November are written from the reports of the session
-that ran them.
+A dated record of what was run to produce Malama v0.0.1, in the order it happened: each
+run, what it measured and the decision that followed. Times are UTC. Results and
+conclusions are summarized in [MALAMA_V0_0_1.md](MALAMA_V0_0_1.md) and
+[CODING_REASONER_1B_FINDINGS.md](CODING_REASONER_1B_FINDINGS.md); this file keeps the
+sequence, including what did not work: a table of every launch, then a day-by-day account
+from pretraining to the release.
 
 ## Run log
 
@@ -18,7 +13,8 @@ Every launch, by workflow run ID (dates UTC). Launches up to reasoning SFT v4 ar
 launch's workflow record and are discussed in
 [CODING_REASONER_1B_FINDINGS.md](CODING_REASONER_1B_FINDINGS.md); their records are under
 `training/results/coding-reasoner-1b/runs/<run ID>/` in `jfrick/lm-exploration-results`.
-Records of later launches are under `pr-197/runs/` of the same dataset. LiveCodeBench scores are v6 pass@1 in the thinking protocol.
+Later launches are described day by day below; their records are under `pr-197/runs/` of
+the same dataset. LiveCodeBench scores are v6 pass@1 in the thinking protocol.
 
 | Run ID | Workflow | Dates | Outcome |
 |---|---|---|---|
@@ -49,16 +45,15 @@ Records of later launches are under `pr-197/runs/` of the same dataset. LiveCode
 | `kda-960m-distill-pilot-d-20261122-01`, `-e-20261122-01` | `kda-960m-distill-pilot-d`, `-e` | Nov 22 | Completed: sharpened teacher, and the lowest rate for three passes. Looping returned as teacher KL fell |
 | `kda-960m-contest-rl-v4-20261122-01` | `kda-960m-contest-rl-v4` | Nov 22 | Completed: 100 RL steps from SFT v4 (16.3 pass@1) |
 | `kda-960m-contest-rl-v4-20261123-01` | `kda-960m-contest-rl-v4` | Nov 23 | Completed: from step 100 to 400 (18.1 pass@1, 25.0 pass@6) |
-| Teacher comparison | `modal_livecodebench --pool train --openrouter` | Nov 23 | Five hosted teachers on 60 problems the Qwen3-30B-A3B teacher never solved: DeepSeek V4 Flash solved 28 for $0.43 at list price and was chosen (DeepSeek V4 Pro 32, DeepSeek V3.2 25, GLM-5.3 and GLM-5.3 Flash 21 each) |
-| Teacher traces v2 | `modal_livecodebench --pool codecontests --openrouter` | Nov 23 | DeepSeek V4 Flash on DeepMind CodeContests problems, and the Qwen3-30B-A3B run rebuilt with up to four passing traces per problem: 31,568 traces against 2,234 in v1, in `jfrick/lcb-teacher-traces` |
 | `kda-960m-reasoning-sft-v5-20261123-01` | `kda-960m-reasoning-sft-v5` | Nov 23–24 | Completed: 4,660 steps (12.8 pass@1, 23.3 pass@6) |
 | `kda-960m-contest-rl-v5-20261124-01` | `kda-960m-contest-rl-v5` | Nov 24–25 | Stopped at about step 650: 15.6 pass@1 at step 100, 18.9 at 250, 17.0 at 500 |
 | `kda-960m-contest-functions-rl-20261124-01` | `kda-960m-contest-functions-rl` | Nov 24–25 | Stopped at step 45: the first mixed pool gave MBPP problems without their assertions and held-out MBPP stayed at 0% |
 | `kda-960m-contest-functions-rl-20261125-01` | `kda-960m-contest-functions-rl` | Nov 25 | Completed: 400 mixed RL steps from contest RL step 250 (19.1 pass@1, HumanEval 50.1, MBPP 41.6). Step 400 is Malama v0.0.1 |
-| Perplexity suite | `modal_benchmarks --suite perplexity` | Nov 25 | Malama Base and eleven open base models on 1,000 arXiv abstracts of 2026-11-24 and WikiText-2: Malama Base 0.949 and 0.833 bits per byte |
-| Release | | Nov 27 | Step 400 of the mixed RL run published as [`jfrick/malama-v0.0.1`](https://huggingface.co/jfrick/malama-v0.0.1); evaluation outputs, RL pools and run logs in `jfrick/lm-exploration-results` under `pr-197/` |
 
-## Day by day
+## Day by day, 10 to 27 November 2026
+
+Scores are LiveCodeBench v6 pass@1 in the thinking protocol (16 samples, temperature 0.6,
+up to 32,768 new tokens) unless stated.
 
 ### 10 to 14 November: pretraining
 
@@ -79,98 +74,89 @@ Records of later launches are under `pr-197/runs/` of the same dataset. LiveCode
   learning rate they had moved by about 1% or less.
 - **Published** as `jfrick/malama-base` with an export every 5B tokens.
 
-### 14 to 15 November: fill-in-the-middle branch and the first format SFT
+### 14 November
 
-- **FIM mid-training** (`kda-960m-fim-midtrain-20261114-01`): continued the foundation
-  run's last constant-rate checkpoint (84.8B tokens) with its optimizer, RNG and data
-  cursor, rearranged half of all code documents as prefix, suffix, middle, and decayed the
-  learning rate at the same token positions as the base run. About 15B tokens.
-  HumanEval-Infilling: 57.1 single-line and 19.8 multi-line, against 2.9 and 0.9 for
-  Malama Base, and below the dedicated code models of similar size (69 to 85 single-line).
-- **LCB format SFT**, three launches. `-01` failed before training because the recipe was
-  not prepared on the data volume; `-02` failed at startup because the trainer could not
-  read the recipe's data files; `-03` completed both variants (answer-only contest
-  programs, and the same with OpenThoughts3 answers). 4.7 pass@1 on an 8-problem
-  LiveCodeBench check.
-- **Reasoning pilot** (`kda-960m-reasoning-pilot`), two launches. `-01` failed in the 32K
-  context extension stage. `-02` completed both stages: the context extension (2B tokens
-  at 32K, half foundation replay, repository-grouped code and books) and a 537M-token
-  thinking SFT on OpenCodeReasoning-2 traces. **3.8** pass@1: the first thinking model.
+- Launched `kda-960m-fim-midtrain-20261114-01` (12:16): about 15B tokens with half of the
+  code documents rearranged for fill-in-the-middle, from Malama Base at 84.8B tokens.
 
-### 17 to 18 November: code mid-training and reasoning SFT v3
+### 15 November
 
-- **Code mid-training, 5B** (`kda-960m-code-anneal`). `-01` failed in data preparation:
-  one source had fewer training tokens than the recipe asked for. `-02` completed 5B
-  tokens at 32K from the context extension, with 45% replay. Plain completion: HumanEval
-  50.0 (39.0 with docstring examples stripped), MBPP 33.2.
-- **Code mid-training, 20B** (`kda-960m-code-anneal-20b-20261117-01`): 20B tokens at 4K
-  from Malama Base, 35% replay, a different mixture with OpenCoder's Stack v2 files and
-  code web pages. HumanEval 42.7 (31.1 stripped), MBPP 42.4. Four times the tokens raised
-  MBPP by 9 points and lowered HumanEval by 7; the runs differ in start, context and
-  mixture, so the token count is not isolated.
-- **Decision:** reasoning SFT continues from the 5B export, which keeps the 32K context
-  the thinking protocol needs.
-- **Reasoning SFT v3** (`kda-960m-reasoning-sft-v3-20261118-01`): 1.42B tokens at 32K,
-  one pass, 10% replay. **8.4** pass@1 (easy 32.8, medium 1.1, hard 0.1). 78.9% of
-  answers ran to the token limit and 97% of those ended in a verbatim loop, starting a
-  median 26% into the answer. A second SFT was not run, because more imitation does not
-  target the model's own decoding falling into repetition and an outcome reward does.
+- The FIM run completed (01:00). HumanEval infilling: 57.1 single-line and 19.8 multi-line,
+  against 2.9 single-line for Malama Base.
+- Reference scores in the thinking protocol: Qwen3-0.6B 15.2, Qwen3-1.7B 31.0,
+  MobileLLM-R1.5-360M 7.0, MobileLLM-R1.5-950M 29.0.
+- Answer-only format SFT: `-01` failed before training (recipe not prepared on the data
+  volume), `-02` failed at startup reading the recipe's data files, `-03` completed both
+  variants (12:21). 4.7 on an 8-problem check.
+- Reasoning pilot: `-01` failed in its 32K context extension stage; `-02` ran the context
+  extension and the pilot (15:25–20:23): 3.8. **Decision:** code mid-training first, then a
+  larger reasoning SFT.
 
-### 19 November: weight merge
+### 17 November
 
-- **Task arithmetic** tried to add the 20B code run's change to the reasoning model:
-  `v3 + λ·(code-20B − Malama Base)`, at λ = 0.5 and 1.0. Both broke the model: held-out
-  loss rose from 0.95 to 3.09 on Python at λ = 0.5 and to about 13.7 on every source at
-  λ = 1.0, above the 11.95 of a uniform guess. The two branches had diverged too early
-  (32K context and the 5B run against the 4K base). Not evaluated further.
+- Code mid-training `kda-960m-code-anneal-20261117-01` failed in data preparation (one
+  source had fewer training tokens than the recipe asked for); `-02` started at 20:50:
+  5B tokens at 32K from the context extension.
+- Launched the 20B-token variant at 4K from Malama Base
+  (`kda-960m-code-anneal-20b-20261117-01`).
 
-### 19 to 21 November: contest RL from SFT v3
+### 18 November
 
-- **Setup.** Dr. GRPO with Muon, 64 problems and 8 answers per step on 8 H100s, 8K-token
-  answers, reward 1 or 0 from LiveCodeBench's grader in a sandbox and −0.5 for an
-  unfinished answer. Pool `rl-pool-contest-02`: 1,843 training problems (1,155 medium,
-  688 easy) and 56 held out.
-- **Three launches for 400 steps.** `-20261119-01` stopped with a CUDA illegal memory
-  access while sampling at step 64, and its resumed launch hung for two hours.
-  `-20261120-01` started from step 50 and hit the same error at step 62 of its run.
-  `-20261120-02` ran from step 100 to 400.
-- **Two fixes.** Training rows are padded to multiples of 1,024 tokens, because padding
-  each micro-batch to its longest answer made compiled attention recompile for almost
-  every batch, fall back to the unfused path and run out of memory. Rollouts reuse the
-  smallest cached decoder with enough slots, where they had captured a new KV cache and
-  CUDA graph almost every step. The root cause of the illegal access was not proven.
-- **Result:** 10.9 at step 50, 11.3 at step 100, **14.1** at step 400 (easy 46.9, medium
-  6.4, hard 1.6). Truncation fell from 79% to 8% in the first 50 steps and to 0.04% by
-  the end.
-- **Greedy validation did not predict the benchmark.** One greedy answer per held-out
-  problem looped on 30% to 80% of problems between steps 275 and 375, while sampled
-  answers finished, and the final checkpoint was the best on the benchmark.
+- The 5B code run completed (02:55): HumanEval 50.0 (39.0 without the docstring examples),
+  MBPP 33.2.
+- **Reasoning SFT v3** from the 5B export (09:00–15:22): 8.4, with 79% of answers running to
+  the token limit, almost all in verbatim loops.
+- The 20B code run's second attempt ran 09:34–23:29 and completed.
 
-### 21 to 22 November: hard-problem RL, the loop test and SFT v4's first launches
+### 19 November
 
-- **Contest RL on medium and hard problems only** (`kda-960m-contest-rl-hard`, pool
-  `rl-pool-contest-03`: 1,154 medium and 403 hard problems, 16K-token answers). `-01` ran
-  out of GPU memory at 16K tokens; target log-probabilities are now computed in chunks of
-  2,048 positions. `-02` scored 11.8 at step 100, below the 14.1 it started from, and was
-  stopped at step 146 of 200 (12.4). Training reward rose from 0.36 to 0.50 while
-  held-out accuracy fell from 22.2 to 18.8; easy problems, absent from the pool, lost 6 to
-  11 points.
-- **Closed-gate loop test** on the 720M model (`hybrid-720m-loop-test-03g`): one loop
-  matched the control and two and three loops were 0.001 to 0.005 nats below it
-  ([LOOPED_LM.md](LOOPED_LM.md)). Looping was not adopted for Malama.
-- **Reasoning SFT v4, first launches.** `-20261121-01` hit its 5.5-hour function timeout
-  at step 900: the held-out evaluation over 207 subsets took 18 minutes each time, and the
-  session hung on shutdown after writing its report. The config now evaluates every 500
-  steps on 4 documents per subset, a session that has written its report is ended, and a
-  failed session is retried within the launch's deadline. `-20261122-01` was stopped
-  after 5 minutes and relaunched with that handling as `-20261122-02`.
+- 20B code results: HumanEval 42.7, MBPP 42.4; four times the code tokens did not improve
+  both tests.
+- **Weight merges** `v3 + λ·(code-20B − Base)` at λ = 0.5 and 1.0 (13:40): both broke the
+  model (held-out loss 3 to 14 nats). Dropped.
+- **Contest RL** from SFT v3 (`kda-960m-contest-rl-20261119-01`): step 50 scored 10.9 and
+  truncation fell from 79% to 8%. The run stopped at step 64 with a CUDA illegal memory
+  access while sampling.
 
-The days from 22 November belong to one session
-([koogle/lm-exploration#197](https://github.com/koogle/lm-exploration/pull/197)). It
-started from the contest RL checkpoint of SFT v3 at step 400 (14.1) with about $3,000 of
-Modal credit.
+### 20 November
+
+- The resumed launch hung for two hours: compiled FlexAttention recompiled for each new
+  micro-batch width and fell back to the unfused path, which ran out of memory. Fix: pad
+  training rows to multiples of 1,024 tokens and raise the recompile limit (`41e0477`).
+- `kda-960m-contest-rl-20261120-01` from step 50 (18:39): illegal memory access again, at
+  step 62 of the run. Its step 50 (cumulative 100) scored 11.3.
+- Fix: reuse the smallest cached decoder with enough slots instead of capturing a new KV
+  cache and CUDA graph almost every step (`9949f11`). `-20261120-02` started from
+  cumulative step 100 at 22:05.
+
+### 21 November
+
+- **Contest RL reached step 400** (06:58), exported to `jfrick/malama-contest-rl`: 14.1
+  pass@1, 21.3 pass@6, 0.04% truncated. Greedy held-out validation had not tracked the
+  benchmark; the next stage validates on sampled answers.
+- **RL on medium and hard problems** from step 400 with 16K-token answers: `-01`
+  (13:48–14:50) ran out of GPU memory; target log-probabilities are now computed in chunks
+  of 2,048 positions (`41efe89`), and `-02` was launched in the afternoon. Its step 100
+  scored 11.8 (easy 46.9 to 36.2) and it was stopped at step 146 of 200. **Decision:** the
+  gap to MobileLLM is capability, not RL; distil more.
+- Launched **reasoning SFT v4** (`-20261121-01`, 21:23): 4.30B tokens, about three times
+  v3's traces. Launched the closed-gate looping test `hybrid-720m-loop-test-03g` (21:23).
 
 ### 22 November
+
+- The looping test completed (00:04): one loop within 0.0004 nats of the control, two and
+  three loops 0.001 to 0.005 better, the gate opened only to 0.02
+  ([looped LM plan](LOOPED_LM.md)).
+- SFT v4 `-20261121-01` hit its 5.5-hour function timeout at step 900 (03:09): 18-minute
+  held-out evaluations on rank 0, a repeated final evaluation and a hang on shutdown.
+  Fixes: evaluate every 500 steps on fewer documents, reuse the final evaluation, end a
+  session that has written its report, one 14-hour session, and retry a failed session
+  within the launch's deadline. `-20261122-01` was stopped after five minutes to pick up
+  the fixes; `-20261122-02` ran 07:04–17:20.
+
+From here the account follows the session behind
+[koogle/lm-exploration#197](https://github.com/koogle/lm-exploration/pull/197), which started
+from the contest RL checkpoint at step 400 (14.1) with about $3,000 of Modal credit.
 
 - **Plan.** Spend most of the budget on on-policy distillation from GLM-4.7-Flash, which
   shares Malama's tokenizer; one round only, after reasoning SFT v4 finishes. SFT v4
@@ -266,7 +252,7 @@ Modal credit.
 
   Held-out validation swung widely during the run (MBPP between 3% and 42%, up to 71% of
   validation answers unfinished at step 250) while benchmark scores of the same
-  checkpoints stayed stable, the pattern seen in the contest RL from v3. Step 400 became Malama v0.0.1.
+  checkpoints stayed stable. Step 400 became Malama v0.0.1.
 - **Perplexity suite** added to the benchmark harness. Malama Base and eleven open base
   models were scored on 1,000 arXiv abstracts of 2026-11-24 and on WikiText-2: Malama Base
   0.949 and 0.833 bits per byte. Four long-context models ran out of GPU memory at eight
@@ -292,7 +278,6 @@ Modal credit.
   (`hybrid-720m-loop-test-03g`, run on 22 November by another session) was written up in
   [LOOPED_LM.md](LOOPED_LM.md) and its records uploaded. No looping run exists for the
   960M model.
-
 - **Reasoning off.** `modal_livecodebench --protocol chat` scores checkpoints with the
   thinking protocol's samples and grading but no reasoning span. Three checkpoints of the
   v0.0.1 line, pass@1:
@@ -310,6 +295,45 @@ Modal credit.
   7.1 for the contest RL checkpoint on 251 of 500 problems, nothing for the other two).
   The thinking-protocol HumanEval run of SFT v5 was stopped at the start in favour of
   these.
+
+### Post-release code and plan audit
+
+Review of the training stack against [CODING_REASONER_1B.md](CODING_REASONER_1B.md) found
+four code/config bugs (now fixed on `main`) and several plan-vs-operated gaps:
+
+**Bugs fixed:**
+
+- **KDA residual-output init (`hybrid/kda.py`).** `self.o_proj.residual_output = True`
+  was set in `optimizer()` instead of `__init__()`, after `HybridLM.initialize` had
+  already run. All 18 KDA `o_proj` matrices initialized at `std = 0.02` instead of
+  `0.02 / sqrt(48) = 0.00289` (~6.9× larger std). Moved to `__init__()`.
+- **On-policy distillation KL direction (`hybrid/model.py`, `trainer/rl/off_policy/distill.py`).**
+  `_chunk_distillation` minimized forward KL `KL(teacher ‖ student)` (mode-covering)
+  instead of reverse KL `KL(student ‖ teacher)` (mode-seeking). Applying forward KL to the
+  RL-sharpened 14.1 checkpoint flattened its distribution and brought back verbatim loops
+  across all five pilots (`a`–`e`). Switched to reverse KL.
+- **Greedy RL validation (`workflows/kda-960m-contest-rl-v4.json`, `-v5.json`,
+  `-contest-functions-rl.json`).** These workflows omitted `validation_samples` and fell
+  back to greedy (`1`), explaining the 3–42% MBPP validation swings and 71% unfinished
+  validation answers at step 250 of mixed RL while sampled benchmarks stayed stable. Set
+  to `validation_samples: 4` at temperature `0.6`.
+- **Replay row placement (`data/packed_shards.py`).** `ReplayMixture.next_batch` appended
+  all replay rows at the end of the batch, putting all 3 replay rows on rank 7 in 8-GPU
+  SFT (gradients were still exact via global valid-token normalization). Now spread evenly
+  across the batch.
+
+**Plan vs. operated gaps:**
+
+- 32K midtraining started from the decayed 100B export (`tokens-099999547392`), not the
+  84.8B constant-LR checkpoint, and kept `rope_base = 1000000` unchanged.
+- Midtraining on the released line ran 7B tokens (2B context extension + 5B code) instead
+  of 20–40B, without FIM, CC-Math 4+, or the matched short-convolution comparison.
+- `kda-context32k-v1.json` reused older 720M GitHub shards (`hybrid-mid32k-v1`,
+  `hybrid-long32k-v1`) that overlapped the 880-file 960M foundation corpus and lacked
+  v2/v3 markup/size/vendor filters.
+- Reasoning SFT v5 ran 4.89B tokens (contest code + 10% replay) instead of ~10B at
+  70/20/10 code/math/general, with no matched answer-only SFT comparison.
+- On-policy distillation was dropped after the forward-KL pilots regressed (`14.1 → 13.2`).
 
 ### Spend
 

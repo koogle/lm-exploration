@@ -141,6 +141,7 @@ class KimiDeltaAttention(nn.Module):
         self.o_norm_weight = nn.Parameter(torch.ones(width))
         self.norm_eps = config.norm_eps
         self.o_proj = nn.Linear(inner, config.n_embd, bias=False)
+        self.o_proj.residual_output = True
 
     def optimizer(self):
         yield from declare(
@@ -157,7 +158,6 @@ class KimiDeltaAttention(nn.Module):
             self.dt_bias,
             self.o_norm_weight,
         )
-        self.o_proj.residual_output = True
 
     def forward(self, x, rope, mask, cache=None):
         """With a `cache` dict (one row), also stores what incremental decoding needs to
@@ -191,8 +191,16 @@ class KimiDeltaAttention(nn.Module):
         keep = cache is not None
         if x.is_cuda:
             out = self.recurrence_kernel(
-                q, k, v, g, beta, self.A_log, self.dt_bias, mask.documents, keep,
-                mask.kda_offsets if mask.share_kda_metadata else None
+                q,
+                k,
+                v,
+                g,
+                beta,
+                self.A_log,
+                self.dt_bias,
+                mask.documents,
+                keep,
+                mask.kda_offsets if mask.share_kda_metadata else None,
             )
         else:
             out = self.recurrence_reference(

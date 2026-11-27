@@ -37,6 +37,8 @@
         },
         "micro_batch": 2,
         "evaluate_every": 25,
+        "validation_samples": 4,
+        "validation_temperature": 0.6,
         "save_every": 25,
         "keep_checkpoints": 3,
         "hf_repo": "jfrick/malama-contest-rl"

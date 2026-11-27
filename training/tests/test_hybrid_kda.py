@@ -110,6 +110,15 @@ class KDATests(unittest.TestCase):
         for name, parameter in lm.named_parameters():
             self.assertGreater(parameter.grad.abs().sum().item(), 0, name)
 
+    def test_kda_output_projection_uses_residual_init_scale(self):
+        config = tiny_config(n_layer=8, n_embd=64, n_head=4, n_kv_head=2, n_kda_head=4, head_dim=16)
+        lm = model.HybridLM(config)
+        expected_std = config.init_std / (2 * config.n_layer) ** 0.5
+        for block in lm.blocks:
+            self.assertTrue(getattr(block.mixer.o_proj, "residual_output", False))
+            self.assertTrue(getattr(block.mlp.down, "residual_output", False))
+            self.assertLess(abs(block.mixer.o_proj.weight.std().item() - expected_std), 0.002)
+
 
 if __name__ == "__main__":
     unittest.main()

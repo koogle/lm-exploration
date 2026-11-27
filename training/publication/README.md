@@ -95,3 +95,21 @@ or upload anything and does not modify the original evidence.
 uv run --extra research python -m publication.malama_charts \
   --results artifacts/malama/results.json --output artifacts/malama/charts
 ```
+
+## Loss forecast
+
+[`loss_forecast.py`](loss_forecast.py) fits `loss = c + a * tokens^-b` to a run's early
+training loss, over three windows that end at the cutoff, and draws the whole run against
+that frozen forecast beside its held-out loss by source. The inputs are a run's metrics
+and validation records, such as `logs/lineage-*.jsonl` in a published base model:
+
+```sh
+uv run --extra research python -m publication.loss_forecast fit \
+  --metrics artifacts/malama-base/lineage-metrics.jsonl --until 26.4 \
+  --output artifacts/malama-base/forecast.json
+uv run --extra research python -m publication.loss_forecast plot \
+  --metrics artifacts/malama-base/lineage-metrics.jsonl \
+  --validation artifacts/malama-base/lineage-validation.jsonl \
+  --forecast artifacts/malama-base/forecast.json --decay-start 85 \
+  --output artifacts/malama-base/training-loss-forecast.png
+```
