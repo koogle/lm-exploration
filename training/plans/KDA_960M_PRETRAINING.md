@@ -1,37 +1,36 @@
-# KDA foundation pretraining constraints
+# KDA 960M pretraining
 
-The selected model and stages are in [the training plan](CODING_REASONER_1B.md);
-[the mixture study](KDA_DATA_STUDY.md) explains the 50/40/10 decision and its
-accepted retention cost. This document defines the scale-up requirements.
+The model and training stages are in [the training plan](CODING_REASONER_1B.md);
+[the mixture study](KDA_DATA_STUDY.md) covers the 50/40/10 split and its retention
+trade-off. This note documents the corpus decisions, 128M ablations, run sizing,
+and loss forecast for the 960M foundation run.
 
 ## Corpus
 
-Plan a conditional 100B-token schedule: 50B ClimbMix, 40B code and 10B Nemotron
-CC-Math score-3 tokens. The 40B code tokens weight curated projects and starred
-repositories above the rest of GitHub ([recipe v3](#quality-weighted-code-sources-recipe-v3)).
-Freeze source revisions, tokenizer identity, filtering and train/held-out
-partitions in the preparation manifest. Require measured usable capacity of at
-least target tokens times source weight, counting each source once per pass its
-recipe allows; estimates size preparation but cannot authorize training. A source
-repeats only up to its recipe's `max_passes`, and the run stops when a source is
-used up. Do not substitute a new source.
+Target: 100B tokens — 50B ClimbMix, 40B code, and 10B Nemotron CC-Math score-3.
+The code share evolved across three recipes, ending on [recipe v3](#quality-weighted-code-sources-recipe-v3),
+which weights curated projects and starred repos above general GitHub.
 
-Require content-hash train/validation separation across sources and repository
-separation for GitHub. Screen conservative 13-token overlaps against the frozen
-benchmark manifests, including the six LiveCodeBench releases used in the study.
-Inspect hits and rejection rates: this screen does not establish complete
-contamination freedom. Preserve source-license restrictions, language coverage,
-source exposure and repetition audits. Bound math preparation by Parquet row
-groups and persist progress through the shared workflow infrastructure.
+Data rules:
 
-Global near-deduplication, fork-aware separation and generated/vendor-code quality
-remain explicit gaps; the audit below measures their size.
+- Source revisions, tokenizer, filters, and train/held-out splits are frozen in
+  the preparation manifest.
+- Capacity must be measured, not estimated, before training. Sources repeat only
+  up to their recipe's `max_passes` and the run stops if one runs dry (no silent
+  substitution).
+- Train/held-out separation uses content hashes across all sources plus
+  repository separation for GitHub.
+- A 13-token overlap screen runs against frozen benchmark manifests, including
+  the six LiveCodeBench releases.
+
+Known gaps — no global near-deduplication, no fork-aware split, and upstream
+generated/vendored code — are measured in the audit below.
 
 ## Corpus audit (November 9)
 
-The complete `kda-foundation-100b-504010-v1` corpus is prepared on the
-`lm-exploration-hybrid-data` volume. Its `capacity.json` measures usable
-single-pass training tokens after license, split and screen filtering:
+The `kda-foundation-100b-504010-v1` corpus on `lm-exploration-hybrid-data`
+(`capacity.json`) has enough single-pass tokens for 100B at 50/40/10 after
+license, split, and contamination filtering:
 
 | Source | Train tokens | Needed | Margin | Screen drops (documents) |
 | --- | ---: | ---: | ---: | ---: |
@@ -39,65 +38,48 @@ single-pass training tokens after license, split and screen filtering:
 | Permissive GitHub | 49.46B | 40B | 23.6% | 297,051 (1.0%) |
 | CC-Math score 3 | 15.44B | 10B | 54.4% | 1,496,775 (10.6%) |
 
-Capacity is sufficient for 100B tokens at 50/40/10 without repetition.
+A 14-file sample across the 450 upstream code files read by v1 (1.78M rows,
+1.15M permissive, 8.0 GB) shows what is actually in the GitHub source:
 
-A sample of 14 upstream code files spread across the 450 the recipe reads
-(1.78M rows, 1.15M permissive, 8.0 GB) characterizes the code source:
-
-- **Ordering.** Upstream files are shuffled: each file has the same language mix
-  (Python 6.2–7.3% of bytes) and about 59,000 repositories. Reading the first
-  450 of 880 files is representative, and training order is not language-sorted.
-- **Exact duplicates.** None within or across the 14 files, also ignoring
-  whitespace. Per-shard exact deduplication is sufficient.
-- **Near duplicates.** A coarse line signature (the eight smallest hashes of
-  lines of at least 20 characters) matches 6.7% of bytes to an earlier document.
-  The rate still rises with each added file (1.7% in the first, 10.0% in the
-  fourteenth), so the full 449-shard rate is higher; this sample cannot bound it.
-- **Language mix.** By bytes: HTML 15.8%, Java 15.1%, JavaScript 14.2%, C 9.3%,
+- **Ordering:** Shuffled. Every file has roughly the same language mix (Python
+  6.2–7.3% of bytes) and ~59,000 repos, so reading 450 of 880 files is
+  representative.
+- **Exact duplicates:** None within or across the 14 files, even ignoring
+  whitespace.
+- **Near duplicates:** A coarse line signature (8 smallest hashes of lines >= 20
+  chars) matches 6.7% of bytes to an earlier doc, climbing from 1.7% in file 1
+  to 10.0% in file 14. The full 449-shard rate is higher.
+- **Language mix (by bytes):** HTML 15.8%, Java 15.1%, JavaScript 14.2%, C 9.3%,
   C++ 8.5%, **Python 6.8%**, C# 5.2%, PHP 5.1%, TypeScript 4.3%, Markdown 3.7%,
-  Go 3.4%, CSS 3.0%. HTML, CSS and Markdown are 22.5%. At 40B code tokens this
-  is about 2.7B Python tokens and 9B markup tokens, while the evaluation target
-  (LiveCodeBench) is Python only. Byte shares approximate token shares.
-- **Generated, vendored and data files.** Files over 100 KB are 0.8% of documents
-  and 25.0% of bytes. Paths under vendor, dependency or build directories and
-  bundled libraries are 8.9% of bytes. The largest repositories by bytes are
-  `cdnjs/cdnjs` (1.8%), a generated benchmark site, parser-comparison HTML and
-  spending data. Upstream's filters (mean line length, alphanumeric fraction,
-  keyword search) leave these in.
+  Go 3.4%, CSS 3.0%. HTML, CSS, and Markdown make up 22.5%. At 40B code tokens,
+  that is ~2.7B Python and ~9B markup, while LiveCodeBench is Python-only.
+- **Oversized and vendored files:** Files over 100 KB are 0.8% of docs but 25.0%
+  of bytes. Vendor, dependency, build, and bundled-library paths are 8.9% of
+  bytes. Top repos by bytes include `cdnjs/cdnjs` (1.8%), a generated benchmark
+  site, parser-comparison HTML, and spending data.
 
-The contamination screen's drops are mostly idioms, not benchmark text. In 20,000
-code and 6,000 math documents the most frequent matching 13-token n-grams are
-number runs (`1, 2, 3, 4, 5`, `0, 0, 0, 0, 0`), the quadratic formula and
-`\mathbb{R} \to \mathbb{R}`; the sampled math drop rate is 11.2%. A 13-token
-window covers few characters of digits or LaTeX. The screen stays conservative
-for evaluation, and biases the math source against documents containing lists
-and standard formulas.
+**Concerns:**
 
-Assessment for launch:
-
-- Capacity, exact deduplication, split separation and shard ordering are
-  qualified by the measurements above.
-- Near-duplicate and fork separation affect how much distinct code the model
-  sees and how optimistic held-out code loss is. They do not affect
-  LiveCodeBench, and do not block a launch.
-- The code composition is the material gap: about a third of code bytes are
-  markup, oversized or vendored files, and Python is a fifteenth. A code source
-  restricted by language, file size and path, drawing Python from all 880
-  upstream files, is a recipe change that needs its own capacity measurement and
-  a matched comparison against this recipe before it replaces it.
-- A minimum character length for screen n-grams would restore most dropped math
-  documents; math capacity does not depend on it.
+- Near-duplicates and forks inflate held-out code metrics and cut distinct code
+  volume, but they don't affect LiveCodeBench.
+- The 13-token contamination screen mostly catches idioms, not benchmark text.
+  In 20,000 code and 6,000 math docs, the top hits are number runs
+  (`1, 2, 3, 4, 5`, `0, 0, 0, 0, 0`), the quadratic formula, and
+  `\mathbb{R} \to \mathbb{R}` (11.2% sampled math drop rate). That biases math
+  against lists and standard formulas. A minimum character length on n-grams
+  would fix most of it, though math capacity doesn't depend on it.
+- The real problem is code composition: roughly a third of code bytes are
+  markup, oversized, or vendored files, and only ~1/15 is Python. That drove
+  recipes v2 and v3.
 
 ## Filtered code sources (recipe v2)
 
-`kda-foundation-100b-504010-v2` keeps the 50/40/10 shares and the prepared
-ClimbMix and math shards, and prepares the 40% code share as two sources from
-all 880 upstream files. `python` (4%) keeps Python only. `code` (36%) keeps every
-language except Python, HTML, CSS and Markdown. Both drop files over 100 KB and
-paths under vendor, dependency or build directories or named after bundled
-libraries, then apply the license allowlist, the content and repository split
-and the contamination screen. Measured capacity after preparation
-(`kda-foundation-data-v2-20261109-01`):
+`kda-foundation-100b-504010-v2` (`kda-foundation-data-v2-20261109-01`) keeps
+50/40/10 and the v1 ClimbMix and math shards, and rebuilds the 40% code share
+from all 880 upstream files as `python` (4%) and `code` (36%, excluding Python,
+HTML, CSS, and Markdown). Both drop files over 100 KB and
+vendor/dependency/build/bundled paths (3.1M path drops and 0.37M size drops in
+other-code after the license filter).
 
 | Source | Share | Train tokens | Needed | Margin | Held-out tokens |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -106,24 +88,21 @@ and the contamination screen. Measured capacity after preparation
 | Other code | 36% | 45.29B | 36B | 25.8% | 0.67M |
 | CC-Math score 3 | 10% | 15.44B | 10B | 54.4% | 23.3M |
 
-A 100B run reads 4.0B Python tokens, against about 2.7B under recipe v1, and no
-HTML, CSS or Markdown. Of the other-code rows that pass the license allowlist,
-the path filter drops 3.1M and the size filter 0.37M.
+At 100B tokens this reads 4.0B Python (up from ~2.7B in v1) and zero markup.
 
-The Python held-out set is one shard's 1% content-and-repository partition:
-55,643 tokens, about 50 documents. Held-out Python loss from it is noisy; use
-it for trend only. The matched 128M mixture study measured the v1 code source,
-so this recipe's effect on held-out code, general and math loss is unmeasured.
-The 960M configuration reads recipe v2 and samples the MTP loss at fraction 0.25.
+**Concerns:** The Python held-out shard is only 55,643 tokens (~50 docs), so
+held-out Python loss is noisy and only useful for trend. The earlier 128M
+mixture study ran on v1, so v2's loss effect was not separately measured before
+moving to v3.
 
-[Capacity reports, sample statistics, screen hits and the scripts that produced them](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/corpus-audit-20261109).
+[Capacity reports, sample stats, screen hits, and scripts](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/corpus-audit-20261109).
 
 ## Quality-weighted code sources (recipe v3)
 
-Decision of November 10: within the unchanged 50/40/10 shares, read more Python
-and more high-quality code, and prefer repeating high-quality code to reading
-low-quality code once. `kda-foundation-100b-504010-v3` splits the 40% code share
-into six sources. All use the recipe v2 language, size and path filters.
+Decision on November 10: keep 50/40/10, push more Python and higher-quality
+code into the 40% share, and accept repeating high-quality repos instead of
+reading low-quality code once. `kda-foundation-100b-504010-v3` splits the code
+share into six sources, all using v2's language, size, and path filters:
 
 | Source | Share | Train tokens | Passes at 100B | Passes allowed |
 | --- | ---: | ---: | ---: | ---: |
@@ -134,41 +113,34 @@ into six sources. All use the recipe v2 language, size and path filters.
 | Starred other code | 20.0% | 7.434B | 2.69 | 3 |
 | Other code | 8.3% | 37.855B | 0.22 | 1 |
 
-- **Curated projects** are `jfrick/curated-oss-code-20261019`: the latest snapshot of
-  53 established projects (Linux, LLVM, Elasticsearch, ClickHouse, VS Code,
-  Kubernetes, PyTorch, Rust, CPython, Django and others). The source keeps each
-  project's own license, which includes GPL projects such as Linux and Git.
-- **MIT collection** is `jfrick/mit-claude-codex-code-20261019`: the latest snapshot
-  of 50 recently active MIT repositories.
-- **Starred** sources are GitHub Code Clean rows whose repository has at least ten
-  stars in `ibragim-bad/github-repos-metadata-40M` (`watchers_count`; 1,246,491
-  repositories qualify). **Other** sources are the remaining rows. A repository
-  absent from that table counts as unstarred.
+- **Curated projects** (`jfrick/curated-oss-code-20261019`): 53 established
+  projects (Linux, LLVM, Elasticsearch, ClickHouse, VS Code, Kubernetes,
+  PyTorch, Rust, CPython, Django, etc.), retaining original licenses including
+  GPL.
+- **MIT collection** (`jfrick/mit-claude-codex-code-20261019`): 50 recently
+  active MIT repos.
+- **Starred vs. other**: GitHub Code Clean repos with at least 10 stars
+  (`watchers_count` in `ibragim-bad/github-repos-metadata-40M`, 1,246,491
+  repos). Unmapped repos count as unstarred.
 
-A 100B run reads 28.2B tokens from curated and starred sources, against about
-6.7B of such code under recipe v2, and about 8B Python tokens against 4.0B.
-Curated projects, the MIT collection and starred Python are read four to five
-times and starred other code 2.7 times; the passes repeat the same shard order.
-The smallest margins are starred other code (2.69 of 3 passes) and curated
-projects (4.68 of 5).
+At 100B tokens this reads 28.2B curated/starred tokens (vs. ~6.7B in v2) and
+~8B Python (vs. 4.0B). Curated projects, the MIT collection, and starred Python
+repeat 4–5x in the same shard order; tightest margins are starred other code
+(2.69 of 3 passes) and curated projects (4.68 of 5).
 
-Train/held-out separation is by content hash for the two project collections
-and by content hash and repository for GitHub sources, as before. Each source's
-held-out shard is small (curated 0.84M tokens of one Linux file's partition,
-starred Python 9K tokens), so per-source held-out loss during training is a
-trend only. `kda-code-quality-eval-v1` is the common evaluation set: one upstream
-GitHub file that no recipe trains on, restricted to repositories in the held-out
-partition and excluding the 103 curated and MIT repositories. It holds 88 starred
-Python documents (0.13M tokens), 385 other Python (0.50M), 899 starred other
-code (0.95M) and 4,564 other code (5.39M), and evaluates the v1 ClimbMix and math
-held-out shards alongside.
+Per-source held-out shards are tiny (curated is 0.84M tokens from one Linux file
+partition; starred Python is 9K tokens) — trend only. For real comparisons,
+`kda-code-quality-eval-v1` holds out one upstream GitHub file excluded from
+training and excluding the 103 curated/MIT repos: 88 starred Python docs
+(0.13M tokens), 385 other Python (0.50M), 899 starred other code (0.95M), and
+4,564 other code (5.39M), scored alongside the v1 ClimbMix and math held-out
+shards.
 
-### Matched 128M comparison of recipe v2 and v3
+### Matched 128M comparison (v2 vs. v3)
 
-Two 127.6M-parameter KDA models trained for 200,015,872 tokens each on one H100,
-identical except for the recipe (context 2,048, one seed, MTP loss fraction
-0.25; workflows `study-128m-mix-v2` and `study-128m-mix-v3`). Both are scored on
-the common evaluation set, in bits per byte:
+Two 127.6M-parameter KDA models trained for 200,015,872 tokens each on 1x H100
+(context 2,048, one seed, MTP loss fraction 0.25; `study-128m-mix-v2` and
+`study-128m-mix-v3`), scored on `kda-code-quality-eval-v1` in bits per byte:
 
 | Evaluation set | Documents | Recipe v2 | Recipe v3 | Change |
 | --- | ---: | ---: | ---: | ---: |
@@ -179,44 +151,41 @@ the common evaluation set, in bits per byte:
 | ClimbMix | | 1.1936 | 1.1916 | -0.2% |
 | Math | | 1.1276 | 1.1201 | -0.7% |
 
-Recipe v3 predicts held-out Python 4.5–5.5% better and leaves general text and
-math unchanged. It predicts unstarred non-Python code 2.6% worse, and starred
-non-Python code the same.
+v3 improves held-out Python by 4.5–5.5%, leaves ClimbMix and math flat, and
+hurts unstarred non-Python code by 2.6%.
 
-What this does and does not show:
+**Concerns:**
 
-- The Python gain follows the Python share: v3 trains on about twice as many
-  Python tokens (about 8% of the stream against 4%). The test does not separate
-  that from any effect of repository quality.
-- It gives no evidence that starred code is better training data for held-out
-  prediction. Starred non-Python code rose from about 6% to 20% of the stream,
-  with curated projects on top, and held-out starred code did not improve; the
-  loss on unstarred code follows its share falling from about 30% to 8%.
-- Bits per byte measures prediction of held-out code, including code one may not
-  want the model to imitate. It is not executable correctness.
-- A 200M-token run reads the start of each source once. It says nothing about
-  reading curated projects and starred Python four to five times in a 100B run.
-- One seed per arm; the size of seed noise at this scale is unmeasured, and the
-  starred-Python set has 88 documents.
+- The Python gain tracks doubling the Python share (~8% vs. 4%) and does not
+  isolate repo quality.
+- There is no evidence here that starred code improves held-out prediction:
+  starred non-Python jumped from ~6% to 20% with zero BPB gain, while unstarred
+  loss tracks its drop from ~30% to 8%.
+- BPB measures next-token prediction on held-out code, not executable
+  correctness.
+- 200M tokens only reads each source once; it doesn't test 4–5x repetition at
+  100B.
+- Single seed per arm, and starred Python is only 88 documents.
 
-The 960M configuration reads recipe v3: the comparison supports it for the Python
-target and shows no cost outside unstarred non-Python code. The weighting toward
-starred repositories is a stated preference, not a measured gain.
+**Decision:** Ship v3 for 960M. It helps Python with no cost outside unstarred
+non-Python code; the starred-repo weighting is a stated preference, not a
+measured win.
 
-[Run reports, common evaluation and capacity reports](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/code-mix-study-20261110).
+[Run reports, common eval, and capacity reports](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/code-mix-study-20261110).
 
 ## Architecture options from the Marin notes (128M study)
 
-Two options from the Marin 535B notes were compared against the recipe v3 control,
-each a 127.6M-parameter KDA model trained for 200,015,872 tokens on one H100 with
-one seed (workflows `study-128m-marin-control`, `-conv` and `-embnorm`):
+Two options from the Marin 535B notes were tested against the v3 control on the
+same 127.6M / 200,015,872-token / 1x H100 / single-seed setup
+(`study-128m-marin-control`, `-conv`, `-embnorm`):
 
-- **Short convolutions** (`short_conv_size: 4`): causal depthwise convolutions on
-  full-attention keys, values and output and on every MLP output, identity at
-  initialization and reset at document boundaries; 51,200 extra parameters.
-- **Embedding RMSNorm** (`embedding_norm: true`): an RMSNorm on the embedding lookup.
+- **Short convolutions** (`short_conv_size: 4`): causal depthwise convolutions
+  on full-attention K/V/O and every MLP output, identity-initialized and reset
+  at document boundaries (+51,200 params).
+- **Embedding RMSNorm** (`embedding_norm: true`): RMSNorm on the embedding
+  lookup.
 
-Held-out bits per byte on the common evaluation set:
+Held-out bits per byte on `kda-code-quality-eval-v1`:
 
 | Evaluation set | Control | Short convolutions | Embedding RMSNorm |
 | --- | ---: | ---: | ---: |
@@ -227,51 +196,47 @@ Held-out bits per byte on the common evaluation set:
 | ClimbMix | 1.1925 | 1.1857 (-0.6%) | 1.1787 (-1.2%) |
 | Math | 1.1212 | 1.1116 (-0.9%) | 1.1072 (-1.2%) |
 
-The control differs from the earlier run of the same configuration
-(`mix-study-v3-20261110-01`) by 0.07–0.32% per set, an estimate of run-to-run
-noise from one pair. Both options are outside it on every set.
+This control differs from the earlier identical run
+(`mix-study-v3-20261110-01`) by 0.07–0.32% per set; both options beat that
+run-to-run noise on every set.
 
-The training-loss lead over the control behaves differently. Over the five
-tenths of the run sampled, the short-convolution lead is roughly constant
-(0.015, 0.032, 0.033, 0.038, 0.029 nats). The embedding-RMSNorm lead shrinks
-steadily (0.232, 0.133, 0.101, 0.087, 0.071 nats). A lead that shrinks like this
-fits faster early optimization rather than a better model at the end; 200M tokens
-cannot tell which.
+The training-loss curves diverge, though. Across the five tenths sampled, short
+convolutions hold a steady lead (0.015, 0.032, 0.033, 0.038, 0.029 nats), while
+embedding RMSNorm's lead shrinks every step (0.232, 0.133, 0.101, 0.087, 0.071
+nats). That pattern points to faster early optimization rather than a better
+final model, and 200M tokens can't tell them apart.
 
-Decisions:
+**Decisions:**
 
-- The 960M foundation run continues without either option; its source hashes and
-  checkpoint lineage are fixed.
-- Short convolutions go to midtraining as a matched comparison: continue the
-  foundation checkpoint with and without them, with the convolutions added at
-  identity so the starting model is unchanged. Loading a foundation checkpoint
-  into a model with new parameters needs an explicit initialization path that
-  doesn't exist yet.
-- Embedding RMSNorm is not adopted: the measured gain may not survive a longer
-  run, and it can't be added to a trained model without changing its function.
-  It needs a longer matched run before a future pretraining run uses it.
+- Keep the 960M foundation run unchanged so its checkpoint lineage stays fixed.
+- Test short convolutions in midtraining: splice them in at identity so the
+  starting model is unchanged (needs an explicit checkpoint-load path for the
+  new parameters).
+- Skip embedding RMSNorm for now. It can't be added to a trained checkpoint
+  without changing the function, and needs a longer matched run before using it
+  in a future pretraining run.
 
-[Run reports, metrics and common evaluation](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/marin-ablation-20261111).
+[Run reports, metrics, and common eval](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/training/sub1b-pilot/marin-ablation-20261111).
 
 ## Sizing the run and the loss forecast
 
-**Sizing (November 10, at launch).** The model has 959.8M training parameters (with its
-one-block MTP head), so 100B tokens is about 104 tokens per parameter. At the measured
-391K tokens/s on eight H100s, 100B tokens is about 71 hours of training, about $22 per
-billion tokens at an assumed $4 per H100-hour: about $2,200 of the $5,000 foundation
-allocation. The strongest models near this size trained on far more, Qwen3-0.6B on about
-36T tokens and SmolLM2 on about 4T. Reaching 4T would have cost on the order of $90,000,
-and the prepared code would not have lasted: Python is about 5B tokens (3.95B, plus 0.98B
-starred) and the rest of the permissive GitHub code about 45B, so past roughly 150B tokens
-the code share would mostly repeat. A frontier base model at this size was out of reach by
-pretraining alone. The decision was to stop at 100B, keep the rest of the budget for
-mid-training, reasoning SFT and RL, and compete in a narrow coding category instead.
+**Sizing (November 10).** With its one-block MTP head, the model has 959.8M
+training parameters (~104 tokens/param at 100B). At the measured 391K tok/s on
+8x H100, 100B tokens takes ~71 hours and ~$22/B tokens at $4/H100-hr — about
+$2,200 of the $5,000 foundation allocation.
 
-**Forecast (November 11).** At 26.4B tokens a curve `loss = c + a * tokens^-b` was fitted
-to the training loss (means of 0.5B-token bins) over three windows ending at 26B, and
-frozen ([`publication.loss_forecast`](../publication/README.md#loss-forecast)). The
-central fit (window 5–26B) has `c = 2.057`, `a = 0.419`, `b = 0.665`. It covers the
-constant learning rate only, up to the decay at 85B.
+Stronger base models near this size trained on far more data (Qwen3-0.6B ~36T,
+SmolLM2 ~4T). Reaching 4T would cost ~$90,000 and blow past our code supply
+(~5B Python, ~45B other permissive GitHub — mostly repeating past ~150B). A
+frontier base model from pretraining alone was out of reach, so the plan stops
+at 100B, saves budget for midtraining, reasoning SFT, and RL, and targets a
+narrow coding category.
+
+**Forecast (November 11).** At 26.4B tokens we fit `loss = c + a * tokens^-b`
+to 0.5B-token mean bins over three windows ending at 26B and froze it
+([`publication.loss_forecast`](../publication/README.md#loss-forecast)). The
+central 5–26B fit is `c = 2.057`, `a = 0.419`, `b = 0.665` (constant LR phase
+only, up to the decay at 85B):
 
 | Tokens | Forecast | Measured (0.5B-token mean) |
 |---:|---:|---:|
@@ -279,47 +244,32 @@ constant learning rate only, up to the decay at 85B.
 | 50B | 2.088 | 2.085 |
 | 75B | 2.081 | 2.064 |
 | 85B | 2.079 (range 2.079–2.084) | 2.068 |
-| 100B, after the decay | not forecast | 1.755 |
+| 100B, after decay | not forecast | 1.755 |
 
-- The run tracked the forecast within 0.02 and finished the constant phase slightly below
-  it, so no abnormal dynamics showed.
-- The 59B tokens from the forecast to the decay bought about 0.03 in training loss, as
-  forecast, while the 15B-token decay bought 0.31. The constant phase was longer than it
-  needed to be; an earlier decay or a lower rate is the schedule lesson for the next run.
-- Held-out bits per byte followed the same shape: slowly falling from about 20B, then down in the
-  decay on every source.
+- Loss tracked within 0.02 and finished the constant phase slightly below
+  forecast, with no stability issues.
+- The 59B tokens from 26B to 85B bought ~0.03 in training loss, while the 15B
+  decay bought 0.31. The constant phase ran too long — next run should decay
+  earlier or use a lower learning rate.
+- Held-out BPB followed the same shape on every source.
 
 ![Training loss against the forecast, and held-out loss by source](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/results/kda-960m-foundation-20261110-01/forecast/training-loss-forecast.png)
 
-The forecast and chart are in `training/results/kda-960m-foundation-20261110-01/forecast/`
-of `jfrick/lm-exploration-results`; the run's metrics are `logs/lineage-*.jsonl` in
+Forecast and chart: `training/results/kda-960m-foundation-20261110-01/forecast/`
+in `jfrick/lm-exploration-results`. Run logs: `logs/lineage-*.jsonl` in
 [`jfrick/malama-base`](https://huggingface.co/jfrick/malama-base).
 
 ## Training and budget
 
-Use exactly eight 80GB H100s, the shared trainer, frozen model/tokenizer and MTP
-objective with its loss sampled at fraction 0.25 (10.6–10.8% more throughput in the
-[matched benchmark](KDA_MIXER_TIMING_STUDY.md#mtp-loss-fraction-november-9); its effect
-on quality is unmeasured). Select execution details from matched real-data
-correctness and performance checks. Full pretraining remains held during performance
-qualification; hardware and MFU experiments belong to the stacked implementation
-PR and do not alter this mixture decision.
-
-Start with a bounded qualification segment and verify finite losses, per-source
-held-out evaluation, checkpoint/resume and source consumption before extending
-that checkpoint lineage. Preserve periodic checkpoints and numerical evaluation;
-preview generation is optional and must not invalidate performance measurement.
-No midtraining, SFT or RL stage starts automatically with foundation training.
-
-Keep the main-pretraining allocation at $5,000 within the overall plan. Set the
-final token commitment from actual dollars per token, including preparation,
-CPU, memory, storage, evaluation and checkpoint overhead. Reconcile previous
-spend before each continuation and preserve the later-stage reserve. A 100B-token
-target is conditional on capacity, observed learning and remaining budget.
-
-Every launch must have a server-side timeout, zero retries and an independent
-remote deadline covering queued work and children, no later than 24 hours after
-launch. Preserve shorter diagnostic limits. Publish measurements, negative
-results and checkpoints in the existing HF/Modal artifact stores, with source
-provenance; executable launch/configuration details belong to the implementation
-review rather than this planning-only change.
+- **Hardware and objective:** 8x 80GB H100 on the shared trainer, frozen
+  model/tokenizer, MTP loss sampled at 0.25 (+10.6–10.8% throughput in the
+  [matched benchmark](KDA_MIXER_TIMING_STUDY.md#mtp-loss-fraction-november-9);
+  quality effect unmeasured).
+- **Qualification and ops:** Start with a bounded qualification segment (finite
+  losses, per-source held-out eval, checkpoint/resume, source consumption)
+  before extending the lineage. Keep periodic checkpoints and numerical evals.
+  Every Modal launch uses a server-side timeout <= 24h, zero retries, and an
+  independent remote deadline supervisor.
+- **Budget:** $5,000 foundation cap. Reconcile actual all-in $/token (prep,
+  CPU, memory, storage, eval, checkpoints) before each continuation so the
+  post-training reserve stays intact.
