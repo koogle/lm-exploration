@@ -14,12 +14,10 @@ tags:
 # Malama v0.0.1
 
 Malama v0.0.1 is an experimental 0.93B-parameter language model trained from random
-initialization that reasons in a `<think>` span before writing Python.
-
-It is the first release of the Malama line: one base model pretrained from scratch on
-**100B tokens** (602 H100-hours, about 5.8e20 FLOPs), followed by roughly 12B tokens of
-context extension, code mid-training and reasoning SFT, and 650 steps of reinforcement
-learning against unit tests.
+initialization that reasons in a `<think>` span before writing Python. Its base model was
+pretrained from scratch on **100B tokens** (602 H100-hours, about 5.8e20 FLOPs), followed
+by roughly 12B tokens of context extension, code mid-training and reasoning SFT, and 650
+steps of reinforcement learning against unit tests.
 
 On LiveCodeBench v6 with thinking it scores **19.1 pass@1**, ahead of Qwen3-0.6B (15.2)
 and behind MobileLLM-R1.5-950M (29.0) and Qwen3-1.7B (31.0), alongside **50.1** on
@@ -28,8 +26,10 @@ HumanEval and **41.6** on MBPP.
 **What this model is—and is not.** For a ~112B-token total budget, those scores are decent,
 especially compared to sub-2B models trained on orders of magnitude more data. At the same
 time, **Malama v0.0.1 is by far not a great model.** Its base model sits at the weak end
-of its size class on raw text perplexity, it is narrow (Python programming problems only),
-and medium and hard competitive-programming problems remain mostly out of reach. While the
+of its size class on raw text perplexity—likely because it is undertrained at 100B
+pretraining tokens compared to multi-trillion-token baselines—it is narrow (Python
+programming problems only), and medium and hard competitive-programming problems remain
+mostly out of reach. While the
 weights were trained from scratch, the coding and reasoning improvements lean heavily on
 stronger teacher models and synthetic datasets—both traces we generated ourselves
 (Qwen3-30B-A3B and DeepSeek V4 Flash) and public teacher-generated datasets (DeepSeek-R1
@@ -199,8 +199,10 @@ trained, and on the WikiText-2 test set. Lower is better.
 ![Perplexity by size](charts/perplexity-by-size.png)
 
 Malama Base is at the weak end of its size class on raw text: level with SmolLM2-360M and
-Gemma 3 1B, and about 7% behind Qwen3-0.6B-Base. The other models have very likely trained
-on Wikipedia, so the arXiv column is the fairer comparison.
+Gemma 3 1B, and about 7% behind Qwen3-0.6B-Base. That gap is likely because it is
+undertrained at 100B pretraining tokens relative to modern small models trained on
+trillions of tokens. The other models have very likely trained on Wikipedia, so the arXiv
+column is the fairer comparison.
 
 ### Code variants: plain completion and infilling
 
@@ -326,8 +328,8 @@ Repositories without a link are private.
 - Medium and hard contest problems are mostly out of reach (11.1% and 2.5% at pass@1).
 - Thinking can run to thousands of tokens for a simple request, and about 0.5% of answers
   never finish.
-- The base model is weaker on raw text than other models of its size, which likely limits
-  everything built on it.
+- The base model is weaker on raw text than other models of its size—likely because it is
+  undertrained at 100B pretraining tokens—which likely limits everything built on it.
 - Its coding and reasoning capabilities rely heavily on teacher-generated traces and
   synthetic datasets rather than pure pretraining scale.
 - LiveCodeBench scores are from one evaluation run of 175 problems; differences of about a
