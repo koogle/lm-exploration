@@ -1,4 +1,4 @@
-# LM Exploration
+# Language Modeling Exploration
 
 A personal playground for learning about language modeling—from pretraining and post-training to inference kernels and speculative decoding.
 
