@@ -286,7 +286,7 @@ constant learning rate only, up to the decay at 85B.
 - The 59B tokens from the forecast to the decay bought about 0.03 in training loss, as
   forecast, while the 15B-token decay bought 0.31. The constant phase was longer than it
   needed to be; an earlier decay or a lower rate is the schedule lesson for the next run.
-- Held-out bits per byte followed the same shape: flat from about 20B, then down in the
+- Held-out bits per byte followed the same shape: slowly falling from about 20B, then down in the
   decay on every source.
 
 ![Training loss against the forecast, and held-out loss by source](https://huggingface.co/datasets/jfrick/lm-exploration-results/resolve/main/training/results/kda-960m-foundation-20261110-01/forecast/training-loss-forecast.png)
