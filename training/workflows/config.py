@@ -63,6 +63,10 @@ class PretrainConfig:
     persist_seconds: int = 600
     # Start training on a growing snapshot once every source has a usable prefix.
     overlap_preparation: bool = False
+    # Times a failed session is started again (it continues from its own newest
+    # checkpoint, or returns its report), within the launch deadline and only after the
+    # failed attempt saved progress (`continue_training`).
+    session_retries: int = 2
 
     def __post_init__(self):
         if self.family not in FAMILIES:
@@ -104,6 +108,8 @@ class PretrainConfig:
         # STALL_SECONDS, which must also cover the copy and the refresher's interval.
         if self.overlap_preparation and self.persist_seconds > max_persist_seconds():
             raise ValueError("Overlapped preparation must persist within half the stall timeout")
+        if type(self.session_retries) is not int or self.session_retries < 0:
+            raise ValueError("Workflow session_retries must be a nonnegative integer")
         if type(self.qualification_segments) is not int or not (
             0 <= self.qualification_segments < self.max_segments
         ):

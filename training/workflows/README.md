@@ -109,7 +109,13 @@ session call, the session continues in its own folder from its newest checkpoint
 keeps its original stop time, and counts the rerun in `session.json` and the report's
 `restarts` ([`sessions.py`](sessions.py)). A session whose container receives a
 termination signal saves a checkpoint and ends with stop reason `signal`; the next
-session continues from it. It checks progress and validation
+session continues from it. A session whose processes have not exited ten minutes after
+it wrote its report is ended as finished (`sessions.run_session`). A session call that
+fails (a crash, or a call outliving its timeout) starts again as the same session, which
+continues from its newest checkpoint or returns its report: up to `session_retries`
+times (default 2), within the launch deadline, and only when the failed attempt saved a
+newer checkpoint or its report. A failed RL stage call starts again up to twice, resuming
+its own run; other post-training stages are not retried. It checks progress and validation
 continuity between sessions, up to `max_segments`. Qualification uses the model's
 final schedule with a short step limit, then continues the same checkpoint lineage.
 `qualification_segments: 0` skips it.

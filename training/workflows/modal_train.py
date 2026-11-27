@@ -216,7 +216,7 @@ def hybrid_segment(run_id, snapshot, bundle, provenance, resume, max_steps, max_
     retries=0,
     nonpreemptible=True,
     max_containers=1,
-    volumes={"/runs": run_volume},
+    volumes={"/runs": run_volume, "/hybrid-runs": hybrid_runs},
 )
 def continue_training(
     run_id,
@@ -229,11 +229,19 @@ def continue_training(
 ):
     from workflows.checks import check_progress, check_resume, validate_paths
     from workflows.config import resolve_payload, step_tokens
-    from workflows.deadline import bounded_timeout, recorded_call, segment_seconds
+    from workflows.deadline import (
+        MIN_WORK_SECONDS,
+        bounded_timeout,
+        recorded_call,
+        segment_seconds,
+    )
+    from workflows.sessions import session_progress, worth_retrying
 
     policy, dataset, config = resolve_payload(bundle)
     settings = config if policy.family == "hybrid" else config.as_dict()
     session = {"subword": train_segment, "hybrid": hybrid_segment}[policy.family]
+    sessions_root = {"subword": Path("/runs"), "hybrid": Path("/hybrid-runs")}[policy.family]
+    sessions_volume = {"subword": run_volume, "hybrid": hybrid_runs}[policy.family]
     # Hybrid evaluation kernels are not bit-reproducible across processes.
     tolerance = 1e-3 if policy.family == "hybrid" else 0.0
     deadline = provenance["deadline_unix"]
@@ -262,11 +270,9 @@ def continue_training(
                 completed_tokens=previous["tokens"] if previous else 0,
                 pending_data_audits=provenance.get("pending_data_audits", []),
             )
-            timeout = bounded_timeout(deadline, policy.worker_timeout_seconds)
 
-            def spawn_session(
-                timeout=timeout, segment_id=segment_id, resume=resume, segment=segment
-            ):
+            def spawn_session(segment_id=segment_id, resume=resume, segment=segment):
+                timeout = bounded_timeout(deadline, policy.worker_timeout_seconds)
                 return session.with_options(
                     gpu=f"{policy.gpu}:{policy.world_size}",
                     cpu=4 * policy.world_size,
@@ -282,15 +288,45 @@ def continue_training(
                     segment_seconds(timeout, policy.segment_seconds),
                 )
 
-            run_volume.reload()
-            call = recorded_call(
-                Path("/runs/.calls") / launch,
-                f"train_segment:{segment_id}",
-                spawn_session,
-                modal.FunctionCall.from_id,
-                run_volume.commit,
-            )
-            report = call.get()
+            # A failed session (a crash, or a call that outlived its timeout) starts again
+            # as the same session: it continues from its own newest checkpoint, or returns
+            # its report if it wrote one. Only within the launch deadline, at most
+            # `session_retries` times, and only when the failed attempt made progress.
+            attempt = 0
+            while True:
+                sessions_volume.reload()
+                before = session_progress(sessions_root / segment_id)
+                run_volume.reload()
+                kind = f"train_segment:{segment_id}" + (f":retry{attempt}" if attempt else "")
+                call = recorded_call(
+                    Path("/runs/.calls") / launch,
+                    kind,
+                    spawn_session,
+                    modal.FunctionCall.from_id,
+                    run_volume.commit,
+                )
+                try:
+                    report = call.get()
+                    break
+                except Exception as error:  # decided below, else re-raised
+                    sessions_volume.reload()
+                    after = session_progress(sessions_root / segment_id)
+                    retry = (
+                        attempt < policy.session_retries
+                        and deadline - time.time() > MIN_WORK_SECONDS
+                        and worth_retrying(before, after)
+                    )
+                    record(
+                        run_id,
+                        "retrying" if retry else "session_failed",
+                        segment=segment_id,
+                        attempt=attempt,
+                        progress=list(after),
+                        error=f"{type(error).__name__}: {error}"[-2000:],
+                    )
+                    if not retry:
+                        raise
+                    attempt += 1
             if report["stop_reason"] == "stop_requested":
                 record(
                     run_id,
@@ -769,6 +805,9 @@ def launch_hybrid(run_id, bundle, provenance, resume="", init_from="", phase_fro
 
 # Seconds before the launch deadline at which the orchestrator stops starting stages.
 STAGE_RESERVE_SECONDS = 1800
+# Times a failed RL stage call starts again within the launch deadline; RL resumes its
+# own run's newest checkpoint, so a retry continues rather than repeats.
+RL_RETRIES = 2
 
 
 def stage_status(run_id):
@@ -1009,10 +1048,33 @@ def run_workflow(plan, selected, provenance, checkpoint="", examples=None, quali
     # Post-training calls still running; branches of the last stage run side by side.
     pending = {}
 
+    # Each running post-training call's spawner, so a failed RL call can start again.
+    spawners = {}
+
     def finish(name):
         """Record a post-training call's result; an RL run that stopped short of its step
-        target is paused, and the next launch resumes it in the same run."""
-        result = pending.pop(name).get()
+        target is paused, and the next launch resumes it in the same run. A failed RL call
+        starts again (it resumes its own checkpoint) up to `RL_RETRIES` times while the
+        deadline leaves a stage's worth of time."""
+        attempt = 0
+        while True:
+            try:
+                result = pending.pop(name).get()
+                break
+            except Exception as error:  # retried below, else re-raised
+                retry = (
+                    stages[name]["stage"] == "rl"
+                    and attempt < RL_RETRIES
+                    and time.time() < deadline - STAGE_RESERVE_SECONDS
+                )
+                state["stages"][name].update(
+                    retries=attempt + retry, last_error=f"{type(error).__name__}: {error}"[-2000:]
+                )
+                save()
+                if not retry:
+                    raise
+                attempt += 1
+                pending[name] = spawners[name]()
         reason = result.get("stop_reason", "steps")
         state["stages"][name].update(
             status="completed" if reason == "steps" else "paused",
@@ -1089,14 +1151,17 @@ def run_workflow(plan, selected, provenance, checkpoint="", examples=None, quali
             recipe = {**stage["spec"], "run_id": run, "parent": parent["checkpoint"]}
             state["stages"][name] = {"status": "running", "run_id": run, "attempt": attempt}
             save()
-            pending[name] = modal_post_train.run_stage(
-                stage["stage"],
-                plan["family"],
-                recipe,
-                launch,
-                deadline,
-                (examples or {}).get(name, b""),
+            spawners[name] = lambda stage=stage, recipe=recipe, name=name: (
+                modal_post_train.run_stage(
+                    stage["stage"],
+                    plan["family"],
+                    recipe,
+                    launch,
+                    deadline,
+                    (examples or {}).get(name, b""),
+                )
             )
+            pending[name] = spawners[name]()
         for name in list(pending):
             finish(name)
         if any(state["stages"].get(n, {}).get("status") == "paused" for n in selected):

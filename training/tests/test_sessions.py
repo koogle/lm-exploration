@@ -9,7 +9,9 @@ from workflows.sessions import (
     continued_checkpoint,
     newest_checkpoint,
     run_session,
+    session_progress,
     session_state,
+    worth_retrying,
 )
 
 
@@ -98,3 +100,24 @@ class RunSessionTests(unittest.TestCase):
         )
         self.assertEqual(code, 1)
         self.assertGreaterEqual(seconds, 2)
+
+
+class RetryTests(unittest.TestCase):
+    def test_a_failed_attempt_is_worth_retrying_only_after_progress(self):
+        with tempfile.TemporaryDirectory() as root:
+            folder = Path(root) / "run-s00"
+            empty = session_progress(folder)
+            self.assertEqual(empty, ("checkpoint", None))
+            self.assertFalse(worth_retrying(empty, empty))
+            session(root, "run-s00", steps=(100,))
+            first = session_progress(folder)
+            self.assertTrue(worth_retrying(empty, first))
+            self.assertFalse(worth_retrying(first, first))
+            (folder / "step-000000200.pt").write_bytes(b"weights")
+            (folder / "latest.json").write_text(json.dumps({"checkpoint": "step-000000200.pt"}))
+            self.assertTrue(worth_retrying(first, session_progress(folder)))
+            (folder / "report.json").write_text("{}")
+            reported = session_progress(folder)
+            self.assertEqual(reported, ("reported", None))
+            self.assertTrue(worth_retrying(reported, reported))
+

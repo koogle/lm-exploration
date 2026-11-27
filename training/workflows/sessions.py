@@ -96,3 +96,19 @@ def run_session(command, log, report, grace=EXIT_GRACE_SECONDS, poll=10, **popen
                 except subprocess.TimeoutExpired:
                     continue
             return 0
+
+
+def session_progress(folder):
+    """What a session folder holds now, to tell whether a failed attempt got anywhere:
+    ("reported", None) once its report exists, else ("checkpoint", path) for its newest
+    checkpoint (path None before the first save)."""
+    if (Path(folder) / "report.json").is_file():
+        return ("reported", None)
+    checkpoint = newest_checkpoint(folder)
+    return ("checkpoint", str(checkpoint) if checkpoint else None)
+
+
+def worth_retrying(before, after):
+    """True when a failed session attempt left something to continue from: a report, or
+    a newer checkpoint than the attempt started with."""
+    return after[0] == "reported" or (after[1] is not None and after != before)
